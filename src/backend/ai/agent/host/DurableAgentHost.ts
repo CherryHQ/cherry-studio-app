@@ -23,6 +23,7 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   type AgentApprovalView,
+  type AgentErrorView,
   type AgentEvent,
   type AgentInputPart,
   type AgentMessageView,
@@ -1073,7 +1074,7 @@ export class DurableAgentHost implements AgentProtocol {
       );
       if (!message) continue;
       const completedAt = Date.now();
-      const error = {
+      const error: AgentErrorView = {
         code: 'INTERRUPTED',
         message: 'The app stopped before this input was admitted.',
         retryable: true,

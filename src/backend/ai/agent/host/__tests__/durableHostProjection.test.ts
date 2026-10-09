@@ -36,6 +36,28 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
 }
 
 describe('durable message timing', () => {
+  test('a stopped answer retains its output and retryable status without an execution error', () => {
+    const projected = projectDurableHostTurn(
+      turn({
+        status: 'cancelled',
+        error: {
+          code: 'aborted',
+          message: 'The Agent run ended without an answer.',
+          retryable: false,
+          origin: 'runtime',
+        },
+      }),
+    );
+    expect(projected.turn).toMatchObject({
+      status: 'cancelled',
+      error: null,
+      endedAt: expect.any(String),
+    });
+    expect(projected.assistant).toMatchObject({
+      status: 'cancelled',
+      parts: [{ type: 'text', text: 'Done' }],
+    });
+  });
   test('projects native usage and failures into the aligned transcript contract', () => {
     const { user, assistant } = projectDurableHostTurn(
       turn({

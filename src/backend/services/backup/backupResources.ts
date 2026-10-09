@@ -116,10 +116,7 @@ export async function validateResourceReferences(
   const { requiredPaths, counts } = await describeDatabase(archiveFile(root, 'database/cherry.db'));
   if (
     Object.keys(counts).some(
-      (key) =>
-        counts[key as keyof typeof counts] !==
-        manifest.counts[key as keyof typeof counts] -
-          (key === 'messages' ? (manifest.agent?.messages ?? 0) : 0),
+      (key) => counts[key as keyof typeof counts] !== manifest.counts[key as keyof typeof counts],
     )
   )
     throw new BackupError('invalid');

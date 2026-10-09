@@ -62,7 +62,8 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
 } {
   const metadata = DurableTurnMetadataSchema.parse(turn.metadata);
   const terminal = turn.status !== 'running' && turn.status !== 'queued';
-  const error = turn.error ? toAgentErrorView(turn.error) : null;
+  // A user stop is a settled, paused answer; it is not an execution failure.
+  const error = turn.error && turn.status !== 'cancelled' ? toAgentErrorView(turn.error) : null;
   const common = {
     sessionId: turn.identity.sessionId,
     turnId: turn.identity.turnId,

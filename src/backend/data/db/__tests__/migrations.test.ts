@@ -564,6 +564,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'forked_from_session_id',
         'fork_boundary_message_id',
+        'runtime_revision',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -581,6 +582,7 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'replay',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',

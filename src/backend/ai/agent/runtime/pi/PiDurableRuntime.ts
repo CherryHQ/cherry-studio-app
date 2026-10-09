@@ -102,6 +102,8 @@ const ResourceScope = defineDoc<{ fileEntryIds: string[] }>({
   kind: 'cherry.resources',
   version: 1,
   scope: 'conversation',
+  history: 'latest',
+  fork: 'current',
   initial: () => ({ fileEntryIds: [] }),
 });
 

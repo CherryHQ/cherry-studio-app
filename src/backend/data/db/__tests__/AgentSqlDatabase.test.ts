@@ -1,6 +1,13 @@
+import { Directory } from 'expo-file-system';
+import * as SQLite from 'expo-sqlite';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { AgentSqlDatabase, type AgentSqlExecutor } from '../AgentSqlDatabase';
+
+jest.mock('expo-sqlite', () => ({
+  ...jest.requireActual('expo-sqlite'),
+  openDatabaseAsync: jest.fn(),
+}));
 
 function deferred() {
   let resolve!: () => void;
@@ -40,6 +47,32 @@ function connection() {
 }
 
 describe('AgentSqlDatabase', () => {
+  test('opens the Android SQLite path without requiring a file URI', async () => {
+    const { sqlite, operations } = connection();
+    // SQLite accepts its native default path; FileSystem requires a URI instead.
+    const create = jest.spyOn(Directory.prototype, 'create').mockImplementation(() => {
+      throw new Error('URI is not absolute');
+    });
+    const open = jest
+      .spyOn(SQLite, 'openDatabaseAsync')
+      .mockResolvedValue(sqlite as unknown as SQLiteDatabase);
+    try {
+      const database = await AgentSqlDatabase.open({
+        directory: '/data/user/0/com.cherryai.cherrystudio_app.dev/files/SQLite',
+      });
+      await database.run('usable connection');
+      await database.close();
+      expect(operations).toEqual([
+        'PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;',
+        'usable connection',
+        'close',
+      ]);
+    } finally {
+      create.mockRestore();
+      open.mockRestore();
+    }
+  });
+
   test('holds unrelated reads, writes, and another transaction until commit', async () => {
     const { database, operations } = connection();
     const entered = deferred();

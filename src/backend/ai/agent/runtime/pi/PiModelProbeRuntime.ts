@@ -89,7 +89,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
     this.controller.signal.throwIfAborted();
     await this.runtime.ensureConversation({
       sessionId: request.sessionId,
-      metadata: {},
+      revision: 0,
       options: request.options,
       agent: {
         model: { provider: request.model.providerId, modelId: request.model.modelId },
@@ -97,7 +97,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
       },
     });
     const previous = new Map<string, RuntimeOutputPart>();
-    this.observer = new PiDurableObserver(this.runtime, request.sessionId, null, (event) => {
+    this.observer = new PiDurableObserver(this.runtime, request.sessionId, (event) => {
       if (event.type !== 'turn.updated') return;
       for (const [index, part] of event.turn.parts.entries()) {
         const old = previous.get(part.id);

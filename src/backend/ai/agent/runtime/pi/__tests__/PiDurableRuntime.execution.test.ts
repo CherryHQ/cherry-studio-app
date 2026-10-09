@@ -3,10 +3,11 @@ import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
 
-import type { RuntimeTool } from '../../types';
+import type { RuntimeEvent, RuntimeTool } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
 import { PiDurableRuntime } from '../PiDurableRuntime';
 import { createPiDurableToolExtension } from '../piDurableTools';
+import { PiModelProbeRuntime } from '../PiModelProbeRuntime';
 import { emptyAssistantMessage } from '../piStreamEvents';
 
 class ReopenableMemoryStorage extends MemoryStorage {
@@ -28,6 +29,78 @@ const wire: Model<Api> = {
 };
 
 describe('Pi durable execution integration', () => {
+  test('model probes deliver the answer and complete without storing a production conversation', async () => {
+    const requests: TranscriptContext[] = [];
+    const runtime = new PiModelProbeRuntime({
+      preflightModel: async () => ({
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 4096,
+        inputModalities: ['text'],
+        supportsTools: false,
+      }),
+      resolveModel: async () => ({
+        model: wire,
+        defaultThinkingLevel: 'off',
+        redactionValues: [],
+        supportsTools: false,
+        usageContext: {
+          providerId: reference.providerId,
+          providerName: null,
+          modelId: reference.modelId,
+          modelName: null,
+          pricingSnapshot: null,
+          trustProviderReportedCost: false,
+          reportedCostCurrency: null,
+          credentialReceipt: { attribution: 'unknown' },
+        },
+        streamFn: (_model, context) => {
+          requests.push(context);
+          const stream = new AssistantMessageEventStream();
+          stream.push({
+            type: 'done',
+            reason: 'stop',
+            message: {
+              ...emptyAssistantMessage(wire),
+              stopReason: 'stop',
+              content: [{ type: 'text', text: 'Probe answer' }],
+            },
+          });
+          return stream;
+        },
+      }),
+    });
+    const session = await runtime.open();
+    const events: RuntimeEvent[] = [];
+    try {
+      for await (const event of session.execute({
+        sessionId: 'probe-session',
+        turnId: 'probe-turn',
+        model: reference,
+        instructions: 'Answer the user.',
+        input: [{ type: 'text', text: 'Hello' }],
+        history: [],
+        contextCheckpoint: null,
+        tools: [],
+        options: {},
+      }))
+        events.push(event);
+      expect(events).toContainEqual({ type: 'completed' });
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'part.add',
+          part: expect.objectContaining({ type: 'text', text: 'Probe answer' }),
+        }),
+      );
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.messages.filter((message) => message.role === 'user')).toEqual([
+        expect.objectContaining({ role: 'user', content: 'Hello' }),
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
+
   test('Pi owns the model/tool loop and retained history across submissions and reopened owners', async () => {
     const storage = new ReopenableMemoryStorage();
     const requests: TranscriptContext[] = [];

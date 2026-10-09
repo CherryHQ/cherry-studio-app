@@ -1,4 +1,4 @@
-import { Directory, File } from 'expo-file-system';
+import { File } from 'expo-file-system';
 import {
   deleteDatabaseAsync,
   openDatabaseAsync,
@@ -40,7 +40,6 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
     options: { directory?: string; name?: string; journal?: 'wal' | 'preserve' } = {},
   ): Promise<AgentSqlDatabase> {
     const directory = options.directory ?? databaseDirectory();
-    new Directory(directory).create({ idempotent: true, intermediates: true });
     const database = new AgentSqlDatabase(
       await openDatabaseAsync(
         options.name ?? AGENT_DATABASE_NAME,

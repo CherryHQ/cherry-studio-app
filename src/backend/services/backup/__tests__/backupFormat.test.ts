@@ -52,7 +52,7 @@ test('rejects experimental paired backups and never accepts a Pi cache as user b
       ...base,
       entries: [...base.entries, { path: 'database/pi-agent.db', size: 2048, sha256 }],
     }),
-  ).toThrow('invalid');
+  ).toThrow(expect.objectContaining({ code: 'invalid' }));
 });
 
 test('rejects case collisions, missing database, forged hashes and undeclared fields', () => {

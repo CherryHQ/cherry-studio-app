@@ -412,7 +412,7 @@ async function runDurableLoop(source: StreamFn, tools: RuntimeTool[]) {
   try {
     await runtime.ensureConversation({
       sessionId: 'session',
-      metadata: { agentId: 'agent' },
+      revision: 0,
       agent: {
         model: { provider: reference.providerId, modelId: reference.modelId },
         instructions: 'Help the user.',

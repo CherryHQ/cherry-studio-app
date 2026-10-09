@@ -11,6 +11,7 @@ import type {
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
 import type { PiRuntimeDependencies } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
+import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
 class ReopenableMemoryStorage extends MemoryStorage {
   override async close(): Promise<void> {}
@@ -144,6 +145,56 @@ async function submitAndWait(runtime: PiDurableAgentRuntime, submission: Runtime
 }
 
 describe('Persistent Agent facade', () => {
+  test('stopping a streamed partial settles the task and preserves the answer across reopen', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    let signal: AbortSignal | undefined;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: withPiStreamIdleTimeout((_model, _context, options) => {
+        signal = options?.signal;
+        const stream = new AssistantMessageEventStream();
+        const partial = {
+          ...emptyAssistantMessage(wire),
+          content: [{ type: 'text' as const, text: 'Partial answer' }],
+        };
+        stream.push({ type: 'text_delta', contentIndex: 0, delta: 'Partial answer', partial });
+        // The provider deliberately ignores abort; the app adapter still owns terminal delivery.
+        return stream;
+      }),
+    });
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    const partial = deferred<void>();
+    const stopped = deferred<void>();
+    const observation = await runtime.observe('session', (event) => {
+      if (event.type !== 'turn.updated') return;
+      if (event.turn.parts.some((part) => part.type === 'text' && part.text === 'Partial answer'))
+        partial.resolve();
+      if (event.turn.status === 'cancelled') stopped.resolve();
+    });
+    try {
+      await runtime.submit('session', input('stopped'));
+      await partial.promise;
+      await runtime.abort('session');
+      await stopped.promise;
+      expect(signal?.aborted).toBe(true);
+      expect(await runtime.hasUnfinishedWork()).toBe(false);
+      await observation.unsubscribe();
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      expect((await runtime.message('session', 'answer-stopped'))?.turn).toMatchObject({
+        status: 'cancelled',
+        parts: [{ type: 'text', text: 'Partial answer', state: 'done' }],
+      });
+      expect(await runtime.hasUnfinishedWork()).toBe(false);
+    } finally {
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
   test('attributes generation to its invocation even when the request ID differs from message aliases', async () => {
     const state = fixture();
     const runtime = state.create();
