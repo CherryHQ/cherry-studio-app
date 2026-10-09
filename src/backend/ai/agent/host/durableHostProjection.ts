@@ -12,7 +12,7 @@ import {
 import type { MessageRuntimeSpan, MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type { RuntimeDurableTurn } from '../runtime';
-import { toAgentErrorView, toAgentMessagePart, toAgentUsageView } from './runtimeProjection';
+import { toAgentErrorView, toAgentMessagePart } from './runtimeProjection';
 
 /** Display identities accompany execution; terminal content and replay settle into Cherry. */
 export const DurableTurnMetadataSchema = z.object({
@@ -78,7 +78,6 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     role: 'user',
     status: 'success',
     parts: metadata.userParts,
-    usage: null,
   });
   const parts = [
     ...(metadata.retainedParts ?? []),
@@ -86,7 +85,8 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
       .filter((part) => !metadata.inferenceSnapshot.imageGeneration || part.type !== 'tool')
       .map(toAgentMessagePart),
   ];
-  if (error) parts.push({ id: `durable-error:${turn.identity.requestId}`, type: 'error', error });
+  if (error)
+    parts.push({ id: `durable-error:${turn.identity.requestId}`, type: 'data-error', data: error });
   const assistant = turn.hasAssistant
     ? AgentMessageViewSchema.parse({
         ...common,
@@ -104,7 +104,6 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
                   ? 'error'
                   : turn.status,
         parts,
-        usage: turn.usage ? toAgentUsageView(turn.usage) : null,
       })
     : null;
   const view = AgentTurnViewSchema.parse({
@@ -121,8 +120,15 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
 
 function assistantStats(turn: RuntimeDurableTurn): AgentMessageView['stats'] {
   const runtimeTiming = durableRuntimeTiming(turn);
-  if (!runtimeTiming && turn.contextTokens === undefined) return null;
+  if (!runtimeTiming && turn.contextTokens === undefined && !turn.usage) return null;
   return {
+    ...(turn.usage
+      ? {
+          inputTokens: turn.usage.inputTokens,
+          outputTokens: turn.usage.outputTokens,
+          totalTokens: turn.usage.totalTokens,
+        }
+      : {}),
     ...(runtimeTiming ? { runtimeTiming } : {}),
     ...(turn.contextTokens !== undefined ? { contextTokens: turn.contextTokens } : {}),
   };

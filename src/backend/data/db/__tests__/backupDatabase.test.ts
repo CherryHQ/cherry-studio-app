@@ -16,8 +16,8 @@ function database() {
     INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
     INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session', 'agent', 1, 1, 1);
     INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-      VALUES ('complete', 'session', 'assistant', '{"version":1,"parts":[]}', 'success', 1, 1),
-             ('partial', 'session', 'assistant', '{"version":1,"parts":[]}', 'streaming', 1, 1);
+      VALUES ('complete', 'session', 'assistant', '{"parts":[]}', 'success', 1, 1),
+             ('partial', 'session', 'assistant', '{"parts":[]}', 'streaming', 1, 1);
     INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
       VALUES ('active', 'test', 'running', 'test', 1, '{}', 1, 1), ('finished', 'test', 'completed', 'test', 1, '{}', 1, 1);
     INSERT INTO plugin_authorization (id, plugin_id, auth_method, account_label, credential, created_at, updated_at)

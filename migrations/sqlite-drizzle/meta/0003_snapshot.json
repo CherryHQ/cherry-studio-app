@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "912df851-9f46-4a85-9fa5-47095ee219ca",
+  "id": "64d53510-1ee2-4e02-a02f-54a386ac87c4",
   "prevId": "dbc88357-1f2a-465c-aa62-00d30c5b3e27",
   "tables": {
     "app_state": {
@@ -218,7 +218,7 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'default'"
+          "default": "'auto'"
         },
         "disabled_capabilities": {
           "name": "disabled_capabilities",
@@ -441,14 +441,6 @@
           "autoincrement": false,
           "default": false
         },
-        "execution_target": {
-          "name": "execution_target",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'{\"kind\":\"local\"}'"
-        },
         "last_activity_at": {
           "name": "last_activity_at",
           "type": "integer",
@@ -483,14 +475,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "runtime_revision": {
-          "name": "runtime_revision",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
         }
       },
       "indexes": {
@@ -574,13 +558,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "usage": {
-          "name": "usage",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "stats": {
           "name": "stats",
           "type": "text",
@@ -609,15 +586,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "message_snapshot": {
-          "name": "message_snapshot",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "replay": {
-          "name": "replay",
+        "inference_snapshot": {
+          "name": "inference_snapshot",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -673,6 +643,12 @@
           "name": "agent_session_message_status_idx",
           "columns": ["status"],
           "isUnique": false
+        },
+        "agent_session_message_active_turn_uniq": {
+          "name": "agent_session_message_active_turn_uniq",
+          "columns": ["session_id"],
+          "isUnique": true,
+          "where": "\"agent_session_message\".\"role\" = 'assistant' and \"agent_session_message\".\"status\" in ('pending', 'streaming')"
         },
         "agent_session_message_fts_rowid_uniq": {
           "name": "agent_session_message_fts_rowid_uniq",

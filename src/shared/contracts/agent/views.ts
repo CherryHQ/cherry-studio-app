@@ -39,16 +39,6 @@ export const AgentViewSchema = z.strictObject({
 });
 export type AgentView = z.infer<typeof AgentViewSchema>;
 
-/**
- * Mobile Agent execution boundary, not an engine selector. `local` always
- * means this mobile app. Cloud and LAN desktop control are separate product
- * domains and do not add variants to this contract.
- */
-export const AgentExecutionTargetSchema = z.strictObject({
-  kind: z.literal('local'),
-});
-export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
-
 const AgentBuiltInToolRefSchema = z.strictObject({
   source: z.literal('builtin'),
   capabilityId: z.string().min(1),
@@ -141,9 +131,8 @@ export function readAgentInferenceSnapshot(value: unknown): AgentInferenceSnapsh
 export const AgentSessionViewSchema = z.strictObject({
   id: z.string().min(1),
   agentId: z.string().min(1),
-  executionTarget: AgentExecutionTargetSchema,
-  title: z.string(),
-  titleIsManual: z.boolean(),
+  name: z.string(),
+  isNameManuallyEdited: z.boolean(),
   /**
    * Copied-message boundary after which the fork-origin divider is rendered.
    * Null for ordinary or pre-boundary Sessions, and cleared with fork lineage.
@@ -174,6 +163,7 @@ export const AgentErrorViewSchema = z
       'AGENT_MODEL_NOT_CONFIGURED',
       'SESSION_NOT_FOUND',
       'MESSAGE_NOT_FOUND',
+      'MESSAGE_UNREADABLE',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
@@ -284,11 +274,11 @@ export type AgentToolInputPreview = z.infer<typeof AgentToolInputPreviewSchema>;
 const AgentToolMessagePartSchema = z
   .strictObject({
     id: z.string().min(1),
-    type: z.literal('tool'),
+    type: z.literal('dynamic-tool'),
     toolCallId: z.string(),
     toolRef: AgentMessageToolRefSchema,
-    providerName: z.string(),
-    displayName: z.string(),
+    toolName: z.string(),
+    title: z.string(),
     state: z.enum([
       'input-streaming',
       'input-available',
@@ -344,25 +334,18 @@ export const AgentMessagePartSchema = z.union([
     type: z.literal('file'),
     fileEntryId: z.string().min(1),
     mediaType: z.string(),
-    name: z.string().optional(),
+    filename: z.string().optional(),
     purpose: z.enum(['input-attachment', 'artifact']),
     attachmentReport: FileAttachmentReportSchema.optional(),
   }),
   AgentToolMessagePartSchema,
   z.strictObject({
     id: z.string().min(1),
-    type: z.literal('error'),
-    error: AgentErrorViewSchema,
+    type: z.literal('data-error'),
+    data: AgentErrorViewSchema,
   }),
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
-
-export const AgentUsageViewSchema = z.strictObject({
-  inputTokens: z.number().optional(),
-  outputTokens: z.number().optional(),
-  totalTokens: z.number().optional(),
-});
-export type AgentUsageView = z.infer<typeof AgentUsageViewSchema>;
 
 export const AgentMessageViewSchema = z.strictObject({
   id: z.string().min(1),
@@ -371,7 +354,6 @@ export const AgentMessageViewSchema = z.strictObject({
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
-  usage: AgentUsageViewSchema.nullable(),
   stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
@@ -407,7 +389,7 @@ export const AgentInputPartSchema = z.union([
     type: z.literal('file'),
     fileEntryId: z.string().min(1),
     mediaType: z.string(),
-    name: z.string().optional(),
+    filename: z.string().optional(),
   }),
 ]);
 export type AgentInputPart = z.infer<typeof AgentInputPartSchema>;

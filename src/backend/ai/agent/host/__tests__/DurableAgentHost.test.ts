@@ -220,7 +220,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     const reserved = await store.reserveInitialSubmission({
       sessionId,
       agentId,
-      executionTarget: { kind: 'local' },
+
       userMessageId: uuid(),
       assistantMessageId: uuid(),
       userParts: [{ id: 'question', type: 'text', text: 'Question', state: 'done' }],
@@ -277,7 +277,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         state.host.startSession({
           sessionId: state.sessionId,
           agentId: state.agentId,
-          executionTarget: { kind: 'local' },
+
           userMessageId: uuid(),
           assistantMessageId: uuid(),
           parts: [{ type: 'text', text: 'Hello' }],
@@ -359,13 +359,37 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       await state.host.startSession({
         sessionId: state.sessionId,
         agentId: state.agentId,
-        executionTarget: { kind: 'local' },
+
         userMessageId: uuid(),
         assistantMessageId: uuid(),
         parts: [{ type: 'text', text: 'Hello' }],
       });
       expect(state.conversations.submit).toHaveBeenCalledTimes(1);
       expect(await state.store.listUnsettledAssistantMessages()).toHaveLength(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('retries a failed answer from stored parts using the aligned input contract', async () => {
+    const state = fixture();
+    const failed = await state.reserve('failed');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: failed.assistantMessageId,
+      });
+      const messages = await state.store.listMessages(state.sessionId);
+      expect(messages.map(({ id }) => id)).toEqual([
+        failed.userMessageId,
+        failed.assistantMessageId,
+      ]);
+      expect(messages[0].parts).toEqual([
+        { id: 'input-0', type: 'text', text: 'Question', state: 'done' },
+      ]);
+      expect(messages[1]).toMatchObject({ status: 'pending' });
+      expect(messages[1].turnId).not.toBe(failed.identity.turnId);
     } finally {
       await state.host.close();
     }
@@ -385,7 +409,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         [turn.assistantMessageId]: replay,
       });
       expect(state.steps.indexOf('persisted')).toBeLessThan(state.steps.indexOf('reset'));
-      expect(await state.store.getSession(state.sessionId)).toMatchObject({ title: 'My title' });
+      expect(await state.store.getSession(state.sessionId)).toMatchObject({ name: 'My title' });
     } finally {
       await state.host.close();
     }

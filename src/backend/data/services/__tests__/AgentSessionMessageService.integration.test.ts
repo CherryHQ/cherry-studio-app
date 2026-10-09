@@ -101,7 +101,7 @@ describe('AgentSessionMessageService persistence', () => {
     // A selected-ID read must not deserialize unrelated history, even between selected rows.
     sqlite
       .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
-      .run(JSON.stringify({ version: 99, parts: [] }), 'unselected');
+      .run(JSON.stringify({ parts: null }), 'unselected');
 
     const page = await agentSessionMessageService.listByCursor('session-1', {
       ids: ['old-a', 'new', 'foreign', 'old-b', 'missing', 'old-a'],
@@ -212,49 +212,54 @@ describe('AgentSessionMessageService persistence', () => {
     expect(selected.items.map((message) => message.id)).toEqual(['checkpointed']);
   });
 
-  test('skips unreadable rows without failing the page or breaking its cursors', async () => {
+  test('keeps unreadable message placeholders without breaking page cursors', async () => {
     for (const id of ['a', 'b', 'c', 'd']) {
       insertMessage(sqlite, { createdAt: 100, id, text: id });
     }
     const corrupt = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
-    corrupt.run(JSON.stringify({ version: 99, parts: [] }), 'b');
-    corrupt.run(JSON.stringify({ version: 1, parts: [{ id: 'p', type: 'future' }] }), 'c');
+    corrupt.run(JSON.stringify({ parts: null }), 'b');
+    corrupt.run(JSON.stringify({ parts: [{ id: 'p', type: 'future' }] }), 'c');
 
     const newest = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
-    expect(newest.items.map((message) => message.id)).toEqual(['d']);
+    expect(newest.items.map((message) => message.id)).toEqual(['d', 'c']);
     const older = await agentSessionMessageService.listByCursor('session-1', {
       cursor: newest.nextCursor,
       limit: 2,
     });
-    expect(older.items.map((message) => message.id)).toEqual(['a']);
+    expect(older.items.map((message) => message.id)).toEqual(['b', 'a']);
     const around = await agentSessionMessageService.listByCursor('session-1', {
       aroundMessageId: 'c',
       limit: 3,
     });
-    expect(around.items.map((message) => message.id)).toEqual(['d']);
+    expect(around.items.map((message) => message.id)).toEqual(['d', 'c', 'b']);
     const selected = await agentSessionMessageService.listByCursor('session-1', {
       ids: ['a', 'b'],
     });
-    expect(selected.items.map((message) => message.id)).toEqual(['a']);
+    expect(selected.items.map((message) => message.id)).toEqual(['b', 'a']);
   });
 
-  test('skips unreadable projected rows while advancing past an empty page', async () => {
+  test('retains unreadable messages across transcript read modes', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'readable', text: 'Readable' });
-    insertMessage(sqlite, { createdAt: 200, id: 'unknown-version', text: 'Unknown' });
+    insertMessage(sqlite, { createdAt: 200, id: 'invalid-parts', text: 'Unknown' });
     insertMessage(sqlite, { createdAt: 300, id: 'unknown-part', text: 'Unknown' });
     const corrupt = sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?');
-    corrupt.run(JSON.stringify({ version: 99, parts: [] }), 'unknown-version');
-    corrupt.run(
-      JSON.stringify({ version: 1, parts: [{ id: 'part', type: 'future' }] }),
-      'unknown-part',
-    );
-    // Both fixes must hold together: omit corrupt non-view columns and skip invalid view data.
+    corrupt.run(JSON.stringify({ parts: null }), 'invalid-parts');
+    corrupt.run(JSON.stringify({ parts: [{ id: 'part', type: 'future' }] }), 'unknown-part');
+    // Both fixes must hold together: omit corrupt non-view columns and isolate invalid parts.
     sqlite
       .prepare('UPDATE agent_session_message SET context_checkpoint = ?, error = ?')
       .run('{not json', '{not json');
 
     const first = await agentSessionMessageService.listByCursor('session-1', { limit: 2 });
-    expect(first.items).toEqual([]);
+    expect(first.items.map((message) => message.id)).toEqual(['unknown-part', 'invalid-parts']);
+    for (const message of first.items) {
+      expect(message.parts).toEqual([
+        expect.objectContaining({
+          type: 'data-error',
+          data: expect.objectContaining({ code: 'MESSAGE_UNREADABLE' }),
+        }),
+      ]);
+    }
     expect(first.nextCursor).toBeDefined();
     const next = await agentSessionMessageService.listByCursor('session-1', {
       cursor: first.nextCursor,
@@ -264,21 +269,50 @@ describe('AgentSessionMessageService persistence', () => {
     expect(next.nextCursor).toBeUndefined();
 
     const around = await agentSessionMessageService.listByCursor('session-1', {
-      aroundMessageId: 'unknown-version',
+      aroundMessageId: 'invalid-parts',
       limit: 3,
     });
-    expect(around.items.map((message) => message.id)).toEqual(['readable']);
+    expect(around.items.map((message) => message.id)).toEqual([
+      'unknown-part',
+      'invalid-parts',
+      'readable',
+    ]);
     const selected = await agentSessionMessageService.listByCursor('session-1', {
-      ids: ['unknown-part', 'unknown-version', 'readable'],
+      ids: ['unknown-part', 'invalid-parts', 'readable'],
     });
-    expect(selected.items.map((message) => message.id)).toEqual(['readable']);
+    expect(selected.items.map((message) => message.id)).toEqual([
+      'unknown-part',
+      'invalid-parts',
+      'readable',
+    ]);
+  });
+
+  test('keeps readable parts around an unsupported part without rewriting stored history', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'mixed', text: 'Readable' });
+    const before = { id: 'before', type: 'text', text: 'Before', state: 'done' };
+    const after = { id: 'after', type: 'text', text: 'After', state: 'done' };
+    const data = JSON.stringify({ parts: [before, { id: 'future', type: 'future' }, after] });
+    sqlite.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?').run(data, 'mixed');
+
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    expect(page.items[0]?.parts).toEqual([
+      before,
+      expect.objectContaining({
+        type: 'data-error',
+        data: expect.objectContaining({ code: 'MESSAGE_UNREADABLE', retryable: false }),
+      }),
+      after,
+    ]);
+    expect(
+      sqlite.prepare('SELECT data FROM agent_session_message WHERE id = ?').get('mixed'),
+    ).toEqual({ data });
   });
 
   test('preserves an unknown inference snapshot version as unsupported JSON', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'message-future', text: 'Future' });
     const futureSnapshot = { version: 2, opaque: { retained: true } };
     sqlite
-      .prepare('UPDATE agent_session_message SET message_snapshot = ? WHERE id = ?')
+      .prepare('UPDATE agent_session_message SET inference_snapshot = ? WHERE id = ?')
       .run(JSON.stringify(futureSnapshot), 'message-future');
 
     const page = await agentSessionMessageService.listByCursor('session-1');
@@ -293,9 +327,9 @@ function insertSession(database: DatabaseSync, id: string): void {
   database
     .prepare(
       `INSERT INTO agent_session (
-        id, agent_id, name, is_name_manually_edited, execution_target,
+        id, agent_id, name, is_name_manually_edited,
         last_activity_at, created_at, updated_at
-      ) VALUES (?, 'agent-1', '', 0, '{"kind":"local"}', 1, 1, 1)`,
+      ) VALUES (?, 'agent-1', '', 0, 1, 1, 1)`,
     )
     .run(id);
 }
@@ -314,7 +348,6 @@ function insertMessage(
       values.id,
       `turn-${values.id}`,
       JSON.stringify({
-        version: 1,
         parts: [{ id: `part-${values.id}`, type: 'text', text: values.text, state: 'done' }],
       }),
       JSON.stringify({

@@ -84,7 +84,7 @@ describe('AgentService persistence', () => {
       // capability enabled; the create form seeds its own deny-list.
       disabledCapabilities: [],
       instructions: '',
-      modelId: 'openai::gpt-4',
+      model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
@@ -120,6 +120,74 @@ describe('AgentService persistence', () => {
       unsubscribe();
     }
   });
+
+  it('publishes committed avatar, ordering, deletion, and initial Agent changes', async () => {
+    const changed = jest.fn((_paths: readonly string[]) => ({
+      inTransaction: sqlite.isTransaction,
+      rows: sqlite.prepare('SELECT id, avatar, deleted_at FROM agent').all(),
+    }));
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+      const id = initial!.id;
+      expect(changed).toHaveBeenLastCalledWith(['/agents', `/agents/${id}`]);
+      await agentService.createInitialAgent({ name: 'Already seeded' });
+      expect(changed).toHaveBeenCalledTimes(1);
+
+      await agentService.setAvatar(id, '🍒');
+      expect(changed.mock.results.at(-1)?.value).toMatchObject({
+        inTransaction: false,
+        rows: [expect.objectContaining({ id, avatar: '🍒' })],
+      });
+      await agentService.reorder(id, { position: 'first' });
+      await agentService.reorderBatch([{ id, anchor: { position: 'last' } }]);
+      await agentService.delete(id);
+      expect(changed).toHaveBeenCalledTimes(5);
+      expect(changed.mock.calls.every(([paths]) => paths[0] === '/agents')).toBe(true);
+      expect(changed.mock.results.every(({ value }) => value.inTransaction === false)).toBe(true);
+      expect(changed.mock.results.at(-1)?.value.rows).toEqual([
+        expect.objectContaining({ id, deleted_at: expect.any(Number) }),
+      ]);
+
+      changed.mockClear();
+      await agentService.reorderBatch([]);
+      await expect(agentService.delete(id)).rejects.toBeDefined();
+      await expect(agentService.setAvatar(id, 'missing')).rejects.toBeDefined();
+      expect(changed).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it.each(['avatar', 'delete', 'reorder', 'reorderBatch'] as const)(
+    'does not notify observers when %s rolls back',
+    async (operation) => {
+      const agent = await agentService.create({ name: 'Writer' });
+      const write = dbService.withWriteTx.bind(dbService);
+      jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce((callback) =>
+        write(async (tx) => {
+          await callback(tx);
+          throw new Error('Commit failed');
+        }),
+      );
+      const changed = jest.fn();
+      const unsubscribe = subscribeDataApiChanges(changed);
+      try {
+        const operations = {
+          avatar: () => agentService.setAvatar(agent.id, '🍒'),
+          delete: () => agentService.delete(agent.id),
+          reorder: () => agentService.reorder(agent.id, { position: 'first' }),
+          reorderBatch: () =>
+            agentService.reorderBatch([{ id: agent.id, anchor: { position: 'first' } }]),
+        };
+        await expect(operations[operation]()).rejects.toThrow('Commit failed');
+        expect(changed).not.toHaveBeenCalled();
+        expect(await agentService.getById(agent.id)).toEqual(agent);
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
 
   it('rejects an edit committed between the read and the guarded write transaction', async () => {
     const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
@@ -223,18 +291,16 @@ describe('AgentService persistence', () => {
 
     const agent = await agentService.create({ name: 'Researcher' });
 
-    expect(agent.modelId).toBeNull();
+    expect(agent.model).toBeNull();
   });
 
   it('rejects a create or update whose model is not registered', async () => {
     await expect(
-      agentService.create({ modelId: 'openai::unknown', name: 'Researcher' }),
+      agentService.create({ model: 'openai::unknown', name: 'Researcher' }),
     ).rejects.toBeDefined();
 
     const agent = await agentService.create({ name: 'Researcher' });
-    await expect(
-      agentService.update(agent.id, { modelId: 'openai::unknown' }),
-    ).rejects.toBeDefined();
+    await expect(agentService.update(agent.id, { model: 'openai::unknown' })).rejects.toBeDefined();
   });
 
   it('advances the Agent version when updates share one wall-clock millisecond', async () => {

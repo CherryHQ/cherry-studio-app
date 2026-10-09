@@ -8,7 +8,7 @@ const message = (parts: AgentMessageView['parts']) =>
     display: {
       data: {
         parts: parts.map((part) =>
-          part.type === 'file' ? { ...part, filename: part.name } : part,
+          part.type === 'file' ? { ...part, filename: part.filename } : part,
         ),
       },
     },
@@ -34,7 +34,7 @@ test('uses an attachment name when there is no answer text', () => {
           id: 'file',
           type: 'file',
           fileEntryId: 'file',
-          name: 'report.pdf',
+          filename: 'report.pdf',
           mediaType: 'application/pdf',
           purpose: 'artifact',
         },

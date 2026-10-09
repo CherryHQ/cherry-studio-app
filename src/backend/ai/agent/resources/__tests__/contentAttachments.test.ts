@@ -126,10 +126,17 @@ describe('managed text attachments', () => {
     });
   });
 
+  test('accepts control characters that occur in real text', async () => {
+    const file = fact(FIRST_ID, 'build.log', 'text/plain');
+    const body = '\u001b[31mfailed\u001b[0m\fnext page';
+    const contents = await resolve([file], new Map([[FIRST_ID, utf8(body)]]));
+
+    expect(contents.get(FIRST_ID)).toMatchObject({ text: body, truncated: false });
+  });
+
   test.each([
     ['nul-byte', Uint8Array.from([65, 0, 66])],
     ['invalid-utf8', Uint8Array.from([0xc0, 0xaf])],
-    ['binary-content', Uint8Array.from([65, 1, 66])],
   ] as const)('rejects %s content', async (failure, bytes) => {
     const file = fact(FIRST_ID, 'spoofed.txt', 'text/plain');
 

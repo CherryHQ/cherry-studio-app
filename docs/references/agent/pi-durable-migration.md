@@ -8,7 +8,7 @@ and device acceptance of this ownership change have not been run.
 
 | Data | Owner |
 | --- | --- |
-| Sessions, titles, complete message parts, errors, timing, file references, search | `cherry.db` |
+| Sessions, names, complete message parts, errors, timing, file references, search | `cherry.db` |
 | Successful assistant/tool model replay, including signed content | Cherry message `replay` |
 | Saved compacted/reset model context at a Cherry turn boundary | Cherry message `contextCheckpoint` |
 | Admitted inputs, tasks, progress, execution recovery and active model context | `pi-agent.db` |
@@ -31,7 +31,7 @@ suspended. Live Pi events overlay the currently executing answer.
 2. Atomically reserve the Cherry session (for an initial input) and its user/assistant pair. The
    assistant is `pending`; its fresh `turnId` is also the native request identity.
 3. Admit the input to Pi. Execution checks that the Cherry owner and history revision still match.
-4. On native completion, write full parts, status, usage, error, timing, replay and checkpoint in one
+4. On native completion, write full parts, status, token counts in `stats`, error, timing, replay and checkpoint in one
    Cherry transaction. Publish terminal message/turn events only after that transaction commits.
 
 Each `pending`/`streaming` assistant row is its own durable settlement receipt. No single
@@ -116,6 +116,8 @@ copying Cherry. Restoring starts with an empty Pi file and rebuilds working copi
 
 The earlier experimental Pi-authoritative branch is not a supported migration input: some of its
 Cherry rows contain text indexes rather than complete messages, and its `0003` migration differs.
+The current lineage keeps main’s `0003_align_agent_fields` and appends
+`0004_agent_message_replay` for durable replay, runtime revisions and queued-input reservations.
 A Pi binding without a valid working-copy revision causes initialization to fail while preserving
 the file, rather than deleting potentially unique history. Such experimental data needs a separate
 explicit conversion; do not delete its Pi file to bypass the guard. Ordinary pre-experiment Cherry

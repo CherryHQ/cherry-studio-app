@@ -73,7 +73,7 @@ it('keeps the same provider failure in message presentation and exported history
   expect(view.display.data.parts).toHaveLength(1);
   expect(remoteTranscriptMessage(message)).toMatchObject({
     status: 'error',
-    parts: [{ type: 'error', error: { code: 'EXECUTION_FAILED', ...failure } }],
+    parts: [{ type: 'data-error', data: { code: 'EXECUTION_FAILED', ...failure } }],
   });
 });
 

@@ -37,7 +37,6 @@ function result(id: string, overrides: Partial<AgentMessageView> = {}): AgentMes
     status: 'success',
     turnId: `turn-${id}`,
     updatedAt: '2026-09-01T00:00:00.000Z',
-    usage: null,
     ...overrides,
   };
 }

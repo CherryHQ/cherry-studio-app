@@ -1,7 +1,5 @@
 import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AgentExecutionTarget } from '@/shared/contracts/agent';
-
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentTable } from './agent';
 
@@ -10,8 +8,7 @@ import { agentTable } from './agent';
  * (docs/references/agent/agent-persistence.md).
  *
  * No workspace reference: mobile has no working directory or shell
- * environment. No Runtime identity: routing resolves per execution from
- * `executionTarget` inside the Host-owned Router. Sessions hard-delete and
+ * environment. The Host owns the local Runtime binding. Sessions hard-delete and
  * cascade their messages; list ordering is recency (`lastActivityAt`), so
  * there is no order key.
  */
@@ -23,17 +20,11 @@ export const agentSessionTable = sqliteTable(
     agentId: text()
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
-    // Protocol vocabulary (AgentSessionView.title), not a second synonym set
-    title: text('name').notNull().default(''),
-    // Whether the title was manually edited by user
-    titleIsManual: integer('is_name_manually_edited', { mode: 'boolean' }).notNull().default(false),
+    name: text().notNull().default(''),
+    // Whether the name was manually edited by user
+    isNameManuallyEdited: integer({ mode: 'boolean' }).notNull().default(false),
     /** Invalidates disposable execution history in the same transaction as transcript edits. */
     runtimeRevision: integer().notNull().default(0),
-    // Application intent (protocol AgentExecutionTarget), never a Runtime id
-    executionTarget: text({ mode: 'json' })
-      .$type<AgentExecutionTarget>()
-      .notNull()
-      .default({ kind: 'local' }),
     // Dedicated conversation activity time: advances to reservation time or
     // terminal stats.runtimeTiming.completedAt, and is inherited by history forks.
     // Administrative mutations such as renames and forks must not stamp "now".

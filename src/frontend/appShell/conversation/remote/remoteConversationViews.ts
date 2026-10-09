@@ -282,8 +282,8 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
   if (message.failure)
     parts.push({
       id: `${message.id}:failure`,
-      type: 'error',
-      error: { code: 'EXECUTION_FAILED', ...message.failure },
+      type: 'data-error',
+      data: { code: 'EXECUTION_FAILED', ...message.failure },
     });
   return {
     id: message.id,

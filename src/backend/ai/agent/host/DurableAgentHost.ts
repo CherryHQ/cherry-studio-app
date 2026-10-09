@@ -371,8 +371,6 @@ export class DurableAgentHost implements AgentProtocol {
   startSession(input: AgentStartSessionInput) {
     const parsed = AgentStartSessionInputSchema.parse(input);
     return this.admit(parsed.sessionId, async (signal) => {
-      if (parsed.executionTarget.kind !== 'local')
-        fail('CAPABILITY_UNSUPPORTED', 'Only local execution is supported.');
       if (await this.store.getSession(parsed.sessionId))
         fail('SESSION_BUSY', 'This session already exists.');
       const plan = await prepareInitialTurn(this.preparation, parsed, signal);
@@ -478,7 +476,6 @@ export class DurableAgentHost implements AgentProtocol {
         : await this.store.reserveInitialSubmission({
             ...reservation,
             agentId: plan.agent.id,
-            executionTarget: { kind: 'local' },
           }));
     const { turnId } = reserved;
     const requestId = turnId;
@@ -500,7 +497,7 @@ export class DurableAgentHost implements AgentProtocol {
               text:
                 part.type === 'text'
                   ? part.text
-                  : `[Image input: ${part.name ?? part.fileEntryId}]`,
+                  : `[Image input: ${part.filename ?? part.fileEntryId}]`,
             }))
           : toRuntimeInputParts(plan.inputParts, plan.resources, attachments),
         ...(plan.retry?.resumeParts.length
@@ -611,7 +608,6 @@ export class DurableAgentHost implements AgentProtocol {
             userMessageId: uuidv7(),
             assistantMessageId: uuidv7(),
             agentId: source.agentId,
-            executionTarget: source.executionTarget,
           });
         const fork = await this.copySession({ sessionId: source.id, fromMessageId: before.id });
         await this.submitMessage({
@@ -638,7 +634,8 @@ export class DurableAgentHost implements AgentProtocol {
       }
       plan.hasMessages = plan.history.length > 0 || plan.runtimeContextCheckpoint !== null;
       const lastTool = assistant.parts.findLastIndex(
-        (part) => part.type === 'tool' && part.input !== undefined && part.output !== undefined,
+        (part) =>
+          part.type === 'dynamic-tool' && part.input !== undefined && part.output !== undefined,
       );
       const retained =
         lastTool < 0
@@ -647,8 +644,9 @@ export class DurableAgentHost implements AgentProtocol {
               .slice(0, lastTool + 1)
               .filter(
                 (part) =>
-                  part.type !== 'error' &&
-                  (part.type !== 'tool' || (part.input !== undefined && part.output !== undefined)),
+                  part.type !== 'data-error' &&
+                  (part.type !== 'dynamic-tool' ||
+                    (part.input !== undefined && part.output !== undefined)),
               );
       if (retained.length) {
         plan.history.push(user, { ...assistant, parts: retained });
@@ -701,10 +699,10 @@ export class DurableAgentHost implements AgentProtocol {
     const parsed = AgentRenameSessionInputSchema.parse(input);
     storageMutationGate.assertWritable();
     await this.requireSession(parsed.sessionId);
-    const session = await this.store.renameSession(parsed.sessionId, parsed.title);
+    const session = await this.store.renameSession(parsed.sessionId, parsed.name);
     if (!session) fail('SESSION_NOT_FOUND', 'The session no longer exists.');
     this.publish(session.id, { type: 'session.updated', session });
-    this.background.updateSessionTitle(session.id, session.title);
+    this.background.updateSessionTitle(session.id, session.name);
     return session;
   }
 
@@ -840,11 +838,7 @@ export class DurableAgentHost implements AgentProtocol {
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
       imageGeneration: this.ports.imageGeneration,
-      routeExecutionTarget: (target) => {
-        if (target.kind !== 'local')
-          fail('CAPABILITY_UNSUPPORTED', 'Only local execution is supported.');
-        return this.runtime;
-      },
+      runtime: this.runtime,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
@@ -1093,7 +1087,7 @@ export class DurableAgentHost implements AgentProtocol {
           error,
           `error-${row.turnId ?? row.assistantMessageId}`,
         ),
-        usage: message.usage,
+        usage: message.stats,
         error,
         contextCheckpoint: null,
         runtimeStats: {
@@ -1138,7 +1132,7 @@ export class DurableAgentHost implements AgentProtocol {
       status:
         turn.status === 'completed' ? 'success' : turn.status === 'failed' ? 'error' : turn.status,
       parts: assistant.parts,
-      usage: assistant.usage,
+      usage: turn.usage,
       error: view.error,
       ...artifacts,
       runtimeStats: {
@@ -1297,7 +1291,7 @@ export class DurableAgentHost implements AgentProtocol {
               return;
             state.background = this.background.startTurn({
               sessionId,
-              sessionTitle: session?.title ?? '',
+              sessionTitle: session?.name ?? '',
               agentId: agent.id,
               agentName: agent.name,
               onInterrupt: () => this.suspend(),
@@ -1449,7 +1443,7 @@ export class DurableAgentHost implements AgentProtocol {
       operation.then((session) => {
         if (session) {
           this.publish(session.id, { type: 'session.updated', session });
-          this.background.updateSessionTitle(session.id, session.title);
+          this.background.updateSessionTitle(session.id, session.name);
         }
       }),
     );
@@ -1554,10 +1548,25 @@ function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
         left.rawToolName === right.rawToolName)
   );
 }
-function userInput(parts: readonly unknown[]): AgentInputPart[] {
+function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
   return parts.flatMap((part) => {
-    const value = part as { type?: string };
-    if (value.type !== 'text' && value.type !== 'file') return [];
-    return [AgentInputPartSchema.parse(part)];
+    if (part.type === 'text')
+      return [
+        AgentInputPartSchema.parse({
+          type: part.type,
+          text: part.text,
+          ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
+        }),
+      ];
+    if (part.type === 'file')
+      return [
+        AgentInputPartSchema.parse({
+          type: part.type,
+          fileEntryId: part.fileEntryId,
+          mediaType: part.mediaType,
+          ...(part.filename !== undefined ? { filename: part.filename } : {}),
+        }),
+      ];
+    return [];
   });
 }

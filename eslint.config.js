@@ -292,7 +292,7 @@ const frontendSharedLayer = layerPattern(
 
 const frontendImplementationPackages = {
   regex:
-    '^(?:ai(?:/|$)|@ai-sdk/|@earendil-works/|@cherrystudio/(?:ai-core|ai-sdk-provider)(?:/|$)|drizzle-orm(?:/|$)|expo-sqlite(?:/|$))',
+    '^(?:ai(?:/|$)|@ai-sdk/|@earendil-works/|@cherrystudio/(?:ai-core|ai-runtime|ai-sdk-provider)(?:/|$)|drizzle-orm(?:/|$)|expo-sqlite(?:/|$))',
   message:
     'Frontend consumes Data API and workflow contracts; AI SDK and database implementations belong to backend.',
 };

@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "6",
+      "when": 1791466514296,
+      "tag": "0003_align_agent_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
       "when": 1791522027135,
-      "tag": "0003_agent_message_replay",
+      "tag": "0004_agent_message_replay",
       "breakpoints": true
     }
   ]

@@ -84,7 +84,7 @@ export function toRuntimeHistory(
           // Missing historical input content is omitted. Assistant artifacts
           // never become implicit model attachments.
           break;
-        case 'tool': {
+        case 'dynamic-tool': {
           const validPart = AgentMessagePartSchema.safeParse(part);
           const output = AgentToolResultSchema.safeParse(part.output);
           if (
@@ -100,7 +100,7 @@ export function toRuntimeHistory(
               type: 'tool-call',
               toolCallId: part.toolCallId,
               toolRef: part.toolRef,
-              providerName: part.providerName,
+              providerName: part.toolName,
               input: part.input,
             });
             parts.push({

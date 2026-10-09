@@ -123,7 +123,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
         const session = await client.startSession({
           ...submission,
           agentId,
-          executionTarget: { kind: 'local' },
         });
         if (isCurrent()) {
           draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);

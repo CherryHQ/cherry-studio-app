@@ -89,14 +89,14 @@ export class AgentSessionNaming {
   ): Promise<AgentSessionView | null> {
     this.dependencies.signal?.throwIfAborted();
     const userText = extractText(parts);
-    const nextTitle = buildFirstUserMessageTitle(userText).slice(0, 255);
-    if (!nextTitle) return null;
+    const nextName = buildFirstUserMessageTitle(userText).slice(0, 255);
+    if (!nextName) return null;
 
     const session = await this.dependencies.store.getSession(sessionId);
     this.dependencies.signal?.throwIfAborted();
-    if (!session || session.titleIsManual || !canAutoRename(session.title)) return null;
+    if (!session || session.isNameManuallyEdited || !canAutoRename(session.name)) return null;
 
-    return this.dependencies.store.autoRenameSession(sessionId, session.title, nextTitle);
+    return this.dependencies.store.autoRenameSession(sessionId, session.name, nextName);
   }
 
   private async renameFromConversationSummary(input: {
@@ -120,7 +120,8 @@ export class AgentSessionNaming {
 
       const session = await this.dependencies.store.getSession(sessionId);
       this.dependencies.signal?.throwIfAborted();
-      if (!session || session.titleIsManual || !canAutoRename(session.title, userText)) return null;
+      if (!session || session.isNameManuallyEdited || !canAutoRename(session.name, userText))
+        return null;
 
       const uniqueModelId = await this.resolveNamingModelId();
       if (!uniqueModelId) return null;
@@ -140,21 +141,21 @@ export class AgentSessionNaming {
           : {}),
       });
       this.dependencies.signal?.throwIfAborted();
-      const nextTitle = sanitizeConversationTitle(text).slice(0, 255);
-      if (!nextTitle) return null;
+      const nextName = sanitizeConversationTitle(text).slice(0, 255);
+      if (!nextName) return null;
 
       const latestSession = await this.dependencies.store.getSession(sessionId);
       this.dependencies.signal?.throwIfAborted();
       if (
         !latestSession ||
-        latestSession.titleIsManual ||
-        !canAutoRename(latestSession.title, userText) ||
-        nextTitle === latestSession.title
+        latestSession.isNameManuallyEdited ||
+        !canAutoRename(latestSession.name, userText) ||
+        nextName === latestSession.name
       ) {
         return null;
       }
 
-      return this.dependencies.store.autoRenameSession(sessionId, latestSession.title, nextTitle);
+      return this.dependencies.store.autoRenameSession(sessionId, latestSession.name, nextName);
     } finally {
       this.summaryLocks.delete(sessionId);
     }

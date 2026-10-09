@@ -31,7 +31,7 @@ const BUILT_IN_TOOL_TITLE_KEYS: Record<string, string> = {
   reminder_update_item: 'chat.builtinTool.reminders.update',
 };
 
-type ToolPart = Extract<AgentMessagePart, { type: 'tool' }>;
+type ToolPart = Extract<AgentMessagePart, { type: 'dynamic-tool' }>;
 export type BackgroundReplyTranslate = (key: string) => string;
 
 export function deriveBackgroundReplyContent(
@@ -151,7 +151,7 @@ function isActiveToolPart(part: ToolPart): boolean {
 }
 
 function isToolPart(part: AgentMessagePart): part is ToolPart {
-  return part.type === 'tool';
+  return part.type === 'dynamic-tool';
 }
 
 function stripMarkdown(value: string): string {

@@ -125,7 +125,7 @@ function readSessionIds() {
 }
 
 function makeSession(id: string): AgentSessionEntity {
-  return { id, title: id.toUpperCase() } as AgentSessionEntity;
+  return { id, name: id.toUpperCase() } as AgentSessionEntity;
 }
 
 function deferred<T>() {

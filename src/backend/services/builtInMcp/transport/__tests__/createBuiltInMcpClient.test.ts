@@ -1,5 +1,6 @@
 import * as mcp from '@ai-sdk/mcp';
 
+import { trackExpoAbortSignals } from '../../authorization/__tests__/_expoAbortSignal';
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
@@ -134,6 +135,146 @@ const userCredential = {
     scope: FEISHU_REQUESTED_TOOL_SCOPES.join(' '),
   },
 };
+
+it.each([false, true])(
+  'releases real SDK request listeners while reusing the Feishu connection (caller: %s)',
+  async (withCaller) => {
+    const tracked = trackExpoAbortSignals();
+    mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
+    const caller = new AbortController();
+    const client = await createBuiltInMcpClient('feishu', 'grant-feishu', caller.signal);
+    try {
+      const discovery = withCaller ? { options: { signal: caller.signal } } : undefined;
+      const options = withCaller ? { abortSignal: caller.signal } : undefined;
+      await client.listTools(discovery);
+      await settle();
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+
+      for (let index = 0; index < 25; index++) {
+        await client.listTools(discovery);
+        await expect(client.callTool({ name: 'fetch-doc', args: {}, options })).resolves.toEqual({
+          content: [{ type: 'text', text: JSON.stringify({ login: 'cherry' }) }],
+          isError: false,
+        });
+        expect(tracked.listeners.size).toBe(0);
+        expect(tracked.timers.size).toBe(0);
+      }
+
+      mockFetch.mockImplementation((url, init) => {
+        if (init?.body && JSON.parse(init.body).method === 'tools/call')
+          return new Response(null, { status: 500 });
+        return respond(url, init);
+      });
+      await expect(
+        client.callTool({ name: 'create-doc', args: {}, options }),
+      ).rejects.toMatchObject({
+        reason: 'unknown-write',
+      });
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+      expect(caller.signal.aborted).toBe(false);
+      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(
+        toolRequests().filter((request) => request.params?.name === 'create-doc'),
+      ).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  },
+);
+
+it.each(['complete', 'cancel'] as const)(
+  'keeps an overlapping response stream alive until its own request ends (%s)',
+  async (ending) => {
+    const tracked = trackExpoAbortSignals();
+    mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
+    const client = await createBuiltInMcpClient(
+      'feishu',
+      'grant-feishu',
+      new AbortController().signal,
+    );
+    let pending: Promise<unknown> | undefined;
+    try {
+      await client.listTools();
+      await settle();
+      const connectionSignal = mockFetch.mock.calls.find(([, init]) => init?.method === 'GET')?.[1]
+        .signal as AbortSignal;
+      const caller = new AbortController();
+      let responseController!: ReadableStreamDefaultController<Uint8Array>;
+      let requestSignal!: AbortSignal;
+      let requestId: number | undefined;
+      let received!: () => void;
+      const started = new Promise<void>((resolve) => {
+        received = resolve;
+      });
+      mockFetch.mockImplementation((url, init) => {
+        if (!init?.body) return respond(url, init);
+        const request: RpcRequest = JSON.parse(init.body);
+        if (request.method !== 'tools/call' || request.params?.name !== 'create-doc')
+          return respond(url, init);
+        requestSignal = init.signal;
+        requestId = request.id;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            responseController = controller;
+            // Model fetch's response-body lifetime under the request's signal.
+            const onAbort = () => {
+              requestSignal.removeEventListener('abort', onAbort);
+              controller.close();
+            };
+            requestSignal.addEventListener('abort', onAbort);
+          },
+        });
+        received();
+        const response = new Response(null, { headers: { 'content-type': 'text/event-stream' } });
+        // The SDK pipes the body through Jest's global stream polyfills, not Node's Response realm.
+        Object.defineProperty(response, 'body', { value: body });
+        return response;
+      });
+      pending = client.callTool({
+        name: 'create-doc',
+        args: {},
+        options: { abortSignal: caller.signal },
+      });
+      await started;
+      await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
+        'content',
+      );
+      expect(requestSignal.aborted).toBe(false);
+      expect(connectionSignal.aborted).toBe(false);
+
+      if (ending === 'complete') {
+        const result = { content: [{ type: 'text', text: 'created' }] };
+        responseController.enqueue(
+          new TextEncoder().encode(
+            `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n\n`,
+          ),
+        );
+        await expect(pending).resolves.toEqual({ ...result, isError: false });
+        expect(caller.signal.aborted).toBe(false);
+      } else {
+        const outcome = expect(pending).rejects.toThrow();
+        caller.abort();
+        await outcome;
+      }
+      expect(requestSignal.aborted).toBe(true);
+      expect(connectionSignal.aborted).toBe(false);
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+      await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
+        'content',
+      );
+      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(
+        toolRequests().filter((request) => request.params?.name === 'create-doc'),
+      ).toHaveLength(1);
+    } finally {
+      await client.close();
+      await pending?.catch(() => undefined);
+    }
+  },
+);
 
 it('rotates user tokens behind a stable grant reference without rejecting the grant', async () => {
   mockGetGrant.mockResolvedValue({

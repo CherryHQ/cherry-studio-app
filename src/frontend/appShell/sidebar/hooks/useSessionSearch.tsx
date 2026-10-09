@@ -23,7 +23,7 @@ export function useSessionSearch() {
       emptyText: t('session.search.noResults'),
       getAccessibilityLabel: ({ item, kind }) =>
         kind === 'session'
-          ? item.title || t('session.list.untitled')
+          ? item.name || t('session.list.untitled')
           : `${item.sessionTitle || t('session.list.untitled')}: ${item.snippet}`,
       keyExtractor: ({ item, kind }) =>
         kind === 'session' ? `session:${item.id}` : `message:${item.messageId}`,
@@ -71,7 +71,7 @@ export function useSessionSearch() {
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {
   const { t, i18n } = useTranslation();
   const title =
-    (result.kind === 'session' ? result.item.title : result.item.sessionTitle) ||
+    (result.kind === 'session' ? result.item.name : result.item.sessionTitle) ||
     t('session.list.untitled');
   const subtitle =
     result.kind === 'message'

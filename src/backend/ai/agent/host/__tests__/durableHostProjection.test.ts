@@ -36,6 +36,48 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
 }
 
 describe('durable message timing', () => {
+  test('projects native usage and failures into the aligned transcript contract', () => {
+    const { user, assistant } = projectDurableHostTurn(
+      turn({
+        status: 'failed',
+        usage: { inputTokens: 12, outputTokens: 3, totalTokens: 15, reasoningTokens: 2 },
+        error: { code: 'PROVIDER_ERROR', message: 'Request failed', retryable: true },
+        parts: [
+          {
+            id: 'tool',
+            type: 'tool',
+            toolCallId: 'call',
+            toolRef: { source: 'builtin', capabilityId: 'agents' },
+            providerName: 'agent_get',
+            displayName: 'Get Agent',
+            state: 'output-available',
+            input: {},
+            output: { value: { ok: true }, artifacts: [] },
+          },
+          {
+            id: 'file',
+            type: 'file',
+            ref: { kind: 'managed-file', fileEntryId: 'file' },
+            mediaType: 'text/plain',
+            name: 'result.txt',
+            purpose: 'artifact',
+          },
+        ],
+      }),
+    );
+    expect(user).not.toHaveProperty('usage');
+    expect(assistant).not.toHaveProperty('usage');
+    expect(assistant?.stats).toEqual({ inputTokens: 12, outputTokens: 3, totalTokens: 15 });
+    expect(assistant?.parts).toEqual([
+      expect.objectContaining({ type: 'dynamic-tool', toolName: 'agent_get', title: 'Get Agent' }),
+      expect.objectContaining({ type: 'file', filename: 'result.txt' }),
+      expect.objectContaining({
+        type: 'data-error',
+        data: expect.objectContaining({ message: 'Request failed' }),
+      }),
+    ]);
+  });
+
   test('restores tool execution and approval-wait spans for the processing duration', () => {
     const { assistant } = projectDurableHostTurn(
       turn({

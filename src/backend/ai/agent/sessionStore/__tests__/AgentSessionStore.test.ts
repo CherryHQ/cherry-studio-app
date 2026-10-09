@@ -59,7 +59,7 @@ function terminalTiming(completedAt = Date.now()) {
 type StoreHarness = {
   store: AgentSessionStore;
   /** Seeds an empty legacy Session without exposing that operation on the production port. */
-  createEmptySession: (input: { agentId: string; title?: string }) => Promise<AgentSessionView>;
+  createEmptySession: (input: { agentId: string; name?: string }) => Promise<AgentSessionView>;
   /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
   /** SQLite-only escape hatch for raw assertions; undefined for in-memory. */
@@ -233,21 +233,20 @@ describe.each([
   test('legacy empty Session lifecycle: seed, get, rename, delete', async () => {
     const created = await harness.createEmptySession({ agentId });
     expect(created.agentId).toBe(agentId);
-    expect(created.executionTarget).toEqual({ kind: 'local' });
-    expect(created.title).toBe('');
-    expect(created.titleIsManual).toBe(false);
+    expect(created.name).toBe('');
+    expect(created.isNameManuallyEdited).toBe(false);
     expect(Date.parse(created.createdAt)).not.toBeNaN();
 
     expect(await store.getSession(created.id)).toEqual(created);
     expect(await store.getSession('missing')).toBeNull();
 
-    const titled = await harness.createEmptySession({ agentId, title: 'Named' });
-    expect(titled.title).toBe('Named');
-    expect(titled.titleIsManual).toBe(true);
+    const titled = await harness.createEmptySession({ agentId, name: 'Named' });
+    expect(titled.name).toBe('Named');
+    expect(titled.isNameManuallyEdited).toBe(true);
 
     const renamed = await store.renameSession(created.id, 'My Chat');
-    expect(renamed?.title).toBe('My Chat');
-    expect(renamed?.titleIsManual).toBe(true);
+    expect(renamed?.name).toBe('My Chat');
+    expect(renamed?.isNameManuallyEdited).toBe(true);
     expect(await store.renameSession('missing', 'x')).toBeNull();
 
     const autoNamed = await store.autoRenameSession(titled.id, 'Named', 'Summary');
@@ -255,8 +254,8 @@ describe.each([
 
     const autoTitle = await harness.createEmptySession({ agentId });
     const firstTitle = await store.autoRenameSession(autoTitle.id, '', 'First message');
-    expect(firstTitle?.title).toBe('First message');
-    expect(firstTitle?.titleIsManual).toBe(false);
+    expect(firstTitle?.name).toBe('First message');
+    expect(firstTitle?.isNameManuallyEdited).toBe(false);
     expect(await store.autoRenameSession(autoTitle.id, '', 'Stale write')).toBeNull();
 
     expect(await store.deleteSession(created.id)).toBe(true);
@@ -383,6 +382,14 @@ describe.each([
       reserved.userMessage,
       reserved.assistantMessage,
     ]);
+    if (harness.raw) {
+      for (const message of [reserved.userMessage, reserved.assistantMessage]) {
+        const row = harness.raw
+          .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+          .get(message.id)!;
+        expect(JSON.parse(row.data as string)).toEqual({ parts: message.parts });
+      }
+    }
     await expect(
       store.reserveSubmission({
         ...messageIds(),
@@ -401,7 +408,6 @@ describe.each([
         sessionId: uuidv7(),
         ...messageIds(),
         agentId,
-        executionTarget: { kind: 'local' },
         userParts: [],
       });
       const ids = { sessionId: uuidv7(), ...messageIds() };
@@ -413,7 +419,6 @@ describe.each([
           ...RESERVATION_FACTS,
           ...ids,
           agentId,
-          executionTarget: { kind: 'local' },
           userParts: [],
         }),
       ).rejects.toThrow();
@@ -433,7 +438,6 @@ describe.each([
       ...ids,
       ...RESERVATION_FACTS,
       agentId,
-      executionTarget: { kind: 'local' },
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
 
@@ -499,7 +503,7 @@ describe.each([
       status: 'error',
       parts: [
         { id: 'text-1', type: 'text', text: 'Partial', state: 'done' },
-        { id: 'error-1', type: 'error', error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' } },
+        { id: 'error-1', type: 'data-error', data: { ...INTERRUPTED, code: 'EXECUTION_FAILED' } },
       ],
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' },
@@ -513,7 +517,7 @@ describe.each([
 
     expect(finalized.status).toBe('error');
     expect(finalized.parts).toHaveLength(2);
-    expect(finalized.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(finalized.stats).toMatchObject({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
     expect(finalized.modelId).toBe(MODEL_ID);
     expect(finalized.inferenceSnapshot).toEqual(reserved.assistantMessage.inferenceSnapshot);
 
@@ -573,7 +577,7 @@ describe.each([
   });
 
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     for (const text of ['one', 'two', 'three']) {
       const reserved = await store.reserveSubmission({
         ...messageIds(),
@@ -604,11 +608,10 @@ describe.each([
     const fork = result.session;
     expect(fork.id).not.toBe(source.id);
     expect(fork.agentId).toBe(source.agentId);
-    expect(fork.executionTarget).toEqual(source.executionTarget);
     // Without an override the fork inherits the conversation's name; any
     // derived wording is the client's to compose, not the store's.
-    expect(fork.title).toBe('Maths');
-    expect(fork.titleIsManual).toBe(true);
+    expect(fork.name).toBe('Maths');
+    expect(fork.isNameManuallyEdited).toBe(true);
     expect(fork.forkedFromSessionId).toBe(source.id);
     expect(await store.getSession(fork.id)).toEqual(fork);
 
@@ -637,7 +640,7 @@ describe.each([
       original.slice(0, 4).map((message) => message.parts),
     );
     // Historical facts travel with the copy.
-    expect(copied[1]?.usage).toEqual({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
+    expect(copied[1]?.stats).toMatchObject({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
     expect(copied[1]?.modelId).toBe(MODEL_ID);
     expect(copied[1]?.inferenceSnapshot).toEqual({
       status: 'supported',
@@ -663,6 +666,36 @@ describe.each([
     // The source is untouched.
     expect(await store.listMessages(source.id)).toEqual(original);
   });
+
+  test.each([null, { inputTokens: 0 }])(
+    'retry replaces fallback token counts with %p',
+    async (usage) => {
+      const session = await harness.createEmptySession({ agentId });
+      const input = {
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'input', type: 'text' as const, text: 'Hello', state: 'done' as const }],
+      };
+      await store.reserveSubmission(input);
+      const finalization = {
+        assistantMessageId: input.assistantMessageId,
+        status: 'success' as const,
+        parts: [],
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      };
+      await store.finalizeAssistantMessage(finalization);
+      await store.reserveRetry({ ...input, assistantParts: [] });
+      const retried = await store.finalizeAssistantMessage({ ...finalization, usage });
+      expect(retried.stats).toEqual({
+        ...usage,
+        runtimeTiming: finalization.runtimeStats.runtimeTiming,
+      });
+    },
+  );
 
   test('forkSession preserves runtime timing without preserving row update time', async () => {
     const reservationTime = 2_000_000_000_000;
@@ -710,7 +743,7 @@ describe.each([
   });
 
   test('nested forks record the direct source and their own copied boundary', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Source' });
+    const source = await harness.createEmptySession({ agentId, name: 'Source' });
     const sourceTurn = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
@@ -767,7 +800,7 @@ describe.each([
   });
 
   test('forkSession names the copy from the caller when one is supplied', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     const reserved = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
@@ -778,21 +811,21 @@ describe.each([
     const result = await store.forkSession({
       sessionId: source.id,
       fromMessageId: reserved.userMessage.id,
-      title: 'Branch - Maths',
+      name: 'Branch - Maths',
     });
 
     expect(result.status).toBe('forked');
     if (result.status !== 'forked') return;
-    expect(result.session.title).toBe('Branch - Maths');
+    expect(result.session.name).toBe('Branch - Maths');
     // Renaming the copy must not touch the Session it was copied from.
-    expect((await store.getSession(source.id))?.title).toBe('Maths');
+    expect((await store.getSession(source.id))?.name).toBe('Maths');
   });
 
   test('deleting a fork source advances the surviving Session row timestamp', async () => {
     const deletionTime = 2_000_000_001_000;
     jest.useFakeTimers({ now: 2_000_000_000_000 });
     try {
-      const source = await harness.createEmptySession({ agentId, title: 'Source' });
+      const source = await harness.createEmptySession({ agentId, name: 'Source' });
       const reserved = await store.reserveSubmission({
         ...messageIds(),
         ...RESERVATION_FACTS,
@@ -1032,7 +1065,7 @@ describe.each([
           fileEntryId: INPUT_FILE_ID,
           id: 'input-0',
           mediaType: 'image/png',
-          name: 'input.png',
+          filename: 'input.png',
           purpose: 'input-attachment',
           type: 'file',
         },
@@ -1046,7 +1079,7 @@ describe.each([
           fileEntryId: ARTIFACT_FILE_ID,
           id: 'artifact-0',
           mediaType: 'text/plain',
-          name: 'result.txt',
+          filename: 'result.txt',
           purpose: 'artifact',
           type: 'file',
         },
@@ -1140,8 +1173,8 @@ describe.each([
     expect(transcript[1]?.parts).toEqual([
       {
         id: expect.stringMatching(/^error-/),
-        type: 'error',
-        error: INTERRUPTED,
+        type: 'data-error',
+        data: INTERRUPTED,
       },
     ]);
 
@@ -1161,7 +1194,7 @@ describe.each([
       type: 'file',
       fileEntryId: '11111111-1111-7111-8111-111111111111',
       purpose: 'artifact',
-      name: 'note.md',
+      filename: 'note.md',
       mediaType: 'text/markdown',
     } as const;
 
@@ -1218,7 +1251,7 @@ describe.each([
       type: 'file',
       fileEntryId: '11111111-1111-7111-8111-111111111111',
       purpose: 'artifact',
-      name: 'note.md',
+      filename: 'note.md',
       mediaType: 'text/markdown',
     } as const;
     await store.updateStreamingAssistantMessage({
@@ -1228,11 +1261,11 @@ describe.each([
         filePart,
         {
           id: 'tool-1',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'call-1',
           toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-          providerName: 'mcp_server_1_search_a1b2',
-          displayName: 'Search',
+          toolName: 'mcp_server_1_search_a1b2',
+          title: 'Search',
           state: 'running',
           input: { query: 'Cherry Studio' },
         },
@@ -1255,7 +1288,7 @@ describe.each([
             artifacts: [],
           },
         },
-        { id: expect.stringMatching(/^error-/), type: 'error', error: INTERRUPTED },
+        { id: expect.stringMatching(/^error-/), type: 'data-error', data: INTERRUPTED },
       ],
     });
     const context = await store.loadRuntimeTurnContext(session.id, null);
@@ -1400,6 +1433,52 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('keeps Runtime replay strict when a stored part is unsupported', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text', text: 'Hello', state: 'done' }],
+    });
+    raw
+      .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+      .run(JSON.stringify({ parts: [{ id: 'future', type: 'future' }] }), reserved.userMessage.id);
+    await expect(store.loadRuntimeTurnContext(session.id, null)).rejects.toThrow();
+  });
+
+  test('finalization preserves ledger counts even when Runtime usage includes extra tokens', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text', text: 'Hello', state: 'done' }],
+    });
+    const stats = { inputTokens: 0, totalTokens: 5, requestCount: 1 };
+    raw
+      .prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?')
+      .run(JSON.stringify(stats), reserved.assistantMessage.id);
+    const finalized = await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'cancelled',
+      parts: [],
+      usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      error: { code: 'CANCELLED', message: 'Stopped', retryable: false },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect(finalized.stats).toMatchObject(stats);
+    expect(finalized.stats).not.toHaveProperty('outputTokens');
+    expect(finalized).not.toHaveProperty('usage');
+  });
+
   test('publishes a committed automatic title without an active session observer', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1410,7 +1489,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       notices.push({
         paths,
         inTransaction: raw.isTransaction,
-        row: raw.prepare('SELECT name AS title FROM agent_session WHERE id = ?').get(session.id),
+        row: raw.prepare('SELECT name FROM agent_session WHERE id = ?').get(session.id),
       });
     });
     try {
@@ -1419,7 +1498,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         {
           paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
           inTransaction: false,
-          row: { title: 'Background title' },
+          row: { name: 'Background title' },
         },
       ]);
       await store.autoRenameSession(session.id, '', 'Stale title');
@@ -1494,7 +1573,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         ...messageIds(),
         ...RESERVATION_FACTS,
         agentId,
-        executionTarget: { kind: 'local' },
         modelId: 'missing-provider::missing-model',
         userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
       }),
@@ -1958,15 +2036,14 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
     raw.prepare('UPDATE agent_session_message SET data = ?, status = ? WHERE id = ?').run(
       JSON.stringify({
-        version: 1,
         parts: [
           {
             id: 'tool-1',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-            providerName: 'mcp_server_1_search_a1b2',
-            displayName: 'Search',
+            toolName: 'mcp_server_1_search_a1b2',
+            title: 'Search',
             state: 'awaiting-approval',
             input: { query: 'Cherry Studio' },
             approvalId: 'approval-1',
@@ -1993,8 +2070,8 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         },
         {
           id: expect.stringMatching(/^error-/),
-          type: 'error',
-          error: INTERRUPTED,
+          type: 'data-error',
+          data: INTERRUPTED,
         },
       ],
     });
