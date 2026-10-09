@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, lte, or, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
@@ -29,6 +29,8 @@ export class AgentSessionMessageService {
   async listByCursor(
     sessionId: string,
     params: ListAgentSessionMessagesQueryParams = {},
+    /** Internal legacy handoff ceiling; not a public query parameter. */
+    throughMessageId?: string,
   ): Promise<AgentSessionMessagePage> {
     const query = ListAgentSessionMessagesQuerySchema.parse(params);
     const [session] = await this.db
@@ -39,6 +41,27 @@ export class AgentSessionMessageService {
     if (!session) {
       throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     }
+    let ceiling: SQL | undefined;
+    if (throughMessageId) {
+      const [boundary] = await this.db
+        .select({ createdAt: agentSessionMessageTable.createdAt, id: agentSessionMessageTable.id })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            eq(agentSessionMessageTable.id, throughMessageId),
+          ),
+        )
+        .limit(1);
+      if (!boundary) throw DataApiErrorFactory.notFound('AgentSessionMessage', throughMessageId);
+      ceiling = or(
+        lt(agentSessionMessageTable.createdAt, boundary.createdAt),
+        and(
+          eq(agentSessionMessageTable.createdAt, boundary.createdAt),
+          lte(agentSessionMessageTable.id, boundary.id),
+        ),
+      );
+    }
 
     if (query.ids) {
       const rows = await this.db
@@ -48,6 +71,7 @@ export class AgentSessionMessageService {
           and(
             eq(agentSessionMessageTable.sessionId, sessionId),
             inArray(agentSessionMessageTable.id, query.ids),
+            ceiling,
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
@@ -56,7 +80,7 @@ export class AgentSessionMessageService {
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
     if (query.aroundMessageId) {
-      return this.readAround(sessionId, query.aroundMessageId, limit);
+      return this.readAround(sessionId, query.aroundMessageId, limit, ceiling);
     }
 
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'agent-session-messages');
@@ -64,7 +88,13 @@ export class AgentSessionMessageService {
     if (isNewer && !cursor) {
       throw DataApiErrorFactory.validation({ cursor: ['Invalid message cursor'] });
     }
-    const rows = await this.readRows(sessionId, limit + 1, isNewer ? 'asc' : 'desc', cursor);
+    const rows = await this.readRows(
+      sessionId,
+      limit + 1,
+      isNewer ? 'asc' : 'desc',
+      cursor,
+      ceiling,
+    );
     const selectedRows = rows.slice(0, limit);
     const pageRows = isNewer ? selectedRows.toReversed() : selectedRows;
     const head = pageRows[0];
@@ -117,7 +147,7 @@ export class AgentSessionMessageService {
     };
   }
 
-  private async readAround(sessionId: string, messageId: string, limit: number) {
+  private async readAround(sessionId: string, messageId: string, limit: number, ceiling?: SQL) {
     const [target] = await this.db
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
@@ -125,6 +155,7 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           eq(agentSessionMessageTable.id, messageId),
+          ceiling,
         ),
       )
       .limit(1);
@@ -136,8 +167,8 @@ export class AgentSessionMessageService {
     const olderCount = Math.floor((limit - 1) / 2);
     const newerCount = limit - 1 - olderCount;
     const [older, newer] = await Promise.all([
-      this.readRows(sessionId, olderCount + 1, 'desc', boundary),
-      this.readRows(sessionId, newerCount + 1, 'asc', boundary),
+      this.readRows(sessionId, olderCount + 1, 'desc', boundary, ceiling),
+      this.readRows(sessionId, newerCount + 1, 'asc', boundary, ceiling),
     ]);
     const rows = [
       ...newer.slice(0, newerCount).toReversed(),
@@ -160,6 +191,7 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
+    ceiling?: SQL,
   ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
@@ -173,6 +205,7 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           cursor ? ordering.where(cursor) : undefined,
+          ceiling,
         ),
       )
       .orderBy(...ordering.orderBy)

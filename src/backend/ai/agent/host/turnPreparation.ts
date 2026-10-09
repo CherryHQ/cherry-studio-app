@@ -259,6 +259,35 @@ export async function prepareInitialTurn(
   );
 }
 
+/** Native conversations prepare capabilities and new input without reconstructing model history. */
+export async function prepareDurableTurn(
+  dependencies: TurnPreparationDependencies,
+  parsed: AgentSubmitMessageInput,
+  referencedFileEntryIds: readonly string[],
+  signal: AbortSignal,
+): Promise<TurnPlan> {
+  const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
+  if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+  const agent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
+  if (!agent) fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    agent,
+    {
+      anchorFound: true,
+      hasMessages: true,
+      history: [],
+      referencedFileEntryIds: [...referencedFileEntryIds],
+      sessionTurnIds: [],
+    },
+    null,
+    dependencies.documentParserMode(),
+    signal,
+  );
+}
+
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,

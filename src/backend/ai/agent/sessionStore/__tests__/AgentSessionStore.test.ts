@@ -136,13 +136,13 @@ function makeSqliteHarness(): StoreHarness {
       const id = randomUUID();
       sqlite
         .prepare(
-          `INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+          `INSERT OR IGNORE INTO user_provider (provider_id, name, order_key, created_at, updated_at)
            VALUES ('mock-provider', 'Mock Provider', 'a0', 1, 1)`,
         )
         .run();
       sqlite
         .prepare(
-          `INSERT INTO user_model (
+          `INSERT OR IGNORE INTO user_model (
             id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at
           ) VALUES (?, 'mock-provider', 'mock-model', 'Mock Model', 'mock-model', 'a0', 1, 1)`,
         )
@@ -175,6 +175,58 @@ describe.each([
 
   afterEach(() => {
     harness.cleanup();
+  });
+
+  test('repairs a metadata-only durable session idempotently and preserves a later manual title', async () => {
+    const input = {
+      id: uuidv7(),
+      agentId,
+      executionTarget: { kind: 'local' as const },
+      title: 'Original',
+      titleIsManual: false,
+      createdAt: 1000,
+      lastActivityAt: 2000,
+      forkedFromSessionId: null,
+      forkBoundaryMessageId: null,
+    };
+    const created = await store.projectSession(input);
+    expect(created.createdAt).toBe(new Date(1000).toISOString());
+    expect(await store.listMessages(input.id)).toEqual([]);
+    const renamed = await store.renameSession(input.id, 'Manual title');
+    expect(await store.projectSession(input)).toEqual(renamed);
+    const otherAgent = await harness.makeAgentId();
+    await expect(store.projectSession({ ...input, agentId: otherAgent })).rejects.toThrow(
+      'different business owner',
+    );
+    expect(await store.getSession(input.id)).toEqual(renamed);
+  });
+
+  test('archive retains historical rows and cannot be undone by creation-seed reconciliation', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Historical question', state: 'done' }],
+    });
+    const before = await store.listMessages(session.id);
+    expect(await store.archiveSession(session.id)).toBe(true);
+    expect(await store.archiveSession(session.id)).toBe(true);
+    expect(await store.isSessionArchived(session.id)).toBe(true);
+    expect(await store.listMessages(session.id)).toEqual(before);
+    await store.projectSession({
+      id: session.id,
+      agentId,
+      executionTarget: session.executionTarget,
+      title: 'Seed',
+      titleIsManual: false,
+      createdAt: Date.parse(session.createdAt),
+      lastActivityAt: Date.parse(session.createdAt),
+      forkedFromSessionId: null,
+      forkBoundaryMessageId: null,
+    });
+    expect(await store.isSessionArchived(session.id)).toBe(true);
+    expect(await store.archiveSession('missing')).toBe(false);
   });
 
   test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
@@ -1318,6 +1370,72 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  test('indexes settled native text into the existing message FTS without tools or analytics loss', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const at = new Date(5_000).toISOString();
+    const common = {
+      sessionId: session.id,
+      turnId: 'native-turn',
+      usage: null,
+      stats: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: at,
+      updatedAt: at,
+    };
+    const user = {
+      ...common,
+      id: uuidv7(),
+      role: 'user' as const,
+      status: 'success' as const,
+      parts: [
+        { id: 'q', type: 'text' as const, text: 'Where is the harbor?', state: 'done' as const },
+      ],
+    };
+    const assistant = {
+      ...common,
+      id: uuidv7(),
+      role: 'assistant' as const,
+      status: 'success' as const,
+      parts: [
+        { id: 'r', type: 'reasoning' as const, text: 'private reasoning', state: 'done' as const },
+        { id: 'a', type: 'text' as const, text: 'The **harbor** is east.', state: 'done' as const },
+      ],
+    };
+    const matches = (term: string) =>
+      raw
+        .prepare(
+          `SELECT message.id FROM agent_session_message message
+           JOIN agent_session_message_fts fts ON message.fts_rowid = fts.rowid
+           WHERE agent_session_message_fts MATCH ? ORDER BY message.id`,
+        )
+        .all(term)
+        .map((row) => (row as { id: string }).id);
+
+    await store.indexDurableMessages([user, assistant]);
+    expect(matches('harbor')).toEqual([user.id, assistant.id].sort());
+    expect(matches('reasoning')).toEqual([]);
+    raw
+      .prepare(`UPDATE agent_session_message SET stats = '{"requestCount":1}' WHERE id = ?`)
+      .run(assistant.id);
+
+    await store.indexDurableMessages([
+      { ...assistant, parts: [{ id: 'a', type: 'text', text: 'Lighthouse', state: 'done' }] },
+    ]);
+    expect(matches('harbor')).toEqual([user.id]);
+    expect(matches('lighthouse')).toEqual([assistant.id]);
+    expect(
+      raw.prepare('SELECT stats FROM agent_session_message WHERE id = ?').get(assistant.id),
+    ).toEqual({ stats: '{"requestCount":1}' });
+
+    await store.unindexDurableMessages(session.id, [user.id, assistant.id]);
+    expect(matches('harbor')).toEqual([]);
+    expect(matches('lighthouse')).toEqual([]);
   });
 
   test('publishes background completion activity after commit and skips failed writes', async () => {

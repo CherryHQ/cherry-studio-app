@@ -14,7 +14,16 @@ const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const CountSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const BackupManifestSchema = z.strictObject({
   product: z.literal('cherry-mobile'),
-  formatVersion: z.literal(1),
+  formatVersion: z.union([z.literal(1), z.literal(2)]),
+  agent: z
+    .strictObject({
+      runtime: z.literal('pi-durable'),
+      runtimeVersion: z.string().min(1),
+      schemaVersion: CountSchema,
+      migrationsSha256: HashSchema,
+      messages: CountSchema,
+    })
+    .optional(),
   id: z.string().uuid(),
   createdAt: z.string().datetime(),
   appVersion: z.string().min(1).max(100),
@@ -40,6 +49,7 @@ export function assertBackupPath(path: string): void {
   const allowed =
     path === 'manifest.json' ||
     path === 'database/cherry.db' ||
+    path === 'database/pi-agent.db' ||
     /^(?:files|avatars\/(?:user|agents|providers))\/[^/\\\x00-\x1f]+$/.test(path);
   if (!allowed || path.includes('..') || path.includes(':') || path.length > 512) {
     throw new BackupError('invalid', 'Unsafe archive path.');
@@ -51,7 +61,7 @@ export function validateManifest(value: unknown): BackupManifest {
     typeof value === 'object' &&
     value !== null &&
     (('product' in value && value.product !== 'cherry-mobile') ||
-      ('formatVersion' in value && value.formatVersion !== 1))
+      ('formatVersion' in value && value.formatVersion !== 1 && value.formatVersion !== 2))
   ) {
     throw new BackupError('incompatible');
   }
@@ -69,5 +79,11 @@ export function validateManifest(value: unknown): BackupManifest {
   }
   if (size > BACKUP_LIMITS.expandedBytes) throw new BackupError('too-large');
   if (!paths.has('database/cherry.db')) throw new BackupError('invalid');
+  if (
+    manifest.formatVersion === 2
+      ? !manifest.agent || !paths.has('database/pi-agent.db')
+      : Boolean(manifest.agent) || paths.has('database/pi-agent.db')
+  )
+    throw new BackupError('invalid');
   return manifest;
 }

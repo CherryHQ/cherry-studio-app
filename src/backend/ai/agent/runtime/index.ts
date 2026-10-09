@@ -1,4 +1,19 @@
 export type {
+  DurableAgentRuntime,
+  RuntimeConversationConfiguration,
+  RuntimeConversationEvent,
+  RuntimeConversationSeed,
+  RuntimeConversationSnapshot,
+  RuntimeDurableSubmission,
+  RuntimeDurableTurn,
+  RuntimeTurnTiming,
+  RuntimeExecutionIdentity,
+  RuntimeExecutionPorts,
+  RuntimeSqlDatabase,
+  RuntimeUsageOwner,
+} from './durableTypes';
+
+export type {
   AgentRuntime,
   AgentRuntimeSession,
   MessageRuntimeTimingSink,

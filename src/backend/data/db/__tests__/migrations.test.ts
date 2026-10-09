@@ -298,6 +298,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'forked_from_session_id',
         'fork_boundary_message_id',
+        'archived_at',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',

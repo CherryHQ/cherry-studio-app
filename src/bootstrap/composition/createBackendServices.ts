@@ -37,8 +37,11 @@ export function createBackendServices({
   preference,
   webSearch,
 }: BackendInfrastructure) {
+  const data = createDataServices({ cache, preference });
+  const transcript = agent.createTranscriptReader(data.agentSessionMessage);
   return {
-    ...createDataServices({ cache, preference }),
+    ...data,
+    agentSessionMessage: transcript,
     agent,
     ai,
     // Module singletons, spread here only so the routing table reads one object.

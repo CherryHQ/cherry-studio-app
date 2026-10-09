@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
@@ -52,6 +52,7 @@ export class AgentSessionService {
       tie: 'desc',
     });
     const condition = and(
+      isNull(agentSessionTable.archivedAt),
       query.agentId ? eq(agentSessionTable.agentId, query.agentId) : undefined,
       query.q
         ? sql`${agentSessionTable.title} LIKE ${`%${query.q.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`
@@ -64,6 +65,7 @@ export class AgentSessionService {
         SELECT id, agent_id AS "agentId", name AS "title",
           is_name_manually_edited AS "titleIsManual", execution_target AS "executionTarget",
           last_activity_at AS "lastActivityAt", created_at AS "createdAt", updated_at AS "updatedAt",
+          archived_at AS "archivedAt",
           forked_from_session_id AS "forkedFromSessionId", fork_boundary_message_id AS "forkBoundaryMessageId"
         FROM ${agentSessionTable}
         WHERE ${condition ?? sql`1 = 1`}

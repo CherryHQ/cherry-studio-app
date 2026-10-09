@@ -151,7 +151,7 @@ export type ConversationMessage = {
   attachments?: readonly { key: string; name: string; mediaType?: string }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
-    retry?: ConversationAction<void, void>;
+    retry?: ConversationAction<void, ConversationRef | void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
   };

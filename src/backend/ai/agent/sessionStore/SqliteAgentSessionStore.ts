@@ -26,8 +26,10 @@ import {
   type AgentMessageView,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import type { MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type {
+  AgentSessionProjection,
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
@@ -42,6 +44,7 @@ import type {
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
+import { toDurableIndexMessage } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
@@ -67,6 +70,150 @@ const FORK_INSERT_CHUNK_SIZE = 50;
 export class SqliteAgentSessionStore extends BaseService implements AgentSessionStore {
   constructor(private readonly dbService: DbService) {
     super();
+  }
+
+  async archiveSession(sessionId: string): Promise<boolean> {
+    const rows = await this.dbService.withWriteTx(async (tx) =>
+      tx
+        .update(agentSessionTable)
+        .set({ archivedAt: sql`COALESCE(${agentSessionTable.archivedAt}, ${Date.now()})` })
+        .where(eq(agentSessionTable.id, sessionId))
+        .returning({ id: agentSessionTable.id }),
+    );
+    if (rows.length) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${sessionId}`]);
+    return rows.length > 0;
+  }
+
+  async isSessionArchived(sessionId: string): Promise<boolean> {
+    const [row] = await this.dbService
+      .getDb()
+      .select({ archivedAt: agentSessionTable.archivedAt })
+      .from(agentSessionTable)
+      .where(eq(agentSessionTable.id, sessionId))
+      .limit(1);
+    return row?.archivedAt !== undefined && row.archivedAt !== null;
+  }
+
+  async indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void> {
+    if (!messages.length) return;
+    const rows = messages.map((message) => {
+      const view = toDurableIndexMessage(message);
+      return {
+        id: view.id,
+        sessionId: view.sessionId,
+        turnId: view.turnId,
+        role: view.role,
+        data: { version: 1 as const, parts: view.parts },
+        status: view.status,
+        stats: view.stats,
+        searchableText: toSearchableText(view.parts),
+        createdAt: Date.parse(view.createdAt),
+        updatedAt: Date.parse(view.updatedAt),
+      };
+    });
+    await this.dbService.withWriteTx(async (tx) => {
+      for (const row of rows)
+        // Usage and stats are written by the analytics ledger; an upsert keeps them.
+        await tx
+          .insert(agentSessionMessageTable)
+          .values(row)
+          .onConflictDoUpdate({
+            target: agentSessionMessageTable.id,
+            set: {
+              data: row.data,
+              status: row.status,
+              ...(row.stats?.runtimeTiming
+                ? {
+                    stats: sql`json_set(
+                      COALESCE(${agentSessionMessageTable.stats}, '{}'),
+                      '$.runtimeTiming',
+                      json(${JSON.stringify(row.stats.runtimeTiming)})
+                    )`,
+                  }
+                : {}),
+              searchableText: row.searchableText,
+              updatedAt: row.updatedAt,
+            },
+            setWhere: eq(agentSessionMessageTable.sessionId, row.sessionId),
+          });
+    });
+  }
+
+  async getDurableRuntimeTimings(messageIds: readonly string[]) {
+    const timings = new Map<string, MessageRuntimeTiming>();
+    if (!messageIds.length) return timings;
+    const rows = await this.dbService
+      .getDb()
+      .select({ id: agentSessionMessageTable.id, stats: agentSessionMessageTable.stats })
+      .from(agentSessionMessageTable)
+      .where(inArray(agentSessionMessageTable.id, [...messageIds]));
+    for (const row of rows)
+      if (row.stats?.runtimeTiming) timings.set(row.id, row.stats.runtimeTiming);
+    return timings;
+  }
+
+  async unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void> {
+    if (!messageIds.length) return;
+    await this.dbService.withWriteTx((tx) =>
+      tx
+        .delete(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            inArray(agentSessionMessageTable.id, [...messageIds]),
+          ),
+        ),
+    );
+  }
+
+  async projectSession(input: AgentSessionProjection): Promise<AgentSessionView> {
+    let created = false;
+    const session = await this.dbService.withWriteTx(async (tx) => {
+      const [inserted] = await tx
+        .insert(agentSessionTable)
+        .values({
+          ...input,
+          updatedAt: input.createdAt,
+        })
+        .onConflictDoNothing({ target: agentSessionTable.id })
+        .returning();
+      created = inserted !== undefined;
+      const row =
+        inserted ??
+        (
+          await tx
+            .select()
+            .from(agentSessionTable)
+            .where(eq(agentSessionTable.id, input.id))
+            .limit(1)
+        )[0];
+      if (
+        !row ||
+        row.agentId !== input.agentId ||
+        row.executionTarget.kind !== input.executionTarget.kind
+      )
+        throw new Error('A durable session identity belongs to a different business owner.');
+      return toAgentSessionView(row);
+    });
+    if (created) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.id}`]);
+    return session;
+  }
+
+  async touchSession(sessionId: string, activityAt: number): Promise<void> {
+    if (!Number.isFinite(activityAt)) throw new Error('Invalid session activity timestamp.');
+    const changed = await this.dbService.withWriteTx(async (tx) => {
+      return tx
+        .update(agentSessionTable)
+        .set({ lastActivityAt: activityAt })
+        .where(
+          and(
+            eq(agentSessionTable.id, sessionId),
+            lt(agentSessionTable.lastActivityAt, activityAt),
+          ),
+        )
+        .returning({ id: agentSessionTable.id });
+    });
+    if (changed.length) publishDataApiChanges(['/agent-sessions', `/agent-sessions/${sessionId}`]);
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */

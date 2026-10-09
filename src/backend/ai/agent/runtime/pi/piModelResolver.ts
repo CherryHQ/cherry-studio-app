@@ -26,13 +26,13 @@ import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiA
 import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
 import { requirePiLanguageBinding, resolvePiLanguageBinding } from './piLanguageBinding';
+import type { PiModelResolution, PiRuntimeDependencies } from './piModelTypes';
 import {
   endpointForPiApi,
   requireOAuthEndpoint,
   resolveOAuthPiModel,
   type ResolvedPiOAuth,
 } from './piOAuthModels';
-import type { PiModelResolution, PiRuntimeDependencies } from './PiRuntime';
 import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
 
 class PiModelResolutionError extends Error {

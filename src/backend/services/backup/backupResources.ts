@@ -16,7 +16,8 @@ const RESOURCE_DIRECTORIES = {
 
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
-  if (path === 'database/cherry.db') return new File(root, 'database', 'cherry.db');
+  if (path === 'database/cherry.db' || path === 'database/pi-agent.db')
+    return new File(root, ...path.split('/'));
   const slash = path.lastIndexOf('/');
   const prefix = path.slice(0, slash) as keyof typeof RESOURCE_DIRECTORIES;
   const directory = RESOURCE_DIRECTORIES[prefix];
@@ -116,7 +117,10 @@ export async function validateResourceReferences(
   const { requiredPaths, counts } = await describeDatabase(archiveFile(root, 'database/cherry.db'));
   if (
     Object.keys(counts).some(
-      (key) => counts[key as keyof typeof counts] !== manifest.counts[key as keyof typeof counts],
+      (key) =>
+        counts[key as keyof typeof counts] !==
+        manifest.counts[key as keyof typeof counts] -
+          (key === 'messages' ? (manifest.agent?.messages ?? 0) : 0),
     )
   )
     throw new BackupError('invalid');

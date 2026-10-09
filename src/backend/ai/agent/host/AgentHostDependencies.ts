@@ -16,14 +16,18 @@ import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import { AgentSqlDatabase } from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
+import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { discardInternalEntries } from '@/backend/services/file/fileStorage';
+import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -53,6 +57,7 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentH
   'McpRuntimeService',
   'WebSearchService',
   'TraceStorageService',
+  'KeepAliveCoordinator',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
   readonly files = managedFileResolver;
@@ -60,9 +65,51 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly runtimeTools;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
+  readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
+    this.keepAlive.acquire('agent.durable', onInterrupt);
+  private agentDatabase: AgentSqlDatabase | undefined;
+  readonly durableStorage = {
+    open: async () => {
+      const database = await AgentSqlDatabase.open();
+      this.agentDatabase = database;
+      return database;
+    },
+    capture: (uri: string) => {
+      if (!this.agentDatabase) throw new Error('The Pi database is not open.');
+      return this.agentDatabase.capture(uri);
+    },
+    notifyTranscript: (sessionId: string) =>
+      publishDataApiChanges([
+        '/agent-sessions',
+        `/agent-sessions/${sessionId}`,
+        `/agent-sessions/${sessionId}/messages`,
+      ]),
+  };
+  readonly recordDurableUsage: NonNullable<MobileAgentHostPorts['recordDurableUsage']> = async (
+    _owner,
+    report,
+    attribution,
+  ) => {
+    await aiUsageRecordService.recordInvocation({
+      completedAt: report.completedAt,
+      metrics: report.metrics,
+      context: {
+        ...report.context,
+        source: { type: 'agent', id: attribution.agentId, name: attribution.agentName, icon: null },
+        messageRef: attribution.assistantMessageId
+          ? { kind: 'agent-session', id: attribution.assistantMessageId }
+          : null,
+      },
+      modality: 'language',
+      requestId: report.requestId,
+      usage: report.usage,
+    });
+  };
   readonly replayCache = new AgentReplayCache(() =>
     createMMKV({ id: 'cherry-agent-replay-cache' }),
   );
+  readonly messageStats = (id: string) =>
+    aiUsageRecordService.getMessageUsageProjection({ kind: 'agent-session', id });
 
   constructor(
     private readonly store: AgentSessionStore,
@@ -71,6 +118,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
     readonly traces: TraceRecorder,
+    private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
   ) {
     super();
     this.imageGeneration = createAgentImageGeneration({

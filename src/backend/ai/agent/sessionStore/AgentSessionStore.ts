@@ -16,6 +16,37 @@ export type StoredRuntimeContextCheckpoint = {
   checkpoint: unknown;
 };
 
+/** A business row repaired from Pi's committed creation seed; contains no transcript. */
+export type AgentSessionProjection = {
+  id: string;
+  agentId: string;
+  executionTarget: AgentExecutionTarget;
+  title: string;
+  titleIsManual: boolean;
+  createdAt: number;
+  lastActivityAt: number;
+  forkedFromSessionId: string | null;
+  forkBoundaryMessageId: string | null;
+};
+
+/**
+ * Native index rows keep searchable text and the app-observed run timing; tools, files and
+ * reasoning stay in Pi, and token statistics come from the analytics ledger.
+ */
+export function toDurableIndexMessage(message: AgentMessageView): AgentMessageView {
+  if (message.status === 'pending' || message.status === 'streaming')
+    throw new Error('Only settled native messages are indexed.');
+  const runtimeTiming = message.stats?.runtimeTiming;
+  return {
+    ...message,
+    parts: message.parts.filter((part) => part.type === 'text'),
+    usage: null,
+    stats: runtimeTiming ? { runtimeTiming } : null,
+    modelId: null,
+    inferenceSnapshot: null,
+  };
+}
+
 export type StoredRuntimeTurnContext = {
   /** False only when an `afterTurnId` was requested but is not in this Session. */
   anchorFound: boolean;
@@ -138,6 +169,21 @@ export type FinalizeAssistantMessageInput = {
  * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
+  projectSession(input: AgentSessionProjection): Promise<AgentSessionView>;
+  touchSession(sessionId: string, activityAt: number): Promise<void>;
+  archiveSession(sessionId: string): Promise<boolean>;
+  isSessionArchived(sessionId: string): Promise<boolean>;
+  /**
+   * Upsert the visible text of settled native messages into the full-text index rows. Pi keeps
+   * the transcript; these rows carry only text parts and never feed model history.
+   */
+  indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void>;
+  /** Run timing settled into native index rows, which includes approval waits Pi does not keep. */
+  getDurableRuntimeTimings(
+    messageIds: readonly string[],
+  ): Promise<Map<string, NonNullable<NonNullable<AgentMessageView['stats']>['runtimeTiming']>>>;
+  /** Remove native index rows, for example when their turn leaves the visible transcript. */
+  unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
   /** Renames only when the current title still matches the caller's auto-title snapshot. */

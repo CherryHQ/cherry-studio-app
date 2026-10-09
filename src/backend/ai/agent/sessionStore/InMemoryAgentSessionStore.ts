@@ -8,8 +8,10 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
+import type { MessageRuntimeTiming } from '@/shared/data/types/message';
 
 import type {
+  AgentSessionProjection,
   AgentSessionStore,
   DeleteTurnInput,
   DeleteTurnResult,
@@ -23,6 +25,7 @@ import type {
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
+import { toDurableIndexMessage } from './AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
@@ -158,10 +161,99 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   private readonly sessions = new Map<string, AgentSessionView>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
+  private readonly activity = new Map<string, number>();
+  private readonly archived = new Set<string>();
+
+  async archiveSession(sessionId: string): Promise<boolean> {
+    if (!this.sessions.has(sessionId)) return false;
+    this.archived.add(sessionId);
+    return true;
+  }
+
+  async isSessionArchived(sessionId: string): Promise<boolean> {
+    return this.archived.has(sessionId);
+  }
+
+  async indexDurableMessages(messages: readonly AgentMessageView[]): Promise<void> {
+    for (const message of messages) {
+      const view = cloneJson(toDurableIndexMessage(message));
+      const list = this.messages.get(view.sessionId) ?? [];
+      const index = list.findIndex((stored) => stored.view.id === view.id);
+      if (index >= 0) {
+        const previous = list[index]!;
+        // Analytics may have materialized token statistics; keep them beside the new timing.
+        const stats =
+          previous.view.stats || view.stats ? { ...previous.view.stats, ...view.stats } : null;
+        list[index] = { ...previous, view: { ...view, stats } };
+      } else list.push({ view, error: null, contextCheckpoint: null });
+      list.sort(
+        (a, b) =>
+          a.view.createdAt.localeCompare(b.view.createdAt) || a.view.id.localeCompare(b.view.id),
+      );
+      this.messages.set(view.sessionId, list);
+    }
+  }
+
+  async getDurableRuntimeTimings(messageIds: readonly string[]) {
+    const ids = new Set(messageIds);
+    const timings = new Map<string, MessageRuntimeTiming>();
+    for (const list of this.messages.values())
+      for (const { view } of list)
+        if (ids.has(view.id) && view.stats?.runtimeTiming)
+          timings.set(view.id, cloneJson(view.stats.runtimeTiming));
+    return timings;
+  }
+
+  async unindexDurableMessages(sessionId: string, messageIds: readonly string[]): Promise<void> {
+    const ids = new Set(messageIds);
+    const list = this.messages.get(sessionId);
+    if (list)
+      this.messages.set(
+        sessionId,
+        list.filter((stored) => !ids.has(stored.view.id)),
+      );
+  }
+
+  async projectSession(input: AgentSessionProjection): Promise<AgentSessionView> {
+    const existing = this.sessions.get(input.id);
+    if (existing) {
+      if (
+        existing.agentId !== input.agentId ||
+        existing.executionTarget.kind !== input.executionTarget.kind
+      )
+        throw new Error('A durable session identity belongs to a different business owner.');
+      return cloneJson(existing);
+    }
+    const session: AgentSessionView = {
+      ...createSessionView({
+        id: input.id,
+        agentId: input.agentId,
+        executionTarget: input.executionTarget,
+        title: input.title,
+        titleIsManual: input.titleIsManual,
+      }),
+      forkedFromSessionId: input.forkedFromSessionId,
+      forkBoundaryMessageId: input.forkBoundaryMessageId,
+      createdAt: new Date(input.createdAt).toISOString(),
+      updatedAt: new Date(input.createdAt).toISOString(),
+    };
+    this.sessions.set(input.id, session);
+    this.messages.set(input.id, []);
+    this.activity.set(input.id, input.lastActivityAt);
+    return cloneJson(session);
+  }
+
+  async touchSession(sessionId: string, activityAt: number): Promise<void> {
+    if (!Number.isFinite(activityAt)) throw new Error('Invalid session activity timestamp.');
+    if (!this.sessions.has(sessionId)) return;
+    this.activity.set(sessionId, Math.max(this.activity.get(sessionId) ?? 0, activityAt));
+  }
 
   protected override onDestroy(): void {
     this.sessions.clear();
     this.messages.clear();
+    this.activity.clear();
+    this.archived.clear();
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */

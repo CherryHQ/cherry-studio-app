@@ -49,6 +49,8 @@ export type RuntimeDescriptor = {
 };
 
 export interface AgentRuntime {
+  /** Persistent production sessions; short-lived open() remains for isolated model probes. */
+  readonly conversations?: import('./durableTypes').DurableAgentRuntime;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
   open(): Promise<AgentRuntimeSession>;
@@ -366,6 +368,11 @@ export type RuntimeUsageReport = {
   usage: RuntimeUsage;
   context: RuntimeUsageContext;
   completedAt: number;
+  metrics?: {
+    timeFirstTokenMs?: number;
+    timeCompletionMs?: number;
+    timeThinkingMs?: number;
+  };
 };
 
 export type RuntimeErrorContext = {

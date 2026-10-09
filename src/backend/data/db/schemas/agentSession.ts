@@ -27,6 +27,8 @@ export const agentSessionTable = sqliteTable(
     title: text('name').notNull().default(''),
     // Whether the title was manually edited by user
     titleIsManual: integer('is_name_manually_edited', { mode: 'boolean' }).notNull().default(false),
+    /** Hidden from lists; retained as a history/fork origin and managed-resource owner. */
+    archivedAt: integer(),
     // Application intent (protocol AgentExecutionTarget), never a Runtime id
     executionTarget: text({ mode: 'json' })
       .$type<AgentExecutionTarget>()

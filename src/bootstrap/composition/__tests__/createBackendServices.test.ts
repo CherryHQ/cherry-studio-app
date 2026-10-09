@@ -12,6 +12,8 @@ import { createBackendServices } from '../createBackendServices';
 
 const mockDataServices = {
   aiUsageRecord: { kind: 'ai-usage-record' },
+  contentSearch: { kind: 'content-search' },
+  agentSessionMessage: { kind: 'agent-transcript' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
   mcpServer: { kind: 'mcp-server' },
@@ -37,7 +39,11 @@ jest.mock('@/backend/services/permissions', () => ({
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
-    const agent = { kind: 'agent' } as unknown as MobileAgentHost;
+    const reader = { kind: 'persistent-transcript' };
+    const agent = {
+      kind: 'agent',
+      createTranscriptReader: () => reader,
+    } as unknown as MobileAgentHost;
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
     const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
@@ -60,6 +66,7 @@ describe('createBackendServices', () => {
     // dependencies now, so the bundle must carry those exact instances.
     expect(services).toEqual({
       ...mockDataServices,
+      agentSessionMessage: reader,
       agent,
       ai,
       devicePermissions,
