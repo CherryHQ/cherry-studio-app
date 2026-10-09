@@ -1208,6 +1208,7 @@
   "remoteAgent.undelivered.title": "Mensaje no entregado",
   "remoteAgent.untitled": "Conversación sin título",
   "remoteAgent.upgradeRequired": "Actualiza Cherry Studio en tu equipo de escritorio para usar agentes remotos.",
+  "remoteAgent.uploadProgress": "Subiendo archivos adjuntos · {{percent}} %",
   "remoteAgent.workspace": "Elegir un espacio de trabajo del PC",
   "session.activityAt.yesterday": "Ayer",
   "session.deleteFailed": "La sesión no fue eliminada. Intentar otra vez.",

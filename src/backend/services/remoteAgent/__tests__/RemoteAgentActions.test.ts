@@ -1,4 +1,5 @@
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentActions } from '../RemoteAgentActions';
 import { RemoteAgentError } from '../RemoteAgentError';
@@ -561,4 +562,56 @@ it('recovers first-send diagnostics from an older journal receipt', async () => 
       errorMessage: 'Agent has no model configured',
     }),
   ]);
+});
+
+it('freezes uploaded references before sending and recovers a lost receipt without uploading or executing again', async () => {
+  const { storage, port } = journal();
+  const attachments = [
+    {
+      fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+      name: 'report.zip',
+      mediaType: 'application/zip',
+    },
+  ];
+  const uploaded = [{ uploadId: 'upload-report' }];
+  const upload = jest.fn(async () => uploaded);
+  let sent: unknown;
+  const first = new RemoteAgentActions(
+    'pc:grant',
+    port,
+    async (_method, body) => {
+      sent = body;
+      expect(JSON.parse(storage.read('pc:grant')!).records[0].params).toEqual(body);
+      throw new RemoteAgentError('CONNECTION_LOST', true);
+    },
+    () => {},
+    upload,
+  );
+  const action = await first.create(
+    'send',
+    method,
+    { ...params, text: '' },
+    '',
+    undefined,
+    attachments,
+  );
+  expect(action).toMatchObject({ status: 'pending', attachments });
+  expect(sent).toMatchObject({ commandId: action.id, text: '', attachments: uploaded });
+  first.stop();
+  const calls: string[] = [];
+  const recovered = new RemoteAgentActions(
+    'pc:grant',
+    port,
+    async (name, body) => {
+      calls.push(name);
+      return receipt((body as { commandId: string }).commandId, 'applied') as never;
+    },
+    () => {},
+    async () => {
+      throw new Error('Must reuse the frozen upload references');
+    },
+  );
+  await recovered.recover();
+  expect(calls).toEqual(['agent.commands.get']);
+  expect(recovered.get()[0]).toMatchObject({ status: 'applied', attachments });
 });

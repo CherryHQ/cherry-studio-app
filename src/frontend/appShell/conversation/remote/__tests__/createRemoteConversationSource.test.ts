@@ -465,7 +465,7 @@ it('resends an undelivered message through the current send target, or discards 
     input: { parts: [{ text: 'hello' }] },
   });
   await expect(undelivered.resend.execute(undefined)).resolves.toMatchObject({ state: 'pending' });
-  expect(test.remote.send).toHaveBeenCalledWith('idle-1', 'hello');
+  expect(test.remote.send).toHaveBeenCalledWith('idle-1', 'hello', undefined);
   undelivered.discard();
   expect(test.remote.discard).toHaveBeenCalledWith('send');
   // A later send supersedes it in the journal; the Session shows only its latest send.

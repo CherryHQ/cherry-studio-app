@@ -1,10 +1,17 @@
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ExecutionFailure } from '../aiFailure';
 import type { InteractionQuestion } from '../interaction';
 
 export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { kind: 'system' };
-export type RemoteStartInput = { draftId: string; agentId: string; text: string } & (
+export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
+export type RemoteStartInput = {
+  draftId: string;
+  agentId: string;
+  text: string;
+  attachments?: RemoteAttachment[];
+} & (
   | { workspace: RemoteWorkspaceSelection; workspaceId?: never }
   | { workspaceId: string; workspace?: never }
 );
@@ -19,6 +26,7 @@ export type RemoteCommand = Readonly<{
   sessionId?: string;
   interactionId?: string;
   text?: string;
+  attachments?: RemoteAttachment[];
   status: RemoteOperationStatus;
   error?: string;
   errorMessage?: string;
@@ -30,6 +38,7 @@ export type RemoteStartOperation = Readonly<{
   workspaceId?: string;
   workspace?: RemoteWorkspaceSelection;
   text: string;
+  attachments?: RemoteAttachment[];
   status: RemoteOperationStatus;
   sessionId?: string;
   error?: string;
@@ -39,6 +48,8 @@ export type RemoteStartOperation = Readonly<{
 export type RemoteSourceState = Readonly<{
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
   reason?: string;
+  attachments?: boolean;
+  upload?: { sent: number; total: number; sessionId?: string; draftId?: string };
 }>;
 export type RemoteSessionView = {
   id: string;
@@ -124,6 +135,7 @@ export type RemoteSessionSnapshot = {
 export type RemoteResourceValue =
   | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string }
+  | { kind: 'file'; uri: string; name: string; mediaType?: string; byteLength?: string }
   | { kind: 'metadata'; name: string; mediaType?: string; byteLength?: string };
 export type RemotePage<T> = { items: readonly T[]; next?: string };
 

@@ -237,8 +237,8 @@ importers:
         specifier: workspace:*
         version: link:packages/provider-registry
       '@cherrystudio/remote-protocol':
-        specifier: 0.3.0
-        version: 0.3.0(zod@4.4.3)
+        specifier: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz
+        version: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz(zod@4.4.3)
       '@cherrystudio/remote-transport':
         specifier: 0.1.2
         version: 0.1.2(zod@4.4.3)
@@ -904,6 +904,12 @@ importers:
         version: 4.4.3
 
 packages:
+
+  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz':
+    resolution: {integrity: sha512-lrDC2NC/UNU6AYrA7TzD72D4QA6+7cFK/J0aKCLO6U9eorzY3Sf9GUemuarqCpuWSY47kqM+PRR4Q2QwCzf0XQ==, tarball: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz}
+    version: 0.4.0-attachments.1
+    peerDependencies:
+      zod: ^4.3.4
 
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
@@ -10198,6 +10204,11 @@ packages:
       '@types/emscripten': '>=1.39.6'
 
 snapshots:
+
+  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz(zod@4.4.3)':
+    dependencies:
+      json-canonicalize: 3.0.1
+      zod: 4.4.3
 
   '@adobe/css-tools@4.5.0': {}
 

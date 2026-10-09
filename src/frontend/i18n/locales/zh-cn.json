@@ -1190,6 +1190,7 @@
   "remoteAgent.undelivered.title": "未送达的消息",
   "remoteAgent.untitled": "未命名会话",
   "remoteAgent.upgradeRequired": "请更新桌面端 Cherry Studio 后使用远程智能体。",
+  "remoteAgent.uploadProgress": "正在上传附件 · {{percent}}%",
   "remoteAgent.workspace": "选择 PC 工作区",
   "session.activityAt.yesterday": "昨天",
   "session.deleteFailed": "会话未能删除，请重试。",

@@ -1217,6 +1217,7 @@
   "remoteAgent.undelivered.title": "Недоставленное сообщение",
   "remoteAgent.untitled": "Разговор без названия",
   "remoteAgent.upgradeRequired": "Обновите Cherry Studio на компьютере, чтобы использовать удалённых агентов.",
+  "remoteAgent.uploadProgress": "Загрузка вложений · {{percent}}%",
   "remoteAgent.workspace": "Выберите рабочую область PC",
   "session.activityAt.yesterday": "Вчера",
   "session.deleteFailed": "Сессия не была удалена. Попробуйте еще раз.",

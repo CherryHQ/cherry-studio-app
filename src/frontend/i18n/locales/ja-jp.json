@@ -1190,6 +1190,7 @@
   "remoteAgent.undelivered.title": "未送信のメッセージ",
   "remoteAgent.untitled": "無題の会話",
   "remoteAgent.upgradeRequired": "リモートエージェントを使うには、デスクトップの Cherry Studio を更新してください。",
+  "remoteAgent.uploadProgress": "添付ファイルをアップロード中 · {{percent}}%",
   "remoteAgent.workspace": "PC のワークスペースを選択",
   "session.activityAt.yesterday": "昨日",
   "session.deleteFailed": "セッションは削除されませんでした。もう一度やり直してください。",

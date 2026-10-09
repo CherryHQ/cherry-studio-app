@@ -1199,6 +1199,7 @@
   "remoteAgent.undelivered.title": "Μήνυμα που δεν παραδόθηκε",
   "remoteAgent.untitled": "Συνομιλία χωρίς τίτλο",
   "remoteAgent.upgradeRequired": "Ενημερώστε το Cherry Studio στον υπολογιστή σας για να χρησιμοποιήσετε απομακρυσμένους πράκτορες.",
+  "remoteAgent.uploadProgress": "Μεταφόρτωση συνημμένων · {{percent}}%",
   "remoteAgent.workspace": "Επιλέξτε χώρο εργασίας PC",
   "session.activityAt.yesterday": "Χθες",
   "session.deleteFailed": "Η συνεδρία δεν διαγράφηκε. Προσπαθήστε ξανά.",

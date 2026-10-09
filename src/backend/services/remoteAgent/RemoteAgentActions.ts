@@ -2,6 +2,8 @@ import {
   agentMethods,
   commandReceiptSchema,
   workspaceSelectionSchema,
+  uploadReferencesSchema,
+  type AgentUploadReference,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
@@ -9,13 +11,21 @@ import * as z from 'zod';
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import { JsonValueSchema } from '@/shared/contracts/agent';
 import type {
+  RemoteAttachment,
   RemoteCommand,
   RemoteStartInput,
   RemoteStartOperation,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentError } from './RemoteAgentError';
+import { uploadProgressSchema, type SavedUpload } from './remoteUploads';
 
+const AttachmentSchema = z.object({
+  fileEntryId: FileEntryIdSchema,
+  name: z.string(),
+  mediaType: z.string(),
+});
 type Request = (method: string, params: unknown) => Promise<unknown>;
 const ActionSchema = z.object({
   id: z.string(),
@@ -24,6 +34,7 @@ const ActionSchema = z.object({
   agentId: z.string().optional(),
   userMessageId: z.string().optional(),
   text: z.string().optional(),
+  attachments: z.array(AttachmentSchema).optional(),
   status: z.enum(['confirming', 'accepted', 'applied', 'rejected', 'interrupted']),
   error: z.string().optional(),
   errorMessage: z.string().max(512).optional(),
@@ -31,6 +42,7 @@ const ActionSchema = z.object({
 const RecordSchema = z.object({
   action: ActionSchema,
   receipt: commandReceiptSchema.optional(),
+  uploads: z.array(uploadProgressSchema).optional(),
   method: z.string(),
   params: z.record(z.string(), JsonValueSchema),
 });
@@ -42,8 +54,11 @@ const StartSchema = z
     workspaceId: z.string().optional(),
     workspace: workspaceSelectionSchema.optional(),
     text: z.string(),
+    attachments: z.array(AttachmentSchema).optional(),
     createId: z.string(),
     sendId: z.string(),
+    uploads: z.array(uploadProgressSchema).optional(),
+    uploaded: uploadReferencesSchema.optional(),
     status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
     sessionId: z.string().optional(),
     error: z.string().optional(),
@@ -124,6 +139,12 @@ export class RemoteAgentActions {
     private readonly journal: RemoteAgentCommandJournal,
     private readonly request: Request,
     private readonly changed: () => void,
+    private readonly upload?: (
+      attachments: RemoteAttachment[],
+      saved: SavedUpload[],
+      save: (value: SavedUpload[]) => void,
+      owner: { sessionId?: string; draftId?: string },
+    ) => Promise<AgentUploadReference[]>,
   ) {
     const parsed = readJournal(journal, binding);
     this.records = parsed?.records ?? [];
@@ -165,6 +186,7 @@ export class RemoteAgentActions {
     params: Record<string, z.infer<typeof JsonValueSchema>>,
     text?: string,
     commandId = randomUUID(),
+    attachments?: RemoteAttachment[],
   ): Promise<RemoteCommand> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     // Keep pending work, open start records and each Session's one undelivered send; a new send
@@ -190,6 +212,7 @@ export class RemoteAgentActions {
       ...(typeof params.agentId === 'string' ? { agentId: params.agentId } : {}),
       ...(typeof params.sessionId === 'string' ? { sessionId: params.sessionId } : {}),
       ...(text ? { text } : {}),
+      ...(attachments?.length ? { attachments } : {}),
     };
     const entry = RecordSchema.parse({
       action,
@@ -256,7 +279,8 @@ export class RemoteAgentActions {
         (entry.workspace?.kind === 'registered' &&
           input.workspace?.kind === 'registered' &&
           entry.workspace.id !== input.workspace.id) ||
-        entry.text !== input.text)
+        entry.text !== input.text ||
+        JSON.stringify(entry.attachments ?? []) !== JSON.stringify(input.attachments ?? []))
     )
       throw new RemoteAgentError('IDEMPOTENCY_CONFLICT');
     if (!entry) {
@@ -267,6 +291,9 @@ export class RemoteAgentActions {
         sessionId: 'validation',
         expectedIdleRevision: '0',
         text: input.text,
+        ...(input.attachments?.length
+          ? { attachments: input.attachments.map((file) => ({ uploadId: file.fileEntryId })) }
+          : {}),
       });
       StartSchema.parse({
         ...input,
@@ -313,16 +340,34 @@ export class RemoteAgentActions {
     method: string,
     params: Record<string, z.infer<typeof JsonValueSchema>>,
     text?: string,
+    attachments?: RemoteAttachment[],
   ) {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     if (this.records.some((entry) => entry.action.id === id)) await this.run(id, true);
-    else await this.create(kind, method, params, text, id);
+    else await this.create(kind, method, params, text, id, attachments);
     return this.snapshot.find((entry) => entry.id === id)!;
   }
   private async executeStart(original: StartEntry): Promise<RemoteStartOperation> {
     let entry = original;
     let settled = projectStart(entry, this.records);
     try {
+      if (
+        entry.attachments?.length &&
+        !this.records.some((record) => record.action.id === entry.sendId)
+      ) {
+        if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
+        const uploaded = await this.upload(
+          entry.attachments,
+          entry.uploads ?? [],
+          (uploads) => {
+            entry = { ...entry, uploads };
+            this.updateStart(entry);
+          },
+          { draftId: entry.draftId },
+        );
+        entry = { ...entry, uploaded };
+        this.updateStart(entry);
+      }
       const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
         agentId: entry.agentId,
         ...(entry.workspace?.kind === 'system'
@@ -353,8 +398,10 @@ export class RemoteAgentActions {
             sessionId: created.sessionId,
             text: entry.text,
             expectedIdleRevision: result.session.idleRevision,
+            ...(entry.uploaded ? { attachments: entry.uploaded } : {}),
           },
           entry.text,
+          entry.attachments,
         );
       }
       if (!this.stopped) return this.finishStart(entry, sent, true);
@@ -378,6 +425,7 @@ export class RemoteAgentActions {
                     kind: 'send' as const,
                     sessionId: entry.sessionId,
                     text: entry.text,
+                    attachments: entry.attachments,
                     status,
                     ...failure,
                   },
@@ -439,7 +487,30 @@ export class RemoteAgentActions {
           if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
         }
       }
-      if (receipt === undefined) receipt = await this.request(entry.method, entry.params);
+      if (receipt === undefined) {
+        if (entry.action.attachments?.length && !entry.params.attachments) {
+          if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
+          const attachments = uploadReferencesSchema.parse(
+            await this.upload(
+              entry.action.attachments,
+              entry.uploads ?? [],
+              (uploads) => {
+                entry = { ...entry, uploads };
+                this.commit(
+                  this.records.map((record) => (record.action.id === action.id ? entry : record)),
+                );
+              },
+              { sessionId: entry.action.sessionId },
+            ),
+          );
+          if (this.stopped) throw new RemoteAgentError('CLOSED');
+          entry = { ...entry, params: { ...entry.params, attachments } };
+          this.commit(
+            this.records.map((record) => (record.action.id === action.id ? entry : record)),
+          );
+        }
+        receipt = await this.request(entry.method, entry.params);
+      }
       const parsed = commandReceiptSchema.parse(receipt);
       if (parsed.commandId !== entry.action.id || parsed.method !== entry.method)
         throw new RemoteAgentError('PROTOCOL_ERROR');

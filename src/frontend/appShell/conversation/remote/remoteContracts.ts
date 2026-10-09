@@ -68,6 +68,7 @@ export type RemoteConversationSnapshot = Omit<ConversationSnapshot, 'executions'
     inputPolicy: InputPolicy;
     send?: ConversationAction<ConversationInput, Submission>;
   };
+  upload?: { sent: number; total: number; cancel(): void };
   undelivered?: UndeliveredMessage;
 };
 export type HistoryPage = {
@@ -112,6 +113,7 @@ export interface ConversationDraft {
     start: ConversationAction<ConversationInput, Submission>;
     /** The Session this draft's start created; the route hands off to it, then releases the start. */
     created?: { conversation: ConversationRef; release(): void };
+    upload?: { sent: number; total: number; cancel(): void };
     undelivered?: UndeliveredMessage;
   }>;
   dispose(): void;

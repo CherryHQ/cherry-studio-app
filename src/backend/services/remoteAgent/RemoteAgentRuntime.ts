@@ -13,6 +13,7 @@ import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/re
 import { RemoteAgentError } from './RemoteAgentError';
 import { RemoteAgentScope, type RemoteBackgroundExecution } from './RemoteAgentScope';
 import { RemoteSessionReadCache } from './RemoteSessionReadCache';
+import type { RemoteUploadFiles } from './remoteUploads';
 
 type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
 type Opening = { promise: Promise<Entry>; waiters: number };
@@ -28,6 +29,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
     connections: DesktopConnections;
     journal: RemoteAgentCommandJournal;
     background?: RemoteBackgroundExecution;
+    files?: RemoteUploadFiles;
   };
   private readonly readCache = new RemoteSessionReadCache();
   private uninvalidate?: () => void;
@@ -71,6 +73,7 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
                   dependencies.journal,
                   this.readCache,
                   dependencies.background,
+                  dependencies.files,
                 );
                 const created: Entry = { scope, users: 0, unwatch: () => undefined };
                 // Route disposal does not interrupt admitted commands; release demand once they settle.
@@ -176,6 +179,10 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
       send: (...args) => {
         assertActive();
         return scope.send(...args);
+      },
+      cancelUpload: () => {
+        assertActive();
+        scope.cancelUpload();
       },
       cancel: (...args) => {
         assertActive();

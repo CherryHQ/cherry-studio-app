@@ -1,5 +1,6 @@
 import type { InteractionResponse } from '../interaction';
 import type {
+  RemoteAttachment,
   RemoteCommand,
   RemoteModelSummary,
   RemoteStartInput,
@@ -48,7 +49,8 @@ export interface RemoteAgentSource {
   ): Promise<RemotePage<RemoteMessageView>>;
   readResource(resource: RemoteResource, signal: AbortSignal): Promise<RemoteResourceValue>;
   start(input: RemoteStartInput): Promise<RemoteStartOperation>;
-  send(target: string, text: string): Promise<RemoteCommand>;
+  send(target: string, text: string, attachments?: RemoteAttachment[]): Promise<RemoteCommand>;
+  cancelUpload?(): void;
   cancel(target: string): Promise<RemoteCommand>;
   respond(target: string, response: InteractionResponse): Promise<RemoteCommand>;
   getCommands(): readonly RemoteCommand[];

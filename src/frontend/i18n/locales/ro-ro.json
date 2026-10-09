@@ -1208,6 +1208,7 @@
   "remoteAgent.undelivered.title": "Mesaj nelivrat",
   "remoteAgent.untitled": "Conversație fără titlu",
   "remoteAgent.upgradeRequired": "Actualizați Cherry Studio pe computer pentru a utiliza agenți la distanță.",
+  "remoteAgent.uploadProgress": "Se încarcă atașamentele · {{percent}}%",
   "remoteAgent.workspace": "Alegeți un spațiu de lucru pe PC",
   "session.activityAt.yesterday": "Ieri",
   "session.deleteFailed": "Sesiunea nu a fost ștearsă. Încearcă din nou.",

@@ -69,6 +69,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
+  agentUploadsVersion?: number;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
@@ -89,6 +90,7 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.agentUploadsVersion = hello.agentUploadsVersion;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
@@ -135,6 +137,11 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (method.startsWith('agent.uploads.') && this.agentUploadsVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support attachments',
+      });
     if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',

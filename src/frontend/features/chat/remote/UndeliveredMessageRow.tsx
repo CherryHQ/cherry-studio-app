@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { ConversationFailure } from '@/frontend/appShell/conversation';
-import type { UndeliveredMessage } from '@/frontend/appShell/conversation/remote';
+import type {
+  ConversationInput,
+  UndeliveredMessage,
+} from '@/frontend/appShell/conversation/remote';
 import { useComposerPresentationActions } from '@/frontend/components/Composer';
 
 import { conversationFailureKey } from '../runtime/conversationFailure';
@@ -52,7 +55,13 @@ function describe(message: UndeliveredMessage): {
 
 function messageText(message: UndeliveredMessage) {
   return message.input.parts
-    .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+    .flatMap((part) =>
+      part.type === 'text'
+        ? [part.text]
+        : part.type === 'file'
+          ? [part.name ?? part.fileEntryId]
+          : [],
+    )
     .join('\n');
 }
 
@@ -65,7 +74,7 @@ export function UndeliveredMessageRow({
   onEdit,
 }: {
   message?: UndeliveredMessage;
-  onEdit(text: string): void;
+  onEdit(input: ConversationInput): void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -98,16 +107,19 @@ export function UndeliveredMessageRow({
     setDelivered(false);
     setResending(shown);
     const result = await shown.resend.execute(undefined).finally(() => setResending(undefined));
-    // Pending means the desktop has the command; a later rejection brings the row back.
-    if (result.state === 'applied' || result.state === 'pending') setDelivered(true);
+    if (result.state === 'applied') setDelivered(true);
     // Not admitted, so the original stays; a recorded rejection replaces it instead.
     else if (result.state === 'rejected' && !result.operationId)
       toast.show({ label: t(conversationFailureKey(result.failure)), variant: 'danger' });
   };
-  const editText = () => {
-    setDetails(false);
-    shown.discard();
-    onEdit(text);
+  const editText = async () => {
+    try {
+      await onEdit(shown.input);
+      shown.discard();
+      setDetails(false);
+    } catch {
+      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+    }
   };
   const discard = () => {
     setDetails(false);

@@ -71,6 +71,12 @@ native module ownership and the network-independent pairing migration.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 
+## Planned file transfer
+
+[Send mobile files to desktop](./file-transfer.md) records the proposed shared protocol, desktop
+receiver, mobile attachment workflow, delivery dependencies, and acceptance checks. This is design
+only; file uploads and remote attachment sending are not implemented.
+
 ## Session read cache
 
 [Remote Session Read Cache](./session-read-cache.md) documents the cross-page read cache,

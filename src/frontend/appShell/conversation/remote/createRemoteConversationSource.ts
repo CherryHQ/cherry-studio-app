@@ -226,7 +226,7 @@ export function createRemoteConversationSource(
             if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
             if (!target.workspace)
               throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
-            const text = remoteInput(value);
+            const preparedInput = remoteInput(value);
             pending = true;
             state.set(snapshot());
             return outcome(
@@ -234,7 +234,7 @@ export function createRemoteConversationSource(
                 draftId: input.draftId,
                 agentId: target.agentId,
                 workspace: target.workspace,
-                text,
+                ...preparedInput,
               }),
             );
           } catch (error) {
@@ -316,7 +316,17 @@ export function createRemoteConversationSource(
               discard,
             );
           return {
-            inputPolicy: REMOTE_INPUT_POLICY,
+            inputPolicy: {
+              ...REMOTE_INPUT_POLICY,
+              attachments: remote.getState().attachments === true,
+            },
+            upload:
+              remote.getState().upload?.draftId === input.draftId
+                ? {
+                    ...remote.getState().upload!,
+                    cancel: () => remote.cancelUpload?.(),
+                  }
+                : undefined,
             start,
             ...(own?.sessionId && own.status !== 'pending'
               ? {

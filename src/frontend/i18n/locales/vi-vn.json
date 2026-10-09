@@ -1190,6 +1190,7 @@
   "remoteAgent.undelivered.title": "Tin nhắn chưa được gửi",
   "remoteAgent.untitled": "Cuộc trò chuyện chưa đặt tên",
   "remoteAgent.upgradeRequired": "Cập nhật Cherry Studio trên máy tính để sử dụng trợ lý từ xa.",
+  "remoteAgent.uploadProgress": "Đang tải tệp đính kèm lên · {{percent}}%",
   "remoteAgent.workspace": "Chọn không gian làm việc trên PC",
   "session.activityAt.yesterday": "Hôm qua",
   "session.deleteFailed": "Phiên không bị xóa. Hãy thử lại.",

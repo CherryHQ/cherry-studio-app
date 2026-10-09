@@ -1199,6 +1199,7 @@
   "remoteAgent.undelivered.title": "Nicht zugestellte Nachricht",
   "remoteAgent.untitled": "Unbenannte Unterhaltung",
   "remoteAgent.upgradeRequired": "Aktualisieren Sie Cherry Studio auf Ihrem Desktop, um Remote-Agenten zu verwenden.",
+  "remoteAgent.uploadProgress": "Anhänge werden hochgeladen · {{percent}} %",
   "remoteAgent.workspace": "PC-Arbeitsbereich auswählen",
   "session.activityAt.yesterday": "Gestern",
   "session.deleteFailed": "Sitzung wurde nicht gelöscht. Versuchen Sie es erneut.",

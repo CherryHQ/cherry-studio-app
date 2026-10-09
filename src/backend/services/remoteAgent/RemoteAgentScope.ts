@@ -41,8 +41,10 @@ import {
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
+import { downloadAttachment } from './remoteDownloads';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
+import { uploadAttachments, type RemoteUploadFiles } from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
 export type RemoteBackgroundExecution = {
@@ -112,6 +114,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly unsubscribe: () => void;
   private stopped = false;
   private preparing = 0;
+  private uploadAbort?: AbortController;
   private backgroundBlocked = false;
   private pendingCommandLease?: ReturnType<KeepAliveSource['acquire']>;
   private readonly pendingStarts = new Set<string>();
@@ -125,6 +128,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     journal: RemoteAgentCommandJournal,
     private readonly readCache: RemoteSessionReadCache,
     private readonly background?: RemoteBackgroundExecution,
+    private readonly files?: RemoteUploadFiles,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
@@ -138,6 +142,52 @@ export class RemoteAgentScope implements RemoteAgentSource {
         return this.request(key, agentMethods[key].params.parse(params));
       },
       () => this.scheduleRecovery(),
+      async (attachments, saved, save, owner) => {
+        if (this.uploadAbort) throw new RemoteAgentError('CONFLICT', true);
+        if (!this.files) throw new RemoteAgentError('UPGRADE_REQUIRED');
+        const session = await this.lease.ready(this.lease.signal);
+        if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
+        if (this.uploadAbort) throw new RemoteAgentError('CONFLICT', true);
+        let staged = saved;
+        const abort = new AbortController();
+        this.uploadAbort = abort;
+        try {
+          return await uploadAttachments(
+            attachments,
+            this.files,
+            this.request,
+            AbortSignal.any([abort.signal, this.lease.signal]),
+            (sent, total) => {
+              this.state = { ...this.state, upload: { sent, total, ...owner } };
+              for (const listener of this.stateListeners) listener();
+            },
+            saved,
+            (value) => {
+              staged = value;
+              save(value);
+            },
+          );
+        } catch (error) {
+          if (abort.signal.aborted) {
+            await Promise.allSettled(
+              staged.map((entry) =>
+                this.request(
+                  'agent.uploads.cancel',
+                  { uploadId: entry.metadata.uploadId },
+                  AbortSignal.timeout(3000),
+                ),
+              ),
+            );
+            throw new RemoteAgentError('UPLOAD_CANCELLED');
+          }
+          if (error instanceof RemoteAgentError) throw error;
+          throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
+        } finally {
+          this.uploadAbort = undefined;
+          this.state = { ...this.state, upload: undefined };
+          for (const listener of this.stateListeners) listener();
+        }
+      },
     );
     this.unoperations = this.actions.subscribe(() => {
       for (const [id, observation] of this.observations) {
@@ -224,6 +274,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     for (const listener of this.executionListeners) listener();
   }
 
+  cancelUpload = () => this.uploadAbort?.abort();
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
     this.stateListeners.add(listener);
@@ -243,7 +294,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (this.stopped || this.lease.signal.aborted) throw new RemoteAgentError('CLOSED');
   }
   private onConnectionChanged() {
-    this.state = this.lease.getSnapshot();
+    this.state = { ...this.lease.getSnapshot(), upload: this.state.upload };
     for (const observation of this.observations.values()) {
       this.stopObservation(observation);
       this.withdrawTargets(observation);
@@ -328,6 +379,10 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
     const session = await this.lease.ready(signal);
+    if (this.state.attachments !== (session.agentUploadsVersion === 1)) {
+      this.state = { ...this.state, attachments: session.agentUploadsVersion === 1 };
+      for (const listener of this.stateListeners) listener();
+    }
     return this.call(session, method, params, signal);
   };
   private async call<M extends AgentMethod>(
@@ -622,7 +677,14 @@ export class RemoteAgentScope implements RemoteAgentSource {
     }
     if (part.kind === 'file')
       return {
-        kind: 'metadata',
+        kind: 'file',
+        uri: await downloadAttachment(
+          this.historyRequest,
+          sessionId,
+          part.ref,
+          part.name,
+          AbortSignal.any([signal, this.lease.signal]),
+        ),
         name: part.name,
         mediaType: part.ref.mediaType,
         byteLength: part.ref.byteLength,
@@ -900,9 +962,16 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     return this.track(this.withPreparation(() => this.actions.start(input)));
   }
-  send(target: string, text: string) {
+  send(target: string, text: string, attachments?: Parameters<RemoteAgentSource['send']>[2]) {
     const params = this.target(target, 'send');
-    agentMethods['agent.messages.send'].params.parse({ ...params, commandId: 'validation', text });
+    agentMethods['agent.messages.send'].params.parse({
+      ...params,
+      commandId: 'validation',
+      text,
+      ...(attachments?.length
+        ? { attachments: attachments.map((file) => ({ uploadId: file.fileEntryId })) }
+        : {}),
+    });
     const observation = this.trackExecution(params.sessionId);
     observation.pendingSubmission = true;
     return this.track(
@@ -913,6 +982,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
             'agent.messages.send',
             { ...params, text },
             text,
+            undefined,
+            attachments,
           );
           if (command.status === 'pending') observation.pendingCommandId = command.id;
           else observation.pendingSubmission = false;

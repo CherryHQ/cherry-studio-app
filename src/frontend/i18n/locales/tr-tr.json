@@ -1199,6 +1199,7 @@
   "remoteAgent.undelivered.title": "Teslim edilmeyen mesaj",
   "remoteAgent.untitled": "Adsız sohbet",
   "remoteAgent.upgradeRequired": "Uzak aracıları kullanmak için masaüstünüzdeki Cherry Studio uygulamasını güncelleyin.",
+  "remoteAgent.uploadProgress": "Ekler yükleniyor · %{{percent}}",
   "remoteAgent.workspace": "PC çalışma alanı seçin",
   "session.activityAt.yesterday": "Dün",
   "session.deleteFailed": "Oturum silinmedi. Tekrar deneyin.",

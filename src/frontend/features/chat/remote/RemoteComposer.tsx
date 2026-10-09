@@ -1,5 +1,4 @@
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import {
   BottomSheet,
   Button,
@@ -10,7 +9,7 @@ import {
 } from '@cherrystudio/ui/components';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import {
   useConversationWorkspaces,
@@ -26,13 +25,17 @@ import {
 } from '@/frontend/appShell/conversation/remote';
 import {
   ComposerSurface,
+  ComposerMenu,
+  ComposerAttachments,
   useComposerPresentationActions,
   useComposerState,
   useComposerActions,
 } from '@/frontend/components/Composer';
-import { usePersistCache } from '@/frontend/data/hooks';
+import { usePersistCache, useBackendModule } from '@/frontend/data';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { ChatInputSurface } from '../components/ChatInput';
+import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 
@@ -54,8 +57,9 @@ export function RemoteComposer({
   const { t } = useTranslation();
   const { toast } = useToast();
   const existing = draftId === undefined;
-  const { draft: text } = useComposerState();
-  const { setDraft } = useComposerActions();
+  const { draft: text, attachments } = useComposerState();
+  const files = useBackendModule('file');
+  const { setDraft, addAttachments } = useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const [, setDrafts] = usePersistCache('remote_agent.drafts');
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
@@ -87,6 +91,9 @@ export function RemoteComposer({
   const startAvailability = draft.state?.start.availability;
   const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
   const action = existing ? snapshot.actions.send : draft.state?.start;
+  const supportsAttachments =
+    (existing ? snapshot.actions.inputPolicy : draft.state?.inputPolicy)?.attachments === true;
+  const upload = existing ? snapshot.upload : draft.state?.upload;
   const cancellations = snapshot.executions.filter((execution) => execution.cancel);
   const canStop = cancellations.some(
     (execution) => execution.cancel?.availability.state === 'enabled',
@@ -106,7 +113,33 @@ export function RemoteComposer({
     <>
       <UndeliveredMessageRow
         message={undelivered}
-        onEdit={(restored) => setDraft((current) => [restored, current].filter(Boolean).join('\n'))}
+        onEdit={async (input) => {
+          const restored = await Promise.all(
+            input.parts
+              .flatMap((part) => (part.type === 'file' ? [part] : []))
+              .map(async (part) => {
+                const fileEntryId = FileEntryIdSchema.parse(part.fileEntryId);
+                const uri = await files.getUri(fileEntryId);
+                if (!uri) throw new Error('RESOURCE_UNAVAILABLE');
+                return {
+                  id: fileEntryId,
+                  fileEntryId,
+                  uri,
+                  name: part.name ?? 'file',
+                  mediaType: part.mediaType,
+                  kind: part.mediaType.startsWith('image/')
+                    ? ('image' as const)
+                    : ('file' as const),
+                  status: 'ready' as const,
+                };
+              }),
+          );
+          addAttachments(restored);
+          const restoredText = input.parts
+            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+            .join('\n');
+          setDraft((current) => [restoredText, current].filter(Boolean).join('\n'));
+        }}
       />
       <ComposerSurface
         getSendErrorLabel={(error) =>
@@ -114,12 +147,17 @@ export function RemoteComposer({
             ? t(conversationFailureKey(error.failure))
             : undefined
         }
-        canSend={action?.availability.state === 'enabled' && Boolean(text.trim())}
+        canSend={
+          action?.availability.state === 'enabled' &&
+          !upload &&
+          Boolean(text.trim() || attachments.length) &&
+          (!attachments.length || supportsAttachments)
+        }
         streaming={canStop}
         dismissKeyboardOnSend
-        onSend={async ({ text }) => {
+        onSend={async (input) => {
           if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
-          const result = await action.execute({ parts: [{ type: 'text', text }] });
+          const result = await action.execute({ parts: toAgentInputParts(input) });
           // A recorded rejection is held by the undelivered row; only unadmitted input returns here.
           if (result.state === 'rejected' && !result.operationId)
             throw new ConversationActionError(result.failure);
@@ -131,18 +169,23 @@ export function RemoteComposer({
         }}
         testID="chat-composer"
       >
+        <ComposerAttachments />
+        {upload ? (
+          <View className="flex-row items-center gap-2 px-4">
+            <Text className="flex-1 text-sm text-muted-foreground">
+              {t('remoteAgent.uploadProgress', {
+                percent: Math.floor((upload.sent / Math.max(1, upload.total)) * 100),
+              })}
+            </Text>
+            <Button size="xs" variant="ghost" onPress={upload.cancel}>
+              {t('common.cancel')}
+            </Button>
+          </View>
+        ) : null}
         <ChatInputSurface
-          attachmentMode="text-only"
+          attachmentMode={supportsAttachments ? 'images' : 'text-only'}
           streaming={canStop}
-          leadingAction={
-            <Composer.Action
-              accessibilityLabel={t('common.more')}
-              onPress={() => toast.show({ label: t('remoteAgent.attachmentsUnavailable') })}
-              testID="composer-menu-trigger"
-            >
-              <PlusIcon className="size-6 text-foreground" />
-            </Composer.Action>
-          }
+          leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
           secondaryAction={
             <Composer.Pill
               accessibilityLabel={t('remoteAgent.workspace')}

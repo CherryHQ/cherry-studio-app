@@ -1,10 +1,12 @@
 import type {
+  RemoteAttachment,
   RemoteAgentSource,
   RemoteCommand,
   RemoteMessageView,
   RemoteSessionSnapshot,
   RemoteSessionView,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type {
   ConversationAction,
@@ -43,18 +45,32 @@ export const REMOTE_INPUT_POLICY = {
   modelSelection: false,
   textLimit: { unit: 'utf16-units' as const, value: 32768 },
 };
-export function remoteInput(input: ConversationInput): string {
+export function remoteInput(input: ConversationInput): {
+  text: string;
+  attachments?: RemoteAttachment[];
+} {
   if (
     input.modelId !== undefined ||
     input.reasoningEffort !== undefined ||
     input.imageGeneration !== undefined ||
-    input.parts.some((part) => part.type !== 'text' || part.pluginReferences?.length)
+    input.parts.some(
+      (part) =>
+        (part.type !== 'text' && part.type !== 'file') ||
+        (part.type === 'text' && part.pluginReferences?.length),
+    )
   )
     throw new ConversationReadError({ code: 'unsupported', retry: 'revise-input' });
-  const text = input.parts.map((part) => (part.type === 'text' ? part.text : '')).join('\n');
-  if (!text.trim() || text.length > 32768)
+  const text = input.parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('\n');
+  const attachments = input.parts.flatMap((part): RemoteAttachment[] => {
+    if (part.type !== 'file') return [];
+    const id = FileEntryIdSchema.safeParse(part.fileEntryId);
+    if (!id.success)
+      throw new ConversationReadError({ code: 'unsupported', retry: 'revise-input' });
+    return [{ fileEntryId: id.data, name: part.name || 'file', mediaType: part.mediaType }];
+  });
+  if ((!text.trim() && !attachments.length) || text.length > 32768 || attachments.length > 8)
     throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
-  return text;
+  return { text, ...(attachments.length ? { attachments } : {}) };
 }
 function commandOutcome<T>(command: RemoteCommand, id: OperationId, value: T): OperationOutcome<T> {
   if (command.status === 'applied') return { state: 'applied', value };
@@ -186,7 +202,10 @@ export function createRemoteConversationSession(
     const send = action<ConversationInput, Submission>(
       'send',
       latest?.sendTarget,
-      (target, input) => source.send(target, remoteInput(input)),
+      (target, input) => {
+        const value = remoteInput(input);
+        return source.send(target, value.text, value.attachments);
+      },
       { conversation: ref },
     );
     const undelivered = source
@@ -283,7 +302,17 @@ export function createRemoteConversationSession(
               }
             : {}),
         })) ?? [],
-      actions: { inputPolicy: REMOTE_INPUT_POLICY, send },
+      actions: {
+        inputPolicy: { ...REMOTE_INPUT_POLICY, attachments: sourceState.attachments === true },
+        send,
+      },
+      upload:
+        sourceState.upload?.sessionId === ref.sessionId
+          ? {
+              ...sourceState.upload,
+              cancel: () => source.cancelUpload?.(),
+            }
+          : undefined,
       undelivered:
         undelivered &&
         undeliveredMessage(undelivered, operationId(undelivered.id), send, () => {

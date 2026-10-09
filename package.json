@@ -84,7 +84,7 @@
     "@cherrystudio/app-icons": "workspace:*",
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/provider-registry": "workspace:*",
-    "@cherrystudio/remote-protocol": "0.3.0",
+    "@cherrystudio/remote-protocol": "file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.1.tgz",
     "@cherrystudio/remote-transport": "0.1.2",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
