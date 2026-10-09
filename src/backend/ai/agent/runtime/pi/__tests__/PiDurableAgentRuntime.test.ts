@@ -2,14 +2,17 @@ import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { MemoryStorage } from '@earendil-works/pi-durable';
 
+import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
   RuntimeExecutionPorts,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
+import type { RuntimeTool } from '../../types';
+import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
-import type { PiRuntimeDependencies } from '../piModelTypes';
+import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
@@ -145,6 +148,123 @@ async function submitAndWait(runtime: PiDurableAgentRuntime, submission: Runtime
 }
 
 describe('Persistent Agent facade', () => {
+  test.each(['openai-completions', 'openai-responses'] as const)(
+    'retains mobile instructions, MCP discovery and the first user input in the serialized %s request',
+    async (api) => {
+      const state = fixture();
+      const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
+      const tools: RuntimeTool[] = [
+        {
+          ref: { source: 'builtin', capabilityId: 'run_js' },
+          providerName: 'run_js',
+          displayName: 'Run JavaScript',
+          description: 'Run a local calculation.',
+          inputSchema: { type: 'object', properties: {} },
+          approval: 'auto',
+          execute,
+        },
+        {
+          ref: { source: 'mcp', serverId: 'github', rawToolName: 'get_me' },
+          providerName: 'mcp_github_get_me',
+          displayName: 'GitHub account',
+          description: 'GitHub: Get the authenticated account.',
+          inputSchema: { type: 'object', properties: {} },
+          approval: 'ask',
+          execute,
+        },
+      ];
+      const instructions = buildAgentSystemPrompt({
+        agentInstructions: 'Help me inspect my GitHub repositories.',
+        appLanguage: 'zh-cn',
+        currentDate: '2026-10-09',
+        tools,
+        pluginGuides: [
+          {
+            pluginId: 'github',
+            revision: 3,
+            serverId: 'github',
+            content: '# GitHub\nUse get_me for account context.',
+          },
+        ],
+      });
+      const adapter = resolvePiApiAdapter(
+        api === 'openai-completions' ? 'openai-chat-completions' : 'openai-responses',
+      );
+      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+        `${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/api/${api}.js`,
+      );
+      // Jest loads the same installed adapter through CommonJS; Metro uses its import entry.
+      const loadStream = jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+      const capture = await bindPiStream(adapter, {
+        apiKey: 'test-key',
+        fetch: async () => {
+          throw new Error('This test must not contact a provider.');
+        },
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 4096,
+      });
+      let payload: unknown;
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => {
+        const resolved = await resolveModel(...args);
+        return {
+          ...resolved,
+          model: { ...wire, api, compat: { supportsDeveloperRole: false } },
+          streamFn: async (model, context, options) => {
+            const serialized = await capture(model, context, {
+              ...options,
+              onPayload: (request) => {
+                payload = request;
+                throw new Error('Request captured before transport.');
+              },
+            });
+            await serialized.result();
+            return resolved.streamFn(model, context, options);
+          },
+        };
+      };
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation({
+          ...seed,
+          configuration: { ...seed.configuration, instructions, tools },
+        });
+        const text = '你看看我的 github 的 skenora 项目';
+        await submitAndWait(runtime, { ...input('first'), input: [{ type: 'text', text }] });
+        const serialized = JSON.stringify(payload);
+        expect(serialized).toContain(text);
+        expect(serialized).toContain('# Cherry Studio Mobile Runtime');
+        expect(serialized).toContain('2026-10-09');
+        expect(serialized).toContain('zh-cn');
+        expect(serialized).toContain('Help me inspect my GitHub repositories.');
+        expect(serialized).toContain('## JavaScript Sandbox');
+        expect(serialized).toContain('# GitHub');
+        expect(serialized).toContain('## MCP Tool Discovery');
+        const request = payload as {
+          tools: { name?: string; function?: { name: string } }[];
+          messages?: { role: string }[];
+          input?: { role?: string }[];
+        };
+        expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
+          'run_js',
+          'tool_search',
+          'tool_describe',
+          'tool_call',
+        ]);
+        expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([
+          'system',
+          'user',
+        ]);
+        expect(execute).not.toHaveBeenCalled();
+      } finally {
+        await runtime.close();
+        loadStream.mockRestore();
+      }
+    },
+  );
+
   test('stopping a streamed partial settles the task and preserves the answer across reopen', async () => {
     const state = fixture();
     const resolveModel = state.dependencies.resolveModel;
