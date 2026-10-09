@@ -93,18 +93,19 @@ async function request(
   } catch (error) {
     if (signal.aborted) throw new PluginError('cancelled', 'Dingtalk authorization cancelled.');
     if (error instanceof PluginError) throw error;
+    const metadata = isHttpError(error) ? { statusCode: error.status } : undefined;
     if (isHttpError(error)) {
       if (error.code && pendingCodes.has(error.code)) return { error: error.code };
       if (error.status === 401)
-        throw new PluginError('authorization', 'Dingtalk authorization rejected.');
+        throw new PluginError('authorization', 'Dingtalk authorization rejected.', metadata);
       if (error.status === 403)
-        throw new PluginError('access', 'Dingtalk organization access denied.');
+        throw new PluginError('access', 'Dingtalk organization access denied.', metadata);
       if (error.status === 429)
-        throw new PluginError('quota', 'Dingtalk authorization rate limited.');
+        throw new PluginError('quota', 'Dingtalk authorization rate limited.', metadata);
       if (error.status && error.status < 500)
-        throw new PluginError('request', 'Dingtalk authorization request rejected.');
+        throw new PluginError('request', 'Dingtalk authorization request rejected.', metadata);
     }
-    throw new PluginError('network', 'Could not reach Dingtalk authorization.');
+    throw new PluginError('network', 'Could not reach Dingtalk authorization.', metadata);
   }
 }
 

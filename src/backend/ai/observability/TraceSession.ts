@@ -1,6 +1,7 @@
+import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
+import { sanitizeTraceAttributes } from '@/backend/utils/diagnosticTrace';
 import type { TraceContext, TraceSpanRecord } from '@/shared/data/types/trace';
 
-import { sanitizeTraceAttributes } from './traceAttributes';
 import type { TraceAttributes, TraceEndStatus, TraceSpan } from './types';
 
 const MAX_SPANS_PER_TRACE = 256;
@@ -39,8 +40,8 @@ export class TraceSession {
     this.monotonicNow = options.monotonicNow ?? (() => performance.now());
     this.context = {};
     for (const key of ['agentId', 'sessionId', 'turnId', 'messageId', 'requestId'] as const) {
-      const value = options.context?.[key];
-      if (typeof value === 'string') this.context[key] = value.slice(0, 256);
+      const value = diagnosticIdentifier(options.context?.[key]);
+      if (value) this.context[key] = value;
     }
     this.root = this.createSpan(options.name, null, options.attributes);
   }

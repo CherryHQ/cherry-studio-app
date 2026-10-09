@@ -1,4 +1,4 @@
-export { traceErrorAttributes } from './traceAttributes';
+export { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 export type {
   TraceAttributes,
   TraceDiagnosticSnapshot,

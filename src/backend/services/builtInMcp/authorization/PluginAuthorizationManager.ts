@@ -1,8 +1,10 @@
 import { pluginAuthorizationService } from '@/backend/data/services/PluginAuthorizationService';
+import type { TraceRecorder } from '@/backend/utils/diagnosticTrace';
 import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginConnectionStatus } from '@/shared/data/types/plugin';
 
 import type { PluginDefinition } from '../pluginDefinition';
+import { recordPluginOperation, type PluginDiagnosticStage } from '../pluginDiagnostics';
 import { getPluginDefinition, requirePluginAuthMethod } from '../pluginRegistry';
 import { createAuthorizationObserver } from './createAuthorizationObserver';
 import type { PluginAuthorizationStore, PluginAuthorizationRuntime } from './pluginAuthorization';
@@ -29,6 +31,7 @@ export class PluginAuthorizationManager {
   constructor(
     private readonly lookup: (id: string) => PluginDefinition | undefined = getPluginDefinition,
     createStore?: CreateAuthorizationStore,
+    private readonly traces?: TraceRecorder,
   ) {
     // Keep the this-capturing arrow out of parameter defaults for Hermes compatibility.
     this.createStore =
@@ -39,6 +42,15 @@ export class PluginAuthorizationManager {
 
   get(pluginId: string, methodId: string) {
     return this.entry(pluginId, methodId).runtime;
+  }
+
+  recordOperation<T>(
+    pluginId: string,
+    methodId: string,
+    stage: PluginDiagnosticStage,
+    action: () => Promise<T>,
+  ) {
+    return recordPluginOperation(this.traces, pluginId, methodId, stage, action);
   }
 
   private entry(pluginId: string, methodId: string): Entry {
@@ -58,7 +70,9 @@ export class PluginAuthorizationManager {
     }
     let entry = methods.get(methodId);
     if (!entry) {
-      const runtime = method.createRuntime(this.createStore(plugin, methodId));
+      const runtime = method.createRuntime(this.createStore(plugin, methodId), (stage, action) =>
+        this.recordOperation(pluginId, methodId, stage, action),
+      );
       if (method.interaction === 'polling' ? !runtime.poll : !runtime.receiveCallback)
         throw new PluginError('unavailable', 'The authorization interaction is unavailable.');
       entry = { runtime, interaction: method.interaction };
@@ -77,7 +91,8 @@ export class PluginAuthorizationManager {
       getState: () => entry.runtime.getState(),
       poll:
         entry.interaction === 'polling' && entry.runtime.poll
-          ? (attemptId) => entry.runtime.poll!(attemptId)
+          ? (attemptId) =>
+              this.recordOperation(pluginId, methodId, 'poll', () => entry.runtime.poll!(attemptId))
           : undefined,
       complete,
     });

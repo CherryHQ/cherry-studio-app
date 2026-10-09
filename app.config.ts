@@ -56,6 +56,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
       ...(config.plugins ?? []),
+      './plugins/withDiagnostics',
       './modules/crash-reporting/app.plugin.js',
       './scripts/withReportingAutolinking.js',
     ]

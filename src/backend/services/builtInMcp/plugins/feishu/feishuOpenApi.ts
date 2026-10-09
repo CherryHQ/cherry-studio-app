@@ -37,6 +37,7 @@ function apiError(code: number, isWrite: boolean): PluginError {
     reason === 'unknown-write'
       ? `Feishu write outcome is unknown (code ${code}). Check the resource before retrying.`
       : `Feishu rejected the request (code ${code}). Check permissions and arguments before retrying.`,
+    { code },
   );
 }
 
@@ -133,6 +134,10 @@ export async function callFeishuOpenApi(
           'Feishu response is invalid or too large. Request fewer fields or a smaller page or time window.',
         );
       else failure = new PluginError('network', 'Could not reach Feishu.');
+      failure = new PluginError(failure.reason, failure.message, {
+        statusCode: error.status,
+        code,
+      });
     } else {
       failure =
         isWrite && submitted

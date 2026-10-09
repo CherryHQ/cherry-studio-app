@@ -18,6 +18,7 @@ import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -66,8 +67,9 @@ export const services = {
   BackgroundReplyRuntime,
   WebSearchService,
   ProviderRegistryUpdaterService,
-  McpRuntimeService,
   TraceStorageService,
+  DiagnosticBundleService,
+  McpRuntimeService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

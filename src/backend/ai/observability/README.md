@@ -1,7 +1,7 @@
 # AI Diagnostic Tracing
 
-Mobile captures diagnostic metadata in ordinary app operation, including development builds. There
-is no developer-mode gate, frontend viewer, upload request, or external telemetry destination.
+Mobile captures diagnostic metadata in ordinary app operation, including development builds. Capture has no developer-mode gate. Tracing itself has no upload destination; the user can export
+or submit selected metadata through the diagnostic bundle screen.
 
 ## Ownership and coverage
 
@@ -10,7 +10,9 @@ is no developer-mode gate, frontend viewer, upload request, or external telemetr
 opens no files. A one-second flush timer and an AppState listener are released by the lifecycle
 owner. Backgrounding requests a flush; the OS does not guarantee time to finish that write.
 
-The public `index.ts` exposes only platform-independent instrumentation. The service constructor is
+The public `index.ts` exposes only platform-independent instrumentation. Shared producer and
+snapshot interfaces and error projection live in `backend/utils/diagnosticTrace.ts`, so plugin
+services can receive these capabilities without depending on AI implementations. The service constructor is
 an assembly entry imported directly by the service registry. Runtime producers receive an optional
 `TraceSpan`; they do not access Expo, persistence, or a global active-span context. Explicit parent
 handles prevent concurrent Sessions from adopting each other's spans.
@@ -24,6 +26,9 @@ Current producers are:
 - MCP: `mcp.connect` for each new connection, `mcp.list_tools` for each complete catalog request
   (including pagination), and `mcp.call_tool` for each attempted tool execution. A reconnect produces
   separate records with a new connection generation. Reusing a client adds no connection record.
+- Plugins: authorization begin/callback/poll/confirmation, validation, persistence, actual token
+  refresh and remote revocation. Records carry plugin/method/step, outcome and safe failure facts;
+  passive state reads add no trace. The existing request flow owns all network activity.
 
 MCP diagnostics start in the client/adapter, so connection and catalog failures are retained even
 when turn preparation fails before a conversation is admitted. Correlate MCP records by process id,
@@ -46,13 +51,13 @@ Span records contain ids, timestamps, elapsed time, model/provider/tool identifi
 finish reasons, and safe error facts. They never receive prompts, message text, tool
 arguments/results, request/response bodies, headers, credentials, stacks, or device file paths.
 Error messages and causes are deliberately omitted; the error type, code, origin, retryability,
-and HTTP status remain diagnosable. Known sensitive attribute keys are excluded, and attribute
-count/string lengths are bounded. This is a metadata policy, not arbitrary-content redaction.
+HTTP status and closed plugin failure reasons remain diagnosable. Known sensitive attribute keys are excluded, and attribute
+counts and identifiers are bounded; free text, URLs and recognizable credential values are dropped. This is a metadata policy, not arbitrary-content redaction.
 
 ## Stored format and limits
 
-Files live under `{Paths.document}/Runtime/trace/v1`. Each immutable `.jsonl` file contains a batch
-of span snapshots conforming to `src/shared/data/types/trace.ts`. Started spans are written before
+Files live under `{Paths.document}/Runtime/trace/v1`. Each rolling `.jsonl` file contains
+span snapshots conforming to `src/shared/data/types/trace.ts`. Started spans are written before
 completion so a later diagnostic package can identify unfinished work after a crash.
 
 Group records by `(processId, traceId, spanId)` and retain the highest `revision`, not the last file
@@ -65,16 +70,24 @@ byte-for-byte Desktop schema.
 - At most 32 active traces and 256 spans per trace; root completion closes unfinished children.
 - At most 256 KiB buffered, 64 KiB per write batch, and 16 KiB per record. Oversized attributes are
   removed before the record is dropped. Capture never waits for filesystem I/O.
-- History retains at most 7 days, 20 MiB, and 512 batch files, whichever limit is reached first.
+- History retains at most 7 days, 20 MiB, and 512 files, whichever limit is reached first.
   Cleanup runs off the first-paint path, after writes, and before diagnostic snapshots.
-- Batches are written to a temporary file then renamed. Incomplete temporary files are discarded
-  on the next cleanup. Storage writes and snapshot copies are serialized.
+- Flushes append to the current UTC day's file, rotating before 1 MiB. Starting/ending a request
+  still triggers a flush, but no longer consumes a new file for every small batch. The existing
+  512-file guard protects against legacy/exceptional file counts rather than limiting ordinary
+  request history before the byte budget is reached.
+- New files are written to a temporary file then renamed. Incomplete temporary files are discarded
+  on cleanup. An interrupted append's final line is separated from the next batch and reported as
+  malformed by export when necessary. Files are closed after each write.
+- The service queue serializes appends, pruning and snapshot copies, so an export copy stays stable
+  while later requests append to the original. Retention limits do not guarantee seven days of history.
 - Queue overflow, collection limits, and storage failures do not fail AI work. Dropped record and
   write-failure counts appear in the snapshot manifest; the root also reports its span limit.
 
 ## Diagnostic package integration
 
-Backend code can obtain a stable export without adding a frontend API:
+`DiagnosticBundleService` consumes this snapshot API for both inspection and export, filters the
+selected range and projects each JSONL record through the archive field allowlist:
 
 ```ts
 const snapshot = await application.get('TraceStorageService').createDiagnosticSnapshot();
@@ -88,6 +101,7 @@ try {
 This flushes queued records, serializes against retention, and copies retained batches into a
 private `{Paths.cache}/diagnostics/trace-<id>` directory. `files` includes `manifest.json` with the
 format version, capture policy, retention limits, file sizes, and collection-loss counters for the
-current service generation. Subsequent tracing and pruning cannot alter these copies. The caller
-owns archive/upload policy and must release the snapshot after consumption. Snapshot creation
+current service generation. Subsequent tracing and pruning cannot alter these copies.
+`metadata` also exposes retention and loss counters without parsing a file. The caller owns
+archive/upload policy and must release the snapshot after consumption. Snapshot creation
 reports its own I/O failures to that caller; ordinary trace producers never receive those failures.

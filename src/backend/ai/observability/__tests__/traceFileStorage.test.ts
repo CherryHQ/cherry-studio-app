@@ -50,8 +50,36 @@ jest.mock('expo-file-system', () => {
     create() {
       files.set(this.uri, '');
     }
-    write(content: string) {
-      files.set(this.uri, content);
+    write(content: string | Uint8Array) {
+      files.set(
+        this.uri,
+        typeof content === 'string' ? content : new TextDecoder().decode(content),
+      );
+    }
+    open() {
+      const uri = this.uri;
+      return {
+        offset: 0,
+        get size() {
+          return new TextEncoder().encode(files.get(uri) ?? '').byteLength;
+        },
+        readBytes(length: number) {
+          const bytes = new TextEncoder()
+            .encode(files.get(uri) ?? '')
+            .slice(this.offset, this.offset + length);
+          this.offset += bytes.length;
+          return bytes;
+        },
+        writeBytes(bytes: Uint8Array) {
+          const previous = new TextEncoder().encode(files.get(uri) ?? '');
+          const next = new Uint8Array(Math.max(previous.length, this.offset + bytes.length));
+          next.set(previous);
+          next.set(bytes, this.offset);
+          files.set(uri, new TextDecoder().decode(next));
+          this.offset += bytes.length;
+        },
+        close() {},
+      };
     }
     delete() {
       files.delete(this.uri);
@@ -67,6 +95,7 @@ jest.mock('expo-file-system', () => {
     }
   }
   return {
+    FileMode: { ReadWrite: 'rw' },
     Directory: MockDirectory,
     File: MockFile,
     Paths: { document: 'file:///documents', cache: 'file:///cache' },
@@ -93,6 +122,38 @@ describe('traceFileStorage', () => {
     await traceFileStorage.writeBatch(['{"revision":1}', '{"revision":2}'], now);
     expect([...testState.files.values()]).toEqual(['{"revision":1}\n{"revision":2}\n']);
     expect([...testState.files.keys()][0]).toMatch(/\.jsonl$/);
+  });
+
+  it('retains more than 512 small flushes without creating one file per batch', async () => {
+    for (let index = 0; index < 600; index += 1) {
+      await traceFileStorage.writeBatch([JSON.stringify({ index })], now + index);
+      await traceFileStorage.prune(now + index);
+    }
+    expect(testState.files.size).toBe(1);
+    const lines = [...testState.files.values()][0].trim().split('\n');
+    expect(lines).toHaveLength(600);
+    expect(JSON.parse(lines[0])).toEqual({ index: 0 });
+    expect(JSON.parse(lines[599])).toEqual({ index: 599 });
+  });
+
+  it('rolls at the byte limit and UTC day boundary without changing the previous file', async () => {
+    testState.directories.add(directory);
+    const full = `${'x'.repeat(1024 * 1024 - 2)}\n`;
+    const previous = `${directory}${name(now)}`;
+    testState.files.set(previous, full);
+    await traceFileStorage.writeBatch(['{"revision":2}'], now + 1);
+    expect(testState.files.size).toBe(2);
+    expect(testState.files.get(previous)).toBe(full);
+    await traceFileStorage.writeBatch(['{"revision":3}'], now + 86400000);
+    expect(testState.files.size).toBe(3);
+  });
+
+  it('separates an interrupted tail from the next valid record', async () => {
+    testState.directories.add(directory);
+    const path = `${directory}${name(now)}`;
+    testState.files.set(path, '{"revision":1}\n{"interrupted":');
+    await traceFileStorage.writeBatch(['{"revision":2}'], now + 1);
+    expect(testState.files.get(path)).toBe('{"revision":1}\n{"interrupted":\n{"revision":2}\n');
   });
 
   it('prunes only owned temporary and expired batches and enforces the file-count limit', async () => {
@@ -134,6 +195,8 @@ describe('traceFileStorage', () => {
       diagnostics,
       files: [{ name: batch.name, size: batch.size }],
     });
+    await traceFileStorage.writeBatch(['{"revision":2}'], now + 1);
+    expect(testState.files.get(batch.uri)).toBe('{"revision":1}\n');
     await traceFileStorage.prune(now + TRACE_RETENTION.maxAgeMs + 1);
     expect(testState.files.get(batch.uri)).toBe('{"revision":1}\n');
     snapshot.dispose();

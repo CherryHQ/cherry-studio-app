@@ -3,6 +3,7 @@ import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
+import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
 import type { McpModule } from './mcp';
@@ -24,6 +25,7 @@ export interface Backend {
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
+  readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;
   readonly mcp: McpModule;

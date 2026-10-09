@@ -6,6 +6,7 @@ import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Chip, Image, Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
@@ -33,6 +34,7 @@ const ABOUT_LINKS = {
 
 export default function AboutSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { toast } = useToast();
   const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateCheck();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
@@ -121,6 +123,11 @@ export default function AboutSettingsScreen() {
             }
           />
         ) : null}
+        <Section.Item
+          label={t('settings.about.diagnostics.title')}
+          description={t('settings.about.diagnostics.entryHint')}
+          onPress={() => router.push('/settings/diagnostics')}
+        />
         <Section.Item
           accessibilityHint={t('settings.about.feedback.description')}
           accessibilityRole="link"
