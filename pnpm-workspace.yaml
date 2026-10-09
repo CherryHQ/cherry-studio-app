@@ -84,6 +84,7 @@ patchedDependencies:
   expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
 
 minimumReleaseAgeExclude:
+  - '@cherrystudio/file-preview@0.1.0'
   - '@cherrystudio/ai-core@2.1.0'
   - '@cherrystudio/ai-sdk-provider@0.1.7'
   - '@cherrystudio/remote-protocol@0.3.0'

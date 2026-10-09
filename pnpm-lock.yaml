@@ -786,8 +786,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: file:/tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz
-        version: file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: 0.1.0
+        version: 0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -1751,9 +1751,8 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz':
-    resolution: {integrity: sha512-qrRSp6xxwT8rFotLKoDdMx5rEhZEHqncMdCRCfrqcxOqFp8reNgUCas/XA0+E0V4aKygffLgsdTqUrhv7Tv6RQ==, tarball: file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz}
-    version: 0.1.0-alpha.0
+  '@cherrystudio/file-preview@0.1.0':
+    resolution: {integrity: sha512-ZPcwN8KVlEzOwqSNWvGCWiQjoXdE7XSWF5Hfx9rUFnnZ6Zy0H3P52+UkoFVMPpYtMZ9Rij6jXgiR1PAy5kdLJQ==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -11292,7 +11291,7 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@file:../../../../../../tmp/fp-pack/cherrystudio-file-preview-0.1.0-alpha.0.tgz(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@cherrystudio/file-preview@0.1.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)

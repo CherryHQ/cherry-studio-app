@@ -5,8 +5,8 @@ file viewer's WebView. The package owns rendering and in-document interaction; t
 it to the app: bytes, PDF resources, theme, locale, diagnostics and the system-open request.
 The app side lives in [`src/frontend/features/files`](../../src/frontend/features/files/README.md).
 
-> Status: local testing. `@cherrystudio/file-preview` is installed from a locally packed tarball
-> (`file:/tmp/fp-pack/...`). Replace it with the published npm version before this leaves draft.
+> Status: uses the published npm package `@cherrystudio/file-preview@0.1.0`.
+> Native acceptance is still pending.
 
 ## Build
 
