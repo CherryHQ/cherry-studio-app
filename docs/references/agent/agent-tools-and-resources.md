@@ -495,7 +495,8 @@ async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
 `{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
 `syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
 the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
-budget and the unbounded default deadline follow Pi's codemode tool.
+budget follows Pi's codemode tool; mobile execution has a bounded deadline and shared concurrency
+limit.
 
 Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
 creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
@@ -514,11 +515,15 @@ inputs must be included in the code and results are retained through tool-result
   carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
   through it. The native side captures at most 500 KiB of each, which keeps a saved output within
   `read_file`'s source limit.
-- **Limits.** There is no deadline unless the model sets `timeout_ms`; turn cancellation stops the
-  script either way, from native code and including inside a regular expression, and JavaScript
-  cannot catch the interruption. Memory is limited to 64 MiB: an allocation past it fails inside the
-  script, so the app is never at risk, and the outcome reports `memory` whenever the limit caused
-  the failure. Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+- **Limits.** Execution defaults to 5 seconds; `timeout_ms` can request at most 30 seconds.
+  Across all turns, the sandbox service runs at most two scripts concurrently and queues the rest
+  in arrival order. Queue waiting does not consume the execution deadline. Cancelling a queued call
+  removes it; cancelling a running call releases the caller immediately but holds its slot until
+  native cleanup finishes. QuickJS interrupts bytecode and regular expressions, and JavaScript
+  cannot catch the interruption. Each runtime's heap is limited to 64 MiB; an allocation past it
+  fails inside the script. Native stacks and output copies consume additional memory, and the
+  sandbox shares the app process, so these limits do not provide process-level crash isolation.
+  Recursion stops with a catchable `RangeError` about 7,000 calls deep.
 
 The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
 data it needs into the code because the sandbox cannot read files or tool results itself, and to page

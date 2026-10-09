@@ -4,7 +4,9 @@ import type { FileEntry } from '@/shared/data/types/file';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
 import {
   createRunJsTool,
+  RUN_JS_DEFAULT_TIMEOUT_MS,
   RUN_JS_LIMITS,
+  RUN_JS_MAX_TIMEOUT_MS,
   RUN_JS_OUTPUT_FILENAME,
   type RunJsFiles,
   toModelValue,
@@ -14,7 +16,7 @@ const DONE = { durationMs: 3, logs: '', logsTruncated: false };
 const OUTPUT_ENTRY_ID = '0198d6b2-7a40-7c4e-9f13-1f6f2b8a9c01';
 
 describe('runJsTool', () => {
-  test('runs without a deadline and returns the parsed result', async () => {
+  test('uses the default deadline and returns the parsed result', async () => {
     const sandbox = createSandbox({
       status: 'ok',
       result: '{"total":42}',
@@ -26,7 +28,7 @@ describe('runJsTool', () => {
 
     expect(sandbox.run).toHaveBeenCalledWith({
       code: 'return { total: 42 }',
-      limits: { ...RUN_JS_LIMITS, timeoutMs: 0 },
+      limits: { ...RUN_JS_LIMITS, timeoutMs: RUN_JS_DEFAULT_TIMEOUT_MS },
       signal: expect.any(AbortSignal),
     });
     expect(output).toEqual({ value: { status: 'ok', result: { total: 42 } }, artifacts: [] });
@@ -43,6 +45,17 @@ describe('runJsTool', () => {
     expect(sandbox.run).toHaveBeenCalledWith(
       expect.objectContaining({ limits: { ...RUN_JS_LIMITS, timeoutMs: 5000 } }),
     );
+  });
+
+  test('rejects a deadline above the application limit without starting native execution', async () => {
+    const sandbox = createSandbox({ status: 'ok', ...DONE });
+    const output = await execute(createRunJsTool({ sandbox, files: createFiles() }), {
+      code: 'return 1',
+      timeout_ms: RUN_JS_MAX_TIMEOUT_MS + 1,
+    });
+
+    expect(output.value).toMatchObject({ status: 'error' });
+    expect(sandbox.run).not.toHaveBeenCalled();
   });
 
   test('keeps the start and end of output over budget and saves the full text as a file', async () => {

@@ -60,6 +60,37 @@ export type JsSandbox = {
   run(input: JsSandboxRun): Promise<JsSandboxOutcome>;
 };
 
+/** Shared across service instances and turns; each run can allocate 64 MiB. */
+export const JS_SANDBOX_MAX_CONCURRENT_RUNS = 2;
+const pendingRuns: (() => void)[] = [];
+let runningCount = 0;
+
+function acquireRunSlot(signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      signal.removeEventListener('abort', abort);
+      runningCount++;
+      resolve();
+    };
+    const abort = () => {
+      const index = pendingRuns.indexOf(start);
+      if (index >= 0) pendingRuns.splice(index, 1);
+      reject(signal.reason);
+    };
+    if (runningCount < JS_SANDBOX_MAX_CONCURRENT_RUNS) start();
+    else {
+      pendingRuns.push(start);
+      signal.addEventListener('abort', abort, { once: true });
+    }
+  });
+}
+
+function releaseRunSlot(): void {
+  runningCount--;
+  pendingRuns.shift()?.();
+}
+
 /** Null when this client was built without the native module. */
 export function createJsSandbox(
   native: JsSandboxNativeModule | null = getJsSandbox(),
@@ -70,21 +101,28 @@ export function createJsSandbox(
   }
   return {
     async run({ code, limits, signal }) {
-      signal.throwIfAborted();
-      const runId = createRunId();
+      await acquireRunSlot(signal);
       let onAbort: (() => void) | undefined;
-      // Settle on abort without waiting; the native side holds a cancel that
-      // lands before its thread registers the run.
-      const aborted = new Promise<never>((_, reject) => {
-        onAbort = () => {
-          native.cancel(runId);
-          reject(signal.reason);
-        };
-        signal.addEventListener('abort', onAbort, { once: true });
-      });
+      let hasStarted = false;
       try {
-        return parseOutcome(await Promise.race([native.run(runId, code, limits), aborted]));
+        signal.throwIfAborted();
+        const runId = createRunId();
+        // Settle on abort without waiting; the native side holds a cancel that
+        // lands before its thread registers the run.
+        const aborted = new Promise<never>((_, reject) => {
+          onAbort = () => {
+            native.cancel(runId);
+            reject(signal.reason);
+          };
+          signal.addEventListener('abort', onAbort, { once: true });
+        });
+        // Cancellation releases the caller immediately, but the slot remains
+        // occupied until native cleanup finishes, so cancelled threads count too.
+        const running = native.run(runId, code, limits).finally(releaseRunSlot);
+        hasStarted = true;
+        return parseOutcome(await Promise.race([running, aborted]));
       } finally {
+        if (!hasStarted) releaseRunSlot();
         if (onAbort) {
           signal.removeEventListener('abort', onAbort);
         }

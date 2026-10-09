@@ -1,5 +1,5 @@
 import type { JsSandboxNativeModule } from '../../../../../modules/js-sandbox';
-import { createJsSandbox, type JsSandboxRun } from '../jsSandbox';
+import { createJsSandbox, JS_SANDBOX_MAX_CONCURRENT_RUNS, type JsSandboxRun } from '../jsSandbox';
 
 const LIMITS = {
   timeoutMs: 1000,
@@ -28,16 +28,24 @@ describe('createJsSandbox', () => {
   });
 
   test('cancels that run and rejects with the abort reason without waiting for it', async () => {
-    const native = createNative(() => new Promise<string>(() => {}));
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    const native = createNative(() => {
+      started.resolve();
+      return finished.promise;
+    });
     const sandbox = createJsSandbox(native, () => 'run-1')!;
     const controller = new AbortController();
     const reason = new Error('turn cancelled');
 
     const running = sandbox.run(runInput({ code: 'while (true) {}', signal: controller.signal }));
+    await started.promise;
     controller.abort(reason);
 
     await expect(running).rejects.toBe(reason);
     expect(native.cancel).toHaveBeenCalledWith('run-1');
+    finished.resolve(JSON.stringify({ status: 'error', kind: 'cancelled', message: '', ...DONE }));
+    await finished.promise;
   });
 
   test('never starts a run for an already cancelled turn', async () => {
@@ -59,7 +67,109 @@ describe('createJsSandbox', () => {
       kind: 'internal',
     });
   });
+
+  test('shares a FIFO concurrency limit across service instances', async () => {
+    const count = JS_SANDBOX_MAX_CONCURRENT_RUNS + 2;
+    const started = Array.from({ length: count }, () => deferred<void>());
+    const finished = Array.from({ length: count }, () => deferred<string>());
+    const native = createNative((_runId, code) => {
+      const index = Number(code);
+      started[index].resolve();
+      return finished[index].promise;
+    });
+    let nextId = 0;
+    const createId = () => String(nextId++);
+    const first = createJsSandbox(native, createId)!;
+    const second = createJsSandbox(native, createId)!;
+    const runs = Array.from({ length: count }, (_, index) =>
+      (index === 0 ? first : second).run(runInput({ code: String(index) })),
+    );
+    await Promise.all(
+      started.slice(0, JS_SANDBOX_MAX_CONCURRENT_RUNS).map(({ promise }) => promise),
+    );
+
+    expect(native.run).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS);
+    finished[0].resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await started[JS_SANDBOX_MAX_CONCURRENT_RUNS].promise;
+    expect(native.run).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS + 1);
+    finished[1].resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await started[count - 1].promise;
+    expect(native.run).toHaveBeenCalledTimes(count);
+    for (const result of finished.slice(2))
+      result.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await Promise.all(runs);
+  });
+
+  test('removes a cancelled queued run without calling native cancel', async () => {
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    let count = 0;
+    const native = createNative(() => {
+      if (++count === JS_SANDBOX_MAX_CONCURRENT_RUNS) started.resolve();
+      return finished.promise;
+    });
+    const sandbox = createJsSandbox(native)!;
+    const active = Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS }, () =>
+      sandbox.run(runInput()),
+    );
+    await started.promise;
+    const controller = new AbortController();
+    const queued = sandbox.run(runInput({ signal: controller.signal }));
+    const reason = new Error('cancelled while queued');
+    controller.abort(reason);
+
+    await expect(queued).rejects.toBe(reason);
+    expect(native.cancel).not.toHaveBeenCalled();
+    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await Promise.all(active);
+    expect(native.run).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS);
+    await sandbox.run(runInput());
+  });
+
+  test('holds a cancelled run slot until the native thread finishes', async () => {
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    let count = 0;
+    const native = createNative(() => {
+      if (++count === JS_SANDBOX_MAX_CONCURRENT_RUNS) started.resolve();
+      return finished.promise;
+    });
+    const sandbox = createJsSandbox(native)!;
+    const controller = new AbortController();
+    const cancelled = sandbox.run(runInput({ signal: controller.signal }));
+    const active = Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS - 1 }, () =>
+      sandbox.run(runInput()),
+    );
+    await started.promise;
+    const queued = sandbox.run(runInput());
+    const reason = new Error('cancelled during execution');
+    controller.abort(reason);
+
+    await expect(cancelled).rejects.toBe(reason);
+    expect(native.run).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS);
+    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await Promise.all([...active, queued]);
+    expect(native.run).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS + 1);
+  });
+
+  test('releases slots when starting native execution throws', async () => {
+    const native = createNative(() => {
+      throw new Error('native unavailable');
+    });
+    const sandbox = createJsSandbox(native)!;
+    for (let index = 0; index <= JS_SANDBOX_MAX_CONCURRENT_RUNS; index++) {
+      await expect(sandbox.run(runInput())).rejects.toThrow('native unavailable');
+    }
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
 function runInput(overrides: Partial<JsSandboxRun> = {}): JsSandboxRun {
   return {

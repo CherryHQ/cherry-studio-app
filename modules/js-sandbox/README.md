@@ -8,8 +8,9 @@ limits are described in [Agent Tools And Controlled Resources](../../docs/refere
 
 Each `run(runId, code, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
 runtime on a dedicated native thread and destroys it afterwards; the script is an in-memory string
-and nothing touches the file system. The app's own Hermes runtime and JS thread are untouched, so a
-busy script cannot stall the UI and cannot reach app state. QuickJS' `std` and `os` modules are not
+and nothing touches the file system. Execution happens outside the app's Hermes runtime and JS
+thread, without access to app state. The caller limits concurrent native runs to bound aggregate
+resource use. QuickJS' `std` and `os` modules are not
 compiled in, so the sandbox's global object contains only ECMAScript built-ins, `atob`/`btoa`,
 `queueMicrotask`, `performance`, and a captured `console`. The C++ core in `cpp/` is
 shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
@@ -22,7 +23,7 @@ QuickJS was chosen because it is built to embed untrusted code with budgets:
 | Budget | Mechanism |
 | --- | --- |
 | Time and cancellation | QuickJS polls an interrupt handler during bytecode and regular expression execution. Once it fires, the error is uncatchable and every later job stops too. `timeoutMs` 0 means no deadline, so a cancel that arrives before its run registers is held for it rather than lost. |
-| Memory | The runtime allocates through `cpp/JsSandbox.cpp`'s allocator, which refuses allocations past the limit. The script sees a catchable out-of-memory error; the process is never at risk. The allocator also records that the limit was hit, because QuickJS cannot always allocate the error object itself. |
+| Memory | The runtime allocates through `cpp/JsSandbox.cpp`'s allocator, which refuses allocations past the heap limit. The script sees a catchable out-of-memory error. The allocator also records that the limit was hit, because QuickJS cannot always allocate the error object itself. Native stacks and host output copies sit outside this heap budget; the runtime shares the app process. |
 | Native stack | QuickJS throws a catchable `RangeError` past 7 MiB of the 8 MiB thread stack, about 7,000 JavaScript calls deep. Deep JSON, nested source, and regular expressions are bounded by the same check. |
 
 QuickJS has no `Intl`, so locale arguments to `toLocaleString` and similar methods are ignored.
@@ -43,6 +44,11 @@ and its larger frames cut the recursion that fits in the stack to about 800 call
 settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(runId)` interrupts a
 run, including one that has not started yet. The caller (`src/backend/services/jsSandbox`) owns the
 limits.
+
+The `run_js` tool defaults to a 5-second execution deadline and allows at most 30 seconds. The
+sandbox service shares a two-run limit across turns, queues extra calls, and retains a cancelled
+run's slot until the native promise settles. Waiting in the queue does not consume the execution
+deadline. The low-level native API still leaves policy to its caller.
 
 ## QuickJS-NG
 
