@@ -50,8 +50,7 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
-  '@earendil-works/pi-agent-core@0.99.1': patches/@earendil-works__pi-agent-core@0.99.1.patch
-  '@earendil-works/pi-ai@0.99.1': patches/@earendil-works__pi-ai@0.99.1.patch
+  '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.5: patches/metro@0.84.5.patch
@@ -116,7 +115,3 @@ minimumReleaseAgeExclude:
   - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
   - '@cherrystudio/analytics-client@1.4.0'
-  - '@earendil-works/chord@0.99.1'
-  - '@earendil-works/pi-agent-core@0.99.1'
-  - '@earendil-works/pi-ai@0.99.1'
-  - '@earendil-works/pi-telemetry@0.99.1'

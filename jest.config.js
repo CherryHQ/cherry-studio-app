@@ -1,7 +1,9 @@
-const { dirname, join } = require('node:path');
+const { realpathSync } = require('node:fs');
+const { join } = require('node:path');
 
-const piAgentDirectory = dirname(require.resolve('@earendil-works/pi-agent-core/package.json'));
-const piDependencyFile = (name, file) => join(piAgentDirectory, '..', name, 'dist', file);
+// pnpm links pi-ai's own dependencies beside its real directory.
+const piAiDirectory = realpathSync(join(__dirname, 'node_modules/@earendil-works/pi-ai'));
+const piDependencyFile = (name, file) => join(piAiDirectory, '..', name, 'dist', file);
 
 module.exports = {
   preset: 'jest-expo',
@@ -52,12 +54,16 @@ module.exports = {
     // Pi's official entries expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
-    '^@earendil-works/pi-agent-core$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/index.js',
-    '^@earendil-works/chord$': piDependencyFile('chord', 'index.js'),
-    '^@earendil-works/chord/(context|delta)$': piDependencyFile('chord', '$1/index.js'),
+    '^@earendil-works/chord$': '<rootDir>/node_modules/@earendil-works/chord/dist/index.js',
+    '^@earendil-works/chord/(context|delta)$':
+      '<rootDir>/node_modules/@earendil-works/chord/dist/$1/index.js',
+    '^@earendil-works/pi-durable$':
+      '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
+    '^@earendil-works/pi-durable/storage/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-durable/dist/storage/$1/index.js',
     '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
+    '^@earendil-works/pi-ai/models$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/models.js',
     '^@earendil-works/pi-ai/native-oauth$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/native-oauth.js',
     '^@earendil-works/pi-ai/providers/(.*)$':
