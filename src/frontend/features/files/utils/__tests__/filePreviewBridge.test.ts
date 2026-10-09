@@ -98,7 +98,8 @@ describe('FilePreviewBridge', () => {
     bridge.handle({ type: 'read', requestId: 2, documentId: 0, offset: 0, length: content.length });
     await flush();
     expect(sent.filter((message) => message.type === 'chunk')).toHaveLength(3);
-    expect(decode(sent, 2)).toEqual(content);
+    // Compare every byte without Jest enumerating millions of typed-array properties.
+    expect(Buffer.compare(decode(sent, 2), content)).toBe(0);
     expect(sent.at(-1)).toEqual({ type: 'done', requestId: 2 });
 
     bridge.handle({ type: 'read', requestId: 3, documentId: 0, offset: 10, length: 5 });
