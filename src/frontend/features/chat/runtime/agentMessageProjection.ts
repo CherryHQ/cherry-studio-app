@@ -78,13 +78,13 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
   } as CherryMessagePart;
 }
 
-function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMessagePart {
+function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
   const base = {
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
-    title: part.displayName,
+    title: part.title,
     toolCallId: part.toolCallId,
-    toolName: part.providerName,
+    toolName: part.toolName,
     type: 'dynamic-tool',
   } as const;
 
@@ -134,7 +134,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
 }
 
 /** Shared tool renderers consume the capability value, not the Runtime envelope. */
-function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['output']) {
+function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'dynamic-tool' }>['output']) {
   const parsed = AgentToolResultSchema.safeParse(output);
   return parsed.success ? parsed.data.value : output;
 }
@@ -156,20 +156,22 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
       return withCherryMeta(
         {
           type: 'file',
-          filename: part.name ?? 'File',
+          filename: part.filename ?? 'File',
           mediaType: part.mediaType,
           url: fileEntryUrl(part.fileEntryId as FileEntryId),
         } as Extract<CherryMessagePart, { type: 'file' }>,
         { fileEntryId: part.fileEntryId },
       );
-    case 'tool':
+    case 'dynamic-tool':
       return toToolPart(part);
-    case 'error':
-      return toErrorPart(part.error);
+    case 'data-error':
+      return toErrorPart(part.data);
   }
 }
 
-function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
+function toSourceUrlParts(
+  part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>,
+): SourceUrlPart[] {
   if (
     (part.state !== 'output-available' && part.state !== 'error') ||
     part.toolRef.source !== 'builtin'
@@ -220,7 +222,7 @@ function projectAgentPart(
 
   const projection = {
     part: toDisplayPart(part),
-    sourceParts: part.type === 'tool' ? toSourceUrlParts(part) : [],
+    sourceParts: part.type === 'dynamic-tool' ? toSourceUrlParts(part) : [],
   } satisfies AgentPartProjection;
   cache?.partsBySource.set(part, projection);
   return projection;

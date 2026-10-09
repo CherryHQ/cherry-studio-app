@@ -10,12 +10,10 @@ describe('agent session api schemas', () => {
   });
 
   test('normalizes a manual title and rejects empty or unknown fields', () => {
-    expect(UpdateAgentSessionSchema.parse({ title: '  Renamed  ' })).toEqual({
-      title: 'Renamed',
+    expect(UpdateAgentSessionSchema.parse({ name: '  Renamed  ' })).toEqual({
+      name: 'Renamed',
     });
-    expect(UpdateAgentSessionSchema.safeParse({ title: '   ' }).success).toBe(false);
-    expect(UpdateAgentSessionSchema.safeParse({ title: 'Chat', unknown: true }).success).toBe(
-      false,
-    );
+    expect(UpdateAgentSessionSchema.safeParse({ name: '   ' }).success).toBe(false);
+    expect(UpdateAgentSessionSchema.safeParse({ name: 'Chat', unknown: true }).success).toBe(false);
   });
 });

@@ -297,6 +297,8 @@
   "chat.errorPart.reason.unknown": "La ejecución falló",
   "chat.errorPart.retryable": "No se pudo completar la respuesta. Puedes intentarlo de nuevo.",
   "chat.errorPart.title": "Error",
+  "chat.errorPart.unreadable.message": "Este mensaje contiene contenido ilegible o no compatible. Los datos originales se han conservado.",
+  "chat.errorPart.unreadable.title": "Parte del contenido no se puede mostrar",
   "chat.filePicker.add": "Agregar",
   "chat.filePicker.addSelected_many": "Añadir {{count}} archivos",
   "chat.filePicker.addSelected_one": "Añadir {{count}} archivo",

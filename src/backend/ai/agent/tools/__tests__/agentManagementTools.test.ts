@@ -10,7 +10,7 @@ const agent: Agent = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Writer',
   instructions: 'Write clearly.',
-  modelId: null,
+  model: null,
   modelName: null,
   avatar: null,
   avatarUri: null,
@@ -60,7 +60,7 @@ describe('Agent management tools', () => {
         disabledCapabilities: [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
       }),
     );
-    expect(data.create.mock.calls[0][0].modelId).toBeUndefined();
+    expect(data.create.mock.calls[0][0].model).toBeUndefined();
     expect(result.value).toEqual({ status: 'created', agent: AgentToolRecordSchema.parse(agent) });
     expect(result.value).not.toHaveProperty('agent.avatar');
     expect(result.value).not.toHaveProperty('agent.avatarUri');
@@ -125,7 +125,7 @@ describe('Agent management tools', () => {
         {
           id: agent.id,
           name: agent.name,
-          modelId: null,
+          model: null,
           modelName: null,
           updatedAt: agent.updatedAt,
         },

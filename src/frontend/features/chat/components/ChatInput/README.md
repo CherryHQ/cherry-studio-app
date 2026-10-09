@@ -44,7 +44,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
   overlays preserve the existing keyboard context instead.
-- Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
+- Picking a model updates the current Agent's `model`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining

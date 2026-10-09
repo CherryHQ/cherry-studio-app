@@ -6,7 +6,7 @@ import { createLocalConversationSource } from '../createLocalConversationSource'
 const session = {
   id: 'session',
   agentId: 'agent',
-  title: 'Conversation',
+  name: 'Conversation',
   lastActivityAt: '2026-09-22T00:00:00.000Z',
 };
 function fixture() {
@@ -36,7 +36,7 @@ function fixture() {
     },
     get: jest.fn(async (path: string) => {
       if (path === '/agents')
-        return { items: [{ id: 'agent', name: 'Agent', modelId: 'model' }], total: 1 };
+        return { items: [{ id: 'agent', name: 'Agent', model: 'model' }], total: 1 };
       if (path === '/agent-sessions') return { items: [session], nextCursor: null };
       return session;
     }),
@@ -141,7 +141,7 @@ test('catalog changes and row actions refresh lists, and retired actions cannot 
   expect(changed).not.toHaveBeenCalled();
   const preview = f.source.catalog.previewSession!({ source: f.source.ref, sessionId: 'session' });
   expect(await preview.rename!.execute({ title: ' Renamed ' })).toMatchObject({ state: 'applied' });
-  expect(f.protocol.renameSession).toHaveBeenCalledWith({ sessionId: 'session', title: 'Renamed' });
+  expect(f.protocol.renameSession).toHaveBeenCalledWith({ sessionId: 'session', name: 'Renamed' });
   expect(changed).toHaveBeenLastCalledWith('sessions');
   expect(f.sessionChanged).toHaveBeenLastCalledWith('session');
   expect(await preview.remove!.execute(undefined)).toMatchObject({ state: 'applied' });

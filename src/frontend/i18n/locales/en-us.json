@@ -294,6 +294,8 @@
   "chat.errorPart.reason.unknown": "Execution failed",
   "chat.errorPart.retryable": "The reply could not be completed. You can try again.",
   "chat.errorPart.title": "Error",
+  "chat.errorPart.unreadable.message": "This message contains unreadable or unsupported content. The original data has been kept.",
+  "chat.errorPart.unreadable.title": "Some content cannot be displayed",
   "chat.filePicker.add": "Add",
   "chat.filePicker.addSelected_one": "Add {{count}} file",
   "chat.filePicker.addSelected_other": "Add {{count}} files",

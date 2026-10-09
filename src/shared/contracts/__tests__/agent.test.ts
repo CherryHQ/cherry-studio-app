@@ -15,6 +15,8 @@ import {
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
   AgentRetryMessageInputSchema,
+  AgentRenameSessionInputSchema,
+  AgentForkSessionInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
 } from '../agent';
@@ -35,6 +37,17 @@ describe('answer retry input', () => {
 });
 
 describe('Agent Session status contract', () => {
+  test('uses name for session rename and fork inputs', () => {
+    const rename = { sessionId: 'session', name: 'Renamed' };
+    const fork = { sessionId: 'session', fromMessageId: 'message', name: 'Fork' };
+    expect(AgentRenameSessionInputSchema.parse(roundTrip(rename))).toEqual(rename);
+    expect(AgentForkSessionInputSchema.parse(roundTrip(fork))).toEqual(fork);
+    expect(
+      AgentRenameSessionInputSchema.safeParse({ sessionId: 'session', title: 'Old' }).success,
+    ).toBe(false);
+    expect(AgentForkSessionInputSchema.safeParse({ ...fork, title: 'Old' }).success).toBe(false);
+  });
+
   test('round-trips Desktop compaction parts with one outer id and no summary payload', () => {
     const part = {
       id: 'compaction-anchor:turn-1:1',
@@ -92,7 +105,7 @@ describe('Agent tool and managed-file contracts', () => {
       imageGeneration,
     };
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
-    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    const initial = { ...input, agentId: 'agent-1' };
     expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
     const snapshot = {
       version: 1,
@@ -146,7 +159,7 @@ describe('Agent tool and managed-file contracts', () => {
         },
       ],
     };
-    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    const initial = { ...input, agentId: 'agent-1' };
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
     expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
   });
@@ -162,11 +175,11 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
     const part = {
       id: 'tool-1',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-1',
       toolRef: { source: 'builtin', capabilityId: 'write_file' },
-      providerName: 'write_file',
-      displayName: 'Write file',
+      toolName: 'write_file',
+      title: 'Write file',
       state: 'input-streaming',
       inputPreview: preview,
     };
@@ -204,7 +217,6 @@ describe('Agent tool and managed-file contracts', () => {
       sessionId: 'session-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
-      executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello.', type: 'text' }],
     } as const;
 
@@ -226,7 +238,6 @@ describe('Agent tool and managed-file contracts', () => {
       status: 'success',
       turnId: 'turn-1',
       updatedAt: '2026-08-31T00:00:00.000Z',
-      usage: null,
       stats: null,
     } as const;
     const assistantMessage = {
@@ -256,14 +267,14 @@ describe('Agent tool and managed-file contracts', () => {
       session: {
         agentId: 'agent-1',
         createdAt: '2026-08-31T00:00:00.000Z',
-        executionTarget: { kind: 'local' },
+
         // Null rather than omitted: lineage is absent, not unknown, and a JSON
         // round trip must keep telling the difference.
         forkBoundaryMessageId: null,
         forkedFromSessionId: null,
         id: 'session-1',
-        title: '',
-        titleIsManual: false,
+        name: '',
+        isNameManuallyEdited: false,
         updatedAt: '2026-08-31T00:00:00.000Z',
       },
       streamingMessage: assistantMessage,
@@ -342,11 +353,11 @@ describe('Agent tool and managed-file contracts', () => {
     expect(
       AgentMessagePartSchema.parse({
         id: 'tool-search-part',
-        type: 'tool',
+        type: 'dynamic-tool',
         toolCallId: 'tool-search-call',
         toolRef: metaRef,
-        providerName: 'tool_search',
-        displayName: 'Search tools',
+        toolName: 'tool_search',
+        title: 'Search tools',
         state: 'output-available',
         input: { query: 'calendar' },
         output: { value: { matchedNamespaces: [] }, artifacts: [] },
@@ -357,11 +368,11 @@ describe('Agent tool and managed-file contracts', () => {
   test('accepts a tool whose provider input is still streaming', () => {
     const part = {
       id: 'tool-part-streaming',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-streaming',
       toolRef: { source: 'builtin', capabilityId: 'write_file' },
-      providerName: 'write_file',
-      displayName: 'Write file',
+      toolName: 'write_file',
+      title: 'Write file',
       state: 'input-streaming',
     } as const;
 
@@ -373,7 +384,7 @@ describe('Agent tool and managed-file contracts', () => {
       type: 'file',
       fileEntryId: 'file-1',
       mediaType: 'image/png',
-      name: 'image.png',
+      filename: 'image.png',
     } as const;
     const messagePart = {
       ...input,
@@ -383,6 +394,7 @@ describe('Agent tool and managed-file contracts', () => {
 
     expect(AgentInputPartSchema.parse(roundTrip(input))).toEqual(input);
     expect(AgentMessagePartSchema.parse(roundTrip(messagePart))).toEqual(messagePart);
+    expect(AgentInputPartSchema.safeParse({ ...input, name: 'old.png' }).success).toBe(false);
     expect(
       AgentInputPartSchema.safeParse({
         type: 'file',
@@ -403,6 +415,11 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentErrorViewSchema.parse(roundTrip(error))).toEqual(error);
+    const part = { id: 'failure', type: 'data-error', data: error };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessagePartSchema.safeParse({ id: 'failure', type: 'error', error }).success).toBe(
+      false,
+    );
   });
 
   test('round-trips a versioned execution failure without flattening its source identity', () => {
@@ -434,11 +451,11 @@ describe('Agent tool and managed-file contracts', () => {
   test('round-trips stable tool identity and the RuntimeToolResult projection', () => {
     const part = {
       id: 'tool-part-1',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-1',
       toolRef: MCP_TOOL_REF,
-      providerName: 'mcp_server_1_search_a1b2',
-      displayName: 'Search',
+      toolName: 'mcp_server_1_search_a1b2',
+      title: 'Search',
       state: 'output-available',
       input: { query: 'Cherry Studio' },
       output: {
@@ -458,7 +475,7 @@ describe('Agent tool and managed-file contracts', () => {
     expect(
       AgentMessagePartSchema.safeParse({
         ...part,
-        toolName: 'search',
+        providerName: 'search',
       }).success,
     ).toBe(false);
   });
@@ -468,11 +485,11 @@ describe('Agent tool and managed-file contracts', () => {
     (state) => {
       const base = {
         id: 'tool-part-1',
-        type: 'tool',
+        type: 'dynamic-tool',
         toolCallId: 'call-1',
         toolRef: MCP_TOOL_REF,
-        providerName: 'mcp_server_1_search_a1b2',
-        displayName: 'Search',
+        toolName: 'mcp_server_1_search_a1b2',
+        title: 'Search',
         state,
       } as const;
 

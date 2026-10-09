@@ -48,7 +48,9 @@ describe('turn attachments', () => {
       const document = fact(FIRST_ID, name, mediaType);
       const facts = new Map([[FIRST_ID, document]]);
       const resources = createTurnResourceLedger(facts, []);
-      const input: AgentInputPart[] = [{ type: 'file', fileEntryId: FIRST_ID, name, mediaType }];
+      const input: AgentInputPart[] = [
+        { type: 'file', fileEntryId: FIRST_ID, filename: name, mediaType },
+      ];
       const files = resolver(facts, {
         readDocumentText: async () => ({ text: 'Document content', truncated: false }),
       });
@@ -133,7 +135,7 @@ describe('turn attachments', () => {
         type: 'file',
         fileEntryId: FIRST_ID,
         mediaType: 'image/png',
-        name: 'managed.png',
+        filename: 'managed.png',
       },
     ]);
     expect(input[1]).not.toHaveProperty('name');
@@ -150,7 +152,7 @@ describe('turn attachments', () => {
             type: 'file',
             fileEntryId: FIRST_ID,
             mediaType: 'image/jpeg',
-            name: 'forged.jpg',
+            filename: 'forged.jpg',
           },
         ],
         [],
@@ -208,7 +210,7 @@ describe('turn attachments', () => {
               type: 'file',
               fileEntryId: SECOND_ID,
               mediaType: unsupported.mediaType,
-              name: unsupported.name,
+              filename: unsupported.name,
             },
           ],
           [],
@@ -228,7 +230,7 @@ describe('turn attachments', () => {
               type: 'file',
               fileEntryId: FIRST_ID,
               mediaType: image.mediaType,
-              name: image.name,
+              filename: image.name,
             },
           ],
           [],
@@ -254,7 +256,7 @@ describe('turn attachments', () => {
         type: 'file',
         fileEntryId: FIRST_ID,
         mediaType: text.mediaType,
-        name: text.name,
+        filename: text.name,
       },
     ];
 
@@ -326,11 +328,10 @@ function messageWithFile(file: ManagedFileFact): AgentMessageView {
         type: 'file',
         fileEntryId: file.fileEntryId,
         mediaType: file.mediaType,
-        name: file.name,
+        filename: file.name,
         purpose: 'input-attachment',
       },
     ],
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

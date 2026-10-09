@@ -54,7 +54,7 @@ describe('searchable text backfill', () => {
   }
 
   const textData = (text: string) =>
-    JSON.stringify({ version: 1, parts: [{ id: 'p', type: 'text', state: 'done', text }] });
+    JSON.stringify({ parts: [{ id: 'p', type: 'text', state: 'done', text }] });
   const readText = (id: string) =>
     (
       database

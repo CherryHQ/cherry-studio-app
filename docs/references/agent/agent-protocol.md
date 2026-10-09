@@ -110,7 +110,7 @@ multi-PC product flow requires one.
 The PC extension must be introduced as a versioned contract rather than reinterpreting local-only
 fields:
 
-- do not add a remote variant to the current `{ kind: 'local' }` execution target;
+- keep PC Agent control separate from the Mobile Agent Runtime;
 - do not use mobile `UniqueModelId` or local inference snapshots as PC execution authority;
 - do not use mobile managed-file ids for PC attachments or artifacts;
 - do not restrict PC tools to the current local built-in/MCP identity union; and
@@ -135,8 +135,6 @@ type AgentView = {
   name: string
 }
 
-type AgentExecutionTarget = { kind: 'local' }
-
 type AgentToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string }
@@ -146,9 +144,8 @@ type AgentMessageToolRef = AgentToolRef | { source: 'meta'; name: string }
 type AgentSessionView = {
   id: string
   agentId: string
-  executionTarget: AgentExecutionTarget
-  title: string
-  titleIsManual: boolean
+  name: string
+  isNameManuallyEdited: boolean
   forkBoundaryMessageId: string | null
   forkedFromSessionId: string | null
   createdAt: string
@@ -156,9 +153,8 @@ type AgentSessionView = {
 }
 ```
 
-`executionTarget` expresses the Mobile Agent boundary, not implementation choice. It defines and
-accepts only `local`, meaning this mobile app. Runtime ids and Pi/provider-SDK implementation
-details never appear in protocol values.
+Mobile Agent always runs in this app through the Host-owned Runtime. No execution-target field
+is sent or persisted. Runtime ids and Pi/provider-SDK implementation details remain private.
 
 `agentId` identifies the application-owned Agent configuration — the definition the user edits in the
 application (instructions, model, tool-approval preference, and MCP extensions). That configuration
@@ -206,7 +202,6 @@ type AgentMessageView = {
   role: 'user' | 'assistant' | 'system'
   status: 'pending' | 'streaming' | 'success' | 'error' | 'cancelled' | 'interrupted'
   parts: AgentMessagePart[]
-  usage: AgentUsageView | null
   stats: MessageStats | null
   modelId: UniqueModelId | null
   inferenceSnapshot: AgentInferenceSnapshotView | null
@@ -231,16 +226,16 @@ type AgentMessagePart =
       type: 'file'
       fileEntryId: string
       mediaType: string
-      name?: string
+      filename?: string
       purpose: 'input-attachment' | 'artifact'
     }
   | {
       id: string
-      type: 'tool'
+      type: 'dynamic-tool'
       toolCallId: string
       toolRef: AgentMessageToolRef
-      providerName: string
-      displayName: string
+      toolName: string
+      title: string
       state:
         | 'input-streaming'
         | 'input-available'
@@ -257,15 +252,9 @@ type AgentMessagePart =
     }
   | {
       id: string
-      type: 'error'
-      error: AgentErrorView
+      type: 'data-error'
+      data: AgentErrorView
     }
-
-type AgentUsageView = {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-}
 
 type AgentInferenceSnapshotV1 = {
   version: 1
@@ -340,10 +329,13 @@ persists only its requested target name and normalized error, never unresolved p
 `input-streaming` is a live lifecycle signal and may omit `input`; consumers must not interpret it as
 an executable call until the part advances to `input-available`.
 
-`usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
-the turn and commits the final value together with the terminal message state, so
-`message.finalized` and later transcript reads both carry it. While the message is streaming,
-`usage` is `null`; there is no dedicated usage event.
+Assistant token counts are exposed once, in `stats`. The invocation ledger materializes those
+counts; finalization uses the Host's Runtime aggregate only when no ledger projection exists.
+`message.finalized` and subsequent transcript reads carry the same persisted statistics.
+
+Display reads preserve valid parts when another part is malformed or unsupported, replacing only
+that part with a `data-error` carrying `MESSAGE_UNREADABLE`. The stored JSON remains unchanged.
+Runtime history reads remain strict and never replay these display-only placeholders.
 
 Image-model submissions may include `imageGeneration: { mode, paramValues }` on both
 `startSession` and `submitMessage`. The Host resolves the selected model, validates the image mode
@@ -364,7 +356,7 @@ configuration.
 ```ts
 type AgentInputPart =
   | { type: 'text'; text: string }
-  | { type: 'file'; fileEntryId: string; mediaType: string; name?: string }
+  | { type: 'file'; fileEntryId: string; mediaType: string; filename?: string }
 
 type AgentApprovalView = {
   id: string
@@ -388,7 +380,7 @@ type AgentCapabilities = {
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
-Capabilities are a stable projection of what the Session's execution target and engine contract can
+Capabilities are a stable projection of what the Host's local engine contract can
 represent. `tools: true` means Pi supports tool-loop protocol parts; it does not mean the Agent has a
 tool configured, that OS permission is granted, or that execution is approved. The Host resolves
 those effective gates for every turn. The Agent Client may branch on protocol capabilities, never on
@@ -401,13 +393,13 @@ interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void
 
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
   deleteTurn(input: { sessionId: string; turnId: string }): Promise<void>
   forkSession(input: {
     sessionId: string
     fromMessageId: string
-    title?: string
+    name?: string
   }): Promise<AgentSessionView>
 
   startSession(input: {
@@ -415,8 +407,7 @@ interface AgentProtocol {
     userMessageId: string
     assistantMessageId: string
     agentId: string
-    executionTarget: AgentExecutionTarget
-    parts: AgentInputPart[]
+      parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
   }): Promise<AgentSessionView>
@@ -509,7 +500,7 @@ and is the only operation that creates a Session from existing history. It is re
 (see [Branching](#branching)). The new Session is not observed by the operation; the client
 navigates to it and observes it like any other Session.
 
-`title` defaults to the source's. The client supplies it because a derived name is localized copy
+`name` defaults to the source's. The client supplies it because a derived name is localized copy
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
 
@@ -623,6 +614,7 @@ type AgentErrorView = {
     | 'AGENT_NOT_FOUND'
     | 'SESSION_NOT_FOUND'
     | 'MESSAGE_NOT_FOUND'
+    | 'MESSAGE_UNREADABLE'
     | 'SESSION_BUSY'
     | 'CAPABILITY_UNSUPPORTED'
     | 'ATTACHMENT_INVALID'
@@ -686,7 +678,7 @@ request bodies, credentials, and stack traces stay behind the Host boundary.
 `message` is diagnostic text, not user-facing copy. The Host writes it in English for logs and
 tests, and the frontend derives every displayed string from the closed vocabulary instead: the
 composer maps a rejected submission's `code` to a translation, the transcript error part maps
-`failure.reasonCode` (or `code` for `INTERRUPTED`) to a translated title, and a tool part translates
+`failure.reasonCode` (or `code` for `INTERRUPTED` and `MESSAGE_UNREADABLE`) to a translated title, and a tool part translates
 its status. The error part never renders `message` inline. Tapping it opens a detail sheet that
 shows `message`, the failure snapshot facts, and `context.responseBody` verbatim: diagnostic
 detail the user explicitly asked for, kept so a provider failure can be investigated in place.
@@ -702,7 +694,7 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 7. Approval responses correlate to the active Session, turn, and approval and fail closed.
 8. A new observation is sufficient to reconstruct all live UI state.
 9. Every protocol value survives a JSON round trip and re-validates against its schema.
-10. The client supplies an execution target and Agent identity, never a Runtime identity.
+10. The client supplies an Agent identity; the Host owns the local Runtime binding.
 11. Tool identity is a stable `AgentToolRef`; provider aliases and display names are not authority.
 12. Every finalized tool call is terminal and reconstructs as a paired model tool call/result.
 13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable

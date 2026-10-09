@@ -84,7 +84,7 @@ describe('AgentService persistence', () => {
       // capability enabled; the create form seeds its own deny-list.
       disabledCapabilities: [],
       instructions: '',
-      modelId: 'openai::gpt-4',
+      model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
@@ -291,18 +291,16 @@ describe('AgentService persistence', () => {
 
     const agent = await agentService.create({ name: 'Researcher' });
 
-    expect(agent.modelId).toBeNull();
+    expect(agent.model).toBeNull();
   });
 
   it('rejects a create or update whose model is not registered', async () => {
     await expect(
-      agentService.create({ modelId: 'openai::unknown', name: 'Researcher' }),
+      agentService.create({ model: 'openai::unknown', name: 'Researcher' }),
     ).rejects.toBeDefined();
 
     const agent = await agentService.create({ name: 'Researcher' });
-    await expect(
-      agentService.update(agent.id, { modelId: 'openai::unknown' }),
-    ).rejects.toBeDefined();
+    await expect(agentService.update(agent.id, { model: 'openai::unknown' })).rejects.toBeDefined();
   });
 
   it('advances the Agent version when updates share one wall-clock millisecond', async () => {

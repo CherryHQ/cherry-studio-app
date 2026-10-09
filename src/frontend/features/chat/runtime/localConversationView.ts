@@ -204,7 +204,7 @@ export function createLocalConversationProjector(input: {
       }
       return {
         agentId: state.snapshot?.agent.id,
-        title: state.snapshot?.session.title ?? title ?? '',
+        title: state.snapshot?.session.name ?? title ?? '',
         freshness:
           state.status === 'error'
             ? { state: 'unavailable', failure: localConversationFailure(state.error) }

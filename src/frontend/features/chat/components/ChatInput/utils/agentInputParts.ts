@@ -15,7 +15,7 @@ export function toAgentInputParts(
       type: 'file',
       fileEntryId: attachment.fileEntryId,
       mediaType: attachment.mediaType,
-      name: attachment.name,
+      filename: attachment.name,
     });
   }
 

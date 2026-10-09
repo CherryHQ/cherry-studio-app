@@ -293,7 +293,7 @@ export class AgentSessionChatClient {
     const session = await this.protocol.forkSession({
       fromMessageId,
       sessionId,
-      ...(title ? { title } : {}),
+      ...(title ? { name: title } : {}),
     });
     // As with a new Session, the destination route owns observation.
     return session;
@@ -576,7 +576,7 @@ export class AgentSessionChatClient {
           const part = entry.liveMessages
             .get(event.messageId)
             ?.parts.find((part) => part.id === partId);
-          if (part?.type === 'tool' && part.state === 'input-streaming') {
+          if (part?.type === 'dynamic-tool' && part.state === 'input-streaming') {
             this.toolInputPreviews.set(event.messageId, part.toolCallId, event.delta.preview);
           }
           return;
@@ -599,7 +599,7 @@ export class AgentSessionChatClient {
           return;
         }
         entry.liveMessages.set(event.messageId, nextMessage);
-        if (event.delta.op === 'part.replace' && event.delta.part.type === 'tool') {
+        if (event.delta.op === 'part.replace' && event.delta.part.type === 'dynamic-tool') {
           this.toolInputPreviews.set(
             event.messageId,
             event.delta.part.toolCallId,
@@ -666,7 +666,7 @@ export class AgentSessionChatClient {
 
   private installToolInputPreviews(message: AgentMessageView): void {
     for (const part of message.parts) {
-      if (part.type === 'tool' && part.inputPreview) {
+      if (part.type === 'dynamic-tool' && part.inputPreview) {
         this.toolInputPreviews.set(message.id, part.toolCallId, part.inputPreview);
       }
     }

@@ -599,7 +599,7 @@ fresh installation can create Agents from conversation. Reads use automatic appr
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
 or change MCP bindings.
 
-Creation accepts a name, instructions, and optional definition fields. Omitting `modelId` lets
+Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
 `AgentService` resolve the global default Agent model; omitted capability settings use the same
 disabled groups as the manual create form. A saved Agent without a model remains editable
 but cannot start chatting. The model derives instructions from the conversation and may use

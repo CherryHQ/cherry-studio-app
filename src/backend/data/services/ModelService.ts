@@ -616,7 +616,7 @@ export class ModelService {
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-        .where(eq(agentTable.modelId, id));
+        .where(eq(agentTable.model, id));
       const rows = await tx
         .delete(userModelTable)
         .where(and(eq(userModelTable.providerId, providerId), eq(userModelTable.modelId, modelId)))
@@ -658,12 +658,12 @@ export class ModelService {
       }
 
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // Keep Agent row versions ahead of the FK's model -> null cascade.
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
           .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-          .where(inArray(agentTable.modelId, idChunk));
+          .where(inArray(agentTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx.delete(userModelTable).where(inArray(userModelTable.id, idChunk));
       }
@@ -820,12 +820,12 @@ export class ModelService {
       );
       const removedIds: string[] = [];
       for (const idChunk of chunks(removableIds, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // Keep Agent row versions ahead of the FK's model -> null cascade.
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
           .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-          .where(inArray(agentTable.modelId, idChunk));
+          .where(inArray(agentTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         const rows = await tx
           .delete(userModelTable)

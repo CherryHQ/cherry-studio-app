@@ -26,17 +26,17 @@ import {
 export function retryAssistantParts(message: AgentMessageView): AgentMessagePart[] {
   if (message.status === 'success') return [];
   const lastToolIndex = message.parts.findLastIndex(
-    (part) => part.type === 'tool' && part.input !== undefined && part.output !== undefined,
+    (part) => part.type === 'dynamic-tool' && part.input !== undefined && part.output !== undefined,
   );
   if (lastToolIndex < 0) return [];
   return message.parts.filter(
     (part, index) =>
       index <= lastToolIndex &&
-      part.type !== 'error' &&
+      part.type !== 'data-error' &&
       // The replacement plans context from scratch and emits its own anchors;
       // the previous attempt's describe a compaction that no longer applies.
       part.type !== 'data-compaction-anchor' &&
-      (part.type !== 'tool' || (part.input !== undefined && part.output !== undefined)),
+      (part.type !== 'dynamic-tool' || (part.input !== undefined && part.output !== undefined)),
   );
 }
 
@@ -148,7 +148,7 @@ export async function prepareRetryTurn(
           type: 'file',
           fileEntryId: part.fileEntryId,
           mediaType: part.mediaType,
-          ...(part.name ? { name: part.name } : {}),
+          ...(part.filename ? { filename: part.filename } : {}),
         },
       ];
     }

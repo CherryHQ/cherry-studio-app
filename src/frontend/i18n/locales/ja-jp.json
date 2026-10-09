@@ -291,6 +291,8 @@
   "chat.errorPart.reason.unknown": "実行に失敗しました",
   "chat.errorPart.retryable": "返信を完了できませんでした。もう一度試すことができます。",
   "chat.errorPart.title": "エラー",
+  "chat.errorPart.unreadable.message": "このメッセージには読み取れない、または未対応の内容が含まれています。元のデータは保持されています。",
+  "chat.errorPart.unreadable.title": "一部の内容を表示できません",
   "chat.filePicker.add": "追加",
   "chat.filePicker.addSelected_other": "{{count}} 個のファイルを追加",
   "chat.filePicker.alreadyAdded": "追加済み",

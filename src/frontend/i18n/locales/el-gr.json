@@ -294,6 +294,8 @@
   "chat.errorPart.reason.unknown": "Η εκτέλεση απέτυχε",
   "chat.errorPart.retryable": "Η απάντηση δεν μπόρεσε να ολοκληρωθεί. Μπορείτε να προσπαθήσετε ξανά.",
   "chat.errorPart.title": "Σφάλμα",
+  "chat.errorPart.unreadable.message": "Αυτό το μήνυμα περιέχει μη αναγνώσιμο ή μη υποστηριζόμενο περιεχόμενο. Τα αρχικά δεδομένα έχουν διατηρηθεί.",
+  "chat.errorPart.unreadable.title": "Κάποιο περιεχόμενο δεν μπορεί να εμφανιστεί",
   "chat.filePicker.add": "Προσθήκη",
   "chat.filePicker.addSelected_one": "Προσθήκη {{count}} αρχείου",
   "chat.filePicker.addSelected_other": "Προσθήκη {{count}} αρχείων",

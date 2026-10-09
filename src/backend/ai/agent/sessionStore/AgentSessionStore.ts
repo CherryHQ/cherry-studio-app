@@ -1,13 +1,15 @@
 import type {
   AgentErrorView,
-  AgentExecutionTarget,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
-  AgentUsageView,
 } from '@/shared/contracts/agent';
-import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
+import type {
+  MessageRuntimeStatsInput,
+  MessageRuntimeTiming,
+  MessageStats,
+} from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 
@@ -47,7 +49,6 @@ export type ReserveSubmissionInput = {
 
 export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
   agentId: string;
-  executionTarget: AgentExecutionTarget;
 };
 
 export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
@@ -63,8 +64,8 @@ export type ForkSessionInput = {
   sessionId: string;
   /** Inclusive fork point, identified by message rather than by turn. */
   fromMessageId: string;
-  /** Overrides the copied source title; the store never composes one itself. */
-  title?: string;
+  /** Overrides the copied source name; the store never composes one itself. */
+  name?: string;
 };
 
 /** Backend-private identities for copying optional per-message caches after commit. */
@@ -113,10 +114,11 @@ export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
   parts: AgentMessagePart[];
-  usage: AgentUsageView | null;
+  /** Runtime fallback counts, used only when no invocation ledger projection exists. */
+  usage: Pick<MessageStats, 'inputTokens' | 'outputTokens' | 'totalTokens'> | null;
   /**
-   * Turn-level error, persisted beside the message for the Turn projection
-   * (agent-persistence.md). It is not part of the message view.
+   * Terminal diagnostics, including cancellation reasons without an inline
+   * data-error part. Not exposed by the transcript view.
    */
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
@@ -139,12 +141,12 @@ export type FinalizeAssistantMessageInput = {
  */
 export interface AgentSessionStore {
   getSession(sessionId: string): Promise<AgentSessionView | null>;
-  renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
-  /** Renames only when the current title still matches the caller's auto-title snapshot. */
+  renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;
+  /** Renames only when the current name still matches the caller's auto-name snapshot. */
   autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;

@@ -113,7 +113,7 @@ function LocalShareContent({ sessionId, messageId }: { sessionId: string; messag
           signal,
         });
         return {
-          title: snapshot.session.title,
+          title: snapshot.session.name,
           assistantName: snapshot.assistantName,
           messages: snapshot.messages.map((message) => ({
             ...message,

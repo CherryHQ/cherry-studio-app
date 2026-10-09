@@ -7,7 +7,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import { useChatInputAgentModelSelection } from '../useChatInputAgentModelSelection';
 
 type Snapshot = ReturnType<typeof useChatInputAgentModelSelection>;
-type AgentModelSnapshot = Pick<Agent, 'modelId' | 'updatedAt'>;
+type AgentModelSnapshot = Pick<Agent, 'model' | 'updatedAt'>;
 
 describe('useChatInputAgentModelSelection', () => {
   test('keeps a local selection until the Agent query catches up', async () => {
@@ -469,7 +469,7 @@ function Harness({
 }) {
   const snapshot = useChatInputAgentModelSelection(
     agentId,
-    { modelId: persistedModelId, updatedAt: persistedUpdatedAt },
+    { model: persistedModelId, updatedAt: persistedUpdatedAt },
     persistModel,
   );
 
@@ -482,7 +482,7 @@ function modelId(value: string): UniqueModelId {
 }
 
 function agentModel(modelId: UniqueModelId | null, version: number): AgentModelSnapshot {
-  return { modelId, updatedAt: updatedAt(version) };
+  return { model: modelId, updatedAt: updatedAt(version) };
 }
 
 function updatedAt(version: number): string {

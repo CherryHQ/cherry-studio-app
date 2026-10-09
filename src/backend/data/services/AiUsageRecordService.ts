@@ -1042,7 +1042,7 @@ async function getMessageUsageProjectionTx(
 }
 
 /**
- * Materializes the message's usage columns from its records and returns the
+ * Materializes the message's statistics from its records and returns the
  * terminal message's Session for post-commit invalidation. Active messages still
  * refresh through the Agent protocol; tool usage can arrive after finalization.
  */
@@ -1084,25 +1084,7 @@ async function rebuildMessageUsageProjectionTx(
   };
   await db
     .update(agentSessionMessageTable)
-    .set({
-      stats,
-      usage:
-        projection.inputTokens !== undefined ||
-        projection.outputTokens !== undefined ||
-        projection.totalTokens !== undefined
-          ? {
-              ...(projection.inputTokens !== undefined
-                ? { inputTokens: projection.inputTokens }
-                : {}),
-              ...(projection.outputTokens !== undefined
-                ? { outputTokens: projection.outputTokens }
-                : {}),
-              ...(projection.totalTokens !== undefined
-                ? { totalTokens: projection.totalTokens }
-                : {}),
-            }
-          : null,
-    })
+    .set({ stats })
     .where(eq(agentSessionMessageTable.id, ref.id));
   if (message.status !== 'pending' && message.status !== 'streaming') {
     return message.sessionId;
