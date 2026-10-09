@@ -2,7 +2,9 @@
 
 Use `pnpm build:local` to create an Android or iOS installation package on your machine. It runs
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
-The existing `eas-build-post-install` hook builds the workspace packages during the build.
+`pnpm install` also generates the document preview page through the `postinstall` script of
+[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md); EAS installs
+dependencies the same way, so no separate build hook is needed.
 
 | Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map and debug-symbol uploads |
 | --- | --- | --- |

@@ -84,6 +84,7 @@ patchedDependencies:
   '@earendil-works/chord@1.1.0': patches/@earendil-works__chord@1.1.0.patch
 
 minimumReleaseAgeExclude:
+  - '@cherrystudio/file-preview@0.1.0'
   - '@cherrystudio/ai-core@2.1.0'
   - '@cherrystudio/ai-sdk-provider@0.1.7'
   - '@cherrystudio/remote-protocol@0.3.0'
