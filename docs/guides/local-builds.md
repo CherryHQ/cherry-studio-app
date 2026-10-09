@@ -6,7 +6,7 @@ Use `pnpm build:local` to create an Android or iOS installation package on your 
 [`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md); EAS installs
 dependencies the same way, so no separate build hook is needed.
 
-| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map and debug-symbol uploads |
+| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map, R8 mapping, source-context, and debug-symbol uploads |
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
@@ -164,15 +164,46 @@ Google Play requires an AAB for a new app; renaming an APK does not convert its 
 and iOS upload workflows and their signing requirements. Google Play AABs are uploaded manually
 in Play Console; no Google service account is needed.
 
-For production monitoring, provide a valid upload token and keep automatic uploads enabled.
-`SENTRY_DISABLE_AUTO_UPLOAD=true` skips uploads but does not disable runtime reporting. Without
-matching source maps and debug symbols, reported error stacks may not resolve back to source.
-Missing or invalid upload credentials can fail the build.
+For production monitoring, provide a valid upload token and keep automatic uploads enabled. Do not
+set `SENTRY_DISABLE_AUTO_UPLOAD` or `SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD` for a distributable
+production build. Either one skips the Android R8 mapping, JVM source bundle, and native symbol
+uploads; the first also skips JavaScript source maps. Missing or invalid upload credentials fail
+the upload tasks.
 
-Android preview and production APKs use arm64 Release builds without R8 code shrinking, so the
-Java and Kotlin stack traces Sentry receives stay readable without a mapping upload. The APK
-profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads. Android
-extracts those libraries during installation, so a smaller APK does not mean less installed storage
+EAS deletes a build's working directory when the build ends, so artifacts that were not uploaded
+cannot be recovered later. Large uploads can be interrupted by the network. For a local production
+build, keep the working directory and let failed uploads warn instead of failing the build, so a
+retry does not use another build number:
+
+```bash
+EAS_LOCAL_BUILD_SKIP_CLEANUP=1 EAS_LOCAL_BUILD_WORKINGDIR=/absolute/path/to/workdir \
+SENTRY_ALLOW_FAILURE=true pnpm build:local --platform android --profile production --output /absolute/path/to/app.apk
+```
+
+Before distributing that package, check the build log for upload warnings. If any upload failed,
+re-run the same Gradle command in `<workdir>/build/android` through
+`eas env:exec production --non-interactive "PROFILE=production NODE_ENV=production EAS_BUILD=true EAS_BUILD_WORKINGDIR=<workdir>/build ./gradlew :app:assembleRelease -PreactNativeArchitectures=arm64-v8a"`
+(`:app:bundleRelease` for the AAB), without `SENTRY_ALLOW_FAILURE`, until it succeeds. The R8
+mapping ID is derived from the mapping contents and the JavaScript debug ID from the bundle, so the
+retry uploads artifacts that match the package already produced. Cloud builds keep no working
+directory: do not set `SENTRY_ALLOW_FAILURE` for them.
+
+Android production APKs and Google Play AABs enable R8 code optimization, obfuscation, and resource
+shrinking. Development and preview keep R8 disabled. The production-only
+`scripts/withAndroidReleaseOptimization.js` plugin selects `proguard-android-optimize.txt`;
+`extraProguardRules` preserves source filenames and line information, and keeps Expo's `@Field`
+and `@Required` record annotations: Expo converts records without introspection data by
+reflection, and renamed annotations make those native calls reject their arguments. A local Expo
+module that adds a dependency missing optional classes ships its own `consumerProguardFiles`
+rules. R8 failures appear only when the affected native call runs, so a Release build must exercise
+record-typed calls such as attaching a PDF to a chat, not just start. Sentry's Android Gradle
+plugin uploads each build's `mapping.txt`, JVM source bundle (including local Expo modules), and
+available native debug symbols/sources. Its embedded debug identifiers associate reports with
+that build's artifacts; JavaScript source maps continue through the existing Sentry Metro/Gradle
+integration. Keep the SDK's native release/dist values instead of overriding them in JavaScript.
+
+The APK profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads.
+Android extracts those libraries during installation, so a smaller APK does not mean less installed storage
 or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
 so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
 libraries in an AAB only slow installation and double on-device storage. Development builds keep

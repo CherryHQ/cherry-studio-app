@@ -131,7 +131,16 @@
         {
           "url": "https://sentry.io/",
           "organization": "cherryai",
-          "project": "cherry-studio-app"
+          "project": "cherry-studio-app",
+          "experimental_android": {
+            "enableAndroidGradlePlugin": true,
+            "includeProguardMapping": true,
+            "autoUploadProguardMapping": true,
+            "uploadNativeSymbols": true,
+            "autoUploadNativeSymbols": true,
+            "includeNativeSources": true,
+            "includeSourceContext": true
+          }
         }
       ],
       [
@@ -216,7 +225,8 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "extraProguardRules": "-keepattributes SourceFile,LineNumberTable\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keep @interface expo.modules.kotlin.records.Required"
           },
           "ios": {
             "deploymentTarget": "17.0",

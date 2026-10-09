@@ -138,6 +138,23 @@ that EAS environment. The DSN is embedded in the app; the token is used only by 
 to upload source maps and debug symbols to `cherryai/cherry-studio-app`. GitHub keeps `EXPO_TOKEN`
 for EAS authentication. The Sentry Expo and Metro plugins handle uploads and source map identifiers.
 
+Production Android builds enable R8. The Sentry Expo plugin also enables its Android Gradle plugin
+with mapping, JVM source-context, and native-symbol uploads. It keeps SDK auto-installation and
+tracing instrumentation disabled, preserving this module's native initialization and SDK versions.
+`withAndroidReleaseOptimization.js` selects the optimizing ProGuard defaults and includes local
+Expo modules in the JVM source bundle. Source filenames and line numbers are retained. Native
+event filters preserve debug images; JavaScript filters preserve source-map debug IDs, release,
+and dist. These identifiers associate each stack with the installed build's artifacts, including
+when APK and AAB builds share a marketing version. Source snippets are added by Sentry from the
+uploaded build-time sources, rather than collected from the user's runtime payload.
+
+Do not override the native release/dist in JS or disable build uploads for a distributable
+production build. A local build may let failed uploads warn only if it keeps its working directory
+and re-runs the uploads before distribution; see
+[Local EAS Builds](../../../../docs/guides/local-builds.md). `SENTRY_AUTH_TOKEN` stays in the build environment; it is never embedded
+in the app. See Sentry's [R8 mapping guide](https://docs.sentry.io/platforms/android/enhance-errors/proguard/)
+and [source context guide](https://docs.sentry.io/platforms/android/enhance-errors/source-context/).
+
 Sentry also works with local EAS builds; cloud workers are not required. Use `pnpm build:local` to
 load `.env` and `.env.local` into the build process before EAS creates its source archive. See
 [Local EAS Builds](../../../../docs/guides/local-builds.md) for production credentials, profile-specific
@@ -146,6 +163,16 @@ Sentry behavior, and native regeneration when switching profiles.
 Before release, authorized acceptance must verify early JS/native capture, saved opt-outs, and
 source-map/debug-symbol matching against the installed build. Native initialization and actual
 server ingestion are not established by lint or JS tests alone.
+
+For an authorized R8 production Android acceptance, confirm successful mapping, JVM source bundle,
+JavaScript source-map, and native-symbol uploads in the build logs. In Sentry's Project Settings →
+Debug Files, match the installed binary's debug IDs to its mapping/source/symbol files. Trigger
+controlled JavaScript and Java/Kotlin errors and check that their issue pages show the original
+file, function, line, source context, release, and build number. Also cover an app-owned native
+module, whose sources are outside the app's Gradle source sets. NDK source resolution depends on
+the debug information available in each library; uploading a stripped third-party binary cannot
+recover missing symbols or source lines. A new build's artifacts cannot restore an older build
+whose matching artifacts were never uploaded.
 
 Reporting acceptance must also confirm that non-production packages omit Observe/Insights and
 send no data, including after upgrading an older client. Enabled production packages must deliver
