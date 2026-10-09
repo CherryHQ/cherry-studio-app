@@ -59,6 +59,13 @@ const providers = readProviderRegistry('/path/to/providers.json')
 const overrides = readProviderModelRegistry('/path/to/provider-models.json')
 ```
 
+## Provider Address Rules
+
+Import `formatApiHost`, `getBaseUrl`, `getProviderBaseUrlIssue`, and
+`shouldAppendProviderApiVersion` from `@cherrystudio/provider-registry` for settings validation
+and address previews. These pure rules also serve AI request adapters and do not load vendor SDKs.
+`@cherrystudio/ai-runtime/provider` retains compatible re-exports for backend consumers.
+
 ## Schema Types
 
 ```typescript

@@ -167,7 +167,9 @@ export class AgentService {
       return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 
-    return row ? rowToAgent(row, await this.getModelName(row.modelId)) : null;
+    if (!row) return null;
+    publishDataApiChanges(['/agents', `/agents/${row.id}`]);
+    return rowToAgent(row, await this.getModelName(row.modelId));
   }
 
   async update(
@@ -269,6 +271,7 @@ export class AgentService {
       return updated as AgentRow;
     });
 
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
     return rowToAgent(row, await this.getModelName(row.modelId));
   }
 
@@ -294,6 +297,7 @@ export class AgentService {
       throw DataApiErrorFactory.notFound('Agent', id);
     }
 
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
     return { deleted };
   }
 
@@ -315,6 +319,7 @@ export class AgentService {
         scope: isNull(agentTable.deletedAt),
       });
     });
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
   }
 
   async reorderBatch(moves: { anchor: OrderRequest; id: string }[]): Promise<void> {
@@ -341,6 +346,7 @@ export class AgentService {
         scope: isNull(agentTable.deletedAt),
       });
     });
+    publishDataApiChanges(['/agents', ...moves.map(({ id }) => `/agents/${id}`)]);
   }
 
   private async resolveCreateModelId(

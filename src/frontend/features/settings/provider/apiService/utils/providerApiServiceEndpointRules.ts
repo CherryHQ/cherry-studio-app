@@ -1,10 +1,10 @@
 import {
+  ENDPOINT_TYPE,
   formatApiHost,
   getProviderBaseUrlIssue,
   shouldAppendProviderApiVersion,
   withoutTrailingApiVersion,
-} from '@cherrystudio/ai-runtime/provider';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+} from '@cherrystudio/provider-registry';
 
 import type { EndpointType } from '@/shared/data/types/model';
 import type { AuthType, EndpointConfigs, Provider } from '@/shared/data/types/provider';
