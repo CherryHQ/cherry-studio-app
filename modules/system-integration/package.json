@@ -1,0 +1,8 @@
+{
+  "name": "@cherrystudio/system-integration",
+  "version": "1.0.0",
+  "description": "System sharing for Cherry Mobile",
+  "main": "index.ts",
+  "private": true,
+  "license": "UNLICENSED"
+}

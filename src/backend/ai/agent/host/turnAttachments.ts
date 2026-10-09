@@ -115,7 +115,10 @@ export async function resolveManagedInput(
         code: 'unavailable',
       });
     }
-    if (part.mediaType !== fact.mediaType || (part.name !== undefined && part.name !== fact.name)) {
+    if (
+      part.mediaType !== fact.mediaType ||
+      (part.filename !== undefined && part.filename !== fact.name)
+    ) {
       fail('ATTACHMENT_METADATA_MISMATCH', 'Attached file metadata could not be verified.', {
         code: 'metadata-mismatch',
         fileEntryId: fact.fileEntryId,
@@ -126,7 +129,7 @@ export async function resolveManagedInput(
       type: 'file',
       fileEntryId: fact.fileEntryId,
       mediaType: fact.mediaType,
-      name: fact.name,
+      filename: fact.name,
     };
   });
 
@@ -193,9 +196,7 @@ function failAttachment(error: FileAttachmentError): never {
       ? 'ATTACHMENT_UNAVAILABLE'
       : code === 'document-empty'
         ? 'ATTACHMENT_NO_TEXT'
-        : ['model-unsupported', 'runtime-unsupported', 'count', 'total-bytes', 'context'].includes(
-              code,
-            )
+        : ['model-unsupported', 'runtime-unsupported', 'count', 'context'].includes(code)
           ? 'CAPABILITY_UNSUPPORTED'
           : 'ATTACHMENT_INVALID',
     error.message,

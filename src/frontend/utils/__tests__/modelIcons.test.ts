@@ -29,13 +29,16 @@ describe('model icon identity', () => {
 
     expect(inferred.iconSource).toBe(resolveProviderAssetIcon('openai'));
     expect(inferred.modelIconSource).toBeUndefined();
+    expect(inferred.isProviderFallback).toBe(false);
     expect(fallback.iconSource).toBe(resolveProviderAssetIcon('azureai'));
     expect(fallback.modelIconSource).toBeUndefined();
+    expect(fallback.isProviderFallback).toBe(true);
   });
 
   test('keeps unknown models without a provider on the initial fallback', () => {
     expect(resolveModelIconSources('deepseek-proxy/custom-model')).toEqual({
       iconSource: undefined,
+      isProviderFallback: true,
       modelIconSource: undefined,
     });
   });

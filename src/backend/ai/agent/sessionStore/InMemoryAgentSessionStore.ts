@@ -11,16 +11,20 @@ import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/share
 
 import type {
   AgentSessionStore,
+  DeleteTurnInput,
+  DeleteTurnResult,
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
+  ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
   UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
 import {
+  finalizeMessageStats,
   interruptNonTerminalToolParts,
   settleInterruptedAssistantParts,
 } from './messageSettlement';
@@ -46,23 +50,30 @@ type StoredMessage = {
 function createSessionView(input: {
   id?: string;
   agentId: string;
-  executionTarget?: AgentSessionView['executionTarget'];
   forkedFromSessionId?: string;
-  title?: string;
-  titleIsManual?: boolean;
+  name?: string;
+  isNameManuallyEdited?: boolean;
 }): AgentSessionView {
   const timestamp = nowIso();
   return {
     id: input.id ?? uuidv7(),
     agentId: input.agentId,
-    executionTarget: input.executionTarget ?? { kind: 'local' },
-    title: input.title ?? '',
-    titleIsManual: input.titleIsManual ?? input.title !== undefined,
+    name: input.name ?? '',
+    isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+/** The payload stays opaque; only the anchor the Host itself validates is read. */
+function readCheckpointAnchorTurnId(checkpoint: unknown): string | null {
+  if (typeof checkpoint !== 'object' || checkpoint === null || !('anchorTurnId' in checkpoint)) {
+    return null;
+  }
+  const { anchorTurnId } = checkpoint;
+  return typeof anchorTurnId === 'string' ? anchorTurnId : null;
 }
 
 /**
@@ -98,7 +109,6 @@ function reserveInTranscript(
     role: 'user',
     status: 'success',
     parts: cloneJson(input.userParts),
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -112,7 +122,6 @@ function reserveInTranscript(
     role: 'assistant',
     status: 'pending',
     parts: [],
-    usage: null,
     stats: null,
     modelId: input.modelId,
     inferenceSnapshot: {
@@ -153,7 +162,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
-  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  async createEmptySession(input: { agentId: string; name?: string }): Promise<AgentSessionView> {
     const session = createSessionView(input);
     this.sessions.set(session.id, session);
     this.messages.set(session.id, []);
@@ -165,15 +174,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return session ? cloneJson(session) : null;
   }
 
-  async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
+  async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: true,
+      name,
+      isNameManuallyEdited: true,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -182,17 +191,17 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
   async autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
-    if (!session || session.titleIsManual || session.title !== expectedTitle) {
+    if (!session || session.isNameManuallyEdited || session.name !== expectedName) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: false,
+      name,
+      isNameManuallyEdited: false,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -238,28 +247,27 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     // together or not at all.
     const session = createSessionView({
       agentId: source.agentId,
-      executionTarget: source.executionTarget,
       forkedFromSessionId: source.id,
-      title: input.title ?? source.title,
-      titleIsManual: source.titleIsManual,
+      name: input.name ?? source.name,
+      isNameManuallyEdited: source.isNameManuallyEdited,
     });
     const reissuedTurnIds = new Map<string, string>();
-    const forkedTranscript = transcript
+    const copied = transcript
       .slice(0, anchorIndex + 1)
-      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))
-      .map<StoredMessage>((stored) => ({
-        // Runtime-private and anchored to a turn id this copy no longer
-        // carries, so the fork replays full history instead.
-        contextCheckpoint: null,
-        error: stored.error === null ? null : cloneJson(stored.error),
-        view: cloneJson({
-          ...stored.view,
-          id: uuidv7(),
-          sessionId: session.id,
-          turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
-          updatedAt: nowIso(),
-        }),
-      }));
+      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status));
+    const forkedTranscript = copied.map<StoredMessage>((stored) => ({
+      // Runtime-private and anchored to a turn id this copy no longer
+      // carries, so the fork replays full history instead.
+      contextCheckpoint: null,
+      error: stored.error === null ? null : cloneJson(stored.error),
+      view: cloneJson({
+        ...stored.view,
+        id: uuidv7(),
+        sessionId: session.id,
+        turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
+        updatedAt: nowIso(),
+      }),
+    }));
     const forkBoundaryMessageId = forkedTranscript.at(-1)?.view.id;
     if (!forkBoundaryMessageId) {
       throw new Error('Fork transcript is missing its settled boundary message.');
@@ -268,7 +276,69 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
     this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
-    return { session: cloneJson(forkedSession), status: 'forked' };
+    return {
+      session: cloneJson(forkedSession),
+      status: 'forked',
+      messageCopies: copied.map(({ view }, index) => ({
+        source: { id: view.id, turnId: view.turnId },
+        target: {
+          id: forkedTranscript[index].view.id,
+          turnId: forkedTranscript[index].view.turnId,
+        },
+      })),
+    };
+  }
+
+  async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
+    const session = this.sessions.get(input.sessionId);
+    if (!session) {
+      return { status: 'session-not-found' };
+    }
+
+    const transcript = this.messages.get(input.sessionId) ?? [];
+    const firstIndex = transcript.findIndex((stored) => stored.view.turnId === input.turnId);
+    if (firstIndex < 0) {
+      return { status: 'turn-not-found' };
+    }
+    const deleted = transcript.filter((stored) => stored.view.turnId === input.turnId);
+    if (deleted.some((stored) => UNSETTLED_MESSAGE_STATUSES.has(stored.view.status))) {
+      return { status: 'turn-unsettled' };
+    }
+
+    // Synchronous section: the checkpoint reset and the removal commit
+    // together or not at all.
+    // A summary covers everything up to its anchor turn, so only a checkpoint
+    // anchored strictly before the deleted turn can be replayed afterwards.
+    for (const stored of transcript) {
+      if (stored.contextCheckpoint === null) {
+        continue;
+      }
+      const anchorTurnId = readCheckpointAnchorTurnId(stored.contextCheckpoint);
+      const anchorIndex =
+        anchorTurnId === null
+          ? -1
+          : transcript.findIndex((entry) => entry.view.turnId === anchorTurnId);
+      if (anchorIndex < 0 || anchorIndex >= firstIndex) {
+        stored.contextCheckpoint = null;
+      }
+    }
+
+    const deletedMessageIds = deleted.map((stored) => stored.view.id);
+    this.messages.set(
+      input.sessionId,
+      transcript.filter((stored) => stored.view.turnId !== input.turnId),
+    );
+    if (
+      session.forkBoundaryMessageId !== null &&
+      deletedMessageIds.includes(session.forkBoundaryMessageId)
+    ) {
+      this.sessions.set(input.sessionId, {
+        ...session,
+        forkBoundaryMessageId: null,
+        updatedAt: nowIso(),
+      });
+    }
+    return { deletedMessageIds, status: 'deleted' };
   }
 
   async reserveInitialSubmission(
@@ -281,7 +351,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const session = createSessionView({
       id: input.sessionId,
       agentId: input.agentId,
-      executionTarget: input.executionTarget,
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
@@ -313,6 +382,54 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       });
     }
     return cloneJson(reserved);
+  }
+
+  async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
+    const source = this.messages.get(input.sessionId) ?? [];
+    const assistant = source.at(-1);
+    const user = source.at(-2);
+    if (
+      !assistant ||
+      assistant.view.id !== input.assistantMessageId ||
+      assistant.view.role !== 'assistant' ||
+      UNSETTLED_MESSAGE_STATUSES.has(assistant.view.status) ||
+      !user ||
+      user.view.id !== input.userMessageId ||
+      user.view.role !== 'user' ||
+      !assistant.view.turnId ||
+      user.view.turnId !== assistant.view.turnId
+    ) {
+      throw new Error('The retry source is not the settled latest answer of this session.');
+    }
+    const session = this.sessions.get(input.sessionId)!;
+    const turnId = uuidv7();
+    const updatedAt = nowIso();
+    user.view = { ...user.view, turnId, parts: cloneJson(input.userParts), updatedAt };
+    assistant.view = {
+      ...assistant.view,
+      turnId,
+      status: 'pending',
+      updatedAt,
+      // Reissued so the replacement execution's own part ids cannot collide
+      // with a retained one carried over from the previous attempt.
+      parts: cloneJson(input.assistantParts).map((part, index) => ({
+        ...part,
+        id: `retained-${turnId}-${index}`,
+      })),
+      modelId: input.modelId,
+      inferenceSnapshot: { status: 'supported', snapshot: cloneJson(input.inferenceSnapshot) },
+      stats: assistant.view.stats
+        ? { ...assistant.view.stats, runtimeTiming: undefined, contextTokens: undefined }
+        : null,
+    };
+    assistant.error = null;
+    assistant.contextCheckpoint = null;
+    this.sessions.set(session.id, { ...session, updatedAt });
+    return cloneJson({
+      turnId,
+      userMessage: user.view,
+      assistantMessage: assistant.view,
+    });
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
@@ -364,10 +481,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     });
   }
 
-  async getLatestContextCheckpoint(sessionId: string) {
+  async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const transcript = this.messages.get(sessionId) ?? [];
     for (let index = transcript.length - 1; index >= 0; index -= 1) {
       const stored = transcript[index];
+      if (stored?.view.id === excludeAssistantMessageId) continue;
       if (stored?.view.role === 'assistant' && stored.contextCheckpoint !== null) {
         return cloneJson({
           assistantMessageId: stored.view.id,
@@ -412,8 +530,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         ...stored.view,
         status: input.status,
         parts: cloneJson(input.parts),
-        usage: input.usage === null ? null : cloneJson(input.usage),
-        stats: { ...stored.view.stats, ...cloneJson(input.runtimeStats) },
+        stats: cloneJson(finalizeMessageStats(stored.view.stats, input)),
         updatedAt,
       };
       stored.error = input.error === null ? null : cloneJson(input.error);

@@ -54,7 +54,7 @@ The Agent Data API, `Backend.agent`, and frontend surfaces share these current c
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
 Mobile Agent has one execution target and one engine: `local → Pi` in this mobile app. Application
 composition injects Pi directly into the Host, so there is no implementation choice to persist. The
-planned PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
+PC Agent Controller does not represent PC execution as a local Runtime binding or extend the
 current local execution-target value. PC Agent Sessions remain authoritative on the PC. A mobile
 adapter may map them into Agent Protocol values for the application, but it does not copy them into
 these tables as a second source of truth. Any offline cache or projection requires a separate
@@ -64,10 +64,20 @@ artifact anchored to a durable turn, not an engine id, resumable Runtime instanc
 or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
 active turn.
 
+**Native model replay is an optional local cache.** Successful Runtime turns may preserve signed
+thinking blocks and the original assistant/tool-result sequence in an Agent-private MMKV store,
+`cherry-agent-replay-cache`. It survives process restarts but is bounded and disposable, separate from
+the SQLite transcript and excluded from application backups. There is no replay column or schema
+migration. The Host writes it after terminal message persistence, reads it by Session/message/Turn
+identity, and removes it on retry or deletion. Fork transactions return backend-private source/copy
+identities so the Host can copy available cache entries after commit. Storage restore clears this
+cache before startup. Missing or invalid entries use normalized message history; see
+[Agent Runtime](./agent-runtime.md#history) for limits and decoding ownership.
+
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
-no workspace reference. `execution_target` records the mobile boundary (`{"kind":"local"}`). Every
-file is imported into `file_entry` before submission or tool use. The Host
+no workspace reference or execution-target column. Every file is imported into `file_entry` before
+submission or tool use. The Host
 initializes a turn resource ledger from managed file ids in the current input and Session transcript,
 then may add only validated entries created by application capabilities during that turn. Those
 durable references already live on messages, while the monotonic same-turn ledger is process-local,
@@ -125,8 +135,13 @@ boundary, not in `AgentService`: resolving it is file-system work under `backend
 an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-deletes and cascades
 messages — matching the store port's `deleteSession` contract. Before deleting rows, the Host
 installs a per-Session barrier, waits any already-admitted submission to install its turn state,
-then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
-are never deleted individually in V1.
+then cancels and drains that turn. New submissions fail closed until deletion finishes.
+
+Inside a Session the deletable unit is the turn, never the single message: replayed history pairs
+every `tool-call` with its `tool-result`, so half a turn is not a transcript any provider accepts.
+`deleteTurn` hard-deletes the turn's rows, and the Host refuses it while the Session is busy for
+the same reason a fork is refused. Deletion erases the record, not the side effects the record
+describes; nothing a tool already did is undone.
 
 **MCP bindings are mobile-owned Agent configuration.** `agent_tool_binding` stores a stable MCP
 `(serverId, rawToolName?)` identity, its enabled state, approval policy, and an optional display
@@ -147,7 +162,7 @@ lives on the Agent row's group-level deny-list, never in this per-tool relation.
 
 Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
 
-**Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
+**Naming and types.** DB columns use the protocol vocabulary (`name`, `isNameManuallyEdited`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
 store maps to the protocol's ISO strings at the boundary. `agent` uses UUID v4 (like `assistant`);
 `agent_session` and `agent_session_message` use time-ordered UUID v7 (`uuidPrimaryKeyOrdered`).
@@ -164,7 +179,7 @@ model selection with Agent definition edits and inactive query caches.
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568
 authority split and the schema README's alignment rule: columns that presume a resumable
 external runtime (workspace, delivery, resume tokens) are deliberately absent, while
-`turnId`/`error`, `executionTarget`, and Agent soft delete are mobile-owned.
+`turnId`/`error` and Agent soft delete are mobile-owned.
 
 ## Tables
 
@@ -176,8 +191,8 @@ external runtime (workspace, delivery, resume tokens) are deliberately absent, w
 | `name` | text | NOT NULL | |
 | `instructions` | text | NOT NULL DEFAULT `''` | System instructions |
 | `avatar` | text | NULL | Built-in Cherry emoji or stable file reference; NULL uses the name fallback |
-| `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
-| `toolApprovalMode` | text | NOT NULL DEFAULT `default` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` |
+| `model` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | `UniqueModelId` |
+| `toolApprovalMode` | text | NOT NULL DEFAULT `auto` | `default` preserves tool policy; `auto` promotes effective `ask` to `auto` and withholds `ask_user_question` |
 | `orderKey` | text | NOT NULL | `orderKeyColumns` fractional index |
 | `createdAt` / `updatedAt` / `deletedAt` | integer | helper defaults | Soft delete via `deletedAt` |
 
@@ -207,9 +222,8 @@ listing/cascade and MCP server delete-time disabling.
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v7 | |
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
-| `title` | text | NOT NULL DEFAULT `''` | |
-| `titleIsManual` | integer (bool) | NOT NULL DEFAULT `false` | |
-| `executionTarget` | text (json) | NOT NULL DEFAULT `{"kind":"local"}` | Mobile app execution boundary, never a Runtime id or remote-control target |
+| `name` | text | NOT NULL DEFAULT `''` | |
+| `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
@@ -226,15 +240,14 @@ recency; no `orderKey`).
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
 | `turnId` | text | NULL, indexed | Correlation id shared by a submission's user/assistant pair; nullable per protocol |
 | `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No `root`: transcript is linear |
-| `data` | text (json) | NOT NULL | `{ version: 1, parts: AgentMessagePart[] }` |
+| `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
-| `usage` | text (json) | NULL | Assistant messages only |
-| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming` |
-| `error` | text (json) | NULL | Turn-level `AgentErrorView`, including the versioned failure snapshot when available; projected into `AgentTurnView.error`, not part of the message view |
+| `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
+| `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
-| `messageSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
-| `searchableText` | text | NOT NULL DEFAULT `''` | Trigger-populated |
+| `inferenceSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
+| `searchableText` | text | NOT NULL DEFAULT `''` | Visible plain text of `text` parts, written by the store |
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
@@ -251,13 +264,25 @@ enforcement here; the plain `status` index exists because Drizzle's bound `statu
 cannot match a partial index — see `message.ts`.)
 
 `data.parts` is exactly the protocol's `AgentMessagePart` union
-([contract](../../../src/shared/contracts/agent/views.ts)); the version field guards future part-shape
-migrations. FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
-`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) with an
-agent-specific extraction expression: `text` parts only. `reasoning` is model-internal and
-deliberately not searchable; tool payloads are structured data, not prose. The update trigger skips
-`pending` and `streaming` rows, so a turn's mid-stream snapshots are indexed once, when the row
-settles.
+([contract](../../../src/shared/contracts/agent/views.ts)). The database migration journal owns
+format upgrades; individual messages store no format version. Migration `0003_align_agent_fields`
+removes the old `data.version` and aligns part fields: `tool` becomes `dynamic-tool`, with
+`toolName` and `title`; file parts use `filename`; and error parts become
+`{ type: 'data-error', data }`. It preserves part order, tool states and result envelopes.
+The same migration renames the inference column to `inference_snapshot` without changing its JSON,
+removes the constant local execution target and consolidates message `usage` into `stats`, filling
+missing counters without overwriting existing statistics. It also aligns the database approval
+default with new Agent creation (`auto`) while retaining saved modes.
+
+FTS mirrors the chat `message` architecture (external-content FTS5 table keyed on
+`ftsRowid`, idempotent statements in the schema module, executed via `customSql.ts`) and indexes
+`text` parts only. `reasoning` is model-internal and deliberately not searchable; tool payloads are
+structured data, not prose. The store writes `searchableText` as the parts' visible plain text,
+with Markdown formatting removed and code content kept, so a trigram `LIKE` finds every visible
+match without scanning the index. Triggers only mirror that column into FTS. Every write of `data`
+supplies it except the mid-stream snapshot, so a turn's streamed text is indexed once, when the row
+settles. When the custom SQL changes, startup re-derives settled rows whose stored text still
+contains Markdown markers; this also converts restored backups indexed by an older trigger.
 
 `reserveSubmission` writes the selected `modelId` and `AgentInferenceSnapshotV1` on the assistant
 placeholder in the same transaction as the user/assistant pair. The existing nullable columns from
@@ -268,15 +293,28 @@ Model deletion may null the foreign key but never rewrites the historical snapsh
 
 ## Store port and adapter
 
+Manual retry adds `reserveRetry`: the Session's last answer and its user row receive a fresh
+shared turn id in one transaction, with the same message ids and transcript position. The
+transaction re-reads the two trailing rows and rejects anything else, so a message that stopped
+being the last one between preparation and reservation cannot be replaced. The assistant is reset
+to `pending`, its error and context checkpoint cleared, runtime timing reset, and any retained
+tool results saved immediately. Retained part ids are reissued so new Runtime output cannot
+collide with them. Only the replaced answer's own checkpoint is dropped — it is the last message,
+so no earlier summary can describe it, and earlier compaction work stays reusable. Invocation
+ledger totals remain intact. Preparation must finish before this operation; a rejected preflight
+does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
+recorded prefix. Retry never creates a Session or inserts another user message.
+
 The `AgentSessionStore` port reshapes to message-centric operations; the Host owns the Turn
 projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, usage, `stats.runtimeTiming`, turn-level error, and an optional validated context
+  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error, and an optional validated context
   checkpoint — in one write (invariant 5). Failed, cancelled, and interrupted terminal rows force
-  the checkpoint to `NULL`. The error part and turn-level error column receive the same
-  `AgentErrorView`; historical rows without a failure snapshot remain valid. Reservation advances
+  the checkpoint to `NULL`. Failed turns write the same `AgentErrorView` to the inline part and
+  diagnostic column. Cancellation retains its reason only in the column; historical rows without
+  a failure snapshot remain valid. Reservation advances
   Session `lastActivityAt` to the assistant placeholder's `createdAt`; normal finalization advances
   it to `stats.runtimeTiming.completedAt`. Message and Session `updatedAt` remain physical row
   modification timestamps.
@@ -288,16 +326,20 @@ projection:
   `streaming`, including any text already produced. The Host coalesces requests: the event loop
   does not wait on the store, one snapshot write is in flight at a time, and requests that arrive
   during a write collapse into one further write. A failed snapshot write is logged and execution
-  continues. Text-only events and non-terminal tool states do not request writes, `interrupted`
-  parts do not either because the terminal write always follows them, and there is no periodic
-  flush. A pending tool may be included in another tool or file's snapshot, but its intermediate
+  continues. Unfinished text and reasoning request a snapshot after a one-second batching window,
+  so a text-only stream has a durable prefix before its part finishes. This timer is scheduled only
+  after a delta, stops at finalization, and cannot write for a replaced or aborted turn. A slow or
+  failing store can leave a larger uncommitted suffix; the interval is not a durability guarantee.
+  Non-terminal tool states and input previews do not request writes; `interrupted` parts do not
+  either because the terminal write follows them. A pending tool may be included in another
+  part's snapshot, but its intermediate
   states are not guaranteed to survive a restart. Finalization remains authoritative: it drains
   the in-flight snapshot before the terminal write, and a late snapshot cannot reopen a settled
   row. On restart, reconciliation keeps saved parts, closes streaming text, and interrupts
   unfinished tools. This preserves recorded artifacts for later turns without resuming execution
   or persisting a draft-file state.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
-  It copies `titleIsManual` and `executionTarget` from the source, takes `title` from the caller
+  It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
   `forkedFromSessionId`, records the reissued copied anchor as `forkBoundaryMessageId`, and copies
   `lastActivityAt` from the source assistant's `stats.runtimeTiming.completedAt` at the inclusive
@@ -305,17 +347,27 @@ projection:
   the fork is an administrative row mutation, not conversation
   activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
   the original reservation activity because it is not new conversation activity. Copied rows keep
-  `createdAt`, `role`, `data`, `status`, `usage`, `stats`, `error`,
-  `modelId`, and `messageSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
+  `createdAt`, `role`, `data`, `status`, `stats`, `error`,
+  `modelId`, and `inferenceSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
   ordered, and the reissued UUID v7 ids break ties in the same direction, so copying the value
   preserves order while stamping "now" on every row would be visibly wrong in the UI.
-  `searchableText` and `ftsRowid` are left to the insert trigger, which is race-free because the
-  whole copy runs inside the serialized write transaction.
+  `searchableText` is copied; `ftsRowid` is left to the insert trigger, which is race-free because
+  the whole copy runs inside the serialized write transaction. Copies are inserted in chunked
+  multi-row statements with ids generated in transcript order.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
+- Deleting a turn clears, in the same transaction, every checkpoint in that Session whose anchor
+  does not sit strictly before the deleted turn — including anchors the deletion itself orphans.
+  A summary covers everything up to its anchor, and its text is opaque to the store, so a
+  checkpoint that may have absorbed the deleted content cannot be replayed without putting that
+  content back in front of the model. The cost is a full replay, and usually a fresh compaction,
+  on the next turn. The Session's own `forkBoundaryMessageId` is cleared when it names a deleted
+  row, and `lastActivityAt` rewinds to the newest surviving message, since a deleted turn is no
+  longer activity to sort by. The FTS delete trigger keeps the index consistent with no extra
+  work; `ai_usage_record` rows are a separate ledger and deliberately survive.
 - The latest assistant row with a non-null checkpoint is the replay candidate. The Host validates
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full

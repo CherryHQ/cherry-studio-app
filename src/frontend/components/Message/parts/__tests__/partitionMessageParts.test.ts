@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { partitionMessageParts } from '../partitionMessageParts';
+import { groupMessageProcessItems, partitionMessageParts } from '../partitionMessageParts';
 
 function file(id: string): CherryMessagePart {
   return {
@@ -16,8 +16,105 @@ function text(value: string): CherryMessagePart {
   return { text: value, type: 'text' };
 }
 
+describe('groupMessageProcessItems', () => {
+  test('folds narration, reasoning, and tool calls together while preserving their order', () => {
+    const parts = [
+      text('First phase'),
+      reasoning('plan'),
+      tool('read-1'),
+      reasoning('next'),
+      tool('read-2'),
+      text('Second phase'),
+      tool('write'),
+      reasoning('finish'),
+    ];
+    const items = parts.map((part, index) => ({ part, index, key: `source-${index}` }));
+    const groups = groupMessageProcessItems(items);
+
+    expect(groups.map((group) => group.kind)).toEqual(['tools']);
+    const runs = groups.filter((group) => group.kind === 'tools');
+    expect(runs.map((group) => group.tools.length)).toEqual([3]);
+    expect(runs.map((group) => group.items.map((item) => item.key))).toEqual([
+      [
+        'source-0',
+        'source-1',
+        'source-2',
+        'source-3',
+        'source-4',
+        'source-5',
+        'source-6',
+        'source-7',
+      ],
+    ]);
+    expect(groups.flatMap((group) => (group.kind === 'part' ? [group.item] : group.items))).toEqual(
+      items,
+    );
+  });
+
+  test('leaves tool-free reasoning unchanged and keeps a growing run anchored to its first part', () => {
+    const first = { part: reasoning('plan'), index: 0, key: 'reasoning-id' };
+    expect(groupMessageProcessItems([first])).toEqual([{ kind: 'part', item: first }]);
+    const run = [first, { part: tool('read'), index: 1, key: 'read-id' }];
+    const groups = groupMessageProcessItems([
+      ...run,
+      { part: tool('write'), index: 2, key: 'write-id' },
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].kind === 'tools' && groups[0].items[0]).toBe(first);
+  });
+
+  test('keeps in-loop compaction inside a tool run but leaves unrelated process parts separate', () => {
+    const parts: CherryMessagePart[] = [
+      tool('read'),
+      {
+        type: 'data-compaction-anchor',
+        data: { phase: 'in-loop', status: 'done' },
+      },
+      text('Continuing'),
+      tool('write'),
+      { type: 'data-compact', data: { content: 'Summary', compactedContent: 'Earlier text' } },
+    ];
+    const groups = groupMessageProcessItems(
+      parts.map((part, index) => ({ part, index, key: `part-${index}` })),
+    );
+    expect(groups.map((group) => group.kind)).toEqual(['tools', 'part']);
+    expect(groups[0].kind === 'tools' && groups[0].items.map((item) => item.key)).toEqual([
+      'part-0',
+      'part-1',
+      'part-2',
+      'part-3',
+    ]);
+  });
+});
+
 describe('partitionMessageParts', () => {
-  test('lifts every file out of the body, in the order it was produced', () => {
+  test('keeps turn-start markers visible and in-loop markers between their tools', () => {
+    const boundary = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'turn-start', status: 'done' },
+    } as const;
+    const inLoop = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'in-loop', status: 'done' },
+    } as const;
+    const result = partitionMessageParts([boundary, tool('a'), inLoop, tool('b'), text('answer')]);
+    expect(result.boundaries.map(({ index }) => index)).toEqual([0]);
+    expect(result.process.map(({ index }) => index)).toEqual([1, 2, 3]);
+    expect(result.body.map(({ index }) => index)).toEqual([4]);
+  });
+
+  test('skipped compaction leaves no process group or blank boundary and cannot hide the answer', () => {
+    const skipped = {
+      type: 'data-compaction-anchor',
+      data: { phase: 'turn-start', status: 'skipped' },
+    } as const;
+    const result = partitionMessageParts([text('answer'), skipped]);
+    expect(result.boundaries).toEqual([]);
+    expect(result.process).toEqual([]);
+    expect(result.body.map(({ index }) => index)).toEqual([0]);
+  });
+
+  test('collects non-image files after the body, in the order they were produced', () => {
     const { body, files, process } = partitionMessageParts([
       text('before'),
       file('a'),
@@ -30,6 +127,30 @@ describe('partitionMessageParts', () => {
     ).toEqual(['after']);
     expect(process.map((item) => (item.part as { text: string }).text)).toEqual(['before']);
     expect(files.map((part) => part.filename)).toEqual(['a.md', 'b.md']);
+  });
+
+  test('keeps tool images before their explanation and later images after it', () => {
+    const image = { ...file('image'), mediaType: 'image/png' };
+    const laterImage = { ...file('later'), mediaType: 'image/webp' };
+    const parts = [tool('generate_image'), image, text('explanation'), laterImage, file('notes')];
+    const { body, files, process } = partitionMessageParts(parts);
+
+    expect(body.map(({ index }) => index)).toEqual([1, 2, 3]);
+    expect(body.map(({ part }) => part)).toEqual([image, parts[2], laterImage]);
+    expect(process.map(({ index }) => index)).toEqual([0]);
+    expect(files).toEqual([parts[4]]);
+  });
+
+  test('keeps an image visible even when no final text follows the tool result', () => {
+    const image: CherryMessagePart = {
+      mediaType: 'image/png',
+      type: 'file',
+      url: 'https://peer.example/image.png',
+    };
+    const { body, files } = partitionMessageParts([tool('generate_image'), image]);
+
+    expect(body).toEqual([{ index: 1, kind: 'part', part: image }]);
+    expect(files).toEqual([]);
   });
 
   test('splits on part type alone, so a peer transcript with no Cherry metadata splits the same', () => {

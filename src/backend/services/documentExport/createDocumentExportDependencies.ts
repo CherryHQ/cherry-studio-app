@@ -8,7 +8,6 @@ import {
 } from '@/backend/services/file/fileStorage';
 
 import type { DocumentExportDependencies } from './createDocumentExportSession';
-import { MAX_ASSET_BYTES } from './resolveDocumentAssets';
 
 /** The composition root supplies a store bound to this host's database. */
 export function createDocumentExportDependencies(
@@ -21,7 +20,6 @@ export function createDocumentExportDependencies(
       signal.throwIfAborted();
       if (!resolved) throw new Error('Image unavailable');
       const file = new File(resolved.uri);
-      if (file.size > MAX_ASSET_BYTES) throw new Error('Image exceeds byte limit');
       return file.bytes();
     },
     saveFile: async (file, signal) => {

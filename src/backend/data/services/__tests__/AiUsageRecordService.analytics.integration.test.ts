@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { application } from '@/backend/core/application/Application';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -14,7 +15,11 @@ import {
   AiUsageRecordTimelineQuerySchema,
 } from '@/shared/data/api/schemas/aiUsageRecords';
 
-import type { AiUsageCaptureContext, RecordAiInvocationInput } from '../AiUsageRecordService';
+import type {
+  AiUsageCaptureContext,
+  CommittedAiInvocationUsage,
+  RecordAiInvocationInput,
+} from '../AiUsageRecordService';
 import { AiUsageRecordService } from '../AiUsageRecordService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -75,7 +80,7 @@ describe('AI usage analytics', () => {
       INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
       INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
       INSERT INTO agent_session_message (id, session_id, role, data, status, stats, created_at, updated_at)
-      VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
+      VALUES ('message-1', 'session-1', 'assistant', '{"parts":[]}', 'success', '{"runtimeTiming":{"startedAt":1,"completedAt":1000,"spans":[]},"contextTokens":42}', 1, 1);
     `);
     const ref = { kind: 'agent-session' as const, id: 'message-1' };
     const first = invocation(
@@ -152,17 +157,12 @@ describe('AI usage analytics', () => {
         ],
       });
       const row = sqlite
-        .prepare('SELECT stats, usage FROM agent_session_message WHERE id = ?')
-        .get('message-1') as { stats: string; usage: string };
+        .prepare('SELECT stats FROM agent_session_message WHERE id = ?')
+        .get('message-1') as { stats: string };
       expect(JSON.parse(row.stats)).toEqual({
         ...projection,
         contextTokens: 42,
         runtimeTiming: { startedAt: 1, completedAt: 1000, spans: [] },
-      });
-      expect(JSON.parse(row.usage)).toEqual({
-        inputTokens: 110,
-        outputTokens: 22,
-        totalTokens: 132,
       });
       await service.recordInvocations([first, second, image]);
       expect(listener).toHaveBeenCalledTimes(1);
@@ -180,18 +180,17 @@ describe('AI usage analytics', () => {
         INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent-1', 'Agent', 'a', 1, 1);
         INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at) VALUES ('session-1', 'agent-1', 1, 1, 1);
         INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
-        VALUES ('message-1', 'session-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
+        VALUES ('message-1', 'session-1', 'assistant', '{"parts":[]}', 'pending', 1, 1);
       `);
       const ref = { kind: 'agent-session' as const, id: 'message-1' };
       const listener = jest.fn((paths: readonly string[]) => {
         const row = sqlite
-          .prepare('SELECT stats, usage, status FROM agent_session_message WHERE id = ?')
-          .get(ref.id) as { stats: string; usage: string; status: string };
+          .prepare('SELECT stats, status FROM agent_session_message WHERE id = ?')
+          .get(ref.id) as { stats: string; status: string };
         return {
           paths,
           inTransaction: sqlite.isTransaction,
           stats: JSON.parse(row.stats),
-          usage: JSON.parse(row.usage),
           status: row.status,
         };
       });
@@ -252,6 +251,9 @@ describe('AI usage analytics', () => {
           inTransaction: false,
           status,
           stats: {
+            inputTokens: 110,
+            outputTokens: 22,
+            totalTokens: 132,
             requestCount: 3,
             costs: expect.arrayContaining([
               {
@@ -262,7 +264,6 @@ describe('AI usage analytics', () => {
               },
             ]),
           },
-          usage: { inputTokens: 110, outputTokens: 22, totalTokens: 132 },
         });
         await service.recordInvocation(image);
         expect(listener).toHaveBeenCalledTimes(1);
@@ -363,6 +364,95 @@ describe('AI usage analytics', () => {
         expect.objectContaining({ isOther: true, totalTokens: 25, unpricedRequestCount: 1 }),
       ]),
     );
+  });
+
+  test('emits immutable usage facts only for newly committed invocations', async () => {
+    const committed = jest.fn((_rows: readonly CommittedAiInvocationUsage[]) => ({
+      inTransaction: sqlite.isTransaction,
+      count: sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count,
+    }));
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      const agentCall = invocation(
+        'analytics-1',
+        1000,
+        { inputTokens: 100, outputTokens: 20 },
+        context('openai', { source: { type: 'agent', id: 'agent-1', name: 'Agent', icon: null } }),
+      );
+      const assistantCall = invocation('analytics-2', 2000, { inputTokens: 5, outputTokens: 1 });
+      await service.recordInvocations([agentCall]);
+      // A mixed retry batch publishes only the new invocation.
+      await service.recordInvocations([agentCall, assistantCall]);
+      await service.recordInvocations([agentCall, assistantCall]);
+      expect(committed).toHaveBeenCalledTimes(2);
+      expect(committed).toHaveBeenNthCalledWith(1, [
+        {
+          requestId: 'analytics-1',
+          inputTokens: 100,
+          outputTokens: 20,
+          modelId: 'model-1',
+          providerId: 'openai',
+          sourceType: 'agent',
+        },
+      ]);
+      expect(committed).toHaveBeenNthCalledWith(2, [
+        {
+          requestId: 'analytics-2',
+          inputTokens: 5,
+          outputTokens: 1,
+          modelId: 'model-1',
+          providerId: 'a',
+          sourceType: 'assistant',
+        },
+      ]);
+      expect(committed.mock.results.map(({ value }) => value)).toEqual([
+        { inTransaction: false, count: 1 },
+        { inTransaction: false, count: 2 },
+      ]);
+      for (const [rows] of committed.mock.calls) {
+        expect(Object.isFrozen(rows)).toBe(true);
+        expect(Object.isFrozen(rows[0])).toBe(true);
+      }
+    } finally {
+      subscription.dispose();
+    }
+  });
+
+  test('does not emit usage facts when the transaction rolls back', async () => {
+    const dbService = application.get('DbService');
+    const write = dbService.withWriteTx.bind(dbService);
+    const failure = jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce((callback) =>
+      write(async (tx) => {
+        await callback(tx);
+        throw new Error('Commit failed');
+      }),
+    );
+    const committed = jest.fn();
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      await service.recordInvocation(invocation('rolled-back', 1000, { inputTokens: 1 }));
+      expect(committed).not.toHaveBeenCalled();
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count).toBe(0);
+    } finally {
+      subscription.dispose();
+      failure.mockRestore();
+    }
+  });
+
+  test('a failing usage observer cannot block committed writes or other observers', async () => {
+    const throwing = service.onInvocationsCommitted(() => {
+      throw new Error('Observer failed');
+    });
+    const committed = jest.fn();
+    const subscription = service.onInvocationsCommitted(committed);
+    try {
+      await service.recordInvocation(invocation('observer-error', 1000, { inputTokens: 1 }));
+      expect(committed).toHaveBeenCalledTimes(1);
+      expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()?.count).toBe(1);
+    } finally {
+      throwing.dispose();
+      subscription.dispose();
+    }
   });
 });
 

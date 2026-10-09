@@ -74,7 +74,7 @@ describe('ContentSearchService', () => {
           createdAt: 300,
           id: 'message-1',
           role: 'assistant',
-          searchableText: '**needle** session',
+          searchableText: 'needle session',
           sessionId: 'session-1',
           sessionTitle: 'Session',
         },

@@ -39,7 +39,7 @@
       },
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
       },
       "ios": {}
     },
@@ -50,13 +50,25 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "production"
+        "PROFILE": "production",
+        "APK_UPDATES_ENABLED": "true"
       },
       "android": {
         "buildType": "apk",
         "withoutCredentials": false,
         "credentialsSource": "remote",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
+      }
+    },
+    "production-google-play": {
+      "extends": "production",
+      "env": {
+        "APK_UPDATES_ENABLED": "false",
+        "ANDROID_COMPRESS_NATIVE_LIBS": "false"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
       }
     }
   },

@@ -8,14 +8,12 @@ export const visiblePermissionKinds = [
   'location',
   'calendar',
   'reminders',
-  'health',
   'camera',
   'photos',
 ] as const satisfies readonly PermissionKind[];
 
 const permissionImages: Partial<Record<PermissionKind, number>> = {
   calendar: require('@/assets/permissions/ios/calendar.png'),
-  health: require('@/assets/permissions/ios/health.png'),
   location: require('@/assets/permissions/ios/location.png'),
   reminders: require('@/assets/permissions/ios/reminders.png'),
 };
@@ -32,6 +30,3 @@ export function PermissionListLeading({ kind }: { kind: PermissionKind }) {
     />
   );
 }
-
-export const healthPermissionProvider = 'apple' as const;
-export const healthSettingsNeedInstructions = true;

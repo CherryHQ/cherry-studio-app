@@ -6,12 +6,11 @@ import {
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import {
+  documentImageCountLimit,
   fileAttachmentMode,
   validateFileAttachments,
   IMAGE_CONTEXT_TOKEN_RESERVE,
   MAX_IMAGE_ATTACHMENT_BYTES,
-  MAX_IMAGE_ATTACHMENT_COUNT,
-  MAX_IMAGE_ATTACHMENT_TOTAL_BYTES,
   MIN_TEXT_CONTEXT_TOKEN_RESERVE,
 } from '../fileAttachmentPolicy';
 
@@ -26,56 +25,41 @@ describe('image attachment limits', () => {
     expect(fileAttachmentMode({ mediaType: 'text/rtf', name: 'document.rtf' })).toBe('document');
     expect(fileAttachmentMode({ mediaType: 'text/csv', name: 'data.csv' })).toBe('text');
   });
-  test('accepts values exactly on every byte and count boundary', () => {
-    const files = Array.from({ length: MAX_IMAGE_ATTACHMENT_COUNT }, (_, index) =>
-      imageFact(index, Math.floor(MAX_IMAGE_ATTACHMENT_TOTAL_BYTES / MAX_IMAGE_ATTACHMENT_COUNT)),
+
+  test('bounds chat images only per file: the Runtime prices the rest into the context', () => {
+    const many = Array.from({ length: 30 }, (_, index) =>
+      imageFact(index, MAX_IMAGE_ATTACHMENT_BYTES),
     );
 
-    expect(findImageAttachmentLimit(files, MODEL)).toBeNull();
-    expect(findImageAttachmentLimit([imageFact(0, MAX_IMAGE_ATTACHMENT_BYTES)], MODEL)).toBeNull();
-    expect(
-      findImageAttachmentLimit(
-        [
-          imageFact(0, MAX_IMAGE_ATTACHMENT_TOTAL_BYTES / 2),
-          imageFact(1, MAX_IMAGE_ATTACHMENT_TOTAL_BYTES / 2),
-        ],
-        MODEL,
-      ),
-    ).toBeNull();
-    expect(
-      findImageAttachmentLimit([imageFact(0, 1)], {
-        ...MODEL,
-        maxInputTokens: MIN_TEXT_CONTEXT_TOKEN_RESERVE + IMAGE_CONTEXT_TOKEN_RESERVE,
-      }),
-    ).toBeNull();
-  });
-
-  test('classifies count, single-file, total-byte, and context overages', () => {
-    expect(
-      findImageAttachmentLimit(
-        Array.from({ length: MAX_IMAGE_ATTACHMENT_COUNT + 1 }, (_, index) => imageFact(index, 1)),
-        MODEL,
-      ),
-    ).toBe('count');
+    expect(findImageAttachmentLimit(many, MODEL)).toBeNull();
+    expect(findImageAttachmentLimit(many, { ...MODEL, maxInputTokens: 2_000 })).toBeNull();
     expect(findImageAttachmentLimit([imageFact(0, MAX_IMAGE_ATTACHMENT_BYTES + 1)], MODEL)).toBe(
       'file-bytes',
     );
+  });
+
+  test('applies a declared reference limit, as painting models set one', () => {
+    const painting: FileAttachmentTarget = {
+      purpose: 'painting',
+      acceptsImages: true,
+      maxImages: 2,
+    };
+
+    expect(findImageAttachmentLimit([imageFact(0, 1), imageFact(1, 1)], painting)).toBeNull();
     expect(
-      findImageAttachmentLimit(
-        [
-          imageFact(0, 7 * 1024 * 1024),
-          imageFact(1, 7 * 1024 * 1024),
-          imageFact(2, 7 * 1024 * 1024),
-        ],
-        MODEL,
-      ),
-    ).toBe('total-bytes');
+      findImageAttachmentLimit([imageFact(0, 1), imageFact(1, 1), imageFact(2, 1)], painting),
+    ).toBe('count');
+  });
+
+  test('sizes the document-image budget by the context reserve', () => {
     expect(
-      findImageAttachmentLimit([imageFact(0, 1)], {
-        ...MODEL,
-        maxInputTokens: MIN_TEXT_CONTEXT_TOKEN_RESERVE + IMAGE_CONTEXT_TOKEN_RESERVE - 1,
+      documentImageCountLimit({
+        maxInputTokens: MIN_TEXT_CONTEXT_TOKEN_RESERVE + 3 * IMAGE_CONTEXT_TOKEN_RESERVE,
       }),
-    ).toBe('context');
+    ).toBe(3);
+    expect(documentImageCountLimit({ maxInputTokens: 500 })).toBe(0);
+    expect(documentImageCountLimit({ maxImages: 2, maxInputTokens: 120_000 })).toBe(2);
+    expect(documentImageCountLimit({})).toBe(Infinity);
   });
 });
 

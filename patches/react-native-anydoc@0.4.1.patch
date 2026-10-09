@@ -1,0 +1,36 @@
+diff --git a/android/build.gradle b/android/build.gradle
+index 6c2b8d5a2ad8dea655036622a265e2c9c314bb50..de88cfaac3c1418ce2c1f163c5afb4e056afac37 100644
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -14,6 +14,10 @@ apply plugin: 'org.jetbrains.kotlin.android'
+ android {
+   namespace "com.tula.anydoc"
+   compileSdkVersion rootProject.hasProperty('compileSdkVersion') ? rootProject.compileSdkVersion : 35
++  // Build with the app's NDK instead of AGP's default.
++  if (rootProject.ext.has("ndkVersion")) {
++    ndkVersion rootProject.ext.ndkVersion
++  }
+ 
+   defaultConfig {
+     minSdkVersion rootProject.hasProperty('minSdkVersion') ? rootProject.minSdkVersion : 24
+@@ -32,7 +36,8 @@ android {
+     externalNativeBuild {
+       cmake {
+         cppFlags "-frtti -fexceptions -Wall -fstack-protector-all"
+-        arguments "-DANDROID_STL=c++_shared"
++        // Google Play requires 16 KB ELF alignment; NDK r27 still defaults to 4 KB.
++        arguments "-DANDROID_STL=c++_shared", "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+       }
+     }
+   }
+@@ -64,7 +69,9 @@ dependencies {
+   //noinspection GradleDynamicVersion
+   implementation "com.facebook.react:react-android:+"
+   //noinspection GradleDynamicVersion
+-  implementation "com.facebook.fbjni:fbjni:+"
++  // Match React Native's fbjni. A dynamic version resolves to the newest release,
++  // which wins conflict resolution and breaks React Native's native libraries.
++  implementation "com.facebook.fbjni:fbjni:0.7.0"
+ }
+ 
+ // Nitrogen's generated Kotlin sources + the "boosted by nitro" banner.

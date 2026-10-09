@@ -26,7 +26,4 @@ export {
   splitParamValues,
   type SplitImageParams,
 } from '../utils/imageOptions';
-export {
-  buildImageProviderOptions,
-  mergeImageProviderOptions,
-} from '../utils/imageProviderOptions';
+export { buildImageProviderOptions } from '../utils/imageProviderOptions';

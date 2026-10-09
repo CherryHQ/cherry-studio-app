@@ -3,9 +3,10 @@ import type { BackgroundTaskOptions } from 'react-native-background-actions';
 
 const mockNativeStart = jest.fn<Promise<void>, [BackgroundTaskOptions]>();
 const mockNativeStop = jest.fn(async () => {});
-const mockNativeUpdate = jest.fn(async () => {});
-const mockNativeListeners = new Map<string, (taskName: string) => void>();
+const mockNativeUpdate = jest.fn(async (_options: BackgroundTaskOptions) => {});
+const mockNativeListeners = new Map<string, (event: any) => void>();
 const mockHeadlessFactories = new Map<string, () => () => Promise<void>>();
+const mockHeadlessTasks = new Map<string, Promise<void>>();
 let background: typeof BackgroundService;
 
 jest.mock('react-native', () => ({
@@ -20,10 +21,10 @@ jest.mock('react-native-background-actions/src/RNBackgroundActionsModule', () =>
   RNBackgroundActions: {
     start: (options: BackgroundTaskOptions) => mockNativeStart(options),
     stop: () => mockNativeStop(),
-    updateNotification: () => mockNativeUpdate(),
+    updateNotification: (options: BackgroundTaskOptions) => mockNativeUpdate(options),
   },
   nativeEventEmitter: {
-    addListener: (name: string, listener: (taskName: string) => void) => {
+    addListener: (name: string, listener: (event: any) => void) => {
       mockNativeListeners.set(name, listener);
     },
   },
@@ -44,12 +45,15 @@ beforeAll(() => {
 });
 beforeEach(() => {
   jest.clearAllMocks();
-  mockNativeStart.mockResolvedValue(undefined);
+  mockNativeStart.mockImplementation(async ({ taskName }) => {
+    mockHeadlessTasks.set(taskName, mockHeadlessFactories.get(taskName)!()());
+  });
 });
 afterEach(async () => {
   await background.stop();
   background.removeAllListeners('stopped');
   mockHeadlessFactories.clear();
+  mockHeadlessTasks.clear();
 });
 
 test('unexpected destruction resets running state before interrupting and finishes the headless task', async () => {
@@ -57,7 +61,7 @@ test('unexpected destruction resets running state before interrupting and finish
   background.on('stopped', () => observedRunning.push(background.isRunning()));
   await background.start(hold, options);
   const taskName = mockNativeStart.mock.calls[0]![0].taskName;
-  const task = mockHeadlessFactories.get(taskName)!()();
+  const task = mockHeadlessTasks.get(taskName)!;
   await background.updateNotification({ taskTitle: 'Updated' });
   mockNativeListeners.get('stopped')?.(taskName);
   expect(observedRunning).toEqual([false]);
@@ -97,4 +101,44 @@ test('a stop arriving before the start promise resolves cannot restore a stale r
   finishStart();
   await rejected;
   expect(background.isRunning()).toBe(false);
+});
+
+test('a previously running task finishing late cannot stop its replacement', async () => {
+  let finishOld!: () => void;
+  const oldTask = new Promise<void>((resolve) => {
+    finishOld = resolve;
+  });
+  await background.start(() => oldTask, options);
+  await background.stop();
+  await background.start(hold, options);
+  finishOld();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(background.isRunning()).toBe(true);
+  expect(mockNativeStop).toHaveBeenCalledTimes(1);
+});
+
+test('preserves notification identity and admitted task generation on content updates', async () => {
+  await background.start(hold, { ...options, notificationId: 100_000, taskOngoing: true });
+  const admitted = mockNativeStart.mock.calls[0]![0];
+  await background.updateNotification({ taskTitle: 'Done', taskOngoing: false });
+  expect(mockNativeUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      taskName: admitted.taskName,
+      notificationId: 100_000,
+      taskOngoing: false,
+    }),
+  );
+});
+
+test('uses native protection proof and ignores events from a retired generation', async () => {
+  await background.start(hold, options);
+  const oldName = mockNativeStart.mock.calls[0]![0].taskName;
+  expect(background.isProtected()).toBe(false);
+  mockNativeListeners.get('protectionChanged')?.({ taskName: oldName, protected: true });
+  expect(background.isProtected()).toBe(true);
+  await background.stop();
+  await background.start(hold, options);
+  mockNativeListeners.get('protectionChanged')?.({ taskName: oldName, protected: true });
+  expect(background.isProtected()).toBe(false);
 });

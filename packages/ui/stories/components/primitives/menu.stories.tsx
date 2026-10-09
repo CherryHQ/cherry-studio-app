@@ -1,7 +1,7 @@
 import {
   ActionMenu,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
@@ -26,7 +26,7 @@ const meta = {
   title: 'Components/Primitives/Menu',
   decorators: [
     (Story) => (
-      <ContextMenuScrollBoundary>
+      <ScrollInteractionBoundary>
         {(scrollHandlers) => (
           <ScrollView
             {...scrollHandlers}
@@ -37,7 +37,7 @@ const meta = {
             <Story />
           </ScrollView>
         )}
-      </ContextMenuScrollBoundary>
+      </ScrollInteractionBoundary>
     ),
   ],
 } satisfies Meta;

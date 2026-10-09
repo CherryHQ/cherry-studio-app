@@ -1,0 +1,12 @@
+{
+  "consentVersion": "20260915",
+  "maxBreadcrumbs": 20,
+  "breadcrumbCodes": [
+    "startup.native",
+    "startup.javascript",
+    "startup.router",
+    "startup.bootstrap",
+    "startup.ready",
+    "startup.failed"
+  ]
+}

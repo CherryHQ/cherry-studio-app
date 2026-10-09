@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
-import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
+import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 export type PaintingDraftHandoff = {
   attachments: readonly ComposerInitialAttachment[];

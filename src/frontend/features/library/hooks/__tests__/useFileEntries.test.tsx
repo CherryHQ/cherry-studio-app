@@ -77,6 +77,7 @@ const backend = {
 } as unknown as Backend;
 
 let latestResult: ReturnType<typeof useFileEntries> | undefined;
+let observedResults: ReturnType<typeof useFileEntries>[];
 let queryClient: QueryClient;
 let renderer: ReactTestRenderer | undefined;
 
@@ -98,6 +99,7 @@ function Probe({ enabled, filter = 'all' }: { enabled: boolean; filter?: FileLib
 
   useEffect(() => {
     latestResult = result;
+    observedResults.push(result);
   }, [result]);
 
   return null;
@@ -108,6 +110,7 @@ describe('useFileEntries', () => {
     jest.clearAllMocks();
     completePreview = undefined;
     latestResult = undefined;
+    observedResults = [];
     queryClient = new QueryClient({
       defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: 30_000 } },
     });
@@ -360,6 +363,83 @@ describe('useFileEntries', () => {
     await flushQueryNotifications();
     expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([documentEntry.id]);
   });
+
+  test.each([false, true])(
+    'keeps surviving files visible through consecutive deletions with a ready preview: %s',
+    async (isPreviewReady) => {
+      dataApi.get.mockResolvedValueOnce({ items: [entry, documentEntry, generatedEntry] });
+      await act(async () => {
+        renderer = create(
+          <Providers>
+            <Probe enabled />
+          </Providers>,
+        );
+      });
+      await flushQueryNotifications();
+      await flushQueryNotifications();
+      if (isPreviewReady) {
+        await act(async () => completePreview?.(`file:///cache/${entry.id}.webp`));
+        await flushQueryNotifications();
+      }
+
+      const originalResolveUris = resolveUris.getMockImplementation()!;
+      const pendingUriPages: (() => Promise<void>)[] = [];
+      resolveUris.mockImplementation(
+        (entries) =>
+          new Promise((resolve) => {
+            pendingUriPages.push(async () => resolve(await originalResolveUris(entries)));
+          }),
+      );
+      observedResults = [];
+      try {
+        dataApi.get.mockResolvedValueOnce({ items: [entry, generatedEntry] });
+        await act(async () => notifyFileChange(documentEntry.id));
+        await flushQueryNotifications();
+        await flushQueryNotifications();
+        expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([
+          entry.id,
+          generatedEntry.id,
+        ]);
+
+        dataApi.get.mockResolvedValueOnce({ items: [entry] });
+        await act(async () => notifyFileChange(generatedEntry.id));
+        await flushQueryNotifications();
+        await flushQueryNotifications();
+        expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([entry.id]);
+
+        // URI resolution is still pending; no intermediate render may blank the
+        // surviving image or lose its original URI / already generated thumbnail.
+        for (const result of observedResults) {
+          expect(result.isLoading).toBe(false);
+          expect(result.entries.find((item) => item.entry.id === entry.id)).toEqual({
+            entry,
+            previewUri: isPreviewReady ? `file:///cache/${entry.id}.webp` : undefined,
+            uri: 'file:///documents/photo.png',
+          });
+        }
+        expect(observedResults.length).toBeGreaterThan(0);
+
+        await act(async () => {
+          for (const complete of pendingUriPages) await complete();
+        });
+        await flushQueryNotifications();
+        expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([entry.id]);
+        expect(generatePreviewUri).toHaveBeenCalledTimes(1);
+
+        dataApi.get.mockResolvedValueOnce({ items: [] });
+        await act(async () => notifyFileChange(entry.id));
+        await flushQueryNotifications();
+        await act(async () => {
+          for (const complete of pendingUriPages) await complete();
+        });
+        await flushQueryNotifications();
+        expect(latestResult?.entries).toEqual([]);
+        expect(latestResult?.isLoading).toBe(false);
+      } finally {
+        resolveUris.mockImplementation(originalResolveUris);
+      }
+    },
+  );
 
   test('unsubscribes from file changes when the app provider unmounts', async () => {
     const pagesKey = ['/files/entries', { limit: 30 }] as const;

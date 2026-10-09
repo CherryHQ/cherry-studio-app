@@ -38,6 +38,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { OperationHandle } from '@/backend/core/resources/types';
 import { ScopeFencedError } from '@/backend/core/resources/types';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { InsertJobRow, JobRow } from '@/backend/data/db/schemas/job';
 import {
@@ -49,6 +50,7 @@ import type {
   KeepAliveLease,
   KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   isTerminalStatus,
   JOB_ERROR_CODES,
@@ -350,12 +352,13 @@ export class JobRuntime extends BaseService {
         if (winner === 'timeout') {
           logger.warn('cancel timed out — forcing terminal state', { graceMs, jobId });
           try {
+            const interrupted = controller.signal.reason instanceof KeepAliveInterruptionError;
             await this.finalizeJob(
               jobId,
-              'cancelled',
+              interrupted ? 'failed' : 'cancelled',
               undefined,
               {
-                code: JOB_ERROR_CODES.CANCELLED,
+                code: interrupted ? JOB_ERROR_CODES.INTERRUPTED : JOB_ERROR_CODES.CANCELLED,
                 message: `Cancel timed out after ${graceMs}ms${reason ? ` (reason: ${reason})` : ''}`,
                 retryable: false,
               },
@@ -388,7 +391,14 @@ export class JobRuntime extends BaseService {
     return { outcome: 'not-cancellable' };
   }
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.pumpRunning || this.inFlightExecuted.size > 0 || this.pendingTxVerifications.size > 0
+    );
+  }
+
   pump(request: PumpRequest): Promise<PumpResult> {
+    if (storageMutationGate.isFrozen) return Promise.resolve({ claimed: 0 });
     if (this.disposed) return Promise.resolve({ claimed: 0 });
     if (request.reason === 'cold-start') this.gcRequested = true;
     if (this.pumpRunning) {
@@ -968,22 +978,26 @@ export class JobRuntime extends BaseService {
         const isAbort = controller.signal.aborted;
         const abortReason: unknown = controller.signal.reason;
         const isTimeout = isAbort && abortReason instanceof JobHandlerTimeoutError;
-        const userCancel = isAbort && !isTimeout;
+        const interruption =
+          abortReason instanceof KeepAliveInterruptionError ? abortReason : undefined;
+        const userCancel = isAbort && !isTimeout && !interruption;
         const thrownMessage = err instanceof Error ? err.message : String(err);
         const cancelMessage = abortReason instanceof Error ? abortReason.message : null;
-        const error: JobError = userCancel
-          ? {
-              code: JOB_ERROR_CODES.CANCELLED,
-              message: cancelMessage || thrownMessage || 'Cancelled',
-              retryable: false,
-            }
-          : !isTimeout && err instanceof JobExecutionError
-            ? err.error
-            : {
-                code: isTimeout ? JOB_ERROR_CODES.HANDLER_TIMEOUT : JOB_ERROR_CODES.HANDLER_THREW,
-                message: thrownMessage,
-                retryable: true,
-              };
+        const error: JobError = interruption
+          ? { code: JOB_ERROR_CODES.INTERRUPTED, message: interruption.message, retryable: false }
+          : userCancel
+            ? {
+                code: JOB_ERROR_CODES.CANCELLED,
+                message: cancelMessage || thrownMessage || 'Cancelled',
+                retryable: false,
+              }
+            : !isTimeout && err instanceof JobExecutionError
+              ? err.error
+              : {
+                  code: isTimeout ? JOB_ERROR_CODES.HANDLER_TIMEOUT : JOB_ERROR_CODES.HANDLER_THREW,
+                  message: thrownMessage,
+                  retryable: true,
+                };
         const canRetry = !userCancel && error.retryable && row.attempt + 1 < row.maxAttempts;
         if (canRetry) {
           const retryPolicy = handler.defaultRetryPolicy ?? DEFAULT_RETRY_POLICY;

@@ -1,9 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 import type { PluginCatalogEntry } from '@/shared/data/types/plugin';
-
-import { PluginIcon } from './PluginIcon';
 
 export function PluginIdentity({ entry }: { entry: PluginCatalogEntry }) {
   const { t } = useTranslation();

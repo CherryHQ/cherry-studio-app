@@ -1,8 +1,8 @@
 # Parallel Device Testing
 
 This guide is the repository's execution standard for coding-agent device acceptance in local
-Conductor workspaces. It covers configuration preparation, development-client reuse, iOS simulator
-and Android emulator isolation, Metro sessions, and cleanup. Physical devices are outside this
+Conductor workspaces. It covers configuration preparation, shared iOS simulators and Android emulators,
+development-client reuse, Metro sessions, and cleanup. Physical devices are outside this
 workflow. [Testing And CI](./testing-and-ci.md) owns test selection and repository gates.
 
 Apply the user's active authorization before execution. Designing this workflow does not authorize
@@ -13,9 +13,9 @@ the task without asking again; this standard does not enable automatic acceptanc
 
 > Status: design
 >
-> The following preparation contract is accepted. Configuration export/import, source registration,
-> native-artifact compatibility checks, shared caches, and their orchestration are not implemented.
-> The device/session workflow later in this guide already exists.
+> The following preparation contract is accepted. Configuration export/import and source
+> registration are not implemented. The device, development-client and session workflow later in
+> this guide already exists.
 
 An ordinary configured self-test reuses a compatible development client, copies the primary
 environment's user configuration into an independent workspace database, and creates conversation
@@ -154,30 +154,8 @@ authorization to discard that workspace's scenario data; routine preparation nev
 
 ### Development Client Reuse
 
-Share immutable native development artifacts, not writable devices or databases. Each workspace
-installs a compatible artifact into its own device and loads its own JavaScript through Metro.
-[Expo development builds](https://docs.expo.dev/develop/development-builds/use-development-builds/)
-support this iteration without rebuilding until underlying native code changes.
-
-| Condition | Action |
-| --- | --- |
-| Compatible client installed | Reuse it with the workspace's Metro |
-| New device and matching cached artifact | Install that artifact without another native build |
-| JS/TS UI, business logic, or copied configuration changed | Reuse compatible native code; update code or import data as needed |
-| Native inputs changed | Recompute compatibility and use a matching artifact, or build within task authorization |
-| Artifact missing or compatibility unproven | Report the prerequisite; do not silently build or install an arbitrary package |
-
-The artifact manifest identifies app ID, platform, simulator/emulator target, architecture,
-development profile, native-input fingerprint, and artifact checksum. iOS device and simulator
-binaries are not interchangeable. Fingerprints cover resolved native dependencies, Expo/React Native
-versions, relevant lockfile/patch inputs, evaluated native config, local config-plugin implementation,
-native source, and relevant build environment; record fingerprint/toolchain versions. Branch names
-and app versions alone cannot establish compatibility.
-
-[Expo Fingerprint](https://docs.expo.dev/versions/latest/sdk/fingerprint/) is a candidate input
-collector, not an integrated cache. Account for its config-plugin limitations. Coordinate concurrent
-cache misses and publish only complete successful artifacts; do not weaken compatibility checks to
-obtain a cache hit. Record native compilation separately from internal package compilation.
+Development clients are shared through the fingerprint-named artifacts in
+[Development Client](#development-client); only native input changes require a new build.
 
 ### Coding Agent Procedure And Evidence
 
@@ -237,75 +215,88 @@ Conductor assigns each workspace ten ports: `$CONDUCTOR_PORT` through
 `$((CONDUCTOR_PORT + 9))`. Use the base port for Metro and only that reserved range for companion
 services. A Conductor device test must not use a fixed port such as `8081` or `8084`.
 
-Each worktree uses a dedicated simulator named:
+### Resident And Temporary Devices
 
-```text
-iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)
-```
+Each platform has one resident test device that every workspace reuses:
 
-Provision it lazily for the workspace, record its UDID under that workspace's `.context`, and never
-reuse a simulator with a live ownership claim. If the dedicated simulator cannot be provisioned,
-stop and report the blocker rather than taking another workspace's device.
+| Platform | Resident device | Temporary device |
+| --- | --- | --- |
+| iOS | Simulator `Cherry Test` | `Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)` |
+| Android | AVD `Cherry_Test` | `Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME` |
 
-Before opening the app, inspect devices and ownership:
+The resident device keeps its app data and configuration across tasks and is never deleted. If it
+does not exist, report it; create it only with device-creation authorization. Never use a physical
+device or the user's primary installation.
 
-```bash
-agent-device devices --platform ios
-agent-device device status --platform ios
-```
-
-Each worktree also uses a dedicated Android emulator named:
-
-```text
-CherryStudio API 36 ($CONDUCTOR_WORKSPACE_NAME)
-```
-
-Provision it lazily for the workspace and never substitute a physical device or another
-workspace's emulator. Record the provisioner's stable AVD identity and expected workspace-specific
-name under that workspace's `.context` when provisioning succeeds. After the emulator boots, also
-record its current serial and `kind: emulator`. An Android serial such as `emulator-5554` can change
-across boots, so refresh the runtime identity before each app session while retaining the stable
-AVD identity. If the dedicated emulator cannot be provisioned, stop and report the blocker.
-
-Before opening the Android app, inspect devices and active sessions:
+The device is occupied while another `agent-device` session is bound to it. Before using the
+resident device, inspect sessions:
 
 ```bash
-agent-device devices --platform android
-agent-device session list
+agent-device session list --json
 ```
+
+- No other session on it: use it with session `$CONDUCTOR_WORKSPACE_NAME` (iOS) or
+  `${CONDUCTOR_WORKSPACE_NAME}-android`.
+- Another session on it with no activity for 60 minutes: close that session with
+  `agent-device close --session <name>` and take over. Activity is the modification time of the
+  `requests` directory under that session's `sessionStateDir`.
+- Another session active within 60 minutes: do not wait and do not take it over. Create this
+  workspace's temporary device with the resident device's device type (iOS) or system image
+  (Android, `image.sysdir.1` in the resident AVD's `config.ini`):
+
+```bash
+xcrun simctl create "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)" "<resident device type>"
+avdmanager create avd -n "Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME" -k "<system-images;...>"
+```
+
+A temporary device starts with empty app data. Reuse it for the rest of the task, and delete it at
+[cleanup](#cleanup). Leave other devices, including unrecognized ones, untouched.
+
+### Development Client
+
+Reuse an installed development client until native inputs change. The native fingerprint decides
+compatibility:
+
+```bash
+PROFILE=development pnpm exec fingerprint fingerprint:generate --platform ios | jq -r .hash
+```
+
+Shared artifacts live in `$CONDUCTOR_ROOT_PATH/.local/dev-clients/` as `ios-<hash>.tar.gz` or
+`android-<hash>.apk`. Install the one matching this workspace's hash; reinstalling keeps app data.
+If none matches, report it, or with build authorization build it straight to that path:
+
+```bash
+pnpm build:local --platform ios --profile development-simulator --output "$CONDUCTOR_ROOT_PATH/.local/dev-clients/ios-<hash>.tar.gz"
+pnpm build:local --platform android --output "$CONDUCTOR_ROOT_PATH/.local/dev-clients/android-<hash>.apk"
+```
+
+Extract the iOS archive and install its `.app` with `agent-device install`. iOS simulator and
+physical-device builds are not interchangeable.
 
 ## Metro And App Session
 
 Keep Metro running across ordinary iterations and preserve its cache. `dev:clear` is for explicit
-cache troubleshooting, not the default self-test startup. Local Conductor run settings should use
-normal startup; setup scripts must not automatically build or boot a device. Both `dev` and
-`dev:clear` currently run `packages:build` first, so starting them requires applicable build
-authorization and must not be described as compilation-free.
-
-Start Metro on the allocated base port:
+cache troubleshooting, not the default self-test startup. Conductor's Run script starts Metro on the
+base port; otherwise start it yourself:
 
 ```bash
 pnpm dev --port "$CONDUCTOR_PORT"
 ```
 
-Use a workspace-unique session, explicit simulator, and explicit Metro hint:
+Relaunch the development client on the selected device, then open the exact development-client URL
+printed by this workspace's Metro process. Do not derive or reuse a URL from another workspace.
 
 ```bash
-agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)" --metro-host 127.0.0.1 --metro-port "$CONDUCTOR_PORT" --relaunch
+agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>" --relaunch
+agent-device open "$DEV_CLIENT_URL" --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>"
 ```
 
-For Android, relaunch the installed development client on the dedicated emulator, then open the
-exact development-client URL printed by this workspace's Metro process. Do not derive or reuse a
-URL from another workspace. Opening that URL through `agent-device` configures Android-to-host
-reachability for its Metro port.
+On Android use `com.cherryai.cherrystudio_app.dev`, session `${CONDUCTOR_WORKSPACE_NAME}-android` and
+`--serial` of the running emulator. Keep commands for one session serial.
 
-```bash
-agent-device open com.cherryai.cherrystudio_app.dev --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL" --relaunch
-agent-device open "$DEV_CLIENT_URL" --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL"
-```
-
-Keep commands for one session serial. Different sessions may run concurrently only when their
-devices and port ranges differ.
+The resident device's data may have been left by another workspace's branch, including a newer
+database schema. Uninstall and reinstall the development client only when the scenario needs empty
+data; tell the user when that discards configuration they set up.
 
 ## Persistence Failures After Fast Refresh
 
@@ -318,7 +309,7 @@ connection reports no active transaction. The same app process may then hold two
 Before changing UI or persistence code in response to this failure:
 
 1. Capture the app log and confirm that the failure occurs at `BEGIN IMMEDIATE`.
-2. Fully relaunch the app with the workspace-specific `agent-device open ... --relaunch` command
+2. Fully relaunch the app with the `agent-device open ... --relaunch` command
    above. A Metro reload is not a valid control experiment for this failure.
 3. Repeat the exact save action. If it succeeds, classify the failure as a stale development
    runtime connection and remove any temporary diagnostic logging before committing.
@@ -332,33 +323,15 @@ real transaction-lifecycle bug.
 
 ## Cleanup
 
-After a PR or complete stack is created:
+After self-testing, and before waiting for review or at PR creation:
 
-1. Close the workspace session with `agent-device close --session "$CONDUCTOR_WORKSPACE_NAME"
-   --platform ios --shutdown`.
-2. Stop listeners only in `$CONDUCTOR_PORT..$((CONDUCTOR_PORT + 9))`.
-3. Delete only the simulator whose recorded UDID and expected workspace name both match.
-4. Remove the workspace simulator metadata after deletion succeeds or the recorded device is
-   already absent.
+1. Close the session and shut the device down:
+   `agent-device close --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --shutdown` (Android:
+   the `-android` session).
+2. Stop the Metro process you started, if any; stop listeners only in this workspace's port range.
+3. Delete this workspace's temporary device, if one was created:
+   `xcrun simctl delete "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)"` or
+   `avdmanager delete avd -n "Cherry_Temp_$CONDUCTOR_WORKSPACE_NAME"`.
 
-Clean up Android with the same ownership guarantees:
-
-1. Resolve the recorded stable AVD identity through its provisioner and verify the expected
-   workspace-specific name. If running, also confirm the current serial resolves to that same AVD
-   with `kind: emulator`; never trust a serial that now belongs to a different device.
-2. For a running owned emulator, close the workspace session with `agent-device close --session
-   "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --shutdown`.
-3. Delete only the recorded AVD whose stable identity and expected name both match, using the same
-   provisioner that created it. A stopped emulator can be deleted without booting it. Never delete
-   an Android device by serial alone or guess an AVD identity from incomplete ownership metadata.
-4. Remove the workspace emulator metadata after the provisioner confirms that the recorded AVD is
-   absent. A missing runtime serial does not prove the AVD was deleted; retain the stable ownership
-   record across shutdown or interrupted cleanup.
-
-The repository does not provide a Conductor archive hook that guarantees this cleanup. Perform the
-steps above explicitly; do not assume archiving a workspace releases its devices and processes.
-A locally configured archive hook may repeat the same cleanup as a fallback. That configuration
-belongs to the local environment, not to this guide's current-state guarantees.
-
-All cleanup paths must be idempotent and refuse to delete unrecorded or name-mismatched devices.
-Android cleanup must also refuse to delete a physical device or an AVD with mismatched identity.
+Never delete the resident device. The repository `.conductor/settings.toml` repeats step 3 on
+workspace archive as a fallback; machine-local Conductor settings can override it.

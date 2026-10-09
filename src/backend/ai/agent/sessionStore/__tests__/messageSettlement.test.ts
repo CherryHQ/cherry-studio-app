@@ -6,6 +6,18 @@ import {
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 
 describe('message settlement', () => {
+  test('recovery retains completed compactions without leaving a spinner or a skipped marker', () => {
+    const parts = (['compacting', 'done', 'skipped'] as const).map((status) => ({
+      id: status,
+      type: 'data-compaction-anchor' as const,
+      data: { phase: 'in-loop' as const, status },
+    }));
+    expect(settleInterruptedAssistantParts(parts, INTERRUPTED, 'error-turn-1')).toEqual([
+      parts[1],
+      { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },
+    ]);
+  });
+
   test.each(['input-streaming', 'input-available', 'awaiting-approval', 'running'] as const)(
     'terminalizes %s tool state with no pending approval',
     (state) => {
@@ -13,11 +25,11 @@ describe('message settlement', () => {
         [
           {
             id: 'tool-call-1',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: TOOL_REF,
-            providerName: 'mcp_server_1_delete_file_a1b2',
-            displayName: 'Delete file',
+            toolName: 'mcp_server_1_delete_file_a1b2',
+            title: 'Delete file',
             state,
             ...(state === 'input-streaming' ? {} : { input: { fileEntryId: 'file-1' } }),
             ...(state === 'awaiting-approval' ? { approvalId: 'approval-1' } : {}),
@@ -39,7 +51,7 @@ describe('message settlement', () => {
 
   test('appends a renderable error part when recovery interrupts an assistant message', () => {
     expect(settleInterruptedAssistantParts([], INTERRUPTED, 'error-turn-1')).toEqual([
-      { id: 'error-turn-1', type: 'error', error: INTERRUPTED },
+      { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },
     ]);
   });
 });

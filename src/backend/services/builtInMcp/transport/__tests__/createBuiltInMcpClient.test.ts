@@ -1,5 +1,6 @@
 import * as mcp from '@ai-sdk/mcp';
 
+import { trackExpoAbortSignals } from '../../authorization/__tests__/_expoAbortSignal';
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../../plugins/feishu/feishuTools';
 import { createBuiltInMcpClient as createClient } from '../createBuiltInMcpClient';
@@ -135,6 +136,146 @@ const userCredential = {
   },
 };
 
+it.each([false, true])(
+  'releases real SDK request listeners while reusing the Feishu connection (caller: %s)',
+  async (withCaller) => {
+    const tracked = trackExpoAbortSignals();
+    mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
+    const caller = new AbortController();
+    const client = await createBuiltInMcpClient('feishu', 'grant-feishu', caller.signal);
+    try {
+      const discovery = withCaller ? { options: { signal: caller.signal } } : undefined;
+      const options = withCaller ? { abortSignal: caller.signal } : undefined;
+      await client.listTools(discovery);
+      await settle();
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+
+      for (let index = 0; index < 25; index++) {
+        await client.listTools(discovery);
+        await expect(client.callTool({ name: 'fetch-doc', args: {}, options })).resolves.toEqual({
+          content: [{ type: 'text', text: JSON.stringify({ login: 'cherry' }) }],
+          isError: false,
+        });
+        expect(tracked.listeners.size).toBe(0);
+        expect(tracked.timers.size).toBe(0);
+      }
+
+      mockFetch.mockImplementation((url, init) => {
+        if (init?.body && JSON.parse(init.body).method === 'tools/call')
+          return new Response(null, { status: 500 });
+        return respond(url, init);
+      });
+      await expect(
+        client.callTool({ name: 'create-doc', args: {}, options }),
+      ).rejects.toMatchObject({
+        reason: 'unknown-write',
+      });
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+      expect(caller.signal.aborted).toBe(false);
+      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(
+        toolRequests().filter((request) => request.params?.name === 'create-doc'),
+      ).toHaveLength(1);
+    } finally {
+      await client.close();
+    }
+  },
+);
+
+it.each(['complete', 'cancel'] as const)(
+  'keeps an overlapping response stream alive until its own request ends (%s)',
+  async (ending) => {
+    const tracked = trackExpoAbortSignals();
+    mockGetGrant.mockResolvedValue({ id: 'grant-feishu', authMethod: 'feishu_user' });
+    const client = await createBuiltInMcpClient(
+      'feishu',
+      'grant-feishu',
+      new AbortController().signal,
+    );
+    let pending: Promise<unknown> | undefined;
+    try {
+      await client.listTools();
+      await settle();
+      const connectionSignal = mockFetch.mock.calls.find(([, init]) => init?.method === 'GET')?.[1]
+        .signal as AbortSignal;
+      const caller = new AbortController();
+      let responseController!: ReadableStreamDefaultController<Uint8Array>;
+      let requestSignal!: AbortSignal;
+      let requestId: number | undefined;
+      let received!: () => void;
+      const started = new Promise<void>((resolve) => {
+        received = resolve;
+      });
+      mockFetch.mockImplementation((url, init) => {
+        if (!init?.body) return respond(url, init);
+        const request: RpcRequest = JSON.parse(init.body);
+        if (request.method !== 'tools/call' || request.params?.name !== 'create-doc')
+          return respond(url, init);
+        requestSignal = init.signal;
+        requestId = request.id;
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            responseController = controller;
+            // Model fetch's response-body lifetime under the request's signal.
+            const onAbort = () => {
+              requestSignal.removeEventListener('abort', onAbort);
+              controller.close();
+            };
+            requestSignal.addEventListener('abort', onAbort);
+          },
+        });
+        received();
+        const response = new Response(null, { headers: { 'content-type': 'text/event-stream' } });
+        // The SDK pipes the body through Jest's global stream polyfills, not Node's Response realm.
+        Object.defineProperty(response, 'body', { value: body });
+        return response;
+      });
+      pending = client.callTool({
+        name: 'create-doc',
+        args: {},
+        options: { abortSignal: caller.signal },
+      });
+      await started;
+      await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
+        'content',
+      );
+      expect(requestSignal.aborted).toBe(false);
+      expect(connectionSignal.aborted).toBe(false);
+
+      if (ending === 'complete') {
+        const result = { content: [{ type: 'text', text: 'created' }] };
+        responseController.enqueue(
+          new TextEncoder().encode(
+            `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n\n`,
+          ),
+        );
+        await expect(pending).resolves.toEqual({ ...result, isError: false });
+        expect(caller.signal.aborted).toBe(false);
+      } else {
+        const outcome = expect(pending).rejects.toThrow();
+        caller.abort();
+        await outcome;
+      }
+      expect(requestSignal.aborted).toBe(true);
+      expect(connectionSignal.aborted).toBe(false);
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+      await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
+        'content',
+      );
+      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(
+        toolRequests().filter((request) => request.params?.name === 'create-doc'),
+      ).toHaveLength(1);
+    } finally {
+      await client.close();
+      await pending?.catch(() => undefined);
+    }
+  },
+);
+
 it('rotates user tokens behind a stable grant reference without rejecting the grant', async () => {
   mockGetGrant.mockResolvedValue({
     id: 'user-grant',
@@ -198,17 +339,25 @@ it('validates a calendar-only Feishu grant without requiring hosted document acc
     ...userCredential,
     tokens: { ...userCredential.tokens, scope: 'calendar:calendar:read' },
   };
-  await expect(validatePluginConnection('feishu', 'feishu_user', calendarCredential)).resolves.toBe(
-    'Feishu user',
-  );
+  await expect(
+    validatePluginConnection('feishu', 'feishu_user', calendarCredential),
+  ).resolves.toMatchObject({
+    accountLabel: 'Feishu user',
+    catalog: {
+      discoveryWarnings: [],
+      tools: expect.arrayContaining([expect.objectContaining({ name: 'calendar_get_primary' })]),
+    },
+  });
   expect(mockFetch).not.toHaveBeenCalled();
   expect(toolRequests()).toEqual([]);
 });
 
 it('connects Feishu as the user without storing credentials in MCP configuration or calling business tools', async () => {
-  await expect(validatePluginConnection('feishu', 'feishu_user', userCredential)).resolves.toBe(
-    'Feishu user',
-  );
+  await expect(
+    validatePluginConnection('feishu', 'feishu_user', userCredential),
+  ).resolves.toMatchObject({
+    accountLabel: 'Feishu user',
+  });
   expect(toolRequests()).toEqual([]);
   const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
   expect(JSON.stringify(config)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
@@ -381,6 +530,36 @@ it('reports an unknown write outcome after a connection failure without replay',
   }
 });
 
+it('reports an unknown write outcome when closing the client aborts a submitted write', async () => {
+  mockFetch.mockImplementation(async (url, init) => {
+    const response = respond(url, init);
+    if (init?.body && JSON.parse(init.body).method === 'initialize')
+      response.headers.set('mcp-session-id', 'session-1');
+    return response;
+  });
+  const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
+  await client.listTools();
+  let submitted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    submitted = resolve;
+  });
+  mockFetch.mockImplementation((url, init) => {
+    if (!init?.body || JSON.parse(init.body).method !== 'tools/call') return respond(url, init);
+    submitted();
+    return new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    });
+  });
+  const result = Promise.resolve(
+    client.callTool({ name: 'issue_write', args: { method: 'create' } }),
+  );
+  const outcome = expect(result).rejects.toMatchObject({ reason: 'unknown-write' });
+  await started;
+  await client.close();
+  await outcome;
+  expect(toolRequests()).toHaveLength(1);
+});
+
 it('does not send a request cancelled while resolving credentials', async () => {
   const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
   try {
@@ -416,7 +595,7 @@ it.each([
           ? { version: 1, token: 'entered-key' }
           : { version: 1, key: 'entered-key' },
       ),
-    ).resolves.toBe(label);
+    ).resolves.toMatchObject({ accountLabel: label, catalog: { discoveryWarnings: [] } });
     expect(toolRequests().map((request) => request.params)).toEqual([{ name, arguments: args }]);
     expect(mockGetGrant).not.toHaveBeenCalled();
   },
@@ -450,7 +629,68 @@ it('follows tool-list pagination to find the validation tool', async () => {
   });
   await expect(
     validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
-  ).resolves.toBe('cherry');
+  ).resolves.toMatchObject({ accountLabel: 'cherry' });
+});
+
+it('keeps collecting pages after finding the validation tool and returns the admitted catalog', async () => {
+  mockFetch.mockImplementation((url, init) => {
+    const request: RpcRequest | undefined = init?.body ? JSON.parse(init.body) : undefined;
+    if (request?.method === 'tools/list') {
+      return reply(
+        request,
+        request.params?.cursor
+          ? { tools: [definitions[1], definitions[2]] }
+          : { tools: [definitions[0]], nextCursor: 'next' },
+      );
+    }
+    return respond(url, init);
+  });
+  const result = await validatePluginConnection('github', 'personal_token', {
+    version: 1,
+    token: 'entered-key',
+  });
+  expect(result.accountLabel).toBe('cherry');
+  expect(result.catalog.tools.map((tool) => tool.name)).toEqual(['get_me', 'issue_write']);
+  expect(result.catalog.serverInfo).toMatchObject({ name: 'official-fixture', version: '1' });
+  expect(JSON.stringify(result)).not.toContain('entered-key');
+  expect(toolRequests()).toHaveLength(1);
+  expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+});
+
+it.each(['duplicate', 'repeated-cursor'])(
+  'rejects a %s catalog even when the first page already contains the validation tool',
+  async (kind) => {
+    mockFetch.mockImplementation((url, init) => {
+      const request: RpcRequest | undefined = init?.body ? JSON.parse(init.body) : undefined;
+      if (request?.method === 'tools/list') {
+        return reply(
+          request,
+          request.params?.cursor
+            ? kind === 'duplicate'
+              ? { tools: [definitions[0]] }
+              : { tools: [], nextCursor: 'next' }
+            : { tools: [definitions[0]], nextCursor: 'next' },
+        );
+      }
+      return respond(url, init);
+    });
+    await expect(
+      validatePluginConnection('github', 'personal_token', { version: 1, token: 'entered-key' }),
+    ).rejects.toMatchObject({ reason: 'request' });
+    expect(toolRequests()).toEqual([]);
+  },
+);
+
+it('preserves partial discovery warnings with the validated local Feishu tools', async () => {
+  mockFetch.mockRejectedValue(new Error('private upstream failure'));
+  const result = await validatePluginConnection('feishu', 'feishu_user', userCredential);
+  expect(result.catalog.tools).toEqual(
+    expect.arrayContaining([expect.objectContaining({ name: 'calendar_get_primary' })]),
+  );
+  expect(result.catalog.discoveryWarnings).toEqual([
+    expect.stringContaining('could not be loaded'),
+  ]);
+  expect(JSON.stringify(result)).not.toContain('private');
 });
 
 it.each([undefined, 'repeated'])(

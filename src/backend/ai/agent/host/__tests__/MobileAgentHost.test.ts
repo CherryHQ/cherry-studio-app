@@ -4,9 +4,12 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
+import { createRequire } from 'node:module';
+
 import { v7 as uuidv7 } from 'uuid';
 
 import type { BackgroundReplyTurnInput } from '@/backend/services/backgroundReply/backgroundReplyTypes';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
   AgentEventSchema,
   AgentProtocolError,
@@ -15,6 +18,8 @@ import {
   type AgentSessionStatus,
   type AgentSessionView,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { TraceRecorder } from '../../../observability';
@@ -30,12 +35,38 @@ import {
   type RuntimeUsageContext,
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
+import { createAskUserQuestionTool } from '../../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentImageGenerationPort } from '../agentImageGeneration';
+import { AgentReplayCache } from '../AgentReplayCache';
 import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES } from '../contextCheckpoints';
 import { MobileAgentHost } from '../MobileAgentHost';
+import { createReplayCacheStorage } from './_replayCacheStorage';
+
+const originalAbortController = globalThis.AbortController;
+const originalAbortSignal = globalThis.AbortSignal;
+
+beforeAll(() => {
+  // Node preserves abort reasons natively; use RN's controller and the app's
+  // preboot setup so interruption persistence exercises the device contract.
+  const abortPath = createRequire(require.resolve('react-native/package.json')).resolve(
+    'abort-controller/dist/abort-controller',
+  );
+  jest.isolateModules(() => {
+    const legacy = jest.requireActual(abortPath);
+    globalThis.AbortController = legacy.AbortController;
+    globalThis.AbortSignal = legacy.AbortSignal;
+    jest.requireActual('@/bootstrap/preboot/abortSignal');
+  });
+});
+
+afterAll(() => {
+  globalThis.AbortController = originalAbortController;
+  globalThis.AbortSignal = originalAbortSignal;
+});
 
 const AGENT_ID = 'agent-under-test';
 const FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000001';
@@ -43,6 +74,16 @@ const SECOND_FILE_ENTRY_ID = '00000000-0000-7000-8000-000000000002';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
 const TOOL_PROVIDER_NAME = 'mcp_server_1_delete_file_a1b2';
 const TOOL_DISPLAY_NAME = 'Delete file';
+
+/** Projects a Runtime tool part into its persisted protocol shape. */
+function storedToolPart<T extends { type: 'tool'; providerName: string; displayName: string }>({
+  type: _type,
+  providerName,
+  displayName,
+  ...part
+}: T) {
+  return { ...part, type: 'dynamic-tool' as const, toolName: providerName, title: displayName };
+}
 
 const USAGE_CONTEXT: RuntimeUsageContext = {
   credentialReceipt: { attribution: 'unknown' },
@@ -67,7 +108,7 @@ const agents: AgentDefinitionSource = {
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
       toolApprovalMode: 'default',
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
     };
   },
 };
@@ -89,12 +130,14 @@ const noOpNaming: NamingOverride = {
   maybeRenameFromFirstUserMessage: async () => null,
 };
 const backgroundReplyTurn = {
+  updateContent: jest.fn(),
   awaitApproval: jest.fn(),
   finish: jest.fn(),
+  retire: jest.fn(),
   update: jest.fn(),
 };
 const backgroundReply = {
-  acquirePreparation: jest.fn((_onInterrupt: (reason: Error) => void) => ({
+  acquirePreparation: jest.fn((_sessionId: string, _onInterrupt: (reason: Error) => void) => ({
     release: jest.fn(),
   })),
   clearSession: jest.fn(),
@@ -135,6 +178,8 @@ const stubTool: RuntimeTool = {
 };
 
 type HostOverrides = {
+  replayCache?: AgentReplayCache;
+  imageGeneration?: AgentImageGenerationPort;
   traces?: TraceRecorder;
   agents?: AgentDefinitionSource;
   appLanguage?: () => 'en-US' | 'zh-CN';
@@ -157,6 +202,8 @@ function createHost(
       documentParserMode: () => 'builtin',
       files,
       inferenceModel: resolveInferenceModel,
+      imageGeneration: overrides.imageGeneration,
+      replayCache: overrides.replayCache,
       naming: () => naming,
       runtimeTools: {
         resolve: overrides.resolveRuntimeTools ?? (async () => ({ tools: [], pluginGuides: [] })),
@@ -261,6 +308,416 @@ describe('MobileAgentHost', () => {
     store = new InMemoryAgentSessionStore();
   });
 
+  async function seedRetryAnswer(status: 'success' | 'error', parts: AgentMessagePart[]) {
+    const session = await createStoredSession();
+    const reservation = {
+      sessionId: session.id,
+      ...messageIds(),
+      modelId: createUniqueModelId('mock-provider', 'mock-model'),
+      inferenceSnapshot: {
+        version: 1 as const,
+        model: await inferenceModel({ providerId: 'mock-provider', modelId: 'mock-model' }),
+        parameters: { temperature: 0.1, maxOutputTokens: 256 },
+        tools: [],
+        reasoningEffort: 'low',
+      },
+      userParts: [
+        { id: 'input', type: 'text' as const, text: 'Original question', state: 'done' as const },
+      ],
+    };
+    const reserved = await store.reserveSubmission(reservation);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status,
+      parts,
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    return { session, reserved, reservation };
+  }
+
+  test('regenerates the latest successful answer in place, reusing its recorded inference facts', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    const before = await store.listMessages(session.id);
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    const fork = jest.spyOn(store, 'forkSession');
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    const after = await store.listMessages(session.id);
+    expect(after.map((message) => message.id)).toEqual(before.map((message) => message.id));
+    expect(after[1].parts).toEqual([
+      { id: 'text-1', type: 'text', state: 'done', text: 'Replacement' },
+    ]);
+    expect(requests[0]).toMatchObject({
+      input: [{ type: 'text', text: 'Original question' }],
+      history: [],
+      options: { temperature: 0.1, maxOutputTokens: 256, reasoningEffort: 'low' },
+    });
+    expect(requests[0].resume).toBeUndefined();
+    // Nothing is replayed, so the model is told the discarded attempt may
+    // already have changed the outside world.
+    expect(requests[0].instructions).toContain('## Answer Retry');
+    expect(fork).not.toHaveBeenCalled();
+    await host._doStop();
+  });
+
+  test('refuses to retry an answer that later messages already build on', async () => {
+    const { session, reserved, reservation } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    const later = await store.reserveSubmission({
+      ...reservation,
+      ...messageIds(),
+      userParts: [{ id: 'later', type: 'text', text: 'Future question', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: later.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'later-answer', type: 'text', text: 'Future answer', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 3, completedAt: 4, spans: [] } },
+    });
+    const before = await store.listMessages(session.id);
+    const host = hostWithText(['Replacement'], []);
+    await expect(
+      host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+    expect(await store.listMessages(session.id)).toEqual(before);
+    // The latest answer stays retryable, so the Session is not left stuck.
+    await host.retryMessage({ sessionId: session.id, messageId: later.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    await host._doStop();
+  });
+
+  test('retries through the surviving checkpoint instead of replaying the whole transcript', async () => {
+    const { session, reserved, reservation } = await seedRetryAnswer('success', [
+      { id: 'summarized', type: 'text', state: 'done', text: 'Summarized answer' },
+    ]);
+    const checkpoint = { version: 1 as const, anchorTurnId: reserved.turnId, payload: { keep: 1 } };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'summarized', type: 'text', state: 'done', text: 'Summarized answer' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const latest = await store.reserveSubmission({
+      ...reservation,
+      ...messageIds(),
+      userParts: [{ id: 'latest', type: 'text', text: 'Latest question', state: 'done' }],
+    });
+    await store.finalizeAssistantMessage({
+      assistantMessageId: latest.assistantMessage.id,
+      status: 'error',
+      parts: [{ id: 'latest-answer', type: 'text', text: 'Broken answer', state: 'done' }],
+      usage: null,
+      error: { code: 'EXECUTION_FAILED', message: 'boom', retryable: true },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: { startedAt: 3, completedAt: 4, spans: [] } },
+    });
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    await host.retryMessage({ sessionId: session.id, messageId: latest.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    expect(requests[0].contextCheckpoint).toEqual(checkpoint);
+    // History stops at the anchor, so the summarized pair is never resent.
+    expect(requests[0].history).toEqual([]);
+    expect(requests[0].input).toEqual([{ type: 'text', text: 'Latest question' }]);
+    await host._doStop();
+  });
+
+  test('ignores the replaced answer as a checkpoint anchor, because its summary is about to vanish', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old-text', type: 'text', state: 'done', text: 'Old answer' },
+    ]);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'old-text', type: 'text', state: 'done', text: 'Old answer' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: { version: 1, anchorTurnId: reserved.turnId, payload: { stale: 1 } },
+      runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+    });
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Replacement'], requests);
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'replacement');
+    expect(requests[0].contextCheckpoint).toBeNull();
+    expect(requests[0].input).toEqual([{ type: 'text', text: 'Original question' }]);
+    await host._doStop();
+  });
+
+  test('keeps completed tool results and appends new output after the retained prefix on retry', async () => {
+    const { session, reserved } = await seedRetryAnswer('error', [
+      { id: 'text-1', type: 'text', state: 'done', text: 'Searching' },
+      {
+        id: 'tool-search',
+        type: 'dynamic-tool',
+        toolCallId: 'search-call',
+        toolRef: { source: 'builtin', capabilityId: 'search' },
+        toolName: 'search',
+        title: 'Search',
+        state: 'output-available',
+        input: { q: 'question' },
+        output: { value: { result: 'Found' }, artifacts: [] },
+      },
+      { id: 'unfinished', type: 'text', state: 'done', text: 'Incomplete answer' },
+    ]);
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Recovered answer'], requests);
+    const events: AgentEvent[] = [];
+    const observation = await host.observeSession(session.id, (event) => events.push(event));
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'recovery');
+    const messages = await store.listMessages(session.id);
+    expect(messages).toHaveLength(2);
+    expect(messages[1].parts).toMatchObject([
+      { type: 'text', text: 'Searching' },
+      { type: 'dynamic-tool', toolCallId: 'search-call' },
+      { type: 'text', text: 'Recovered answer' },
+    ]);
+    expect(new Set(messages[1].parts.map((part) => part.id)).size).toBe(3);
+    expect(requests[0].resume).toMatchObject([
+      { type: 'text', text: 'Searching' },
+      { type: 'tool-call', toolCallId: 'search-call' },
+      { type: 'tool-result', toolCallId: 'search-call', output: { value: { result: 'Found' } } },
+    ]);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'message.delta',
+        delta: expect.objectContaining({ op: 'part.add', index: 2 }),
+      }),
+    );
+    observation.unsubscribe();
+    await host._doStop();
+  });
+
+  test('locks retry admission before preflight and leaves the old answer untouched when it fails', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'text', type: 'text', state: 'done', text: 'Keep me' },
+    ]);
+    const before = await store.listMessages(session.id);
+    const gate = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, async () => {
+      await gate.promise;
+      throw new Error('Model unavailable');
+    });
+    const retry = host.retryMessage({
+      sessionId: session.id,
+      messageId: reserved.assistantMessage.id,
+    });
+    const rejection = expect(retry).rejects.toBeDefined();
+    await expect(
+      host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    await expect(
+      host.submitMessage({
+        sessionId: session.id,
+        ...messageIds(),
+        parts: [{ type: 'text', text: 'next' }],
+      }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    gate.resolve();
+    await rejection;
+    expect(await store.listMessages(session.id)).toEqual(before);
+    await host._doStop();
+  });
+
+  test('keeps image and text exchanges in one durable Session without opening Pi for images', async () => {
+    const settings = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
+    const entry = FileEntrySchema.parse({
+      id: FILE_ENTRY_ID,
+      filename: 'orchard.png',
+      mediaType: 'image/png',
+      provenance: 'generated',
+      createdAt: 1,
+      updatedAt: 1,
+      size: 12,
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const open = jest.spyOn(runtime, 'open');
+    const preflight = jest.spyOn(runtime, 'preflightModel');
+    const execute = jest.fn(async () => [entry]);
+    const resolveRuntimeTools = jest.fn(async () => ({ tools: [], pluginGuides: [] }));
+    const host = createHost(runtime, noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async ({ model }) =>
+          model.modelId === 'image-model' ? { settings, execute } : null,
+      },
+      resolveRuntimeTools,
+    });
+    const ids = messageIds();
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...ids,
+      agentId: AGENT_ID,
+      modelId: createUniqueModelId('mock-provider', 'image-model'),
+      parts: [{ type: 'text', text: 'Draw an orchard' }],
+      imageGeneration: settings,
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'image saved',
+    );
+    expect(await store.getSession(session.id)).toMatchObject({ agentId: AGENT_ID });
+    expect(open).not.toHaveBeenCalled();
+    expect(preflight).not.toHaveBeenCalled();
+    expect(resolveRuntimeTools).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledWith(
+      expect.any(AbortSignal),
+      expect.objectContaining({
+        messageRef: { kind: 'agent-session', id: ids.assistantMessageId },
+      }),
+    );
+    const generated = (await store.listMessages(session.id))[1];
+    expect(generated.parts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        fileEntryId: entry.id,
+        purpose: 'artifact',
+      }),
+    ]);
+    expect(generated.inferenceSnapshot).toMatchObject({
+      snapshot: { imageGeneration: settings, tools: [] },
+    });
+
+    runtime.script((controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: {
+          id: 'text-result',
+          type: 'text',
+          text: 'An orchard.',
+          state: 'done',
+        },
+      });
+      controller.emit({ type: 'completed' });
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Describe it' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[3]?.status === 'success',
+      'text saved',
+    );
+    expect(open).toHaveBeenCalledTimes(1);
+    await host.submitMessage({
+      sessionId: session.id,
+      ...messageIds(),
+      parts: [{ type: 'text', text: 'Draw a second orchard' }],
+      modelId: createUniqueModelId('mock-provider', 'image-model'),
+      imageGeneration: settings,
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[5]?.status === 'success',
+      'next image saved',
+    );
+    const messages = await store.listMessages(session.id);
+    expect(messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
+    expect(messages[1]).toEqual(generated);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(1);
+    await host._doStop();
+  });
+
+  test('cancels an image request through the Session and keeps its user message', async () => {
+    const settings = { mode: 'generate' as const, paramValues: {} };
+    let requestSignal: AbortSignal | undefined;
+    const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async () => ({
+          settings,
+          execute: (signal) => {
+            requestSignal = signal;
+            return new Promise((_resolve, reject) => {
+              if (signal.aborted) reject(signal.reason);
+              else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+            });
+          },
+        }),
+      },
+    });
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      agentId: AGENT_ID,
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+      imageGeneration: settings,
+    });
+    const messages = await store.listMessages(session.id);
+    await host.cancelTurn({ sessionId: session.id, turnId: messages[1].turnId! });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'cancelled',
+      'cancelled image saved',
+    );
+    expect(requestSignal?.aborted).toBe(true);
+    expect((await store.listMessages(session.id))[0].parts[0]).toMatchObject({
+      text: 'Draw a cherry',
+    });
+    expect((await store.listMessages(session.id))[1].parts).toEqual([]);
+    await host._doStop();
+  });
+
+  test('preserves provider image failures in the assistant message', async () => {
+    const error = new AiRequestError({
+      message: 'Quota exceeded',
+      retryable: false,
+      failure: {
+        version: 1,
+        reasonCode: 'quota',
+        source: { layer: 'provider', code: 'quota_exceeded' },
+      },
+    });
+    const host = createHost(new FakeRuntime(), noOpNaming, noFiles, noOpTools, inferenceModel, {
+      imageGeneration: {
+        prepare: async () => ({
+          settings: { mode: 'generate', paramValues: {} },
+          execute: async () => {
+            throw error;
+          },
+        }),
+      },
+    });
+    const session = await host.startSession({
+      sessionId: uuidv7(),
+      ...messageIds(),
+      agentId: AGENT_ID,
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'error',
+      'image failure saved',
+    );
+    expect((await store.listMessages(session.id))[1].parts).toEqual([
+      expect.objectContaining({
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', ...error.detail },
+      }),
+    ]);
+    await host._doStop();
+  });
+
   test.each(['new', 'existing'] as const)(
     'protects %s-session preparation before awaiting and hands off before releasing',
     async (kind) => {
@@ -280,10 +737,14 @@ describe('MobileAgentHost', () => {
       };
       const submitting =
         kind === 'new'
-          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          ? host.startSession({ ...input, agentId: AGENT_ID })
           : host.submitMessage(input);
       const lease = backgroundReply.acquirePreparation.mock.results[0]!.value;
-      expect(backgroundReply.acquirePreparation).toHaveBeenCalledTimes(1);
+      // The Session's surface can only be opened before the turn exists.
+      expect(backgroundReply.acquirePreparation).toHaveBeenCalledWith(
+        sessionId,
+        expect.any(Function),
+      );
       expect(lease.release).not.toHaveBeenCalled();
       expect(backgroundReply.startTurn).not.toHaveBeenCalled();
 
@@ -319,11 +780,14 @@ describe('MobileAgentHost', () => {
       };
       const submitting =
         kind === 'new'
-          ? host.startSession({ ...input, agentId: AGENT_ID, executionTarget: { kind: 'local' } })
+          ? host.startSession({ ...input, agentId: AGENT_ID })
           : host.submitMessage(input);
-      const reason = new Error('Background service admission failed');
-      const rejected = expect(submitting).rejects.toThrow(reason);
-      backgroundReply.acquirePreparation.mock.calls[0]![0](reason);
+      const rejected = expect(submitting).rejects.toMatchObject({
+        view: { code: 'INTERRUPTED', retryable: true },
+      });
+      backgroundReply.acquirePreparation.mock.calls[0]![1](
+        new KeepAliveInterruptionError('service-stopped'),
+      );
       prepared.resolve();
       await rejected;
       expect(
@@ -354,7 +818,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'private input' }],
     });
     await waitFor(
@@ -443,7 +906,6 @@ describe('MobileAgentHost', () => {
     const session = await host.startSession({
       ...ids,
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await waitForAsync(
@@ -484,7 +946,6 @@ describe('MobileAgentHost', () => {
       sessionId: uuidv7(),
       ...messageIds(),
       agentId: AGENT_ID,
-      executionTarget: { kind: 'local' },
       parts: [{ type: 'text', text: 'Hello.' }],
     });
     await executionStarted.promise;
@@ -522,7 +983,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: AGENT_ID,
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'Hello.' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'EXECUTION_UNAVAILABLE' } });
@@ -558,7 +1018,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: AGENT_ID,
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
       }),
     ).rejects.toMatchObject({
@@ -641,7 +1100,11 @@ describe('MobileAgentHost', () => {
     expect(finalized.message.parts).toEqual([
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
-    expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(finalized.message.stats).toMatchObject({
+      inputTokens: 3,
+      outputTokens: 2,
+      totalTokens: 5,
+    });
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       agentId: AGENT_ID,
       agentName: 'Test Agent',
@@ -690,10 +1153,11 @@ describe('MobileAgentHost', () => {
       ['assistant', 'success'],
     ]);
     expect(transcript[1]?.parts).toEqual(finalized.message.parts);
-    expect(transcript[1]?.usage).toEqual(finalized.message.usage);
+    expect(transcript[1]?.stats).toEqual(finalized.message.stats);
 
     // The Runtime saw the current Agent definition and the turn input.
     expect(requests[0]).toMatchObject({
+      sessionId: session.id,
       instructions: expect.stringContaining(
         '<agent_instructions>\nBe brief.\n</agent_instructions>',
       ),
@@ -766,8 +1230,222 @@ describe('MobileAgentHost', () => {
     ]);
     const finalized = events.find((event) => event.type === 'message.finalized');
     expect(finalized).toMatchObject({
-      message: { status: 'error', usage: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
+      message: { status: 'error', stats: { inputTokens: 13, outputTokens: 3, totalTokens: 16 } },
     });
+  });
+
+  test.each(['completed', 'cancelled', 'failed'] as const)(
+    'projects %s compaction in place and persists only completed anchors',
+    async (outcome) => {
+      const compaction = {
+        id: 'compaction-1',
+        phase: 'tool-loop' as const,
+        status: 'running' as const,
+        startedAt: 1,
+        inputTokensBefore: 112_000,
+      };
+      const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'before', type: 'text', text: 'Before', state: 'done' },
+        });
+        controller.emit({ type: 'context.compaction', compaction });
+        if (outcome !== 'cancelled') {
+          controller.emit({
+            type: 'context.compaction',
+            compaction: {
+              ...compaction,
+              status: outcome,
+              completedAt: 2,
+              ...(outcome === 'completed'
+                ? { inputTokensAfter: 20_000 }
+                : { reason: 'summary-failed' as const }),
+            },
+          });
+          controller.emit({
+            type: 'part.add',
+            index: 1,
+            part: { id: 'after', type: 'text', text: 'After', state: 'done' },
+          });
+        }
+        controller.emit({ type: outcome === 'cancelled' ? 'cancelled' : 'completed' });
+      });
+      const host = createHost(runtime);
+      const session = await createStoredSession();
+      const events: AgentEvent[] = [];
+      await host.observeSession(session.id, (event) => events.push(event));
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Continue.' }],
+      });
+      await waitFor(
+        () => events.some((event) => event.type === 'message.finalized'),
+        'context terminal',
+      );
+      const updates = events.flatMap((event) =>
+        event.type === 'message.delta' &&
+        (event.delta.op === 'part.add' || event.delta.op === 'part.replace') &&
+        event.delta.part.type === 'data-compaction-anchor'
+          ? [event.delta]
+          : [],
+      );
+      expect(updates[0]).toMatchObject({
+        op: 'part.add',
+        index: 1,
+        part: { data: { status: 'compacting', phase: 'in-loop' } },
+      });
+      if (outcome !== 'cancelled') {
+        // The anchor occupies a transcript slot the Runtime's own part count does not know about.
+        expect(
+          events.flatMap((event) =>
+            event.type === 'message.delta' &&
+            event.delta.op === 'part.add' &&
+            event.delta.part.id === 'after'
+              ? [event.delta.index]
+              : [],
+          ),
+        ).toEqual([2]);
+        expect(updates[1]).toMatchObject({
+          op: 'part.replace',
+          part: {
+            id: updates[0].part.id,
+            data: { status: outcome === 'completed' ? 'done' : 'skipped' },
+          },
+        });
+      }
+      const message = (await store.listMessages(session.id))[1];
+      if (outcome === 'completed') {
+        expect(message.parts).toMatchObject([
+          { id: 'before' },
+          {
+            id: updates[0].part.id,
+            type: 'data-compaction-anchor',
+            data: {
+              status: 'done',
+              phase: 'in-loop',
+              trigger: 'auto',
+              startedAt: '1970-01-01T00:00:00.001Z',
+              completedAt: '1970-01-01T00:00:00.002Z',
+              preTokens: 112_000,
+              postTokens: 20_000,
+              durationMs: 1,
+            },
+          },
+          { id: 'after' },
+        ]);
+      } else {
+        expect(message.parts.some((part) => part.type === 'data-compaction-anchor')).toBe(false);
+      }
+    },
+  );
+
+  test('reopens cached model history in a fresh Host without exposing it in events or stored messages', async () => {
+    const replay = {
+      version: 1 as const,
+      payload: { nativeHistory: 'signature-and-full-tool-output' },
+    };
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed', replay },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const host = createHost(runtime, undefined, undefined, undefined, undefined, {
+      replayCache: new AgentReplayCache(() => storage),
+    });
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'First' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(events)?.turn.status === 'completed',
+      'the cached replay',
+    );
+    expect(JSON.stringify(events)).not.toContain('signature-and-full-tool-output');
+    expect(JSON.stringify(await store.listMessages(session.id))).not.toContain(
+      'signature-and-full-tool-output',
+    );
+
+    const requests: RuntimeExecutionRequest[] = [];
+    const restarted = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script((controller) => {
+        requests.push(controller.request);
+        controller.emit({ type: 'completed' });
+      }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache: new AgentReplayCache(() => storage) },
+    );
+    const nextEvents: AgentEvent[] = [];
+    await restarted.observeSession(session.id, (event) => nextEvents.push(event));
+    await restarted.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Second' }],
+    });
+    await waitFor(
+      () => terminalTurnEvent(nextEvents)?.turn.status === 'completed',
+      'the replayed turn',
+    );
+    expect(requests[0].history[0].replay).toEqual(replay);
+    expect(JSON.stringify(nextEvents)).not.toContain('signature-and-full-tool-output');
+  });
+
+  test('retry discards cached history for the replaced answer', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'old', type: 'text', text: 'Old answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    replayCache.write(session.id, history[1], { version: 1, payload: 'old-native-answer' });
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([{ type: 'completed' }]),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    await host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id });
+    await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'retry');
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(session.id, await store.listMessages(session.id))).toEqual({});
+  });
+
+  test('fork copies cached history and deleting each branch clears only its own replay', async () => {
+    const { session, reserved } = await seedRetryAnswer('success', [
+      { id: 'text', type: 'text', text: 'Answer', state: 'done' },
+    ]);
+    const { storage } = createReplayCacheStorage();
+    const replayCache = new AgentReplayCache(() => storage);
+    const history = await store.listMessages(session.id);
+    const replay = { version: 1 as const, payload: 'native-answer' };
+    replayCache.write(session.id, history[1], replay);
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { replayCache },
+    );
+    const fork = await host.forkSession({
+      sessionId: session.id,
+      fromMessageId: reserved.assistantMessage.id,
+    });
+    const forkHistory = await store.listMessages(fork.id);
+    await host.deleteSession({ sessionId: session.id });
+    expect(replayCache.readHistory(session.id, history)).toEqual({});
+    expect(replayCache.readHistory(fork.id, forkHistory)).toEqual({ [forkHistory[1].id]: replay });
+    await host.deleteTurn({ sessionId: fork.id, turnId: forkHistory[1].turnId! });
+    expect(new AgentReplayCache(() => storage).readHistory(fork.id, forkHistory)).toEqual({});
   });
 
   test('persists a completed checkpoint and replays it after Host recreation', async () => {
@@ -982,7 +1660,9 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
 
     expect(getTools).toHaveBeenCalledWith({
-      disabledCapabilities: ['health'],
+      agentId: AGENT_ID,
+      askUser: expect.any(Function),
+      disabledCapabilities: ['location'],
       documentParserMode: 'builtin',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
       resources: expect.objectContaining({ fileEntryIds: expect.any(Set) }),
@@ -1130,7 +1810,7 @@ describe('MobileAgentHost', () => {
       );
       const resumed = await host.observeSession(session.id, () => {});
       expect(resumed.snapshot.streamingMessage?.parts).toEqual([
-        { ...toolPart, inputPreview: preview },
+        storedToolPart({ ...toolPart, inputPreview: preview }),
       ]);
       resumed.unsubscribe();
       expect(saveSnapshot).not.toHaveBeenCalled();
@@ -1251,7 +1931,7 @@ describe('MobileAgentHost', () => {
               (event) =>
                 event.type === 'message.delta' &&
                 event.delta.op === 'part.replace' &&
-                event.delta.part.type === 'tool' &&
+                event.delta.part.type === 'dynamic-tool' &&
                 event.delta.part.state === 'running',
             ),
           'the intermediate tool states to be processed',
@@ -1275,7 +1955,7 @@ describe('MobileAgentHost', () => {
         expect(saveSnapshot).toHaveBeenCalledTimes(1);
         expect((await store.listMessages(session.id))[1]).toMatchObject({
           status: 'streaming',
-          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, toolResult],
+          parts: [{ id: 'text-1', text: 'Deleting.', state: 'done' }, storedToolPart(toolResult)],
         });
       } finally {
         releaseTool.resolve();
@@ -1287,12 +1967,76 @@ describe('MobileAgentHost', () => {
         status: 'success',
         parts: [
           { id: 'text-1', text: 'Deleting.', state: 'done' },
-          toolResult,
+          storedToolPart(toolResult),
           { id: 'text-2', text: 'Finished.', state: 'done' },
         ],
       });
     },
   );
+
+  test('checkpoints unfinished text in bounded batches and retires the timer at finalization', async () => {
+    const started = createDeferred();
+    const releaseText = createDeferred();
+    const releaseSuffix = createDeferred();
+    const releaseTerminal = createDeferred();
+    const saveSnapshot = jest.spyOn(store, 'updateStreamingAssistantMessage');
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      await releaseText.promise;
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+      });
+      for (let index = 0; index < 100; index += 1) {
+        controller.emit({ type: 'text.delta', partId: 'text-1', text: 'partial ' });
+      }
+      await releaseSuffix.promise;
+      controller.emit({ type: 'text.delta', partId: 'text-1', text: 'finished' });
+      await releaseTerminal.promise;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Continue until interrupted.' }],
+    });
+    await started.promise;
+    jest.useFakeTimers();
+    try {
+      releaseText.resolve();
+      await jest.advanceTimersByTimeAsync(999);
+      expect(saveSnapshot).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      expect(saveSnapshot).toHaveBeenCalledTimes(1);
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'streaming',
+        parts: [{ type: 'text', text: 'partial '.repeat(100), state: 'streaming' }],
+      });
+
+      releaseSuffix.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      releaseTerminal.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
+      await jest.advanceTimersByTimeAsync(5_000);
+      expect(saveSnapshot).toHaveBeenCalledTimes(1);
+      expect((await store.listMessages(session.id))[1]).toMatchObject({
+        status: 'success',
+        parts: [{ text: 'partial '.repeat(100) + 'finished', state: 'done' }],
+      });
+    } finally {
+      releaseText.resolve();
+      releaseSuffix.resolve();
+      releaseTerminal.resolve();
+      await jest.advanceTimersByTimeAsync(0);
+      jest.useRealTimers();
+    }
+  });
 
   test('still finalizes the complete message when a mid-turn snapshot write fails', async () => {
     jest
@@ -1376,14 +2120,14 @@ describe('MobileAgentHost', () => {
         (event) =>
           event.type === 'message.delta' &&
           event.delta.op === 'part.replace' &&
-          event.delta.part.type === 'tool' &&
+          event.delta.part.type === 'dynamic-tool' &&
           event.delta.part.state === 'interrupted',
       ),
     ).toBe(true);
     expect(saveSnapshot).not.toHaveBeenCalled();
     expect((await store.listMessages(session.id))[1]).toMatchObject({
       status: 'cancelled',
-      parts: [{ id: 'tool-1', type: 'tool', state: 'interrupted' }],
+      parts: [{ id: 'tool-1', type: 'dynamic-tool', state: 'interrupted' }],
     });
   });
 
@@ -1464,7 +2208,7 @@ describe('MobileAgentHost', () => {
       );
       // Three durable-value events, one blocked write: the loop kept going.
       expect(saveSnapshot).toHaveBeenCalledTimes(1);
-      expect(writtenParts[0]).toEqual([firstResult]);
+      expect(writtenParts[0]).toEqual([storedToolPart(firstResult)]);
 
       releaseTerminal.resolve();
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1477,16 +2221,16 @@ describe('MobileAgentHost', () => {
 
     expect(saveSnapshot).toHaveBeenCalledTimes(2);
     expect(writtenParts[1]).toEqual([
-      firstResult,
+      storedToolPart(firstResult),
       {
         id: artifact.id,
         type: 'file',
         fileEntryId: SECOND_FILE_ENTRY_ID,
         mediaType: artifact.mediaType,
-        name: artifact.name,
+        filename: artifact.name,
         purpose: artifact.purpose,
       },
-      secondResult,
+      storedToolPart(secondResult),
     ]);
     expect(finalizeMessage).toHaveBeenCalledTimes(1);
     expect(Math.max(...saveSnapshot.mock.invocationCallOrder)).toBeLessThan(
@@ -1494,7 +2238,11 @@ describe('MobileAgentHost', () => {
     );
     expect((await store.listMessages(session.id))[1]).toMatchObject({
       status: 'success',
-      parts: [firstResult, { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID }, secondResult],
+      parts: [
+        storedToolPart(firstResult),
+        { type: 'file', fileEntryId: SECOND_FILE_ENTRY_ID },
+        storedToolPart(secondResult),
+      ],
     });
   });
 
@@ -1549,8 +2297,91 @@ describe('MobileAgentHost', () => {
     await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
     expect(finalizeMessage).toHaveBeenCalledTimes(1);
     expect(events.find((event) => event.type === 'message.finalized')).toMatchObject({
-      message: { status: 'success', usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
+      message: { status: 'success', stats: { inputTokens: 3, outputTokens: 2, totalTokens: 5 } },
     });
+  });
+
+  test('answers ask_user_question through the catalog-bound channel of the calling turn', async () => {
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+    const question = {
+      questions: [
+        {
+          id: 'focus',
+          question: 'Which focus?',
+          selection: 'single' as const,
+          options: [
+            { id: 'a', label: 'Writing' },
+            { id: 'b', label: 'Reading' },
+          ],
+        },
+      ],
+    };
+    let answered: unknown;
+    runtime.script(async (controller) => {
+      const ask = controller.request.tools[0];
+      if (!ask) throw new Error('The question tool was not offered.');
+      const result = await ask.execute({
+        input: question,
+        signal: controller.signal,
+        toolCallId: 'question-1',
+        turnId: controller.turnId,
+      });
+      answered = result.value;
+      controller.emit({ type: 'completed' });
+    });
+    const host = createHost(runtime, noOpNaming, noFiles, {
+      getTools: async ({ askUser }) => [createAskUserQuestionTool(askUser)],
+    });
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Pick one.' }],
+    });
+    await waitFor(
+      () => events.some((event) => event.type === 'question.updated' && event.question !== null),
+      'the question to be published',
+    );
+    const pending = events.find((event) => event.type === 'question.updated');
+    if (pending?.type !== 'question.updated' || !pending.question) throw new Error('No question.');
+    expect(pending.question).toMatchObject({ toolCallId: 'question-1', question });
+    expect(
+      events.some(
+        (event) => event.type === 'turn.updated' && event.turn.status === 'awaiting-input',
+      ),
+    ).toBe(true);
+    const answer = {
+      answers: [{ questionId: 'focus', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    // A response for another turn never reaches the waiter.
+    await expect(
+      host.respondQuestion({
+        sessionId: session.id,
+        turnId: 'other-turn',
+        toolCallId: 'question-1',
+        answer,
+      }),
+    ).rejects.toMatchObject({ view: { code: 'QUESTION_NOT_FOUND' } });
+
+    await host.respondQuestion({
+      sessionId: session.id,
+      turnId: pending.question.turnId,
+      toolCallId: 'question-1',
+      answer,
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the turn to settle');
+
+    expect(answered).toMatchObject({
+      answers: answer.answers,
+      selectedOptions: [{ questionId: 'focus', options: [{ id: 'a', label: 'Writing' }] }],
+    });
+    expect(
+      events.some((event) => event.type === 'question.updated' && event.question === null),
+    ).toBe(true);
+    expect(terminalTurnEvent(events)?.turn.status).toBe('completed');
   });
 
   test('runs the turn tool-less when the catalog cannot be resolved', async () => {
@@ -1946,9 +2777,59 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
-  test('background interruption waits for cancelled turn persistence', async () => {
+  test('cancels the Runtime turn when the Host fails handling its events', async () => {
+    let executionSignal: AbortSignal | undefined;
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      executionSignal = controller.signal;
+      controller.emit({
+        type: 'usage',
+        requestId: 'invocation:host-failure',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    runtime.script((controller) => controller.emit({ type: 'completed' }));
+    usage.record.mockImplementationOnce(() => {
+      throw new Error('usage ledger unavailable');
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Fail in the Host.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'failed',
+      'the Host failure to settle',
+    );
+
+    expect(executionSignal?.aborted).toBe(true);
+    // The Runtime session's single execute slot is free for the next turn.
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Next turn.' }],
+    });
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'completed',
+      'the next turn to complete',
+    );
+  });
+
+  test('background interruption preserves partial output and waits for failed turn persistence', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Partial reply', state: 'streaming' },
+      });
       started.resolve();
       if (!controller.signal.aborted) {
         await new Promise<void>((resolve) => {
@@ -1975,15 +2856,24 @@ describe('MobileAgentHost', () => {
 
     let drained = false;
     const interrupt = backgroundReply.startTurn.mock.calls[0]![0].onInterrupt!;
-    const interrupted = Promise.resolve(interrupt(new Error('Background time limit'))).then(() => {
+    const interrupted = Promise.resolve(
+      interrupt(new KeepAliveInterruptionError('execution-limit')),
+    ).then(() => {
       drained = true;
     });
-    await waitFor(() => finalize.mock.calls.length > 0, 'cancelled message persistence to start');
+    await waitFor(() => finalize.mock.calls.length > 0, 'interrupted message persistence to start');
     expect(drained).toBe(false);
     persistence.resolve();
     await interrupted;
-    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
-    expect(host.getSessionStatus(session.id)?.status).toBe('cancelled');
+    expect((await store.listMessages(session.id))[1]).toMatchObject({
+      status: 'error',
+      parts: [
+        { id: 'text-1', type: 'text', text: 'Partial reply', state: 'done' },
+        { type: 'data-error', data: { code: 'INTERRUPTED', retryable: true } },
+      ],
+    });
+    expect(host.getSessionStatus(session.id)?.status).toBe('failed');
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('failed', expect.any(Object));
   });
 
   test('stops active turns before draining Host-owned lifecycle work', async () => {
@@ -2055,6 +2945,110 @@ describe('MobileAgentHost', () => {
     releaseAdmission.resolve();
   });
 
+  test('cancels a submission still in admission without reserving or running a turn', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const host = hostWithText(['After cancel']);
+    const session = await createStoredSession();
+    const getSession = store.getSession.bind(store);
+    jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
+      admissionStarted.resolve();
+      await releaseAdmission.promise;
+      return getSession(sessionId);
+    });
+
+    const submission = host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Stop while preparing.' }],
+    });
+    await admissionStarted.promise;
+    // Admission has no turn id yet, so cancelling a turn cannot reach it.
+    await host.cancelSubmission({ sessionId: session.id });
+
+    await expect(submission).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    await expect(host.cancelSubmission({ sessionId: session.id })).resolves.toBeUndefined();
+    releaseAdmission.resolve();
+    await expect(store.listMessages(session.id)).resolves.toEqual([]);
+    expect(host.getSessionStatus(session.id)).toBeNull();
+
+    // The Session is idle again and the next submission runs normally.
+    await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Send again.' }],
+    });
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[1]?.status === 'success',
+      'the next turn to settle',
+    );
+  });
+
+  test('settles a turn as cancelled when cancellation lands during reservation', async () => {
+    const reservationStarted = createDeferred();
+    const releaseReservation = createDeferred();
+    const executed = jest.fn();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async () => {
+      executed();
+    });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const reserve = store.reserveSubmission.bind(store);
+    jest.spyOn(store, 'reserveSubmission').mockImplementationOnce(async (input) => {
+      reservationStarted.resolve();
+      await releaseReservation.promise;
+      return reserve(input);
+    });
+
+    const submission = host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Stop while reserving.' }],
+    });
+    await reservationStarted.promise;
+    await host.cancelSubmission({ sessionId: session.id });
+    releaseReservation.resolve();
+
+    const { turnId } = await submission;
+    await waitFor(
+      () => host.getSessionStatus(session.id)?.status === 'cancelled',
+      'the reserved turn to settle',
+    );
+    expect(host.getSessionStatus(session.id)).toEqual({ status: 'cancelled', turnId });
+    expect((await store.listMessages(session.id))[1]?.status).toBe('cancelled');
+    expect(executed).not.toHaveBeenCalled();
+  });
+
+  test('cancels a Draft start still in admission without creating its Session', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const host = createHost(
+      new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }),
+      noOpNaming,
+      noFiles,
+      noOpTools,
+      async (model) => {
+        admissionStarted.resolve();
+        await releaseAdmission.promise;
+        return inferenceModel(model);
+      },
+    );
+    const sessionId = uuidv7();
+
+    const start = host.startSession({
+      sessionId,
+      ...messageIds(),
+      agentId: AGENT_ID,
+      parts: [{ type: 'text', text: 'Stop the first send.' }],
+    });
+    await admissionStarted.promise;
+    await host.cancelSubmission({ sessionId });
+
+    await expect(start).rejects.toMatchObject({ view: { code: 'CANCELLED' } });
+    releaseAdmission.resolve();
+    await expect(store.getSession(sessionId)).resolves.toBeNull();
+  });
+
   test('updates an active background reply when its Session is renamed', async () => {
     const started = createDeferred();
     const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
@@ -2072,7 +3066,7 @@ describe('MobileAgentHost', () => {
     });
     await started.promise;
 
-    await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
+    await host.renameSession({ sessionId: session.id, name: 'Renamed Session' });
 
     expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
     await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
@@ -2132,7 +3126,7 @@ describe('MobileAgentHost', () => {
     });
     await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
 
-    await host.renameSession({ sessionId: session.id, title: 'Manual title' });
+    await host.renameSession({ sessionId: session.id, name: 'Manual title' });
 
     expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Manual title');
     resolveSummary(null);
@@ -2516,7 +3510,7 @@ describe('MobileAgentHost', () => {
 
     const transcript = await store.listMessages(session.id);
     const toolPart = transcript[1]?.parts[0];
-    expect(toolPart).toMatchObject({ type: 'tool', state: 'output-available' });
+    expect(toolPart).toMatchObject({ type: 'dynamic-tool', state: 'output-available' });
   });
 
   test('validates managed files before reservation and persists authoritative references', async () => {
@@ -2570,7 +3564,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'image/png',
-        name: 'managed.png',
+        filename: 'managed.png',
         purpose: 'input-attachment',
         attachmentReport: { mode: 'image', sourceTruncated: false, requestTruncated: false },
       },
@@ -2671,6 +3665,63 @@ describe('MobileAgentHost', () => {
         },
       ]),
     );
+  });
+
+  test('carries the final request context size into the next turn as its estimate anchor', async () => {
+    const requests: RuntimeExecutionRequest[] = [];
+    const answer = (controller: Parameters<Parameters<FakeRuntime['script']>[0]>[0]) => {
+      requests.push(controller.request);
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: 'Answer.', state: 'done' },
+      });
+    };
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed', contextTokens: 42_000 });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({
+          type: 'failed',
+          error: { code: 'runtime_error', message: 'Provider failed.', retryable: false },
+        });
+      })
+      .script((controller) => {
+        answer(controller);
+        controller.emit({ type: 'completed' });
+      });
+    const host = createHost(fake);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+    const send = async (text: string) => {
+      events.length = 0;
+      await host.submitMessage({
+        ...messageIds(),
+        sessionId: session.id,
+        parts: [{ type: 'text', text }],
+      });
+      await waitFor(() => terminalTurnEvent(events) !== undefined, text);
+    };
+
+    await send('First.');
+    expect((await store.listMessages(session.id))[1]?.stats?.contextTokens).toBe(42_000);
+
+    await send('Second.');
+    expect(requests[1]?.history.at(-1)?.messages.at(-1)).toMatchObject({
+      role: 'assistant',
+      contextTokens: 42_000,
+    });
+    // A failed answer carries no measurement, so the next turn estimates by content.
+    expect((await store.listMessages(session.id))[3]?.stats?.contextTokens).toBeUndefined();
+
+    await send('Third.');
+    expect(
+      requests[2]?.history.flatMap((turn) => turn.messages).some((m) => 'contextTokens' in m),
+    ).toBe(false);
   });
 
   test('retries the same terminal outcome when persistence fails transiently', async () => {
@@ -2961,13 +4012,13 @@ describe('MobileAgentHost', () => {
           type: 'file',
           fileEntryId: FILE_ENTRY_ID,
           mediaType: 'text/markdown',
-          name: 'notes.md',
+          filename: 'notes.md',
         },
         {
           type: 'file',
           fileEntryId: SECOND_FILE_ENTRY_ID,
           mediaType: 'application/json',
-          name: 'config.json',
+          filename: 'config.json',
         },
       ],
     });
@@ -3009,7 +4060,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/markdown',
-        name: 'notes.md',
+        filename: 'notes.md',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -3023,7 +4074,7 @@ describe('MobileAgentHost', () => {
         type: 'file',
         fileEntryId: SECOND_FILE_ENTRY_ID,
         mediaType: 'application/json',
-        name: 'config.json',
+        filename: 'config.json',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -3069,7 +4120,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'application/zip',
-            name: 'archive.zip',
+            filename: 'archive.zip',
           },
         ],
       }),
@@ -3096,7 +4147,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'text/plain',
-            name: 'spoofed.txt',
+            filename: 'spoofed.txt',
           },
         ],
       }),
@@ -3138,7 +4189,7 @@ describe('MobileAgentHost', () => {
             type: 'file',
             fileEntryId: FILE_ENTRY_ID,
             mediaType: 'image/jpeg',
-            name: 'forged.jpg',
+            filename: 'forged.jpg',
           },
         ],
       }),
@@ -3212,6 +4263,174 @@ describe('MobileAgentHost', () => {
     ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
   });
 
+  test('deletes a settled turn, publishes it, and refuses to delete across a live turn', async () => {
+    const released = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
+      .script((controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-1', type: 'text', text: 'First answer', state: 'done' },
+        });
+      })
+      .script(async (controller) => {
+        controller.emit({
+          type: 'part.add',
+          index: 0,
+          part: { id: 'text-2', type: 'text', text: 'Second answer', state: 'done' },
+        });
+        await released.promise;
+      });
+    const host = createHost(runtime);
+    const session = await createStoredSession();
+    const events: AgentEvent[] = [];
+    await host.observeSession(session.id, (event) => events.push(event));
+
+    const first = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => terminalTurnEvent(events) !== undefined, 'the first turn to settle');
+    const second = await host.submitMessage({
+      ...messageIds(),
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Again.' }],
+    });
+
+    // A live turn owns the whole Session, so even deleting an older settled
+    // turn waits: its rows are what that turn will be replayed against.
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+
+    released.resolve();
+    await waitForAsync(
+      async () => (await store.listMessages(session.id))[3]?.status === 'success',
+      'the second turn to settle',
+    );
+
+    events.length = 0;
+    await host.deleteTurn({ sessionId: session.id, turnId: first.turnId });
+
+    expect(events).toEqual([
+      {
+        type: 'turn.deleted',
+        turnId: first.turnId,
+        messageIds: [first.userMessageId, first.assistantMessageId],
+      },
+    ]);
+    const remaining = await store.listMessages(session.id);
+    expect(remaining.map((message) => message.id)).toEqual([
+      second.userMessageId,
+      second.assistantMessageId,
+    ]);
+    // The latest turn ran in this generation, so its status snapshot survives
+    // a deletion that did not touch it.
+    expect(host.getSessionStatus(session.id)).toMatchObject({ turnId: second.turnId });
+
+    await host.deleteTurn({ sessionId: session.id, turnId: second.turnId });
+    // Deleting the turn the status describes leaves nothing to report.
+    expect(host.getSessionStatus(session.id)).toBeNull();
+    expect(await store.listMessages(session.id)).toEqual([]);
+
+    await expect(
+      host.deleteTurn({ sessionId: session.id, turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
+    await expect(
+      host.deleteTurn({ sessionId: 'missing', turnId: first.turnId }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
+  });
+
+  test.each(['success', 'failure'] as const)(
+    'holds the Session during turn deletion and releases it after %s',
+    async (outcome) => {
+      const { session, reserved } = await seedRetryAnswer('success', [
+        { id: 'old-answer', type: 'text', text: 'Remove this answer', state: 'done' },
+      ]);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      const deletionError = new Error('Deletion failed');
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        if (outcome === 'failure') throw deletionError;
+        return deleteFromStore(input);
+      });
+      const requests: RuntimeExecutionRequest[] = [];
+      const host = hostWithText(['Next answer'], requests);
+      const input = { sessionId: session.id, turnId: reserved.turnId };
+      const deletion = host.deleteTurn(input).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      try {
+        await expect(
+          host.submitMessage({
+            sessionId: session.id,
+            ...messageIds(),
+            parts: [{ type: 'text', text: 'Do not read stale history' }],
+          }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(
+          host.retryMessage({ sessionId: session.id, messageId: reserved.assistantMessage.id }),
+        ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+        await expect(host.deleteTurn(input)).rejects.toMatchObject({
+          view: { code: 'SESSION_BUSY' },
+        });
+
+        gate.resolve();
+        expect(await deletion).toBe(outcome === 'failure' ? deletionError : null);
+        await host.submitMessage({
+          sessionId: session.id,
+          ...messageIds(),
+          parts: [{ type: 'text', text: 'Continue after deletion settled' }],
+        });
+        await waitFor(() => host.getSessionStatus(session.id)?.status === 'completed', 'next turn');
+        expect(requests).toHaveLength(1);
+        expect(requests[0].history.map((turn) => turn.turnId)).toEqual(
+          outcome === 'success' ? [] : [reserved.turnId],
+        );
+      } finally {
+        gate.resolve();
+        await deletion;
+        await host._doStop();
+      }
+    },
+  );
+
+  test.each(['shutdown', 'session deletion'] as const)(
+    'drains a pending turn deletion before %s finishes',
+    async (operation) => {
+      const { session, reserved } = await seedRetryAnswer('success', []);
+      const gate = createDeferred();
+      const deleteFromStore = store.deleteTurn.bind(store);
+      jest.spyOn(store, 'deleteTurn').mockImplementationOnce(async (input) => {
+        await gate.promise;
+        return deleteFromStore(input);
+      });
+      const host = hostWithText([]);
+      const deletion = host.deleteTurn({ sessionId: session.id, turnId: reserved.turnId });
+      let finished = false;
+      const drain = (
+        operation === 'shutdown' ? host._doStop() : host.deleteSession({ sessionId: session.id })
+      ).then(() => {
+        finished = true;
+      });
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(finished).toBe(false);
+        gate.resolve();
+        await deletion;
+        await drain;
+        expect(finished).toBe(true);
+      } finally {
+        gate.resolve();
+        await Promise.allSettled([deletion, drain]);
+        await host._doStop();
+      }
+    },
+  );
+
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
     const host = hostWithText(['unused']);
 
@@ -3220,7 +4439,6 @@ describe('MobileAgentHost', () => {
         sessionId: uuidv7(),
         ...messageIds(),
         agentId: 'missing',
-        executionTarget: { kind: 'local' },
         parts: [{ type: 'text', text: 'x' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'AGENT_NOT_FOUND' } });
@@ -3247,9 +4465,9 @@ describe('MobileAgentHost', () => {
     expect(await store.listMessages(session.id)).toEqual([]);
 
     // Rename and delete round out the session lifecycle.
-    const renamed = await host.renameSession({ sessionId: session.id, title: 'My Chat' });
-    expect(renamed.title).toBe('My Chat');
-    expect(renamed.titleIsManual).toBe(true);
+    const renamed = await host.renameSession({ sessionId: session.id, name: 'My Chat' });
+    expect(renamed.name).toBe('My Chat');
+    expect(renamed.isNameManuallyEdited).toBe(true);
     await host.deleteSession({ sessionId: session.id });
     await expect(host.observeSession(session.id, () => {})).rejects.toMatchObject({
       view: { code: 'SESSION_NOT_FOUND' },

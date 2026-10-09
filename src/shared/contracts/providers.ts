@@ -1,8 +1,11 @@
 import type { Provider } from '@/shared/data/types/provider';
 
+import type { ProviderAccountsModule } from './providerAccounts';
+
 export type ProviderCatalogEntry = {
   description?: string;
   id: string;
+  isEnabled: boolean;
   isInstalled: boolean;
   isRecommended: boolean;
   name: string;
@@ -16,6 +19,7 @@ export type ProviderRegistryUpdateEvent = {
 export type ProviderRegistryUpdateResult = { status: 'current' | 'updated' };
 
 export type ProviderConfigurationIssue =
+  | 'missing-oauth'
   | 'missing-api-key'
   | 'disabled-api-keys'
   | 'invalid-endpoint'
@@ -35,6 +39,7 @@ export class ProviderSetupError extends Error {
 }
 
 export interface ProvidersModule {
+  readonly accounts: ProviderAccountsModule;
   ensureRegistryReady(): Promise<void>;
   getSetupStatus(providerId: string): Promise<ProviderSetupStatus>;
   enable(providerId: string): Promise<Provider>;

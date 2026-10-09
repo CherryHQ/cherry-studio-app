@@ -18,6 +18,7 @@ import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
 } from '@/shared/utils/modelTokenLimits';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import { buildModelPricing, type ModelPricingDraft } from './providerModelPricing';
 
@@ -55,23 +56,15 @@ export type ProviderModelAddBuildResult = {
   input?: CreateModelDto;
 };
 
-export const PROVIDER_MODEL_CHAT_ENDPOINT_TYPES = [
-  ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-  ENDPOINT_TYPE.OPENAI_RESPONSES,
-  ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-] as const satisfies readonly EndpointType[];
-export type ProviderModelChatEndpointType = (typeof PROVIDER_MODEL_CHAT_ENDPOINT_TYPES)[number];
+export type ProviderModelChatEndpointType = (typeof CHAT_ENDPOINT_TYPES)[number];
 
 export const providerModelAddEndpointOptions = [
   { id: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, labelKey: 'endpoint_type.openai' },
   { id: ENDPOINT_TYPE.OPENAI_RESPONSES, labelKey: 'endpoint_type.openai-response' },
   { id: ENDPOINT_TYPE.ANTHROPIC_MESSAGES, labelKey: 'endpoint_type.anthropic' },
   { id: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, labelKey: 'endpoint_type.gemini' },
-  { id: ENDPOINT_TYPE.OPENAI_EMBEDDINGS, labelKey: 'endpoint_type.openai-embeddings' },
   { id: ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, labelKey: 'endpoint_type.image-generation' },
   { id: ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, labelKey: 'endpoint_type.image-edit' },
-  { id: ENDPOINT_TYPE.JINA_RERANK, labelKey: 'endpoint_type.jina-rerank' },
 ] as const satisfies readonly { id: EndpointType; labelKey: string }[];
 
 export function createInitialProviderModelAddFormState(): ProviderModelAddFormState {
@@ -130,12 +123,10 @@ export function getProviderChatEndpointTypes(
   provider: Pick<Provider, 'defaultChatEndpoint' | 'endpointConfigs'>,
 ): ProviderModelChatEndpointType[] {
   const endpointTypes: ProviderModelChatEndpointType[] = [];
-  const defaultType = PROVIDER_MODEL_CHAT_ENDPOINT_TYPES.find(
-    (type) => type === provider.defaultChatEndpoint,
-  );
+  const defaultType = CHAT_ENDPOINT_TYPES.find((type) => type === provider.defaultChatEndpoint);
   if (defaultType && provider.endpointConfigs?.[defaultType]?.baseUrl?.trim())
     endpointTypes.push(defaultType);
-  for (const type of PROVIDER_MODEL_CHAT_ENDPOINT_TYPES) {
+  for (const type of CHAT_ENDPOINT_TYPES) {
     if (provider.endpointConfigs?.[type]?.baseUrl?.trim() && !endpointTypes.includes(type))
       endpointTypes.push(type);
   }
@@ -248,14 +239,6 @@ export function changeProviderModelPrimaryType(
   ) {
     endpointType = getProviderChatEndpointTypes(provider)[0] ?? 'auto';
   }
-  if (type === 'embedding') endpointType = ENDPOINT_TYPE.OPENAI_EMBEDDINGS;
-  else if (type === 'rerank') endpointType = ENDPOINT_TYPE.JINA_RERANK;
-  else if (
-    endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS ||
-    endpointType === ENDPOINT_TYPE.JINA_RERANK
-  ) {
-    endpointType = getProviderChatEndpointTypes(provider)[0] ?? 'auto';
-  }
   if (
     type === 'image' &&
     !endpoints?.some(isProviderModelImageEndpoint) &&
@@ -293,14 +276,6 @@ export function changeProviderModelEndpoint(
     if (inherited.rerank) capabilities.rerank = false;
     else delete capabilities.rerank;
     primaryType = undefined;
-  } else if (
-    endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS ||
-    endpointType === ENDPOINT_TYPE.JINA_RERANK
-  ) {
-    capabilities.drawing = false;
-    capabilities.embedding = endpointType === ENDPOINT_TYPE.OPENAI_EMBEDDINGS;
-    capabilities.rerank = endpointType === ENDPOINT_TYPE.JINA_RERANK;
-    primaryType = capabilities.embedding ? 'embedding' : 'rerank';
   }
   return { ...form, capabilities, endpointType, primaryType };
 }

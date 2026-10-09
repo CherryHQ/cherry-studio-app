@@ -1,6 +1,7 @@
 import 'tsx/cjs';
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 
+import reportingServices from './src/frontend/appShell/observability/reportingServices.json';
 import { APP_LANGUAGES } from './src/shared/utils/languages';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
@@ -8,12 +9,27 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (!['development', 'preview', 'production'].includes(profile)) {
     throw new Error(`Unknown PROFILE: ${profile}. Expected development, preview, or production.`);
   }
+  const apkUpdatesSetting = process.env.APK_UPDATES_ENABLED ?? 'false';
+  if (!['true', 'false'].includes(apkUpdatesSetting)) {
+    throw new Error(`Invalid APK_UPDATES_ENABLED: ${apkUpdatesSetting}. Expected true or false.`);
+  }
 
   const suffix = profile === 'development' ? '.dev' : profile === 'preview' ? '.preview' : '';
   const bundleIdentifier = `${config.ios!.bundleIdentifier}${suffix}`;
   const groupIdentifier = `group.${bundleIdentifier}`;
   const widgetBundleIdentifier = `${bundleIdentifier}.ExpoWidgetsTarget`;
   const eas = config.extra?.eas;
+  const reporting = {
+    environment: profile,
+    services: Object.fromEntries(
+      Object.entries(reportingServices).map(([name, service]) => [
+        name,
+        profile === 'production' &&
+          process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true' &&
+          service.enabled,
+      ]),
+    ),
+  };
 
   return {
     ...config,
@@ -31,36 +47,57 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       bundleIdentifier,
       entitlements: {
         ...config.ios?.entitlements,
-        'com.apple.security.application-groups': [groupIdentifier],
+        'com.apple.security.application-groups': [
+          groupIdentifier,
+          `group.${bundleIdentifier}.system-integration`,
+        ],
       },
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
-      ...(config.plugins
-        ?.filter((plugin) => {
-          const name = Array.isArray(plugin) ? plugin[0] : plugin;
-          return name !== '@sentry/react-native/expo' || profile === 'production';
-        })
-        .map<NonNullable<ExpoConfig['plugins']>[number]>((plugin) => {
-          if (plugin === 'expo-dev-client') {
-            return [plugin, { addGeneratedScheme: profile === 'development' }];
-          }
-          if (plugin === 'expo-localization') {
-            return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
-          }
-          if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
-            return [
-              plugin[0],
-              { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
-            ];
-          }
-          return plugin;
-        }) ?? []),
+      ...(config.plugins ?? []),
       './plugins/withDiagnostics',
-    ],
+      './modules/crash-reporting/app.plugin.js',
+      './scripts/withReportingAutolinking.js',
+    ]
+      .filter((plugin) => {
+        const name = Array.isArray(plugin) ? plugin[0] : plugin;
+        return name !== '@sentry/react-native/expo' || reporting.services.sentry;
+      })
+      .map((plugin) => {
+        if (plugin === 'expo-dev-client') {
+          return [plugin, { addGeneratedScheme: profile === 'development' }];
+        }
+        if (plugin === 'expo-localization') {
+          return [plugin, { supportedLocales: APP_LANGUAGES.map(({ value }) => value) }];
+        }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-build-properties') {
+          return [
+            plugin[0],
+            {
+              ...plugin[1],
+              android: {
+                ...plugin[1].android,
+                // Compressed native libraries only help direct APK downloads; the Google Play profile opts out.
+                useLegacyPackaging:
+                  profile !== 'development' && process.env.ANDROID_COMPRESS_NATIVE_LIBS !== 'false',
+              },
+            },
+          ];
+        }
+        if (Array.isArray(plugin) && plugin[0] === 'expo-widgets') {
+          return [
+            plugin[0],
+            { ...plugin[1], bundleIdentifier: widgetBundleIdentifier, groupIdentifier },
+          ];
+        }
+        return plugin;
+      }),
     extra: {
       ...config.extra,
+      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
+      reporting,
       eas: {
         ...eas,
         build: {
@@ -74,6 +111,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
                   targetName: 'ExpoWidgetsTarget',
                   bundleIdentifier: widgetBundleIdentifier,
                   entitlements: { 'com.apple.security.application-groups': [groupIdentifier] },
+                },
+                {
+                  targetName: 'CherryShareExtension',
+                  bundleIdentifier: `${bundleIdentifier}.CherryShareExtension`,
+                  entitlements: {
+                    'com.apple.security.application-groups': [
+                      `group.${bundleIdentifier}.system-integration`,
+                    ],
+                  },
                 },
               ],
             },

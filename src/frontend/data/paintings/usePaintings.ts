@@ -26,8 +26,11 @@ import type { PaintingsModule } from '@/shared/contracts';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntryId } from '@/shared/data/types/file';
 import type { Painting } from '@/shared/data/types/painting';
+import {
+  imageParamsAspectRatio,
+  imageParamsResolutionLabel,
+} from '@/shared/utils/imageGenerationParams';
 
-import { imageParamsAspectRatio, imageParamsResolutionLabel } from './imageGenerationParams';
 import {
   type PaintingJobInterruptionReason,
   paintingJobInterruptionReason,

@@ -43,17 +43,6 @@ export function getEffortSliderTrackGeometry(
   return { thumbCenterStart, tickCenters, travelDistance };
 }
 
-const effortGaugeStartAngle = -Math.PI / 3;
-const effortGaugeEndAngle = Math.PI / 3;
-
-/** Gauge-needle angle in radians for the matching discrete slider stop. */
-export function effortGaugeNeedleAngle(index: number, stopCount: number): number {
-  return (
-    effortGaugeStartAngle +
-    stopFraction(index, stopCount) * (effortGaugeEndAngle - effortGaugeStartAngle)
-  );
-}
-
 export function nearestStopIndex(fraction: number, stopCount: number): number {
   'worklet';
   if (stopCount < 2) {

@@ -1,6 +1,6 @@
 # Splash Screen And Startup Readiness
 
-> Updated: 2026-08-16
+> Updated: 2026-09-24
 >
 > Dependency baseline updated 2026-09-11: Expo `57.0.21`, `expo-splash-screen` `57.0.8`, iOS 17.0+, Android API 26+
 
@@ -20,8 +20,10 @@ both modes. The native surface contains no attribution or animation.
 The React Native cover adds a single-line `Cherry Studio` attribution 48 dp above the bottom
 safe area. The centered logo stays fixed across the native-to-React handoff, while the attribution
 fades in over 260 ms after the React Native cover is confirmed visible. After the application
-renders behind the opaque cover, the entire cover fades out over 220 ms. The application tree
-itself is never animated.
+renders behind the opaque cover, the cover exits in 340 ms: the logo scales to 1.15× over 320 ms,
+and the cover, including the attribution, starts fading 60 ms later over 280 ms with an ease-in-out
+curve. The slow start of the fade keeps the logo's growth readable before the cover thins out. The
+application tree itself is never animated.
 
 This lifecycle is process-owned state. Background-to-foreground transitions do not remount or reset
 the coordinator, so they do not replay the launch experience.
@@ -49,7 +51,7 @@ the coordinator, so they do not replay the launch experience.
 8. The active route reports initial content readiness. The cover exits only after bootstrap,
    content readiness, and the 800 ms minimum are all satisfied.
 9. The cover continues to intercept touch and hides the application tree from accessibility until
-   its 220 ms UI-thread fade completes. It is then removed from the tree.
+   its 340 ms UI-thread exit completes. It is then removed from the tree.
 
 If content does not report readiness within three seconds after bootstrap becomes ready, the
 coordinator records a warning and treats content as ready. The layout and minimum-duration guards
@@ -64,14 +66,17 @@ timeout remains a fallback for navigation trees that never report layout.
 
 ## Motion And Accessibility
 
-The cover and attribution opacity transitions use Reanimated timing on the UI thread. When the
-operating system's Reduce Motion setting is enabled, the attribution appears without animation and
-the cover is removed immediately after readiness and the 800 ms minimum.
+The cover's logo scale and the cover and attribution opacity transitions use Reanimated timing on
+the UI thread. When the operating system's Reduce Motion setting is enabled, the attribution appears
+without animation and the cover is removed immediately after readiness and the 800 ms minimum.
 
 While visible, the cover owns pointer input. The underlying application uses
 `no-hide-descendants`/`accessibilityElementsHidden`, preventing focus from reaching controls that
 are not yet visible. The attribution and logo are decorative and do not become accessibility focus
 targets.
+
+Screens behind the cover can read `useStartupCoverVisible` from the startup module. The onboarding
+welcome intro uses it to wait until the cover has been removed, so the intro is not spent behind it.
 
 ## Native Boundary
 

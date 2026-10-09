@@ -155,7 +155,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   rejectCredential(authorizationId: string, rejected: PluginCredential) {
-    const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+    const signal = this.renewal.signal;
     return this.serialize(async () => {
       signal.throwIfAborted();
       const sent = WecomCredentialSchema.safeParse(rejected);
@@ -181,7 +181,7 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   get attemptSignal() {
-    return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
+    return this.attempt.signal;
   }
 
   cancel() {
@@ -192,14 +192,21 @@ export class WecomAuthorizationRuntime implements PluginAuthorizationRuntime {
     });
   }
 
+  /** stop() aborts the current attempt and renewal; generations replaced afterwards start aborted. */
+  private nextGeneration() {
+    const controller = new AbortController();
+    if (this.lifetime.signal.aborted) controller.abort(this.lifetime.signal.reason);
+    return controller;
+  }
+
   interrupt() {
     this.attempt.abort();
-    this.attempt = new AbortController();
+    this.attempt = this.nextGeneration();
   }
 
   invalidateGrant() {
     this.renewal.abort();
-    this.renewal = new AbortController();
+    this.renewal = this.nextGeneration();
   }
 
   async stop() {

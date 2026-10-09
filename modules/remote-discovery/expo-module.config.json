@@ -1,0 +1,5 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": { "podspecPath": "ios/RemoteDiscovery.podspec", "modules": ["RemoteDiscoveryModule"] },
+  "android": { "modules": ["expo.modules.remotediscovery.RemoteDiscoveryModule"] }
+}

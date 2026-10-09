@@ -135,6 +135,17 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       );
     }
 
+    const replacementCount = replace_all ? replacements : 1;
+    // UTF-8 never takes fewer bytes than a string has UTF-16 units, so this lower
+    // bound refuses an oversized result before building it: replace_all of a
+    // one-character match in a 1 MiB file could otherwise allocate gigabytes.
+    if (
+      decoded.text.length + replacementCount * (new_string.length - old_string.length) >
+      EDIT_FILE_MAX_CONTENT_BYTES
+    ) {
+      return invalid(`The edited file exceeds the ${EDIT_FILE_MAX_CONTENT_BYTES}-byte limit.`);
+    }
+
     const editedText = replace_all
       ? decoded.text.split(old_string).join(new_string)
       : replaceSingle(decoded.text, old_string, new_string);
@@ -145,7 +156,6 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
     }
 
     const snippet = changeSnippet(editedText, decoded.text.indexOf(old_string), new_string.length);
-    const replacementCount = replace_all ? replacements : 1;
 
     signal.throwIfAborted();
     if (rewritable) {
@@ -216,6 +226,12 @@ export function createEditFileTool(files: EditFileFiles, scope: TurnEditScope): 
       const requestedId = FileEntryIdSchema.parse(file_entry_id);
       if (old_string === new_string) {
         return Promise.resolve(invalid('old_string and new_string must be different.'));
+      }
+      // read_file refuses NUL as binary; writing it would leave a file nothing can read back.
+      if (new_string.includes('\0')) {
+        return Promise.resolve(
+          invalid('new_string contains NUL characters. Remove them; a text file cannot hold NUL.'),
+        );
       }
       // Queue on the entry the edit will actually touch, so naming a source and
       // the version already derived from it does not open two writers on one file.

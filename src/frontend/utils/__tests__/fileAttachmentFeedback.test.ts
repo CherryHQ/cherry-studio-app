@@ -3,11 +3,7 @@ import type { TFunction } from 'i18next';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 
-import {
-  fileAttachmentIssueDescription,
-  fileAttachmentNoticeKeys,
-  getFileAttachmentIssue,
-} from '../fileAttachmentFeedback';
+import { fileAttachmentIssueDescription, getFileAttachmentIssue } from '../fileAttachmentFeedback';
 
 const t = ((key: string) => key) as TFunction;
 
@@ -27,20 +23,6 @@ describe('file attachment feedback', () => {
     expect(description).toContain('attachments.issue.invalid-utf8');
     expect(description).not.toContain('file:///');
     expect(getFileAttachmentIssue(new Error('invalid-utf8'))).toBeUndefined();
-  });
-
-  test('distinguishes extraction and request truncation, leaving old messages unknown', () => {
-    expect(fileAttachmentNoticeKeys(undefined)).toEqual([]);
-    expect(
-      fileAttachmentNoticeKeys({
-        mode: 'document-text',
-        sourceTruncated: true,
-        requestTruncated: false,
-      }),
-    ).toEqual(['attachments.notice.documentText', 'attachments.notice.sourceTruncated']);
-    expect(
-      fileAttachmentNoticeKeys({ mode: 'text', sourceTruncated: false, requestTruncated: true }),
-    ).toEqual(['attachments.notice.requestTruncated']);
   });
 
   test.each(['parser-unavailable', 'parser-unsupported'] as const)(

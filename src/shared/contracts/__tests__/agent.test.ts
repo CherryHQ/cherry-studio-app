@@ -1,4 +1,7 @@
 import {
+  AgentEventSchema,
+  AgentRespondQuestionSchema,
+  validateUserAnswers,
   AgentApprovalViewSchema,
   AgentErrorViewSchema,
   AgentFailureSnapshotSchema,
@@ -11,6 +14,9 @@ import {
   AgentSessionStatusSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  AgentRetryMessageInputSchema,
+  AgentRenameSessionInputSchema,
+  AgentForkSessionInputSchema,
   AgentToolRefSchema,
   readAgentInferenceSnapshot,
 } from '../agent';
@@ -21,7 +27,59 @@ function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
+describe('answer retry input', () => {
+  test('round-trips only the source identifiers and rejects client-supplied execution state', () => {
+    const input = { sessionId: 'session', messageId: 'answer' };
+    expect(AgentRetryMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    expect(AgentRetryMessageInputSchema.safeParse({ ...input, messageId: '' }).success).toBe(false);
+    expect(AgentRetryMessageInputSchema.safeParse({ ...input, resume: [] }).success).toBe(false);
+  });
+});
+
 describe('Agent Session status contract', () => {
+  test('uses name for session rename and fork inputs', () => {
+    const rename = { sessionId: 'session', name: 'Renamed' };
+    const fork = { sessionId: 'session', fromMessageId: 'message', name: 'Fork' };
+    expect(AgentRenameSessionInputSchema.parse(roundTrip(rename))).toEqual(rename);
+    expect(AgentForkSessionInputSchema.parse(roundTrip(fork))).toEqual(fork);
+    expect(
+      AgentRenameSessionInputSchema.safeParse({ sessionId: 'session', title: 'Old' }).success,
+    ).toBe(false);
+    expect(AgentForkSessionInputSchema.safeParse({ ...fork, title: 'Old' }).success).toBe(false);
+  });
+
+  test('round-trips Desktop compaction parts with one outer id and no summary payload', () => {
+    const part = {
+      id: 'compaction-anchor:turn-1:1',
+      type: 'data-compaction-anchor',
+      data: {
+        status: 'done',
+        phase: 'in-loop',
+        trigger: 'auto',
+        startedAt: '2026-09-18T00:00:00.000Z',
+        completedAt: '2026-09-18T00:00:01.000Z',
+        preTokens: 112_000,
+        postTokens: 30_000,
+        durationMs: 1_000,
+        foldedCount: 6,
+      },
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessageDeltaSchema.parse(roundTrip({ op: 'part.add', index: 2, part }))).toEqual({
+      op: 'part.add',
+      index: 2,
+      part,
+    });
+    for (const data of [
+      { ...part.data, summary: 'Private history' },
+      { ...part.data, status: 'completed' },
+      { ...part.data, phase: 'tool-loop' },
+      { ...part.data, startedAt: 1 },
+      { ...part.data, preTokens: -1 },
+    ]) {
+      expect(AgentMessagePartSchema.safeParse({ ...part, data }).success).toBe(false);
+    }
+  });
   test('round-trips immutable status snapshots without admitting transcript or error payloads', () => {
     const input = { status: 'awaiting-approval', turnId: 'turn-1' };
     const snapshot = AgentSessionStatusSchema.parse(roundTrip(input));
@@ -37,6 +95,42 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
+  test('round-trips image settings through initial sends, follow-ups, and inference snapshots', () => {
+    const imageGeneration = { mode: 'edit', paramValues: { size: '1024x1024', numImages: 2 } };
+    const input = {
+      sessionId: 'session-1',
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Use a blue background' }],
+      imageGeneration,
+    };
+    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+    const initial = { ...input, agentId: 'agent-1' };
+    expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
+    const snapshot = {
+      version: 1,
+      model: {
+        uniqueModelId: 'provider::image',
+        providerId: 'provider',
+        modelId: 'image',
+        name: 'Image',
+      },
+      parameters: {},
+      tools: [],
+      imageGeneration,
+    };
+    expect(readAgentInferenceSnapshot(roundTrip(snapshot))).toEqual({
+      status: 'supported',
+      snapshot,
+    });
+    expect(
+      AgentSubmitMessageInputSchema.safeParse({
+        ...input,
+        imageGeneration: { ...imageGeneration, mode: 'text' },
+      }).success,
+    ).toBe(false);
+  });
+
   test('round-trips plugin display snapshots and rejects mismatched input ranges', () => {
     const reference = { type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 3 };
     const input = { type: 'text', text: '使用 飞书', pluginReferences: [reference] };
@@ -65,7 +159,7 @@ describe('Agent tool and managed-file contracts', () => {
         },
       ],
     };
-    const initial = { ...input, agentId: 'agent-1', executionTarget: { kind: 'local' } };
+    const initial = { ...input, agentId: 'agent-1' };
     expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
     expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
   });
@@ -81,11 +175,11 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
     const part = {
       id: 'tool-1',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-1',
       toolRef: { source: 'builtin', capabilityId: 'write_file' },
-      providerName: 'write_file',
-      displayName: 'Write file',
+      toolName: 'write_file',
+      title: 'Write file',
       state: 'input-streaming',
       inputPreview: preview,
     };
@@ -123,7 +217,6 @@ describe('Agent tool and managed-file contracts', () => {
       sessionId: 'session-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
-      executionTarget: { kind: 'local' },
       parts: [{ text: 'Hello.', type: 'text' }],
     } as const;
 
@@ -145,7 +238,6 @@ describe('Agent tool and managed-file contracts', () => {
       status: 'success',
       turnId: 'turn-1',
       updatedAt: '2026-08-31T00:00:00.000Z',
-      usage: null,
       stats: null,
     } as const;
     const assistantMessage = {
@@ -171,17 +263,18 @@ describe('Agent tool and managed-file contracts', () => {
       capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
       hasHistoryBeforeActiveTurn: false,
       pendingApprovals: [],
+      pendingQuestion: null,
       session: {
         agentId: 'agent-1',
         createdAt: '2026-08-31T00:00:00.000Z',
-        executionTarget: { kind: 'local' },
+
         // Null rather than omitted: lineage is absent, not unknown, and a JSON
         // round trip must keep telling the difference.
         forkBoundaryMessageId: null,
         forkedFromSessionId: null,
         id: 'session-1',
-        title: '',
-        titleIsManual: false,
+        name: '',
+        isNameManuallyEdited: false,
         updatedAt: '2026-08-31T00:00:00.000Z',
       },
       streamingMessage: assistantMessage,
@@ -260,11 +353,11 @@ describe('Agent tool and managed-file contracts', () => {
     expect(
       AgentMessagePartSchema.parse({
         id: 'tool-search-part',
-        type: 'tool',
+        type: 'dynamic-tool',
         toolCallId: 'tool-search-call',
         toolRef: metaRef,
-        providerName: 'tool_search',
-        displayName: 'Search tools',
+        toolName: 'tool_search',
+        title: 'Search tools',
         state: 'output-available',
         input: { query: 'calendar' },
         output: { value: { matchedNamespaces: [] }, artifacts: [] },
@@ -275,11 +368,11 @@ describe('Agent tool and managed-file contracts', () => {
   test('accepts a tool whose provider input is still streaming', () => {
     const part = {
       id: 'tool-part-streaming',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-streaming',
       toolRef: { source: 'builtin', capabilityId: 'write_file' },
-      providerName: 'write_file',
-      displayName: 'Write file',
+      toolName: 'write_file',
+      title: 'Write file',
       state: 'input-streaming',
     } as const;
 
@@ -291,7 +384,7 @@ describe('Agent tool and managed-file contracts', () => {
       type: 'file',
       fileEntryId: 'file-1',
       mediaType: 'image/png',
-      name: 'image.png',
+      filename: 'image.png',
     } as const;
     const messagePart = {
       ...input,
@@ -301,6 +394,7 @@ describe('Agent tool and managed-file contracts', () => {
 
     expect(AgentInputPartSchema.parse(roundTrip(input))).toEqual(input);
     expect(AgentMessagePartSchema.parse(roundTrip(messagePart))).toEqual(messagePart);
+    expect(AgentInputPartSchema.safeParse({ ...input, name: 'old.png' }).success).toBe(false);
     expect(
       AgentInputPartSchema.safeParse({
         type: 'file',
@@ -310,14 +404,22 @@ describe('Agent tool and managed-file contracts', () => {
     ).toBe(false);
   });
 
-  test('round-trips the classified text attachment admission error', () => {
+  test.each([
+    ['ATTACHMENT_INVALID', 'Attachment "notes.txt" is not valid UTF-8 text.'],
+    ['AGENT_MODEL_NOT_CONFIGURED', 'Agent has no configured model: agent-1'],
+  ])('round-trips the %s admission error', (code, message) => {
     const error = {
-      code: 'ATTACHMENT_INVALID',
-      message: 'Attachment "notes.txt" is not valid UTF-8 text.',
+      code,
+      message,
       retryable: false,
     } as const;
 
     expect(AgentErrorViewSchema.parse(roundTrip(error))).toEqual(error);
+    const part = { id: 'failure', type: 'data-error', data: error };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(AgentMessagePartSchema.safeParse({ id: 'failure', type: 'error', error }).success).toBe(
+      false,
+    );
   });
 
   test('round-trips a versioned execution failure without flattening its source identity', () => {
@@ -349,11 +451,11 @@ describe('Agent tool and managed-file contracts', () => {
   test('round-trips stable tool identity and the RuntimeToolResult projection', () => {
     const part = {
       id: 'tool-part-1',
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: 'call-1',
       toolRef: MCP_TOOL_REF,
-      providerName: 'mcp_server_1_search_a1b2',
-      displayName: 'Search',
+      toolName: 'mcp_server_1_search_a1b2',
+      title: 'Search',
       state: 'output-available',
       input: { query: 'Cherry Studio' },
       output: {
@@ -373,7 +475,7 @@ describe('Agent tool and managed-file contracts', () => {
     expect(
       AgentMessagePartSchema.safeParse({
         ...part,
-        toolName: 'search',
+        providerName: 'search',
       }).success,
     ).toBe(false);
   });
@@ -383,11 +485,11 @@ describe('Agent tool and managed-file contracts', () => {
     (state) => {
       const base = {
         id: 'tool-part-1',
-        type: 'tool',
+        type: 'dynamic-tool',
         toolCallId: 'call-1',
         toolRef: MCP_TOOL_REF,
-        providerName: 'mcp_server_1_search_a1b2',
-        displayName: 'Search',
+        toolName: 'mcp_server_1_search_a1b2',
+        title: 'Search',
         state,
       } as const;
 
@@ -432,5 +534,69 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentApprovalViewSchema.parse(roundTrip(approval))).toEqual(approval);
+  });
+});
+
+describe('user question protocol', () => {
+  const question = {
+    questions: [
+      {
+        id: 'focus',
+        question: 'Choose a focus',
+        selection: 'multiple' as const,
+        options: [
+          { id: 'a', label: 'Writing' },
+          { id: 'b', label: 'Reading' },
+        ],
+      },
+    ],
+  };
+  const answerWith = (answer: { selectedOptionIds: string[]; text: string; skipped: boolean }) => ({
+    answers: [{ questionId: 'focus', ...answer }],
+  });
+  test('round-trips pending questions, answers, and the waiting turn status', () => {
+    const event = {
+      type: 'question.updated',
+      question: { turnId: 'turn', toolCallId: 'call', question },
+    };
+    expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
+    const response = {
+      sessionId: 'session',
+      turnId: 'turn',
+      toolCallId: 'call',
+      answer: answerWith({ selectedOptionIds: ['a', 'b'], text: 'At work', skipped: false }),
+    };
+    expect(AgentRespondQuestionSchema.parse(roundTrip(response))).toEqual(response);
+    expect(
+      AgentSessionStatusSchema.parse({ turnId: 'turn', status: 'awaiting-input' }).status,
+    ).toBe('awaiting-input');
+  });
+  test('rejects empty answers, duplicate options, and answers combined with skipping', () => {
+    expect(() =>
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: [], text: '', skipped: false }),
+      ),
+    ).toThrow();
+    expect(() =>
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: ['a', 'a'], text: '', skipped: false }),
+      ),
+    ).toThrow();
+    expect(() =>
+      validateUserAnswers(
+        question,
+        answerWith({ selectedOptionIds: [], text: 'yes', skipped: true }),
+      ),
+    ).toThrow();
+    expect(
+      AgentRespondQuestionSchema.safeParse({
+        sessionId: 's',
+        turnId: 't',
+        toolCallId: 'c',
+        answer: answerWith({ selectedOptionIds: [], text: 'x'.repeat(4001), skipped: false }),
+      }).success,
+    ).toBe(false);
   });
 });

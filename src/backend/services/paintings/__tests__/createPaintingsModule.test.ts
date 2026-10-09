@@ -226,7 +226,7 @@ describe('createPaintingsModule', () => {
     });
     jest.mocked(dependencies.getModel).mockResolvedValue(null);
     await expect(backend.startGeneration(generationInput)).rejects.toMatchObject({
-      issue: { code: 'model-unsupported' },
+      issue: { code: 'model-unavailable' },
     });
     expect(dependencies.db.withWriteTx).toHaveBeenCalledTimes(1);
   });
@@ -260,7 +260,7 @@ describe('createPaintingsModule', () => {
     await expect(
       backend.startGeneration({ ...generationInput, mode: 'generate' }),
     ).rejects.toMatchObject({
-      issue: { code: 'model-unsupported' },
+      issue: { code: 'mode-changed' },
     });
     expect(dependencies.db.withWriteTx).not.toHaveBeenCalled();
   });
@@ -271,5 +271,18 @@ describe('createPaintingsModule', () => {
     await backend.cancelGeneration('job-1');
 
     expect(dependencies.jobs.cancelGenerate).toHaveBeenCalledWith('job-1');
+  });
+
+  it('rejects unsupported parameters before creating or resetting a receipt', async () => {
+    const { backend, dependencies } = createSubject();
+    await expect(
+      backend.startGeneration({
+        ...generationInput,
+        paintingId: 'painting-7',
+        paramValues: { quality: 'high' },
+      }),
+    ).rejects.toMatchObject({ issue: { code: 'invalid-parameters' } });
+    expect(dependencies.db.withWriteTx).not.toHaveBeenCalled();
+    expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
   });
 });

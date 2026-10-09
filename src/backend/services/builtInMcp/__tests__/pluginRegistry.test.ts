@@ -310,10 +310,12 @@ it('covers the expanded Feishu catalog while keeping write workflows out of a re
     selections.filter(({ effect }) => effect === 'read'),
   );
   const [complete] = resolveBuiltInPluginGuides(selections);
-  expect(complete.revision).toBe(3);
+  expect(complete.revision).toBe(4);
   for (const heading of [
     'Read a document',
     'Resolve a wiki link',
+    'Browse knowledge spaces',
+    'Inspect a Base view',
     'Query Base records',
     'Check availability',
   ]) {
@@ -325,8 +327,12 @@ it('covers the expanded Feishu catalog while keeping write workflows out of a re
     'Comment on a document',
     'Create a Base record',
     'Update a Base record',
+    'Create records in a batch',
+    'Update records in a batch',
     'Update or complete a task',
     'Update an event',
+    'Cancel an event',
+    'Respond to an invitation',
     'Invite event attendees',
   ]) {
     expect(readOnly.content).not.toContain(`## ${heading}`);

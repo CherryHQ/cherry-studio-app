@@ -3,22 +3,28 @@ import {
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core/agent';
-import type { Context, FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import type { AgentOptions } from '@earendil-works/pi-agent-core';
+import type { FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { Model } from '@/shared/data/types/model';
 
-import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from '../piApiAdapters';
-import type { PiLanguageEndpointType } from '../piLanguageBinding';
+import {
+  bindPiStream,
+  resolvePiApiAdapter,
+  type PiLanguageEndpointType,
+  type SupportedPiApi,
+} from '../piApiAdapters';
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();
 const mockOpenAiCompletionsStreamSimple = jest.fn();
 const mockOpenAiResponsesStreamSimple = jest.fn();
+const mockAzureResponsesStreamSimple = jest.fn();
 
 const mockStreamResult = { id: 'stream' };
 const mockFetch = jest.fn() as unknown as FetchFunction;
-const context: Context = { messages: [] };
+const context = normalizeContext({ messages: [] });
 
 const CASES: {
   api: SupportedPiApi;
@@ -63,6 +69,14 @@ const CASES: {
 ];
 
 describe('Pi API adapters', () => {
+  test.each([ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, ENDPOINT_TYPE.OPENAI_RESPONSES])(
+    'respects version suppression for %s',
+    (endpoint) => {
+      expect(resolvePiApiAdapter(endpoint).formatBaseUrl('https://api.example.com/gateway#')).toBe(
+        'https://api.example.com/gateway',
+      );
+    },
+  );
   beforeEach(() => {
     jest.restoreAllMocks();
     for (const testCase of CASES) testCase.streamSimple.mockReturnValue(mockStreamResult);
@@ -86,11 +100,14 @@ describe('Pi API adapters', () => {
       maxRetries: 0,
       maxTokens: 2048,
       temperature: 0.2,
-      timeoutMs: 60_000,
+      cacheRetention: 'none',
+      sessionId: 'stable-conversation',
     });
     const model = { api: testCase.api } as PiModel<SupportedPiApi>;
     const signal = new AbortController().signal;
     const result = streamFn(model, context, {
+      cacheRetention: 'long',
+      sessionId: 'per-request-id',
       fetch: jest.fn() as unknown as FetchFunction,
       headers: { 'X-Request': 'request' },
       maxTokens: 32,
@@ -111,7 +128,37 @@ describe('Pi API adapters', () => {
         reasoning: 'high',
         signal,
         temperature: 0.2,
-        timeoutMs: 60_000,
+        cacheRetention: 'none',
+        sessionId: 'stable-conversation',
+      }),
+    );
+  });
+
+  test('selects and binds the Azure Responses adapter for the Azure family', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES, 'azure-responses');
+    expect(adapter.api).toBe('azure-openai-responses');
+    expect(adapter.formatBaseUrl('https://resource.openai.azure.com/openai')).toBe(
+      'https://resource.openai.azure.com/openai',
+    );
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAzureResponsesStreamSimple);
+    mockAzureResponsesStreamSimple.mockReturnValue(mockStreamResult);
+
+    const streamFn = await bindPiStream(adapter, {
+      apiKey: 'azure-key',
+      azureApiVersion: '2025-04-01-preview',
+      fetch: mockFetch,
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 2048,
+    });
+    const model = { api: 'azure-openai-responses' } as PiModel<SupportedPiApi>;
+    expect(streamFn(model, context)).toBe(mockStreamResult);
+    expect(mockAzureResponsesStreamSimple).toHaveBeenCalledWith(
+      model,
+      context,
+      expect.objectContaining({
+        apiKey: 'azure-key',
+        azureApiVersion: '2025-04-01-preview',
       }),
     );
   });
@@ -125,7 +172,6 @@ describe('Pi API adapters', () => {
       headers: {},
       maxRetries: 0,
       maxTokens: 8192,
-      timeoutMs: 60_000,
       requestParameters: {
         model: {
           reasoning: { selectableEfforts: ['high'], thinkingTokenLimits: { min: 1024, max: 8192 } },

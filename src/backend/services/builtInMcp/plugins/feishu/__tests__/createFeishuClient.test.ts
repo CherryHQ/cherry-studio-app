@@ -1,10 +1,11 @@
 import { HttpError } from '@/backend/services/http';
 import { PluginError } from '@/shared/contracts/plugins';
 
+import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
 import type { PluginClient, PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';
 import { createFeishuClient } from '../createFeishuClient';
-import { FEISHU_REQUESTED_TOOL_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
+import { FEISHU_API_TOOLS, FEISHU_REQUESTED_TOOL_SCOPES, FEISHU_TOOL_POLICY } from '../feishuTools';
 
 const mockRequest = jest.fn();
 jest.mock('@/backend/services/http', () => ({
@@ -305,6 +306,26 @@ it('treats a read-only POST failure as a read and an unreadable write result as 
   expect(mockRequest).toHaveBeenCalledTimes(2);
 });
 
+it.each([
+  {
+    name: 'base_batch_update_records',
+    args: {
+      app_token: 'bascnOne',
+      table_id: 'tblOne',
+      records: [{ record_id: 'recOne', fields: { title: 'Updated' } }],
+    },
+  },
+  {
+    name: 'calendar_delete_event',
+    args: { calendar_id: 'calOne', event_id: 'event_0' },
+  },
+])('never replays an uncertain $name write', async (input) => {
+  mockRequest.mockRejectedValue(new HttpError('private-access', { kind: 'network' }));
+  await expect(client.callTool(input)).rejects.toMatchObject({ reason: 'unknown-write' });
+  expect(mockRequest).toHaveBeenCalledTimes(1);
+  expect(mockRemote.callTool).not.toHaveBeenCalled();
+});
+
 it('loads only the granted calendar tools and rechecks scope changes on later discovery and calls', async () => {
   expect(createOfficialMcpClient).not.toHaveBeenCalled();
   jest.mocked(context.getCredential).mockResolvedValue({
@@ -346,7 +367,7 @@ it.each(['initialization', 'listing'] as const)(
       jest.mocked(createOfficialMcpClient).mockRejectedValueOnce(failure);
     else mockRemote.listTools.mockRejectedValueOnce(failure);
     const catalog = await client.listTools();
-    expect(catalog.tools).toHaveLength(19);
+    expect(catalog.tools).toHaveLength(FEISHU_API_TOOLS.size);
     expect(catalog.tools.some((tool) => tool.name === 'calendar_get_primary')).toBe(true);
     expect(catalog.tools.some((tool) => tool.name === 'search-doc')).toBe(false);
     expect(client.discoveryWarnings).toEqual([expect.stringContaining('document tools')]);
@@ -372,10 +393,49 @@ it('bounds hosted discovery without cancelling the independent local catalog', a
     const pending = client.listTools();
     await jest.advanceTimersByTimeAsync(5_000);
     const catalog = await pending;
-    expect(catalog.tools).toHaveLength(19);
+    expect(catalog.tools).toHaveLength(FEISHU_API_TOOLS.size);
     expect(client.discoveryWarnings).toEqual([expect.stringContaining('timeout')]);
     await client.callTool({ name: 'calendar_get_primary', args: {} });
     expect(mockRequest.mock.calls[0][1].signal.aborted).toBe(false);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('keeps a hosted write running when concurrent discovery times out, then retires its client', async () => {
+  jest.useFakeTimers();
+  try {
+    let release!: () => void;
+    let writeSignal!: AbortSignal;
+    const started = new Promise<void>((resolve) => {
+      mockRemote.callTool.mockImplementationOnce(({ options }) => {
+        writeSignal = options.abortSignal;
+        resolve();
+        return new Promise((finish) => {
+          release = () => finish({ content: [{ type: 'text', text: 'created' }] });
+        });
+      });
+    });
+    const write = client.callTool({ name: 'create-doc', args: {} });
+    await started;
+    mockRemote.listTools.mockImplementation(
+      ({ options }) =>
+        new Promise((_resolve, reject) => {
+          options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+            once: true,
+          });
+        }),
+    );
+    const discovery = client.listTools();
+    await jest.advanceTimersByTimeAsync(5_000);
+    await discovery;
+    expect(client.discoveryWarnings).toEqual([expect.stringContaining('timeout')]);
+    expect(writeSignal.aborted).toBe(false);
+    expect(mockRemote.close).not.toHaveBeenCalled();
+
+    release();
+    await expect(write).resolves.toEqual({ content: [{ type: 'text', text: 'created' }] });
+    expect(mockRemote.close).toHaveBeenCalledTimes(1);
   } finally {
     jest.useRealTimers();
   }
@@ -390,3 +450,33 @@ it('does not disguise an aborted discovery as a successful partial catalog', asy
   await expect(client.listTools({ options: { signal: caller.signal } })).rejects.toThrow();
   expect(client.discoveryWarnings).toEqual([]);
 });
+
+it.each([false, true])(
+  'releases settled discovery/call listeners and timers while the client remains open (caller: %s)',
+  async (withCaller) => {
+    jest.useFakeTimers();
+    const tracked = trackExpoAbortSignals();
+    try {
+      await client.listTools({ options: { signal: new AbortController().signal } });
+      expect(tracked.timers.size).toBe(0);
+      expect(tracked.listeners.size).toBe(0);
+      for (let index = 0; index < 250; index++) {
+        await client.listTools({ options: { signal: new AbortController().signal } });
+        const options = withCaller
+          ? { options: { abortSignal: new AbortController().signal } }
+          : {};
+        await client.callTool({ name: 'calendar_get_primary', args: {}, ...options });
+        await client.callTool({ name: 'search-doc', args: {}, ...options });
+      }
+      await expect(client.callTool({ name: 'unknown', args: {} })).rejects.toMatchObject({
+        reason: 'access',
+      });
+      expect(tracked.listeners.size).toBe(0);
+      expect(tracked.timers.size).toBe(0);
+    } finally {
+      await client?.close();
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    }
+  },
+);

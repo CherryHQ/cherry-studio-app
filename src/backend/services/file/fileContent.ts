@@ -34,6 +34,7 @@ import {
   rewriteInternalTextEntry,
   subscribeFileChanges,
 } from './fileStorage';
+import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
 const createInternalEntryInputSchema = z.strictObject({
@@ -64,16 +65,24 @@ export const fileContent = {
    * instead of taking it: anything that can produce other origins — an agent
    * tool, a peer transfer — uses `fileStorage.createInternalEntry` directly and
    * must state one.
+   *
+   * An oversized still image is re-encoded here, once, so the managed file is
+   * already what a model request can carry; nothing downstream resizes it again.
    */
   createInternalEntry: async (input: { mediaType?: string; name?: string; uri: string }) => {
     const validated = createInternalEntryInputSchema.parse(input);
-    const entry = await createInternalEntryWithPreview(fileEntryService, {
-      mediaType: validated.mediaType,
-      name: validated.name,
-      provenance: 'imported',
-      source: 'uri',
-      uri: validated.uri,
-    });
+    const normalized = await normalizeImportedImage(validated);
+    let entry: FileEntry;
+    try {
+      entry = await createInternalEntryWithPreview(fileEntryService, {
+        ...validated,
+        ...normalized,
+        provenance: 'imported',
+        source: 'uri',
+      });
+    } finally {
+      if (normalized) discardNormalizedImage(normalized);
+    }
     const resolved = await resolveFileEntry(fileEntryService, entry.id);
     if (!resolved) {
       await discardInternalEntries(fileEntryService, [entry]);

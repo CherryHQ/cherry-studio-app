@@ -1,28 +1,31 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { ResolvedFileUris } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry } from '@/shared/data/types/file';
-import type { CherryMessagePart } from '@/shared/data/types/message';
 
+import { filePreviewDirectory, imageThumbnailCacheKey } from './filePreviewCache';
 import {
   createInternalEntry,
   type CreateInternalEntryInput,
-  createMessageParts,
   getInternalFileUri,
 } from './fileStorage';
 
 const logger = loggerService.withContext('FilePreviewStorage');
-const thumbnailDirectory = new Directory(Paths.cache, 'FilePreviewImages');
-const cacheVersion = 1;
+const thumbnailDirectory = filePreviewDirectory();
 const maxConcurrentGenerations = 2;
 const thumbnailMaxDimension = 512;
 const webpQuality = 0.78;
 const pendingThumbnails = new Map<string, Promise<string>>();
 const generationQueue: (() => void)[] = [];
 let activeGenerations = 0;
+
+/** Called only behind the cold-start gate, before any preview readers or generators exist. */
+export function resetFilePreviewsForRestore(): void {
+  if (thumbnailDirectory.exists) thumbnailDirectory.delete();
+}
 
 export async function createInternalEntryWithPreview(
   entries: Pick<FileEntryService, 'create'>,
@@ -31,15 +34,6 @@ export async function createInternalEntryWithPreview(
   const entry = await createInternalEntry(entries, input);
   await resolveFilePreviewUris(entry);
   return entry;
-}
-
-export async function createMessagePartsWithPreviews(
-  entries: Pick<FileEntryService, 'create' | 'delete'>,
-  parts: readonly CherryMessagePart[],
-): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
-  const managed = await createMessageParts(entries, parts);
-  await Promise.all(managed.entries.map(resolveFilePreviewUris));
-  return managed;
 }
 
 export async function resolveFilePreviewUris(entry: FileEntry): Promise<ResolvedFileUris> {
@@ -78,10 +72,6 @@ export async function generateFilePreviewUri(entry: FileEntry): Promise<string |
     });
     return resolved.uri;
   }
-}
-
-export function imageThumbnailCacheKey(entry: Pick<FileEntry, 'id' | 'updatedAt'>): string {
-  return `v${cacheVersion}_${entry.id}_${entry.updatedAt}.webp`;
 }
 
 async function getImageThumbnailUri(entry: FileEntry, sourceUri: string): Promise<string> {

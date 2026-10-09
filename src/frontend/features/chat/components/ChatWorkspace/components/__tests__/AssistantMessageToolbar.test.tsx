@@ -7,7 +7,12 @@ import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
+const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
+/** Captures the confirm request so a test can accept it the way a user would. */
+const mockAlertConfirm = jest.fn<void, [{ onConfirm: () => void }]>();
 const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
 jest.mock('expo-clipboard', () => ({
@@ -15,7 +20,7 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (callback: () => (() => void) | void) =>
     jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
 }));
@@ -23,22 +28,16 @@ jest.mock('expo-router', () => ({
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/git-fork', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/trash-2', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
+    useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: jest.fn() } }),
   };
 });
-
-jest.mock('../../../../runtime', () => ({
-  useAgentChatFork: () => mockForkSession,
-}));
-
-jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentSession: () => ({ data: { title: 'Arithmetic drills' } }),
-}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -60,11 +59,45 @@ describe('AssistantMessageToolbar', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
   });
+
+  test('disables retry while the session is busy', () => {
+    mockIsSessionBusy = true;
+    renderToolbar(createMessage('success', 'Old answer'));
+    const retry = renderer!.root.findByProps({ testID: 'assistant-message-retry' });
+    expect(retry.props.disabled).toBe(true);
+    act(() => retry.props.onPress());
+    expect(mockRetryMessage).not.toHaveBeenCalled();
+  });
+
+  test('offers no retry on an answer that is not the latest, leaving branching as the way back', () => {
+    renderToolbar(createMessage('success', 'Older answer'), 'assistant-2');
+
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-retry' })).toHaveLength(0);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-fork' }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test.each(['success', 'error', 'paused'] as const)(
+    'retries a %s latest answer without creating a branch',
+    async (status) => {
+      renderToolbar(createMessage(status, 'Answer'));
+      await act(async () => {
+        renderer!.root.findByProps({ testID: 'assistant-message-retry' }).props.onPress();
+      });
+      expect(mockRetryMessage).toHaveBeenCalledWith({
+        sessionId: 'session-1',
+        messageId: 'assistant-1',
+      });
+      expect(mockForkSession).not.toHaveBeenCalled();
+    },
+  );
 
   test('stays hidden while the assistant message is pending', () => {
     renderToolbar(createMessage('pending', 'Answer'));
@@ -139,10 +172,95 @@ describe('AssistantMessageToolbar', () => {
     });
   });
 
-  function renderToolbar(message: MessageListItem) {
+  test("deletes the pressed answer's whole turn after a destructive confirmation", async () => {
+    renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
+
+    const deleteButton = renderer!.root.findByProps({ testID: 'assistant-message-delete' });
+    expect(deleteButton.props).toMatchObject({
+      accessibilityLabel: 'chat.messageActions.delete',
+      disabled: false,
+      size: 'xs',
+      variant: 'ghost',
+    });
+
+    act(() => deleteButton.props.onPress());
+    expect(mockDeleteTurn).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockAlertConfirm.mock.lastCall![0].onConfirm();
+      await Promise.resolve();
+    });
+    expect(mockDeleteTurn).toHaveBeenCalledWith({ sessionId: 'session-1', turnId: 'turn-1' });
+  });
+
+  test('disables delete while the session is busy', () => {
+    mockIsSessionBusy = true;
+    renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
+
+    expect(renderer!.root.findByProps({ testID: 'assistant-message-delete' }).props.disabled).toBe(
+      true,
+    );
+  });
+
+  test('offers no delete on a row that carries no turn', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-delete' })).toHaveLength(0);
+  });
+
+  function renderToolbar(message: MessageListItem, retryableMessageId = 'assistant-1') {
     act(() => {
       renderer = create(
-        <AssistantMessageActionsProvider isAssistantToolbarEnabled sessionId="session-1">
+        <AssistantMessageActionsProvider
+          isAssistantToolbarEnabled
+          retryableMessageId={retryableMessageId}
+          onShare={jest.fn()}
+          snapshot={{
+            title: 'Arithmetic drills',
+            freshness: { state: 'current' },
+            liveMessages: [],
+            interactions: [],
+            executions: mockIsSessionBusy ? [{ id: 'turn', state: 'running' }] : [],
+          }}
+          messages={[
+            {
+              key: message.id,
+              state: 'success',
+              completeness: 'complete',
+              display: message,
+              actions: {
+                retry: {
+                  availability: { state: 'enabled' },
+                  execute: async () => {
+                    await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+                    return { state: 'applied', value: undefined };
+                  },
+                },
+                fork: {
+                  availability: { state: 'enabled' },
+                  execute: async ({ title }) => {
+                    await mockForkSession({
+                      fromMessageId: message.id,
+                      sessionId: 'session-1',
+                      title,
+                    });
+                    return {
+                      state: 'applied',
+                      value: { source: { kind: 'local' }, sessionId: 'fork' },
+                    };
+                  },
+                },
+                remove: {
+                  availability: { state: 'enabled' },
+                  execute: async () => {
+                    await mockDeleteTurn({ sessionId: 'session-1', turnId: message.turnId });
+                    return { state: 'applied', value: undefined };
+                  },
+                },
+              },
+            },
+          ]}
+        >
           <AssistantMessageToolbar message={message} />
         </AssistantMessageActionsProvider>,
       );

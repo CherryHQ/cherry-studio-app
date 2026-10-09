@@ -24,10 +24,13 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   insufficient_quota: 'quota',
   invalid_api_key: 'auth',
   invalid_json: 'parse',
+  image_too_large: 'payload_too_large',
   mcp_error: 'mcp',
   missing_terminal_event: 'internal',
   model_not_found: 'model_not_found',
+  model_not_supported: 'model_not_found',
   permission_denied: 'permission',
+  payload_too_large: 'payload_too_large',
   provider_unavailable: 'provider_unavailable',
   rate_limit_error: 'rate_limit',
   rate_limit_exceeded: 'rate_limit',
@@ -35,7 +38,6 @@ const CODE_REASONS: Readonly<Partial<Record<string, AiFailureReason>>> = {
   tool_call_limit_exceeded: 'tool_limit',
   tool_execution_error: 'tool_failed',
   tool_step_limit_exceeded: 'tool_limit',
-  turn_timeout: 'timeout',
   unsupported_approval: 'invalid_input',
   unsupported_input: 'invalid_input',
   unsupported_tool: 'invalid_input',
@@ -109,7 +111,13 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     resolvedStatusCode === 404 ||
-    includesAny(text, ['model_not_found', 'model not found', 'model does not exist']) ||
+    includesAny(text, [
+      'model_not_found',
+      'model_not_supported',
+      'model not found',
+      'model does not exist',
+      'requested model is not supported',
+    ]) ||
     (text.includes('model with id') && text.includes('not found'))
   ) {
     return 'model_not_found';
@@ -158,7 +166,16 @@ export function classifyAiFailureReason(facts: AiFailureFacts): AiFailureReason 
   }
   if (
     resolvedStatusCode === 413 ||
-    includesAny(text, ['payload too large', 'request entity too large'])
+    includesAny(text, [
+      'payload too large',
+      'request entity too large',
+      'request body too large',
+      'request too large',
+      'image too large',
+      'image is too large',
+      'image size exceeds',
+    ]) ||
+    /\bimage exceeds\b[^\n]{0,80}\b(?:bytes?|[km]b|[km]ib)\b/u.test(text)
   ) {
     return 'payload_too_large';
   }

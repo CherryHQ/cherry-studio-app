@@ -35,7 +35,7 @@ export const githubPlugin: PluginDefinition = {
     links: {
       // Pre-fills the fine-grained token form: name, expiry and the permissions the tools use.
       credentials:
-        'https://github.com/settings/personal-access-tokens/new?name=Cherry%20Studio&description=Cherry%20Studio%20plugin&expires_in=366&contents=read&issues=write&pull_requests=write',
+        'https://github.com/settings/personal-access-tokens/new?name=Cherry%20Studio&description=Cherry%20Studio%20plugin&expires_in=366&contents=write&issues=write&pull_requests=write&actions=read',
       website: 'https://github.com',
       authorizationManagement: 'https://github.com/settings/applications',
       privacy:
@@ -45,15 +45,33 @@ export const githubPlugin: PluginDefinition = {
   tools: {
     get_me: 'read',
     search_repositories: 'read',
+    search_code: 'read',
     search_issues: 'read',
     search_pull_requests: 'read',
     get_file_contents: 'read',
+    list_branches: 'read',
+    list_commits: 'read',
+    get_commit: 'read',
+    list_tags: 'read',
+    get_tag: 'read',
+    list_releases: 'read',
+    get_latest_release: 'read',
+    get_release_by_tag: 'read',
+    actions_list: 'read',
+    actions_get: 'read',
+    get_job_logs: 'read',
     list_pull_requests: 'read',
     issue_read: 'read',
     pull_request_read: 'read',
     issue_write: 'write',
     add_issue_comment: 'write',
     create_pull_request: 'write',
+    create_branch: 'write',
+    update_pull_request: 'write',
+    update_pull_request_branch: 'write',
+    merge_pull_request: 'write',
+    pull_request_review_write: 'write',
+    add_comment_to_pending_review: 'write',
   },
   authMethods: [
     ...(getGithubApplication() ? [githubUserMethod] : []),

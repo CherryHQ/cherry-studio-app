@@ -31,19 +31,19 @@ describe('agent-table definition source', () => {
     sqlite.close();
   });
 
-  test('maps live modeled agents and hides unusable definitions', async () => {
+  test('maps live modeled agents and hides missing or deleted agents', async () => {
     insertUserModel(sqlite, 'openai', 'gpt-4');
     const source = createAgentTableDefinitionSource();
     const agent = await agentService.create({
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
       instructions: 'Be terse.',
-      modelId: 'openai::gpt-4',
+      model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
 
     await expect(source.getAgent(agent.id)).resolves.toEqual({
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
       id: agent.id,
       instructions: 'Be terse.',
       model: { modelId: 'gpt-4', providerId: 'openai' },
@@ -52,11 +52,20 @@ describe('agent-table definition source', () => {
       toolApprovalMode: 'auto',
     });
 
-    const modelless = await agentService.create({ modelId: null, name: 'No Model' });
-    await expect(source.getAgent(modelless.id)).resolves.toBeNull();
+    await expect(source.getAgent('missing-agent')).resolves.toBeNull();
 
     await agentService.delete(agent.id);
     await expect(source.getAgent(agent.id)).resolves.toBeNull();
+  });
+
+  test('reports an unconfigured model separately from a missing agent', async () => {
+    const source = createAgentTableDefinitionSource();
+    const agent = await agentService.create({ model: null, name: 'No Model' });
+
+    await expect(source.getAgent(agent.id)).rejects.toMatchObject({
+      name: 'AgentProtocolError',
+      view: { code: 'AGENT_MODEL_NOT_CONFIGURED', retryable: false },
+    });
   });
 });
 

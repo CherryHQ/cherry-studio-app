@@ -8,6 +8,8 @@ import type { MessageListItem } from '../../types';
 import { UserMessage } from '../UserMessage';
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  BackgroundPressExclusion: (props: object) =>
+    jest.requireActual('react').createElement(jest.requireActual('react-native').View, props),
   ContextMenuExclusion: (props: object) =>
     jest.requireActual('react').createElement(jest.requireActual('react-native').View, props),
 }));

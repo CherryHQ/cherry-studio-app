@@ -6,9 +6,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 
 import { cn } from '../../utils';
 import { useMenuInteraction } from './menu-interaction';
+
+const ROW_CLASS_NAME = 'min-h-14 flex-row items-center gap-3 rounded-2xl px-3 py-2';
 
 /** Every action and toggle has one press target, one accessible node, and wrapping text. */
 export function MenuRow({
@@ -32,27 +35,27 @@ export function MenuRow({
   testID?: string;
   trailing?: ReactNode;
 }) {
-  const { close, isOpen, registerItem } = useMenuInteraction();
+  const { close, isOpen, registerItem, shouldUseNativePresses } = useMenuInteraction();
   const register = useCallback(
     (item: View | null) => (item ? registerItem?.(item) : undefined),
     [registerItem],
   );
 
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole={accessibilityRole}
-      accessibilityState={{ ...accessibilityState, disabled }}
-      className="min-h-14 flex-row items-center gap-3 rounded-2xl px-3 py-2 active:bg-secondary-active disabled:opacity-40"
-      disabled={disabled}
-      onPress={() => {
-        if (isOpen && !disabled) {
-          close(onPress);
-        }
-      }}
-      ref={register}
-      testID={testID}
-    >
+  const pressableProps = {
+    accessibilityLabel: label,
+    accessibilityRole,
+    accessibilityState: { ...accessibilityState, disabled },
+    disabled,
+    onPress: () => {
+      if (isOpen && !disabled) {
+        close(onPress);
+      }
+    },
+    ref: register,
+    testID,
+  };
+  const content = (
+    <>
       {icon ? (
         <MenuRowDecoration>
           <View className="size-10 items-center justify-center rounded-full bg-secondary">
@@ -69,6 +72,35 @@ export function MenuRow({
         {label}
       </Text>
       {trailing ? <MenuRowDecoration>{trailing}</MenuRowDecoration> : null}
+    </>
+  );
+
+  if (shouldUseNativePresses) {
+    return (
+      <GesturePressable {...pressableProps}>
+        {({ pressed }) => (
+          // Uniwind's interactive selectors belong to RN Pressable. Keep the
+          // row's geometry and pressed/disabled styling on a native View here.
+          <View
+            className={cn(
+              ROW_CLASS_NAME,
+              pressed && 'bg-secondary-active',
+              disabled && 'opacity-40',
+            )}
+          >
+            {content}
+          </View>
+        )}
+      </GesturePressable>
+    );
+  }
+
+  return (
+    <Pressable
+      {...pressableProps}
+      className={cn(ROW_CLASS_NAME, 'active:bg-secondary-active disabled:opacity-40')}
+    >
+      {content}
     </Pressable>
   );
 }

@@ -1,0 +1,20 @@
+diff --git a/ios/Widgets/Utils.swift b/ios/Widgets/Utils.swift
+index 2b4c044b597de7e0fab42dbc47af14d8bb521838..3ae14e9d0561638b37b205fb92f98f8108a293ea 100644
+--- a/ios/Widgets/Utils.swift
++++ b/ios/Widgets/Utils.swift
+@@ -92,11 +92,14 @@ func getLiveActivityEnvironment(for environment: EnvironmentValues, in context:
+   ]
+ 
+   env["isLuminanceReduced"] = environment.isLuminanceReduced
+-  env["isActivityFullscreen"] = environment.isActivityFullscreen
++  // The SDK marks this getter as available on iOS 16.1, but its weak-linked
++  // symbol is missing on iOS 17. Reading it there jumps to a null address.
++  env["isActivityFullscreen"] = false
+   if #available(iOS 16.2, *) {
+     env["isStale"] = context.isStale
+   }
+   if #available(iOS 18.0, *) {
++    env["isActivityFullscreen"] = environment.isActivityFullscreen
+     env["isActivityUpdateReduced"] = environment.isActivityUpdateReduced
+     env["activityFamily"] = "\(environment.activityFamily)"
+   }

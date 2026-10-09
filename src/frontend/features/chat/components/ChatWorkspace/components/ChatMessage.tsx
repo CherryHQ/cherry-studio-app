@@ -1,10 +1,11 @@
 import {
+  BackgroundPressExclusion,
   Button,
   ContextMenu,
   ContextMenuExclusion,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, type ReactElement } from 'react';
+import { memo, type ReactElement, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -14,7 +15,6 @@ import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { AssistantMessageUsage } from './AssistantMessageUsage';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -28,12 +28,18 @@ type ChatMessageProps = {
   isScreenReaderEnabled?: boolean;
   message: MessageListItem;
   shouldShowTimestamp: boolean;
+  attachments?: ReactNode;
+  accessories?: ReactNode;
+  /** A stable renderer, called here so the row's memo boundary still holds. */
+  renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
 function renderChatAssistantMessage(
-  isTextSelectionEnabled: boolean,
   message: MessageListItem,
   presentation: AssistantMessagePresentation,
+  attachments: ReactNode,
+  accessories: ReactNode,
+  renderUsage: ((message: MessageListItem) => ReactNode) | undefined,
 ) {
   return (
     <View className="w-full gap-2.5">
@@ -59,14 +65,16 @@ function renderChatAssistantMessage(
           ) : null}
         </View>
       </View>
-      <AssistantMessage isTextSelectionEnabled={isTextSelectionEnabled} message={message}>
+      <AssistantMessage message={message}>
+        {attachments}
+        {accessories}
         {message.status !== 'pending' ? (
-          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-            <AssistantMessageToolbar message={message} />
-            <View className="min-w-0 max-w-full flex-1 items-end">
-              <AssistantMessageUsage message={message} />
-            </View>
-          </ContextMenuExclusion>
+          <BackgroundPressExclusion>
+            <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+              <AssistantMessageToolbar message={message} />
+              <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
+            </ContextMenuExclusion>
+          </BackgroundPressExclusion>
         ) : null}
       </AssistantMessage>
     </View>
@@ -97,14 +105,25 @@ export const ChatMessage = memo(function ChatMessage({
   isScreenReaderEnabled = false,
   message,
   shouldShowTimestamp,
+  attachments,
+  accessories,
+  renderUsage,
 }: ChatMessageProps) {
-  const isTextSelectionEnabled = !isMessageActionsEnabled;
   const createdAt = shouldShowTimestamp ? formatMessageCreatedAt(message.createdAt) : undefined;
   const content =
     message.role === 'user' ? (
-      <UserMessage message={message} />
+      <View className="gap-2">
+        <UserMessage attachments={attachments} message={message} />
+        {accessories}
+      </View>
     ) : (
-      renderChatAssistantMessage(isTextSelectionEnabled, message, assistantPresentation)
+      renderChatAssistantMessage(
+        message,
+        assistantPresentation,
+        attachments,
+        accessories,
+        renderUsage,
+      )
     );
 
   return (
@@ -142,6 +161,9 @@ function ChatMessageContextMenu({
   // These existing actions and the text projection accept either message role.
   const text =
     message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? []);
+  // Non-destructive actions only. A long press competes with native text
+  // selection and lands on whatever the finger happens to reach, which is not
+  // a gesture that should be able to remove a turn.
   const items: readonly MenuItem[] =
     message.status === 'pending'
       ? []
@@ -166,22 +188,24 @@ function ChatMessageContextMenu({
         {/* Keep attachment and text nodes independently reachable. Assistant rows already
             have a toolbar; user rows need explicit actions when long press is unavailable. */}
         {isScreenReaderEnabled && message.role === 'user' && items.length > 0 ? (
-          <ContextMenuExclusion className="flex-row justify-end gap-1">
-            {items
-              .filter((item) => !item.disabled)
-              .map((item) => (
-                <Button
-                  accessibilityLabel={item.label}
-                  key={item.id}
-                  onPress={item.onPress}
-                  size="xs"
-                  testID={`user-message-${item.id}`}
-                  variant="ghost"
-                >
-                  {item.label}
-                </Button>
-              ))}
-          </ContextMenuExclusion>
+          <BackgroundPressExclusion>
+            <ContextMenuExclusion className="flex-row justify-end gap-1">
+              {items
+                .filter((item) => !item.disabled)
+                .map((item) => (
+                  <Button
+                    accessibilityLabel={item.label}
+                    key={item.id}
+                    onPress={item.onPress}
+                    size="xs"
+                    testID={`user-message-${item.id}`}
+                    variant="ghost"
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+            </ContextMenuExclusion>
+          </BackgroundPressExclusion>
         ) : null}
       </View>
     </ContextMenu>

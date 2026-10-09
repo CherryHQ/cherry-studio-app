@@ -2,12 +2,14 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, health, location, web search and fetch,
-image generation, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
-`{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and the Agent's capability-group deny-list, then combines it with
+The system catalog ships device calendar and reminders, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+`run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
+Host resolves that catalog against model tool support, platform, OS permission, app
+configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location) are enabled per Agent in the editor; the three file tools belong to every turn. An
+location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -82,9 +84,7 @@ content. See [Web Search](../web-search.md) for the request and partial-result p
 `generate_image` additionally requires a configured drawing model. An OS permission scope
 that can still be requested keeps a device tool available as `ask`; execution prompts after
 in-app approval, including after a denial when the OS allows another request. Permanently denied,
-unavailable, or unreadable permission states remove dependent tools for the turn. Health summaries
-need only one usable or requestable metric; execution checks the metrics selected by the call.
-HealthKit's `requested` state permits a query without claiming that read access was granted.
+unavailable, or unreadable permission states remove dependent tools for the turn.
 The inference snapshot records the tools that entered the immutable turn. Enabling an Agent
 capability changes its preference; it does not itself request OS permission.
 
@@ -151,6 +151,28 @@ Cherry are repeated inside `execute()` immediately before the side effect. A mis
 permission, deleted file, or disconnected server fails closed; the callback never performs a
 fallback action with broader access.
 
+Step 4 does not wait on the network for a server that has already been listed. The MCP runtime
+reuses each server's last complete `tools/list` result, kept in memory for the current connection
+configuration and in a per-server file under the app cache directory, until that server is
+invalidated by an endpoint, header, or grant change, a disable, a delete, or a plugin connect or
+disconnect. Plugin connection validation collects the full tool catalog before saving the grant;
+after the save, the runtime caches those definitions under the new grant without a second network
+discovery. A send arriving during that local cache handoff waits for it through the existing turn
+preparation path. The temporary validation client is closed; actual tool calls still use a
+grant-bound client and its live routing checks.
+
+There is no timed refresh: the catalog is reconciled where the network is already in
+use, when a fresh connection lists tools before its first call and whenever the settings screens
+read live. A catalog with partial-discovery warnings is served immediately and never written to
+disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+partial catalogs refresh in the background after that delay. Consecutive failures start at 30
+seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
+screens may still probe the server. The file stores a
+fingerprint of the connection configuration rather than its headers. Because the frozen tool is
+pinned to the catalog rather than to a live connection, it may execute over a reconnected client for
+the same configuration; execution still rereads the stored server row, and a tool absent from the
+live listing fails closed.
+
 The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
 application function by name: every callable target must still exist in the frozen turn catalog.
 The Pi binding consumes the Host-prepared application prompt, exposes system capabilities directly,
@@ -207,7 +229,8 @@ Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
 extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed.
+are never compiled or executed. `run_js` is not a substitute for `tool_exec`: its sandbox cannot
+call tools, MCP, or any application capability.
 
 ## Controlled File Ledger
 
@@ -272,7 +295,7 @@ read it through a controlled tool; otherwise the reference remains visible as un
 under `artifacts`. `edit_file` additionally returns the source id, replacement count, and a
 bounded snippet of the edited region; when it saves a new version it marks that entry as `derived`,
 and when it rewrites this turn's draft it returns no artifact because the draft's file part already
-exists. `read_file` returns a text-line or AnyDoc JSON-character window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
+exists. `read_file` returns a line or code-point window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
 each imported image under `artifacts`; each image is named after its prompt (`readableFilename`),
 never after an id. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
 persists both the result envelope and the file parts. Device and web capabilities return portable
@@ -313,10 +336,11 @@ retry; cancellation still propagates without becoming a cached failure.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
   a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
-- The Host freezes the discovered tools for the turn, including the endpoint URL and live Runtime
-  generation that produced them. An endpoint edit, invalidation, or reconnect makes an old callback
+- The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
+  generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
-  catalog, even when the server row keeps the same URL.
+  catalog, even when the server row keeps the same URL. A transport reconnect for the same
+  configuration keeps the frozen callback usable and lists the live catalog before its first call.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.
@@ -352,25 +376,14 @@ retry; cancellation still propagates without becoming a cached failure.
   batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
   until its native callback settles.
 
-### System Health
+### Retired Health Capability
 
-- [Health Access](../../../modules/health-access/README.md) owns native read authorization;
-  `src/backend/services/permissions` maps its results to the shared permission contract. Data
-  queries remain in `src/backend/services/device/health.ts` using Nitro HealthKit.
-- The Nitro HealthKit Android patch propagates record-read failures after quota retries and native
-  aggregate failures. Failed queries must not resolve as empty data or a measured zero; the caller
-  marks the affected metric as `error` while retaining successful metrics. This patch and the iOS
-  calendar requester patch require a new native build.
-- Android awaits the runtime permission callback on Android 14+ and the Health Connect activity
-  result on earlier versions, then reads grants per data type. Settings open Health Connect
-  management even when all permissions are already granted.
-  Unsupported devices hide the capability; a missing or outdated provider retains an install path.
-- Apple Health never discloses whether a read permission was granted. `requested` means the system
-  no longer needs to ask, and settings explain how to review access in Apple Health.
-- Summaries request only selected metrics, skip known denied metrics, and preserve successful
-  metrics when another query fails. Absent data is `null` in range summaries, with per-metric
-  `no-data` or `error` states; it must not be interpreted as zero activity. Daily results omit
-  missing values. Queries remain subject to the system's history limits.
+The first App Store release omits health access. The executable catalog, Agent capability groups,
+permission settings, native dependencies, entitlements, and usage descriptions contain no health
+capability. Persisted Agent deny-lists drop the retired `health` id on read using the existing
+unknown-capability guard. Existing conversations retain health tool result labels and icons for
+historical display; those entries do not register executable tools or request permissions.
+Restoring health access requires a separate native feature and App Store submission.
 
 ### Image Generation
 
@@ -388,14 +401,18 @@ retry; cancellation still propagates without becoming a cached failure.
 ### Managed File Write And Edit
 
 `write_file` accepts a display name rather than a path, writes
-bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. The
+bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. It
+refuses content holding NUL, the one character `read_file` treats as binary, so nothing it writes is
+unreadable later. The
 model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
 opaque failure.
 
 `edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
 It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
-larger than 1 MiB. Matching is exact and case-sensitive: a single edit requires exactly one
+larger than 1 MiB; a `replace_all` result is bounded before it is built, so a short match with a long
+replacement cannot allocate far past the limit. Like `write_file`, it refuses a `new_string` holding
+NUL. Matching is exact and case-sensitive: a single edit requires exactly one
 non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
 BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
 tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
@@ -441,28 +458,76 @@ lines, at most 2,000) and returns
 `{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
 window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
 next line to request. A single line larger than the whole budget is the one case that cannot be cut
-on a boundary: the head is returned with `lineTruncated: true` and the read reports itself
-truncated, because the rest of that line is unreachable by asking for a later line and silence would
-present a fraction of a minified file as the whole of it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
-`edit_file`. Documents use the selected local parser and 20 MiB
+on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
+and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
+later line cannot reach it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
+`edit_file`; NUL is the only control character refused as binary. Documents use the selected local parser and 20 MiB
 source ceiling described in [File Model](../data/file-model.md). `sourceTruncated: true` means the
 document extractor reached its own page/row/text limit; it is independent of the pageable window's
 `truncated` flag. This lets a model continue reading an attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
-For AnyDoc output, use zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode
-code points), never line parameters. The result is explicitly `format: 'json-fragment'`, with
-`text`, `offset`, `characterCount`, `totalCharacters`, `nextOffset`, and `complete`. Concatenating
+Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the
+full text as a raw code-point window instead of lines, returning `text`, `offset`,
+`characterCount`, `totalCharacters`, `nextOffset`, and `complete`. They are how a cut line
+continues, and the only paging AnyDoc output accepts: its result is explicitly
+`format: 'json-fragment'`. Concatenating
 successive `text` windows until `nextOffset` is null recovers the complete original IR JSON, even
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Assets are
 `reference-only`: no pixel bytes, image artifacts, or multimodal tool-result extension is added.
-Mixed line/JSON parameters fail explicitly. The original community `fallback` result remains an
+Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
+
+The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
+than once per window. A document entry is never rewritten in place — only this turn's UTF-8 drafts
+are — so the cache needs no invalidation. Ordinary text is read fresh on every call.
 
 Both tools run without approval because they have no destructive form, and the Host offers them only
 to models that support function calling. Handing tools to a model that cannot call them fails the
 whole turn. Implementation: `src/backend/ai/agent/tools/`.
+
+### JavaScript Sandbox
+
+`run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
+counting, sorting, parsing, and data transformation. It takes a `code` string, run as the body of an
+async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
+`{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
+`syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
+the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
+budget follows Pi's codemode tool; mobile execution has a bounded deadline and shared concurrency
+limit.
+
+Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
+creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
+script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
+`queueMicrotask`, `performance.now()`, and a captured `console`; there is no `Intl`,
+so locale arguments are ignored. Timers, modules, network, files, and every application binding are
+absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
+`auto` without an Agent capability group and requires only that the model supports function calling
+and the client includes the native module; older clients omit the tool. Every call starts fresh;
+inputs must be included in the code and results are retained through tool-result messages.
+
+- **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
+  token) keeps the structured form above. Longer output becomes one `output` text that keeps its
+  start and end around a count of the removed tokens, and the full text — the returned value's JSON,
+  then the console output — is saved as a generated `run_js-output.txt` managed file. The result
+  carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
+  through it. The native side captures at most 500 KiB of each, which keeps a saved output within
+  `read_file`'s source limit.
+- **Limits.** Execution defaults to 5 seconds; `timeout_ms` can request at most 30 seconds.
+  Across all turns, the sandbox service runs at most two scripts concurrently and queues the rest
+  in arrival order. Queue waiting does not consume the execution deadline. Cancelling a queued call
+  removes it; cancelling a running call releases the caller immediately but holds its slot until
+  native cleanup finishes. QuickJS interrupts bytecode and regular expressions, and JavaScript
+  cannot catch the interruption. Each runtime's heap is limited to 64 MiB; an allocation past it
+  fails inside the script. Native stacks and output copies consume additional memory, and the
+  sandbox shares the app process, so these limits do not provide process-level crash isolation.
+  Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+
+The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
+data it needs into the code because the sandbox cannot read files or tool results itself, and to page
+through a saved output instead of rerunning the script.
 
 ### Skill Boundary
 
@@ -487,7 +552,7 @@ work must discard late results after the turn is terminal.
 
 Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
 one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit and the same ten-minute turn deadline. The MCP
+This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
 adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
 limits are application constants rather than user settings in Version 1.
 
@@ -496,11 +561,11 @@ limits are application constants rather than user settings in Version 1.
 Cherry Desktop proves the useful semantics: Pi owns its tool loop, MCP tools are adapted into Pi,
 tools are disabled and approved by application policy, and skills are injected explicitly. Mobile
 ports those semantics but not the Electron/Node execution surface. Desktop workspaces, shell tools,
-JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and executable Skill
-trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
-adapters are semantic ports.
+tool-calling JavaScript execution, arbitrary filesystem paths, local MCP processes, and executable
+Skill trees are explicit mobile exclusions; `run_js` computes in isolation and calls nothing.
+Streamable HTTP MCP and device/application capability adapters are semantic ports.
 
-The planned PC Agent Controller may reuse the normalized application presentation of a tool or
+The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps
 their opaque identities, lifecycle, approval requests, and resource results into Agent Protocol
 values; it does not register them as local `RuntimeTool` callbacks. They are different from a local
@@ -527,3 +592,72 @@ desktop event labels or persistence shapes.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.
+
+
+## User Questions
+
+`ask_user_question` is a core system tool, available when the model supports tool calls and the
+Agent does not use automatic approval. Choosing automatic approval means the user does not want the
+turn to stop for them, so that mode withholds the tool and the model asks for missing decisions in
+its reply. One call contains one to eight questions with unique IDs, each with up to four concise
+options and single or multiple selection. An empty options array requests free text only. The tool
+waits for a user response; it is not a tool-approval request and never auto-selects an answer. A custom
+text answer and skipping are always available. Skipping does not authorize an action.
+
+The Host supplies the response channel to the catalog through turn preparation; each call carries
+its turn id, so the Host correlates the question to the live turn and tool-call ID. The Protocol
+publishes `question.updated` and includes `pendingQuestion` in observation snapshots. While a
+question is pending, the turn reports `awaiting-input`. A question sheet opens over the chat and
+leaves the ordinary input's draft intact; desktop question forms in remote chat reuse the same sheet
+through the shared interaction contract. It shows one question at a time with its full text in the
+scrolling body, radio options for a single choice, and checkboxes for multiple. Choosing never
+navigates; tapping a selected option clears it so the answer can return to free text only or be
+skipped. The footer action reads skip until the question is answered, next once it is, and submit on
+the last question, with previous beside it. Choices and free text remain editable until the user
+submits the complete set; local submission marks any unanswered question skipped.
+Skip never submits or cancels the turn. There is no close control.
+Turn cancellation discards the pending request without submitting answers. Approval requests take
+presentation priority if tools were called concurrently, without discarding the question draft.
+When the source is no longer current, the sheet closes while preserving its draft so navigation and
+connection recovery stay reachable; the same request reopens when the source recovers.
+A second simultaneous question call is rejected.
+
+Question arguments and successful answers use ordinary persisted tool parts. The transcript shows
+a flat read-only record of every question and answer, associated by `questionId`. Missing, duplicate,
+unknown, or invalid answers reject the whole response without settling the wait. Pending callbacks and waiting state are memory-only, like
+approvals: leaving a route does not cancel the turn, but cancellation, host disposal, and process
+restart invalidate the question. Persisted unanswered questions are not resumable controls.
+
+A question waits for its answer like an approval wait; the turn has no deadline to expire meanwhile. Background activity uses the existing approval attention phase
+with a question-specific label and releases its keep-alive lease. This does not promise indefinite
+background execution or recovery after the operating system terminates the app.
+
+
+## Agent Management
+
+The `agents` capability group contains `agent_list`, `agent_get`, `agent_create`, and `agent_update`.
+The editor lists it as Agent management alongside the other capability groups; it needs no OS
+permission. New Agents start with it disabled,
+whether created from the editor or by these tools; the seeded default Agent keeps it enabled so a
+fresh installation can create Agents from conversation. Reads use automatic approval; writes start at `ask` and follow the current Agent's approval
+preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
+or change MCP bindings.
+
+Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
+`AgentService` resolve the global default Agent model; omitted capability settings use the same
+disabled groups as the manual create form. A saved Agent without a model remains editable
+but cannot start chatting. The model derives instructions from the conversation and may use
+`ask_user_question` for material missing requirements.
+
+`agent_list` supports name search and pagination, returns at most 50 compact records per call,
+and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+update accept `current` to refer to the originating conversation's Agent. Update requires that
+version and an explicit field patch. The persistence transaction compares the row timestamp before
+writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
+latest definition. Changes to the active Agent apply to future turns only.
+
+Create/update publish committed Data API cache invalidations, including when a turn has no visible
+chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is
+configured. List/read results remain in the process disclosure. Results omit managed
+avatar paths and credentials. Writes are not automatically replayed: after an uncertain outcome,
+inspect current saved records before deciding whether another write is needed.

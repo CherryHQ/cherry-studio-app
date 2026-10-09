@@ -19,12 +19,15 @@ export function useFileUri(entryId: FileEntryId, { enabled = true }: { enabled?:
   });
 }
 
-export function useResolvedFile(entryId: FileEntryId) {
+export function useResolvedFile(entryId: FileEntryId | undefined) {
   const entryQuery = useDataQuery('/files/entries/:id', {
-    params: { id: entryId },
+    enabled: entryId !== undefined,
+    params: { id: entryId ?? '' },
     retry: false,
   });
-  const uriQuery = useFileUri(entryId, { enabled: Boolean(entryQuery.data) });
+  const uriQuery = useFileUri(entryId ?? '', {
+    enabled: entryId !== undefined && Boolean(entryQuery.data),
+  });
   const data =
     entryQuery.data && uriQuery.data ? { entry: entryQuery.data, uri: uriQuery.data } : null;
 

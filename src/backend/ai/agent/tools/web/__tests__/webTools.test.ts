@@ -209,6 +209,7 @@ describe('createWebTools', () => {
         input: { urls: ['https://example.com'] },
         signal: controller.signal,
         toolCallId: 'cancelled',
+        turnId: 'turn-1',
       }),
     ).rejects.toBe(reason);
   });
@@ -322,6 +323,7 @@ describe('createWebTools', () => {
         input: { query: 'cherry studio' },
         signal: controller.signal,
         toolCallId: 'cancelled-call',
+        turnId: 'turn-1',
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(webSearch.searchKeywords).toHaveBeenCalledTimes(1);
@@ -538,5 +540,10 @@ function toolNamed(
 }
 
 function execute(tool: RuntimeTool, input: RuntimeJsonValue): Promise<RuntimeToolResult> {
-  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({
+    input,
+    signal: new AbortController().signal,
+    toolCallId: 'call-1',
+    turnId: 'turn-1',
+  });
 }

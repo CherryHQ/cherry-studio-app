@@ -11,6 +11,7 @@ import { schema } from '@/backend/data/db/schemas';
 
 import { contentSearchService } from '../ContentSearchService';
 import { entitySearchService } from '../EntitySearchService';
+import { toSearchableText } from '../utils/searchSnippet';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 jest.mock('@logger', () => ({
@@ -36,8 +37,10 @@ type MigrationJournal = { entries: { tag: string }[] };
 describe('auxiliary Data API integration', () => {
   let sqlite: DatabaseSync;
   let dbService: DbService;
+  let asyncReads: { query: string; params: SQLInputValue[] }[];
 
   beforeEach(async () => {
+    asyncReads = [];
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -63,8 +66,10 @@ describe('auxiliary Data API integration', () => {
     dbService = {
       getDb: () => database,
       getSqlite: () => ({
-        getAllAsync: async (query: string, params: SQLInputValue[]) =>
-          sqlite.prepare(query).all(...params),
+        getAllAsync: async (query: string, params: SQLInputValue[]) => {
+          asyncReads.push({ query, params });
+          return sqlite.prepare(query).all(...params);
+        },
       }),
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         sqlite.exec('BEGIN IMMEDIATE');
@@ -107,7 +112,7 @@ describe('auxiliary Data API integration', () => {
       .run(sessionId, agentId, 'Needle Session', 1, now, now, now);
     sqlite
       .prepare(
-        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, searchable_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         userMessageId,
@@ -116,15 +121,15 @@ describe('auxiliary Data API integration', () => {
         'user',
         JSON.stringify({
           parts: [{ id: 'question-0', text: 'first question', type: 'text', state: 'done' }],
-          version: 1,
         }),
         'success',
+        'first question',
         now,
         now,
       );
     sqlite
       .prepare(
-        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, searchable_text, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
         assistantMessageId,
@@ -133,9 +138,9 @@ describe('auxiliary Data API integration', () => {
         'assistant',
         JSON.stringify({
           parts: [{ id: 'answer-0', text: '**needle** answer', type: 'text', state: 'done' }],
-          version: 1,
         }),
         'success',
+        'needle answer',
         now + 1,
         now + 1,
       );
@@ -200,6 +205,29 @@ describe('auxiliary Data API integration', () => {
     expect(result.items.map((item) => item.messageId)).toEqual(['visible']);
   });
 
+  test('narrows indexed terms through the trigram index instead of scanning it', async () => {
+    insertSearchMessages(sqlite, [
+      { id: 'match', text: '支持**多模态**输入', createdAt: 1 },
+      {
+        id: 'markdown-noise',
+        text: '**unrelated** `code` [link](https://example.com)',
+        createdAt: 2,
+      },
+    ]);
+    const result = await contentSearchService.search({ q: '支持多模态' });
+    expect(result.items.map((item) => item.messageId)).toEqual(['match']);
+    const ftsRead = asyncReads.find(({ query }) => query.includes('agent_session_message_fts'));
+    if (!ftsRead) throw new Error('indexed search should read through the FTS table');
+    const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${ftsRead.query}`).all(...ftsRead.params) as {
+      detail: string;
+    }[];
+    // `INDEX 0:` alone is a full virtual-table scan; `L` marks a LIKE constraint
+    // the trigram tokenizer answers from the index.
+    expect(plan.map(({ detail }) => detail)).toContainEqual(
+      expect.stringMatching(/^SCAN fts VIRTUAL TABLE INDEX 0:L/),
+    );
+  });
+
   test('continues a short-word search beyond a full batch with no matches', async () => {
     insertSearchMessages(sqlite, [
       { id: 'old-match', text: '明天的计划', createdAt: 0 },
@@ -227,16 +255,15 @@ function insertSearchMessages(
     INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
     VALUES ('search-session', 'search-agent', 'Search Session', 1, 1, 1);`);
   const statement = sqlite.prepare(`INSERT INTO agent_session_message
-    (id, session_id, role, data, status, created_at, updated_at)
-    VALUES (?, 'search-session', ?, ?, 'success', ?, ?)`);
+    (id, session_id, role, data, status, searchable_text, created_at, updated_at)
+    VALUES (?, 'search-session', ?, ?, 'success', ?, ?, ?)`);
   for (const message of messages) {
+    const parts = [{ id: message.id, type: 'text', state: 'done', text: message.text }] as const;
     statement.run(
       message.id,
       message.role ?? 'assistant',
-      JSON.stringify({
-        version: 1,
-        parts: [{ id: message.id, type: 'text', state: 'done', text: message.text }],
-      }),
+      JSON.stringify({ parts }),
+      toSearchableText(parts),
       message.createdAt,
       message.createdAt,
     );

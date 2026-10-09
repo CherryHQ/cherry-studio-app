@@ -1,9 +1,20 @@
 package expo.modules.crashreporting
 
 import io.sentry.SentryEvent
+import io.sentry.Breadcrumb
+import io.sentry.SentryLevel
 import io.sentry.protocol.Device
 import io.sentry.protocol.OperatingSystem
 import io.sentry.protocol.SentryStackTrace
+
+internal fun sanitizeCrashBreadcrumb(crumb: Breadcrumb): Breadcrumb? {
+  if (crumb.category != "app.diagnostic" || crumb.message !in CrashReportingState.breadcrumbCodes) return null
+  return Breadcrumb(crumb.timestamp).apply {
+    category = "app.diagnostic"
+    message = crumb.message
+    level = SentryLevel.INFO
+  }
+}
 
 private fun cleanStack(stack: SentryStackTrace?) {
   stack?.frames?.forEach { frame ->
@@ -17,8 +28,8 @@ private fun cleanStack(stack: SentryStackTrace?) {
 
 /** Delete free-form fields in place. Error classification, stacks, and debug images stay as produced. */
 internal fun sanitizeCrashEvent(event: SentryEvent): SentryEvent? {
-  // React Native already reports these through its JavaScript error handler.
-  if (event.exceptions?.any { it.type == "JavascriptException" } == true) return null
+  // A native fatal is still useful when the JS handler could not initialize or deliver its event.
+  val isJavaScriptFatal = event.exceptions?.any { it.type == "JavascriptException" } == true
 
   event.message = null
   event.logger = null
@@ -29,9 +40,11 @@ internal fun sanitizeCrashEvent(event: SentryEvent): SentryEvent? {
   event.extras = null
   event.user = null
   event.request = null
-  event.breadcrumbs = null
+  event.breadcrumbs = event.breadcrumbs?.mapNotNull(::sanitizeCrashBreadcrumb)
+    ?.takeLast(CrashReportingState.breadcrumbLimit)
   event.unknown = null
   event.tags = mapOf("event.origin" to "native", "event.platform" to "android")
+  if (isJavaScriptFatal) event.setTag("error.kind", "javascript_fatal")
 
   val os = event.contexts.operatingSystem?.let { original ->
     OperatingSystem().apply {

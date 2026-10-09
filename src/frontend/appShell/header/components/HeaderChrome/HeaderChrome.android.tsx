@@ -1,7 +1,8 @@
 import { Stack } from 'expo-router';
 import { useMemo } from 'react';
+import { View } from 'react-native';
 
-import { headerScreenOptions } from '../../headerScreenOptions';
+import { headerScreenOptions, mainHeaderRowHeight } from '../../headerScreenOptions';
 import { HeaderActionGroup } from '../HeaderActionGroup/HeaderActionGroup';
 import type { HeaderChromeProps } from './HeaderChrome.types';
 
@@ -30,7 +31,15 @@ export function HeaderChrome({
       ...headerScreenOptions,
       headerLeft: () => leftContent,
       headerRight: rightContent ? () => rightContent : undefined,
-      headerTitle: titleElement ? () => titleElement : undefined,
+      // The toolbar hands a custom title the full bar height and lays its content out from the
+      // top, so a title shorter than the bar has to centre itself against the bar's action buttons.
+      headerTitle: titleElement
+        ? () => (
+            <View style={{ height: mainHeaderRowHeight, justifyContent: 'center' }}>
+              {titleElement}
+            </View>
+          )
+        : undefined,
       headerTitleAlign: titleAlign,
       title: titleElement ? '' : title,
     }),

@@ -33,9 +33,9 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuCheckedState; 
 // Forward declaration of `NativeMenuIcon` to properly resolve imports.
 namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuIcon; }
 
+#include <string>
 #include "NativeMenuCheckedState.hpp"
 #include "NativeMenuIcon.hpp"
-#include <string>
 
 namespace margelo::nitro::cherrystudio::ui {
 
@@ -44,6 +44,7 @@ namespace margelo::nitro::cherrystudio::ui {
    */
   struct NativeMenuItem final {
   public:
+    std::string group     SWIFT_PRIVATE;
     NativeMenuCheckedState checked     SWIFT_PRIVATE;
     bool destructive     SWIFT_PRIVATE;
     bool disabled     SWIFT_PRIVATE;
@@ -53,7 +54,7 @@ namespace margelo::nitro::cherrystudio::ui {
 
   public:
     NativeMenuItem() = default;
-    explicit NativeMenuItem(NativeMenuCheckedState checked, bool destructive, bool disabled, NativeMenuIcon icon, std::string id, std::string label): checked(checked), destructive(destructive), disabled(disabled), icon(icon), id(id), label(label) {}
+    explicit NativeMenuItem(std::string group, NativeMenuCheckedState checked, bool destructive, bool disabled, NativeMenuIcon icon, std::string id, std::string label): group(group), checked(checked), destructive(destructive), disabled(disabled), icon(icon), id(id), label(label) {}
 
   public:
     friend bool operator==(const NativeMenuItem& lhs, const NativeMenuItem& rhs) = default;
@@ -69,6 +70,7 @@ namespace margelo::nitro {
     static inline margelo::nitro::cherrystudio::ui::NativeMenuItem fromJSI(jsi::Runtime& runtime, const jsi::Value& arg) {
       jsi::Object obj = arg.asObject(runtime);
       return margelo::nitro::cherrystudio::ui::NativeMenuItem(
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "group"))),
         JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "checked"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "destructive"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled"))),
@@ -79,6 +81,7 @@ namespace margelo::nitro {
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::cherrystudio::ui::NativeMenuItem& arg) {
       jsi::Object obj(runtime);
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "group"), JSIConverter<std::string>::toJSI(runtime, arg.group));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "checked"), JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::toJSI(runtime, arg.checked));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "destructive"), JSIConverter<bool>::toJSI(runtime, arg.destructive));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "disabled"), JSIConverter<bool>::toJSI(runtime, arg.disabled));
@@ -95,6 +98,7 @@ namespace margelo::nitro {
       if (!nitro::isPlainObject(runtime, obj)) {
         return false;
       }
+      if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "group")))) return false;
       if (!JSIConverter<margelo::nitro::cherrystudio::ui::NativeMenuCheckedState>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "checked")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "destructive")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled")))) return false;

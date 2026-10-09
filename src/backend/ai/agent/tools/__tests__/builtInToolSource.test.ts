@@ -1,4 +1,5 @@
 import { fileContent } from '@/backend/services/file/fileContent';
+import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { FileEntrySchema } from '@/shared/data/types/file';
@@ -7,6 +8,7 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import type { TurnToolResources } from '../../resources/managedFileResolver';
 import { managedFileResolver } from '../../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../../runtime';
+import type { AskUserQuestion } from '../askUserQuestionTool';
 import {
   createSystemCapabilitySource,
   type SystemCapabilityServices,
@@ -21,6 +23,9 @@ jest.mock('@/backend/services/permissions', () => ({
 }));
 
 const MODEL: RuntimeModel = { providerId: 'openai', modelId: 'gpt-test' };
+const noAskUser: AskUserQuestion = async () => {
+  throw new Error('This scenario asks no questions.');
+};
 const TURN_RESOURCES: TurnToolResources = {
   availableFiles: new Map(),
   draftFileEntryIds: new Set<string>(),
@@ -38,13 +43,36 @@ describe('createSystemCapabilitySource', () => {
 
     // Every device tool needs a permission, web tools need a configured
     // provider, and generate_image needs a drawing model, so only the
-    // unconditional file tools survive.
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
+    // permission-free Agent management, question and file tools survive.
+    expect(capabilityIds(tools)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
+      'edit_file',
+      'read_file',
+      'write_file',
+    ]);
+  });
+
+  test('offers run_js without approval only when the client has the native sandbox', async () => {
+    const withoutSandbox = await resolve({});
+    expect(capabilityIds(withoutSandbox)).not.toContain('run_js');
+
+    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    expect(capabilityIds(tools)).toContain('run_js');
+    expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
   test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
@@ -84,7 +112,16 @@ describe('createSystemCapabilitySource', () => {
       disabledCapabilities: ['calendar'],
     });
 
-    expect(capabilityIds(tools)).toEqual(['edit_file', 'read_file', 'write_file']);
+    expect(capabilityIds(tools)).toEqual([
+      'agent_create',
+      'agent_get',
+      'agent_list',
+      'agent_update',
+      'ask_user_question',
+      'edit_file',
+      'read_file',
+      'write_file',
+    ]);
   });
 
   test('reads mutations as ask and lookups as auto', async () => {
@@ -96,18 +133,22 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'calendar_create_event')).toBe('ask');
   });
 
-  test('offers health summaries with just one granted metric without enabling workouts', async () => {
-    const tools = await resolve({
-      deviceAccess: { 'health.steps.read': 'granted', 'health.workouts.read': 'denied' },
-    });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-    expect(capabilityIds(tools)).not.toContain('health_list_workouts');
-  });
-
-  test('allows HealthKit read attempts after an inquiry without requiring a fictitious read grant', async () => {
-    const tools = await resolve({ deviceAccess: { 'health.steps.read': 'requested' } });
-    expect(capabilityIds(tools)).toContain('health_get_summary');
-  });
+  test.each(['ios', 'android'])(
+    'omits retired health tools despite existing device grants on %s',
+    async (platform) => {
+      const deviceAccess = {
+        'calendar.read': 'granted',
+        'calendar.write': 'granted',
+        'health.steps.read': 'granted',
+        'health.workouts.read': 'granted',
+      } as const;
+      const tools = await resolve({ deviceAccess }, { platform });
+      expect(capabilityIds(tools)).toContain('calendar_list_events');
+      expect(capabilityIds(tools)).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/^health_/)]),
+      );
+    },
+  );
 
   test('offers each web tool only when its provider is configured', async () => {
     const unconfigured = await resolve({});
@@ -128,6 +169,98 @@ describe('createSystemCapabilitySource', () => {
 
     expect(capabilityIds(tools)).not.toContain('web_search');
     expect(capabilityIds(tools)).not.toContain('web_fetch');
+  });
+
+  test('omits Agent management tools when the Agent disables the group', async () => {
+    const tools = await resolve({ disabledCapabilities: ['agents'] });
+
+    expect(capabilityIds(tools)).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(/^agent_/)]),
+    );
+    expect(capabilityIds(tools)).toContain('ask_user_question');
+  });
+
+  test('binds the Host response channel into ask_user_question with the calling turn', async () => {
+    const answer = {
+      answers: [{ questionId: 'pick', selectedOptionIds: ['a'], text: '', skipped: false }],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
+    const tools = await resolve({}, { askUser });
+    const question = {
+      questions: [
+        {
+          id: 'pick',
+          question: 'Which?',
+          selection: 'single',
+          options: [
+            { id: 'a', label: 'A' },
+            { id: 'b', label: 'B' },
+          ],
+        },
+      ],
+    };
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question');
+    if (!ask) throw new Error('ask_user_question was not available.');
+
+    const result = await ask.execute({
+      input: question,
+      signal: new AbortController().signal,
+      toolCallId: 'question-1',
+      turnId: 'turn-7',
+    });
+
+    expect(askUser).toHaveBeenCalledWith(
+      question,
+      expect.objectContaining({ toolCallId: 'question-1', turnId: 'turn-7' }),
+    );
+    expect(result.value).toMatchObject({
+      ...answer,
+      selectedOptions: [{ questionId: 'pick', options: [{ id: 'a', label: 'A' }] }],
+    });
+  });
+
+  test('returns batch answers and selected labels associated by question ID', async () => {
+    const answer = {
+      answers: [
+        { questionId: 'second', selectedOptionIds: ['a'], text: 'Extra', skipped: false },
+        { questionId: 'first', selectedOptionIds: [], text: '', skipped: true },
+      ],
+    };
+    const askUser = jest.fn<ReturnType<AskUserQuestion>, Parameters<AskUserQuestion>>(
+      async () => answer,
+    );
+    const tools = await resolve({}, { askUser });
+    const ask = tools.find((tool) => tool.providerName === 'ask_user_question')!;
+    const result = await ask.execute({
+      input: {
+        questions: [
+          {
+            id: 'first',
+            question: 'Choose',
+            selection: 'single',
+            options: [{ id: 'a', label: 'City' }],
+          },
+          {
+            id: 'second',
+            question: 'Choose',
+            selection: 'multiple',
+            options: [{ id: 'a', label: 'Food' }],
+          },
+        ],
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'batch',
+      turnId: 'turn',
+    });
+    expect(result.value).toEqual({
+      ...answer,
+      selectedOptions: [
+        { questionId: 'second', options: [{ id: 'a', label: 'Food' }] },
+        { questionId: 'first', options: [] },
+      ],
+    });
   });
 
   test('offers generate_image only with a drawing model and the group enabled', async () => {
@@ -201,6 +334,7 @@ describe('createSystemCapabilitySource', () => {
     };
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -213,6 +347,7 @@ describe('createSystemCapabilitySource', () => {
       input: { content: 'report', filename: 'report.txt' },
       signal: new AbortController().signal,
       toolCallId: 'call-1',
+      turnId: 'turn-1',
     });
 
     expect(grantFile).toHaveBeenCalledWith(entry.id);
@@ -253,6 +388,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -270,6 +406,7 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: sourceId, old_string: 'old', new_string: 'new' },
       signal: new AbortController().signal,
       toolCallId: 'call-2',
+      turnId: 'turn-1',
     });
 
     expect(grantFile).toHaveBeenCalledWith(entry.id);
@@ -307,6 +444,7 @@ describe('createSystemCapabilitySource', () => {
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -324,6 +462,7 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: draftId, old_string: 'old', new_string: 'new' },
       signal: new AbortController().signal,
       toolCallId: 'call-3',
+      turnId: 'turn-1',
     });
 
     expect(rewriteTextEntry).toHaveBeenCalledWith(
@@ -351,6 +490,7 @@ describe('createSystemCapabilitySource', () => {
       .mockResolvedValue(new TextEncoder().encode('a\nb'));
     const source = createSystemCapabilitySource(SERVICES, dependencies({}));
     const tools = await source.getTools({
+      askUser: noAskUser,
       documentParserMode: 'builtin',
       disabledCapabilities: [],
       model: MODEL,
@@ -364,11 +504,13 @@ describe('createSystemCapabilitySource', () => {
       input: { file_entry_id: knownId },
       signal,
       toolCallId: 'c4',
+      turnId: 'turn-1',
     });
     const unknown = await readFile.execute({
       input: { file_entry_id: unknownId },
       signal,
       toolCallId: 'c5',
+      turnId: 'turn-1',
     });
 
     expect(known.value).toMatchObject({ status: 'ok', text: 'a\nb', totalLines: 2 });
@@ -378,6 +520,7 @@ describe('createSystemCapabilitySource', () => {
 
 type Scenario = {
   deviceAccess?: Partial<Record<DevicePermissionScope, SystemPermissionState>>;
+  jsSandbox?: JsSandbox;
   disabledCapabilities?: AgentCapability[];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
@@ -386,13 +529,14 @@ type Scenario = {
 
 async function resolve(
   scenario: Scenario,
-  options: { platform?: string } = {},
+  options: { askUser?: AskUserQuestion; platform?: string } = {},
 ): Promise<readonly RuntimeTool[]> {
   const source = createSystemCapabilitySource(SERVICES, {
     ...dependencies(scenario),
     platform: options.platform ?? 'ios',
   });
   return source.getTools({
+    askUser: options.askUser ?? noAskUser,
     documentParserMode: 'builtin',
     disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
@@ -450,6 +594,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
         return null;
       }),
     } as unknown as SystemCapabilitySourceDependencies['preference'],
+    jsSandbox: scenario.jsSandbox ?? null,
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };

@@ -7,6 +7,7 @@ import {
   isInjectable,
 } from '@/backend/core/lifecycle/decorators';
 import { DependencyResolver } from '@/backend/core/lifecycle/DependencyResolver';
+import { LifecycleManager } from '@/backend/core/lifecycle/LifecycleManager';
 import { ServiceContainer } from '@/backend/core/lifecycle/ServiceContainer';
 import { Phase, type ServiceConstructor } from '@/backend/core/lifecycle/types';
 
@@ -80,6 +81,19 @@ describe('service registry', () => {
     },
   );
 
+  test('initializes conversation protection before desktop routes can recover active execution', () => {
+    const container = new ServiceContainer();
+    container.registerAll(serviceList);
+    new LifecycleManager(container).validatePhases();
+    const layers = new DependencyResolver().resolveLayered(
+      container.buildDependencyGraph(Phase.Gate),
+    );
+    const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+    expect(layerOf('BackgroundReplyRuntime')).toBeGreaterThanOrEqual(0);
+    expect(layerOf('BackgroundReplyRuntime')).toBeLessThan(layerOf('RemoteAgentRuntime'));
+    expect(layerOf('KeepAliveCoordinator')).toBeLessThan(layerOf('BackgroundReplyRuntime'));
+  });
+
   test('the gate boots cache, then database, then preferences', () => {
     const container = new ServiceContainer();
     container.registerAll(serviceList);
@@ -89,12 +103,10 @@ describe('service registry', () => {
     const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
 
     // Spelled out rather than left to the generic check above, because this
-    // particular chain is what first paint depends on: the database is seeded
-    // through the cache, and the theme and language come out of preferences.
-    // Before the lifecycle framework it was statement order in
-    // `createAppBootstrapRuntime`; now it is three declared edges.
-    expect(layerOf('CacheService')).toBeGreaterThanOrEqual(0);
-    expect(layerOf('CacheService')).toBeLessThan(layerOf('DbService'));
+    // edge is what first paint depends on: the theme and language come out of
+    // preferences, which read the seeded database. Before the lifecycle
+    // framework it was statement order in `createAppBootstrapRuntime`.
+    expect(layerOf('DbService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
   });
 
@@ -129,7 +141,9 @@ describe('service registry', () => {
     expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
     expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
     expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('not-applicable');
-    expect(getAppStatePolicy(services.AudioKeepAliveSource)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.IosBackgroundExecutionSource)).toBe(
+      'background-presentation',
+    );
     expect(getAppStatePolicy(services.AndroidBackgroundActivityRuntime)).toBe(
       'background-presentation',
     );

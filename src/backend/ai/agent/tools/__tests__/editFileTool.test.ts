@@ -341,7 +341,6 @@ describe('editFileTool', () => {
   test.each([
     ['invalid UTF-8', Uint8Array.from([0xc0, 0xaf]), 'valid UTF-8'],
     ['a NUL byte', Uint8Array.from([65, 0, 66]), 'NUL'],
-    ['a binary control', Uint8Array.from([65, 1, 66]), 'control'],
   ])('rejects %s content', async (_case, bytes, message) => {
     const files = createFiles(bytes);
     const output = await execute(createEditFileTool(files), {
@@ -390,6 +389,47 @@ describe('editFileTool', () => {
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
+  test('refuses an oversized replace_all before building the result', async () => {
+    // Joined, this would be a 10-billion-character string: over the engine's
+    // string limit, so building it first throws instead of returning an error.
+    const files = createFiles('a'.repeat(EDIT_FILE_MAX_CONTENT_BYTES));
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'a',
+      new_string: 'x'.repeat(10_000),
+      replace_all: true,
+    });
+
+    expectError(output, 'edited file exceeds');
+    expect(files.createTextEntry).not.toHaveBeenCalled();
+  });
+
+  test('measures the result limit in bytes, not characters', async () => {
+    // Under the limit by length, three times over it in UTF-8.
+    const files = createFiles('a'.repeat(EDIT_FILE_MAX_CONTENT_BYTES / 2));
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'a',
+      new_string: '中',
+      replace_all: true,
+    });
+
+    expectError(output, 'edited file exceeds');
+    expect(files.createTextEntry).not.toHaveBeenCalled();
+  });
+
+  test('refuses NUL in the replacement, which read_file would reject as binary', async () => {
+    const files = createFiles('hello');
+    const output = await execute(createEditFileTool(files), {
+      file_entry_id: SOURCE_ID,
+      old_string: 'hello',
+      new_string: 'he\u0000llo',
+    });
+
+    expectError(output, 'NUL');
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+
   test('preserves a UTF-8 BOM and existing newlines', async () => {
     const bytes = Uint8Array.from([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('a\r\nb\r\n')]);
     const files = createFiles(bytes);
@@ -423,6 +463,7 @@ describe('editFileTool', () => {
         },
         signal: controller.signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toThrow('turn cancelled');
     expect(files.createTextEntry).not.toHaveBeenCalled();
@@ -539,7 +580,12 @@ function execute(
   tool: ReturnType<typeof createEditFileTool>,
   input: RuntimeJsonValue,
 ): Promise<RuntimeToolResult> {
-  return tool.execute({ input, signal: new AbortController().signal, toolCallId: 'call-1' });
+  return tool.execute({
+    input,
+    signal: new AbortController().signal,
+    toolCallId: 'call-1',
+    turnId: 'turn-1',
+  });
 }
 
 function expectError(output: RuntimeToolResult, message: string) {

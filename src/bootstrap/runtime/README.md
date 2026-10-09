@@ -11,8 +11,8 @@ feature UI may render.
 | `initializeAppRuntime.ts` | Applies cached boot preferences, initializes i18n, and seeds localized first-run data after the native handoff |
 | `startupCoverHandoff.ts` | Holds native-appearance mutations until the system-themed RN cover owns the surface |
 | `diagnosticRecording.ts` | App-entry process logger and JavaScript exception observers, independent of host or database readiness |
-| `AppBootstrapProvider.tsx` | Owns one runtime, injects its interfaces, tracks startup status, and disposes it |
-| `AppBootstrapGate.tsx` | Renders nothing while loading and surfaces initialization failure |
+| `AppBootstrapProvider.tsx` | Owns one runtime per startup attempt, injects its interfaces, tracks startup status, and disposes it |
+| `AppBootstrapGate.tsx` | Renders nothing while loading and a retryable failure screen after initialization fails |
 
 ## Startup Contract
 

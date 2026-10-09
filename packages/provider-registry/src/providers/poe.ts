@@ -1,5 +1,5 @@
 import type { ReasoningWireProfile } from '../schemas/reasoningWire';
-import { openaiCompatible } from './types';
+import { defineProvider } from './types';
 import { EFFORT, modeWire } from './wires';
 
 const effortWire = modeWire(
@@ -34,19 +34,35 @@ const claudeModels: { apiModelId: string; modelId: string }[] = [
   { apiModelId: 'Claude-Sonnet-4.6', modelId: 'claude-sonnet-4-6' },
 ];
 
-export default openaiCompatible({
+export default defineProvider({
   id: 'poe',
   name: 'Poe',
-  baseUrl: 'https://api.poe.com/v1/',
-  // Poe silently ignores top-level reasoning_effort. Unknown/community bots
-  // stay fail-closed until their custom parameter contract is known.
-  reasoningFormat: { type: 'openai-chat', wire: { disabled: true } },
-  anthropic: 'https://api.poe.com',
-  website: {
-    apiKey: 'https://poe.com/api/keys',
-    docs: 'https://creator.poe.com/docs/external-applications/openai-compatible-api',
-    models: 'https://poe.com/',
-    official: 'https://poe.com/',
+  defaultChatEndpoint: 'openai-responses',
+  endpointConfigs: {
+    'openai-responses': {
+      adapterFamily: 'openai',
+      baseUrl: 'https://api.poe.com/v1/',
+      reasoningFormat: { type: 'openai-responses' },
+    },
+    'openai-chat-completions': {
+      adapterFamily: 'openai-compatible',
+      baseUrl: 'https://api.poe.com/v1/',
+      // Poe silently ignores top-level reasoning_effort. Unknown/community bots
+      // stay fail-closed until their custom parameter contract is known.
+      reasoningFormat: { type: 'openai-chat', wire: { disabled: true } },
+    },
+    'anthropic-messages': {
+      adapterFamily: 'anthropic',
+      baseUrl: 'https://api.poe.com',
+    },
+  },
+  metadata: {
+    website: {
+      apiKey: 'https://poe.com/api/keys',
+      docs: 'https://creator.poe.com/docs/external-applications/openai-compatible-api',
+      models: 'https://poe.com/',
+      official: 'https://poe.com/',
+    },
   },
   apiFeatures: {
     arrayContent: false,

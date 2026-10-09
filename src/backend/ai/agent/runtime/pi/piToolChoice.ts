@@ -10,6 +10,7 @@ export function disablePiToolCalls(payload: unknown, api: PiApi): unknown {
       return { ...payload, tool_choice: { type: 'none' } };
     case 'openai-completions':
     case 'openai-responses':
+    case 'azure-openai-responses':
       return { ...payload, tool_choice: 'none' };
     case 'google-generative-ai': {
       const { config } = payload as { config?: Record<string, unknown> };

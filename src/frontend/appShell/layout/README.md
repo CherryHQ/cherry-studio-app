@@ -14,3 +14,7 @@ header so the native stack reserves space above that row.
 Frames may serve as a native Stack's `screenLayout`, or wrap a page's content below its header.
 They do not choose routes, create device-specific page trees, or reset page state. Galleries and
 full-screen media own their available region rather than using a reading-width constraint.
+
+`ChatDockLayoutProvider` shares the height measured by `ChatDockFooter`, including its top gap,
+across the chat and drawer. The sidebar adds this space to the composer's action-center offset so
+its floating controls stay aligned when footer text wraps or scales.

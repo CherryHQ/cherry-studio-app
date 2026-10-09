@@ -9,6 +9,7 @@ import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
 import type { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
+import type { PluginToolCatalog } from './pluginDefinition';
 import type { PluginDiagnosticStage } from './pluginDiagnostics';
 import {
   getPluginDefinition,
@@ -18,7 +19,10 @@ import {
 import { validatePluginConnection } from './transport/validatePluginConnection';
 
 export function createPluginsModule(
-  runtime: { invalidateServer(id: string): void },
+  runtime: {
+    invalidateServer(id: string): void;
+    cachePluginToolCatalog(id: string, catalog: PluginToolCatalog): Promise<void>;
+  },
   authorizations: PluginAuthorizationManager,
 ): PluginsModule {
   const pending = new Map<PluginId, Promise<unknown>>();
@@ -44,7 +48,7 @@ export function createPluginsModule(
         'prepare',
         () => auth.prepare(attemptId, attemptSignal),
       );
-      await authorizations.recordOperation(pluginId, methodId, 'validate', () =>
+      const { catalog } = await authorizations.recordOperation(pluginId, methodId, 'validate', () =>
         validatePluginConnection(pluginId, methodId, credential, signal),
       );
       let connection;
@@ -59,6 +63,7 @@ export function createPluginsModule(
       }
       authorizations.invalidateGrant(pluginId);
       runtime.invalidateServer(connection.serverId);
+      await runtime.cachePluginToolCatalog(connection.serverId, catalog);
       return connection;
     });
   }
@@ -158,7 +163,7 @@ export function createPluginsModule(
             'Disconnect before replacing this connection.',
           );
         const credential = method.encodeCredentials(fields);
-        const accountLabel = await authorizations.recordOperation(
+        const { accountLabel, catalog } = await authorizations.recordOperation(
           parsed.pluginId,
           method.id,
           'validate',
@@ -195,6 +200,7 @@ export function createPluginsModule(
         }
         authorizations.invalidateGrant(parsed.pluginId);
         runtime.invalidateServer(connection.serverId);
+        await runtime.cachePluginToolCatalog(connection.serverId, catalog);
         return connection;
       });
     },
@@ -214,6 +220,7 @@ export function createPluginsModule(
           ? await current!.runtime.prepareRevocation!(current!.grant.id).catch(() => undefined)
           : undefined;
         await authorizations.credentials.disconnect(pluginId);
+        getPluginDefinition(pluginId)?.clearLocalFiles?.();
         if (!canRevoke) return { revocation: 'not-applicable' as const };
         if (!revocation)
           return {

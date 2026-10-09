@@ -1,16 +1,18 @@
-import { Button, ContentState, Section, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, Section, useAlert } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { remoteChatHref } from '@/frontend/appShell/navigation/chat';
 import {
   useDesktopConnection,
   useDesktopConnectionActions,
 } from '@/frontend/hooks/useDesktopConnections';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { describeCapabilities } from '../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 
 export function DeviceConnectionDetailScreen() {
@@ -68,8 +70,12 @@ export function DeviceConnectionDetailScreen() {
     <SettingsScrollPage contentClassName="gap-6" headerProps={{ title: connection.name }}>
       <Section footer={t('settings.deviceConnections.localNetworkNotice')}>
         <Section.Item
-          label={t('settings.deviceConnections.version')}
-          trailing={<Text className="text-muted-foreground">{connection.desktopVersion}</Text>}
+          label={t('settings.deviceConnections.capabilities.label')}
+          trailing={
+            <Text className="text-muted-foreground">
+              {describeCapabilities(connection.capabilities, t)}
+            </Text>
+          }
         />
         <Section.Item
           label={t('settings.deviceConnections.statusLabel')}
@@ -87,36 +93,50 @@ export function DeviceConnectionDetailScreen() {
         />
       </Section>
 
-      {connection.status === 'paired' ? (
+      {connection.status === 'paired' && connection.capabilities.length > 0 ? (
         <Section>
-          <Section.Item
-            description={t('settings.deviceConnections.syncGuide.entryDescription')}
-            label={t('settings.deviceConnections.syncGuide.entry')}
-            onPress={() =>
-              router.push({
-                params: { connectionId: connection.id },
-                pathname: '/settings/device-connections/sync-guide',
-              })
-            }
-          />
+          {connection.capabilities.includes('agent') ? (
+            <Section.Item
+              label={t('settings.deviceConnections.openHome')}
+              onPress={() => router.push(remoteChatHref({ connectionId: connection.id }))}
+            />
+          ) : null}
+          {connection.capabilities.includes('configuration') ? (
+            <Section.Item
+              description={t('settings.deviceConnections.syncGuide.entryDescription')}
+              label={t('settings.deviceConnections.syncGuide.entry')}
+              onPress={() =>
+                router.push({
+                  params: { connectionId: connection.id },
+                  pathname: '/settings/provider/desktop-sync',
+                })
+              }
+            />
+          ) : null}
         </Section>
       ) : null}
 
-      <Button
-        onPress={() =>
-          router.push({
-            params: { connectionId: connection.id },
-            pathname: '/settings/device-connections/scan',
-          })
-        }
-        variant={connection.status === 'paired' ? 'outline' : 'default'}
-      >
-        {t('settings.deviceConnections.repair')}
-      </Button>
+      <Section>
+        <Section.Item
+          label={t('settings.deviceConnections.location.scan')}
+          onPress={() =>
+            router.push({
+              params: { connectionId: connection.id },
+              pathname: '/settings/device-connections/scan',
+            })
+          }
+        />
+      </Section>
 
-      <Button loading={isRemoving} onPress={requestRemove} variant="destructive">
-        {t('settings.deviceConnections.remove.action')}
-      </Button>
+      <Section>
+        <Section.Item
+          destructive
+          disabled={isRemoving}
+          label={t('settings.deviceConnections.remove.action')}
+          onPress={requestRemove}
+          showChevron={false}
+        />
+      </Section>
     </SettingsScrollPage>
   );
 }

@@ -1,0 +1,19 @@
+diff --git a/src/module.ts b/src/module.ts
+--- a/src/module.ts
++++ b/src/module.ts
+@@ -1,5 +1,14 @@
+ import { requireNativeModule } from 'expo';
+ 
++import type { Session } from './Session';
+ import type { ExpoAppMetricsModuleType } from './types';
+ 
+-export default requireNativeModule<ExpoAppMetricsModuleType>('ExpoAppMetrics');
++const AppMetrics = requireNativeModule<ExpoAppMetricsModuleType>('ExpoAppMetrics');
++
++// Keep the process-lifetime session's JS wrapper alive so native conversion cannot race GC.
++// Backport https://github.com/expo/expo/pull/50055; resolve lazily after native initialization.
++let mainSession: Session | undefined;
++const getMainSession = AppMetrics.getMainSession.bind(AppMetrics);
++AppMetrics.getMainSession = () => (mainSession ??= getMainSession());
++
++export default AppMetrics;

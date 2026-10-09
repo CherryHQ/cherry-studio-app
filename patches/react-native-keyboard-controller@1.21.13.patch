@@ -67,3 +67,52 @@ index 560df54bae1a8c41a2e9ac0e2a8d2fd9b843968a..350e18b841f8b7f6d8c224e52cafa0eb
            effective < padding.value &&
            atEnd
          ) {
+diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
+--- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
++++ b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.js
+@@ -220,6 +220,11 @@
+       const effective = (0, _helpers.getEffectiveHeight)(e.height, targetKeyboardHeight.value, offset);
+       padding.value = effective;
+ 
++      // Reconcile the final range even when onMove did not observe the final height.
++      if (!inverted && closing.value) {
++        clampScrollIfNeeded(effective, Math.max(blankSpace.value, effective + extraContentPadding.value));
++      }
++
+       // Record actual scroll displacement so close can be symmetric
+       if (effective > 0 && offsetBeforeScroll.value !== -1) {
+         actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
+diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
+--- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
++++ b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.js
+@@ -213,6 +213,11 @@
+       const effective = getEffectiveHeight(e.height, targetKeyboardHeight.value, offset);
+       padding.value = effective;
+ 
++      // Reconcile the final range even when onMove did not observe the final height.
++      if (!inverted && closing.value) {
++        clampScrollIfNeeded(effective, Math.max(blankSpace.value, effective + extraContentPadding.value));
++      }
++
+       // Record actual scroll displacement so close can be symmetric
+       if (effective > 0 && offsetBeforeScroll.value !== -1) {
+         actualOpenShift.value = scroll.value - offsetBeforeScroll.value;
+diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
+--- a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
++++ b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ts
+@@ -352,6 +352,15 @@
+ 
+         padding.value = effective;
+ 
++        // The final animation frame can arrive only in onEnd. Reconcile the
++        // reduced range even when onMove did not observe the final height.
++        if (!inverted && closing.value) {
++          clampScrollIfNeeded(
++            effective,
++            Math.max(blankSpace.value, effective + extraContentPadding.value),
++          );
++        }
++
+         // Record actual scroll displacement so close can be symmetric
+         if (effective > 0 && offsetBeforeScroll.value !== -1) {
+           actualOpenShift.value = scroll.value - offsetBeforeScroll.value;

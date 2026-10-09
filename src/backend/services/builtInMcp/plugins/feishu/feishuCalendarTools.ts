@@ -137,6 +137,31 @@ export const feishuCalendarTools = [
     }),
   }),
   defineFeishuApiTool({
+    name: 'calendar_search_events',
+    access: 'read',
+    scopes: ['calendar:calendar.event:read'],
+    description:
+      '飞书日历、日程、搜索。Search one page of events by keyword in a selected primary or shared calendar. Continue with page_token while has_more is true. Inspect the actual event before changing it.',
+    input: z.strictObject({
+      ...calendarShape,
+      ...FeishuPageShape,
+      page_size: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe('Page size, 1–50; default 20.'),
+      query: z.string().min(1).max(1000),
+    }),
+    request: ({ calendar_id, page_size = 20, page_token, query }) => ({
+      method: 'POST',
+      path: `${eventsPath({ calendar_id })}/search`,
+      query: { page_size, page_token, user_id_type: 'open_id' },
+      body: { query },
+    }),
+  }),
+  defineFeishuApiTool({
     name: 'calendar_get_event',
     access: 'read',
     scopes: ['calendar:calendar.event:read'],
@@ -199,6 +224,41 @@ export const feishuCalendarTools = [
       path: eventPath({ calendar_id, event_id }),
       query: { user_id_type: 'open_id' },
       body: changes,
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'calendar_delete_event',
+    access: 'write',
+    scopes: ['calendar:calendar.event:delete'],
+    description:
+      '飞书日历、日程、取消。Delete an event organized by the authorized user in a writable primary or shared calendar. Read calendar_get_event first and preserve the intended occurrence or series ID. This may notify attendees; it is not declining an invitation.',
+    input: z.strictObject({
+      ...eventShape,
+      need_notification: z
+        .boolean()
+        .optional()
+        .describe('Notify attendees of cancellation; omit to use Feishu’s default.'),
+    }),
+    request: ({ need_notification, ...event }) => ({
+      method: 'DELETE',
+      path: eventPath(event),
+      query: { need_notification: need_notification?.toString() },
+    }),
+  }),
+  defineFeishuApiTool({
+    name: 'calendar_reply_event',
+    access: 'write',
+    scopes: ['calendar:calendar.event:reply'],
+    description:
+      '飞书日历、日程、邀请。Accept, decline or tentatively accept an invitation as the authorized user. Read calendar_get_event first. Declining an invitation does not cancel the organizer’s event.',
+    input: z.strictObject({
+      ...eventShape,
+      rsvp_status: z.enum(['accept', 'decline', 'tentative']),
+    }),
+    request: ({ calendar_id, event_id, rsvp_status }) => ({
+      method: 'POST',
+      path: `${eventPath({ calendar_id, event_id })}/reply`,
+      body: { rsvp_status },
     }),
   }),
   defineFeishuApiTool({

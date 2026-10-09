@@ -74,6 +74,7 @@ function createSession(markdown = 'Content') {
       sections: [{ id: 'document', blocks: [{ kind: 'markdown' as const, source: markdown }] }],
     },
     markdown,
+    previewMarkdown: () => `<p>${markdown}</p>`,
     render: jest.fn(
       async (
         target: DocumentExportTarget,
@@ -91,31 +92,79 @@ afterEach(() => {
   renderer = undefined;
 });
 
-test('default Markdown and its unchecked snapshot stay in memory until sharing', async () => {
+test('Markdown preview and sharing use the same prepared image-bearing artifact', async () => {
   const ref = createRef<Preview>();
   const checked = createSession('Thinking and answer');
   const unchecked = createSession('Answer');
+  const checkedArtifact = {
+    ...markdownArtifact,
+    text: 'Thinking and answer\n![Image](data:image/png;base64,AA==)',
+  };
+  const uncheckedArtifact = {
+    ...markdownArtifact,
+    text: 'Answer\n![Image](data:image/png;base64,AA==)',
+  };
+  checked.render.mockResolvedValue(checkedArtifact);
+  unchecked.render.mockResolvedValue(uncheckedArtifact);
   await act(async () => {
     renderer = create(<Probe ref={ref} session={checked} format="markdown" revision={0} />);
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Thinking and answer' });
-  expect(checked.render).not.toHaveBeenCalled();
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: checkedArtifact });
   await act(async () => {
     renderer?.update(<Probe ref={ref} session={unchecked} format="markdown" revision={1} />);
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Answer' });
-  expect(unchecked.render).not.toHaveBeenCalled();
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: uncheckedArtifact });
   await expect(ref.current?.getArtifact(new AbortController().signal)).resolves.toBe(
-    markdownArtifact,
+    uncheckedArtifact,
   );
-  expect(unchecked.render).toHaveBeenCalledWith(
-    { format: 'markdown' },
-    { signal: expect.any(AbortSignal) },
-  );
-  expect(checked.render).not.toHaveBeenCalled();
+  expect(unchecked.render).toHaveBeenCalledTimes(1);
+  expect(unchecked.save).not.toHaveBeenCalled();
+  expect(checked.render).toHaveBeenCalledTimes(1);
 });
 
-test('sharing Markdown waits for the cancelled conversion and never starts an image render', async () => {
+test('image fallback retains the same brand signature in Markdown preview and delivery', async () => {
+  const ref = createRef<Preview>();
+  const session = createSession();
+  const signature = {
+    brandName: 'Cherry Studio',
+    brandColor: '#ff5757',
+    downloadLabel: 'Scan to download the mobile app',
+    downloadLinkLabel: 'Download the mobile app',
+    downloadUrl: 'https://example.com/mobile',
+    qrCodeDataUrl: 'data:image/png;base64,AQ==',
+    background: '#ffffff',
+    foreground: '#111111',
+    logoDataUrl: 'data:image/png;base64,AA==',
+  };
+  const watermark = { kind: 'cherry' as const, signature };
+  session.render.mockImplementation(async (target) => {
+    if (target.format === 'markdown') return markdownArtifact;
+    throw new DocumentExportError('capture-failed');
+  });
+  await act(async () => {
+    renderer = create(
+      <Probe
+        ref={ref}
+        session={session}
+        format="image"
+        revision={0}
+        currentPresentation={{ ...presentation, watermark }}
+      />,
+    );
+  });
+  expect(ref.current?.state).toEqual({
+    status: 'markdown',
+    text: 'Content\n---\n\n**Cherry Studio** · [Download the mobile app](<https://example.com/mobile>)\n',
+    fallback: true,
+  });
+  await ref.current!.getArtifact(new AbortController().signal);
+  expect(session.render).toHaveBeenLastCalledWith(
+    { format: 'markdown', watermark },
+    { signal: expect.any(AbortSignal) },
+  );
+});
+
+test('preparing Markdown waits for the cancelled conversion and disables sharing until ready', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
   const pending = deferred<DocumentExportArtifact>();
@@ -128,11 +177,14 @@ test('sharing Markdown waits for the cancelled conversion and never starts an im
     renderer?.update(<Probe ref={ref} session={session} format="markdown" revision={1} />);
   });
   expect(signal.aborted).toBe(true);
-  const sharing = ref.current!.getArtifact(new AbortController().signal);
-  await Promise.resolve();
+  await expect(ref.current!.getArtifact(new AbortController().signal)).rejects.toMatchObject({
+    code: 'busy',
+  });
   expect(session.render).toHaveBeenCalledTimes(1);
   await act(async () => pending.resolve(htmlArtifact));
-  await expect(sharing).resolves.toBe(markdownArtifact);
+  await expect(ref.current!.getArtifact(new AbortController().signal)).resolves.toBe(
+    markdownArtifact,
+  );
   expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['html', 'markdown']);
 });
 
@@ -197,7 +249,7 @@ test('a theme change invalidates the old artifact while the new presentation is 
 test('an image failure automatically produces a shareable document instead of an error state', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-size-limit'));
+  session.render.mockRejectedValueOnce(new DocumentExportError('capture-failed'));
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
   });
@@ -229,21 +281,10 @@ test('if HTML also fails, complete Markdown stays available without writing a fi
   ]);
 });
 
-test('image resource limits go directly to text instead of repeating the same rejected HTML render', async () => {
-  const ref = createRef<Preview>();
-  const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
-  await act(async () => {
-    renderer = create(<Probe ref={ref} session={session} format="image" revision={0} />);
-  });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content', fallback: true });
-  expect(session.render).toHaveBeenCalledTimes(1);
-});
-
 test('an HTML failure keeps Markdown shareable without starting image capture', async () => {
   const ref = createRef<Preview>();
   const session = createSession();
-  session.render.mockRejectedValueOnce(new DocumentExportError('image-resource-limit'));
+  session.render.mockRejectedValueOnce(new DocumentExportError('storage-failed'));
   await act(async () => {
     renderer = create(<Probe ref={ref} session={session} format="html" revision={0} />);
   });
@@ -274,6 +315,6 @@ test('cancelling an old image request does not start a fallback for the supersed
   await act(async () => {
     reject(new DocumentExportError('capture-failed'));
   });
-  expect(ref.current?.state).toEqual({ status: 'markdown', text: 'Content' });
-  expect(session.render).toHaveBeenCalledTimes(1);
+  expect(ref.current?.state).toEqual({ status: 'ready', artifact: markdownArtifact });
+  expect(session.render.mock.calls.map(([target]) => target.format)).toEqual(['image', 'markdown']);
 });

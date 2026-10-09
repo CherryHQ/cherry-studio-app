@@ -6,6 +6,7 @@ import type {
   SimpleStreamOptions,
   StreamFunction,
 } from '@earendil-works/pi-ai';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { SupportedPiApi } from '../piApiAdapters';
 import { disablePiToolCalls } from '../piToolChoice';
@@ -34,6 +35,16 @@ const CASES: { api: SupportedPiApi; expected: Record<string, unknown> }[] = [
   },
   {
     api: 'openai-responses',
+    expected: {
+      tools: [expect.objectContaining({ name: 'lookup' })],
+      tool_choice: 'none',
+      input: expect.arrayContaining([
+        expect.objectContaining({ type: 'function_call_output', output: 'Collected evidence' }),
+      ]),
+    },
+  },
+  {
+    api: 'azure-openai-responses',
     expected: {
       tools: [expect.objectContaining({ name: 'lookup' })],
       tool_choice: 'none',
@@ -127,7 +138,7 @@ describe('Pi final response tool choice', () => {
         ],
       };
       let captured: unknown;
-      const stream = streamSimple(model, context, {
+      const stream = streamSimple(model, normalizeContext(context), {
         apiKey: 'test-key',
         onPayload: (payload) => {
           captured = disablePiToolCalls(payload, api);

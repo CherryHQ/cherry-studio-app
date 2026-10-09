@@ -39,6 +39,7 @@ export function useNativeMenu(items: readonly MenuItem[]) {
   const nativeItems = useMemo<NativeMenuItem[]>(
     () =>
       items.map((item) => ({
+        group: item.group ?? '',
         checked: getCheckedState(item.checked),
         destructive: item.destructive ?? false,
         disabled: item.disabled ?? false,

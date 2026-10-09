@@ -5,10 +5,13 @@
 
 import type { AgentEvent, AgentSessionObservation } from './events';
 import type {
+  AgentDeleteTurnInput,
   AgentForkSessionInput,
+  AgentRetryMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
+import type { AgentRespondQuestionInput } from './userQuestion';
 import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
 
 /**
@@ -28,7 +31,7 @@ export interface AgentProtocol {
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
 
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 
   /** Creates the durable Session only when its first submission is admitted. */
@@ -41,11 +44,30 @@ export interface AgentProtocol {
    */
   forkSession(input: AgentForkSessionInput): Promise<AgentSessionView>;
 
+  /**
+   * Removes one settled turn from the transcript and clears any context
+   * checkpoint that may have summarized it. The turn's side effects are not
+   * undone: this erases the record, not what the record describes.
+   */
+  deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
+
+  /** Replaces a settled answer in place using context up to its original user input. */
+  retryMessage(input: AgentRetryMessageInput): Promise<void>;
+
   submitMessage(
     input: AgentSubmitMessageInput,
   ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
+
+  /**
+   * Abandons a submission, retry, or Draft start that has not reserved its turn
+   * yet; the pending call rejects with `CANCELLED`. A reserved turn is
+   * cancelled through `cancelTurn`. Idempotent.
+   */
+  cancelSubmission(input: { sessionId: string }): Promise<void>;
+
+  respondQuestion(input: AgentRespondQuestionInput): Promise<void>;
 
   respondApproval(input: {
     sessionId: string;

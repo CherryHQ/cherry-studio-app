@@ -32,7 +32,6 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
   const dependencies: ModelsModuleDependencies = {
     checkChatModel: jest.fn(async () => ({ status: 'success' as const, latency: 10 })),
     ai: {
-      checkModel: jest.fn(async () => ({ latency: 12 })),
       listModels: jest.fn(async () => []),
     },
     isSystemSupportedModel: jest.fn(() => true),
@@ -150,13 +149,14 @@ describe('createModelsModule', () => {
         providerId: 'openai',
       }),
     ).resolves.toEqual([
-      { latency: 12, model: first, status: 'success' },
-      { latency: 12, model: second, status: 'success' },
+      { latency: 10, model: first, status: 'success' },
+      { latency: 10, model: second, status: 'success' },
     ]);
     expect(onResult).toHaveBeenCalledTimes(2);
-    expect(dependencies.ai.checkModel).toHaveBeenNthCalledWith(
+    expect(dependencies.checkChatModel).toHaveBeenNthCalledWith(
       2,
-      expect.objectContaining({ uniqueModelId: second.id }),
+      second,
+      expect.objectContaining({ timeoutMs: 15_000 }),
     );
   });
 
@@ -167,9 +167,9 @@ describe('createModelsModule', () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.get).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
     jest
-      .mocked(dependencies.ai.checkModel)
-      .mockRejectedValueOnce(new Error('Invalid API key'))
-      .mockResolvedValueOnce({ latency: 18 });
+      .mocked(dependencies.checkChatModel)
+      .mockResolvedValueOnce({ status: 'failed', reason: 'authentication' })
+      .mockResolvedValueOnce({ status: 'success', latency: 18 });
 
     await expect(
       backend.checkHealth({
@@ -178,7 +178,7 @@ describe('createModelsModule', () => {
         providerId: 'openai',
       }),
     ).resolves.toEqual([
-      { error: 'Invalid API key', model: first, status: 'failed' },
+      { reason: 'authentication', model: first, status: 'failed' },
       { latency: 18, model: second, status: 'success' },
     ]);
     expect(onResult).toHaveBeenCalledTimes(2);
@@ -190,9 +190,9 @@ describe('createModelsModule', () => {
     const controller = new AbortController();
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.get).mockResolvedValueOnce(first).mockResolvedValueOnce(second);
-    jest.mocked(dependencies.ai.checkModel).mockImplementationOnce(async () => {
+    jest.mocked(dependencies.checkChatModel).mockImplementationOnce(async () => {
       controller.abort(new Error('cancelled'));
-      return { latency: 12 };
+      return { status: 'success', latency: 12 };
     });
 
     await expect(
@@ -202,13 +202,57 @@ describe('createModelsModule', () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow('cancelled');
-    expect(dependencies.ai.checkModel).toHaveBeenCalledTimes(1);
+    expect(dependencies.checkChatModel).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the same chat probe for settings and onboarding, preserving the selected key and timeout', async () => {
+    const { backend, dependencies } = createSubject();
+    const candidate = model('chat');
+    const controller = new AbortController();
+    await backend.checkHealth({
+      apiKey: 'selected-key',
+      modelIds: [candidate.id],
+      providerId: 'openai',
+      signal: controller.signal,
+      timeoutMs: 321,
+    });
+    expect(dependencies.checkChatModel).toHaveBeenLastCalledWith(candidate, {
+      apiKeyOverride: 'selected-key',
+      signal: controller.signal,
+      timeoutMs: 321,
+    });
+    await backend.checkChat({ modelId: candidate.id });
+    expect(dependencies.checkChatModel).toHaveBeenLastCalledWith(candidate, { signal: undefined });
+  });
+
+  it('rejects a different provider before sending the selected credential', async () => {
+    const { backend, dependencies } = createSubject();
+    await expect(
+      backend.checkHealth({
+        apiKey: 'selected-key',
+        modelIds: [model('chat').id],
+        providerId: 'another-provider',
+      }),
+    ).rejects.toThrow('selected provider');
+    expect(dependencies.checkChatModel).not.toHaveBeenCalled();
+  });
+
+  it('does not probe an unsupported chat model through another executor', async () => {
+    const { backend, dependencies } = createSubject({
+      isSystemSupportedModel: () => false,
+    });
+    await expect(
+      backend.checkHealth({
+        modelIds: [model('chat').id],
+        providerId: 'openai',
+      }),
+    ).resolves.toEqual([{ model: model('chat'), reason: 'model', status: 'failed' }]);
+    expect(dependencies.checkChatModel).not.toHaveBeenCalled();
   });
 
   it('rejects a stalled pull with the stable contract error', async () => {
     const { backend } = createSubject({
       ai: {
-        checkModel: jest.fn(async () => ({ latency: 1 })),
         listModels: jest.fn(() => new Promise(() => {})),
       },
       pullTimeoutMs: 1,

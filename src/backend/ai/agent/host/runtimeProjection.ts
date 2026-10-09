@@ -10,11 +10,51 @@ import {
   type AgentApprovalView,
   type AgentErrorView,
   type AgentMessagePart,
-  type AgentUsageView,
 } from '@/shared/contracts/agent';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
-import type { RuntimeApproval, RuntimeError, RuntimeOutputPart, RuntimeUsage } from '../runtime';
+import type {
+  RuntimeApproval,
+  RuntimeContextCompaction,
+  RuntimeError,
+  RuntimeOutputPart,
+} from '../runtime';
+
+export function toCompactionAnchorPart(
+  compaction: RuntimeContextCompaction,
+  turnId: string,
+): Extract<AgentMessagePart, { type: 'data-compaction-anchor' }> {
+  const status =
+    compaction.status === 'running'
+      ? 'compacting'
+      : compaction.status === 'completed'
+        ? 'done'
+        : 'skipped';
+  return {
+    id: `compaction-anchor:${turnId}:${compaction.id}`,
+    type: 'data-compaction-anchor',
+    data: {
+      status,
+      phase: compaction.phase === 'preflight' ? 'turn-start' : 'in-loop',
+      trigger: 'auto',
+      startedAt: new Date(compaction.startedAt).toISOString(),
+      ...(compaction.completedAt === undefined
+        ? {}
+        : {
+            completedAt: new Date(compaction.completedAt).toISOString(),
+            durationMs: Math.max(0, compaction.completedAt - compaction.startedAt),
+          }),
+      ...(status === 'skipped'
+        ? {}
+        : {
+            preTokens: compaction.inputTokensBefore,
+            ...(compaction.inputTokensAfter === undefined
+              ? {}
+              : { postTokens: compaction.inputTokensAfter }),
+          }),
+    },
+  };
+}
 
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
   return { code: 'EXECUTION_FAILED', ...createAiFailure(error) };
@@ -27,7 +67,7 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       type: 'file',
       fileEntryId: part.ref.fileEntryId,
       mediaType: part.mediaType,
-      name: part.name,
+      filename: part.name,
       purpose: part.purpose,
     });
   }
@@ -49,11 +89,11 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
       : runtimeOutput;
     return AgentMessagePartSchema.parse({
       id: part.id,
-      type: 'tool',
+      type: 'dynamic-tool',
       toolCallId: part.toolCallId,
       toolRef: part.toolRef,
-      providerName: part.providerName,
-      displayName: part.displayName,
+      toolName: part.providerName,
+      title: part.displayName,
       state: part.state,
       ...(part.input !== undefined ? { input: part.input } : {}),
       ...(part.inputPreview !== undefined ? { inputPreview: part.inputPreview } : {}),
@@ -84,12 +124,4 @@ export function toAgentApprovalView(
     input: approval.input,
     status: approval.status,
   });
-}
-
-export function toAgentUsageView(usage: RuntimeUsage): AgentUsageView {
-  return {
-    ...(usage.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
-    ...(usage.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
-    ...(usage.totalTokens !== undefined ? { totalTokens: usage.totalTokens } : {}),
-  };
 }

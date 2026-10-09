@@ -30,11 +30,28 @@ export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 export interface PreferenceSchema {
   'app.language': LanguageVarious | null;
   'app.onboarding.status': 'unseen' | 'pending' | 'skipped' | 'completed';
+  /** Opt-out switch for anonymous product analytics. Only honoured under the current policy. */
+  'app.privacy.data_collection.enabled': boolean;
+  /**
+   * Disclosure the user was last shown. Both consent answers record it, so whether
+   * collection runs is carried by the switch above; anything but the latest version
+   * revokes collection and asks again.
+   */
+  'app.privacy.policy_version': string;
   /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
   'app.user.avatar': string;
+  /**
+   * Analytics client identity (UUID). Generated on first use, and replaced by the
+   * desktop's own identity when this device pairs with a computer.
+   */
+  'app.user.id': string;
   'app.user.name': string;
 
+  'app.background_run_guidance.seen': boolean;
+
+  /** iOS presentation only; unfinished conversation execution is always protected. */
   'chat.background_reply.enabled': boolean;
+  'chat.completion_notifications.enabled': boolean;
   'agent.default_model_id': string | null;
   'chat.web_search.compression.cutoff_limit': number;
   'chat.web_search.compression.method': WebSearchCompressionMethod;
@@ -48,6 +65,7 @@ export interface PreferenceSchema {
   'feature.translate.model_id': string | null;
 
   'file.document_parser.mode': DocumentParserMode;
+  'file.export.watermark_enabled': boolean;
 
   'agent.session_naming.enabled': boolean;
   'agent.session_naming.model_id': string | null;
@@ -55,16 +73,26 @@ export interface PreferenceSchema {
 
   'ui.font_size_step': FontSizeStep;
   'ui.library.view_mode': 'grid' | 'list';
+  'ui.sidebar.recent_view_mode': 'agents' | 'sessions';
   'ui.theme_mode': ThemeMode;
 }
 
 export const PreferenceDefaults = {
   'app.language': null,
   'app.onboarding.status': 'unseen',
+  'app.privacy.data_collection.enabled': true,
+  // Empty until the consent sheet records a choice, so nothing is collected before
+  // the disclosure is shown. A later policy bump leaves stored installs behind the
+  // current version and shows the sheet again.
+  'app.privacy.policy_version': '',
   'app.user.avatar': '',
+  'app.user.id': '',
   'app.user.name': '',
 
+  'app.background_run_guidance.seen': false,
+
   'chat.background_reply.enabled': true,
+  'chat.completion_notifications.enabled': true,
   'agent.default_model_id': null,
   'chat.web_search.compression.cutoff_limit': 2000,
   'chat.web_search.compression.method': 'cutoff',
@@ -78,6 +106,7 @@ export const PreferenceDefaults = {
   'feature.translate.model_id': null,
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
+  'file.export.watermark_enabled': true,
 
   'agent.session_naming.enabled': true,
   'agent.session_naming.model_id': null,
@@ -85,7 +114,22 @@ export const PreferenceDefaults = {
 
   'ui.font_size_step': 0,
   'ui.library.view_mode': 'grid',
+  'ui.sidebar.recent_view_mode': 'sessions',
   'ui.theme_mode': ThemeMode.system,
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
+
+/**
+ * Preferences that describe this device or its consent rather than the user's content.
+ * Restoring a backup keeps the target device's values for these keys.
+ */
+export const DEVICE_LOCAL_PREFERENCE_KEYS = [
+  'app.background_run_guidance.seen',
+  'app.onboarding.status',
+  'app.privacy.data_collection.enabled',
+  'app.privacy.policy_version',
+  'app.user.id',
+  'chat.background_reply.enabled',
+  'chat.completion_notifications.enabled',
+] as const satisfies readonly PreferenceKeyType[];

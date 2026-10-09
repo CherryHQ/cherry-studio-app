@@ -1,5 +1,4 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
@@ -64,7 +63,6 @@ describe('applyFastModeToProviderOptions', () => {
 
   it('adds the configured context window beside Ollama reasoning options', () => {
     const result = buildCapabilityProviderOptions(
-      { settings: {} } as Assistant,
       createModel({ contextWindow: 32_768 }),
       createProvider('ollama'),
       { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },
@@ -86,7 +84,6 @@ describe('applyFastModeToProviderOptions', () => {
 
   it('uses the Vertex namespace for Gemini defaults and reasoning', () => {
     const result = buildCapabilityProviderOptions(
-      { settings: {} } as Assistant,
       createModel(),
       createProvider('vertexai'),
       { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },
@@ -113,7 +110,6 @@ describe('applyFastModeToProviderOptions', () => {
 
   it('does not send the direct-Anthropic interleaved-thinking beta to Bedrock', () => {
     const result = buildCapabilityProviderOptions(
-      { settings: {} } as Assistant,
       createModel({ modelId: 'claude-sonnet-4-5' }),
       { ...createProvider('aws-bedrock'), authType: 'iam-aws' },
       { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },

@@ -1,0 +1,46 @@
+import ExpoModulesCore
+import Foundation
+import ActivityKit
+import UIKit
+
+public class SystemIntegrationModule: Module {
+  private var observers: [NSObjectProtocol] = []
+  private let backgroundExecution = BackgroundExecution()
+
+  public func definition() -> ModuleDefinition {
+    Name("SystemIntegration")
+    Events("onPending", "onBackgroundExecutionExpired")
+    OnCreate {
+      self.observers = [
+        NotificationCenter.default.addObserver(forName: SystemEntryStore.pendingNotification, object: nil, queue: .main) { [weak self] _ in self?.sendEvent("onPending") }
+      ]
+    }
+    OnDestroy {
+      self.observers.forEach { NotificationCenter.default.removeObserver($0) }
+      self.observers = []
+      DispatchQueue.main.async { self.backgroundExecution.end() }
+    }
+    AsyncFunction("beginBackgroundExecution") { (id: String) -> Bool in
+      self.backgroundExecution.begin(id: id) { [weak self] expiredId in
+        self?.sendEvent("onBackgroundExecutionExpired", ["id": expiredId])
+      }
+    }.runOnQueue(.main)
+    AsyncFunction("endBackgroundExecution") { (id: String) in
+      self.backgroundExecution.end(id: id)
+    }.runOnQueue(.main)
+    AsyncFunction("claimNextEntry") { try SystemEntryStore.claimNext() }
+    AsyncFunction("releaseEntry") { (id: String) in SystemEntryStore.release(id) }
+    AsyncFunction("completeEntry") { (id: String) in try SystemEntryStore.complete(id) }
+    AsyncFunction("getBackgroundRunSettings") { () -> [String: Any] in
+      ["batteryOptimizationExempt": NSNull(),
+       "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
+       "liveActivitiesEnabled": ActivityAuthorizationInfo().areActivitiesEnabled,
+       "manufacturer": "Apple"]
+    }
+    AsyncFunction("openBackgroundRunSettings") {
+      await MainActor.run {
+        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+      }
+    }
+  }
+}

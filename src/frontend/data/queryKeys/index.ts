@@ -1,6 +1,7 @@
 import { agentQueryKeys } from './agents';
 import { agentSessionQueryKeys } from './agentSessions';
 import { aiUsageRecordQueryKeys } from './aiUsageRecords';
+import { appUpdateQueryKeys } from './appUpdate';
 import { fileQueryKeys } from './files';
 import { jobQueryKeys } from './jobs';
 import { mcpServerQueryKeys } from './mcpServers';
@@ -12,6 +13,7 @@ import { providerQueryKeys } from './providers';
 export const queryKeys = {
   agentSessions: agentSessionQueryKeys,
   agents: agentQueryKeys,
+  appUpdate: appUpdateQueryKeys,
   aiUsageRecords: aiUsageRecordQueryKeys,
   files: fileQueryKeys,
   jobs: jobQueryKeys,

@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 export const AGENT_SESSION_MESSAGES_DEFAULT_LIMIT = 50;
@@ -53,7 +53,23 @@ export type AgentSessionMessagePage = CursorPaginationResponse<AgentMessageView>
   previousCursor?: string;
 };
 
+export const AgentTranscriptSelectionSchema = z.strictObject({
+  ids: z.array(z.string().min(1)).min(1).max(128),
+});
+export type AgentTranscriptSelection = {
+  assistantName?: string;
+  session: AgentSessionView;
+  messages: AgentMessageView[];
+};
+
 export type AgentSessionMessageSchemas = {
+  '/agent-sessions/:sessionId/messages/selection': {
+    GET: {
+      params: { sessionId: string };
+      query: z.input<typeof AgentTranscriptSelectionSchema>;
+      response: AgentTranscriptSelection;
+    };
+  };
   '/agent-sessions/:sessionId/messages': {
     GET: {
       params: { sessionId: string };

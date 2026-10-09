@@ -1,18 +1,22 @@
-import type { ReactNode } from 'react';
+import { type ComponentProps, type ReactNode, useMemo } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { ConversationMessage, ConversationSnapshot } from '@/frontend/appShell/conversation';
 import type { MessageListItem, MessageListProps } from '@/frontend/components/Message';
 import type { AgentApprovalView, AgentMessageView } from '@/shared/contracts/agent';
 
-import type { PendingChatSend } from '../../../runtime';
-import { ChatWorkspace } from '../ChatWorkspace';
+import {
+  mergeAgentMessageViews,
+  toAgentMessageListItem,
+} from '../../../runtime/agentMessageProjection';
+import type { PendingChatSend } from '../../../runtime/ChatProvider';
+import { ChatWorkspace as Workspace } from '../ChatWorkspace';
 
 const mockPendingSendDisplayed = jest.fn();
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRetry = jest.fn(async () => undefined);
-const mockReconcilePersistedMessages = jest.fn();
-const mockRespondApproval = jest.fn(async () => undefined);
-const mockCancelTurn = jest.fn(async () => undefined);
+const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockToastShow = jest.fn();
@@ -20,17 +24,14 @@ const mockTranslate = (key: string) => key;
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
-let mockToolApprovalSheetProps:
-  | {
-      onCancel: () => Promise<void>;
-    }
-  | undefined;
 let mockAgentChatSession: {
   activeTurn: null;
   enteringUserMessageId?: string;
   hasHistoryBeforeActiveTurn?: boolean;
   liveMessages: readonly AgentMessageView[];
   pendingApprovals: readonly AgentApprovalView[];
+  pendingQuestion: null;
+  retryingMessageId?: string;
   sessionId: string;
   status: 'ready';
 };
@@ -44,7 +45,7 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn() },
   useFocusEffect: (callback: () => (() => void) | void) =>
     jest.requireActual<typeof import('react')>('react').useEffect(callback, [callback]),
 }));
@@ -69,12 +70,14 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     ActionMenu: ({ children }: { children: ReactNode }) => children,
+    BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
     Button: (props: object) => createElement('Button', props),
     ContentState: {
       Error: (props: object) => createElement('ContentState.Error', props),
     },
     ContextMenu: ({ children }: { children: ReactNode }) => children,
     ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+    useAlert: () => ({ alert: { confirm: jest.fn() } }),
     useToast: () => ({ toast: { show: mockToastShow } }),
   };
 });
@@ -129,43 +132,89 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
-jest.mock('../../ToolApprovalSheet', () => ({
-  ToolApprovalSheet: (props: { onCancel: () => Promise<void> }) => {
-    mockToolApprovalSheetProps = props;
-    return null;
-  },
-}));
+jest.mock('../../ConversationApprovals', () => ({ ConversationApprovals: () => null }));
+jest.mock('../../ConversationQuestionSheet', () => ({ ConversationQuestionSheet: () => null }));
 
-jest.mock('../../../runtime', () => ({
-  createAgentMessageListProjectionCache: () => ({}),
-  mergeAgentMessageViews: (
-    persisted: readonly AgentMessageView[],
-    live: readonly AgentMessageView[],
-  ) => {
-    const liveById = new Map(live.map((message) => [message.id, message]));
-    const persistedIds = new Set(persisted.map((message) => message.id));
-    return [
-      ...persisted.map((message) => liveById.get(message.id) ?? message),
-      ...live.filter((message) => !persistedIds.has(message.id)),
-    ];
+const projected = new WeakMap<AgentMessageView, ConversationMessage>();
+function project(message: AgentMessageView): ConversationMessage {
+  const existing = projected.get(message);
+  if (existing) return existing;
+  const value: ConversationMessage = {
+    key: message.id,
+    state: message.status,
+    completeness: 'complete',
+    actions: {
+      retry: {
+        availability: { state: 'enabled' },
+        execute: async () => {
+          await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+          return { state: 'applied', value: undefined };
+        },
+      },
+      fork: {
+        availability: { state: 'enabled' },
+        execute: async () => {
+          await mockForkSession();
+          return { state: 'applied', value: { source: { kind: 'local' }, sessionId: 'fork' } };
+        },
+      },
+    },
+    display: toAgentMessageListItem(message) ?? {
+      id: message.id,
+      role: message.role,
+      status: 'success',
+      data: {},
+    },
+  };
+  projected.set(message, value);
+  return value;
+}
+// Feed the same scenarios through the public consumption views, preserving the existing assertions.
+function ChatWorkspace(
+  props: Omit<ComponentProps<typeof Workspace>, 'snapshot' | 'messageWindow' | 'messages'> & {
+    messageWindow: Omit<
+      ComponentProps<typeof Workspace>['messageWindow'],
+      'messages' | 'dataKey' | 'hasOlderMessages'
+    > & {
+      messages: readonly AgentMessageView[];
+      dataKey?: string;
+      hasOlderMessages?: boolean;
+    };
   },
-  toAgentMessageListItems: (messages: readonly AgentMessageView[]) =>
-    messages
-      .filter((message) => message.role === 'user' || message.role === 'assistant')
-      .map((message) => ({
-        data: { parts: message.parts },
-        id: message.id,
-        role: message.role,
-        status: message.status === 'success' ? 'success' : 'pending',
-      })),
-  useAgentChatActions: () => ({
-    cancelTurn: mockCancelTurn,
-    reconcilePersistedMessages: mockReconcilePersistedMessages,
-    respondApproval: mockRespondApproval,
-  }),
-  useAgentChatFork: () => mockForkSession,
-  useAgentChatSession: () => mockAgentChatSession,
-}));
+) {
+  const snapshot: ConversationSnapshot = {
+    title: '',
+    freshness: { state: 'current' },
+    executions: mockIsSessionBusy ? [{ id: 'turn', state: 'running' }] : [],
+    interactions: [],
+    liveMessages: mockAgentChatSession.liveMessages.map(project),
+    enteringMessageKey: mockAgentChatSession.enteringUserMessageId,
+    retryingMessageKey: mockAgentChatSession.retryingMessageId,
+    hasHistoryBeforeExecution: mockAgentChatSession.hasHistoryBeforeActiveTurn,
+  };
+  const history = props.messageWindow.messages;
+  const live = mockAgentChatSession.liveMessages;
+  const { hasNewerMessages } = props.messageWindow;
+  // The production hook memoizes merged rows, so unchanged inputs keep the same array identity.
+  const merged = useMemo(
+    () => (hasNewerMessages ? history : mergeAgentMessageViews(history, live)).map(project),
+    [hasNewerMessages, history, live],
+  );
+  return (
+    <Workspace
+      {...props}
+      snapshot={snapshot}
+      messages={merged}
+      messageWindow={{
+        ...props.messageWindow,
+        hasOlderMessages: true,
+        dataKey:
+          props.messageWindow.dataKey ?? props.sessionId ?? props.pendingSend?.sessionId ?? '',
+        messages: history.map(project),
+      }}
+    />
+  );
+}
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
   ChatInitialRenderCover: ({ isVisible }: { isVisible: boolean }) => {
@@ -202,7 +251,6 @@ function createMessage(
     status,
     turnId: 'turn-1',
     updatedAt: '2026-08-09T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -253,6 +301,7 @@ function createWorkspaceElement(
       messageWindow={{
         hasNewerMessages: false,
         isLoadingInitial,
+        isRefreshing: false,
         isLoadingNewer: false,
         isLoadingOlder: true,
         loadNewer: mockLoadOlder,
@@ -272,17 +321,18 @@ describe('ChatWorkspace message rendering integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsSessionBusy = false;
     mockAgentChatSession = {
       activeTurn: null,
       liveMessages: [],
       pendingApprovals: [],
+      pendingQuestion: null,
       sessionId: 'session-1',
       status: 'ready',
     };
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
     mockMessageListProps = undefined;
-    mockToolApprovalSheetProps = undefined;
     readyFrame = undefined;
     requestAnimationFrameSpy = jest
       .spyOn(global, 'requestAnimationFrame')
@@ -322,6 +372,7 @@ describe('ChatWorkspace message rendering integration', () => {
       messageWindow: {
         hasNewerMessages: false,
         isLoadingInitial: true,
+        isRefreshing: false,
         isLoadingNewer: false,
         isLoadingOlder: false,
         loadNewer: mockLoadOlder,
@@ -377,6 +428,7 @@ describe('ChatWorkspace message rendering integration', () => {
           sessionId="session-1"
           messageWindow={{
             ...props.messageWindow,
+            hasOlderMessages: true,
             messages: [user, assistant],
             isLoadingInitial: false,
           }}
@@ -388,6 +440,52 @@ describe('ChatWorkspace message rendering integration', () => {
       'assistant-1',
     ]);
     expect(mockPendingSendDisplayed).toHaveBeenCalledWith('user-1');
+  });
+
+  test('keys a draft first send by its pending Session while the draft window has no key', () => {
+    const pendingSend: PendingChatSend = {
+      sessionId: 'session-1',
+      isNewSession: true,
+      isSubmitting: true,
+      messages: [
+        {
+          id: 'user-1',
+          role: 'user',
+          status: 'pending',
+          data: { parts: [{ type: 'text', text: 'Hello' }] },
+        },
+        { id: 'assistant-1', role: 'assistant', status: 'pending', data: { parts: [] } },
+      ],
+    };
+    act(() => {
+      renderer = create(
+        <ChatWorkspace
+          pendingSend={pendingSend}
+          enteringUserMessageId="user-1"
+          onPendingSendDisplayed={mockPendingSendDisplayed}
+          contentBottomInset={96}
+          isAssistantToolbarEnabled={false}
+          keyboardOffset={26}
+          messageWindow={{
+            // A draft history window has no Session and reports an empty key.
+            dataKey: '',
+            hasNewerMessages: false,
+            isLoadingInitial: false,
+            isRefreshing: false,
+            isLoadingNewer: false,
+            isLoadingOlder: false,
+            loadNewer: mockLoadOlder,
+            loadOlder: mockLoadOlder,
+            messages: [],
+            retry: mockRetry,
+          }}
+        />,
+      );
+    });
+
+    // A keyless list would bootstrap LegendList's initial end target from the
+    // empty draft and later retarget the viewport to that stale target.
+    expect(mockMessageListProps?.dataKey).toBe('session-1');
   });
 
   test('merges live rows with displayable history and passes list layout', () => {
@@ -417,11 +515,45 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
     expect(mockIsLoadingOlder).toBe(true);
-    expect(mockReconcilePersistedMessages).toHaveBeenCalledWith('session-1', messages);
 
     const renderMessage = mockMessageListProps?.renderMessage;
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+  });
+
+  test('keeps the row renderer and list-wide extraData stable while an answer streams', () => {
+    const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const streaming = (text: string): AgentMessageView => ({
+      ...createMessage('assistant-2', 'assistant', 'streaming'),
+      parts: [{ id: 'assistant-2-text', state: 'streaming', text, type: 'text' }],
+    });
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('a')] };
+    renderer = renderWorkspace(false, history);
+    const renderMessage = mockMessageListProps?.renderMessage;
+    const extraData = mockMessageListProps?.extraData;
+
+    mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('ab')] };
+    act(() => renderer?.update(createWorkspaceElement(false, history)));
+
+    // LegendList refreshes every mounted row when extraData changes, so a
+    // streamed chunk must reach only its own row through the item data.
+    expect(mockMessageListProps?.messages.at(-1)?.data.parts).toEqual([
+      expect.objectContaining({ text: 'ab' }),
+    ]);
+    expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
+    expect(mockMessageListProps?.extraData).toBe(extraData);
+  });
+
+  test('empties the retrying answer while admission runs, so the wait reads as pending', () => {
+    const messages = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    mockAgentChatSession = { ...mockAgentChatSession, retryingMessageId: 'assistant-1' };
+
+    renderer = renderWorkspace(false, messages);
+
+    expect(mockMessageListProps?.messages).toEqual([
+      expect.objectContaining({ id: 'user-1', status: 'success' }),
+      expect.objectContaining({ id: 'assistant-1', status: 'pending', data: { parts: [] } }),
+    ]);
   });
 
   test('composes the assistant toolbar for settled assistant messages', () => {
@@ -532,13 +664,5 @@ describe('ChatWorkspace message rendering integration', () => {
       'assistant-1',
     ]);
     expect(mockCoverVisible).toBe(false);
-  });
-
-  test('cancels the active turn from the approval sheet', async () => {
-    renderer = renderWorkspace(false, []);
-
-    await act(async () => mockToolApprovalSheetProps?.onCancel());
-
-    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
   });
 });

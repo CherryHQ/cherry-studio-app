@@ -35,6 +35,7 @@ yarn-error.*
 .env
 .env*.local
 .local/
+.conductor/settings.local.toml
 
 # typescript
 *.tsbuildinfo
@@ -43,6 +44,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+/modules/*/android/build/
 
 .zed/*
 .idea/*

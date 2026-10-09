@@ -10,6 +10,7 @@
 #import "CherryStudioUI-Swift-Cxx-Umbrella.hpp"
 #import <type_traits>
 
+#include "HybridCherryBackgroundPressViewSpecSwift.hpp"
 #include "HybridCherryMenuViewSpecSwift.hpp"
 
 @interface CherryStudioUIAutolinking : NSObject
@@ -21,6 +22,13 @@
   using namespace margelo::nitro;
   using namespace margelo::nitro::cherrystudio::ui;
 
+  HybridObjectRegistry::registerHybridObjectConstructor(
+    "CherryBackgroundPressView",
+    []() -> std::shared_ptr<HybridObject> {
+      std::shared_ptr<HybridCherryBackgroundPressViewSpec> hybridObject = CherryStudioUI::CherryStudioUIAutolinking::createCherryBackgroundPressView();
+      return hybridObject;
+    }
+  );
   HybridObjectRegistry::registerHybridObjectConstructor(
     "CherryMenuView",
     []() -> std::shared_ptr<HybridObject> {

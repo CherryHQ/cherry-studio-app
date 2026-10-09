@@ -20,7 +20,7 @@ export type ListAgentSessionsQueryParams = z.input<typeof ListAgentSessionsQuery
 export type ListAgentSessionsQuery = z.output<typeof ListAgentSessionsQuerySchema>;
 
 export const UpdateAgentSessionSchema = z.strictObject({
-  title: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).max(255),
 });
 export type UpdateAgentSessionDto = z.infer<typeof UpdateAgentSessionSchema>;
 

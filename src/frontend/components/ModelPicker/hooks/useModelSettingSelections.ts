@@ -7,7 +7,7 @@ import { MODEL_SETTING_PREFERENCE_KEYS } from '../utils/modelSettings';
 export function useModelSettingSelections() {
   const [selections, setSelections] = useMultiplePreferences(MODEL_SETTING_PREFERENCE_KEYS);
   const saveSelections = useCallback(
-    (nextSelections: typeof selections) => setSelections(nextSelections),
+    (nextSelections: Partial<typeof selections>) => setSelections(nextSelections),
     [setSelections],
   );
 

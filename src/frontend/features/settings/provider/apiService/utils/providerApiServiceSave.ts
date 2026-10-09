@@ -1,8 +1,8 @@
 import type { EndpointType } from '@/shared/data/types/model';
 import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
+import { CHAT_ENDPOINT_TYPES } from '@/shared/utils/providerEndpoints';
 
 import {
-  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
   type CustomProviderTextEndpoint,
   getPrimaryEndpoint,
   hasConfiguredCustomProviderTextEndpoint,
@@ -34,7 +34,7 @@ export function buildProviderTextEndpointUpdates({
   }
 
   const endpointConfigs: EndpointConfigs = { ...provider.endpointConfigs };
-  for (const endpointType of CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES) {
+  for (const endpointType of CHAT_ENDPOINT_TYPES) {
     const baseUrl = endpointUrls[endpointType]?.trim() ?? '';
     if (baseUrl && !isValidEndpointBaseUrl(baseUrl)) {
       throw new ProviderApiServiceSaveError('invalid-base-url');

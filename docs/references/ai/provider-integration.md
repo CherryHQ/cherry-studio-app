@@ -48,10 +48,11 @@ cancellation, output import, and cleanup. See
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
 - `generateText()` for short internal generations such as Session naming;
-- `listModels()` and `checkModel()` for provider settings;
+- `listModels()` for provider discovery and `checkModel()` for internal AI SDK probes;
 - `generateImage()` for painting jobs.
 
-It is not exposed through `Backend` or frontend context. Every request supplies an explicit
+Settings and onboarding chat checks use the bound AgentRuntime through `Backend.models`.
+`AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 
 ## Provider And Model Records
@@ -75,6 +76,12 @@ Pi and AI SDK request construction. It resolves the effective endpoint, endpoint
 family, normalized wire model id, gateway provider-options key, and mobile/Provider request
 headers. It does not select API keys or IAM/OAuth credentials. Because configured extra headers may
 contain sensitive values, the result remains in memory and must not be persisted or logged.
+
+A trailing `#` on a base URL disables automatic API-version insertion. Standard base-URL formatting
+removes that marker before Pi, AI SDK, and model-list requests use the address. Full request-path
+overrides remain a separate AI SDK contract and are not admitted by Pi or the provider setup form;
+the form offers a base-URL correction instead. URL validation rejects query parameters, credentials,
+and nonempty fragments because these cannot safely receive an appended request path.
 
 For language models, Pi consumes the resolved connection through `resolvePiLanguageBinding()` and
 requires a typed compatibility result before selecting a credential. AI SDK configuration consumes
@@ -132,8 +139,51 @@ CherryAI:
 
 CherryIN uses the normal endpoint configuration and API-key path.
 
-Mobile has no provider OAuth sign-in. Registry `authMethods` still mirrors the desktop catalog, but
-OAuth-only preset providers are projected out by `MobileRegistryLoader.isProviderExcluded`.
+Mobile provider account sign-in has two bindings: CherryIN retains its account-to-API-key flow;
+Pi supplies GitHub Copilot, OpenAI Codex, Kimi Code, xAI/Grok, and OpenRouter through a
+runtime-owned `ProviderAccountAdapter`. Registry OAuth flags alone do not enable a login flow.
+The first four use the official device-code flows. OpenRouter uses official PKCE with the manual
+code/final-redirect-URL fallback; native apps do not create a loopback HTTP listener. Its browser
+opens externally so the final redirect URL can be copied.
+
+Copilot starts on `github.com` by default. Only the separate GitHub Enterprise action asks for a
+company domain. Codex chooses device-code login without exposing the upstream CLI method picker;
+Kimi Code and xAI/Grok have no preliminary text input. OpenRouter retains the required manual
+authorization-result input with visible browser instructions. Catalog and saved-provider rows mark
+account sign-in support from `accounts.getCapabilities`, including preset-backed copies, rather
+than upstream catalog OAuth flags or the user's current signed-in state.
+
+`ProviderAccountRuntime` owns the public account workflow and teardown. `PiProviderAccountAdapter`
+is the native auth bridge inside the Pi zone: it adapts app HTTP/Expo crypto and supplies an
+instance-scoped `CredentialStore` backed by device-only SecureStore. OAuth credentials never become
+user-provider API keys or enter backups. Pi resolves and refreshes credentials under per-instance
+locks, preserving vendor fields and preventing ambient API-key fallback after refresh failure.
+Deleting a provider or signing out cancels attempts and removes its local credential. Upstream
+logout has no remote revocation operation; OpenRouter keys remain manageable in the provider console.
+
+OAuth network exchanges go through `providerAccountFetch` and the shared app HTTP transport, with
+one immutable route per HTTPS origin, request-local credentials, bounded text responses, and no
+redirects. `statusPolicy: 'all'` preserves non-2xx protocol responses for Pi to handle pending,
+slow-down, and rate-limit decisions. Transport failures retain the app's safe error/diagnostic
+boundary. Streaming model requests keep the existing Expo fetch path.
+
+The Pi request binding retains canonical provider IDs and all resolved `apiKey`, `headers`, and
+`baseUrl` fields while usage attribution keeps the app instance ID. Four selective official model
+catalogs supply API/compatibility metadata; Copilot filters them by the account's available model
+IDs. OpenRouter keeps ordinary API-key model discovery. Codex uses its dedicated Responses API over
+SSE. These account credentials currently serve conversation models; non-conversation AI SDK
+features retain their existing credential path.
+
+Meta account login is excluded because subscription credentials are restricted to the official
+Muse Code client. Anthropic account login is not enabled. The newer OpenAI ChatGPT OAuth route still
+requires a fixed loopback callback and additional identity-validation/platform integration. Radius
+has no Mobile provider preset or `pi-messages` binding. `grok-cli` still requires an external CLI and
+remains excluded. Supporting the xAI subscription flow on the `grok` preset does not enable `grok-cli`.
+
+The versioned Pi 0.99.1 patch exposes `native-oauth`, injects app HTTP/PKCE primitives, and adds a
+native manual-callback adapter. Metro honors this package's browser file map. OAuth protocol polling,
+refresh, token parsing, and request-auth derivation remain upstream implementations. Update this
+patch and the native module-graph regression coverage together when upgrading Pi.
 
 Azure provider configuration handles OpenAI, Responses, and Anthropic variants. `iam-azure` auth
 configuration and API-version settings influence the generated provider settings.

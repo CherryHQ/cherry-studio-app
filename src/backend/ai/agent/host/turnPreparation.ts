@@ -13,7 +13,6 @@ import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
   AgentProtocolError,
   type AgentErrorView,
-  type AgentExecutionTarget,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -42,9 +41,11 @@ import type {
   AgentSessionStore,
   StoredRuntimeTurnContext,
 } from '../sessionStore/AgentSessionStore';
+import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
+import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
 import {
   createAgentInferenceSnapshot,
@@ -65,11 +66,14 @@ function fail(code: AgentErrorView['code'], message: string, retryable = false):
 
 export type TurnPreparationDependencies = {
   agents: AgentDefinitionSource;
+  /** The Host's `ask_user_question` response channel; calls correlate by turn id. */
+  askUser: AskUserQuestion;
   documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
-  /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
-  routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime;
+  imageGeneration?: AgentImageGenerationPort;
+  /** The Host keeps the engine binding; preparation consumes that local Runtime. */
+  runtime: AgentRuntime;
   runtimeTools: AgentRuntimeToolResolver;
   store: Pick<
     AgentSessionStore,
@@ -85,10 +89,17 @@ export type TurnPlan = {
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
   history: AgentMessageView[];
+  /**
+   * Present only for an explicit answer retry. `resumeParts` is the recorded
+   * assistant prefix the replacement execution keeps; it is empty when the
+   * answer restarts from the original question alone.
+   */
+  retry?: { resumeParts: AgentMessagePart[] };
   inferenceSnapshot: ReturnType<typeof createAgentInferenceSnapshot>;
   /** Canonicalized input parts: file parts rewritten to verified managed facts. */
   inputParts: AgentInputPart[];
-  modelPreflight: RuntimeModelPreflight;
+  modelPreflight: RuntimeModelPreflight | null;
+  imageGeneration?: AgentImageGenerationPlan;
   resources: TurnResourceLedger;
   runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
@@ -148,8 +159,41 @@ export async function prepareTurn(
     fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
   }
 
+  const { storedTurnContext, runtimeContextCheckpoint } = await loadTurnContext(
+    dependencies,
+    sessionId,
+    signal,
+  );
+
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    configuredAgent,
+    storedTurnContext,
+    runtimeContextCheckpoint,
+    documentParserMode,
+    signal,
+  );
+}
+
+/**
+ * Resolve the stored compaction checkpoint and the history it anchors. Every
+ * turn — submission or retry — reads history through this path, so no caller
+ * replays a full transcript the Runtime has already summarized.
+ */
+export async function loadTurnContext(
+  dependencies: Pick<TurnPreparationDependencies, 'store'>,
+  sessionId: string,
+  signal: AbortSignal,
+  /** A retry skips the answer it replaces: that summary describes discarded content. */
+  excludeCheckpointMessageId?: string,
+): Promise<{
+  storedTurnContext: StoredRuntimeTurnContext;
+  runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
+}> {
   const storedContextCandidate = await raceAbort(
-    dependencies.store.getLatestContextCheckpoint(sessionId),
+    dependencies.store.getLatestContextCheckpoint(sessionId, excludeCheckpointMessageId),
     signal,
   );
   const checkpointValidation = storedContextCandidate
@@ -160,8 +204,6 @@ export async function prepareTurn(
     dependencies.store.loadRuntimeTurnContext(sessionId, requestedCheckpoint?.anchorTurnId ?? null),
     signal,
   );
-  const runtimeContextCheckpoint =
-    requestedCheckpoint && storedTurnContext.anchorFound ? requestedCheckpoint : null;
   const runtimeContextIssue =
     checkpointValidation?.issue ??
     (requestedCheckpoint && !storedTurnContext.anchorFound
@@ -174,17 +216,11 @@ export async function prepareTurn(
       sessionId,
     });
   }
-
-  return prepareResolvedTurn(
-    dependencies,
-    parsed,
-    session,
-    configuredAgent,
+  return {
     storedTurnContext,
-    runtimeContextCheckpoint,
-    documentParserMode,
-    signal,
-  );
+    runtimeContextCheckpoint:
+      requestedCheckpoint && storedTurnContext.anchorFound ? requestedCheckpoint : null,
+  };
 }
 
 export async function prepareInitialTurn(
@@ -199,8 +235,7 @@ export async function prepareInitialTurn(
   }
   const session = {
     agentId: parsed.agentId,
-    executionTarget: parsed.executionTarget,
-    title: '',
+    name: '',
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
@@ -222,10 +257,10 @@ export async function prepareInitialTurn(
   );
 }
 
-async function prepareResolvedTurn(
+export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -239,7 +274,7 @@ async function prepareResolvedTurn(
     name: agent.name,
     icon: null,
   });
-  const runtime = dependencies.routeExecutionTarget(session.executionTarget);
+  const runtime = dependencies.runtime;
   if (
     !runtime.descriptor.capabilities.attachments &&
     parsed.parts.some((part) => part.type === 'file')
@@ -258,6 +293,68 @@ async function prepareResolvedTurn(
     availableFiles,
   );
 
+  const resolveInferenceModel = async () => {
+    try {
+      return await raceAbort(dependencies.inferenceModel(agent.model), signal);
+    } catch {
+      signal.throwIfAborted();
+      fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
+    }
+  };
+  const imageGeneration = await dependencies.imageGeneration?.prepare({
+    instructions: agent.instructions,
+    model: agent.model,
+    parts,
+    resources,
+    settings: parsed.imageGeneration,
+    signal,
+  });
+  if (imageGeneration) {
+    return {
+      agent,
+      documentParserMode,
+      hasMessages: storedTurnContext.hasMessages,
+      history: storedTurnContext.history,
+      imageGeneration,
+      inferenceSnapshot: createAgentInferenceSnapshot({
+        model: await resolveInferenceModel(),
+        options: {},
+        tools: [],
+        imageGeneration: imageGeneration.settings,
+      }),
+      inputParts: parts,
+      modelPreflight: null,
+      resources,
+      runtime,
+      runtimeContextCheckpoint: null,
+      runtimeContentAttachments: new Map(),
+      sessionTitle: session.name,
+      sessionTurnIds: storedTurnContext.sessionTurnIds,
+      tools: [],
+      pluginGuides: [],
+      toolDiscoveryWarnings: [],
+      userParts: parts.map(
+        (part, index): AgentMessagePart =>
+          part.type === 'text'
+            ? { ...part, id: `input-${index}`, state: 'done' }
+            : {
+                ...part,
+                id: `input-${index}`,
+                purpose: 'input-attachment',
+                attachmentReport: {
+                  mode: 'image',
+                  sourceTruncated: false,
+                  requestTruncated: false,
+                },
+              },
+      ),
+      usageAttribution,
+    };
+  }
+  if (parsed.imageGeneration) {
+    fail('CAPABILITY_UNSUPPORTED', 'Image generation is unavailable for this Agent.');
+  }
+
   // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
   // this turn's resource ledger, never a global file surface. System capability
@@ -270,6 +367,8 @@ async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          agentId: agent.id,
+          askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
           model: agent.model,
           resources,
@@ -283,10 +382,16 @@ async function prepareResolvedTurn(
       logger.warn('Failed to resolve system capabilities; continuing without them', error as Error);
     }
     try {
+      // The turn signal reaches live MCP discovery so cancelling the send
+      // stops the network request rather than only abandoning its result.
       const configured = await raceAbort(
-        dependencies.runtimeTools.resolve(agent.id, (warning) => {
-          if (!signal.aborted) toolDiscoveryWarnings.push(warning);
-        }),
+        dependencies.runtimeTools.resolve(
+          agent.id,
+          (warning) => {
+            if (!signal.aborted) toolDiscoveryWarnings.push(warning);
+          },
+          signal,
+        ),
         signal,
       );
       configuredTools = configured.tools;
@@ -300,13 +405,7 @@ async function prepareResolvedTurn(
     [...systemTools, ...configuredTools],
     agent.toolApprovalMode,
   );
-  let inferenceModel: Awaited<ReturnType<AgentInferenceModelResolver>>;
-  try {
-    inferenceModel = await raceAbort(dependencies.inferenceModel(agent.model), signal);
-  } catch {
-    signal.throwIfAborted();
-    fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
-  }
+  const inferenceModel = await resolveInferenceModel();
   let modelPreflight: RuntimeModelPreflight;
   try {
     modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
@@ -351,7 +450,7 @@ async function prepareResolvedTurn(
       type: 'file',
       fileEntryId: part.fileEntryId,
       mediaType: part.mediaType,
-      ...(part.name !== undefined ? { name: part.name } : {}),
+      ...(part.filename !== undefined ? { filename: part.filename } : {}),
       purpose: 'input-attachment',
       attachmentReport:
         content?.type === 'text-attachment' || content?.type === 'document-attachment'
@@ -372,7 +471,7 @@ async function prepareResolvedTurn(
     runtime,
     runtimeContextCheckpoint,
     runtimeContentAttachments,
-    sessionTitle: session.title,
+    sessionTitle: session.name,
     sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     toolDiscoveryWarnings,
@@ -405,13 +504,20 @@ function applyTurnOverrides(
 /**
  * Applies only the Agent's interactive approval preference; the value-level
  * rule lives in the shared policy module next to the MCP approval floor.
+ * Choosing auto means the user does not want the turn to stop for them, so it
+ * also withholds the question tool: the model asks in its reply instead.
  */
 function applyAgentToolApprovalMode(
   tools: readonly RuntimeTool[],
   mode: AgentDefinition['toolApprovalMode'],
 ): RuntimeTool[] {
-  return tools.map((tool) => {
+  return tools.flatMap((tool) => {
+    if (mode === 'auto' && isAskUserQuestionTool(tool)) return [];
     const approval = applyToolApprovalMode(tool.approval, mode, tool.autoApprovalEligible ?? true);
-    return approval === tool.approval ? tool : { ...tool, approval };
+    return [approval === tool.approval ? tool : { ...tool, approval }];
   });
+}
+
+function isAskUserQuestionTool({ ref }: RuntimeTool): boolean {
+  return ref.source === 'builtin' && ref.capabilityId === ASK_USER_QUESTION_TOOL_NAME;
 }

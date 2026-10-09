@@ -7,7 +7,6 @@ import {
   filenameExtension,
   MediaTypeSchema,
   nextVersionFilename,
-  parseFileEntryUrl,
   readableFilename,
 } from '../file';
 
@@ -48,14 +47,10 @@ describe('File contract', () => {
     expect(filenameExtension('report.final version')).toBeNull();
   });
 
-  it('round-trips entry ids through the persisted sentinel URL', () => {
+  it('builds the persisted sentinel URL from a validated entry id', () => {
     const id = FileEntryIdSchema.parse(entryId);
-    const url = fileEntryUrl(id);
 
-    expect(url).toBe(`${FILE_ENTRY_URL_PREFIX}${entryId}`);
-    expect(parseFileEntryUrl(url)).toBe(id);
-    expect(parseFileEntryUrl(`${FILE_ENTRY_URL_PREFIX}not-a-uuid`)).toBeNull();
-    expect(parseFileEntryUrl(`file:///documents/${entryId}`)).toBeNull();
+    expect(fileEntryUrl(id)).toBe(`${FILE_ENTRY_URL_PREFIX}${entryId}`);
   });
 });
 

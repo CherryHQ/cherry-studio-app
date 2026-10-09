@@ -1,8 +1,9 @@
-import { Directory, File, Paths } from 'expo-file-system';
+import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
@@ -22,6 +23,8 @@ import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 import { resolveTextImportMediaType } from '@/shared/utils/textFileTypes';
+
+import { deleteFilePreview } from './filePreviewCache';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
@@ -68,7 +71,7 @@ type WrittenInternalFile = {
 };
 
 function fileDirectory(): Directory {
-  return new Directory(Paths.document, DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
+  return new Directory(storageDirectory(), DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
 }
 
 function ensureFileDirectory(): Directory {
@@ -248,7 +251,7 @@ export async function createMessageParts(
 
 export async function discardInternalEntries(
   entries: Pick<FileEntryService, 'delete'>,
-  createdEntries: readonly Pick<FileEntry, 'filename' | 'id'>[],
+  createdEntries: readonly Pick<FileEntry, 'filename' | 'id' | 'updatedAt'>[],
 ): Promise<void> {
   for (const entry of createdEntries) {
     try {
@@ -259,6 +262,7 @@ export async function discardInternalEntries(
     }
     try {
       deleteInternalFile(entry);
+      deleteFilePreview(entry);
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
@@ -302,7 +306,7 @@ export async function rewriteInternalTextEntry(
 }
 
 /**
- * Hard-delete an entry and its bytes. The row is removed first; the unlink is
+ * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
  * best-effort (a leftover blob is reclaimable by the future cache-cleanup
  * sweep, while a dangling row would not be).
  */
@@ -325,6 +329,7 @@ export async function deleteInternalEntry(
 
   try {
     deleteInternalFile(deletedEntry);
+    deleteFilePreview(deletedEntry);
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }

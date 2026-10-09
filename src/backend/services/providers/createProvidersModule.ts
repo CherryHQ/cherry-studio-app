@@ -4,12 +4,14 @@ import {
   createPresetProviderInput,
   isRecommendedPresetProvider,
 } from '@/backend/data/services/presetProviders';
-import type {
-  ProviderRegistryUpdateEvent,
-  ProviderRegistryUpdateResult,
-  ProvidersModule,
+import {
+  ProviderSetupError,
+  type ProviderAccountsModule,
+  type ProviderRegistryUpdateEvent,
+  type ProviderRegistryUpdateResult,
+  type ProviderSetupStatus,
+  type ProvidersModule,
 } from '@/shared/contracts';
-import { ProviderSetupError, type ProviderSetupStatus } from '@/shared/contracts/providers';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
 import { getProviderConfigurationIssue } from './providerConfiguration';
@@ -21,6 +23,7 @@ type ProviderAvatarStorage = {
 };
 
 export type ProvidersModuleDependencies = {
+  accounts: ProviderAccountsModule;
   avatars: ProviderAvatarStorage;
   catalog: {
     isExcluded(providerId: string): boolean;
@@ -44,6 +47,7 @@ export type ProvidersModuleDependencies = {
 };
 
 export function createProvidersModule({
+  accounts,
   avatars,
   catalog,
   providers,
@@ -56,10 +60,15 @@ export function createProvidersModule({
       providers.keys(providerId),
       providers.auth(providerId),
     ]);
-    const issue = getProviderConfigurationIssue(provider, keys, auth);
+    const signedIn =
+      accounts.getCapabilities(provider).flow === 'interactive'
+        ? (await accounts.getStatus(providerId)).signedIn
+        : false;
+    const issue = getProviderConfigurationIssue(provider, keys, auth, signedIn);
     return { provider, issue, hasModels: !issue && (await hasAvailableModels(provider)) };
   };
   return {
+    accounts,
     getSetupStatus,
     ensureRegistryReady: registryUpdates.ensureReady,
     enable: async (providerId) => {
@@ -83,7 +92,9 @@ export function createProvidersModule({
       );
     },
     listCatalog: async () => {
-      const installedProviderIds = new Set((await providers.list()).map((provider) => provider.id));
+      const installedProviders = new Map(
+        (await providers.list()).map((provider) => [provider.id, provider]),
+      );
 
       return catalog
         .list()
@@ -91,7 +102,8 @@ export function createProvidersModule({
         .map((provider) => ({
           ...(provider.description ? { description: provider.description } : {}),
           id: provider.id,
-          isInstalled: installedProviderIds.has(provider.id),
+          isEnabled: installedProviders.get(provider.id)?.isEnabled ?? false,
+          isInstalled: installedProviders.has(provider.id),
           isRecommended: isRecommendedPresetProvider(provider.id),
           name: provider.name,
         }));

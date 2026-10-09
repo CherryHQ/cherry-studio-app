@@ -1,3 +1,4 @@
+import { ImageGenerationModeSchema, imageParamsSchema } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
@@ -5,6 +6,7 @@ import * as z from 'zod';
  * `./index.ts` for the protocol overview.
  */
 
+import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
@@ -36,16 +38,6 @@ export const AgentViewSchema = z.strictObject({
   name: z.string(),
 });
 export type AgentView = z.infer<typeof AgentViewSchema>;
-
-/**
- * Mobile Agent execution boundary, not an engine selector. `local` always
- * means this mobile app. Cloud and LAN desktop control are separate product
- * domains and do not add variants to this contract.
- */
-export const AgentExecutionTargetSchema = z.strictObject({
-  kind: z.literal('local'),
-});
-export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
 
 const AgentBuiltInToolRefSchema = z.strictObject({
   source: z.literal('builtin'),
@@ -80,6 +72,12 @@ const AgentInferenceToolSnapshotSchema = z.strictObject({
   approval: z.enum(['auto', 'ask', 'deny']),
 });
 
+export const AgentImageGenerationSchema = z.strictObject({
+  mode: ImageGenerationModeSchema,
+  paramValues: imageParamsSchema,
+});
+export type AgentImageGeneration = z.infer<typeof AgentImageGenerationSchema>;
+
 /** Immutable, credential-free facts used to construct one Agent Runtime request. */
 export const AgentInferenceSnapshotV1Schema = z.strictObject({
   version: z.literal(1),
@@ -90,6 +88,7 @@ export const AgentInferenceSnapshotV1Schema = z.strictObject({
     apiModelId: z.string().optional(),
     name: z.string(),
   }),
+  imageGeneration: AgentImageGenerationSchema.optional(),
   reasoningEffort: z.string().min(1).optional(),
   parameters: z.strictObject({
     temperature: z.number().finite().optional(),
@@ -132,9 +131,8 @@ export function readAgentInferenceSnapshot(value: unknown): AgentInferenceSnapsh
 export const AgentSessionViewSchema = z.strictObject({
   id: z.string().min(1),
   agentId: z.string().min(1),
-  executionTarget: AgentExecutionTargetSchema,
-  title: z.string(),
-  titleIsManual: z.boolean(),
+  name: z.string(),
+  isNameManuallyEdited: z.boolean(),
   /**
    * Copied-message boundary after which the fork-origin divider is rendered.
    * Null for ordinary or pre-boundary Sessions, and cleared with fork lineage.
@@ -162,8 +160,10 @@ export const AgentErrorViewSchema = z
   .strictObject({
     code: z.enum([
       'AGENT_NOT_FOUND',
+      'AGENT_MODEL_NOT_CONFIGURED',
       'SESSION_NOT_FOUND',
       'MESSAGE_NOT_FOUND',
+      'MESSAGE_UNREADABLE',
       'SESSION_BUSY',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
@@ -172,6 +172,7 @@ export const AgentErrorViewSchema = z
       'ATTACHMENT_UNAVAILABLE',
       'ATTACHMENT_METADATA_MISMATCH',
       'APPROVAL_NOT_FOUND',
+      'QUESTION_NOT_FOUND',
       'EXECUTION_UNAVAILABLE',
       'EXECUTION_FAILED',
       'CANCELLED',
@@ -206,6 +207,7 @@ export const AgentTurnViewSchema = z.strictObject({
   status: z.enum([
     'running',
     'awaiting-approval',
+    'awaiting-input',
     'cancelling',
     'completed',
     'failed',
@@ -272,11 +274,11 @@ export type AgentToolInputPreview = z.infer<typeof AgentToolInputPreviewSchema>;
 const AgentToolMessagePartSchema = z
   .strictObject({
     id: z.string().min(1),
-    type: z.literal('tool'),
+    type: z.literal('dynamic-tool'),
     toolCallId: z.string(),
     toolRef: AgentMessageToolRefSchema,
-    providerName: z.string(),
-    displayName: z.string(),
+    toolName: z.string(),
+    title: z.string(),
     state: z.enum([
       'input-streaming',
       'input-available',
@@ -317,6 +319,11 @@ const AgentToolMessagePartSchema = z
 export const AgentMessagePartSchema = z.union([
   z.strictObject({
     id: z.string().min(1),
+    type: z.literal('data-compaction-anchor'),
+    data: CompactionAnchorDataSchema,
+  }),
+  z.strictObject({
+    id: z.string().min(1),
     type: z.enum(['text', 'reasoning']),
     text: z.string(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
@@ -327,25 +334,18 @@ export const AgentMessagePartSchema = z.union([
     type: z.literal('file'),
     fileEntryId: z.string().min(1),
     mediaType: z.string(),
-    name: z.string().optional(),
+    filename: z.string().optional(),
     purpose: z.enum(['input-attachment', 'artifact']),
     attachmentReport: FileAttachmentReportSchema.optional(),
   }),
   AgentToolMessagePartSchema,
   z.strictObject({
     id: z.string().min(1),
-    type: z.literal('error'),
-    error: AgentErrorViewSchema,
+    type: z.literal('data-error'),
+    data: AgentErrorViewSchema,
   }),
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
-
-export const AgentUsageViewSchema = z.strictObject({
-  inputTokens: z.number().optional(),
-  outputTokens: z.number().optional(),
-  totalTokens: z.number().optional(),
-});
-export type AgentUsageView = z.infer<typeof AgentUsageViewSchema>;
 
 export const AgentMessageViewSchema = z.strictObject({
   id: z.string().min(1),
@@ -354,7 +354,6 @@ export const AgentMessageViewSchema = z.strictObject({
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
-  usage: AgentUsageViewSchema.nullable(),
   stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
@@ -390,7 +389,7 @@ export const AgentInputPartSchema = z.union([
     type: z.literal('file'),
     fileEntryId: z.string().min(1),
     mediaType: z.string(),
-    name: z.string().optional(),
+    filename: z.string().optional(),
   }),
 ]);
 export type AgentInputPart = z.infer<typeof AgentInputPartSchema>;

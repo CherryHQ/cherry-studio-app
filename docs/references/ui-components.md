@@ -22,6 +22,13 @@ rows, accessibility focus, and action dispatch; the keyboard variant handles Bac
 overlay removal before dispatch. Its placement follows the live trigger on the UI thread through
 opening and closing, including ongoing keyboard motion.
 
+On Android, the over-keyboard variant uses Gesture Handler pressables for its rows and backdrop.
+These recognize presses in native view coordinates rather than comparing the overlay's touch
+coordinates with measurements from the composer's layout tree. Row geometry and pressed/disabled
+styles stay on a child View so Uniwind does not need interactive selectors on the third-party
+pressable. System-modal menus and iOS keep their existing pressables; action dispatch still waits
+for dismissal, and native scroll cancellation must prevent a row action on release.
+
 One rule governs every platform decision:
 
 > Respect a platform difference the platform imposes. Do not introduce one it does not.

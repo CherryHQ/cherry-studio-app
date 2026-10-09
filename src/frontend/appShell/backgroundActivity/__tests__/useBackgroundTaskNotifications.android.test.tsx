@@ -166,7 +166,12 @@ function setAppState(state: AppStateStatus) {
   for (const listener of appStateListeners) listener(state);
 }
 
-function notice(id: string, url: string, owner = BACKGROUND_NOTIFICATION_OWNER): Notification {
+function notice(
+  id: string,
+  url: string,
+  owner = BACKGROUND_NOTIFICATION_OWNER,
+  terminal = true,
+): Notification {
   return {
     date: 0,
     request: {
@@ -178,8 +183,18 @@ function notice(id: string, url: string, owner = BACKGROUND_NOTIFICATION_OWNER):
         body: null,
         categoryIdentifier: null,
         sound: null,
-        data: { owner, url },
+        data: { owner, url, terminal },
       },
     },
   };
 }
+
+test('retains an ongoing conversation notification while its screen is visible', async () => {
+  mockPresented.mockResolvedValue([
+    notice('ongoing', 'cherrystudio:///?sessionId=s', BACKGROUND_NOTIFICATION_OWNER, false),
+  ]);
+  await act(async () => {
+    renderer = create(<Probe />);
+  });
+  expect(mockDismiss).not.toHaveBeenCalled();
+});

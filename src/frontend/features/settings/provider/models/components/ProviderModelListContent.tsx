@@ -2,7 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import {
   Button,
   ContextMenu,
-  ContextMenuScrollBoundary,
+  ScrollInteractionBoundary,
   type MenuItem,
 } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -156,7 +156,7 @@ export function ProviderModelListContent({
   );
 
   return (
-    <ContextMenuScrollBoundary>
+    <ScrollInteractionBoundary>
       {(scrollHandlers) => (
         <LegendList
           {...scrollHandlers}
@@ -178,7 +178,7 @@ export function ProviderModelListContent({
           style={styles.list}
         />
       )}
-    </ContextMenuScrollBoundary>
+    </ScrollInteractionBoundary>
   );
 }
 
@@ -207,11 +207,9 @@ function ManagedModelRow({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const openModel = (edit = false) =>
+  const openModel = () =>
     router.push({
-      pathname: edit
-        ? '/settings/provider/[providerId]/model-edit'
-        : '/settings/provider/[providerId]/model',
+      pathname: '/settings/provider/[providerId]/model',
       params: { providerId: model.providerId, modelId: model.id },
     });
   const items: readonly MenuItem[] = [
@@ -219,11 +217,6 @@ function ManagedModelRow({
       id: 'detail',
       label: t('settings.provider.models.management.details'),
       onPress: () => openModel(),
-    },
-    {
-      id: 'edit',
-      label: t('settings.provider.models.management.edit'),
-      onPress: () => openModel(true),
     },
     {
       id: 'select',

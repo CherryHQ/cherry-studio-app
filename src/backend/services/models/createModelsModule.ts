@@ -7,7 +7,12 @@ import type {
   ReconcileModelsInput,
   ReconcileModelsResult,
 } from '@/shared/contracts';
-import { ModelPullError, ModelPullTimeoutError, ProviderSetupError } from '@/shared/contracts';
+import {
+  ModelPullError,
+  ModelPullTimeoutError,
+  ProviderSetupError,
+  ProviderAccountError,
+} from '@/shared/contracts';
 import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
@@ -37,12 +42,6 @@ type ProviderWorkflowData = {
 };
 
 type ModelsAi = {
-  checkModel(input: {
-    apiKeyOverride?: string;
-    requestOptions?: { signal?: AbortSignal };
-    timeout?: number;
-    uniqueModelId: UniqueModelId;
-  }): Promise<{ latency: number }>;
   listModels(input: {
     providerId: string;
     requestOptions: { signal: AbortSignal };
@@ -52,12 +51,16 @@ type ModelsAi = {
 
 export type ModelsModuleDependencies = {
   ai: ModelsAi;
-  checkChatModel(model: Model, signal?: AbortSignal): Promise<ChatModelCheckResult>;
+  checkChatModel(
+    model: Model,
+    options: { apiKeyOverride?: string; signal?: AbortSignal; timeoutMs?: number },
+  ): Promise<ChatModelCheckResult>;
   isSystemSupportedModel(provider: Provider, model: Model): boolean;
   materializeRemoteModels(provider: Provider, models: readonly RemoteModel[]): Model[];
   models: ModelWorkflowData;
   providers: ProviderWorkflowData;
   pullTimeoutMs?: number;
+  isOAuthSignedIn?(provider: Provider): Promise<boolean>;
 };
 
 export function createModelsModule(dependencies: ModelsModuleDependencies): ModelsModule {
@@ -100,6 +103,9 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
 
   const checkHealth = async (input: CheckModelsHealthInput): Promise<ModelHealthResult[]> => {
     const models = await Promise.all(input.modelIds.map(requireModel));
+    if (models.some((model) => model.providerId !== input.providerId)) {
+      throw new Error('Model health check must use models from the selected provider');
+    }
     const results: ModelHealthResult[] = [];
 
     for (const [index, model] of models.entries()) {
@@ -107,14 +113,16 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
 
       let result: ModelHealthResult;
       try {
-        const { latency } = await dependencies.ai.checkModel({
-          ...(input.apiKey !== undefined && { apiKeyOverride: input.apiKey }),
-          ...(input.signal && { requestOptions: { signal: input.signal } }),
-          timeout: input.timeoutMs ?? defaultHealthTimeoutMs,
-          uniqueModelId: model.id,
+        const check = await probeChatModel(model, {
+          apiKeyOverride: input.apiKey,
+          signal: input.signal,
+          timeoutMs: input.timeoutMs ?? defaultHealthTimeoutMs,
         });
         throwIfAborted(input.signal);
-        result = { latency, model, status: 'success' };
+        result =
+          check.status === 'success'
+            ? { latency: check.latency, model, status: 'success' }
+            : { reason: check.reason, model, status: 'failed' };
       } catch (error) {
         if (input.signal?.aborted) {
           throw error;
@@ -136,7 +144,12 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
         dependencies.providers.keys(providerId),
         dependencies.providers.auth(providerId),
       ]);
-      const issue = getProviderConfigurationIssue(provider, keys, auth);
+      const issue = getProviderConfigurationIssue(
+        provider,
+        keys,
+        auth,
+        await dependencies.isOAuthSignedIn?.(provider),
+      );
       if (issue) throw new ProviderSetupError(issue);
     }
     throwIfAborted(signal);
@@ -195,15 +208,22 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
     return result;
   };
 
-  const checkChat: ModelsModule['checkChat'] = async ({ modelId, signal }) => {
-    throwIfAborted(signal);
-    const model = await requireModel(modelId);
+  const probeChatModel = async (
+    model: Model,
+    options: Parameters<ModelsModuleDependencies['checkChatModel']>[1],
+  ): Promise<ChatModelCheckResult> => {
+    throwIfAborted(options.signal);
     const provider = await dependencies.providers.get(model.providerId);
-    throwIfAborted(signal);
+    throwIfAborted(options.signal);
     if (!isTextGenerationModel(model) || !dependencies.isSystemSupportedModel(provider, model)) {
       return { status: 'failed', reason: 'model' };
     }
-    return dependencies.checkChatModel(model, signal);
+    return dependencies.checkChatModel(model, options);
+  };
+
+  const checkChat: ModelsModule['checkChat'] = async ({ modelId, signal }) => {
+    throwIfAborted(signal);
+    return probeChatModel(await requireModel(modelId), { signal });
   };
 
   return { checkChat, checkHealth, pull, reconcile };
@@ -267,6 +287,10 @@ function errorMessage(error: unknown): string {
 }
 
 function classifyPullFailure(error: unknown): ModelPullError['reason'] {
+  if (error instanceof ProviderAccountError) {
+    if (error.reason === 'authorization') return 'authentication';
+    if (error.reason === 'network') return 'network';
+  }
   if (error && typeof error === 'object') {
     const status = 'statusCode' in error ? error.statusCode : undefined;
     if (status === 401 || status === 403) return 'authentication';

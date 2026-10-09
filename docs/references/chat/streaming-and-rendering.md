@@ -2,8 +2,9 @@
 
 > Status: as-built.
 
-This reference defines Cherry Studio Mobile's Agent Session stream, transcript window, live
-projection, and message rendering boundaries. Terms follow [Domain Language](../domain-language.md)
+This reference describes the implemented local Agent Session stream, transcript window, live
+projection, and rendering boundaries. Remote chat/sidebar now reuse the consumption boundary; see
+[Service Dependencies And Ownership](../remote-access/service-ownership.md). Terms follow [Domain Language](../domain-language.md)
 and [Cherry Agent Protocol](../agent/agent-protocol.md).
 
 ## Principles
@@ -40,8 +41,10 @@ transport is a global replacement for the other.
 
 ## Frontend Observation Boundary
 
-`ChatProvider` owns one `AgentSessionChatClient` for the route. React consumers subscribe by
-Session id through `useSyncExternalStore`. The client:
+The chat page's `ChatProvider` (`frontend/features/chat/runtime`) owns the local
+`AgentSessionChatClient`. `useLocalConversation` subscribes to the client for the route's Session
+and projects that state into the shared Conversation snapshot through `useSyncExternalStore`; the
+app-shell `ConversationProvider` owns only the catalog sources. The client:
 
 - installs the atomic `observeSession` snapshot before applying events queued during observation;
 - applies `part.add`, `text.append`, and `part.replace` deltas to the live message projection;
@@ -66,24 +69,36 @@ The message list receives a chronological presentation sequence from two sources
 2. The live Agent snapshot/events, which contain the active user/assistant rows, deltas, and
    approvals needed before the next persisted read settles.
 
-The window owns older-message pagination and local reveal policy. `mergeAgentMessageViews` replaces
-persisted rows with live rows of the same id and appends new live rows. `agentMessageProjection`
-then maps protocol parts and statuses into the existing `MessageList` renderer shape.
+`localConversationView` maps protocol parts and statuses into `ConversationMessage` values using
+`agentMessageProjection`. `useAgentMessageHistoryWindow` owns the Session-keyed infinite query,
+older/newer pagination and its Query cache lifetime, so leaving and re-entering the chat within the
+five-minute freshness window shows the loaded pages again. `useLocalConversation` merges that history with live rows by message id and
+hands each persisted page back to the client, which drops live copies once they are persisted.
+Older search windows exclude live rows until their newer edge reaches the current transcript. The
+renderer receives presentation values rather than protocol DTOs.
 
-When a message is created or finalized, the frontend invalidates the transcript query. When a turn
-reaches a terminal status, it also invalidates Session list/detail queries. Stable message ids keep
-query refreshes from creating duplicate rows.
+When a message is finalized, the frontend invalidates the transcript query in place; a created
+message is already visible through the live projection until then.
+When a turn reaches a terminal status, it also invalidates Session list/detail queries. Stable
+message ids keep query refreshes from creating duplicate rows. The desktop route has a different
+problem, a history revision that lags the live stream, and keeps its own revisioned window and
+presenter under `frontend/appShell/conversation/remote` and `features/chat/remote`.
 
 ## Approval And Cancellation
 
-Pending approvals come from the live Session snapshot/events. The approval sheet sends an
-approve/deny decision with the protocol approval and turn identity. A terminal turn clears pending
-approvals. Stop calls `cancelTurn` only when the selected Session has a non-terminal active turn.
+Pending approvals come from the client's live Session snapshot/events. The local projection
+exposes each one as an interaction with an inline input and a bound response action; that action
+revalidates the approval, turn and input identity before calling the local protocol.
+`ConversationApprovals` renders the same interaction shape for both sources. A terminal turn clears
+pending approvals. Explicit stop reaches the Session's cancellation action; the local composer
+calls the client directly for the same operation.
 
 ## Persistence And Recovery
 
 - Streaming deltas are ephemeral; a fresh observer receives the accumulated streaming message in
   its snapshot.
+- The mobile UI releases Session observations while backgrounded. On foreground it restores each
+  visible Session from a fresh Host snapshot before consuming new events.
 - Terminal messages, parts, errors, and usage are durable transcript facts.
 - Route unmount removes the observation but does not cancel a Host-owned turn.
 - On process start, unfinished local turns reconcile to `interrupted`; Version 1 does not resume
@@ -93,6 +108,10 @@ approvals. Stop calls `cancelTurn` only when the selected Session has a non-term
 ## Rendering
 
 - Text and reasoning remain Markdown-capable shared message parts.
+- Expanded reasoning renders one continuous, selectable Markdown document. It is not truncated or
+  split by character count: code fences, formulas, links, and other Markdown constructs retain
+  their complete source. Like answer text, streaming reasoning holds its last rendered content
+  while the list end is off screen, then catches up when the end is visible or the part finishes.
 - Each text or reasoning part leaves native streaming mode when its own state reaches `done`,
   even if the turn continues with tools or another part. Turn completion, cancellation, and failure
   also end streaming mode. This releases pending Markdown tail blocks and finalizes layout without

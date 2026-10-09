@@ -616,7 +616,7 @@ export class ModelService {
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-        .where(eq(agentTable.modelId, id));
+        .where(eq(agentTable.model, id));
       const rows = await tx
         .delete(userModelTable)
         .where(and(eq(userModelTable.providerId, providerId), eq(userModelTable.modelId, modelId)))
@@ -658,12 +658,12 @@ export class ModelService {
       }
 
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // Keep Agent row versions ahead of the FK's model -> null cascade.
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
           .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-          .where(inArray(agentTable.modelId, idChunk));
+          .where(inArray(agentTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx.delete(userModelTable).where(inArray(userModelTable.id, idChunk));
       }
@@ -678,28 +678,11 @@ export class ModelService {
       presetProviderId?: string | null;
     },
   ): Promise<ReconcileProviderModelsResult> {
-    const result = await this.applyReconcile(providerId, input, providerConfig, false);
+    const result = await this.applyReconcile(providerId, input, providerConfig);
     return {
       added: await this.enrichModels(result.inserted),
       removedIds: result.removedIds,
     };
-  }
-
-  async reconcileForProvider(
-    providerId: string,
-    input: { toAdd: CreateModelDto[]; toRemove: string[] },
-  ): Promise<Model[]> {
-    const config = (await this.getProviderConfigs([providerId])).get(providerId);
-    const toAdd = input.toAdd.map((dto) =>
-      dtoToCreateInput(dto, providerRegistryService.lookupModel(providerId, dto.modelId, config)),
-    );
-    const result = await this.applyReconcile(
-      providerId,
-      { toAdd, toRemove: input.toRemove },
-      config,
-      true,
-    );
-    return (result.allRows ?? []).map((row) => enrichModelFromRegistry(row, config));
   }
 
   async createFromRegistry(
@@ -793,11 +776,10 @@ export class ModelService {
           presetProviderId?: string | null;
         }
       | undefined,
-    includeAllRows: boolean,
-  ): Promise<{ allRows?: UserModelRow[]; inserted: UserModelRow[]; removedIds: string[] }> {
+  ): Promise<{ inserted: UserModelRow[]; removedIds: string[] }> {
     const toAdd = input.toAdd ?? [];
     const requestedRemoveIds = Array.from(new Set(input.toRemove ?? []));
-    if (toAdd.length === 0 && requestedRemoveIds.length === 0 && !includeAllRows) {
+    if (toAdd.length === 0 && requestedRemoveIds.length === 0) {
       return { inserted: [], removedIds: [] };
     }
 
@@ -838,12 +820,12 @@ export class ModelService {
       );
       const removedIds: string[] = [];
       for (const idChunk of chunks(removableIds, sqliteBatchSize)) {
-        // Keep Agent row versions ahead of the FK's modelId -> null cascade.
+        // Keep Agent row versions ahead of the FK's model -> null cascade.
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         await tx
           .update(agentTable)
           .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-          .where(inArray(agentTable.modelId, idChunk));
+          .where(inArray(agentTable.model, idChunk));
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
         const rows = await tx
           .delete(userModelTable)
@@ -865,14 +847,7 @@ export class ModelService {
         );
       }
 
-      const allRows = includeAllRows
-        ? ((await tx
-            .select()
-            .from(userModelTable)
-            .where(eq(userModelTable.providerId, providerId))
-            .orderBy(asc(userModelTable.orderKey))) as UserModelRow[])
-        : undefined;
-      return { allRows, inserted, removedIds };
+      return { inserted, removedIds };
     });
   }
 

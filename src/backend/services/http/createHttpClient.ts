@@ -37,6 +37,8 @@ export interface CreateHttpClientOptions {
   errorDecoder?: HttpErrorDecoder;
   headers?: HttpHeaders;
   interceptors?: readonly HttpInterceptor[];
+  /** Let a protocol client inspect non-2xx responses instead of receiving an HttpError. */
+  statusPolicy?: 'success' | 'all';
   timeoutMs?: number;
 }
 
@@ -45,8 +47,12 @@ interface HttpRoute {
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers: HttpHeaders;
   readonly interceptors: readonly HttpInterceptor[];
+  readonly statusPolicy: NonNullable<CreateHttpClientOptions['statusPolicy']>;
   readonly timeoutMs: number;
 }
+
+const acceptSuccessfulStatus = (status: number) => status >= 200 && status < 300;
+const acceptAllStatuses = () => true;
 
 interface RoutedAxiosConfig {
   [HTTP_REQUEST]?: HttpRequest<unknown>;
@@ -239,6 +245,8 @@ const dispatchRequestInterceptors = async (
     config.fetchOptions = { redirect: request.redirect };
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
+    config.validateStatus =
+      context.route.statusPolicy === 'all' ? acceptAllStatuses : acceptSuccessfulStatus;
     return config;
   } catch (error) {
     throw await dispatchError(error, { request, route: context.route });
@@ -319,11 +327,19 @@ function createHttpClientWithTransport(
     });
   }
 
+  if (options.statusPolicy !== undefined && !['success', 'all'].includes(options.statusPolicy)) {
+    throw new HttpError('HTTP client status policy is invalid.', {
+      code: 'INVALID_STATUS_POLICY',
+      kind: 'internal',
+    });
+  }
+
   const route: HttpRoute = Object.freeze({
     baseUrl: options.baseUrl,
     errorDecoder: options.errorDecoder,
     headers: Object.freeze({ ...options.headers }),
     interceptors: Object.freeze([...(options.interceptors ?? [])]),
+    statusPolicy: options.statusPolicy ?? 'success',
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   });
 

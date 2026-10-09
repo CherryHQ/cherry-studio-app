@@ -12,6 +12,7 @@ export async function checkChatModel(
   runtime: Pick<AgentRuntime, 'open'>,
   model: Model,
   options: {
+    apiKeyOverride?: string;
     onUsage: (report: RuntimeUsageReport, requestId: string) => Promise<void>;
     signal?: AbortSignal;
     timeoutMs?: number;
@@ -31,6 +32,7 @@ export async function checkChatModel(
   try {
     options.signal?.throwIfAborted();
     const events = session.execute({
+      ...(options.apiKeyOverride !== undefined && { apiKeyOverride: options.apiKeyOverride }),
       contextCheckpoint: null,
       history: [],
       input: [{ type: 'text', text: 'Reply with OK.' }],
@@ -40,6 +42,8 @@ export async function checkChatModel(
         maxOutputTokens: Math.min(model.maxOutputTokens ?? 4096, requiresReasoning ? 4096 : 64),
         reasoningEffort: canDisableReasoning ? 'none' : 'default',
       },
+      // A health check has no conversation; each probe is its own session.
+      sessionId: uuid(),
       tools: [],
       turnId,
     });

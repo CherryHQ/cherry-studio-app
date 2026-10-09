@@ -1,11 +1,69 @@
 import type { AgentMessageView, JsonValue } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import { toRuntimeHistory, toRuntimeInputParts } from '../turnRuntimeInput';
 
 const TIMESTAMP = '2026-08-25T00:00:00.000Z';
 const TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'delete_file' } as const;
+const MODEL_ID = createUniqueModelId('provider-1', 'vision-model');
+const OTHER_MODEL_ID = createUniqueModelId('provider-1', 'other-model');
+
+function answer(
+  id: string,
+  turnId: string,
+  contextTokens: number | undefined,
+  modelId = MODEL_ID,
+): AgentMessageView {
+  return {
+    id,
+    sessionId: 'session-1',
+    turnId,
+    role: 'assistant',
+    status: 'success',
+    parts: [{ id: `${id}-text`, type: 'text', text: 'Answer.', state: 'done' }],
+    modelId,
+    inferenceSnapshot: null,
+    stats: contextTokens === undefined ? null : { contextTokens },
+    createdAt: TIMESTAMP,
+    updatedAt: TIMESTAMP,
+  };
+}
 
 describe('Turn Runtime input assembly', () => {
+  test('timeline compaction markers never enter model history', () => {
+    const message: AgentMessageView = {
+      id: 'assistant-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+      parts: [
+        {
+          id: 'anchor',
+          type: 'data-compaction-anchor',
+          data: {
+            phase: 'turn-start',
+            status: 'done',
+            preTokens: 100_000,
+            postTokens: 20_000,
+          },
+        },
+        { id: 'text', type: 'text', state: 'done', text: 'Answer' },
+      ],
+    };
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn-1',
+        messages: [{ role: 'assistant', parts: [{ type: 'text', text: 'Answer' }] }],
+      },
+    ]);
+  });
+
   test('preserves explicit plugin intent in model input and user history without display metadata', () => {
     const part = {
       type: 'text' as const,
@@ -29,7 +87,6 @@ describe('Turn Runtime input assembly', () => {
       role: 'user',
       status: 'success',
       parts: [{ ...part, id: 'input-0', state: 'done' }],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,
@@ -75,7 +132,7 @@ describe('Turn Runtime input assembly', () => {
       toRuntimeInputParts(
         [
           { type: 'text', text: 'Describe this.' },
-          { type: 'file', fileEntryId, mediaType: 'image/png', name: 'image.png' },
+          { type: 'file', fileEntryId, mediaType: 'image/png', filename: 'image.png' },
         ],
         { fileEntryIds: new Set([fileEntryId]) },
         new Map([[fileEntryId, image]]),
@@ -101,7 +158,7 @@ describe('Turn Runtime input assembly', () => {
       type: 'file' as const,
       fileEntryId,
       mediaType: 'text/plain',
-      name: 'notes.txt',
+      filename: 'notes.txt',
     };
 
     expect(
@@ -119,7 +176,6 @@ describe('Turn Runtime input assembly', () => {
       role: 'user',
       status: 'success',
       parts: [{ ...filePart, id: 'attachment-1', purpose: 'input-attachment' }],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,
@@ -158,7 +214,6 @@ describe('Turn Runtime input assembly', () => {
             purpose: 'input-attachment',
           },
         ],
-        usage: null,
         modelId: null,
         inferenceSnapshot: null,
         stats: null,
@@ -180,7 +235,6 @@ describe('Turn Runtime input assembly', () => {
             purpose: 'artifact',
           },
         ],
-        usage: null,
         modelId: null,
         inferenceSnapshot: null,
         stats: null,
@@ -210,11 +264,11 @@ describe('Turn Runtime input assembly', () => {
       parts: [
         {
           id: 'tool-call-1',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'call-1',
           toolRef: TOOL_REF,
-          providerName: 'mcp_server_1_delete_file_a1b2',
-          displayName: 'Delete file',
+          toolName: 'mcp_server_1_delete_file_a1b2',
+          title: 'Delete file',
           state: 'denied',
           input: { fileEntryId: 'file-1' },
           output: {
@@ -223,7 +277,6 @@ describe('Turn Runtime input assembly', () => {
           },
         },
       ],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,
@@ -273,17 +326,16 @@ describe('Turn Runtime input assembly', () => {
       parts: [
         {
           id: 'tool-search-part',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'tool-search-call',
           toolRef: metaRef,
-          providerName: 'tool_search',
-          displayName: 'Search tools',
+          toolName: 'tool_search',
+          title: 'Search tools',
           state: 'output-available',
           input: { query: 'calendar' },
           output,
         },
       ],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,
@@ -308,34 +360,26 @@ describe('Turn Runtime input assembly', () => {
     ]);
   });
 
-  test('projects persisted assistant usage for Pi context estimation', () => {
-    const message: AgentMessageView = {
-      id: 'assistant-message',
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      role: 'assistant',
-      status: 'success',
-      parts: [{ id: 'text-1', type: 'text', text: 'Answer.', state: 'done' }],
-      usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
-      modelId: null,
-      inferenceSnapshot: null,
-      stats: null,
-      createdAt: TIMESTAMP,
-      updatedAt: TIMESTAMP,
-    };
+  test('anchors only the newest answer on its measured context, never on summed usage', () => {
+    const older = answer('assistant-old', 'turn-1', 50_000);
+    const newest = answer('assistant-new', 'turn-2', 90_000);
 
-    expect(toRuntimeHistory([message])).toEqual([
-      {
-        turnId: 'turn-1',
-        messages: [
-          {
-            role: 'assistant',
-            parts: [{ type: 'text', text: 'Answer.' }],
-            usage: { inputTokens: 120, outputTokens: 8, totalTokens: 128 },
-          },
-        ],
-      },
+    const history = toRuntimeHistory([older, newest], new Map(), MODEL_ID);
+
+    expect(history.map((turn) => turn.messages[0])).toEqual([
+      { role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }] },
+      { role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }], contextTokens: 90_000 },
     ]);
+  });
+
+  test.each([
+    ['another model measured it', answer('a', 't', 90_000, OTHER_MODEL_ID), MODEL_ID],
+    ['the newest answer has no measurement', answer('a', 't', undefined), MODEL_ID],
+    ['no turn model is known', answer('a', 't', 90_000), undefined],
+  ])('estimates by content when %s', (_, message, modelId) => {
+    expect(toRuntimeHistory([message], new Map(), modelId)[0]?.messages[0]).not.toHaveProperty(
+      'contextTokens',
+    );
   });
 
   test('omits a dangling tool call instead of producing unpaired Runtime history', () => {
@@ -348,16 +392,15 @@ describe('Turn Runtime input assembly', () => {
       parts: [
         {
           id: 'tool-call-1',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'call-1',
           toolRef: TOOL_REF,
-          providerName: 'mcp_server_1_delete_file_a1b2',
-          displayName: 'Delete file',
+          toolName: 'mcp_server_1_delete_file_a1b2',
+          title: 'Delete file',
           state: 'running',
           input: { fileEntryId: 'file-1' },
         },
       ],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,
@@ -366,6 +409,52 @@ describe('Turn Runtime input assembly', () => {
     };
 
     expect(toRuntimeHistory([message])).toEqual([{ turnId: 'turn-1', messages: [] }]);
+  });
+
+  test('omits an interrupted tool call that never received its input', () => {
+    // The stream ended while the provider was still sending arguments: the
+    // part settled as `interrupted` with no `input`. Replaying it as a call
+    // with `null` arguments makes providers such as Qwen reject the next turn.
+    const message: AgentMessageView = {
+      id: 'assistant-message',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'error',
+      parts: [
+        { id: 'text-1', type: 'text', text: 'Let me look that up.', state: 'done' },
+        {
+          id: 'tool-call-1',
+          type: 'dynamic-tool',
+          toolCallId: 'call-1',
+          toolRef: { source: 'builtin', capabilityId: 'web-search' },
+          toolName: 'web_search',
+          title: 'Web search',
+          state: 'interrupted',
+          output: {
+            value: { status: 'interrupted', reason: 'The turn was interrupted.' },
+            artifacts: [],
+          },
+        },
+        {
+          id: 'error-1',
+          type: 'data-error',
+          data: { code: 'INTERRUPTED', message: 'Connection reset', retryable: true },
+        },
+      ],
+      modelId: null,
+      inferenceSnapshot: null,
+      stats: null,
+      createdAt: TIMESTAMP,
+      updatedAt: TIMESTAMP,
+    };
+
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn-1',
+        messages: [{ role: 'assistant', parts: [{ type: 'text', text: 'Let me look that up.' }] }],
+      },
+    ]);
   });
 
   test.each([
@@ -395,17 +484,16 @@ describe('Turn Runtime input assembly', () => {
       parts: [
         {
           id: 'tool-call-1',
-          type: 'tool',
+          type: 'dynamic-tool',
           toolCallId: 'call-1',
           toolRef: TOOL_REF,
-          providerName: 'mcp_server_1_delete_file_a1b2',
-          displayName: 'Delete file',
+          toolName: 'mcp_server_1_delete_file_a1b2',
+          title: 'Delete file',
           state,
           input: { fileEntryId: 'file-1' },
           output: { value, artifacts: [] },
         },
       ],
-      usage: null,
       modelId: null,
       inferenceSnapshot: null,
       stats: null,

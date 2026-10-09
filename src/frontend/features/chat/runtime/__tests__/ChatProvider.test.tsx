@@ -1,17 +1,26 @@
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ChatProvider, useAgentChatControls, useAgentChatDraftHandoff } from '../ChatProvider';
+import { AgentProtocolError, type AgentMessageView } from '@/shared/contracts/agent';
 
+import {
+  ChatProvider,
+  useAgentChatControls,
+  useAgentChatDraftHandoff,
+  useAgentChatImageResult,
+} from '../ChatProvider';
+import { localImageResult } from '../localImageResult';
+
+const mockCancelTurn = jest.fn(async () => undefined);
 const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
-const mockRefreshObservedSessions = jest.fn();
+const mockPauseObservedSessions = jest.fn();
+const mockResumeObservedSessions = jest.fn();
 const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
 const mockSubmitMessage = jest.fn();
-const mockChatState = { status: 'ready', activeTurn: null };
+const mockChatState = { status: 'ready', activeTurn: null, liveMessages: [] as AgentMessageView[] };
 const mockSubscribe = jest.fn(() => () => undefined);
 
 jest.mock('@tanstack/react-query', () => ({
@@ -39,13 +48,20 @@ jest.mock('@/frontend/components/Message', () => ({
 }));
 
 jest.mock('../AgentSessionChatClient', () => ({
+  // The busy predicate is the client's own rule, not a test double.
+  isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
+  ).isAgentSessionBusy,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
+    cancelTurn: mockCancelTurn,
     dispose: mockDispose,
-    refreshObservedSessions: mockRefreshObservedSessions,
+    pauseObservedSessions: mockPauseObservedSessions,
+    resumeObservedSessions: mockResumeObservedSessions,
     startSession: mockStartSession,
     submitMessage: mockSubmitMessage,
     getState: () => mockChatState,
     subscribe: mockSubscribe,
+    toolInputPreviews: {},
   })),
 }));
 
@@ -53,10 +69,20 @@ type AgentChatControls = ReturnType<typeof useAgentChatControls>;
 
 let chatControls: AgentChatControls | undefined;
 let draftHandoff: ReturnType<typeof useAgentChatDraftHandoff>;
+let imageResult: import('@/frontend/appShell/conversation').ConversationImageResult | undefined;
 
-function Probe({ sessionId, composerKey = 0 }: { sessionId?: string; composerKey?: number }) {
+type HarnessProps = { sessionId?: string; composerKey?: number; persistedImage?: AgentMessageView };
+
+function Probe({ sessionId, composerKey = 0, persistedImage }: HarnessProps) {
   const controls = useAgentChatControls({ agentId: 'agent-1', sessionId, composerKey });
   const handoff = useAgentChatDraftHandoff(sessionId);
+  const latestImage = useAgentChatImageResult(
+    sessionId,
+    persistedImage ? localImageResult(persistedImage) : undefined,
+  );
+  useEffect(() => {
+    imageResult = latestImage;
+  }, [latestImage]);
 
   useEffect(() => {
     captureChatControls(controls);
@@ -68,10 +94,10 @@ function Probe({ sessionId, composerKey = 0 }: { sessionId?: string; composerKey
   return null;
 }
 
-function Harness({ sessionId, composerKey }: { sessionId?: string; composerKey?: number }) {
+function Harness({ sessionId, composerKey, persistedImage }: HarnessProps) {
   return (
     <ChatProvider>
-      <Probe sessionId={sessionId} composerKey={composerKey} />
+      <Probe sessionId={sessionId} composerKey={composerKey} persistedImage={persistedImage} />
     </ChatProvider>
   );
 }
@@ -81,9 +107,10 @@ describe('ChatProvider Draft handoff', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(AppState, 'addEventListener').mockReturnValue({ remove: jest.fn() });
     chatControls = undefined;
     draftHandoff = undefined;
+    imageResult = undefined;
+    mockChatState.liveMessages = [];
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
   });
@@ -148,7 +175,7 @@ describe('ChatProvider Draft handoff', () => {
               type: 'file',
               fileEntryId: 'file-1',
               mediaType: 'application/pdf',
-              name: 'notes.pdf',
+              filename: 'notes.pdf',
             },
           ],
         });
@@ -156,6 +183,7 @@ describe('ChatProvider Draft handoff', () => {
       const pending = currentControls().pendingSend!;
       const request = (sessionId ? mockSubmitMessage : mockStartSession).mock.calls[0][0];
       expect(pending.isSubmitting).toBe(true);
+      expect(currentControls().isBusy).toBe(true);
       expect(currentControls().canSend).toBe(false);
       expect(pending.sessionId).toBe(request.sessionId);
       expect(pending.messages.map((message) => message.id)).toEqual([
@@ -182,11 +210,41 @@ describe('ChatProvider Draft handoff', () => {
         isSubmitting: false,
         messages: pending.messages,
       });
+      expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
+
+  it('stops first-message preparation by the pending session ID and restores the draft without navigation', async () => {
+    const admission = deferred<void>();
+    mockStartSession.mockImplementationOnce(() => admission.promise);
+    act(() => {
+      renderer = create(<Harness />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Hello' }] });
+    });
+    const pendingSessionId = currentControls().pendingSend!.sessionId;
+    await act(async () => {
+      await currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith(pendingSessionId);
+    await act(async () => {
+      const cancelled = expect(sending).rejects.toMatchObject({ name: 'AbortError' });
+      admission.reject(
+        new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: false }),
+      );
+      await cancelled;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
+  });
 
   it('withdraws a rejected send, keeps its scroll intent stable, and allows the next send', async () => {
     const admission = deferred<void>();
@@ -271,7 +329,83 @@ describe('ChatProvider Draft handoff', () => {
     expect(mockReplace).not.toHaveBeenCalled();
     expect(mockInvalidateQueries).toHaveBeenCalled();
   });
+
+  it('retains a persisted image when the caller reconstructs an equivalent result', () => {
+    const persisted = imageMessage('1');
+    act(() => {
+      renderer = create(<Harness persistedImage={persisted} sessionId="session-1" />);
+    });
+    const first = imageResult;
+    act(() => {
+      renderer?.update(<Harness persistedImage={{ ...persisted }} sessionId="session-1" />);
+    });
+    expect(imageResult).toBe(first);
+    expect(first).toEqual(localImageResult(persisted));
+  });
+
+  it('retains the latest image across history refreshes and drops it when switching sessions', () => {
+    const persisted = imageMessage('1');
+    const live = imageMessage('2');
+    mockChatState.liveMessages = [live];
+    act(() => {
+      renderer = create(<Harness persistedImage={persisted} sessionId="session-1" />);
+    });
+    expect(imageResult).toEqual(localImageResult(live));
+
+    mockChatState.liveMessages = [];
+    act(() => {
+      renderer?.update(<Harness sessionId="session-1" />);
+    });
+    expect(imageResult).toEqual(localImageResult(live));
+    act(() => {
+      renderer?.update(<Harness persistedImage={persisted} sessionId="session-1" />);
+    });
+    expect(imageResult).toEqual(localImageResult(live));
+
+    act(() => {
+      renderer?.update(<Harness persistedImage={persisted} sessionId="session-2" />);
+    });
+    expect(imageResult).toBeUndefined();
+  });
 });
+
+function imageMessage(id: string): AgentMessageView {
+  return {
+    createdAt: '2026-09-01T00:00:00.000Z',
+    id,
+    inferenceSnapshot: {
+      status: 'supported',
+      snapshot: {
+        version: 1,
+        imageGeneration: { mode: 'generate', paramValues: {} },
+        model: {
+          uniqueModelId: 'provider::image',
+          providerId: 'provider',
+          modelId: 'image',
+          name: 'Image',
+        },
+        parameters: {},
+        tools: [],
+      },
+    },
+    modelId: 'provider::image',
+    parts: [
+      {
+        id: 'file-1',
+        type: 'file',
+        fileEntryId: `output-${id}`,
+        mediaType: 'image/png',
+        purpose: 'artifact',
+      },
+    ],
+    role: 'assistant',
+    sessionId: 'session-1',
+    stats: null,
+    status: 'success',
+    turnId: `turn-${id}`,
+    updatedAt: '2026-09-01T00:00:00.000Z',
+  };
+}
 
 function captureChatControls(value: AgentChatControls) {
   chatControls = value;

@@ -1,4 +1,8 @@
-import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
+import {
+  BackgroundPressExclusion,
+  ContextMenuExclusion,
+  MessagePart,
+} from '@cherrystudio/ui/components';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -28,21 +32,26 @@ export function SourceGroup({ citationNumberBySourceId, parts }: SourceGroupProp
 
   return (
     <ContextMenuExclusion>
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="button"
-        className="-mx-2 min-h-11 self-start flex-row items-center gap-2 rounded-lg px-2 active:bg-secondary-active active:opacity-80"
-        onPress={() => setIsOpen(true)}
-      >
-        <View className="flex-row items-center">
-          {sources.slice(0, 3).map((source, index) => (
-            <View key={source.url} style={{ marginLeft: index === 0 ? 0 : -4, zIndex: 3 - index }}>
-              <WebSourceFavicon source={source} />
-            </View>
-          ))}
-        </View>
-        <Text className="font-medium text-foreground-tertiary text-sm">{label}</Text>
-      </Pressable>
+      <BackgroundPressExclusion className="-mx-2 self-start">
+        <Pressable
+          accessibilityLabel={label}
+          accessibilityRole="button"
+          className="min-h-11 flex-row items-center gap-2 rounded-lg px-2 active:bg-secondary-active active:opacity-80"
+          onPress={() => setIsOpen(true)}
+        >
+          <View className="flex-row items-center">
+            {sources.slice(0, 3).map((source, index) => (
+              <View
+                key={source.url}
+                style={{ marginLeft: index === 0 ? 0 : -4, zIndex: 3 - index }}
+              >
+                <WebSourceFavicon source={source} />
+              </View>
+            ))}
+          </View>
+          <Text className="font-medium text-foreground-tertiary text-sm">{label}</Text>
+        </Pressable>
+      </BackgroundPressExclusion>
       {isOpen ? (
         <MessagePart.Detail
           onClose={() => setIsOpen(false)}

@@ -4,6 +4,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, notInArray, or, type SQL } fro
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { agentTable, monotonicUpdateTimestamp, userModelTable } from '@/backend/data/db/schemas';
 import type {
   InsertUserProviderRow,
@@ -31,7 +32,7 @@ import {
 
 import {
   assertCustomProviderEndpointConfiguration,
-  getRemovedPiTextEndpoints,
+  getRemovedConfiguredChatEndpoints,
 } from './providerModelEndpointIntegrity';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
@@ -351,6 +352,64 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
   };
 }
 
+/**
+ * Insert unknown providers and refresh the catalog-owned fields of installed
+ * presets inside the caller's write transaction. A plain function over the
+ * transaction so seeding can run it against the database being initialized
+ * without resolving anything through the application host.
+ */
+export async function batchUpsertProviders(
+  tx: Database,
+  inputs: CreateProviderInput[],
+): Promise<void> {
+  if (inputs.length === 0) {
+    return;
+  }
+
+  const providerIds = inputs.map((input) => input.providerId);
+  const existingRows = await tx
+    .select({
+      apiFeatures: userProviderTable.apiFeatures,
+      defaultChatEndpoint: userProviderTable.defaultChatEndpoint,
+      endpointConfigs: userProviderTable.endpointConfigs,
+      providerId: userProviderTable.providerId,
+      presetProviderId: userProviderTable.presetProviderId,
+    })
+    .from(userProviderTable)
+    .where(inArray(userProviderTable.providerId, providerIds));
+  const existing = new Set(existingRows.map((row) => row.providerId));
+  const newRows = inputs.flatMap((input) =>
+    existing.has(input.providerId) ? [] : [toInsert(input)],
+  );
+
+  if (newRows.length > 0) {
+    await insertManyWithOrderKey(tx, userProviderTable, newRows, {
+      pkColumn: userProviderTable.providerId,
+    });
+  }
+
+  const inputByProviderId = new Map(inputs.map((input) => [input.providerId, input]));
+  for (const row of existingRows) {
+    const input = inputByProviderId.get(row.providerId);
+    if (!input || row.presetProviderId === null) {
+      continue;
+    }
+
+    // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，并行化无收益
+    await tx
+      .update(userProviderTable)
+      .set({
+        apiFeatures: mergeApiFeatures(row.apiFeatures, input.apiFeatures ?? null),
+        defaultChatEndpoint: row.defaultChatEndpoint ?? input.defaultChatEndpoint ?? null,
+        endpointConfigs: mergeCatalogEndpointConfigs(
+          row.endpointConfigs as EndpointConfigs | null,
+          input.endpointConfigs,
+        ) as Partial<Record<string, EndpointConfig>> | null,
+      })
+      .where(eq(userProviderTable.providerId, row.providerId));
+  }
+}
+
 export class ProviderService {
   /**
    * Resolved per call rather than injected once, so the instance holds no
@@ -598,7 +657,7 @@ export class ProviderService {
         });
 
         if (input.endpointConfigs !== undefined) {
-          const removedEndpointTypes = getRemovedPiTextEndpoints(
+          const removedEndpointTypes = getRemovedConfiguredChatEndpoints(
             current.endpointConfigs,
             nextEndpointConfigs,
           );
@@ -711,7 +770,7 @@ export class ProviderService {
       await tx
         .update(agentTable)
         .set({ updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt) })
-        .where(inArray(agentTable.modelId, providerModelIds));
+        .where(inArray(agentTable.model, providerModelIds));
 
       const deletedProviders = await tx
         .delete(userProviderTable)
@@ -731,50 +790,7 @@ export class ProviderService {
       return;
     }
 
-    await this.dbService.withWriteTx(async (tx) => {
-      const providerIds = inputs.map((input) => input.providerId);
-      const existingRows = await tx
-        .select({
-          apiFeatures: userProviderTable.apiFeatures,
-          defaultChatEndpoint: userProviderTable.defaultChatEndpoint,
-          endpointConfigs: userProviderTable.endpointConfigs,
-          providerId: userProviderTable.providerId,
-          presetProviderId: userProviderTable.presetProviderId,
-        })
-        .from(userProviderTable)
-        .where(inArray(userProviderTable.providerId, providerIds));
-      const existing = new Set(existingRows.map((row) => row.providerId));
-      const newRows = inputs.flatMap((input) =>
-        existing.has(input.providerId) ? [] : [toInsert(input)],
-      );
-
-      if (newRows.length > 0) {
-        await insertManyWithOrderKey(tx, userProviderTable, newRows, {
-          pkColumn: userProviderTable.providerId,
-        });
-      }
-
-      const inputByProviderId = new Map(inputs.map((input) => [input.providerId, input]));
-      for (const row of existingRows) {
-        const input = inputByProviderId.get(row.providerId);
-        if (!input || row.presetProviderId === null) {
-          continue;
-        }
-
-        // react-doctor-disable-next-line async-await-in-loop -- 同一写事务内本质串行，并行化无收益
-        await tx
-          .update(userProviderTable)
-          .set({
-            apiFeatures: mergeApiFeatures(row.apiFeatures, input.apiFeatures ?? null),
-            defaultChatEndpoint: row.defaultChatEndpoint ?? input.defaultChatEndpoint ?? null,
-            endpointConfigs: mergeCatalogEndpointConfigs(
-              row.endpointConfigs as EndpointConfigs | null,
-              input.endpointConfigs,
-            ) as Partial<Record<string, EndpointConfig>> | null,
-          })
-          .where(eq(userProviderTable.providerId, row.providerId));
-      }
-    });
+    await this.dbService.withWriteTx((tx) => batchUpsertProviders(tx, inputs));
   }
 }
 

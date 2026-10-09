@@ -112,27 +112,63 @@ export async function createOfficialMcpClient(
       return response;
     } catch (error) {
       if (init?.signal?.aborted) {
-        throw new PluginError('cancelled', 'The plugin request was cancelled.');
+        // Closing the client also aborts a submitted write, which the service may have committed.
+        throw isWrite && submitted
+          ? unknownWriteError(context.pluginId)
+          : new PluginError('cancelled', 'The plugin request was cancelled.');
       }
       if (error instanceof PluginError) throw error;
       if (isWrite && submitted) throw unknownWriteError(context.pluginId);
       throw new PluginError('network', 'Could not reach the official MCP service.');
     }
   };
-  const client = await createMCPClient({
-    clientName: 'Cherry Studio',
-    initializationOptions: { signal: context.signal },
-    maxRetries: 0,
-    // No authProvider: a 401 must not replay a possibly committed write.
-    transport: { type: 'http', url: connection.url, fetch, redirect: 'error' },
-  });
+  const client = await withRequestSignal(context.signal, (signal) =>
+    createMCPClient({
+      clientName: 'Cherry Studio',
+      initializationOptions: { signal },
+      maxRetries: 0,
+      // No authProvider: a 401 must not replay a possibly committed write.
+      transport: { type: 'http', url: connection.url, fetch, redirect: 'error' },
+    }),
+  );
   // The pinned SDK implements callTool, but omits it from its public interface.
   // Keep that dependency at the transport boundary instead of exposing the full SDK.
   if (typeof (client as MCPClient & Partial<PluginClient>).callTool !== 'function') {
     await client.close();
     throw new PluginError('unavailable', 'The MCP client cannot invoke plugin tools.');
   }
-  return client as MCPClient & PluginClient;
+  const toolClient = client as MCPClient & PluginClient;
+  return {
+    get serverInfo() {
+      return client.serverInfo;
+    },
+    listTools(input) {
+      return withRequestSignal(input?.options?.signal, (signal) =>
+        client.listTools({ ...input, options: { ...input?.options, signal } }),
+      );
+    },
+    callTool(input) {
+      return withRequestSignal(input.options?.abortSignal, (abortSignal) =>
+        toolClient.callTool({ ...input, options: { ...input.options, abortSignal } }),
+      );
+    },
+    close: () => client.close(),
+  };
+}
+
+/** The SDK's nested AbortSignal.any links need an abort even when a request succeeds. */
+async function withRequestSignal<TResult>(
+  caller: AbortSignal | undefined,
+  operation: (signal: AbortSignal) => Promise<TResult>,
+): Promise<TResult> {
+  const request = new AbortController();
+  const signal = caller ? AbortSignal.any([caller, request.signal]) : request.signal;
+  try {
+    return await operation(signal);
+  } finally {
+    // The RPC has settled; release its links/response stream without closing the shared transport.
+    request.abort();
+  }
 }
 
 function unknownWriteError(pluginId: string, statusCode?: number): PluginError {

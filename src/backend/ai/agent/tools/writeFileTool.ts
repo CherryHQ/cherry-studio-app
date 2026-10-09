@@ -95,6 +95,13 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
         );
       }
 
+      // read_file refuses NUL as binary; storing it would save a file nothing can read back.
+      if (parsed.data.content.includes('\0')) {
+        return invalid(
+          'Content contains NUL characters. Remove them; a text file cannot hold NUL.',
+        );
+      }
+
       const size = new TextEncoder().encode(parsed.data.content).length;
       if (size > WRITE_FILE_MAX_CONTENT_BYTES) {
         return invalid(

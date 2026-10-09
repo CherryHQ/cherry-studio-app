@@ -1,11 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { AgentProtocolError } from '@/shared/contracts/agent';
-import {
-  FileAttachmentError,
-  type FileAttachmentIssue,
-  type FileAttachmentReport,
-} from '@/shared/contracts/fileAttachment';
+import { FileAttachmentError, type FileAttachmentIssue } from '@/shared/contracts/fileAttachment';
 
 export function getFileAttachmentIssue(error: unknown): FileAttachmentIssue | undefined {
   if (error instanceof FileAttachmentError) return error.issue;
@@ -22,13 +18,4 @@ export function fileAttachmentIssueDescription(issue: FileAttachmentIssue, t: TF
       issue.limit === undefined ? '' : `${Number((issue.limit / (1024 * 1024)).toFixed(1))} MiB`,
   });
   return [issue.name, reason, t('attachments.draftKept')].filter(Boolean).join('\n\n');
-}
-
-export function fileAttachmentNoticeKeys(report: FileAttachmentReport | undefined): string[] {
-  if (!report) return [];
-  const notices: string[] = [];
-  if (report.mode === 'document-text') notices.push('attachments.notice.documentText');
-  if (report.sourceTruncated) notices.push('attachments.notice.sourceTruncated');
-  if (report.requestTruncated) notices.push('attachments.notice.requestTruncated');
-  return notices;
 }

@@ -1,0 +1,13 @@
+{
+  "name": "@cherrystudio/image-drop-target",
+  "version": "1.0.0",
+  "description": "iOS system drag-and-drop image receiving for the chat composer (Expo Module)",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "private": true,
+  "expo-module": {
+    "ios": {
+      "podspecPath": "ios/ImageDropTarget.podspec"
+    }
+  }
+}

@@ -1,13 +1,13 @@
 # Cherry Agent Protocol
 
 > Status: Version 1 is as-built for device-local execution. A PC Agent Controller extension is
-> planned and is not implemented.
+> implemented as the separate application-facing version 2 contract; device verification is pending.
 
 This document defines the application-facing contract consumed by the Agent Client. Today that
-contract is provided in process by the Mobile Agent Host. The planned PC Agent Controller keeps the
+contract is provided in process by the Mobile Agent Host. The PC Agent Controller keeps the
 contract next to the application while a separate adapter translates between it and a PC-owned
 Agent Runtime. This document does not define either the local [Agent Runtime](./agent-runtime.md) or
-the future PC connection protocol.
+the separately versioned PC connection protocol.
 
 ## Scope
 
@@ -21,16 +21,16 @@ JSON-safe values validated at the boundary. Subscription callbacks and unsubscri
 process-local transport mechanics, not protocol data. JSON safety keeps application values
 portable; this document does not define a network wire protocol.
 
-For the planned PC Agent Controller, the PC owns the Agent, Session, conversation, execution, tool,
+For the PC Agent Controller, the PC owns the Agent, Session, conversation, execution, tool,
 approval, task, and persistence state. Mobile consumes normalized application events, maintains
 only the projection needed by its UI, and sends user intent such as a message, cancellation, or
 approval decision back through the adapter. The adapter may eventually use WebSocket, WebRTC, or
 another transport; that choice does not change the Agent Protocol.
 
 Version 1 remains local-only and its TypeScript shapes below are still the as-built contract. The
-planned PC extension is documented separately in [Planned PC Agent Controller
-extension](#planned-pc-agent-controller-extension); it must not be read as implemented behavior.
-See also [Agent Architecture](./README.md#planned-pc-agent-controller-boundary).
+PC extension is documented separately in [PC Agent Controller extension](#pc-agent-controller-extension).
+The implemented subset and PC gaps are specified in [PC Agent Controller](./pc-agent-controller.md).
+See also [Agent Architecture](./README.md#pc-agent-controller-boundary).
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
 `AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
@@ -44,17 +44,20 @@ The protocol does not expose provider SDK objects, Runtime-native events, SQLite
 | Agent Protocol | Normalized views, application events, user commands, capabilities, and application-level errors | WebSocket/WebRTC frames, acknowledgements, heartbeats, or Runtime-native events |
 | Mobile UI | Rendering a temporary projection and collecting user intent | Authoritative conversation or execution state |
 
-The current local path uses the Mobile Agent Host and Pi Runtime in process and has no PC adapter.
-The table defines the planned PC path; it does not retroactively describe Version 1 internals.
+The local path still uses the Mobile Agent Host and Pi Runtime in process. The PC adapter is a
+separate path; the table does not retroactively describe Version 1 internals.
 
-## Planned PC Agent Controller extension
+## PC Agent Controller extension
 
-This section records the target application contract before implementation. It deliberately does
-not select a wire transport or claim that the current TypeScript schemas support PC Sessions.
+This section records the broader target contract. The implemented version 2 contract is
+`src/shared/contracts/agent/controller.ts`, translated by `RemoteAgentAdapter`. Current PC wire v1
+provides full snapshots, admission receipts and on-demand details rather than deltas, replay, or
+background-task control. Those differences are explicit in [the implementation](./pc-agent-controller.md);
+the requirements below must not be interpreted as already supported PC capabilities.
 
 ### Required application semantics
 
-The planned protocol must cover the following mobile-visible behavior:
+The full target protocol covers the following mobile-visible behavior:
 
 - An authoritative Session snapshot containing the visible transcript window, active turn,
   streaming message, pending approvals, background work, and a cursor for older messages. Mobile
@@ -107,7 +110,7 @@ multi-PC product flow requires one.
 The PC extension must be introduced as a versioned contract rather than reinterpreting local-only
 fields:
 
-- do not add a remote variant to the current `{ kind: 'local' }` execution target;
+- keep PC Agent control separate from the Mobile Agent Runtime;
 - do not use mobile `UniqueModelId` or local inference snapshots as PC execution authority;
 - do not use mobile managed-file ids for PC attachments or artifacts;
 - do not restrict PC tools to the current local built-in/MCP identity union; and
@@ -132,8 +135,6 @@ type AgentView = {
   name: string
 }
 
-type AgentExecutionTarget = { kind: 'local' }
-
 type AgentToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string }
@@ -143,9 +144,8 @@ type AgentMessageToolRef = AgentToolRef | { source: 'meta'; name: string }
 type AgentSessionView = {
   id: string
   agentId: string
-  executionTarget: AgentExecutionTarget
-  title: string
-  titleIsManual: boolean
+  name: string
+  isNameManuallyEdited: boolean
   forkBoundaryMessageId: string | null
   forkedFromSessionId: string | null
   createdAt: string
@@ -153,9 +153,8 @@ type AgentSessionView = {
 }
 ```
 
-`executionTarget` expresses the Mobile Agent boundary, not implementation choice. It defines and
-accepts only `local`, meaning this mobile app. Runtime ids and Pi/provider-SDK implementation
-details never appear in protocol values.
+Mobile Agent always runs in this app through the Host-owned Runtime. No execution-target field
+is sent or persisted. Runtime ids and Pi/provider-SDK implementation details remain private.
 
 `agentId` identifies the application-owned Agent configuration — the definition the user edits in the
 application (instructions, model, tool-approval preference, and MCP extensions). That configuration
@@ -177,6 +176,7 @@ type AgentTurnView = {
   status:
     | 'running'
     | 'awaiting-approval'
+    | 'awaiting-input'
     | 'cancelling'
     | 'completed'
     | 'failed'
@@ -202,7 +202,6 @@ type AgentMessageView = {
   role: 'user' | 'assistant' | 'system'
   status: 'pending' | 'streaming' | 'success' | 'error' | 'cancelled' | 'interrupted'
   parts: AgentMessagePart[]
-  usage: AgentUsageView | null
   stats: MessageStats | null
   modelId: UniqueModelId | null
   inferenceSnapshot: AgentInferenceSnapshotView | null
@@ -211,6 +210,11 @@ type AgentMessageView = {
 }
 
 type AgentMessagePart =
+  | {
+      id: string
+      type: 'data-compaction-anchor'
+      data: CompactionAnchorData
+    }
   | {
       id: string
       type: 'text' | 'reasoning'
@@ -222,16 +226,16 @@ type AgentMessagePart =
       type: 'file'
       fileEntryId: string
       mediaType: string
-      name?: string
+      filename?: string
       purpose: 'input-attachment' | 'artifact'
     }
   | {
       id: string
-      type: 'tool'
+      type: 'dynamic-tool'
       toolCallId: string
       toolRef: AgentMessageToolRef
-      providerName: string
-      displayName: string
+      toolName: string
+      title: string
       state:
         | 'input-streaming'
         | 'input-available'
@@ -248,15 +252,9 @@ type AgentMessagePart =
     }
   | {
       id: string
-      type: 'error'
-      error: AgentErrorView
+      type: 'data-error'
+      data: AgentErrorView
     }
-
-type AgentUsageView = {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-}
 
 type AgentInferenceSnapshotV1 = {
   version: 1
@@ -311,7 +309,7 @@ Data URL exists only inside the Host-to-Runtime request.
 
 Text inputs accept authoritative `text/*` media types and an explicit application/source-code
 media-type and extension allowlist. The Host reads managed bytes before reservation, accepts and
-strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL/binary controls, unsupported types, and
+strips a leading UTF-8 BOM, rejects invalid UTF-8, NUL, unsupported types, and
 oversized current files, then projects a temporary structured Runtime part. Pi JSON-escapes that
 part as untrusted user text with the authoritative name, media type, and `[complete]` or
 `[truncated]` state; its body cannot alter the system/tool instruction layer or expand the Turn
@@ -331,10 +329,18 @@ persists only its requested target name and normalized error, never unresolved p
 `input-streaming` is a live lifecycle signal and may omit `input`; consumers must not interpret it as
 an executable call until the part advances to `input-available`.
 
-`usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
-the turn and commits the final value together with the terminal message state, so
-`message.finalized` and later transcript reads both carry it. While the message is streaming,
-`usage` is `null`; there is no dedicated usage event.
+Assistant token counts are exposed once, in `stats`. The invocation ledger materializes those
+counts; finalization uses the Host's Runtime aggregate only when no ledger projection exists.
+`message.finalized` and subsequent transcript reads carry the same persisted statistics.
+
+Display reads preserve valid parts when another part is malformed or unsupported, replacing only
+that part with a `data-error` carrying `MESSAGE_UNREADABLE`. The stored JSON remains unchanged.
+Runtime history reads remain strict and never replay these display-only placeholders.
+
+Image-model submissions may include `imageGeneration: { mode, paramValues }` on both
+`startSession` and `submitMessage`. The Host resolves the selected model, validates the image mode
+and attachments, and captures these settings in the ordinary assistant inference snapshot. Image
+results are assistant artifact file parts in the same Session; they do not enter painting history.
 
 Every accepted assistant placeholder carries the selected `modelId` and a versioned inference
 snapshot committed in the same reservation transaction. The snapshot is Agent-owned and does not
@@ -350,7 +356,7 @@ configuration.
 ```ts
 type AgentInputPart =
   | { type: 'text'; text: string }
-  | { type: 'file'; fileEntryId: string; mediaType: string; name?: string }
+  | { type: 'file'; fileEntryId: string; mediaType: string; filename?: string }
 
 type AgentApprovalView = {
   id: string
@@ -374,7 +380,7 @@ type AgentCapabilities = {
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
-Capabilities are a stable projection of what the Session's execution target and engine contract can
+Capabilities are a stable projection of what the Host's local engine contract can
 represent. `tools: true` means Pi supports tool-loop protocol parts; it does not mean the Agent has a
 tool configured, that OS permission is granted, or that execution is approved. The Host resolves
 those effective gates for every turn. The Agent Client may branch on protocol capabilities, never on
@@ -387,12 +393,13 @@ interface AgentProtocol {
   getSessionStatus(sessionId: string): AgentSessionStatus | null
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void
 
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>
   deleteSession(input: { sessionId: string }): Promise<void>
+  deleteTurn(input: { sessionId: string; turnId: string }): Promise<void>
   forkSession(input: {
     sessionId: string
     fromMessageId: string
-    title?: string
+    name?: string
   }): Promise<AgentSessionView>
 
   startSession(input: {
@@ -400,8 +407,7 @@ interface AgentProtocol {
     userMessageId: string
     assistantMessageId: string
     agentId: string
-    executionTarget: AgentExecutionTarget
-    parts: AgentInputPart[]
+      parts: AgentInputPart[]
     modelId?: UniqueModelId
     reasoningEffort?: ReasoningEffortOption
   }): Promise<AgentSessionView>
@@ -415,7 +421,10 @@ interface AgentProtocol {
     reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
+  retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
+
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
+  cancelSubmission(input: { sessionId: string }): Promise<void>
 
   respondApproval(input: {
     sessionId: string
@@ -466,6 +475,13 @@ until both messages have formal data. Its preallocated Session ID also keeps the
 mounted through navigation and history loading. Admission rejection restores the draft; execution
 errors belong to the accepted transcript.
 
+Stop works before a turn exists. Preparation (tool discovery, attachment reading, model preflight,
+and Runtime open) has no turn id, so the client stops it with `cancelSubmission`, which aborts the
+Session's submission, retry, or Draft start still in admission. The pending call rejects with
+`CANCELLED` and the composer restores the draft without a failure notice. A stop that lands while
+the reservation commits leaves a reserved turn that settles as `cancelled` without running. Once
+the turn is reserved, the client uses `cancelTurn`.
+
 `modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
 The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning
 snapshot is turn-local and is never written to Agent configuration. Omitting either field inherits
@@ -484,9 +500,22 @@ and is the only operation that creates a Session from existing history. It is re
 (see [Branching](#branching)). The new Session is not observed by the operation; the client
 navigates to it and observes it like any other Session.
 
-`title` defaults to the source's. The client supplies it because a derived name is localized copy
+`name` defaults to the source's. The client supplies it because a derived name is localized copy
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
+
+`deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
+history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
+its turn rather than deleting a row, and offers the action from the assistant toolbar rather than
+the long-press menu, which stays non-destructive. The Host refuses the operation while the Session has an
+active turn — the same clean-cut rule a fork applies — and refuses a turn whose own rows have not
+settled. It clears any context checkpoint that may have summarized the removed turn, then
+publishes `turn.deleted` so observers drop the rows from live state.
+
+Deletion is not an undo. A turn's tool calls already changed the one real world, and erasing their
+record does not reverse them; the Agent simply no longer sees that it made them. Replacing an
+answer is [Manual answer retry](#manual-answer-retry), and reopening an earlier question is a fork
+(see [Branching](#branching)); neither undoes side effects either.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
@@ -503,6 +532,7 @@ type AgentEvent =
   | { type: 'message.created'; message: AgentMessageView }
   | { type: 'message.delta'; messageId: string; delta: AgentMessageDelta }
   | { type: 'message.finalized'; message: AgentMessageView }
+  | { type: 'turn.deleted'; turnId: string; messageIds: string[] }
   | { type: 'approval.requested'; approval: AgentApprovalView }
   | { type: 'approval.resolved'; approval: AgentApprovalView }
 
@@ -517,6 +547,36 @@ there is no untyped patch object.
 
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
+
+Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
+
+```ts
+type CompactionAnchorData = {
+  status: 'compacting' | 'done' | 'skipped'
+  phase: 'turn-start' | 'in-loop' | 'agent-session'
+  trigger?: 'manual' | 'auto'
+  startedAt?: string // ISO timestamp
+  completedAt?: string // ISO timestamp
+  preTokens?: number
+  postTokens?: number
+  durationMs?: number
+  foldedCount?: number
+}
+```
+
+The Host inserts one `compacting` part per attempt using `part.add`, then replaces that same id with
+`done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
+anchor keep their order for live observers. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
+and terminal persistence; skipped, cancelled, or still-running attempts leave no historical marker.
+Completed anchors survive later turn failure or interruption. Recovery also removes transient anchors.
+The Mobile path emits `turn-start` for preflight folds and `in-loop` between tool batches, with
+`trigger: 'auto'`; `agent-session` and `manual` retain their Desktop vocabulary without adding commands.
+Optional measurements are omitted when unavailable; Mobile does not infer `foldedCount` from tool parts.
+
+Turn-start anchors render as a dashed separator outside the process disclosure. In-loop anchors remain
+inside the process at their original position. The marker has no detail disclosure and never contains
+summary text or tool payloads. The model-history adapter excludes these presentation parts. A marker
+records an event; it does not turn an execution-local summary into a durable checkpoint.
 
 ## Snapshot and recovery
 
@@ -554,6 +614,7 @@ type AgentErrorView = {
     | 'AGENT_NOT_FOUND'
     | 'SESSION_NOT_FOUND'
     | 'MESSAGE_NOT_FOUND'
+    | 'MESSAGE_UNREADABLE'
     | 'SESSION_BUSY'
     | 'CAPABILITY_UNSUPPORTED'
     | 'ATTACHMENT_INVALID'
@@ -617,7 +678,7 @@ request bodies, credentials, and stack traces stay behind the Host boundary.
 `message` is diagnostic text, not user-facing copy. The Host writes it in English for logs and
 tests, and the frontend derives every displayed string from the closed vocabulary instead: the
 composer maps a rejected submission's `code` to a translation, the transcript error part maps
-`failure.reasonCode` (or `code` for `INTERRUPTED`) to a translated title, and a tool part translates
+`failure.reasonCode` (or `code` for `INTERRUPTED` and `MESSAGE_UNREADABLE`) to a translated title, and a tool part translates
 its status. The error part never renders `message` inline. Tapping it opens a detail sheet that
 shows `message`, the failure snapshot facts, and `context.responseBody` verbatim: diagnostic
 detail the user explicitly asked for, kept so a provider failure can be investigated in place.
@@ -633,16 +694,64 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 7. Approval responses correlate to the active Session, turn, and approval and fail closed.
 8. A new observation is sufficient to reconstruct all live UI state.
 9. Every protocol value survives a JSON round trip and re-validates against its schema.
-10. The client supplies an execution target and Agent identity, never a Runtime identity.
+10. The client supplies an Agent identity; the Host owns the local Runtime binding.
 11. Tool identity is a stable `AgentToolRef`; provider aliases and display names are not authority.
 12. Every finalized tool call is terminal and reconstructs as a paired model tool call/result.
 13. Every file part uses a managed id rather than a raw path; deleted content remains an unavailable
     historical reference, and artifact parts are not implicit model attachments.
 14. A Draft Session becomes durable in the same transaction that reserves its first message pair.
 
+## Manual answer retry
+
+`retryMessage({ sessionId, messageId })` replaces a settled assistant answer in place.
+
+**Only the Session's last message is retryable.** An in-place replacement rewrites history that
+later messages already answered, so retrying an earlier answer would leave every message after it
+responding to a reply that no longer exists. The Host rejects any other message with
+`MESSAGE_NOT_FOUND`, the store repeats the check inside the reservation transaction, and the
+toolbar offers the action on the latest answer alone. Going back further is a fork, not a retry.
+The Host holds the Session's admission guard throughout preparation and reservation; running,
+awaiting-approval, cancelling, and admitting Sessions reject retry with `SESSION_BUSY`. The
+frontend disables the action while the Session is busy and hides it in an older transcript window.
+
+The replacement keeps the answer's message id and transcript position and takes a fresh turn id.
+The original user message is reused; retry never creates a Session, inserts a message, or
+navigates away. Model context stops at that original question.
+
+A **resumed** retry applies to a failed, interrupted, or cancelled answer that completed at least
+one tool call. Its recorded prefix through the last completed tool result survives; the unfinished
+model response after it is discarded. Pi continues from the original input and those
+tool-call/result pairs without a synthetic user message. Tool errors stay visible so the model can
+recover; interrupted calls have unknown outcomes and must not be blindly repeated. The prefix keeps
+the tool record alone: the previous attempt's compaction anchors are dropped, because the
+replacement plans context afresh and emits its own. The prefix is budgeted as current-turn input,
+so compaction can summarize history around it but never the prefix itself.
+
+A **restarted** retry applies to a successful answer, and to an unfinished one with no completed
+tool call. The old answer is discarded outright and the message restarts empty. Because that
+discarded attempt may already have changed the outside world without leaving any trace the model
+can read, the system prompt tells it to inspect current state before repeating an externally
+visible action. Retry does not undo tool effects and promises nothing about exactly-once execution.
+
+Approvals and tool availability are resolved afresh. The original model and inference parameters
+are reused when the snapshot is supported; current credentials, instructions, permissions, and
+attachment availability are revalidated. Preparation failure leaves the original transcript
+unchanged. Each retry has fresh runtime timing; the replaced answer retains cumulative provider
+usage and costs, because the invocation ledger is immutable and both attempts really were billed.
+Recovery uses persisted facts, not provider stream offsets: process death can lose unflushed
+output, and retry does not promise byte-level continuation.
+
+Retry reads history through the same checkpoint path as a submission, skipping the checkpoint on
+the answer it replaces: a retry in a compacted Session neither rereads the summarized transcript
+nor resumes from a summary of content it is discarding. Admission is therefore as slow as a
+submission's, and it has no new rows to show for it. The frontend renders the answer as empty and
+pending from the press until the reserved one arrives — the same state a just-sent message shows —
+so a rejected admission simply restores the untouched answer.
+
 ## Branching
 
-Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
+Manual retry replaces the last answer; it does not create selectable answer versions, and it is
+never the way back to an earlier point in the transcript. Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
 alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
 the one real world that every branch would claim to share. In-place switching therefore
 misrepresents history, and an active-path concept would touch nearly every invariant above.
@@ -651,8 +760,8 @@ Branching is instead a **fork**: `forkSession({ sessionId, fromMessageId })` cre
 and copies the transcript up to the fork point inside one transaction. Turns and approvals are not
 copied; the new Session starts idle. Because the Host already supplies complete normalized history
 for every turn, a forked Session executes through the unchanged flow — the Runtime never knows a
-fork happened. Regenerate and "try a different question" are forks from the relevant message
-boundary.
+fork happened. The explicit branch action and editing a question use a fork; retrying an answer
+uses the in-place replacement operation above.
 
 Rules:
 
@@ -685,3 +794,14 @@ exactly this). The fork decision rests on the two costs that remain: an in-place
 presents divergent timelines as interchangeable views of one conversation, which is dishonest
 once tool side effects exist, and an active-path selection is a new piece of mutable state that
 every operation, snapshot, event, and invariant would have to carry.
+
+
+### User-question responses
+
+`respondQuestion({ sessionId, turnId, toolCallId, answer })` resolves the active question only.
+The answer contains `selectedOptionIds`, `text`, and `skipped`; selection membership/cardinality,
+nonempty responses, and skip exclusivity are validated before consuming the waiter. Duplicate,
+stale, or cross-turn responses cannot execute the continuation again. `question.updated` carries
+an `AgentPendingQuestion` or `null`; observation snapshots include the pending question so returning
+to a live conversation can reopen its sheet. The question belongs to the current Host generation,
+not a durable queue. After process restart, ordinary interrupted-tool reconciliation applies.

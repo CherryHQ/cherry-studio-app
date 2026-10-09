@@ -169,18 +169,23 @@ describe('MobileRegistryLoader', () => {
     });
   });
 
-  it('excludes preset providers whose only auth path is OAuth, without dropping their catalog rows', () => {
+  it('excludes external CLI auth while admitting mobile OAuth presets', () => {
     const loader = downloadedLoader();
     const overrides = loader.loadProviderModels();
 
-    expect(loader.getExcludedProviderIds()).toEqual(['copilot', 'grok-cli', 'openai-codex']);
+    expect(loader.getExcludedProviderIds()).toEqual(['grok-cli']);
 
-    for (const providerId of ['copilot', 'grok-cli', 'openai-codex']) {
+    for (const providerId of ['grok-cli']) {
       expect(loader.isProviderExcluded(providerId)).toBe(true);
       expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(true);
       expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });
       expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
       expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
+    }
+    for (const providerId of ['copilot', 'openai-codex', 'kimi-coding']) {
+      expect(loader.isProviderExcludedFromCatalog(providerId)).toBe(false);
+      expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
     }
   });
 
@@ -200,6 +205,7 @@ describe('MobileRegistryLoader', () => {
     const loader = downloadedLoader();
 
     for (const providerId of [
+      'meta',
       'claude-code',
       'lmstudio',
       'ollama',

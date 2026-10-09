@@ -8,6 +8,27 @@
       "when": 1789461429602,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790057476804,
+      "tag": "0001_hot_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790763054621,
+      "tag": "0002_orange_thunderbolt_ross",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791466514296,
+      "tag": "0003_align_agent_fields",
+      "breakpoints": true
     }
   ]
 }

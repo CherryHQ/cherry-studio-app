@@ -7,7 +7,10 @@ import { PluginError } from '@/shared/contracts/plugins';
 export type FeishuApiRequest = {
   path: `/open-apis/${string}`;
   query?: HttpQuery;
-} & ({ method: 'GET'; body?: never } | { method: 'POST' | 'PUT' | 'PATCH'; body?: unknown });
+} & (
+  | { method: 'GET' | 'DELETE'; body?: never }
+  | { method: 'POST' | 'PUT' | 'PATCH'; body?: unknown }
+);
 
 export type FeishuToolAccess = 'read' | 'write';
 export type FeishuApiTool = {

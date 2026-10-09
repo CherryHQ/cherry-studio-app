@@ -24,14 +24,15 @@
  *     after it; the run loop stops at the first terminal;
  * 5.  terminal message state commits before terminal events publish; the
  *     terminal turn is a projection of that committed message;
- * 6.  cancellation settles as `cancelled` (or `interrupted` at startup);
+ * 6.  user cancellation settles as `cancelled`; platform revocation fails with
+ *     `INTERRUPTED`, while unfinished turns reconcile as `interrupted` at startup;
  * 7.  approval responses correlate to the active Session/turn/approval and
  *     fail closed;
  * 8.  `observeSession` captures snapshot and subscription in one synchronous
  *     section, so no event falls into a gap;
  * 9.  operation inputs are schema-parsed, snapshots re-validate, and every
  *     published event is JSON-cloned (a non-JSON-safe value cannot survive);
- * 10. clients supply an execution target and Agent id; the local Pi binding
+ * 10. clients supply an Agent id; the local Pi binding
  *     stays private to the Host.
  * 14. a Draft Session becomes durable in the same transaction as its first
  *     user/assistant message reservation.
@@ -45,14 +46,23 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import {
+  AgentRespondQuestionSchema,
+  type AgentRespondQuestionInput,
+  type AgentPendingQuestion,
+  type AgentUserQuestions,
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
+  AgentDeleteTurnInputSchema,
   AgentForkSessionInputSchema,
+  AgentRetryMessageInputSchema,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
   AgentStartSessionInputSchema,
@@ -62,11 +72,11 @@ import {
   AgentProtocolError,
   AgentToolInputPreviewSchema,
   type AgentApprovalView,
-  type AgentCapabilities,
+  type AgentDeleteTurnInput,
   type AgentErrorView,
   type AgentEvent,
-  type AgentExecutionTarget,
   type AgentForkSessionInput,
+  type AgentRetryMessageInput,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -78,6 +88,7 @@ import {
   type AgentSubmitMessageInput,
   type AgentTurnView,
 } from '@/shared/contracts/agent';
+import { AiRequestError } from '@/shared/contracts/aiFailure';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -85,21 +96,26 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import { traceErrorAttributes, type TraceRecorder, type TraceSpan } from '../../observability';
 import type { ManagedFileResolver, TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
+  RuntimeToolCall,
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeContextCheckpoint,
   RuntimeEvent,
   RuntimeUsage,
+  RuntimeTurnReplay,
 } from '../runtime';
 import { raceAbort } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import {
   interruptNonTerminalToolParts,
+  omitTransientCompactionParts,
   settleStreamingTextParts,
 } from '../sessionStore/messageSettlement';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
+import type { AgentImageGenerationPort } from './agentImageGeneration';
+import type { AgentReplayCache } from './AgentReplayCache';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -110,7 +126,7 @@ import {
   toAgentApprovalView,
   toAgentErrorView,
   toAgentMessagePart,
-  toAgentUsageView,
+  toCompactionAnchorPart,
 } from './runtimeProjection';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
@@ -119,7 +135,9 @@ import {
   type TurnPlan,
   type TurnPreparationDependencies,
 } from './turnPreparation';
+import { prepareRetryTurn } from './turnRetry';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
+import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -130,8 +148,10 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 };
 
 const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
+  updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
+  retire: () => {},
   update: () => {},
 };
 
@@ -149,6 +169,7 @@ const MESSAGE_SURFACE_EVENTS: ReadonlySet<RuntimeEvent['type']> = new Set([
 ]);
 
 const TERMINAL_PERSISTENCE_RETRY_DELAYS_MS = [0, 50, 200] as const;
+const STREAMING_SNAPSHOT_INTERVAL_MS = 1_000;
 
 export type MobileAgentHostNaming = Pick<
   AgentSessionNaming,
@@ -166,6 +187,8 @@ export type MobileAgentHostPorts = {
   documentParserMode: () => DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
+  imageGeneration?: AgentImageGenerationPort;
+  replayCache?: AgentReplayCache;
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
@@ -190,6 +213,8 @@ type ActiveTurnState = {
   backgroundReply: BackgroundReplyTurn;
   hasHistoryBeforeActiveTurn: boolean;
   pendingApprovals: Map<string, AgentApprovalView>;
+  userQuestions: TurnUserQuestions;
+  pendingQuestion: AgentPendingQuestion | null;
   pendingContextCheckpoint: RuntimeContextCheckpoint | null;
   resources: TurnResourceLedger;
   runtimeTiming: MessageRuntimeTimingCollector;
@@ -199,18 +224,30 @@ type ActiveTurnState = {
   snapshotDirty: boolean;
   /** The single in-flight snapshot writer, or null when none is running. */
   snapshotFlush: Promise<void> | null;
+  /** Batches unfinished text so process death loses at most the recent uncommitted suffix. */
+  streamingSnapshotTimer?: ReturnType<typeof setTimeout>;
   /** Turn aggregate for the in-memory view and fallback when no usage projection was persisted. */
   usage: RuntimeUsage | null;
   recordedInvocations: Set<string>;
   /** Analytical writes started by this turn; the terminal write waits for them, the loop does not. */
   usageWrites: Promise<void>[];
-  runtimeSession: AgentRuntimeSession;
+  runtimeSession: AgentRuntimeSession | undefined;
 };
 
 type AdmissionState = {
   abortController: AbortController;
   completion: Promise<void>;
 };
+
+/**
+ * A user cancellation outranks whatever the interrupted preparation step threw,
+ * so the caller can tell a stopped submission from a failed one.
+ */
+function throwIfSubmissionCancelled(signal: AbortSignal): void {
+  if (signal.reason instanceof AgentProtocolError && signal.reason.view.code === 'CANCELLED') {
+    throw signal.reason;
+  }
+}
 
 class TerminalPersistenceError extends Error {
   override readonly name = 'TerminalPersistenceError';
@@ -267,7 +304,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly sessionStatusListeners = new Map<string, Set<() => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Map<string, AdmissionState>();
-  private readonly initialAdmissions = new Set<AdmissionState>();
+  private readonly initialAdmissions = new Set<AdmissionState & { sessionId: string }>();
   private readonly observingSessions = new Map<string, Set<Promise<void>>>();
   private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
@@ -299,6 +336,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.ports.files;
   }
 
+  /** Storage restore invalidates optional local replay before the Host starts. */
+  resetReplayCacheForRestore(): void {
+    this.ports.replayCache?.resetForRestore();
+  }
+
   private get usage(): MobileAgentHostPorts['usage'] {
     return this.ports.usage;
   }
@@ -307,10 +349,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get turnPreparation(): TurnPreparationDependencies {
     return {
       agents: this.ports.agents,
+      askUser: (question, call) => this.askUserQuestion(question, call),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
-      routeExecutionTarget: (target) => this.routeExecutionTarget(target),
+      imageGeneration: this.ports.imageGeneration,
+      runtime: this.runtime,
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
@@ -407,18 +451,24 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.assertAcceptingSubmissions();
     const completion = createCompletionSignal();
     const abortController = new AbortController();
-    const admission = { abortController, completion: completion.promise };
+    const admission = {
+      abortController,
+      completion: completion.promise,
+      sessionId: parsed.sessionId,
+    };
     const { signal } = abortController;
     this.initialAdmissions.add(admission);
     let openedRuntimeSession: AgentRuntimeSession | undefined;
     let isRuntimeSessionInstalled = false;
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(parsed.sessionId, (reason) =>
       abortController.abort(reason),
     );
 
     try {
       const plan = await prepareInitialTurn(this.turnPreparation, parsed, signal);
-      openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
+      if (!plan.imageGeneration) {
+        openedRuntimeSession = await this.openRuntimeSession(plan.runtime, signal);
+      }
       signal.throwIfAborted();
 
       const reserved = await this.store.reserveInitialSubmission({
@@ -426,26 +476,33 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         sessionId: parsed.sessionId,
         userMessageId: parsed.userMessageId,
         assistantMessageId: parsed.assistantMessageId,
-        executionTarget: parsed.executionTarget,
         userParts: plan.userParts,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
       const { session } = reserved;
-      this.runtimeSessions.set(session.id, {
-        runtimeId: plan.runtime.descriptor.id,
-        session: openedRuntimeSession,
-      });
-      isRuntimeSessionInstalled = true;
+      if (openedRuntimeSession) {
+        this.runtimeSessions.set(session.id, {
+          runtimeId: plan.runtime.descriptor.id,
+          session: openedRuntimeSession,
+        });
+        isRuntimeSessionInstalled = true;
+      }
       this.startReservedTurn(
         session.id,
-        session.title,
+        session.name,
         plan,
         reserved,
         openedRuntimeSession,
         abortController,
       );
       return session;
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) {
+        fail('INTERRUPTED', error.message, true);
+      }
+      throwIfSubmissionCancelled(signal);
+      throw error;
     } finally {
       if (openedRuntimeSession && !isRuntimeSessionInstalled) {
         await openedRuntimeSession
@@ -483,19 +540,115 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_BUSY', 'The fork point has not settled yet.');
         break;
       case 'forked':
+        this.ports.replayCache?.copyFork(parsed.sessionId, result.session.id, result.messageCopies);
         return result.session;
     }
   }
 
-  async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
+  async deleteTurn(input: AgentDeleteTurnInput): Promise<void> {
+    const parsed = AgentDeleteTurnInputSchema.parse(input);
+    // Same clean-cut rule as a fork: rows a live turn is still writing must
+    // not disappear underneath it, and the Session is the unit that is busy.
+    this.assertIdle(parsed.sessionId);
+    // Block new history reads before awaiting the write. The admission barrier
+    // also makes shutdown and whole-Session deletion drain this operation.
+    const completion = createCompletionSignal();
+    this.admittingSessions.set(parsed.sessionId, {
+      abortController: new AbortController(),
+      completion: completion.promise,
+    });
+    try {
+      const result = await this.store.deleteTurn(parsed);
+      switch (result.status) {
+        case 'session-not-found':
+          fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+          break;
+        case 'turn-not-found':
+          fail('MESSAGE_NOT_FOUND', `Turn does not exist in this session: ${parsed.turnId}`);
+          break;
+        case 'turn-unsettled':
+          fail('SESSION_BUSY', 'The turn has not settled yet.');
+          break;
+        case 'deleted':
+          this.ports.replayCache?.removeMessages(parsed.sessionId, result.deletedMessageIds);
+          break;
+      }
+
+      // The status snapshot describes the latest turn this generation ran. Once
+      // that turn's rows are gone it would report a turn nothing can observe.
+      if (this.getSessionStatus(parsed.sessionId)?.turnId === parsed.turnId) {
+        this.updateSessionStatus(parsed.sessionId, null);
+      }
+      this.publish(parsed.sessionId, {
+        type: 'turn.deleted',
+        turnId: parsed.turnId,
+        messageIds: result.deletedMessageIds,
+      });
+    } finally {
+      this.admittingSessions.delete(parsed.sessionId);
+      completion.resolve();
+    }
+  }
+
+  async renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView> {
     const parsed = AgentRenameSessionInputSchema.parse(input);
-    const session = await this.store.renameSession(parsed.sessionId, parsed.title);
+    const session = await this.store.renameSession(parsed.sessionId, parsed.name);
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
-    this.updateBackgroundReplyTitle(session.id, session.title);
+    this.updateBackgroundReplyTitle(session.id, session.name);
     this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
+  }
+
+  async retryMessage(input: AgentRetryMessageInput): Promise<void> {
+    const parsed = AgentRetryMessageInputSchema.parse(input);
+    const { sessionId } = parsed;
+    this.assertIdle(sessionId);
+    const completion = createCompletionSignal();
+    const abortController = new AbortController();
+    const { signal } = abortController;
+    this.admittingSessions.set(sessionId, { abortController, completion: completion.promise });
+    const lease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
+      abortController.abort(reason),
+    );
+    try {
+      const { plan, source, assistantParts } = await prepareRetryTurn(
+        { ...this.turnPreparation, store: this.store },
+        parsed,
+        signal,
+      );
+      const runtimeSession = plan.imageGeneration
+        ? undefined
+        : await this.getRuntimeSession(sessionId, plan.runtime, signal);
+      signal.throwIfAborted();
+      const reserved = await this.store.reserveRetry({
+        sessionId,
+        assistantMessageId: source.assistant.id,
+        userMessageId: source.user.id,
+        userParts: plan.userParts,
+        assistantParts,
+        modelId: plan.inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot: plan.inferenceSnapshot,
+      });
+      this.ports.replayCache?.removeMessages(sessionId, [source.assistant.id]);
+      this.startReservedTurn(
+        sessionId,
+        plan.sessionTitle,
+        { ...plan, retry: { resumeParts: assistantParts } },
+        reserved,
+        runtimeSession,
+        abortController,
+      );
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) fail('INTERRUPTED', error.message, true);
+      throwIfSubmissionCancelled(signal);
+      throw error;
+    } finally {
+      this.admittingSessions.delete(sessionId);
+      lease.release();
+      completion.resolve();
+    }
   }
 
   async deleteSession(input: { sessionId: string }): Promise<void> {
@@ -535,6 +688,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
+      this.ports.replayCache?.removeSession(sessionId);
       this.updateSessionStatus(sessionId, null);
       this.listeners.delete(sessionId);
     } finally {
@@ -557,7 +711,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       abortController,
       completion: completion.promise,
     });
-    const preparationLease = this.backgroundReply.acquirePreparation((reason) =>
+    const preparationLease = this.backgroundReply.acquirePreparation(sessionId, (reason) =>
       abortController.abort(reason),
     );
     try {
@@ -567,7 +721,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       // Open the Runtime before creating durable pending rows. A failed open
       // must leave no reservation that startup reconciliation has to repair.
-      const runtimeSession = await this.getRuntimeSession(sessionId, plan.runtime, signal);
+      const runtimeSession = plan.imageGeneration
+        ? undefined
+        : await this.getRuntimeSession(sessionId, plan.runtime, signal);
       signal.throwIfAborted();
 
       // Invariant 2: reservation commits before execution starts.
@@ -588,6 +744,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         runtimeSession,
         abortController,
       );
+    } catch (error) {
+      if (error instanceof KeepAliveInterruptionError) {
+        fail('INTERRUPTED', error.message, true);
+      }
+      throwIfSubmissionCancelled(signal);
+      throw error;
     } finally {
       this.admittingSessions.delete(sessionId);
       preparationLease.release();
@@ -606,7 +768,76 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(parsed.sessionId, { type: 'turn.updated', turn: active.turn });
     }
     active.abortController.abort(new Error('The turn was cancelled.'));
-    await active.runtimeSession.cancel(parsed.turnId);
+    await active.runtimeSession?.cancel(parsed.turnId);
+  }
+
+  async cancelSubmission(input: { sessionId: string }): Promise<void> {
+    const { sessionId } = AgentCancelSubmissionInputSchema.parse(input);
+    const reason = new AgentProtocolError({
+      code: 'CANCELLED',
+      message: 'The submission was cancelled.',
+      retryable: false,
+    });
+    // Admission settles through its own catch; an abort that lands while the
+    // reservation commits starts a turn that settles as cancelled instead.
+    this.admittingSessions.get(sessionId)?.abortController.abort(reason);
+    for (const admission of this.initialAdmissions) {
+      if (admission.sessionId === sessionId) admission.abortController.abort(reason);
+    }
+  }
+
+  /**
+   * The `ask_user_question` response channel bound into every turn's catalog.
+   * The call's turn id selects the live turn; a call from a turn that is no
+   * longer active fails closed instead of reaching a different session.
+   */
+  private async askUserQuestion(question: AgentUserQuestions, call: RuntimeToolCall) {
+    call.signal.throwIfAborted();
+    const state = [...this.activeTurns.values()].find((entry) => entry.turn.id === call.turnId);
+    if (!state || state.abortController.signal.aborted) {
+      throw new Error('The question does not belong to an active turn.');
+    }
+    const sessionId = state.turn.sessionId;
+    // Register before publishing: an observer may answer synchronously.
+    if (state.pendingQuestion)
+      throw new Error('Wait for the current question before asking another.');
+    const response = state.userQuestions.ask(question, call);
+    state.pendingQuestion = { turnId: state.turn.id, toolCallId: call.toolCallId, question };
+    state.turn = { ...state.turn, status: 'awaiting-input' };
+    state.backgroundReply.awaitApproval(state.assistantMessage, 'question');
+    this.publish(sessionId, { type: 'question.updated', question: state.pendingQuestion });
+    this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+    try {
+      return await response;
+    } finally {
+      state.pendingQuestion = null;
+      if (this.activeTurns.get(sessionId) === state) {
+        this.publish(sessionId, { type: 'question.updated', question: null });
+      }
+      if (this.activeTurns.get(sessionId) === state && state.turn.status === 'awaiting-input') {
+        state.turn = {
+          ...state.turn,
+          status: [...state.pendingApprovals.values()].some(
+            (approval) => approval.status === 'pending',
+          )
+            ? 'awaiting-approval'
+            : 'running',
+        };
+        this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
+      }
+    }
+  }
+
+  async respondQuestion(input: AgentRespondQuestionInput): Promise<void> {
+    const parsed = AgentRespondQuestionSchema.parse(input);
+    const active = this.activeTurns.get(parsed.sessionId);
+    if (!active || active.turn.id !== parsed.turnId || active.abortController.signal.aborted) {
+      fail('QUESTION_NOT_FOUND', 'This question does not belong to the active turn.');
+    }
+    if (active.pendingQuestion?.toolCallId !== parsed.toolCallId) {
+      fail('QUESTION_NOT_FOUND', 'This question is no longer waiting for an answer.');
+    }
+    active.userQuestions.respond(parsed.toolCallId, parsed.answer);
   }
 
   async respondApproval(input: {
@@ -619,7 +850,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const active = this.activeTurns.get(parsed.sessionId);
     const approval = active?.pendingApprovals.get(parsed.approvalId);
     // Invariant 7: correlate to the active Session, turn, and approval; fail closed.
-    if (!active || active.turn.id !== parsed.turnId || approval?.status !== 'pending') {
+    if (
+      !active ||
+      !active.runtimeSession ||
+      active.turn.id !== parsed.turnId ||
+      approval?.status !== 'pending'
+    ) {
       fail('APPROVAL_NOT_FOUND', 'The approval is not pending on the active turn.');
     }
     await active.runtimeSession.respondApproval({
@@ -647,7 +883,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
       const agent = await this.requireAgent(session.agentId);
-      const capabilities = this.projectCapabilities(session.executionTarget);
+      const capabilities = { ...this.runtime.descriptor.capabilities };
       if (this.deletingSessions.has(sessionId)) {
         fail('SESSION_BUSY', 'The session is being deleted.');
       }
@@ -664,6 +900,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           activeUserMessage: active?.activeUserMessage ?? null,
           hasHistoryBeforeActiveTurn: active?.hasHistoryBeforeActiveTurn ?? null,
           streamingMessage: active?.assistantMessage ?? null,
+          pendingQuestion: active?.pendingQuestion ?? null,
           pendingApprovals: active
             ? [...active.pendingApprovals.values()].filter((entry) => entry.status === 'pending')
             : [],
@@ -696,7 +933,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     sessionTitle: string,
     plan: TurnPlan,
     reserved: ReserveSubmissionResult,
-    runtimeSession: AgentRuntimeSession,
+    runtimeSession: AgentRuntimeSession | undefined,
     abortController: AbortController,
   ): { turnId: string; userMessageId: string; assistantMessageId: string } {
     plan.usageAttribution.bindMessage({ kind: 'agent-session', id: reserved.assistantMessage.id });
@@ -735,6 +972,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }),
       hasHistoryBeforeActiveTurn: plan.hasMessages,
       pendingApprovals: new Map(),
+      userQuestions: new TurnUserQuestions(),
+      pendingQuestion: null,
       pendingContextCheckpoint: null,
       resources: plan.resources,
       runtimeTiming,
@@ -747,7 +986,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: reserved.assistantMessage.id,
         },
         {
-          'runtime.name': plan.runtime.descriptor.id,
+          'runtime.name': plan.imageGeneration ? 'image-generation' : plan.runtime.descriptor.id,
           'gen_ai.provider.id': plan.agent.model.providerId,
           'gen_ai.request.model': plan.agent.model.modelId,
         },
@@ -762,7 +1001,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     };
     this.activeTurns.set(sessionId, state);
 
-    this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
+    // A retry re-reserves an existing pair: the user row is already on screen,
+    // so it republishes as a settled view instead of entering the transcript.
+    this.publish(sessionId, {
+      type: plan.retry ? 'message.finalized' : 'message.created',
+      message: reserved.userMessage,
+    });
     this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
     this.publish(sessionId, { type: 'turn.updated', turn });
     if (state.autoNameUserParts && !abortController.signal.aborted) {
@@ -794,6 +1038,38 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   private async runTurn(sessionId: string, plan: TurnPlan, state: ActiveTurnState): Promise<void> {
     try {
+      if (plan.imageGeneration) {
+        const entries = await plan.imageGeneration.execute(
+          state.abortController.signal,
+          plan.usageAttribution.resolve(),
+        );
+        // Adopt every output synchronously before the next await. The ordinary
+        // snapshot/finalization path owns the durable file refs from here.
+        const parts: AgentMessagePart[] = entries.map((entry) => {
+          state.resources.grantFile(entry.id);
+          return {
+            id: `image-${entry.id}`,
+            type: 'file',
+            fileEntryId: entry.id,
+            mediaType: entry.mediaType,
+            filename: entry.filename,
+            purpose: 'artifact',
+          };
+        });
+        state.assistantMessage = { ...state.assistantMessage, parts, status: 'streaming' };
+        this.requestSnapshot(sessionId, state);
+        state.backgroundReply.update(state.assistantMessage);
+        await this.finalize(
+          sessionId,
+          state,
+          state.abortController.signal.aborted ? 'cancelled' : 'completed',
+          null,
+        );
+        return;
+      }
+      if (!state.runtimeSession || !plan.modelPreflight) {
+        throw new Error('The prepared text turn has no Runtime session.');
+      }
       const runtimeAttachments = await materializeRuntimeAttachments({
         files: this.files,
         history: plan.history,
@@ -804,19 +1080,35 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         contentAttachments: plan.runtimeContentAttachments,
       });
       state.abortController.signal.throwIfAborted();
+      // Derived from the projected parts, not the persisted ones: an assistant
+      // artifact is never replayed to the model, so a retained prefix can be
+      // model-visible or empty regardless of how many parts it kept.
+      const resume = plan.retry
+        ? toRuntimeHistory([{ ...state.assistantMessage, parts: plan.retry.resumeParts }]).flatMap(
+            (turn) => turn.messages.flatMap((message) => message.parts),
+          )
+        : [];
       const events = state.runtimeSession.execute({
         turnId: state.turn.id,
+        sessionId,
         instructions: buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
           pluginGuides: plan.pluginGuides,
           toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
+          ...(plan.retry ? { retry: resume.length ? 'resumed' : 'restarted' } : {}),
         }),
         model: plan.agent.model,
-        history: toRuntimeHistory(plan.history, runtimeAttachments),
+        history: toRuntimeHistory(
+          plan.history,
+          runtimeAttachments,
+          plan.inferenceSnapshot.model.uniqueModelId,
+          this.ports.replayCache?.readHistory(sessionId, plan.history),
+        ),
         contextCheckpoint: plan.runtimeContextCheckpoint,
         input: toRuntimeInputParts(plan.inputParts, state.resources, runtimeAttachments),
+        ...(resume.length ? { resume } : {}),
         tools: [...plan.tools],
         options: plan.agent.options,
         runtimeTimingSink: state.runtimeTiming.sink,
@@ -856,9 +1148,40 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.handleTerminalPersistenceFailure(sessionId, state, error);
         return;
       }
+      // Leaving the event loop does not stop the Runtime. An orphaned execution
+      // would hold the Session's only execute slot and could request an
+      // approval nobody can answer.
+      await state.runtimeSession
+        ?.cancel(state.turn.id)
+        .catch((cancelError) =>
+          logger.warn('Failed to cancel an abandoned Runtime turn', cancelError as Error),
+        );
       if (state.abortController.signal.aborted) {
         try {
           await this.finalize(sessionId, state, 'cancelled', null);
+        } catch (finalizeError) {
+          this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
+        }
+        return;
+      }
+      if (plan.imageGeneration) {
+        if (!(error instanceof AiRequestError)) {
+          logger.warn('Agent image generation failed', error as Error);
+        }
+        const detail =
+          error instanceof AiRequestError
+            ? { code: 'EXECUTION_FAILED' as const, ...error.detail }
+            : toAgentErrorView({
+                code:
+                  error instanceof Error && error.name === 'TimeoutError'
+                    ? 'timeout'
+                    : 'image_generation_failed',
+                message: 'Image generation failed.',
+                retryable: true,
+                origin: 'host',
+              });
+        try {
+          await this.finalize(sessionId, state, 'failed', detail);
         } catch (finalizeError) {
           this.handleTerminalPersistenceFailure(sessionId, state, finalizeError);
         }
@@ -894,6 +1217,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     event: RuntimeEvent,
   ): Promise<boolean> {
     switch (event.type) {
+      case 'context.compaction': {
+        const part = toCompactionAnchorPart(event.compaction, state.turn.id);
+        const index = state.assistantMessage.parts.findIndex((item) => item.id === part.id);
+        if (index < 0) {
+          state.assistantMessage.parts.push(part);
+        } else {
+          state.assistantMessage.parts[index] = part;
+        }
+        this.publish(sessionId, {
+          type: 'message.delta',
+          messageId: state.assistantMessage.id,
+          delta:
+            index < 0
+              ? { op: 'part.add', index: state.assistantMessage.parts.length - 1, part }
+              : { op: 'part.replace', part },
+        });
+        if (part.data.status === 'done') this.requestSnapshot(sessionId, state);
+        return false;
+      }
       case 'part.add': {
         const part = toAgentMessagePart(event.part);
         if (part.type === 'file') {
@@ -909,7 +1251,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.publish(sessionId, {
           type: 'message.delta',
           messageId: state.assistantMessage.id,
-          delta: { op: 'part.add', index: event.index, part },
+          // Host-owned compaction anchors and a retry's retained prefix both
+          // shift later parts past the Runtime's own count.
+          delta: { op: 'part.add', index: state.assistantMessage.parts.length - 1, part },
         });
         return false;
       }
@@ -917,6 +1261,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
         if (part && (part.type === 'text' || part.type === 'reasoning')) {
           part.text += event.text;
+          this.scheduleStreamingSnapshot(sessionId, state);
         }
         this.publish(sessionId, {
           type: 'message.delta',
@@ -927,7 +1272,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       case 'tool.input.preview': {
         const part = state.assistantMessage.parts.find((entry) => entry.id === event.partId);
-        if (part?.type === 'tool' && part.state === 'input-streaming') {
+        if (part?.type === 'dynamic-tool' && part.state === 'input-streaming') {
           const preview = AgentToolInputPreviewSchema.parse(event.preview);
           part.inputPreview = preview;
           this.publish(sessionId, {
@@ -971,7 +1316,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           (entry) => entry.status === 'pending',
         );
         if (!hasPending && state.turn.status === 'awaiting-approval') {
-          state.turn = { ...state.turn, status: 'running' };
+          state.turn = {
+            ...state.turn,
+            status: state.pendingQuestion ? 'awaiting-input' : 'running',
+          };
           this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
         this.publish(sessionId, { type: 'approval.resolved', approval });
@@ -1017,7 +1365,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'completed':
-        await this.finalize(sessionId, state, 'completed', null);
+        await this.finalize(sessionId, state, 'completed', null, event.contextTokens, event.replay);
         return true;
       case 'failed':
         state.trace?.setAttributes(traceErrorAttributes(event.error));
@@ -1036,7 +1384,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     state: ActiveTurnState,
     outcome: 'completed' | 'failed' | 'cancelled',
     error: AgentErrorView | null,
+    /** The next turn's context-estimate anchor; kept only on a completed answer. */
+    contextTokens?: number,
+    replay?: RuntimeTurnReplay,
   ): Promise<void> {
+    clearTimeout(state.streamingSnapshotTimer);
+    state.streamingSnapshotTimer = undefined;
+    const interruption: unknown = state.abortController.signal.reason;
+    if (interruption instanceof KeepAliveInterruptionError) {
+      outcome = 'failed';
+      error = { code: 'INTERRUPTED', message: interruption.message, retryable: true };
+    }
     const terminalAt = Date.now();
     state.runtimeTiming.closeOpenSpans(terminalAt);
     state.runtimeTiming.complete(terminalAt);
@@ -1046,11 +1404,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       completedAt: timingSnapshot.completedAt ?? Math.max(timingSnapshot.startedAt, terminalAt),
     };
     const parts: AgentMessagePart[] = interruptNonTerminalToolParts(
-      settleStreamingTextParts(state.assistantMessage.parts),
+      settleStreamingTextParts(omitTransientCompactionParts(state.assistantMessage.parts)),
       'The turn ended before this tool call completed.',
     );
     if (outcome === 'failed' && error) {
-      parts.push({ id: `error-${state.turn.id}`, type: 'error', error });
+      parts.push({ id: `error-${state.turn.id}`, type: 'data-error', data: error });
     }
     const messageStatus =
       outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
@@ -1067,11 +1425,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage) : null,
+      usage: state.usage,
       error,
       contextCheckpoint: outcome === 'completed' ? state.pendingContextCheckpoint : null,
-      runtimeStats: { runtimeTiming },
+      runtimeStats: {
+        runtimeTiming,
+        ...(outcome === 'completed' && contextTokens !== undefined ? { contextTokens } : {}),
+      },
     });
+    if (outcome === 'completed') this.ports.replayCache?.write(sessionId, finalized, replay);
     const turn: AgentTurnView = {
       ...state.turn,
       status: outcome,
@@ -1094,10 +1456,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       logFailure('Agent turn reached a failed terminal state', {
         assistantMessageId: finalized.id,
         durationMs: Math.max(0, runtimeTiming.completedAt - runtimeTiming.startedAt),
+        errorMessage: error.message,
         hasUsage: state.usage !== null,
         modelId: error.failure?.context?.modelId ?? state.agent.model.modelId,
         providerId: error.failure?.context?.providerId ?? state.agent.model.providerId,
         reasonCode: error.failure?.reasonCode ?? 'unknown',
+        responseBody: error.failure?.context?.responseBody,
         retryable: error.retryable,
         sessionId,
         sourceCode: error.failure?.source.code,
@@ -1128,6 +1492,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     );
   }
 
+  private scheduleStreamingSnapshot(sessionId: string, state: ActiveTurnState): void {
+    if (state.streamingSnapshotTimer !== undefined) return;
+    state.streamingSnapshotTimer = setTimeout(() => {
+      state.streamingSnapshotTimer = undefined;
+      if (this.activeTurns.get(sessionId) === state && !state.abortController.signal.aborted) {
+        this.requestSnapshot(sessionId, state);
+      }
+    }, STREAMING_SNAPSHOT_INTERVAL_MS);
+  }
+
   /**
    * Coalesces snapshot writes: the event loop never waits on the store, one
    * write is in flight at a time, and a burst of durable-value events collapses
@@ -1156,7 +1530,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     try {
       await this.store.updateStreamingAssistantMessage({
         assistantMessageId: assistantMessage.id,
-        parts: assistantMessage.parts,
+        parts: omitTransientCompactionParts(assistantMessage.parts),
       });
     } catch (error) {
       logger.warn('Agent streaming message write failed; recovery fidelity reduced', {
@@ -1209,7 +1583,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   // ── Helpers ──
 
+  hasPendingStorageWork(): boolean {
+    return (
+      this.activeTurns.size > 0 ||
+      this.admittingSessions.size > 0 ||
+      this.initialAdmissions.size > 0 ||
+      this.runningTurns.size > 0
+    );
+  }
+
   private assertAcceptingSubmissions(): void {
+    storageMutationGate.assertWritable();
     if (!this.acceptingSubmissions) {
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is stopping.');
     }
@@ -1220,7 +1604,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (this.deletingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session is being deleted.');
     }
-    if (this.activeTurns.has(sessionId) || this.admittingSessions.has(sessionId)) {
+    if (
+      this.activeTurns.has(sessionId) ||
+      this.admittingSessions.has(sessionId) ||
+      this.runningTurnsBySession.has(sessionId)
+    ) {
       fail('SESSION_BUSY', 'The session already has an active turn.');
     }
   }
@@ -1231,18 +1619,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       fail('AGENT_NOT_FOUND', `Agent does not exist: ${agentId}`);
     }
     return agent;
-  }
-
-  private routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime {
-    if (target.kind !== 'local') {
-      fail('EXECUTION_UNAVAILABLE', 'No runtime can execute this Agent configuration.');
-    }
-    return this.runtime;
-  }
-
-  private projectCapabilities(target: AgentExecutionTarget): AgentCapabilities {
-    const runtime = this.routeExecutionTarget(target);
-    return { ...runtime.descriptor.capabilities };
   }
 
   private startBackgroundReply(input: {
@@ -1364,7 +1740,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     void promise
       .then((session) => {
         if (session) {
-          this.updateBackgroundReplyTitle(session.id, session.title);
+          this.updateBackgroundReplyTitle(session.id, session.name);
           this.publish(session.id, { type: 'session.updated', session });
         }
       })

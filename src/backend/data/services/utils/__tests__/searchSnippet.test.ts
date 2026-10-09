@@ -1,4 +1,4 @@
-import { buildSearchSnippet, stripMarkdownFormatting } from '../searchSnippet';
+import { buildSearchSnippet, stripMarkdownFormatting, toSearchableText } from '../searchSnippet';
 
 describe('searchable message text', () => {
   test.each([
@@ -21,9 +21,21 @@ describe('searchable message text', () => {
     expect(snippet.length).toBeLessThanOrEqual(162);
   });
 
+  test('indexes the visible text of text parts only', () => {
+    expect(
+      toSearchableText([
+        { id: 'r', type: 'reasoning', text: 'hidden **reasoning**', state: 'done' },
+        { id: 'a', type: 'text', text: '支持**多模态**', state: 'done' },
+        { id: 'blank', type: 'text', text: '  ', state: 'done' },
+        { id: 'b', type: 'text', text: '`List<T>` [docs](https://example.com)', state: 'done' },
+      ]),
+    ).toBe('支持多模态\nList<T> docs');
+  });
+
   test('keeps matching code visible in the preview', () => {
-    expect(buildSearchSnippet('```tsx\n<View>hello</View>\n```', ['<view>'], 'substring')).toBe(
-      '<View>hello</View>',
-    );
+    const text = toSearchableText([
+      { id: 'code', type: 'text', text: '```tsx\n<View>hello</View>\n```', state: 'done' },
+    ]);
+    expect(buildSearchSnippet(text, ['<view>'], 'substring')).toBe('<View>hello</View>');
   });
 });

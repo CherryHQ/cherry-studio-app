@@ -79,7 +79,9 @@ export function applyPiRequestParameters(
 function toPiReasoningPath(api: SupportedPiApi, target: string): string | undefined {
   if (target === 'sendReasoning') return undefined;
   if (target === 'reasoningEffort') {
-    return api === 'openai-responses' ? 'reasoning.effort' : 'reasoning_effort';
+    return api === 'openai-responses' || api === 'azure-openai-responses'
+      ? 'reasoning.effort'
+      : 'reasoning_effort';
   }
   if (target === 'reasoningSummary') return 'reasoning.summary';
   if (api === 'anthropic-messages') {

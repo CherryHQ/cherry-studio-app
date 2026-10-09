@@ -12,7 +12,7 @@ import { createAiRepair, type RequestContext } from '@cherrystudio/ai-runtime/to
 import {
   applyFastModeToProviderOptions,
   applyServiceTierToProviderOptions,
-  buildResolvedReasoningProviderOptions,
+  buildCapabilityProviderOptions,
   filterStandardParams,
   getTimeout,
   normalizeServiceTierSelection,
@@ -26,7 +26,6 @@ import {
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
-import * as Crypto from 'expo-crypto';
 
 import {
   projectRuntimeReasoning,
@@ -40,7 +39,7 @@ import type { Provider } from '@/shared/data/types/provider';
 import { resolveProviderConnection } from '../provider/providerConnection';
 import type { AiSdkGeneratorOptions } from './AiSdkGenerator';
 import { createCustomParamsFetch } from './customParamsFetch';
-import { resolveProviderAiSdkConfig } from './providerConfig';
+import { resolveAiSdkServing } from './providerConfig';
 
 export interface BuildAgentParamsDependencies {
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
@@ -65,7 +64,7 @@ export interface BuiltAgentParams {
   credentialReceipt: ServingCredentialReceipt;
 }
 
-/** Build the assistant-less AI SDK request used by naming, checks, and paintings. */
+/** Build the assistant-less AI SDK text request used by naming and checks. */
 export async function buildAgentParams({
   request,
   services,
@@ -84,16 +83,13 @@ export async function buildAgentParams({
     throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
   }
 
-  const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
+  const { sdkConfig, credentialReceipt, requestId } = await resolveAiSdkServing({
     provider,
     model,
-    {
-      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
-      resolveApiKey: (providerId, override) =>
-        services.provider.resolveApiKey(providerId, override),
-    },
-    { apiKeyOverride: request.apiKeyOverride, resolvedConnection: connection },
-  );
+    providerService: services.provider,
+    apiKeyOverride: request.apiKeyOverride,
+    connection,
+  });
   const endpointType = connection.endpointType;
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
     actualProviderId: provider.id,
@@ -128,15 +124,22 @@ export async function buildAgentParams({
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  let providerOptions =
-    request.reasoningEffort === undefined
-      ? {}
-      : buildResolvedReasoningProviderOptions({
-          aiSdkProviderId: sdkConfig.providerId,
-          providerOptionsKey,
-          endpointType,
-          reasoning,
-        });
+  let providerOptions = buildCapabilityProviderOptions(
+    invocationModel,
+    provider,
+    {
+      enableGenerateImage: false,
+      enableReasoning: request.reasoningEffort !== undefined,
+      enableWebSearch: false,
+    },
+    {
+      aiSdkProviderId: sdkConfig.providerId,
+      runtimeProviderId: sdkConfig.providerId,
+      providerOptionsKey,
+      endpointType,
+      reasoning,
+    },
+  );
   if (serviceTierControl) {
     const serviceTierSelection = normalizeServiceTierSelection(
       serviceTierControl,
@@ -192,13 +195,16 @@ export async function buildAgentParams({
     endpointType,
     providerOptionsKey,
   );
+  const hasProviderOptions = Object.values(effectiveProviderOptions).some((namespace) =>
+    Object.values(namespace).some((value) => value !== undefined),
+  );
 
   return {
     credentialReceipt,
-    sdkConfig: { ...sdkConfig, modelId: connection.wireModelId },
+    sdkConfig,
     context: {
       abortSignal: request.requestOptions?.signal,
-      requestId: Crypto.randomUUID(),
+      requestId,
     },
     plugins,
     repairToolCall,
@@ -210,7 +216,7 @@ export async function buildAgentParams({
       ...(request.callOverrides?.toolChoice && {
         toolChoice: request.callOverrides.toolChoice,
       }),
-      ...(Object.keys(effectiveProviderOptions).length > 0 && {
+      ...(hasProviderOptions && {
         providerOptions: effectiveProviderOptions,
       }),
       ...overridden.standardParams,

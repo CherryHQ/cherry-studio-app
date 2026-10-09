@@ -2,6 +2,7 @@ import { CURRENCY } from '../schemas/enums';
 import { defineProvider } from './types';
 
 export default defineProvider({
+  authMethods: ['api-key', 'oauth'],
   id: 'openrouter',
   name: 'OpenRouter',
   // OpenRouter's usage response carries the actual billed amount, so the cost
@@ -14,7 +15,7 @@ export default defineProvider({
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
     'anthropic-messages': {
-      adapterFamily: 'openrouter',
+      adapterFamily: 'anthropic',
       baseUrl: 'https://openrouter.ai/api',
       requestControls: {
         serviceTier: {

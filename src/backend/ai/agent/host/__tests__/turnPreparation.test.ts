@@ -36,9 +36,8 @@ const OVERRIDE_MODEL: RuntimeModel = { providerId: 'provider-2', modelId: 'model
 const SESSION: AgentSessionView = {
   id: SESSION_ID,
   agentId: AGENT_ID,
-  executionTarget: { kind: 'local' },
-  title: '',
-  titleIsManual: false,
+  name: '',
+  isNameManuallyEdited: false,
   forkBoundaryMessageId: null,
   forkedFromSessionId: null,
   createdAt: NOW,
@@ -52,7 +51,7 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['health'],
+  disabledCapabilities: ['location'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -97,7 +96,6 @@ describe('turn preparation', () => {
               harness.dependencies,
               {
                 agentId: AGENT_ID,
-                executionTarget: { kind: 'local' },
                 sessionId: SESSION_ID,
                 userMessageId: 'user-1',
                 assistantMessageId: 'assistant-1',
@@ -129,6 +127,7 @@ describe('turn preparation', () => {
         input: { file_entry_id: FILE_ENTRY_ID },
         signal: new AbortController().signal,
         toolCallId: 'read-1',
+        turnId: 'turn-1',
       });
       expect(read.value).toMatchObject({
         parser: 'anydoc',
@@ -172,6 +171,7 @@ describe('turn preparation', () => {
             input: { file_entry_id: FILE_ENTRY_ID },
             signal: new AbortController().signal,
             toolCallId: 'read-2',
+            turnId: 'turn-1',
           })
         ).value,
       ).toMatchObject({ parser: 'builtin', text: 'built-in result' });
@@ -187,7 +187,6 @@ describe('turn preparation', () => {
         sessionId: SESSION_ID,
         userMessageId: 'user-1',
         assistantMessageId: 'assistant-1',
-        executionTarget: { kind: 'local' },
         parts: [{ text: 'Hello.', type: 'text' }],
       },
       new AbortController().signal,
@@ -238,8 +237,9 @@ describe('turn preparation', () => {
 
     const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
 
-    expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      agentId: AGENT.id,
+      askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
       model: OVERRIDE_MODEL,
       resources: plan.resources,
@@ -269,7 +269,11 @@ describe('turn preparation', () => {
     expect(() =>
       plan.usageAttribution.bindMessage({ kind: 'agent-session', id: 'assistant-2' }),
     ).toThrow('already bound');
-    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(AGENT_ID, expect.any(Function));
+    expect(harness.resolveRuntimeTools).toHaveBeenCalledWith(
+      AGENT_ID,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
 
@@ -284,7 +288,7 @@ describe('turn preparation', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/plain',
-        name: 'notes.txt',
+        filename: 'notes.txt',
       },
     ]);
     expect(plan.userParts).toEqual([
@@ -294,7 +298,7 @@ describe('turn preparation', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/plain',
-        name: 'notes.txt',
+        filename: 'notes.txt',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -347,6 +351,29 @@ describe('turn preparation', () => {
     expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
   });
 
+  test('withholds ask_user_question only under the auto approval mode', async () => {
+    const question = tool('ask_user_question', 'auto');
+    const prepare = async (toolApprovalMode: AgentDefinition['toolApprovalMode']) => {
+      const harness = createHarness();
+      harness.getSystemTools.mockResolvedValueOnce([question, harness.systemTool]);
+      harness.getAgent.mockResolvedValueOnce({ ...AGENT, toolApprovalMode });
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      return plan.tools.map((entry) => entry.providerName);
+    };
+
+    // Auto mode never blocks on the user, so missing decisions go into the reply.
+    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool']);
+    expect(await prepare('default')).toEqual([
+      'ask_user_question',
+      'system_tool',
+      'configured_tool',
+    ]);
+  });
+
   test.each(['existing', 'initial'] as const)(
     '%s messages preserve explicit plugin intent without restricting the tool snapshot',
     async (kind) => {
@@ -359,7 +386,6 @@ describe('turn preparation', () => {
               {
                 ...input,
                 agentId: AGENT_ID,
-                executionTarget: { kind: 'local' },
               },
               new AbortController().signal,
             )
@@ -393,7 +419,6 @@ describe('turn preparation', () => {
     ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
 
     expect(harness.getAgent).not.toHaveBeenCalled();
-    expect(harness.routeExecutionTarget).not.toHaveBeenCalled();
     expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
   });
 
@@ -512,19 +537,23 @@ function createHarness() {
     },
   });
   const preflightModel = jest.spyOn(runtime, 'preflightModel');
-  const routeExecutionTarget = jest.fn(() => runtime);
+  const askUser = jest.fn(async () => {
+    throw new Error('Preparation never asks the user.');
+  });
   const dependencies: TurnPreparationDependencies = {
     agents: { getAgent },
+    askUser,
     documentParserMode: () => 'anydoc',
     files,
     inferenceModel: resolveInferenceModel,
-    routeExecutionTarget,
+    runtime,
     runtimeTools: { resolve: resolveRuntimeTools },
     store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
     systemCapabilities: { getTools: getSystemTools },
   };
 
   return {
+    askUser,
     configuredTool,
     dependencies,
     files,
@@ -536,7 +565,7 @@ function createHarness() {
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,
-    routeExecutionTarget,
+    runtime,
     systemTool,
   };
 }
@@ -579,7 +608,6 @@ function textMessage(id: string, turnId: string): AgentMessageView {
     role: 'user',
     status: 'success',
     parts: [{ id: `${id}-part`, type: 'text', text: 'Later message.', state: 'done' }],
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

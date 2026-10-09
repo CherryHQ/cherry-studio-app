@@ -1,5 +1,5 @@
 import { Button, ContentState, Section } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -10,6 +10,12 @@ export function OnboardingDeviceConnectionsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { connections, error, isLoading, refetch } = useDesktopConnections();
+
+  // Picking a saved desktop is the only choice this screen offers. A first run has none, so it
+  // sends those straight to the scanner, which carries the pairing instructions itself.
+  if (!isLoading && !error && connections.length === 0) {
+    return <Redirect href="/onboarding/device-connections/scan" />;
+  }
 
   return (
     <>
@@ -39,7 +45,7 @@ export function OnboardingDeviceConnectionsScreen() {
             primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
             title={t('settings.deviceConnections.loadFailed')}
           />
-        ) : connections.length > 0 ? (
+        ) : (
           <Section title={t('onboarding.device.saved')}>
             {connections.map((connection) => (
               <Section.Item
@@ -51,37 +57,22 @@ export function OnboardingDeviceConnectionsScreen() {
                 key={connection.id}
                 label={connection.name}
                 onPress={() =>
-                  router.push({
-                    params: { connectionId: connection.id },
-                    pathname:
-                      connection.status === 'paired'
-                        ? '/onboarding/device-connections/sync-guide'
-                        : '/onboarding/device-connections/scan',
-                  })
+                  router.push(
+                    connection.status === 'paired'
+                      ? {
+                          params: { connectionId: connection.id },
+                          pathname: '/onboarding/provider-sync',
+                        }
+                      : {
+                          params: { connectionId: connection.id },
+                          pathname: '/onboarding/device-connections/scan',
+                        },
+                  )
                 }
               />
             ))}
           </Section>
-        ) : null}
-
-        <View className="gap-6">
-          <View className="gap-2">
-            <Text className="font-medium text-base text-foreground">
-              {t('onboarding.device.networkTitle')}
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              {t('onboarding.device.networkDescription')}
-            </Text>
-          </View>
-          <View className="gap-2">
-            <Text className="font-medium text-base text-foreground">
-              {t('onboarding.device.qrTitle')}
-            </Text>
-            <Text className="text-sm text-muted-foreground">
-              {t('onboarding.device.qrDescription')}
-            </Text>
-          </View>
-        </View>
+        )}
 
         <View className="flex-grow justify-end gap-3">
           <Button

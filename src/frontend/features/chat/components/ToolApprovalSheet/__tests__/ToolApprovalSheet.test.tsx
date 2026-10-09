@@ -25,13 +25,19 @@ jest.mock('@cherrystudio/ui/components', () => {
   function MockBottomSheet({
     children,
     footer,
+    headerAction,
+    title,
     ...props
   }: {
     children?: ReactNode;
     footer?: ReactNode;
+    headerAction?: ReactNode;
+    title: string;
   }) {
     return (
       <MockView {...props}>
+        <MockText>{title}</MockText>
+        {headerAction}
         {children}
         {footer}
       </MockView>
@@ -41,19 +47,21 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     BottomSheet: MockBottomSheet,
     Button: MockButton,
+    MessagePart: {
+      ValueSection: ({ value }: { value: unknown }) => (
+        <MockText>{value === undefined ? null : JSON.stringify(value)}</MockText>
+      ),
+    },
   };
 });
 
 const allowLabel = 'chat.tool.approval.allow';
 const denyLabel = 'chat.tool.approval.deny';
-const stopLabel = 'chat.input.action.stopGenerating';
 
 function makeApproval(overrides: Partial<PendingToolApproval> = {}): PendingToolApproval {
   return {
     approvalId: 'approval-1',
     input: { query: 'cherry' },
-    messageId: 'assistant-1',
-    toolCallId: 'call-1',
     displayName: 'Server One: Search docs',
     ...overrides,
   };
@@ -69,14 +77,18 @@ describe('ToolApprovalSheet', () => {
   function render(
     overrides: {
       approvals?: readonly PendingToolApproval[];
-      onCancel?: () => Promise<void>;
+      canRespond?: boolean;
       onRespond?: () => Promise<void>;
     } = {},
   ) {
-    const onCancel = jest.fn(overrides.onCancel ?? (async () => undefined));
     const onRespond = jest.fn(overrides.onRespond ?? (async () => undefined));
     const element = (approvals: readonly PendingToolApproval[]) => (
-      <ToolApprovalSheet approvals={approvals} isOpen onCancel={onCancel} onRespond={onRespond} />
+      <ToolApprovalSheet
+        approvals={approvals}
+        canRespond={overrides.canRespond}
+        isOpen
+        onRespond={onRespond}
+      />
     );
 
     act(() => {
@@ -84,7 +96,6 @@ describe('ToolApprovalSheet', () => {
     });
 
     return {
-      onCancel,
       onRespond,
       rerender: (approvals: readonly PendingToolApproval[]) =>
         act(() => {
@@ -120,13 +131,10 @@ describe('ToolApprovalSheet', () => {
 
     await press(allowLabel);
 
-    // These three ids are the entire payload: the runtime matches the decision
-    // back to the paused message and to the SDK's own approval by them, so a
-    // wrong one settles nothing and the turn stays stuck.
+    // Each source resolves the pending tool using this approval identity.
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: true,
-      messageId: 'assistant-1',
     });
   });
 
@@ -138,14 +146,7 @@ describe('ToolApprovalSheet', () => {
 
   test('does not mount a sheet before an approval exists', () => {
     act(() => {
-      renderer = create(
-        <ToolApprovalSheet
-          approvals={[]}
-          isOpen={false}
-          onCancel={jest.fn()}
-          onRespond={jest.fn()}
-        />,
-      );
+      renderer = create(<ToolApprovalSheet approvals={[]} isOpen={false} onRespond={jest.fn()} />);
     });
 
     expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
@@ -167,23 +168,13 @@ describe('ToolApprovalSheet', () => {
     expect(onRespond).toHaveBeenCalledWith({
       approvalId: 'approval-1',
       approved: false,
-      messageId: 'assistant-1',
     });
   });
 
-  test('stops the turn without approving or denying the tool', async () => {
-    const { onCancel, onRespond } = render();
-
-    await press(stopLabel);
-
-    expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(onRespond).not.toHaveBeenCalled();
-  });
-
-  test('uses a solid danger action for denial', () => {
+  test('keeps denial neutral and allow as the primary action', () => {
     render();
 
-    expect(findButton(denyLabel)?.props.variant).toBe('destructive');
+    expect(findButton(denyLabel)?.props.variant).toBe('secondary');
     expect(findButton(allowLabel)?.props.variant).toBe('default');
   });
 
@@ -247,7 +238,6 @@ describe('ToolApprovalSheet', () => {
       makeApproval({
         approvalId: 'approval-2',
         displayName: 'Server Two: Create file',
-        toolCallId: 'call-2',
       }),
     ]);
 
@@ -257,7 +247,7 @@ describe('ToolApprovalSheet', () => {
 
   test('says how many approvals are still queued behind this one', () => {
     render({
-      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2' })],
     });
 
     expect(renderedTexts()).toContain('chat.tool.approval.pendingCount {"count":2}');
@@ -265,13 +255,12 @@ describe('ToolApprovalSheet', () => {
 
   test('advances to the next approval without closing the sheet', () => {
     const { rerender } = render({
-      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2', toolCallId: 'call-2' })],
+      approvals: [makeApproval(), makeApproval({ approvalId: 'approval-2' })],
     });
 
     rerender([
       makeApproval({
         approvalId: 'approval-2',
-        toolCallId: 'call-2',
         displayName: 'Server Two: Create file',
       }),
     ]);
@@ -291,5 +280,22 @@ describe('ToolApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('Get current location');
     expect(renderedTexts()).not.toContain('location_get_current');
+  });
+
+  test('blocks unavailable decisions', async () => {
+    const { onRespond } = render({ canRespond: false });
+
+    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(denyLabel)?.props.disabled).toBe(true);
+    await press(allowLabel);
+    await press(denyLabel);
+    expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  test('retains asynchronously loaded arguments during the close animation', () => {
+    const { rerender } = render({ approvals: [makeApproval({ input: undefined })] });
+    rerender([makeApproval({ input: { command: 'ls' } })]);
+    rerender([]);
+    expect(renderedTexts()).toContain(JSON.stringify({ command: 'ls' }));
   });
 });

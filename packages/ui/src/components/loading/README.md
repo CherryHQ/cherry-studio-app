@@ -5,6 +5,15 @@ This component family owns Cherry UI loading and ongoing-work indicators. It exp
 numbered dot-matrix loaders ported from the source design set: `DotMatrixSquare2`,
 `DotMatrixSquare6`, `DotMatrixSquare19`, and `DotMatrixSquare20`.
 
+## Spinner
+
+The shared `Spinner` contract keeps sizes (16/24/32 points), semantic or explicit colors, and
+caller-supplied accessibility labels. Its private Android adapter uses native indeterminate
+progress. Reanimated-driven rotation repeatedly triggered Fabric commit exhaustion during remote
+history loading on Android; native progress avoids per-frame ShadowTree commits. Reduced Motion
+uses a static indicator. iOS and the tooling/web fallback retain the existing HeroUI rendering.
+Platform selection stays inside CherryUI; local and remote screens use the same public component.
+
 ## ImageGenerationLoader
 
 `ImageGenerationLoader` is the pending state for generated images, in one treatment at every size:

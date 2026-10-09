@@ -8,6 +8,7 @@ import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
 import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
@@ -349,6 +350,21 @@ describe('createPaintingGenerateJobHandler', () => {
           icon: 'warning-triangle',
           phase: 'failed',
         }),
+      );
+    });
+
+    it('finishes system interruption as failure so the background notification is not suppressed', async () => {
+      const { dependencies, sessions } = createSessionDependencies();
+      const controller = new AbortController();
+      const reason = new KeepAliveInterruptionError('service-stopped');
+      controller.abort(reason);
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await expect(handler.execute(createContext({ signal: controller.signal }))).rejects.toThrow(
+        reason,
+      );
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'failed' }),
       );
     });
 

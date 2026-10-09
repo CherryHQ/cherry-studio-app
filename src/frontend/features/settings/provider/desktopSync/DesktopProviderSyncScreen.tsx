@@ -12,17 +12,28 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
+import { ProviderAvatar } from '@/frontend/components/Avatar';
 import {
   useDesktopConnectionActions,
   useDesktopConnections,
 } from '@/frontend/hooks/useDesktopConnections';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import type { DesktopImportPreview } from '@/shared/data/api/schemas/desktopConnections';
+import type {
+  DesktopImportPreview,
+  DesktopImportUnavailableReason,
+} from '@/shared/data/api/schemas/desktopConnections';
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
+import { describeCapabilities } from '../../describeCapabilities';
 import { desktopConnectionErrorMessage } from '../../desktopConnectionError';
-import { ProviderAvatar } from '../components/ProviderAvatar';
+
+// `keySeparator: false` makes the whole dotted key literal, so spell each state out.
+const UNAVAILABLE_KEYS = {
+  'missing-api-key': 'settings.provider.desktopSync.unavailable.missing-api-key',
+  unreadable: 'settings.provider.desktopSync.unavailable.unreadable',
+  'unsupported-auth': 'settings.provider.desktopSync.unavailable.unsupported-auth',
+} as const satisfies Record<DesktopImportUnavailableReason, string>;
 
 type LoadedPreview = {
   connection: DesktopConnection;
@@ -61,7 +72,9 @@ function DesktopProviderSync({
     () =>
       connections.filter(
         (connection) =>
-          connection.status === 'paired' && (!connectionId || connection.id === connectionId),
+          connection.status === 'paired' &&
+          connection.capabilities.includes('configuration') &&
+          (!connectionId || connection.id === connectionId),
       ),
     [connectionId, connections],
   );
@@ -239,9 +252,7 @@ function DesktopProviderSync({
           <Section title={t('settings.provider.desktopSync.chooseDevice')}>
             {availableConnections.map((connection) => (
               <Section.RadioItem
-                description={t('settings.deviceConnections.versionValue', {
-                  version: connection.desktopVersion,
-                })}
+                description={describeCapabilities(connection.capabilities, t)}
                 key={connection.id}
                 label={connection.name}
                 onPress={() => setSelectedConnectionId(connection.id)}
@@ -320,8 +331,11 @@ function ProviderSelection({
               accessibilityState={{ checked: isSelected, disabled: isUnavailable }}
               description={
                 provider.unavailableReason
-                  ? t('settings.provider.desktopSync.unsupportedAuth')
-                  : t('settings.provider.desktopSync.providerDescription', {
+                  ? t(UNAVAILABLE_KEYS[provider.unavailableReason])
+                  : (provider.accountNotice
+                      ? t('settings.provider.desktopSync.accountNotice') + '\n'
+                      : '') +
+                    t('settings.provider.desktopSync.providerDescription', {
                       count: provider.models.length,
                     })
               }

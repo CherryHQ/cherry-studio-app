@@ -4,6 +4,7 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 const ChatRouteParamsSchema = z.strictObject({
   agentId: z.string().trim().min(1).optional(),
+  composerHandoff: z.string().trim().min(1).optional(),
   sessionId: z.string().trim().min(1).optional(),
   messageId: z.string().trim().min(1).optional(),
   messageRequestId: z.string().trim().min(1).optional(),
@@ -11,7 +12,12 @@ const ChatRouteParamsSchema = z.strictObject({
 
 // Shared by every route entry that can open the chat surface.
 export type ChatTarget =
-  | { agentId: string; kind: 'draft' }
+  | {
+      agentId: string;
+      kind: 'draft';
+      /** Seeds the composer from a handoff, such as an incoming system share. */
+      composerHandoff?: string;
+    }
   | {
       kind: 'session';
       sessionId: string;
@@ -22,6 +28,7 @@ export type ChatTarget =
 
 export type ChatRouteParamsInput = {
   agentId?: string | string[];
+  composerHandoff?: string | string[];
   sessionId?: string | string[];
   messageId?: string | string[];
   messageRequestId?: string | string[];
@@ -36,12 +43,14 @@ export function chatRouteParams(target: ChatTarget) {
   return target.kind === 'session'
     ? {
         agentId: undefined,
+        composerHandoff: undefined,
         sessionId: target.sessionId,
         messageId: target.messageId,
         messageRequestId: target.messageRequestId,
       }
     : {
         agentId: target.agentId,
+        composerHandoff: target.composerHandoff,
         sessionId: undefined,
         messageId: undefined,
         messageRequestId: undefined,
@@ -65,6 +74,7 @@ export function chatReturnToHref(target: ChatTarget) {
 export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
   const result = ChatRouteParamsSchema.safeParse({
     agentId: getSingleRouteParam(input.agentId),
+    composerHandoff: getSingleRouteParam(input.composerHandoff),
     sessionId: getSingleRouteParam(input.sessionId),
     messageId: getSingleRouteParam(input.messageId),
     messageRequestId: getSingleRouteParam(input.messageRequestId),
@@ -74,7 +84,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     return { status: 'invalid' };
   }
 
-  const { agentId, sessionId, messageId, messageRequestId } = result.data;
+  const { agentId, composerHandoff, sessionId, messageId, messageRequestId } = result.data;
   if (sessionId) {
     return {
       status: 'ready',
@@ -86,7 +96,10 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     };
   }
   if (agentId) {
-    return { status: 'ready', target: { agentId, kind: 'draft' } };
+    return {
+      status: 'ready',
+      target: { agentId, kind: 'draft', ...(composerHandoff ? { composerHandoff } : {}) },
+    };
   }
 
   return { status: 'empty' };

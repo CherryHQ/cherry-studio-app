@@ -2,6 +2,10 @@ import { randomUUID } from 'expo-crypto';
 import type { Href } from 'expo-router';
 
 import type { DocumentExportSession, ExportFormat } from '@/shared/contracts/documentExport';
+import {
+  DEFAULT_EXPORT_WATERMARK_STYLE,
+  type ExportWatermarkStyle,
+} from '@/shared/contracts/fileExport';
 
 export type DocumentExportOption = { label: string; uncheckedSession: DocumentExportSession };
 
@@ -10,6 +14,7 @@ type ExportRequest = {
   session: DocumentExportSession;
   initialFormat: ExportFormat;
   allowedFormats: readonly ExportFormat[];
+  watermark: ExportWatermarkStyle;
   option?: DocumentExportOption;
   /** Where the page dismisses to once the system share sheet closes. */
   returnTo?: Href;
@@ -18,13 +23,21 @@ type ExportRequest = {
 };
 let active: ExportRequest | undefined;
 
-export function createDocumentExportRequest(
-  session: DocumentExportSession,
-  initialFormat: ExportFormat,
-  option?: DocumentExportOption,
-  returnTo?: Href,
-  allowedFormats: readonly [ExportFormat, ...ExportFormat[]] = ['markdown', 'html', 'image'],
-) {
+export function createDocumentExportRequest({
+  session,
+  initialFormat,
+  option,
+  returnTo,
+  allowedFormats = ['markdown', 'html', 'image'],
+  watermark = DEFAULT_EXPORT_WATERMARK_STYLE,
+}: {
+  session: DocumentExportSession;
+  initialFormat: ExportFormat;
+  option?: DocumentExportOption;
+  returnTo?: Href;
+  allowedFormats?: readonly [ExportFormat, ...ExportFormat[]];
+  watermark?: ExportWatermarkStyle;
+}) {
   if (active) return undefined;
   const id = randomUUID();
   let resolve = () => {};
@@ -36,6 +49,7 @@ export function createDocumentExportRequest(
     session,
     initialFormat: allowedFormats.includes(initialFormat) ? initialFormat : allowedFormats[0],
     allowedFormats,
+    watermark,
     option,
     returnTo,
     resolve,

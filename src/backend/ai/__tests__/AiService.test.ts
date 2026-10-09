@@ -1,7 +1,13 @@
+import { createOpenAI } from '@ai-sdk/openai';
+import { generateImage as aiCoreGenerateImage } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
-import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import {
+  installProviderRegistryTestSnapshot,
+  providerRegistryTestSnapshot,
+} from '@/backend/data/services/providerRegistryTestSnapshot';
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
@@ -110,6 +116,73 @@ describe('AiService.listModels', () => {
   });
 });
 
+describe('AiService.generateImage', () => {
+  afterEach(() => {
+    jest.mocked(aiCoreGenerateImage).mockReset();
+  });
+
+  it.each([
+    ['generate', ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ['edit', ENDPOINT_TYPE.OPENAI_RESPONSES],
+    ['generate', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ['edit', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+    ['generate', ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+  ] as const)(
+    'keeps chat parameters out of image %s requests using %s connections',
+    async (mode, endpointType) => {
+      const provider = createProvider({
+        defaultChatEndpoint: endpointType,
+        endpointConfigs: {
+          [endpointType]: { adapterFamily: 'openai', baseUrl: 'https://api.example.com' },
+        },
+        settings: { serviceTier: 'priority' },
+      });
+      const model = createModel('local-image', {
+        apiModelId: 'gpt-image-2-2026-04-21',
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      });
+      const services = createServices({ model, provider });
+      const signal = new AbortController().signal;
+      const inputImages = mode === 'edit' ? ['data:image/png;base64,iVBORw0KGgo='] : undefined;
+      jest.mocked(aiCoreGenerateImage).mockRejectedValue(new Error('image request captured'));
+
+      await expect(
+        new AiService(services).generateImage({
+          apiKeyOverride: 'image-key',
+          inputImages,
+          mode,
+          paramValues: { background: 'opaque', quality: 'high', size: '1024x1024' },
+          prompt: 'Draw a cat.',
+          requestOptions: {
+            headers: { 'X-Image': 'test', unused: undefined },
+            maxRetries: 2,
+            signal,
+          },
+          uniqueModelId: model.id,
+        }),
+      ).rejects.toThrow('image request captured');
+
+      const [, providerSettings, params] = jest.mocked(aiCoreGenerateImage).mock
+        .calls[0] as unknown as [string, unknown, { providerOptions?: Record<string, unknown> }];
+      expect(providerSettings).toMatchObject({
+        apiKey: 'image-key',
+        baseURL: 'https://api.example.com/v1',
+      });
+      expect(services.provider.resolveApiKey).toHaveBeenCalledTimes(1);
+      expect(params).toMatchObject({
+        abortSignal: signal,
+        headers: { 'X-Image': 'test' },
+        maxRetries: 2,
+        model: 'gpt-image-2-2026-04-21',
+        n: 1,
+        prompt: inputImages ? { images: inputImages, text: 'Draw a cat.' } : 'Draw a cat.',
+        size: '1024x1024',
+      });
+      expect(params.providerOptions?.openai).toEqual({ background: 'opaque', quality: 'high' });
+    },
+  );
+});
+
 describe('AiService.checkModel', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -154,6 +227,166 @@ describe('AiService.checkModel', () => {
       expect.objectContaining({ modelId: model.modelId, system: 'test' }),
     );
     expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal));
+    expect(mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers).not.toHaveProperty(
+      'x-opencode-session',
+    );
+  });
+
+  it.each([
+    ['dashscope', 'qwen3.8-max', true],
+    ['dashscope-copy', 'qwen3.8-max', true],
+    ['dashscope', 'qwen3.8-max-preview', false],
+  ] as const)(
+    'serializes a %s / %s probe using the downloaded reasoning contract',
+    async (providerId, apiModelId, supportsNonThinking) => {
+      // Desktop 8d8649f: Max supports disabling thinking; Max Preview does not.
+      providerRegistryService.installRemoteSnapshot({
+        models: providerRegistryTestSnapshot.models,
+        providerModels: {
+          version: 'desktop-qwen38-probe',
+          overrides: [
+            {
+              providerId: 'dashscope',
+              modelId: apiModelId.replaceAll('.', '-'),
+              apiModelId,
+              name: apiModelId,
+              reasoningContracts: {
+                'openai-responses': {
+                  support: {
+                    controls: [
+                      {
+                        kind: 'effort',
+                        values: supportsNonThinking
+                          ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+                          : ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+                        default: 'xhigh',
+                      },
+                    ],
+                  },
+                  wire: {
+                    ...(supportsNonThinking && {
+                      off: {
+                        operations: [
+                          {
+                            target: 'reasoningEffort',
+                            value: { source: 'literal', value: 'none' },
+                          },
+                        ],
+                      },
+                    }),
+                    effort: {
+                      operations: [{ target: 'reasoningEffort', value: { source: 'effort' } }],
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      });
+      const provider = createProvider({
+        id: providerId,
+        presetProviderId: 'dashscope',
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: {
+            adapterFamily: 'openai',
+            baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1/',
+          },
+        },
+      });
+      const model = createModel(apiModelId, {
+        apiModelId,
+        providerId,
+        capabilities: [MODEL_CAPABILITY.REASONING],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+      });
+
+      await new AiService(createServices({ model, provider })).checkModel({
+        uniqueModelId: model.id,
+      });
+
+      const [params] = mockGeneratorConstructor.mock.calls[0];
+      let requestUrl: string | undefined;
+      let requestBody: Record<string, unknown> | undefined;
+      const sdkModel = createOpenAI({
+        ...params.providerSettings,
+        fetch: async (url, init) => {
+          requestUrl = String(url);
+          requestBody = JSON.parse(String(init?.body));
+          throw new Error('request captured');
+        },
+      }).responses(params.modelId);
+
+      await expect(
+        sdkModel.doGenerate({
+          prompt: [
+            { role: 'system', content: params.system },
+            { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+          ],
+          providerOptions: params.options.providerOptions,
+        }),
+      ).rejects.toThrow('request captured');
+
+      expect(requestUrl).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/responses');
+      expect(requestBody).toMatchObject({
+        model: apiModelId,
+        store: false,
+        input: [
+          { role: 'system', content: 'test' },
+          { role: 'user', content: [{ type: 'input_text', text: 'hi' }] },
+        ],
+      });
+      expect(requestBody?.reasoning).toEqual(supportsNonThinking ? { effort: 'none' } : undefined);
+    },
+  );
+
+  it.each([
+    ['opencode', undefined, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-compatible'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-compatible'],
+    ['opencode', undefined, ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic'],
+    ['opencode', undefined, ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai'],
+    ['opencode-copy', 'opencode', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai'],
+  ] as const)(
+    'gives each %s health probe its own session header on %s / %s',
+    async (id, presetProviderId, endpointType, adapterFamily) => {
+      const provider = createProvider({
+        id,
+        presetProviderId,
+        defaultChatEndpoint: endpointType,
+        endpointConfigs: {
+          [endpointType]: { adapterFamily, baseUrl: 'https://opencode.ai/zen/go/v1' },
+        },
+      });
+      const model = createModel('test-model', { providerId: id, endpointTypes: [endpointType] });
+      const service = new AiService(createServices({ model, provider }));
+
+      await service.checkModel({ uniqueModelId: model.id });
+      await service.checkModel({ uniqueModelId: model.id });
+
+      const [first, second] = mockGeneratorConstructor.mock.calls.map(([params]) => params);
+      expect(first.providerSettings.headers['x-opencode-session']).toEqual(expect.any(String));
+      expect(first.providerSettings.headers['x-opencode-session']).toBe(first.context.requestId);
+      expect(second.providerSettings.headers['x-opencode-session']).toBe(second.context.requestId);
+      expect(first.context.requestId).not.toBe(second.context.requestId);
+    },
+  );
+
+  it('preserves a case-insensitive explicit OpenCode session header during a health probe', async () => {
+    const provider = createProvider({
+      id: 'opencode-copy',
+      presetProviderId: 'opencode',
+      settings: { extraHeaders: { 'X-OpenCode-Session': 'configured-session' } },
+    });
+    const model = createModel('test-model', { providerId: provider.id });
+
+    await new AiService(createServices({ model, provider })).checkModel({
+      uniqueModelId: model.id,
+    });
+
+    const headers = mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers;
+    expect(headers['X-OpenCode-Session']).toBe('configured-session');
+    expect(headers).not.toHaveProperty('x-opencode-session');
   });
 
   it('requires an explicit model id', async () => {

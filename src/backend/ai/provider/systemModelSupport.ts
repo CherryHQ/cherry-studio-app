@@ -2,6 +2,7 @@ import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import { isImageTransportDescriptorSupported } from '@cherrystudio/ai-runtime/image';
 import { getAiSdkProviderId } from '@cherrystudio/ai-runtime/provider';
 
+import type { ProviderAccountAdapter } from '@/backend/services/providers/account/providerAccountAdapter';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
@@ -13,6 +14,11 @@ import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/mo
  * replaces this answer with it.
  */
 export interface LanguageServingSupport {
+  readonly providerAccounts?: ProviderAccountAdapter;
+  listAuthenticatedModels?(
+    provider: Provider,
+    signal: AbortSignal,
+  ): Promise<Partial<Model>[] | undefined>;
   supportsLanguageModel(provider: Provider, model: Model): boolean;
 }
 

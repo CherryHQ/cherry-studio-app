@@ -19,15 +19,16 @@ overrides:
   '@storybook/react-native-ui-common': 10.5.1
   '@valibot/to-json-schema': 1.5.0
   '@ai-sdk/anthropic': 3.0.103
-  '@ai-sdk/azure': 3.0.54
+  '@ai-sdk/azure': 3.0.116
   '@ai-sdk/deepseek': 2.0.57
   '@ai-sdk/google': 3.0.113
-  '@ai-sdk/openai': 3.0.53
+  '@ai-sdk/openai': 3.0.109
   '@ai-sdk/openai-compatible': 2.0.72
   '@ai-sdk/provider': 3.0.15
-  '@ai-sdk/provider-utils': 4.0.48
+  '@ai-sdk/provider-utils': 4.0.49
   '@ai-sdk/xai': 3.0.126
   ai: 6.0.185
+  expo-app-metrics: 57.0.17
   react-native-svg: 15.15.4
 
 allowBuilds:
@@ -49,22 +50,21 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
-  '@earendil-works/pi-agent-core@0.84.2': patches/@earendil-works__pi-agent-core@0.84.2.patch
-  '@earendil-works/pi-ai@0.84.2': patches/@earendil-works__pi-ai@0.84.2.patch
+  '@earendil-works/pi-agent-core@0.99.1': patches/@earendil-works__pi-agent-core@0.99.1.patch
+  '@earendil-works/pi-ai@0.99.1': patches/@earendil-works__pi-ai@0.99.1.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.5: patches/metro@0.84.5.patch
   metro-runtime@0.84.5: patches/metro-runtime@0.84.5.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
-  react-native-reanimated@4.5.1: patches/react-native-reanimated@4.5.1.patch
+  react-native-reanimated@4.5.5: patches/react-native-reanimated@4.5.5.patch
   '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
   '@ai-sdk/google@3.0.113': patches/@ai-sdk__google@3.0.113.patch
-  '@ai-sdk/openai@3.0.53': patches/@ai-sdk__openai@3.0.53.patch
+  '@ai-sdk/openai@3.0.109': patches/@ai-sdk__openai@3.0.109.patch
   '@ai-sdk/openai-compatible@2.0.72': patches/@ai-sdk__openai-compatible@2.0.72.patch
   '@openrouter/ai-sdk-provider@2.10.0': patches/@openrouter__ai-sdk-provider@2.10.0.patch
   ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
   ai@6.0.185: patches/ai@6.0.185.patch
-  react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
   expo-router@57.0.20: patches/expo-router@57.0.20.patch
   react-native-enriched-markdown@1.0.1: patches/react-native-enriched-markdown@1.0.1.patch
@@ -72,8 +72,22 @@ patchedDependencies:
   expo-calendar@57.0.3: patches/expo-calendar@57.0.3.patch
   react-native-background-actions@4.1.0: patches/react-native-background-actions@4.1.0.patch
   expo-notifications@57.0.17: patches/expo-notifications@57.0.17.patch
+  expo-image-picker@57.0.16: patches/expo-image-picker@57.0.16.patch
+  expo-app-metrics@57.0.17: patches/expo-app-metrics@57.0.17.patch
+  react-native-screens@4.26.2: patches/react-native-screens@4.26.2.patch
+  react-native@0.86.3: patches/react-native@0.86.3.patch
+  expo-widgets@57.0.19: patches/expo-widgets@57.0.19.patch
+  react-native-streamdown@0.2.0: patches/react-native-streamdown@0.2.0.patch
+  expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
+  react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
+  drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
+  expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
 
 minimumReleaseAgeExclude:
+  - '@cherrystudio/ai-core@2.1.0'
+  - '@cherrystudio/ai-sdk-provider@0.1.7'
+  - '@cherrystudio/remote-protocol@0.3.0'
+  - '@cherrystudio/remote-transport@0.1.2'
   - '@expo/cli@57.0.3'
   - '@expo/fingerprint@0.20.1'
   - '@expo/inline-modules@0.1.1'
@@ -101,3 +115,8 @@ minimumReleaseAgeExclude:
   - react-native-enriched-markdown@1.0.1
   - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
+  - '@cherrystudio/analytics-client@1.4.0'
+  - '@earendil-works/chord@0.99.1'
+  - '@earendil-works/pi-agent-core@0.99.1'
+  - '@earendil-works/pi-ai@0.99.1'
+  - '@earendil-works/pi-telemetry@0.99.1'

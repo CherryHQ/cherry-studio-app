@@ -10,7 +10,6 @@ package com.margelo.nitro.cherrystudio.ui
 import androidx.annotation.Keep
 import com.facebook.jni.HybridData
 import com.facebook.proguard.annotations.DoNotStrip
-import dalvik.annotation.optimization.FastNative
 
 
 /**
@@ -59,7 +58,6 @@ class Func_void_std__string_cxx: Func_void_std__string {
   override fun invoke(id: String): Unit
     = invoke_cxx(id)
 
-  @FastNative
   private external fun invoke_cxx(id: String): Unit
 }
 

@@ -1,7 +1,7 @@
 import {
-  buildApiKeysInputFromEntries,
+  getApiKeyValidationError,
+  maskProviderApiKey,
   normalizeApiKeyEntries,
-  normalizeApiKeySingleLine,
 } from '../apiService/utils/providerApiServiceApiKeys';
 import { shouldShowApiKeys } from '../apiService/utils/providerApiServiceAuth';
 import {
@@ -18,6 +18,13 @@ import {
 } from '../apiService/utils/providerApiServiceSave';
 
 describe('provider API service form helpers', () => {
+  it('never displays a complete credential in the key list', () => {
+    expect(maskProviderApiKey('short')).toBe('••••••••');
+    expect(maskProviderApiKey('        abcd')).toBe('••••••••');
+    expect(maskProviderApiKey('12345678')).toBe('••••••••');
+    expect(maskProviderApiKey('sk-secret-value-abcd')).toBe('•••• abcd');
+    expect(maskProviderApiKey(' sk-secret-value-abcd ')).toBe('•••• abcd');
+  });
   it('hides manual keys only for login-only providers', () => {
     expect(shouldShowApiKeys('api-key', { authMethods: ['oauth'] })).toBe(false);
     expect(shouldShowApiKeys('api-key', { authMethods: ['api-key', 'oauth'] })).toBe(true);
@@ -25,17 +32,20 @@ describe('provider API service form helpers', () => {
     expect(shouldShowApiKeys('iam-gcp', { authMethods: ['api-key'] })).toBe(false);
   });
 
-  it('removes line breaks from a single API key', () => {
-    expect(normalizeApiKeySingleLine('sk-a\r\nsk-b\nsk-c')).toBe('sk-ask-bsk-c');
-  });
+  it.each(['sk-a,sk-b', 'sk-a\nsk-b', 'sk-a sk-b', 'sk-a，sk-b'])(
+    'rejects multiple keys pasted into one row: %s',
+    (key) => {
+      expect(getApiKeyValidationError({ id: 'a', key, isEnabled: true }, [])).toBe('invalidFormat');
+    },
+  );
 
-  it('formats API keys as comma separated values', () => {
-    expect(
-      buildApiKeysInputFromEntries([
-        { id: 'key-a', key: 'sk-a', isEnabled: false, label: 'Primary' },
-        { id: 'key-b', key: 'sk-b', isEnabled: true },
-      ]),
-    ).toBe('sk-a,sk-b');
+  it('rejects blank and duplicate keys, including disabled duplicates', () => {
+    const entry = { id: 'a', key: 'sk-a', isEnabled: false };
+    expect(getApiKeyValidationError({ id: 'b', key: ' ', isEnabled: true }, [entry])).toBe('empty');
+    expect(getApiKeyValidationError({ id: 'b', key: ' sk-a ', isEnabled: true }, [entry])).toBe(
+      'duplicate',
+    );
+    expect(getApiKeyValidationError(entry, [entry])).toBeUndefined();
   });
 
   it('builds independent text, image generation, and image editing configs', () => {
@@ -74,6 +84,11 @@ describe('provider API service form helpers', () => {
       findInvalidCustomProviderEndpointUrl({
         'openai-chat-completions': 'https://chat.example.com/#',
       }),
+    ).toBeNull();
+    expect(
+      findInvalidCustomProviderEndpointUrl({
+        'openai-chat-completions': 'https://chat.example.com/v1/chat/completions',
+      }),
     ).toBe('openai-chat-completions');
   });
 
@@ -84,6 +99,16 @@ describe('provider API service form helpers', () => {
       'https://api.example.com/v1/chat/completions',
     ],
     ['openai-responses', 'https://api.example.com/v1/', 'https://api.example.com/v1/responses'],
+    [
+      'openai-responses',
+      'https://api.example.com/gateway#',
+      'https://api.example.com/gateway/responses',
+    ],
+    [
+      'openai-chat-completions',
+      'https://api.example.com/gateway#',
+      'https://api.example.com/gateway/chat/completions',
+    ],
     ['anthropic-messages', 'https://api.example.com', 'https://api.example.com/v1/messages'],
     [
       'google-generate-content',
@@ -92,6 +117,24 @@ describe('provider API service form helpers', () => {
     ],
   ] as const)('previews the final %s request URL', (endpointType, baseUrl, expected) => {
     expect(getCustomProviderEndpointRequestPreview(endpointType, baseUrl)).toBe(expected);
+  });
+
+  it('uses the same no-version provider policy as requests and avoids guessing custom transports', () => {
+    expect(
+      getCustomProviderEndpointRequestPreview(
+        'openai-chat-completions',
+        'https://api.example.com',
+        {
+          id: 'perplexity-copy',
+          presetProviderId: 'perplexity',
+        } as never,
+      ),
+    ).toBe('https://api.example.com/chat/completions');
+    expect(
+      getCustomProviderEndpointRequestPreview('openai-responses', 'https://azure.example.com', {
+        endpointConfigs: { 'openai-responses': { adapterFamily: 'azure-responses' } },
+      } as never),
+    ).toBeNull();
   });
 
   it('moves the default to the first remaining configured endpoint', () => {
@@ -186,7 +229,7 @@ describe('provider API service form helpers', () => {
     });
   });
 
-  it('updates all Pi text endpoints while preserving unknown endpoint metadata', () => {
+  it('updates all configurable chat endpoints while preserving unknown endpoint metadata', () => {
     expect(
       buildProviderTextEndpointUpdates({
         defaultChatEndpoint: 'anthropic-messages',
@@ -220,17 +263,15 @@ describe('provider API service form helpers', () => {
     });
   });
 
-  it('normalizes API key entries before they reach the save call', () => {
+  it('trims values while retaining key IDs, labels, enabled states, and order', () => {
     expect(
       normalizeApiKeyEntries([
-        { id: 'key-a', isEnabled: false, key: ' sk-a ' },
-        { id: 'key-empty', isEnabled: true, key: ' ' },
-        { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        { id: 'key-duplicate', isEnabled: true, key: 'sk-a' },
+        { id: 'key-b', isEnabled: false, key: ' sk-b ', label: ' Backup ' },
+        { id: 'key-a', isEnabled: true, key: 'sk-a', label: '' },
       ]),
     ).toEqual([
-      { id: 'key-a', isEnabled: false, key: 'sk-a' },
-      { id: 'key-b', isEnabled: true, key: 'sk-b' },
+      { id: 'key-b', isEnabled: false, key: 'sk-b', label: 'Backup' },
+      { id: 'key-a', isEnabled: true, key: 'sk-a', label: '' },
     ]);
   });
 

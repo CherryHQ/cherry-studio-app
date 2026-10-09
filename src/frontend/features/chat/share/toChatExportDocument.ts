@@ -1,17 +1,16 @@
 import { webSearchOutputSchema } from '@cherrystudio/universal/ai/builtinTools';
 
+import type { TranscriptMessage } from '@/frontend/appShell/conversation';
 import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
-import {
-  AgentToolResultSchema,
-  type AgentMessagePart,
-  type AgentMessageView,
-} from '@/shared/contracts/agent';
+import { omitGeneratedImageReferencesFromMarkdown } from '@/frontend/utils/omitGeneratedImageReferences';
+import { AgentToolResultSchema, type AgentMessageView } from '@/shared/contracts/agent';
 import {
   DOCUMENT_EXPORT_MAX_SECTIONS,
   DocumentExportError,
   type ExportBlock,
   type ExportDocument,
 } from '@/shared/contracts/documentExport';
+import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 export type ChatExportOptions = {
@@ -21,6 +20,7 @@ export type ChatExportOptions = {
     user: string;
     assistant: string;
     process(seconds: number): string;
+    sources(count: number): string;
     reasoning: string;
     file: string;
     status: string;
@@ -28,14 +28,19 @@ export type ChatExportOptions = {
   };
 };
 
-export function isChatMessageExportable(message: AgentMessageView) {
+export type ChatExportMessage = TranscriptMessage & { truncated?: boolean };
+
+export function isChatMessageExportable(message: ChatExportMessage) {
   return (
-    message.role !== 'system' && message.status !== 'pending' && message.status !== 'streaming'
+    !message.truncated &&
+    message.role !== 'system' &&
+    message.status !== 'pending' &&
+    message.status !== 'streaming'
   );
 }
 
 export function toChatExportDocument(
-  messages: readonly AgentMessageView[],
+  messages: readonly ChatExportMessage[],
   options: ChatExportOptions,
 ): ExportDocument {
   if (messages.length > DOCUMENT_EXPORT_MAX_SECTIONS) throw new DocumentExportError('size-limit');
@@ -46,13 +51,40 @@ export function toChatExportDocument(
     const sources = collectSources(message.parts);
     const blocks: ExportBlock[] = [];
     const process: ExportBlock[] = [];
-    const resultIndex = finalTextIndex(message.parts);
-    message.parts.forEach((part, index) => {
-      if (part.type === 'text' && part.text.trim()) {
+    const attachments: ExportBlock[] = [];
+    const imageIds = new Set(
+      message.parts.flatMap((part) =>
+        part.type === 'file' && part.mediaType.toLowerCase().startsWith('image/')
+          ? [part.fileEntryId]
+          : [],
+      ),
+    );
+    const parts = message.parts.map((part) => {
+      if (message.role === 'user' || part.type !== 'text') return part;
+      const text = omitGeneratedImageReferencesFromMarkdown(part.text, imageIds);
+      return text === part.text ? part : { ...part, text };
+    });
+    const resultIndex = finalTextIndex(parts);
+    parts.forEach((part, index) => {
+      if (part.type === 'file') {
+        const name = part.filename || options.labels.file;
+        if (part.mediaType.toLowerCase().startsWith('image/')) {
+          const assetId = `${message.id}:${part.id}`;
+          assets[assetId] = {
+            kind: 'managed-file',
+            fileEntryId: FileEntryIdSchema.parse(part.fileEntryId),
+          };
+          // Generated pictures belong beside the answer in transcript order.
+          blocks.push({ kind: 'image', assetId, alt: name });
+        } else attachments.push({ kind: 'attachment', name, mediaType: part.mediaType });
+      } else if (part.type === 'text' && part.text.trim()) {
         const block: ExportBlock =
           message.role === 'user'
             ? { kind: 'text', text: part.text }
-            : { kind: 'markdown', source: replaceChatCitations(part.text, sources) };
+            : {
+                kind: 'markdown',
+                source: replaceChatCitations(part.text, sources),
+              };
         if (message.role === 'user' || index === resultIndex) blocks.push(block);
         else if (options.includeProcess) process.push(block);
       } else if (part.type === 'reasoning' && options.includeProcess && part.text.trim()) {
@@ -62,9 +94,16 @@ export function toChatExportDocument(
           presentation: 'reasoning',
           blocks: [{ kind: 'markdown', source: part.text }],
         });
-      } else if (part.type === 'tool' && options.includeProcess) {
+      } else if (
+        (part.type === 'dynamic-tool' || part.type === 'tool-summary') &&
+        options.includeProcess
+      ) {
         // Only the readable tool name is shared. Inputs, credentials and raw result envelopes stay private.
-        process.push({ kind: 'details', summary: part.displayName, blocks: [] });
+        process.push({
+          kind: 'details',
+          summary: part.type === 'tool-summary' ? part.displayName : part.title,
+          blocks: [],
+        });
       }
     });
     if (process.length) {
@@ -79,26 +118,18 @@ export function toChatExportDocument(
         blocks: process,
       });
     }
-    for (const part of message.parts) {
-      if (part.type !== 'file') continue;
-      const name = part.name || options.labels.file;
-      if (part.mediaType.startsWith('image/')) {
-        const assetId = `${message.id}:${part.id}`;
-        assets[assetId] = {
-          kind: 'managed-file',
-          fileEntryId: FileEntryIdSchema.parse(part.fileEntryId),
-        };
-        blocks.push({ kind: 'image', assetId, alt: name });
-      } else blocks.push({ kind: 'attachment', name, mediaType: part.mediaType });
-    }
+    blocks.push(...attachments);
     if (sources.size)
       blocks.push({
         kind: 'links',
+        summary: options.labels.sources(sources.size),
         items: [...sources.values()].map((source, index) => ({
           label: `${index + 1}. ${source.title}`,
           url: source.url,
         })),
       });
+    for (const attachment of message.attachments ?? [])
+      blocks.push({ kind: 'attachment', ...attachment });
     const metadata: { label: string; value: string }[] = [];
     if (message.status !== 'success')
       metadata.push({
@@ -109,6 +140,10 @@ export function toChatExportDocument(
       id: message.id,
       heading: message.role === 'user' ? options.labels.user : options.labels.assistant,
       presentation: message.role === 'user' ? ('bubble' as const) : ('message' as const),
+      ...(message.role === 'assistant' && {
+        avatar: CHERRY_AGENT_AVATAR,
+        ...(message.modelName && { model: message.modelName }),
+      }),
       metadata,
       blocks,
     };
@@ -117,12 +152,13 @@ export function toChatExportDocument(
 }
 
 /** Match the article's final-answer boundary using persisted Agent parts, without UI projections. */
-function finalTextIndex(parts: readonly AgentMessagePart[]): number | undefined {
+function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | undefined {
   for (let index = parts.length - 1; index >= 0; index--) {
     const part = parts[index];
     if (
       part.type === 'file' ||
-      part.type === 'error' ||
+      part.type === 'data-error' ||
+      part.type === 'data-compaction-anchor' ||
       ((part.type === 'text' || part.type === 'reasoning') && !part.text.trim())
     )
       continue;
@@ -132,11 +168,11 @@ function finalTextIndex(parts: readonly AgentMessagePart[]): number | undefined 
 }
 
 type CitationSource = { title: string; url: string };
-function collectSources(parts: readonly AgentMessagePart[]): Map<string, CitationSource> {
+function collectSources(parts: Readonly<TranscriptMessage['parts']>): Map<string, CitationSource> {
   const sources = new Map<string, CitationSource>();
   for (const part of parts) {
     if (
-      part.type !== 'tool' ||
+      part.type !== 'dynamic-tool' ||
       part.toolRef.source !== 'builtin' ||
       !['web_search', 'web_fetch'].includes(part.toolRef.capabilityId)
     )

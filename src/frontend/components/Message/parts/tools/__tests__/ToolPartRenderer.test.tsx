@@ -5,6 +5,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { ToolPartRenderer } from '../ToolPartRenderer';
 import type { ToolMessagePart } from '../toolPartState';
 
+jest.mock('../AgentManagementToolPart', () => mockCreateToolPart('AgentManagementToolPart'));
 jest.mock('../GenericToolPart', () => mockCreateToolPart('GenericToolPart'));
 jest.mock('../FileToolContent', () => mockCreateToolPart('FileToolContent'));
 jest.mock('../EditFileToolPart', () => ({
@@ -23,6 +24,11 @@ jest.mock('../ReadFileToolPart', () => ({
   ...mockCreateToolPart('ReadFileToolPart'),
   isReadFileToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'read_file',
 }));
+jest.mock('../RunJsToolPart', () => ({
+  ...mockCreateToolPart('RunJsToolPart'),
+  isRunJsToolPart: (part: ToolMessagePart) => mockGetToolName(part) === 'run_js',
+}));
+jest.mock('../UserQuestionPart', () => mockCreateToolPart('UserQuestionPart'));
 jest.mock('../WebSearchToolPart', () => mockCreateToolPart('WebSearchToolPart'));
 jest.mock('../WriteFileToolPart', () => ({
   ...mockCreateToolPart('WriteFileToolPart'),
@@ -38,6 +44,10 @@ describe('ToolPartRenderer', () => {
     ['edit_file', 'EditFileToolPart'],
     ['read_file', 'ReadFileToolPart'],
     ['write_file', 'WriteFileToolPart'],
+    ['run_js', 'RunJsToolPart'],
+    ['ask_user_question', 'UserQuestionPart'],
+    ['agent_create', 'AgentManagementToolPart'],
+    ['agent_update', 'AgentManagementToolPart'],
     ['other', 'GenericToolPart'],
   ])('routes %s tools to %s', (toolName, expectedType) => {
     const part = makeToolPart(toolName);

@@ -8,6 +8,7 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
+import { subscribeDataApiChanges } from '../../dataApiChanges';
 import type { PreferenceService } from '../../PreferenceService';
 import { agentService } from '../AgentService';
 import { applyMigrations } from './_testDb';
@@ -83,9 +84,130 @@ describe('AgentService persistence', () => {
       // capability enabled; the create form seeds its own deny-list.
       disabledCapabilities: [],
       instructions: '',
-      modelId: 'openai::gpt-4',
+      model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
+    });
+  });
+
+  it('rejects stale edits and only notifies caches after successful writes', async () => {
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+      expect(changed).toHaveBeenLastCalledWith(['/agents', `/agents/${created.id}`]);
+      const updated = await agentService.update(
+        created.id,
+        { name: 'Renamed' },
+        { expectedUpdatedAt: created.updatedAt },
+      );
+      expect(updated.instructions).toBe('Original');
+      expect(updated.updatedAt).not.toBe(created.updatedAt);
+      changed.mockClear();
+      await expect(
+        agentService.update(
+          created.id,
+          { instructions: 'Stale overwrite' },
+          { expectedUpdatedAt: created.updatedAt },
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(changed).not.toHaveBeenCalled();
+      expect(await agentService.getById(created.id)).toMatchObject({
+        name: 'Renamed',
+        instructions: 'Original',
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('publishes committed avatar, ordering, deletion, and initial Agent changes', async () => {
+    const changed = jest.fn((_paths: readonly string[]) => ({
+      inTransaction: sqlite.isTransaction,
+      rows: sqlite.prepare('SELECT id, avatar, deleted_at FROM agent').all(),
+    }));
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      const initial = await agentService.createInitialAgent({ name: 'Cherry Agent' });
+      const id = initial!.id;
+      expect(changed).toHaveBeenLastCalledWith(['/agents', `/agents/${id}`]);
+      await agentService.createInitialAgent({ name: 'Already seeded' });
+      expect(changed).toHaveBeenCalledTimes(1);
+
+      await agentService.setAvatar(id, '🍒');
+      expect(changed.mock.results.at(-1)?.value).toMatchObject({
+        inTransaction: false,
+        rows: [expect.objectContaining({ id, avatar: '🍒' })],
+      });
+      await agentService.reorder(id, { position: 'first' });
+      await agentService.reorderBatch([{ id, anchor: { position: 'last' } }]);
+      await agentService.delete(id);
+      expect(changed).toHaveBeenCalledTimes(5);
+      expect(changed.mock.calls.every(([paths]) => paths[0] === '/agents')).toBe(true);
+      expect(changed.mock.results.every(({ value }) => value.inTransaction === false)).toBe(true);
+      expect(changed.mock.results.at(-1)?.value.rows).toEqual([
+        expect.objectContaining({ id, deleted_at: expect.any(Number) }),
+      ]);
+
+      changed.mockClear();
+      await agentService.reorderBatch([]);
+      await expect(agentService.delete(id)).rejects.toBeDefined();
+      await expect(agentService.setAvatar(id, 'missing')).rejects.toBeDefined();
+      expect(changed).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it.each(['avatar', 'delete', 'reorder', 'reorderBatch'] as const)(
+    'does not notify observers when %s rolls back',
+    async (operation) => {
+      const agent = await agentService.create({ name: 'Writer' });
+      const write = dbService.withWriteTx.bind(dbService);
+      jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce((callback) =>
+        write(async (tx) => {
+          await callback(tx);
+          throw new Error('Commit failed');
+        }),
+      );
+      const changed = jest.fn();
+      const unsubscribe = subscribeDataApiChanges(changed);
+      try {
+        const operations = {
+          avatar: () => agentService.setAvatar(agent.id, '🍒'),
+          delete: () => agentService.delete(agent.id),
+          reorder: () => agentService.reorder(agent.id, { position: 'first' }),
+          reorderBatch: () =>
+            agentService.reorderBatch([{ id: agent.id, anchor: { position: 'first' } }]),
+        };
+        await expect(operations[operation]()).rejects.toThrow('Commit failed');
+        expect(changed).not.toHaveBeenCalled();
+        expect(await agentService.getById(agent.id)).toEqual(agent);
+      } finally {
+        unsubscribe();
+      }
+    },
+  );
+
+  it('rejects an edit committed between the read and the guarded write transaction', async () => {
+    const created = await agentService.create({ name: 'Writer', instructions: 'Original' });
+    const write = dbService.withWriteTx.bind(dbService);
+    jest.spyOn(dbService, 'withWriteTx').mockImplementationOnce(async (callback) => {
+      sqlite
+        .prepare('UPDATE agent SET name = ?, updated_at = updated_at + 1 WHERE id = ?')
+        .run('Manual edit', created.id);
+      return write(callback);
+    });
+    await expect(
+      agentService.update(
+        created.id,
+        { instructions: 'Tool edit' },
+        { expectedUpdatedAt: created.updatedAt },
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(await agentService.getById(created.id)).toMatchObject({
+      name: 'Manual edit',
+      instructions: 'Original',
     });
   });
 
@@ -140,15 +262,15 @@ describe('AgentService persistence', () => {
     expect(agent.disabledCapabilities).toEqual(['calendar', 'web']);
 
     await expect(
-      agentService.update(agent.id, { disabledCapabilities: ['health'] }),
-    ).resolves.toMatchObject({ disabledCapabilities: ['health'] });
+      agentService.update(agent.id, { disabledCapabilities: ['location'] }),
+    ).resolves.toMatchObject({ disabledCapabilities: ['location'] });
 
     // A build that no longer knows an id must drop it rather than fail the row.
     sqlite
       .prepare('UPDATE agent SET disabled_capabilities = ? WHERE id = ?')
-      .run(JSON.stringify(['health', 'retired-group']), agent.id);
+      .run(JSON.stringify(['location', 'health', 'retired-group']), agent.id);
     await expect(agentService.getById(agent.id)).resolves.toMatchObject({
-      disabledCapabilities: ['health'],
+      disabledCapabilities: ['location'],
     });
   });
 
@@ -169,18 +291,16 @@ describe('AgentService persistence', () => {
 
     const agent = await agentService.create({ name: 'Researcher' });
 
-    expect(agent.modelId).toBeNull();
+    expect(agent.model).toBeNull();
   });
 
   it('rejects a create or update whose model is not registered', async () => {
     await expect(
-      agentService.create({ modelId: 'openai::unknown', name: 'Researcher' }),
+      agentService.create({ model: 'openai::unknown', name: 'Researcher' }),
     ).rejects.toBeDefined();
 
     const agent = await agentService.create({ name: 'Researcher' });
-    await expect(
-      agentService.update(agent.id, { modelId: 'openai::unknown' }),
-    ).rejects.toBeDefined();
+    await expect(agentService.update(agent.id, { model: 'openai::unknown' })).rejects.toBeDefined();
   });
 
   it('advances the Agent version when updates share one wall-clock millisecond', async () => {

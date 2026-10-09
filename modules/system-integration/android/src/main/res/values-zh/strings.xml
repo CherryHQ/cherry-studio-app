@@ -1,0 +1,8 @@
+<resources>
+  <string name="cherry_share_title">分享到 Cherry</string>
+  <string name="cherry_share_continue">在 Cherry 中继续</string>
+  <string name="cherry_share_close">关闭</string>
+  <string name="cherry_share_confirm">Cherry 会把内容放进新对话的输入框，可继续编辑后发送。</string>
+  <string name="cherry_share_preparing">正在准备分享内容…</string>
+  <string name="cherry_share_failed">无法读取分享内容。请分享最多 10 个文件（单个 25 MB，总计 50 MB）后重试。</string>
+</resources>

@@ -1,11 +1,12 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
 
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginClient, PluginClientContext } from '../../pluginDefinition';
 import { createWecomApi, readWecomResult, unknownWecomWrite } from './wecomApi';
 import { readWecomCredential } from './wecomCredentials';
-import { prepareWecomFiles, saveWecomFile, saveWecomResult } from './wecomFiles';
+import { prepareWecomFiles, saveWecomFile, saveWecomResult, sweepWecomFiles } from './wecomFiles';
 import { readWecomService, WecomCatalogSchema, type WecomTool } from './wecomSchema';
 
 /** One authorized CLI gateway client; business definitions are discovered from the official service. */
@@ -14,6 +15,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
   const initial = readWecomCredential(await context.getCredential(context.signal));
   await context.assertAuthorized();
   context.signal.throwIfAborted();
+  sweepWecomFiles();
   const lifetime = new AbortController();
   const api = createWecomApi(context, initial.botId);
   let routes = new Map<string, WecomTool>();
@@ -21,7 +23,7 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
   let expiresAt = 0;
   let discovering: Promise<ListToolsResult> | undefined;
   const operationSignal = (signal?: AbortSignal) =>
-    AbortSignal.any([lifetime.signal, ...(signal ? [signal] : [])]);
+    linkAbortSignals([lifetime.signal, ...(signal ? [signal] : [])]);
 
   async function discover(signal: AbortSignal): Promise<ListToolsResult> {
     const catalog = WecomCatalogSchema.parse(
@@ -48,16 +50,24 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
       const batch = services.slice(offset, offset + 6);
       const results = await Promise.allSettled(
         batch.map(async ({ name }) => {
-          const value = readWecomResult(
-            await api.call({
-              endpoint: { path: '/cli/service/discovery' },
-              payload: { service: name },
-              effect: 'read',
-              signal: AbortSignal.any([signal, AbortSignal.timeout(5000)]),
-              maxResponseBytes: 4 * 1024 * 1024,
-            }),
-          );
-          return readWecomService(name, value);
+          const deadline = new AbortController();
+          const timer = setTimeout(() => deadline.abort(), 5000);
+          const linked = linkAbortSignals([signal, deadline.signal]);
+          try {
+            const value = readWecomResult(
+              await api.call({
+                endpoint: { path: '/cli/service/discovery' },
+                payload: { service: name },
+                effect: 'read',
+                signal: linked.signal,
+                maxResponseBytes: 4 * 1024 * 1024,
+              }),
+            );
+            return readWecomService(name, value);
+          } finally {
+            clearTimeout(timer);
+            linked.dispose();
+          }
         }),
       );
       lifetime.signal.throwIfAborted();
@@ -97,55 +107,73 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
       return warnings;
     },
     async listTools(input) {
-      const signal = operationSignal(input?.options?.signal);
-      signal.throwIfAborted();
-      await context.assertAuthorized();
-      if (Date.now() < expiresAt)
-        return { tools: [...routes.values()].map(({ definition }) => definition) };
-      discovering ??= discover(operationSignal(AbortSignal.timeout(14_000))).finally(() => {
-        discovering = undefined;
-      });
+      const linked = operationSignal(input?.options?.signal);
+      const { signal } = linked;
       try {
-        const result = await waitForCaller(discovering, signal);
         signal.throwIfAborted();
-        return result;
-      } catch (error) {
-        if (signal.aborted) throw new PluginError('cancelled', 'Wecom discovery cancelled.');
-        if (error instanceof PluginError) throw error;
-        throw new PluginError('request', 'Could not load official Wecom tools.');
+        await context.assertAuthorized();
+        signal.throwIfAborted();
+        if (Date.now() < expiresAt)
+          return { tools: [...routes.values()].map(({ definition }) => definition) };
+        if (!discovering) {
+          const deadline = new AbortController();
+          const timer = setTimeout(() => deadline.abort(), 14_000);
+          const discovery = operationSignal(deadline.signal);
+          discovering = discover(discovery.signal).finally(() => {
+            clearTimeout(timer);
+            discovery.dispose();
+            discovering = undefined;
+          });
+        }
+        try {
+          const result = await waitForCaller(discovering, signal);
+          signal.throwIfAborted();
+          return result;
+        } catch (error) {
+          if (signal.aborted) throw new PluginError('cancelled', 'Wecom discovery cancelled.');
+          if (error instanceof PluginError) throw error;
+          throw new PluginError('request', 'Could not load official Wecom tools.');
+        }
+      } finally {
+        linked.dispose();
       }
     },
     async callTool(input) {
-      const signal = operationSignal(input.options?.abortSignal);
-      if (signal.aborted) throw new PluginError('cancelled', 'Wecom request cancelled.');
-      const tool = routes.get(input.name);
-      if (!tool)
-        throw new PluginError('access', 'Refresh Wecom tools before calling this operation.');
-      const credential = readWecomCredential(await context.getCredential(signal));
-      if (credential.botId !== initial.botId)
-        throw new PluginError('authorization', 'Wecom identity changed.');
-      await context.assertAuthorized();
-      signal.throwIfAborted();
-      const prepared = await prepareWecomFiles(api, tool.request, input.args, signal);
-      const response = await api.call({
-        ...prepared,
-        endpoint: tool.endpoint,
-        effect: tool.effect,
-        signal,
-      });
+      const linked = operationSignal(input.options?.abortSignal);
+      const { signal } = linked;
       try {
+        if (signal.aborted) throw new PluginError('cancelled', 'Wecom request cancelled.');
+        const tool = routes.get(input.name);
+        if (!tool)
+          throw new PluginError('access', 'Refresh Wecom tools before calling this operation.');
+        const credential = readWecomCredential(await context.getCredential(signal));
+        if (credential.botId !== initial.botId)
+          throw new PluginError('authorization', 'Wecom identity changed.');
+        await context.assertAuthorized();
         signal.throwIfAborted();
-        const result =
-          response.kind === 'file'
-            ? {
-                ...saveWecomFile(response.bytes, response.filename),
-                content_type: response.contentType,
-              }
-            : saveWecomResult(tool.response, readWecomResult(response), signal);
-        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-      } catch (error) {
-        if (tool.effect === 'write') throw unknownWecomWrite();
-        throw error;
+        const prepared = await prepareWecomFiles(api, tool.request, input.args, signal);
+        const response = await api.call({
+          ...prepared,
+          endpoint: tool.endpoint,
+          effect: tool.effect,
+          signal,
+        });
+        try {
+          signal.throwIfAborted();
+          const result =
+            response.kind === 'file'
+              ? {
+                  ...saveWecomFile(response.bytes, response.filename),
+                  content_type: response.contentType,
+                }
+              : saveWecomResult(tool.response, readWecomResult(response), signal);
+          return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        } catch (error) {
+          if (tool.effect === 'write') throw unknownWecomWrite();
+          throw error;
+        }
+      } finally {
+        linked.dispose();
       }
     },
     async close() {
@@ -159,7 +187,10 @@ export async function createWecomClient(context: PluginClientContext): Promise<P
 
 function waitForCaller<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
-    const abort = () => reject(new PluginError('cancelled', 'Wecom discovery cancelled.'));
+    const abort = () => {
+      signal.removeEventListener('abort', abort);
+      reject(new PluginError('cancelled', 'Wecom discovery cancelled.'));
+    };
     if (signal.aborted) {
       abort();
       return;

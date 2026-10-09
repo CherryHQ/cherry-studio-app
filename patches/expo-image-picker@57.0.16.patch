@@ -1,0 +1,17 @@
+diff --git a/android/src/main/java/expo/modules/imagepicker/contracts/CropImageContract.kt b/android/src/main/java/expo/modules/imagepicker/contracts/CropImageContract.kt
+--- a/android/src/main/java/expo/modules/imagepicker/contracts/CropImageContract.kt
++++ b/android/src/main/java/expo/modules/imagepicker/contracts/CropImageContract.kt
+@@ -63,7 +63,12 @@
+     if (resultCode == Activity.RESULT_CANCELED || result == null) {
+       return ImagePickerContractResult.Cancelled
+     }
+-    val targetUri = requireNotNull(result.uriContent)
++    if (resultCode != Activity.RESULT_OK) {
++      return ImagePickerContractResult.Error
++    }
++    // Failed crops can return a result without an output URI. Reject the picker promise
++    // through its existing error path instead of crashing native activity-result dispatch.
++    val targetUri = result.uriContent ?: return ImagePickerContractResult.Error
+     val contentResolver = requireNotNull(appContextProvider.appContext.reactContext) { "React Application Context is null" }.contentResolver
+     runBlocking { copyExifData(input.sourceUri.toUri(), input.outputFile, contentResolver) }
+     return ImagePickerContractResult.Success(listOf(MediaType.IMAGE to targetUri))

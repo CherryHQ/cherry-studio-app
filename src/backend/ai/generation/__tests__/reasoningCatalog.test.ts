@@ -355,6 +355,7 @@ const matrix: MatrixSample[] = [
     group: '11 Poe OpenAI extra body',
     providerId: 'poe',
     modelId: 'GPT-5.4',
+    endpointType: 'openai-chat-completions',
     expected: {
       default: {},
       none: { 'extra_body.reasoning_effort': 'none' },

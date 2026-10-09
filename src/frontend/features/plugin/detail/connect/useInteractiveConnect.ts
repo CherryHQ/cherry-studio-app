@@ -22,7 +22,7 @@ import type {
 } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
-import { useRefreshPluginConnections } from '../../usePluginConnections';
+import { useRefreshPluginConnections } from '../../useRefreshPluginConnections';
 import {
   getInteractiveConnectProgress,
   type InteractiveConnectOperation,

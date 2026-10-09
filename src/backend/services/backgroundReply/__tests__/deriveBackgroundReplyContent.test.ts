@@ -20,7 +20,7 @@ const translations: Record<string, string> = {
 };
 const t = (key: string) => translations[key] ?? key;
 
-function toolPart(rawToolName: string): Extract<AgentMessagePart, { type: 'tool' }> {
+function toolPart(rawToolName: string): Extract<AgentMessagePart, { type: 'dynamic-tool' }> {
   return {
     id: 'tool-1',
     input: {},
@@ -30,9 +30,9 @@ function toolPart(rawToolName: string): Extract<AgentMessagePart, { type: 'tool'
       rawToolName === 'private_mcp_tool'
         ? { source: 'mcp', serverId: 'server-1', rawToolName }
         : { source: 'builtin', capabilityId: rawToolName },
-    providerName: `provider_${rawToolName}`,
-    displayName: rawToolName,
-    type: 'tool',
+    toolName: `provider_${rawToolName}`,
+    title: rawToolName,
+    type: 'dynamic-tool',
   };
 }
 

@@ -33,7 +33,7 @@ export function PaintingViewerChrome({
       { id: 'share', disabled: !canShare, label: t('fileViewer.share'), onPress: onShare },
       {
         id: 'view-conversation',
-        label: t('painting.viewer.viewConversation'),
+        label: t('painting.viewer.viewGenerationDetails'),
         onPress: onViewConversation,
       },
       {

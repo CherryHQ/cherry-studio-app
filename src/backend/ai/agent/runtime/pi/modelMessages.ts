@@ -2,6 +2,7 @@ import type {
   Api as PiApi,
   AssistantMessage,
   ImageContent,
+  JsonObject,
   Message as PiMessage,
   Model as PiModel,
   TextContent,
@@ -13,12 +14,12 @@ import type {
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
-  RuntimeJsonValue,
   RuntimeMessagePart,
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
 import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
+import { PI_TURN_REPLAY_KIND, readPiTurnReplay } from './piTurnReplay';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
@@ -38,12 +39,15 @@ export type PiConversation = {
   history: PiMessage[];
   historyTurns: PiHistoryTurn[];
   prompt: Extract<PiMessage, { role: 'user' }>;
+  /** Current-turn replay, excluded from completed-history compaction. */
+  resume?: PiMessage[];
   systemPrompt: string;
 };
 
 export type PiHistoryTurn = {
   turnId: string | null;
   messages: PiMessage[];
+  replayKind?: typeof PI_TURN_REPLAY_KIND;
 };
 
 /** Convert the complete normalized Runtime context into one fresh Pi conversation. */
@@ -62,6 +66,8 @@ export function toPiConversation(
 
   for (const turn of request.history) {
     const historyTurn: PiHistoryTurn = { turnId: turn.turnId, messages: [] };
+    const replay = readPiTurnReplay(turn.replay);
+    if (replay) historyTurn.replayKind = PI_TURN_REPLAY_KIND;
     for (const message of turn.messages) {
       if (message.role === 'system') {
         const text = collectText(message.parts);
@@ -76,14 +82,40 @@ export function toPiConversation(
         });
         continue;
       }
-      appendAssistantHistory(historyTurn.messages, message.parts, providerNamesByCallId, model);
+      if (replay) continue;
+      appendAssistantHistory(
+        historyTurn.messages,
+        message.parts,
+        providerNamesByCallId,
+        model,
+        message.contextTokens,
+      );
+    }
+    if (replay) {
+      const contextTokens = turn.messages.findLast(
+        (message) => message.role === 'assistant',
+      )?.contextTokens;
+      const lastAssistant = replay.findLast((message) => message.role === 'assistant');
+      if (lastAssistant?.role === 'assistant' && contextTokens !== undefined) {
+        lastAssistant.usage = {
+          ...EMPTY_PI_USAGE,
+          input: contextTokens,
+          totalTokens: contextTokens,
+        };
+      }
+      historyTurn.messages.push(...replay);
     }
     historyTurns.push(historyTurn);
   }
 
+  const resume: PiMessage[] = [];
+  if (request.resume?.length) {
+    appendAssistantHistory(resume, request.resume, providerNamesByCallId, model);
+  }
   return {
     history: historyTurns.flatMap((turn) => turn.messages),
     historyTurns,
+    ...(resume.length ? { resume } : {}),
     prompt: {
       role: 'user',
       content: collectUserContent(request.input, mediaCapabilities),
@@ -187,6 +219,9 @@ function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
 
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
   const result = new Map<string, string>();
+  for (const part of request.resume ?? []) {
+    if (part.type === 'tool-call') result.set(part.toolCallId, piToolName(part));
+  }
   for (const turn of request.history) {
     for (const message of turn.messages) {
       for (const part of message.parts) {
@@ -208,12 +243,14 @@ function appendAssistantHistory(
   parts: RuntimeMessagePart[],
   providerNamesByCallId: Map<string, string>,
   model: PiModel<PiApi>,
+  contextTokens?: number,
 ): void {
   let content: AssistantMessage['content'] = [];
+  let lastAssistant: AssistantMessage | undefined;
   const flushAssistant = () => {
     if (content.length === 0) return;
     const stopReason = content.some((part) => part.type === 'toolCall') ? 'toolUse' : 'stop';
-    history.push({
+    lastAssistant = {
       api: model.api,
       content,
       model: model.id,
@@ -222,9 +259,9 @@ function appendAssistantHistory(
       stopReason,
       timestamp: Date.now(),
       // Persisted message usage sums multiple requests, not this context's size.
-      // Leave it unknown so Pi estimates the reconstructed history by content.
       usage: EMPTY_PI_USAGE,
-    });
+    };
+    history.push(lastAssistant);
     content = [];
   };
 
@@ -244,12 +281,12 @@ function appendAssistantHistory(
           arguments:
             part.toolRef.source === 'mcp'
               ? { name: part.providerName, params: part.input }
-              : (part.input as Record<string, unknown>),
+              : (part.input as JsonObject),
         });
         break;
       case 'tool-result': {
         flushAssistant();
-        const result: ToolResultMessage<RuntimeJsonValue> = {
+        const result: ToolResultMessage = {
           role: 'toolResult',
           toolCallId: part.toolCallId,
           toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',
@@ -268,6 +305,11 @@ function appendAssistantHistory(
   }
 
   flushAssistant();
+  // The measured size of the request that ended this answer anchors Pi's
+  // estimate; everything replayed after it is estimated by content.
+  if (lastAssistant && contextTokens !== undefined) {
+    lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
+  }
 }
 
 function piToolName(part: Extract<RuntimeMessagePart, { type: 'tool-call' }>): string {

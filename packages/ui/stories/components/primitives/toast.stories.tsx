@@ -39,3 +39,10 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
+
+export const LongMessage: Story = {
+  args: {
+    label:
+      'Model information has been updated. Your custom settings are preserved, so you can continue using your existing configuration.',
+  },
+};

@@ -31,7 +31,7 @@ const BUILT_IN_TOOL_TITLE_KEYS: Record<string, string> = {
   reminder_update_item: 'chat.builtinTool.reminders.update',
 };
 
-type ToolPart = Extract<AgentMessagePart, { type: 'tool' }>;
+type ToolPart = Extract<AgentMessagePart, { type: 'dynamic-tool' }>;
 export type BackgroundReplyTranslate = (key: string) => string;
 
 export function deriveBackgroundReplyContent(
@@ -46,6 +46,17 @@ export function deriveBackgroundReplyContent(
     return createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview);
   }
 
+  const question = findLastToolPart(
+    parts,
+    (part) =>
+      part.state === 'running' &&
+      part.toolRef.source === 'builtin' &&
+      part.toolRef.capabilityId === 'ask_user_question',
+  );
+  if (question) {
+    // Waiting for a question uses the same attention phase and execution lease.
+    return createContent('awaiting-approval', t('chat.question.waiting'), preview);
+  }
   const activeTool = findLastToolPart(parts, isActiveToolPart);
   if (activeTool) {
     return createContent('using-tool', getToolActivityLabel(activeTool, t), preview);
@@ -140,7 +151,7 @@ function isActiveToolPart(part: ToolPart): boolean {
 }
 
 function isToolPart(part: AgentMessagePart): part is ToolPart {
-  return part.type === 'tool';
+  return part.type === 'dynamic-tool';
 }
 
 function stripMarkdown(value: string): string {

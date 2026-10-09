@@ -7,12 +7,12 @@ import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
-import { AgentExecutionTargetSchema, AgentInputPartSchema } from './views';
+import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
 export const AgentRenameSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
-  title: z.string().min(1),
+  name: z.string().min(1),
 });
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
@@ -27,6 +27,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  imageGeneration: AgentImageGenerationSchema.optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
@@ -34,12 +35,12 @@ export const AgentStartSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  executionTarget: AgentExecutionTargetSchema,
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
+  imageGeneration: AgentImageGenerationSchema.optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({
@@ -51,12 +52,30 @@ export const AgentForkSessionInputSchema = z.strictObject({
    * it because any derived wording is localized copy, and the Host has no
    * locale: it never composes user-visible text.
    */
-  title: z.string().min(1).max(255).optional(),
+  name: z.string().min(1).max(255).optional(),
 });
 export type AgentForkSessionInput = z.infer<typeof AgentForkSessionInputSchema>;
+/**
+ * Deletion is turn-scoped. A transcript replays `tool-call` and `tool-result`
+ * as a pair, so removing one message of a turn would leave history no provider
+ * accepts; the UI therefore resolves the pressed message to its turn.
+ */
+export const AgentDeleteTurnInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+});
+export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
+export const AgentRetryMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+});
+export const AgentCancelSubmissionInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
 });
 export const AgentRespondApprovalInputSchema = z.strictObject({
   sessionId: z.string().min(1),

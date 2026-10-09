@@ -1,5 +1,6 @@
 export type BuiltInToolIconName =
   | 'calendar'
+  | 'code'
   | 'fileEdit'
   | 'fileText'
   | 'health'
@@ -14,6 +15,11 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  agent_create: { iconName: 'fileEdit', titleKey: 'chat.agentTool.create' },
+  agent_update: { iconName: 'fileEdit', titleKey: 'chat.agentTool.update' },
+  agent_get: { iconName: 'fileText', titleKey: 'chat.agentTool.get' },
+  agent_list: { iconName: 'fileText', titleKey: 'chat.agentTool.list' },
+  ask_user_question: { iconName: 'reminders', titleKey: 'chat.question.title' },
   calendar_create_event: {
     iconName: 'calendar',
     titleKey: 'chat.builtinTool.calendar.createEvent',
@@ -35,6 +41,7 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     titleKey: 'chat.builtinTool.location.current',
   },
   health_get_summary: {
+    // Historical transcript display only; health tools are absent from the executable catalog.
     iconName: 'health',
     titleKey: 'chat.builtinTool.health.summary',
   },
@@ -85,6 +92,10 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   web_search: {
     iconName: 'web',
     titleKey: 'chat.builtinTool.web.search',
+  },
+  run_js: {
+    iconName: 'code',
+    titleKey: 'chat.builtinTool.code.runJs',
   },
   web_fetch: {
     iconName: 'web',

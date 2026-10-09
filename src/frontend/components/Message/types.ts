@@ -1,8 +1,10 @@
+import type { ParamValues } from '@cherrystudio/provider-registry';
 import type { ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
+import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
 import type { Model } from '@/shared/data/types/model';
 
@@ -16,6 +18,8 @@ export type MessageListItem = Readonly<{
     parts?: readonly CherryMessagePart[];
   }>;
   id: string;
+  /** Image request settings captured by this message, independent of the current model. */
+  imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
   role: 'assistant' | 'system' | 'user';
@@ -26,7 +30,13 @@ export type MessageListItem = Readonly<{
   }>;
   /** Message-owned runtime timing and materialized provider statistics. */
   stats?: MessageStats;
+  usage?: MessageUsageSummary;
   status: MessageStatus;
+  /**
+   * Correlation id shared by a submission's rows. Row actions that operate on
+   * the whole exchange need it; synthetic and not-yet-reserved rows have none.
+   */
+  turnId?: string;
 }>;
 
 export type MessageListProps = {

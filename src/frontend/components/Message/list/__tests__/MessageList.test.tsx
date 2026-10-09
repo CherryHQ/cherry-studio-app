@@ -149,7 +149,8 @@ jest.mock('@legendapp/list/keyboard', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  ContextMenuScrollBoundary: ({
+  BackgroundPressExclusion: ({ children }: { children?: React.ReactNode }) => children,
+  ScrollInteractionBoundary: ({
     children,
     ...handlers
   }: {

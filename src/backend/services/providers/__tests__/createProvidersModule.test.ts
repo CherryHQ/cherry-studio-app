@@ -15,6 +15,20 @@ function subject() {
     endpointConfigs: { 'openai-chat-completions': { baseUrl: 'https://example.test/v1' } },
   } as Provider;
   const dependencies: ProvidersModuleDependencies = {
+    accounts: {
+      getStatus: jest.fn(),
+      begin: jest.fn(),
+      signIn: jest.fn(),
+      cancel: jest.fn(),
+      receiveRedirect: jest.fn(),
+      refresh: jest.fn(),
+      getCapabilities: jest.fn(() => ({
+        signIn: false,
+        apiKeys: false,
+        balance: false,
+      })),
+      logout: jest.fn(),
+    },
     avatars: { persist: jest.fn(), remove: jest.fn(), resolve: jest.fn() },
     catalog: { isExcluded: () => false, list: () => [] },
     hasAvailableModels: jest.fn(async () => true),
@@ -42,6 +56,29 @@ function subject() {
 }
 
 describe('explicit provider activation', () => {
+  it('marks only enabled providers as enabled in the catalog', async () => {
+    const { dependencies } = subject();
+    dependencies.catalog.list = () =>
+      [
+        { id: 'deepseek', name: 'DeepSeek' },
+        { id: 'openai', name: 'OpenAI' },
+        { id: 'gemini', name: 'Gemini' },
+      ] as ReturnType<ProvidersModuleDependencies['catalog']['list']>;
+    jest
+      .mocked(dependencies.providers.list)
+      .mockResolvedValue([
+        { id: 'deepseek', isEnabled: true } as Provider,
+        { id: 'openai', isEnabled: false } as Provider,
+      ]);
+    const backend = createProvidersModule(dependencies);
+
+    expect(await backend.listCatalog()).toEqual([
+      expect.objectContaining({ id: 'deepseek', isEnabled: true, isInstalled: true }),
+      expect.objectContaining({ id: 'openai', isEnabled: false, isInstalled: true }),
+      expect.objectContaining({ id: 'gemini', isEnabled: false, isInstalled: false }),
+    ]);
+  });
+
   it('filters unavailable presets from setup and rejects direct imports before creating records', async () => {
     const { dependencies } = subject();
     const loader = new MobileRegistryLoader();
@@ -54,9 +91,8 @@ describe('explicit provider activation', () => {
     const catalogIds = (await backend.listCatalog()).map(({ id }) => id);
 
     for (const providerId of [
-      'copilot',
       'grok-cli',
-      'openai-codex',
+      'meta',
       'claude-code',
       'lmstudio',
       'ollama',
@@ -74,7 +110,18 @@ describe('explicit provider activation', () => {
       );
     }
     expect(dependencies.providers.create).not.toHaveBeenCalled();
-    expect(catalogIds).toEqual(expect.arrayContaining(['openai', 'anthropic', 'gemini']));
+    expect(catalogIds).toEqual(
+      expect.arrayContaining([
+        'openai',
+        'anthropic',
+        'gemini',
+        'copilot',
+        'openai-codex',
+        'kimi-coding',
+        'grok',
+        'openrouter',
+      ]),
+    );
   });
 
   it('prepares without enabling, then enables a configured provider with local models', async () => {

@@ -15,12 +15,17 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   including content added while waiting. Draft-to-Session handoff preserves the list and composer.
 - The shared composer owns the draft, send recovery, keyboard behavior, and pasted attachment
   presentation. Draft and existing-Session composers use separate keyed sessions, so navigation
-  cannot reuse one Session's draft in another.
+  cannot reuse one Session's draft in another. Switching Agents inside a Draft keeps the composer:
+  its text and attachments belong to the user, not to the Agent they were written under. An
+  incoming system share opens a fresh Draft composer seeded with its text and library attachments,
+  replacing whatever draft was there; nothing is sent until the user sends it.
 - Sending a message blurs the input, ends editing, and dismisses the keyboard immediately on
   submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
-- While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
+- While a submission or turn is active, the send control becomes stop. Before the Host reserves
+  the turn it calls `cancelSubmission` and the draft returns to the composer; afterwards it calls
+  `cancelTurn` for that Session.
 - When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
   action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and
@@ -39,14 +44,18 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   composer retains editing, pins its dock, blurs the field, and settles keyboard dismissal before presenting them.
   It reconnects keyboard tracking only when the field receives focus again. Menu and effort
   overlays preserve the existing keyboard context instead.
-- Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
+- Picking a model updates the current Agent's `model`. Submission also snapshots the visible
   model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
   persisted serially and coalesced to the latest visible selection.
 - The reasoning gauge derives its stops from the selected model's `selectableEfforts`, retaining
-  `xhigh` and `max` as distinct values. It starts at the provider default. A pick is local to the
-  current Agent composer and is snapshotted into each submission; it never updates Agent
-  configuration. Switching models projects that pick to the closest supported stop. `default`
-  bypasses the Agent effort for that turn; `auto` remains a separate provider-controlled mode.
+  `xhigh` and `max` as distinct values. The frontend's persistent `chat.reasoning_efforts` cache
+  remembers the last selection per Agent across new conversations and app restarts. It is
+  recoverable UI state: clearing the cache restores model defaults. Agent database configuration
+  is unchanged, and each submission snapshots the visible effort. Once model metadata is available,
+  switching models also caches the nearest supported stop, preferring the higher stop on a tie.
+  Models without selectable reasoning, including image models, reset it to `default`; loading model
+  metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
+  fallback ordering.
 - The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.

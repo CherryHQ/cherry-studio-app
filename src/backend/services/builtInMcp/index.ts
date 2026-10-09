@@ -8,4 +8,4 @@ export {
 } from './pluginRegistry';
 export type { PluginGuideSnapshot } from './pluginGuide';
 export { PluginAuthorizationManager } from './authorization/PluginAuthorizationManager';
-export type { PluginClient } from './pluginDefinition';
+export type { PluginClient, PluginToolCatalog } from './pluginDefinition';

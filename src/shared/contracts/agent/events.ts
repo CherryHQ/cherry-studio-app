@@ -5,6 +5,7 @@
 
 import * as z from 'zod';
 
+import { AgentPendingQuestionSchema } from './userQuestion';
 import {
   AgentApprovalViewSchema,
   AgentCapabilitiesSchema,
@@ -40,6 +41,10 @@ export const AgentMessageDeltaSchema = z.union([
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentEventSchema = z.union([
+  z.strictObject({
+    type: z.literal('question.updated'),
+    question: AgentPendingQuestionSchema.nullable(),
+  }),
   z.strictObject({ type: z.literal('session.updated'), session: AgentSessionViewSchema }),
   z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
   z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
@@ -49,6 +54,12 @@ export const AgentEventSchema = z.union([
     delta: AgentMessageDeltaSchema,
   }),
   z.strictObject({ type: z.literal('message.finalized'), message: AgentMessageViewSchema }),
+  /** One settled turn left the transcript; its rows are gone, not superseded. */
+  z.strictObject({
+    type: z.literal('turn.deleted'),
+    turnId: z.string().min(1),
+    messageIds: z.array(z.string().min(1)).min(1),
+  }),
   z.strictObject({ type: z.literal('approval.requested'), approval: AgentApprovalViewSchema }),
   z.strictObject({ type: z.literal('approval.resolved'), approval: AgentApprovalViewSchema }),
 ]);
@@ -67,6 +78,7 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
+  pendingQuestion: AgentPendingQuestionSchema.nullable(),
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 

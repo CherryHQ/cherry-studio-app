@@ -6,8 +6,16 @@ describe.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     test('chat and painting links round-trip, including ids that need encoding', () => {
       const chat = { kind: 'chat', sessionId: 'session?2&3' } as const;
       const painting = { kind: 'painting', paintingId: 'painting #4/5' } as const;
+      const remote = {
+        kind: 'remote-chat',
+        connectionId: 'pc & 1',
+        sessionId: 'session?2&3',
+      } as const;
 
       expect(parseBackgroundTaskUrl(createBackgroundTaskUrl(scheme, chat), scheme)).toEqual(chat);
+      expect(parseBackgroundTaskUrl(createBackgroundTaskUrl(scheme, remote), scheme)).toEqual(
+        remote,
+      );
       expect(parseBackgroundTaskUrl(createBackgroundTaskUrl(scheme, painting), scheme)).toEqual(
         painting,
       );
@@ -36,6 +44,8 @@ describe.each(['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'])(
     test('rejects other schemes, unknown routes, incomplete links, and malformed encoding', () => {
       expect(parseBackgroundTaskUrl('https://example.com/paintings/p', scheme)).toBeUndefined();
       expect(parseBackgroundTaskUrl(`${scheme}://settings`, scheme)).toBeUndefined();
+      expect(parseBackgroundTaskUrl(`${scheme}://remote?sessionId=s`, scheme)).toBeUndefined();
+      expect(parseBackgroundTaskUrl(`${scheme}://remote?connectionId=pc`, scheme)).toBeUndefined();
       expect(parseBackgroundTaskUrl(`${scheme}://paintings/p/extra`, scheme)).toBeUndefined();
       expect(parseBackgroundTaskUrl(`${scheme}:///?agentId=a`, scheme)).toBeUndefined();
       expect(parseBackgroundTaskUrl(`${scheme}:///?sessionId=`, scheme)).toBeUndefined();
@@ -53,4 +63,8 @@ test('notification identity includes the task kind and compares decoded ids', ()
   expect(isSameBackgroundTask(chat, { kind: 'painting', paintingId: 'same' })).toBe(false);
   expect(isSameBackgroundTask(chat, { kind: 'chat', sessionId: 'other' })).toBe(false);
   expect(isSameBackgroundTask(undefined, undefined)).toBe(false);
+  const remote = { kind: 'remote-chat', connectionId: 'pc', sessionId: 'same' } as const;
+  expect(isSameBackgroundTask(remote, { ...remote })).toBe(true);
+  expect(isSameBackgroundTask(remote, { ...remote, connectionId: 'other-pc' })).toBe(false);
+  expect(isSameBackgroundTask(chat, remote)).toBe(false);
 });

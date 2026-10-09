@@ -1,4 +1,4 @@
-import { Button } from '@cherrystudio/ui/components';
+import { BackgroundPressExclusion, Button } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -32,14 +32,16 @@ export function PaintingErrorMessage({
       />
       {onRetry ? (
         <View className="items-start">
-          <Button
-            accessibilityLabel={t('painting.status.retry')}
-            onPress={onRetry}
-            size="sm"
-            variant="secondary"
-          >
-            <Button.Label>{t('painting.status.retry')}</Button.Label>
-          </Button>
+          <BackgroundPressExclusion>
+            <Button
+              accessibilityLabel={t('painting.status.retry')}
+              onPress={onRetry}
+              size="sm"
+              variant="secondary"
+            >
+              <Button.Label>{t('painting.status.retry')}</Button.Label>
+            </Button>
+          </BackgroundPressExclusion>
         </View>
       ) : null}
     </View>

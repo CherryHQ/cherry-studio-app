@@ -1,6 +1,7 @@
 import { PluginError } from '@/shared/contracts/plugins';
 
 import { authorizationStoreFixture } from '../../../authorization/__tests__/_authorizationStoreFixture';
+import { trackExpoAbortSignals } from '../../../authorization/__tests__/_expoAbortSignal';
 import { FeishuAuthorizationRuntime } from '../FeishuAuthorizationRuntime';
 import { feishuOauth } from '../feishuOauth';
 import { FEISHU_REQUESTED_TOOL_SCOPES } from '../feishuTools';
@@ -306,6 +307,20 @@ function pendingRefresh() {
   });
   return { started, release: () => release(), signal: () => signal };
 }
+
+it('leaves no abort listeners behind on long-lived signals after credential lookups', async () => {
+  const runtime = createRuntime();
+  const grant = await connected(runtime);
+  const { listeners } = trackExpoAbortSignals();
+
+  for (let index = 0; index < 3; index += 1) {
+    await runtime.resolveCredential(grant.id, new AbortController().signal);
+    void runtime.attemptSignal;
+  }
+  await runtime.getState();
+
+  expect(listeners.size).toBe(0);
+});
 
 it('cancels only one caller wait while the shared refresh continues and is saved for the other caller', async () => {
   const runtime = createRuntime();

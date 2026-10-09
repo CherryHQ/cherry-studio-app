@@ -1,3 +1,4 @@
+import type { DirectEndpoint } from '@cherrystudio/remote-protocol';
 import * as z from 'zod';
 
 import type { DesktopConnection } from '@/shared/data/types/desktopConnection';
@@ -25,20 +26,41 @@ function isIpAddress(value: string): boolean {
   );
 }
 
+export const DesktopRemoteAgentSchema = z.object({
+  protocolVersion: z.number().int().positive(),
+  instanceId: z.string().uuid(),
+  port: z.number().int().min(1).max(65_535),
+  path: z.string().regex(/^\/(?!\/)[^?#\s]*$/),
+  serverPublicKey: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
+});
+export type DesktopRemoteAgent = z.infer<typeof DesktopRemoteAgentSchema>;
+
 export const DesktopPairingQrSchema = z.object({
-  code: z.string().regex(/^[a-f\d]{32}$/i),
-  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1),
+  desktopIdentity: z.string().min(1).max(256),
+  invitationId: z.string().min(1).max(256),
+  invitationSecret: z.string().min(1).max(256),
+  ips: z.array(z.string().refine(isIpAddress, 'Invalid IP address')).min(1).max(32),
   name: z.string().min(1).max(128),
   port: z.number().int().min(1).max(65_535),
+  protocolVersions: z.array(z.number().int().positive()).min(1).max(16),
   t: z.literal('cherry-studio-pair'),
-  v: z.literal(1),
+  v: z.literal(2),
 });
 export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 
+/** Mirrors `remoteCapabilitiesSchema`; the protocol package stays off the app's startup path. */
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
+  capabilities: z
+    .array(z.enum(['configuration', 'agent']))
+    .min(1)
+    .max(2)
+    .refine((values) => new Set(values).size === values.length, 'Capabilities must be unique'),
   connectionId: z.string().uuid().optional(),
 });
 export type PairDesktopConnectionDto = z.infer<typeof PairDesktopConnectionSchema>;
+
+/** Shown while the desktop user approves the claim; the code must match the desktop's. */
+export type DesktopPairingClaim = { expiresAt: string; verificationCode: string };
 
 const ApiKeySchema = z.looseObject({
   id: z.string().min(1),
@@ -195,62 +217,98 @@ export const DesktopProviderModelSchema = z
   }));
 export type DesktopProviderModel = z.infer<typeof DesktopProviderModelSchema>;
 
-export const DesktopProviderSnapshotSchema = z
-  .looseObject({
-    apiFeatures: z
-      .looseObject({
-        arrayContent: z.boolean().optional(),
-        reportsActualCost: z.boolean().optional(),
-        serviceTier: z.boolean().optional(),
-        streamOptions: z.boolean().optional(),
-        verbosity: z.boolean().optional(),
-      })
-      .optional(),
-    apiHost: z.string().optional(),
-    apiKeys: z.array(ApiKeySchema).default([]),
-    authConfig: z.unknown().optional(),
-    authMethods: z.array(z.enum(['api-key', 'oauth', 'external-cli'])).optional(),
-    authOptional: z.boolean().optional(),
-    authType: DesktopAuthTypeSchema.optional(),
-    defaultChatEndpoint: z.enum(objectValues(ENDPOINT_TYPE)).optional(),
-    endpointConfigs: z
-      .partialRecord(z.enum(objectValues(ENDPOINT_TYPE)), EndpointConfigSchema)
-      .optional(),
-    id: ProviderIdSchema,
-    isEnabled: z.boolean().optional(),
-    models: z.array(DesktopProviderModelSchema),
-    name: z.string().min(1),
-    presetProviderId: ProviderIdSchema.optional(),
-    providerSettings: ProviderSettingsSchema.optional(),
-    reportsActualCost: z.boolean().optional(),
-    settings: ProviderSettingsSchema.optional(),
-    type: z.string().optional(),
-  })
-  .superRefine((provider, context) => {
-    const modelIds = new Set<string>();
-    for (const model of provider.models) {
-      if (modelIds.has(model.modelId)) {
-        context.addIssue({ code: 'custom', message: 'Duplicate model ID', path: ['models'] });
-      }
-      modelIds.add(model.modelId);
-    }
-  });
-export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema>;
+const DesktopProviderPayloadSchema = z.looseObject({
+  apiFeatures: z
+    .looseObject({
+      arrayContent: z.boolean().optional(),
+      reportsActualCost: z.boolean().optional(),
+      serviceTier: z.boolean().optional(),
+      streamOptions: z.boolean().optional(),
+      verbosity: z.boolean().optional(),
+    })
+    .optional(),
+  apiHost: z.string().optional(),
+  apiKeys: z.array(ApiKeySchema).default([]),
+  authConfig: z.unknown().optional(),
+  authMethods: z.array(z.enum(['api-key', 'oauth', 'external-cli'])).optional(),
+  authOptional: z.boolean().optional(),
+  authType: DesktopAuthTypeSchema.optional(),
+  defaultChatEndpoint: z.enum(objectValues(ENDPOINT_TYPE)).optional(),
+  endpointConfigs: z
+    .partialRecord(z.enum(objectValues(ENDPOINT_TYPE)), EndpointConfigSchema)
+    .optional(),
+  id: ProviderIdSchema,
+  isEnabled: z.boolean().optional(),
+  models: z.array(z.unknown()),
+  name: z.string().min(1),
+  presetProviderId: ProviderIdSchema.optional(),
+  providerSettings: ProviderSettingsSchema.optional(),
+  reportsActualCost: z.boolean().optional(),
+  settings: ProviderSettingsSchema.optional(),
+  type: z.string().optional(),
+});
+
+/** Identity is all a rejected provider needs: the picker still lists it, disabled. */
+const DesktopProviderIdentitySchema = z.looseObject({
+  id: ProviderIdSchema,
+  isEnabled: z.boolean().optional(),
+  name: z.string().min(1),
+});
+
+export const DesktopProviderSnapshotSchema = DesktopProviderPayloadSchema.transform((provider) => {
+  const oauth =
+    provider.authType === 'oauth' ||
+    z.object({ type: z.literal('oauth') }).safeParse(provider.authConfig).success;
+  return {
+    ...provider,
+    models: collectModels(provider.models),
+    // Keep import eligibility metadata, but never retain a desktop account grant.
+    ...(oauth ? { authType: 'oauth' as const, authConfig: null } : {}),
+  };
+});
+export type DesktopProviderSnapshot = z.infer<typeof DesktopProviderSnapshotSchema> & {
+  /** The desktop sent fields this build cannot read; only the provider's identity survived. */
+  unreadable?: boolean;
+};
+
+/** A model the desktop describes in terms this build lacks is dropped, not fatal. */
+function collectModels(items: unknown[]): DesktopProviderModel[] {
+  const seen = new Set<string>();
+  const models: DesktopProviderModel[] = [];
+  for (const item of items) {
+    const parsed = DesktopProviderModelSchema.safeParse(item);
+    if (!parsed.success || seen.has(parsed.data.modelId)) continue;
+    seen.add(parsed.data.modelId);
+    models.push(parsed.data);
+  }
+  return models;
+}
+
+function readProvider(item: unknown): DesktopProviderSnapshot | undefined {
+  const parsed = DesktopProviderSnapshotSchema.safeParse(item);
+  if (parsed.success) return parsed.data;
+  const identity = DesktopProviderIdentitySchema.safeParse(item);
+  return identity.success
+    ? { ...identity.data, apiKeys: [], models: [], unreadable: true }
+    : undefined;
+}
+
+/** One unreadable provider must not cost the user every other provider on the desktop. */
+function collectProviders(items: unknown[]): DesktopProviderSnapshot[] {
+  const seen = new Set<string>();
+  const providers: DesktopProviderSnapshot[] = [];
+  for (const item of items) {
+    const provider = readProvider(item);
+    if (!provider || seen.has(provider.id)) continue;
+    seen.add(provider.id);
+    providers.push(provider);
+  }
+  return providers;
+}
 
 export const DesktopProvidersSnapshotSchema = z
-  .looseObject({
-    providers: z.array(DesktopProviderSnapshotSchema),
-    version: z.number().int(),
-  })
-  .superRefine((snapshot, context) => {
-    const providerIds = new Set<string>();
-    for (const provider of snapshot.providers) {
-      if (providerIds.has(provider.id)) {
-        context.addIssue({ code: 'custom', message: 'Duplicate provider ID', path: ['providers'] });
-      }
-      providerIds.add(provider.id);
-    }
-  });
+  .looseObject({ providers: z.array(z.unknown()), version: z.number().int() })
+  .transform((snapshot) => ({ ...snapshot, providers: collectProviders(snapshot.providers) }));
 export type DesktopProvidersSnapshot = z.infer<typeof DesktopProvidersSnapshotSchema>;
 
 export function parseSupportedAuthConfig(value: unknown) {
@@ -259,7 +317,7 @@ export function parseSupportedAuthConfig(value: unknown) {
 }
 
 export type DesktopImportMode = 'provider' | 'provider-models';
-export type DesktopImportUnavailableReason = 'unsupported-auth';
+export type DesktopImportUnavailableReason = 'unsupported-auth' | 'missing-api-key' | 'unreadable';
 
 export const DesktopImportSelectionsSchema = z.strictObject({
   selections: z
@@ -280,6 +338,7 @@ export type DesktopImportPreview = {
     models: { action: 'add' | 'skip'; modelId: string; name: string }[];
     name: string;
     unavailableReason?: DesktopImportUnavailableReason;
+    accountNotice?: 'sign-in-for-balance';
   }[];
 };
 
@@ -296,5 +355,10 @@ export type DesktopConnectionSchemas = {
   };
   '/desktop-connections/:id': {
     GET: { params: { id: string }; response: DesktopConnection };
+    PATCH: {
+      params: { id: string };
+      body: { configuredEndpoints: DirectEndpoint[] };
+      response: DesktopConnection;
+    };
   };
 };

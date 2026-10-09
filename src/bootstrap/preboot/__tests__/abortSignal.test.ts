@@ -1,69 +1,117 @@
-/**
- * Emulates React Native's `abort-controller@3` global, which ships neither
- * `throwIfAborted` nor `reason`, then loads the polyfill onto it.
- */
+import { createRequire } from 'node:module';
 
-class LegacyAbortSignal {
-  aborted = false;
-}
-
-class LegacyAbortController {
-  readonly signal = new LegacyAbortSignal();
-
-  abort() {
-    this.signal.aborted = true;
-  }
-}
-
+// Resolve React Native's own dependency instead of inheriting Node's newer API.
+const legacyAbortPath = createRequire(require.resolve('react-native/package.json')).resolve(
+  'abort-controller/dist/abort-controller',
+);
 const originalAbortSignal = globalThis.AbortSignal;
 const originalAbortController = globalThis.AbortController;
 
-beforeAll(() => {
-  globalThis.AbortSignal = LegacyAbortSignal as unknown as typeof AbortSignal;
-  globalThis.AbortController = LegacyAbortController as unknown as typeof AbortController;
+beforeEach(() => {
   jest.isolateModules(() => {
-    // The polyfill only acts at import time, so re-evaluating it needs a
-    // require inside the isolated registry — an ESM import would be hoisted
-    // out of the fake-global window this test sets up.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('../abortSignal');
+    const legacy = jest.requireActual(legacyAbortPath);
+    globalThis.AbortSignal = legacy.AbortSignal;
+    globalThis.AbortController = legacy.AbortController;
+    jest.requireActual('../abortSignal');
   });
 });
 
-afterAll(() => {
+afterEach(() => {
   globalThis.AbortSignal = originalAbortSignal;
   globalThis.AbortController = originalAbortController;
 });
 
-describe('AbortSignal.throwIfAborted polyfill', () => {
-  it('installs the method the legacy polyfill lacks', () => {
-    expect(typeof globalThis.AbortSignal.prototype.throwIfAborted).toBe('function');
-  });
-
-  it('is a no-op while the signal is not aborted', () => {
+describe('AbortSignal compatibility', () => {
+  it('has no reason and does not throw before cancellation', () => {
     const controller = new globalThis.AbortController();
+    expect(controller.signal.reason).toBeUndefined();
     expect(() => controller.signal.throwIfAborted()).not.toThrow();
   });
 
-  it('throws an AbortError once aborted, even with no reason property', () => {
+  it.each([new Error('System interruption'), 'cancelled', null, false, 0])(
+    'preserves the exact reason %p before abort listeners run',
+    (reason) => {
+      const controller = new globalThis.AbortController();
+      const observed: unknown[] = [];
+      controller.signal.addEventListener('abort', () => {
+        observed.push(controller.signal.reason);
+      });
+
+      controller.abort(reason);
+
+      expect(controller.signal.aborted).toBe(true);
+      expect(observed).toEqual([reason]);
+      expect(controller.signal.reason).toBe(reason);
+      let thrown: unknown = Symbol('not thrown');
+      try {
+        controller.signal.throwIfAborted();
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBe(reason);
+    },
+  );
+
+  it('creates one default AbortError and keeps it across repeated aborts', () => {
     const controller = new globalThis.AbortController();
     controller.abort();
+    const reason = controller.signal.reason;
 
-    expect(() => controller.signal.throwIfAborted()).toThrow(
-      expect.objectContaining({ name: 'AbortError' }),
-    );
+    controller.abort(new Error('Later cancellation'));
+
+    expect(reason).toBeInstanceOf(DOMException);
+    expect(reason.name).toBe('AbortError');
+    expect(controller.signal.reason).toBe(reason);
+    expect(() => controller.signal.throwIfAborted()).toThrow(reason);
+  });
+
+  it('keeps the first explicit reason when cancellation is repeated or reentrant', () => {
+    const controller = new globalThis.AbortController();
+    const reason = new Error('System interruption');
+    const listener = jest.fn(() => controller.abort(new Error('User cancellation')));
+    controller.signal.addEventListener('abort', listener);
+
+    controller.abort(reason);
+    controller.abort();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(controller.signal.reason).toBe(reason);
+  });
+
+  it('keeps reasons isolated between controllers and across repeated setup', () => {
+    const first = new globalThis.AbortController();
+    const second = new globalThis.AbortController();
+    const reason = new Error('First task interrupted');
+    first.abort(reason);
+    const abort = globalThis.AbortController.prototype.abort;
+
+    jest.isolateModules(() => {
+      jest.requireActual('../abortSignal');
+    });
+
+    expect(globalThis.AbortController.prototype.abort).toBe(abort);
+    expect(first.signal.reason).toBe(reason);
+    expect(second.signal.reason).toBeUndefined();
+    second.abort(null);
+    expect(second.signal.reason).toBeNull();
+    expect(first.signal.reason).toBe(reason);
   });
 
   it('leaves a spec-compliant implementation alone', () => {
-    const native = function throwIfAborted() {};
-    const withNative = { prototype: { throwIfAborted: native } };
-    globalThis.AbortSignal = withNative as unknown as typeof AbortSignal;
+    globalThis.AbortSignal = originalAbortSignal;
+    globalThis.AbortController = originalAbortController;
+    const abort = originalAbortController.prototype.abort;
+    const throwIfAborted = originalAbortSignal.prototype.throwIfAborted;
+    const reason = Object.getOwnPropertyDescriptor(originalAbortSignal.prototype, 'reason');
 
     jest.isolateModules(() => {
-      require('../abortSignal');
+      jest.requireActual('../abortSignal');
     });
 
-    expect(globalThis.AbortSignal.prototype.throwIfAborted).toBe(native);
-    globalThis.AbortSignal = LegacyAbortSignal as unknown as typeof AbortSignal;
+    expect(originalAbortController.prototype.abort).toBe(abort);
+    expect(originalAbortSignal.prototype.throwIfAborted).toBe(throwIfAborted);
+    expect(Object.getOwnPropertyDescriptor(originalAbortSignal.prototype, 'reason')).toEqual(
+      reason,
+    );
   });
 });

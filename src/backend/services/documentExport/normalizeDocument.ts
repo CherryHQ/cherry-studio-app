@@ -29,18 +29,33 @@ const block: z.ZodType<ExportBlock> = z.lazy(() =>
     }),
     z.strictObject({
       kind: z.literal('links'),
+      summary: z.string().max(256).optional(),
       items: z.array(z.strictObject({ label: text, url: text })).max(256),
     }),
   ]),
 );
 const documentSchema = z.strictObject({
   title: text.optional(),
+  labels: z
+    .strictObject({
+      code: z.string().max(256),
+      codeOmitted: z.string().max(256),
+      file: z.string().max(256),
+      fileMetadataOnly: z.string().max(256),
+      image: z.string().max(256),
+      imageUnavailable: z.string().max(256),
+      sources: z.string().max(256),
+      table: z.string().max(256),
+    })
+    .optional(),
   sections: z
     .array(
       z.strictObject({
         id: text,
         heading: text.optional(),
         presentation: z.enum(['bubble', 'message']).optional(),
+        avatar: z.string().max(16).optional(),
+        model: z.string().max(256).optional(),
         metadata: z
           .array(z.strictObject({ label: text, value: text }))
           .max(16)
@@ -77,13 +92,12 @@ export function normalizeDocument(input: DocumentExportInput): ExportDocument {
     input.kind === 'markdown'
       ? {
           title: input.title,
+          labels: input.labels,
           sections: [{ id: 'document', blocks: [{ kind: 'markdown', source: input.source }] }],
         }
       : input.document;
   const result = documentSchema.safeParse(value);
   if (!result.success) throw new DocumentExportError('invalid-input');
-  // Image preparation has its own budget. Keep the source available for a text export
-  // even when the selection contains more images than one HTML render can prepare.
   // Zod returns new objects; none of the session's values alias caller-owned data.
   freezeSnapshot(result.data);
   return result.data;

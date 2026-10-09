@@ -71,10 +71,12 @@ compatibility adapter or generic frontend selector for persistence services.
 ## Topic Documents
 
 - [Data Layer](./data/README.md): Data API, preferences, workflow contracts, SQLite services, schemas, and seeding.
-- [Universal Package](./universal-package.md): `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync.
+- [Universal Package](./universal-package.md): `@cherrystudio/universal` scope, admission criteria, and aliasing.
 - [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
 - [Lifecycle](./lifecycle/README.md): implemented service container, hosts, phases, and resource-scope coordination.
+- [Remote Conversation Ownership](./remote-access/service-ownership.md): current frontend/backend
+  dependencies, desktop transport ownership, active consumers and migration gaps.
 - [Job Runtime](./job-runtime.md): durable enqueue, dispatch, cancellation, recovery, and painting generation.
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
 - [Agent Architecture](./agent/README.md): Pi-only conversation Runtime, Agent Protocol, tools,
@@ -84,6 +86,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
 - [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
 - [UI Components](./ui-components.md): shared controls and feature-local UI.
+- [System Integration Design](./system-integration-design.md): system sharing, composer handoff,
+  and native-extension boundaries.
 - [Extending Cherry Mobile](../guides/extending.md): how to extend data, workflows, backend behavior, and UI.
 
 ## Current Baseline

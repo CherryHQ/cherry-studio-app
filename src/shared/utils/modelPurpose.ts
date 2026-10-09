@@ -45,10 +45,6 @@ export function isVideoGenerationModel(model: Model): boolean {
   return model.capabilities.includes(MODEL_CAPABILITY.VIDEO_GENERATION);
 }
 
-export function hasTextToSpeechEndpoint(model: Model): boolean {
-  return model.endpointTypes?.includes(ENDPOINT_TYPE.OPENAI_TEXT_TO_SPEECH) ?? false;
-}
-
 export function isSpeechToTextModel(model: Model): boolean {
   return (
     model.capabilities.includes(MODEL_CAPABILITY.AUDIO_TRANSCRIPT) ||

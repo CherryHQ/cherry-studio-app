@@ -21,6 +21,7 @@ export function ZoomableImage({
   onZoomChange,
   uri,
   width,
+  sourceResolution = 'display',
 }: {
   accessibilityLabel: string;
   height: number;
@@ -28,6 +29,7 @@ export function ZoomableImage({
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
   width: number;
+  sourceResolution?: 'original' | 'display';
 }) {
   const [isZoomed, setIsZoomed] = useState(false);
 
@@ -136,7 +138,8 @@ export function ZoomableImage({
       <Animated.View style={[{ height, width }, animatedStyle]}>
         <Image
           accessibilityLabel={accessibilityLabel}
-          cachePolicy="memory-disk"
+          allowDownscaling={sourceResolution !== 'original'}
+          cachePolicy={sourceResolution === 'original' ? 'disk' : 'memory-disk'}
           contentFit="contain"
           onError={onError}
           source={uri}

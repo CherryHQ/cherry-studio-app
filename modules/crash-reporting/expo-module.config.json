@@ -2,7 +2,8 @@
   "platforms": ["apple", "android"],
   "apple": {
     "podspecPath": "ios/CrashReporting.podspec",
-    "modules": ["CrashReportingModule"]
+    "modules": ["CrashReportingModule"],
+    "appDelegateSubscribers": ["CrashReportingAppDelegateSubscriber"]
   },
   "android": {
     "modules": ["expo.modules.crashreporting.CrashReportingModule"]

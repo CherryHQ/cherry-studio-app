@@ -74,9 +74,9 @@ describe('useCompleteOnboarding', () => {
     jest.resetAllMocks();
     mockCheckChat.mockResolvedValue({ status: 'success', latency: 1 });
     mockCreateModels.mockResolvedValue([model]);
-    mockRefetchAgents.mockResolvedValue({ data: { items: [{ id: 'seed', modelId: null }] } });
-    mockUpdateAgent.mockResolvedValue({ id: 'seed', modelId: model.id });
-    mockCreateAgent.mockResolvedValue({ id: 'created', modelId: model.id });
+    mockRefetchAgents.mockResolvedValue({ data: { items: [{ id: 'seed', model: null }] } });
+    mockUpdateAgent.mockResolvedValue({ id: 'seed', model: model.id });
+    mockCreateAgent.mockResolvedValue({ id: 'created', model: model.id });
     act(() => {
       renderer = create(<Probe />);
     });
@@ -101,7 +101,7 @@ describe('useCompleteOnboarding', () => {
   test('reuses the seeded Agent and writes completion only after the check succeeds', async () => {
     await act(async () => onboarding.complete({ kind: 'catalog', model, isLocal: true }));
     expect(mockCreateAgent).not.toHaveBeenCalled();
-    expect(mockUpdateAgent).toHaveBeenCalledWith('seed', { modelId: model.id });
+    expect(mockUpdateAgent).toHaveBeenCalledWith('seed', { model: model.id });
     expect(mockSavePreferences).toHaveBeenCalledWith(
       { defaultModelId: model.id, status: 'completed' },
       { optimistic: false },
@@ -152,6 +152,12 @@ describe('useCompleteOnboarding', () => {
     await act(async () => onboarding.complete(selection));
     expect(mockCreateModels).toHaveBeenCalledTimes(1);
     expect(mockCreateAgent).toHaveBeenCalledTimes(1);
+    // The default Agent keeps Agent management; other create defaults still apply.
+    expect(mockCreateAgent.mock.calls[0][0].disabledCapabilities).toEqual([
+      'calendar',
+      'location',
+      'reminders',
+    ]);
     expect(mockCheckChat).toHaveBeenCalledTimes(2);
     expect(mockSavePreferences).toHaveBeenCalledTimes(2);
     expect(mockReplace).toHaveBeenCalledTimes(1);

@@ -1,13 +1,15 @@
 import type {
   AgentErrorView,
-  AgentExecutionTarget,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
-  AgentUsageView,
 } from '@/shared/contracts/agent';
-import type { MessageRuntimeStatsInput, MessageRuntimeTiming } from '@/shared/data/types/message';
+import type {
+  MessageRuntimeStatsInput,
+  MessageRuntimeTiming,
+  MessageStats,
+} from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 
@@ -47,19 +49,29 @@ export type ReserveSubmissionInput = {
 
 export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
   agentId: string;
-  executionTarget: AgentExecutionTarget;
 };
 
 export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
   session: AgentSessionView;
 };
 
+export type ReserveRetryInput = ReserveSubmissionInput & {
+  /** Recorded prefix the replacement execution keeps; empty restarts the answer. */
+  assistantParts: AgentMessagePart[];
+};
+
 export type ForkSessionInput = {
   sessionId: string;
   /** Inclusive fork point, identified by message rather than by turn. */
   fromMessageId: string;
-  /** Overrides the copied source title; the store never composes one itself. */
-  title?: string;
+  /** Overrides the copied source name; the store never composes one itself. */
+  name?: string;
+};
+
+/** Backend-private identities for copying optional per-message caches after commit. */
+export type ForkedMessageCopy = {
+  source: Pick<AgentMessageView, 'id' | 'turnId'>;
+  target: Pick<AgentMessageView, 'id' | 'turnId'>;
 };
 
 /**
@@ -69,10 +81,28 @@ export type ForkSessionInput = {
  * caller never asked for.
  */
 export type ForkSessionResult =
-  | { status: 'forked'; session: AgentSessionView }
+  | { status: 'forked'; session: AgentSessionView; messageCopies: ForkedMessageCopy[] }
   | { status: 'session-not-found' }
   | { status: 'message-not-found' }
   | { status: 'fork-point-unsettled' };
+
+export type DeleteTurnInput = {
+  sessionId: string;
+  /** Deletion is turn-scoped: a lone message would orphan its tool pairing. */
+  turnId: string;
+};
+
+/**
+ * Distinguishes a missing Session, a turn that is not in it, and a turn whose
+ * rows have not settled. The last case is refused rather than partially
+ * applied: removing a placeholder that a live turn is still writing would
+ * leave that turn persisting into a transcript it no longer belongs to.
+ */
+export type DeleteTurnResult =
+  | { status: 'deleted'; deletedMessageIds: string[] }
+  | { status: 'session-not-found' }
+  | { status: 'turn-not-found' }
+  | { status: 'turn-unsettled' };
 
 export type UpdateStreamingAssistantMessageInput = {
   assistantMessageId: string;
@@ -84,10 +114,11 @@ export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
   parts: AgentMessagePart[];
-  usage: AgentUsageView | null;
+  /** Runtime fallback counts, used only when no invocation ledger projection exists. */
+  usage: Pick<MessageStats, 'inputTokens' | 'outputTokens' | 'totalTokens'> | null;
   /**
-   * Turn-level error, persisted beside the message for the Turn projection
-   * (agent-persistence.md). It is not part of the message view.
+   * Terminal diagnostics, including cancellation reasons without an inline
+   * data-error part. Not exposed by the transcript view.
    */
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
@@ -110,12 +141,12 @@ export type FinalizeAssistantMessageInput = {
  */
 export interface AgentSessionStore {
   getSession(sessionId: string): Promise<AgentSessionView | null>;
-  renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
-  /** Renames only when the current title still matches the caller's auto-title snapshot. */
+  renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;
+  /** Renames only when the current name still matches the caller's auto-name snapshot. */
   autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
@@ -132,6 +163,15 @@ export interface AgentSessionStore {
   reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
   /**
+   * Atomically reserves a fresh execution of an existing user/assistant pair,
+   * keeping both message ids and their transcript position. Rejects unless the
+   * assistant row is the Session's last message, is settled, and is immediately
+   * preceded by the user row it shares a turn with: only the latest answer is
+   * replaceable (agent-protocol.md "Manual answer retry").
+   */
+  reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult>;
+
+  /**
    * Atomically creates a Session carrying the source's transcript up to and
    * including the fork point (agent-protocol.md "Branching"). Unsettled rows
    * are skipped, turn ids are reissued so the copy shares no correlation with
@@ -139,6 +179,19 @@ export interface AgentSessionStore {
    * turn is started: the new Session is idle.
    */
   forkSession(input: ForkSessionInput): Promise<ForkSessionResult>;
+
+  /**
+   * Atomically removes one turn's messages from a Session. The unit is the
+   * turn, not the message: a replayed transcript pairs every `tool-call` with
+   * its `tool-result`, and half a turn cannot be sent to a provider.
+   *
+   * Any context checkpoint whose summary covers the removed turn is cleared in
+   * the same transaction. The summary text is opaque to the store, so a
+   * checkpoint anchored at or after the deleted turn is assumed to contain it;
+   * dropping the checkpoint costs a full replay on the next turn and is the
+   * only way to keep deleted content out of the model's context.
+   */
+  deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 
@@ -151,8 +204,15 @@ export interface AgentSessionStore {
     afterTurnId: string | null,
   ): Promise<StoredRuntimeTurnContext>;
 
-  /** Returns the newest assistant row carrying an opaque checkpoint candidate. */
-  getLatestContextCheckpoint(sessionId: string): Promise<StoredRuntimeContextCheckpoint | null>;
+  /**
+   * Returns the newest assistant row carrying an opaque checkpoint candidate.
+   * `excludeAssistantMessageId` skips one answer, so a retry does not resume
+   * from a summary of the very answer it is about to replace.
+   */
+  getLatestContextCheckpoint(
+    sessionId: string,
+    excludeAssistantMessageId?: string,
+  ): Promise<StoredRuntimeContextCheckpoint | null>;
 
   /**
    * Durably records the parts an active turn has produced so far and marks the

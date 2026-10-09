@@ -3,10 +3,13 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
-import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import type { CacheService } from '@/backend/data/CacheService';
+import { BaseService, Injectable } from '@/backend/core/lifecycle';
+import {
+  assertStorageDatabaseExists,
+  databaseDirectory,
+} from '@/backend/data/storage/storagePaths';
 
-import { customSqlStatements } from './customSql';
+import { backfillSearchableText, customSqlStatements } from './customSql';
 import { migrations } from './migrations';
 import { type DatabaseSchema, schema } from './schemas';
 import { seedDatabase } from './seeding';
@@ -32,21 +35,10 @@ const logger = loggerService.withContext('DbService');
 export type Database = ExpoSQLiteDatabase<DatabaseSchema>;
 
 @Injectable('DbService')
-@DependsOn(['CacheService'])
 export class DbService extends BaseService {
   private connection: { db: Database; sqlite: SQLite.SQLiteDatabase } | null = null;
   private disposed = false;
   private writeTail: Promise<void> = Promise.resolve();
-
-  /**
-   * The cache is declared but never read here. Seeding reaches it through the
-   * data-service singletons (`ProviderService` resolves `CacheService` from
-   * `application`), and those run inside `onInit` — so the dependency edge is
-   * what orders cache initialization ahead of this service, nothing more.
-   */
-  constructor(_cache: CacheService) {
-    super();
-  }
 
   /**
    * The connection is opened here, not in the constructor.
@@ -60,7 +52,8 @@ export class DbService extends BaseService {
   protected async onInit(): Promise<void> {
     this.assertOpen();
 
-    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions);
+    assertStorageDatabaseExists();
+    const sqlite = SQLite.openDatabaseSync(databaseName, openDatabaseOptions, databaseDirectory());
     this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
 
     await this.configurePragmas();
@@ -81,10 +74,11 @@ export class DbService extends BaseService {
     try {
       connection?.sqlite.closeSync();
     } catch (error) {
-      // Drizzle prepares a statement per query and never finalizes it, and
-      // with the pre-close walk disabled SQLite refuses to close while any
-      // remain (SQLITE_BUSY). Leaking one handle at teardown is the accepted
-      // cost; a rejected onStop would leave the service stuck in Stopping.
+      // The patched Drizzle session finalizes each statement after it runs, but
+      // with the pre-close walk disabled SQLite still refuses to close while
+      // any statement remains (SQLITE_BUSY). Leaking one handle at teardown is
+      // the accepted cost; a rejected onStop would leave the service stuck in
+      // Stopping.
       logger.warn('Failed to close database connection', error as Error);
     }
   }
@@ -176,6 +170,15 @@ export class DbService extends BaseService {
 
     for (const statement of customSqlStatements) {
       this.sqlite.execSync(statement);
+    }
+    // Rows indexed by an older trigger body, including restored backups, may
+    // still hold source Markdown. A failure only degrades search, so startup
+    // continues and the unjournaled run repeats on the next launch.
+    try {
+      backfillSearchableText(this.sqlite);
+    } catch (error) {
+      logger.warn('Failed to backfill searchable message text', error as Error);
+      return;
     }
 
     const now = Date.now();

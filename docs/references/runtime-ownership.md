@@ -37,10 +37,12 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
   bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
-- Backgrounding is not a reliable execution window for chat or painting generation.
+- Every admitted unfinished conversation holds execution demand in foreground and background,
+  including questions, approvals, persistence, and final delivery. Stored history does not.
+  Platform protection remains subject to OS limits and process death.
 - `KeepAliveCoordinator` is the only execution-lease facade that business services and the
   background-activity manager use. It selects one registered platform source when constructed:
-  `AudioKeepAliveSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
+  `IosBackgroundExecutionSource` on iOS, `AndroidBackgroundActivityRuntime` on Android, and a no-op
   elsewhere. Business services never branch on platform; a platform without a mechanism degrades
   through no-op sources and presenters.
 - Android uses task-scoped foreground-service and Headless JS lifetimes within OS limits; see
@@ -59,19 +61,24 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 - creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- installs the host, whose dependency graph initializes cache before SQLite seeding and preferences,
-  then waits for the native splash handoff before applying boot theme and i18n;
+- installs the host, whose dependency graph initializes SQLite seeding before preferences, then
+  waits for the native splash handoff before applying boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
 - uninstalls the host on unmount; reverse dependency order drains consumers before their
   infrastructure.
 
-The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
+The provider's own React context exposes only `loading`, `ready`, or `error`; `error` also carries
+`retry`, which replaces the failed runtime with a new one because a host that failed to start
+cannot start again. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
 providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` for preferences, and
 `BackendProvider` for workflow modules, including any caller-owned session factories.
 
-`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
-initialization error. The root layout retains the native splash, while the app-shell
+`AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and the app-shell
+`StartupFailureScreen` after an initialization error, so a failed start never becomes a crash
+loop. The provider has already logged the failure and initialized translations for that screen
+when an earlier step failed. Render failures after the gate opens are contained by the app-shell
+`AppErrorBoundary`. The root layout retains the native splash, while the app-shell
 `StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
 two composited frames. The provider owns initialization state and post-ready work; it does not own
 splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
@@ -91,14 +98,17 @@ exposes its `AgentProtocol` interface through `Backend.agent`. The Host is app-o
 route-owned. It owns active turns, Runtime sessions, normalized Agent events, approvals, terminal
 persistence, and process-start reconciliation of unfinished turns.
 
-The frontend `ChatProvider` creates one route-owned `AgentSessionChatClient`. The client observes
+The app-shell `ConversationProvider` owns the local conversation source and its
+`AgentSessionChatClient`. The feature `ChatProvider` consumes that client for existing local
+composer/navigation extensions during the conversation migration. The client observes
 only Sessions with React subscribers, composes snapshots and deltas into live state, refreshes those
-observations when the app returns to the foreground, and unsubscribes on route unmount. Removing an
+observations when the app returns to the foreground, and releases route observations on unmount. The app-shell owner disposes the client. Removing an
 observation does not cancel the Host's turn; reopening the route installs a fresh snapshot.
 
-The frontend provider owns route navigation and React Query invalidation. Persisted transcripts are
-ordinary `/agent-sessions/:sessionId/messages` Data API reads; live messages and approvals come from
-the protocol snapshot/events and are merged by stable message id at the presentation boundary.
+The feature ChatProvider owns local composer navigation; the app-shell ConversationProvider owns
+observation and React Query invalidation. The local conversation adapter reads persisted transcripts
+through `/agent-sessions/:sessionId/messages` and projects protocol snapshots/events into the common
+consumption contract. `ConversationPresenter` reconciles history and live rows by stable message id.
 Backend code never imports Expo Router or TanStack Query.
 
 User cancellation affects only the selected Session. One Session allows at most one active turn,
@@ -106,6 +116,25 @@ while different Sessions may run concurrently. App disposal closes Runtime sessi
 tracked turns before lower-level infrastructure closes. OS suspension or termination still does not
 guarantee continued execution or resumable streaming; the next process start marks unfinished local
 turns interrupted.
+
+## Remote Conversation Ownership
+
+The mobile frontend/backend boundary is in-process. The desktop protocol is a separate network
+boundary. `ConversationProvider` owns frontend sources and observation handles; `Backend.remoteAgent`
+exposes credential-free reads and actions. `RemoteAgentRuntime` owns shared Agent scopes and pending
+command recovery, while the desktop remains the execution and transcript authority.
+
+`DesktopConnectionManager` owns physical desktop connections, domain leases and reconnection.
+`DesktopConnectionRuntime` owns pairing and configuration workflows. A route releases reads and
+observation; explicit cancellation is an independent command. Agent and configuration authorization
+are separate even when they share one physical channel. MCP clients and document export sessions
+remain owned by their respective runtimes.
+
+The current graph, actual consumers, release matrix and unresolved dependencies are documented in
+[Service Dependencies And Ownership](./remote-access/service-ownership.md). Remote chat/sidebar now
+consume the common boundary, and the superseded Controller entry is removed. Local composer
+admission, managed export asset leases, pairing-channel adoption and device acceptance remain
+incomplete. Question responses and default-workspace creation need desktop protocol support.
 
 ## Agent Tool Capabilities
 
@@ -131,12 +160,19 @@ resource-deletion contract.
 
 ## Other Long-Lived Resources
 
+- `SystemEntryBridge` owns the foreground claim pass. `systemEntry` owns the import and the native
+  acknowledgement that ends a claim; bootstrap drains in-flight claims before stopping the host.
+  A claimed share then lives only in the composer, so the process that is killed with an unsent
+  draft loses it. Unclaimed staging survives process restart until consumed or expired. The iOS
+  share extension runs outside the main app process and does not own another Backend or Agent Host.
+
 - `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
 - `WebSearchService` owns API-key rotation state; the host stops it.
 - `ProviderRegistryUpdaterService` owns user-requested dual-source model-metadata checks and updates,
   approved-cache activation, request cancellation, and fallback to bundled data; the host stops it.
-- `AudioKeepAliveSource` owns the iOS silent audio session; `AndroidBackgroundActivityRuntime`
-  owns the Android foreground service, local notifications, and background budget. The host stops
+- `IosBackgroundExecutionSource` owns one finite iOS UIKit execution window; `AndroidBackgroundActivityRuntime`
+  owns Android execution demand, reused task notifications, protection status, and background budget.
+  SystemIntegration shares notification IDs with the patched background-actions service. The host stops
   both after their lease consumers have released.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
   the host initializes and stops it.

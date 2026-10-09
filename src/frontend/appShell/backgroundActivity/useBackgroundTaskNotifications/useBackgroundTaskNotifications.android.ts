@@ -17,7 +17,7 @@ import {
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { registerVisibleBackgroundTask } from '../foregroundActivityAttention';
+import { useVisibleBackgroundTask } from './useVisibleBackgroundTask';
 
 const logger = loggerService.withContext('BackgroundTaskNotifications');
 
@@ -27,16 +27,20 @@ export function useBackgroundTaskNotifications(
 ): void {
   const scheme = resolveScheme({});
   const taskKind = task?.kind;
-  const taskId = task?.kind === 'chat' ? task.sessionId : task?.paintingId;
+  const taskId = task?.kind === 'painting' ? task.paintingId : task?.sessionId;
+  const connectionId = task?.kind === 'remote-chat' ? task.connectionId : undefined;
+
+  useVisibleBackgroundTask(task, enabled);
 
   useFocusEffect(
     useCallback(() => {
       if (!enabled || !taskKind || !taskId) return;
       const target: BackgroundTaskLink =
-        taskKind === 'chat'
-          ? { kind: taskKind, sessionId: taskId }
-          : { kind: taskKind, paintingId: taskId };
-      let releaseVisibility: (() => void) | undefined;
+        taskKind === 'remote-chat'
+          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId }
+          : taskKind === 'chat'
+            ? { kind: taskKind, sessionId: taskId }
+            : { kind: taskKind, paintingId: taskId };
       let focused = true;
 
       const dismissViewed = async (notification: Notification) => {
@@ -45,6 +49,7 @@ export function useBackgroundTaskNotifications(
           focused &&
           AppState.currentState === 'active' &&
           data?.owner === BACKGROUND_NOTIFICATION_OWNER &&
+          data.terminal === true &&
           isSameBackgroundTask(target, parseBackgroundTaskUrl(data.url, scheme))
         ) {
           await dismissNotificationAsync(notification.request.identifier);
@@ -52,11 +57,8 @@ export function useBackgroundTaskNotifications(
       };
       const reportError = (error: unknown) =>
         logger.warn('Could not clear viewed notification', { error });
-      const updateVisibility = () => {
-        releaseVisibility?.();
-        releaseVisibility = undefined;
+      const dismissPresented = () => {
         if (AppState.currentState !== 'active') return;
-        releaseVisibility = registerVisibleBackgroundTask(target);
         void getPresentedNotificationsAsync()
           .then((notifications) => Promise.all(notifications.map(dismissViewed)))
           .catch(reportError);
@@ -67,14 +69,13 @@ export function useBackgroundTaskNotifications(
       const presented = addNotificationPresentedListener((notification) => {
         void dismissViewed(notification).catch(reportError);
       });
-      const appState = AppState.addEventListener('change', updateVisibility);
-      updateVisibility();
+      const appState = AppState.addEventListener('change', dismissPresented);
+      dismissPresented();
       return () => {
         focused = false;
-        releaseVisibility?.();
         appState.remove();
         presented.remove();
       };
-    }, [enabled, scheme, taskId, taskKind]),
+    }, [connectionId, enabled, scheme, taskId, taskKind]),
   );
 }

@@ -50,6 +50,12 @@
       "import": "./src/background-activity/background-activity.ios.tsx",
       "default": "./src/background-activity/background-activity.ios.tsx"
     },
+    "./markdown": {
+      "types": "./src/markdown/index.ts",
+      "react-native": "./src/markdown/index.ts",
+      "import": "./src/markdown/index.ts",
+      "default": "./src/markdown/index.ts"
+    },
     "./utils": {
       "types": "./src/utils/index.ts",
       "react-native": "./src/utils/index.ts",

@@ -9,6 +9,7 @@ import type {
 } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { JobExecutionError } from '@/backend/services/jobs/JobExecutionError';
 import type { JobHandlerFor } from '@/backend/services/jobs/types';
+import { KeepAliveInterruptionError } from '@/backend/services/keepAlive/KeepAliveInterruptionError';
 import type {
   PaintingActivityPhase,
   PaintingActivityProps,
@@ -214,7 +215,10 @@ export function createPaintingGenerateJobHandler(
           throw error;
         }
       } catch (error) {
-        const phase: PaintingActivityPhase = ctx.signal.aborted ? 'cancelled' : 'failed';
+        const phase: PaintingActivityPhase =
+          ctx.signal.aborted && !(ctx.signal.reason instanceof KeepAliveInterruptionError)
+            ? 'cancelled'
+            : 'failed';
         await session?.finish(
           paintingActivityProps(translate, phase, modelName, prompt, startedAtEpochMs),
         );

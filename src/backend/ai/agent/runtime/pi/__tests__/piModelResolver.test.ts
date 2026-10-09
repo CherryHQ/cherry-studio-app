@@ -1,23 +1,33 @@
 import {
+  buildRuntimeEndpointConfigs,
   ENDPOINT_TYPE,
   MODEL_CAPABILITY,
   type EndpointType,
 } from '@cherrystudio/provider-registry';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
+import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
+import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
+import * as piOAuthModels from '../piOAuthModels';
 import type { PiRuntimeDependencies } from '../PiRuntime';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
 const mockGetModelById = jest.fn();
 const mockGetProviderById = jest.fn();
+const mockGetAuthConfig = jest.fn();
 const mockResolveApiKey = jest.fn();
+const mockListApiKeys = jest.fn();
 const mockBoundStreamFn = jest.fn();
 const mockBindPiStream = jest.fn<ReturnType<BindPiStream>, Parameters<BindPiStream>>();
 
@@ -26,8 +36,10 @@ jest.mock('@/backend/data/services/ModelService', () => ({
 }));
 jest.mock('@/backend/data/services/ProviderService', () => ({
   providerService: {
+    getAuthConfig: (...args: unknown[]) => mockGetAuthConfig(...args),
     getByProviderId: (...args: unknown[]) => mockGetProviderById(...args),
     resolveApiKey: (...args: unknown[]) => mockResolveApiKey(...args),
+    listApiKeys: (...args: unknown[]) => mockListApiKeys(...args),
   },
 }));
 jest.mock('../piApiAdapters', () => {
@@ -85,7 +97,11 @@ describe('Pi model resolver', () => {
   let resolver: PiRuntimeDependencies;
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
+    mockBoundStreamFn.mockReset();
+    mockGetAuthConfig.mockResolvedValue(null);
+    mockListApiKeys.mockResolvedValue({ keys: [] });
     mockResolveApiKey.mockResolvedValue({
       apiKeySelection: CREDENTIAL_RECEIPT,
       value: 'secret-key',
@@ -93,6 +109,446 @@ describe('Pi model resolver', () => {
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
   });
+
+  test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(GITHUB_COPILOT_MODELS['claude-sonnet-4.6']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://api.githubcopilot.com',
+      'github-copilot-openai-compatible',
+    );
+    provider.presetProviderId = 'copilot';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, { apiModelId: 'claude-sonnet-4.6' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'github-copilot',
+        auth: { apiKey: 'copilot-access', baseUrl: 'https://api.business.githubcopilot.com' },
+        availableModelIds: ['claude-sonnet-4.6'],
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'github-copilot' }),
+      'claude-sonnet-4.6',
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'github-copilot',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.business.githubcopilot.com',
+    });
+    expect(resolution.usageContext).toMatchObject({
+      providerId: 'test-provider',
+      credentialReceipt: { attribution: 'unknown' },
+    });
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
+    jest
+      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+      .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
+    const provider = makeProvider(
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'https://api.kimi.com/coding',
+      'anthropic',
+    );
+    provider.presetProviderId = 'kimi-coding';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
+    );
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'kimi-coding',
+        auth: { headers: { Authorization: 'Bearer kimi-access' } },
+        availableModelIds: undefined,
+      }),
+    });
+    const resolution = await resolve(resolver);
+    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'kimi-coding' }),
+      'kimi-for-coding',
+    );
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        apiKey: undefined,
+        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+      }),
+    );
+    expect(resolution.model).toMatchObject({
+      provider: 'kimi-coding',
+      compat: { forceAdaptiveThinking: true },
+    });
+    expect(resolution.redactionValues).toContain('kimi-access');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => {
+        throw new ProviderAccountError('authorization');
+      },
+    });
+    await expect(resolve(resolver)).rejects.toEqual(new ProviderAccountError('authorization'));
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { baseUrl: 'https://openrouter.ai/api', preset: undefined, enabled: true },
+    { baseUrl: 'https://relay.example', preset: 'openrouter', enabled: false },
+  ])(
+    'enables explicit OpenRouter compatibility for custom provider ids: %p',
+    async ({ baseUrl, preset, enabled }) => {
+      const provider = makeProvider(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, baseUrl, 'openai');
+      provider.presetProviderId = preset;
+      provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(
+        makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+          apiModelId: 'anthropic/claude-sonnet-4.6',
+        }),
+      );
+      const resolution = await resolve(resolver);
+      expect(resolution.model).toMatchObject({
+        provider: 'test-provider',
+        compat: {
+          cacheControlFormat: 'anthropic',
+          sendSessionAffinityHeaders: true,
+          sessionAffinityFormat: 'openrouter',
+        },
+      });
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          sessionId: 'session-1',
+          cacheRetention: enabled ? 'short' : 'none',
+        }),
+      );
+    },
+  );
+
+  test('does not infer Anthropic cache support from a Claude model name on an unknown relay', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(
+        ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        'https://openrouter.ai.untrusted.example/api',
+        'openai',
+      ),
+    );
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, {
+        apiModelId: 'anthropic/claude-sonnet-4.6',
+      }),
+    );
+    const resolution = await resolve(resolver);
+    expect(resolution.model.compat).not.toHaveProperty('cacheControlFormat');
+    expect(resolution.model.compat).not.toHaveProperty('sendSessionAffinityHeaders');
+  });
+
+  test.each([undefined, true, false])(
+    'applies native Anthropic cache setting %p',
+    async (enabled) => {
+      const provider = makeProvider(
+        ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        'https://api.anthropic.com',
+        'anthropic',
+      );
+      if (enabled !== undefined) provider.settings.cacheControl = { enabled };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES));
+      await resolve(resolver);
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          cacheRetention: enabled === false ? 'none' : 'short',
+          sessionId: 'session-1',
+        }),
+      );
+    },
+  );
+
+  test('uses the selected probe key for transport, attribution, and redaction', async () => {
+    const testCase = CASES[0];
+    const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
+    provider.apiKeys = [
+      { id: 'key-1', isEnabled: true },
+      { id: 'key-2', isEnabled: true },
+    ];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockResolveApiKey.mockResolvedValue({
+      apiKeySelection: CREDENTIAL_RECEIPT,
+      value: 'probe-key',
+    });
+    const resolution = await resolver.resolveModel(
+      { modelId: 'test-model', providerId: 'test-provider' },
+      {},
+      'probe-session',
+      'probe-key',
+    );
+    expect(mockResolveApiKey).toHaveBeenCalledWith('test-provider', 'probe-key');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: 'probe-key' }),
+    );
+    expect(resolution.redactionValues).toContain('probe-key');
+    expect(resolution.usageContext.credentialReceipt).toEqual(CREDENTIAL_RECEIPT);
+    expect(mockListApiKeys).not.toHaveBeenCalled();
+  });
+
+  test('walks enabled keys as a ring and attributes each call to the serving key', async () => {
+    const testCase = CASES[0];
+    const keys = ['a', 'b', 'c'].map((id) => ({
+      id,
+      isEnabled: true,
+      key: `secret-${id}`,
+      label: `Account ${id}`,
+    }));
+    const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
+    provider.apiKeys = [...keys, { id: 'disabled', isEnabled: false }];
+    provider.settings.extraHeaders = {
+      ...provider.settings.extraHeaders,
+      'CF-AIG-Authorization': 'Bearer gateway-key',
+    };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockListApiKeys.mockResolvedValue({ keys });
+    mockResolveApiKey.mockImplementation(async (_providerId, override) => {
+      const key = keys.find((entry) => entry.key === (override ?? 'secret-b'))!;
+      return {
+        value: key.key,
+        apiKeySelection: {
+          attribution: override ? 'matched' : 'explicit',
+          id: key.id,
+          label: key.label,
+          masked: '****',
+        },
+      };
+    });
+    const usedKeys: string[] = [];
+    const statuses: Record<string, number[]> = {
+      'secret-a': [200, 200, 503],
+      'secret-b': [401, 200],
+      'secret-c': [429],
+    };
+    mockBindPiStream.mockImplementation(async (_adapter, binding) => () => {
+      const { apiKey } = binding;
+      if (!apiKey) throw new Error('Expected an API key for credential rotation.');
+      usedKeys.push(apiKey);
+      const status = statuses[apiKey].shift()!;
+      const response: AssistantMessage = {
+        role: 'assistant',
+        api: testCase.api,
+        provider: provider.id,
+        model: 'test-model',
+        content: status === 200 ? [{ type: 'text', text: 'ok' }] : [],
+        stopReason: status === 200 ? 'stop' : 'error',
+        timestamp: 1,
+        diagnostics: [{ type: 'provider_response_failure', timestamp: 1, details: { status } }],
+        usage: {
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      };
+      const stream = new AssistantMessageEventStream();
+      stream.push(
+        status === 200
+          ? { type: 'done', reason: 'stop', message: response }
+          : { type: 'error', reason: 'error', error: response },
+      );
+      stream.end();
+      return stream;
+    });
+
+    const resolution = await resolve(resolver);
+    expect(resolution.redactionValues).toEqual(
+      expect.arrayContaining(['secret-a', 'secret-b', 'secret-c']),
+    );
+    for (const [servingKey, attribution] of [
+      ['a', 'matched'],
+      ['a', 'matched'],
+      ['b', 'explicit'],
+    ]) {
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
+      expect((await stream.result()).content).toEqual([{ type: 'text', text: 'ok' }]);
+      expect(resolution.usageContext.credentialReceipt).toMatchObject({
+        attribution,
+        id: servingKey,
+        label: `Account ${servingKey}`,
+      });
+    }
+    expect(usedKeys).toEqual([
+      'secret-b',
+      'secret-c',
+      'secret-a',
+      'secret-a',
+      'secret-a',
+      'secret-b',
+    ]);
+    expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
+  });
+
+  test('bounds all credential attempts to two minutes before output', async () => {
+    jest.useFakeTimers();
+    try {
+      const testCase = CASES[0];
+      const keys = ['key-1', 'key-2', 'key-3'].map((id) => ({
+        id,
+        isEnabled: true,
+        key: `secret-${id}`,
+      }));
+      const provider = makeProvider(
+        testCase.endpointType,
+        testCase.baseUrl,
+        testCase.adapterFamily,
+      );
+      provider.apiKeys = keys;
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+      mockListApiKeys.mockResolvedValue({ keys });
+      mockResolveApiKey.mockImplementation(async (_providerId, override) => ({
+        value: override ?? keys[0].key,
+        apiKeySelection: {
+          ...CREDENTIAL_RECEIPT,
+          id: keys.find((key) => key.key === (override ?? keys[0].key))!.id,
+        },
+      }));
+      const usedKeys: string[] = [];
+      let signal: AbortSignal | undefined;
+      mockBindPiStream.mockImplementation(
+        async (_adapter, binding) => (_model, _context, options) => {
+          const { apiKey } = binding;
+          if (!apiKey) throw new Error('Expected an API key for credential retries.');
+          usedKeys.push(apiKey);
+          signal = options?.signal;
+          if (apiKey === keys[0].key) {
+            return new Promise<AssistantMessageEventStream>((_resolve, reject) => {
+              setTimeout(() => reject(new Error('Temporary failure')), 60_000);
+            });
+          }
+          return new AssistantMessageEventStream();
+        },
+      );
+
+      const resolution = await resolve(resolver);
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
+      await jest.advanceTimersByTimeAsync(120_000);
+
+      expect(await stream.result()).toMatchObject({
+        stopReason: 'error',
+        errorMessage: 'The model response timed out after 120 seconds without data.',
+      });
+      expect(usedKeys).toEqual([keys[0].key, keys[1].key]);
+      expect(signal?.aborted).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test.each([
+    ...CASES.map((testCase) => ({
+      ...testCase,
+      authHeader: 'aUtHoRiZaTiOn',
+      value: 'Bearer header-secret',
+    })),
+    { ...CASES[0], authHeader: 'Authorization', value: '' },
+    { ...CASES[2], authHeader: 'X-Api-Key', value: 'header-secret' },
+    { ...CASES[3], authHeader: 'X-Goog-Api-Key', value: 'header-secret' },
+    ...['API-Key', 'Authorization'].map((authHeader) => ({
+      ...CASES[0],
+      adapterFamily: 'azure-responses',
+      api: 'azure-openai-responses',
+      authHeader,
+      value: 'header-secret',
+    })),
+  ])(
+    'preserves $authHeader on $api without rotating or attributing the overridden key',
+    async (testCase) => {
+      const provider = makeProvider(
+        testCase.endpointType,
+        testCase.baseUrl,
+        testCase.adapterFamily,
+      );
+      provider.apiKeys = [
+        { id: 'key-1', isEnabled: true },
+        { id: 'key-2', isEnabled: true },
+      ];
+      provider.settings.extraHeaders = { [testCase.authHeader]: testCase.value };
+      if (testCase.adapterFamily === 'azure-responses') provider.authType = 'iam-azure';
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+      mockListApiKeys.mockResolvedValue({
+        keys: provider.apiKeys.map((key) => ({ ...key, key: `secret-${key.id}` })),
+      });
+
+      const resolution = await resolve(resolver);
+      expect(resolution.usageContext.credentialReceipt).toEqual({ attribution: 'unknown' });
+      expect(resolution.redactionValues).toEqual(['secret-key', testCase.value]);
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          headers: expect.objectContaining({ [testCase.authHeader]: testCase.value }),
+        }),
+      );
+
+      for (const status of [401, 429]) {
+        const failure: AssistantMessage = {
+          role: 'assistant',
+          api: resolution.model.api,
+          provider: provider.id,
+          model: resolution.model.id,
+          content: [],
+          stopReason: 'error',
+          timestamp: 1,
+          diagnostics: [{ type: 'provider_response_failure', timestamp: 1, details: { status } }],
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        };
+        mockBoundStreamFn.mockImplementation(() => {
+          const stream = new AssistantMessageEventStream();
+          stream.push({ type: 'error', reason: 'error', error: failure });
+          return stream;
+        });
+        const stream = await resolution.streamFn(
+          resolution.model,
+          normalizeContext({ messages: [] }),
+        );
+        expect(await stream.result()).toBe(failure);
+      }
+      expect(mockBoundStreamFn).toHaveBeenCalledTimes(2);
+      expect(mockListApiKeys).not.toHaveBeenCalled();
+      expect(mockResolveApiKey).toHaveBeenCalledTimes(1);
+    },
+  );
 
   test.each(CASES)('resolves $endpointType through $api', async (testCase) => {
     const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
@@ -125,10 +581,10 @@ describe('Pi model resolver', () => {
           ? { supportsDeveloperRole: false }
           : undefined,
     );
-    expect(resolution.streamFn).toBe(mockBoundStreamFn);
+    expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
     expect(resolution.supportsTools).toBe(true);
     expect(resolution.defaultThinkingLevel).toBe('high');
-    expect(resolution.redactionValues).toEqual(['secret-key', 'Bearer header-secret']);
+    expect(resolution.redactionValues).toEqual(['secret-key']);
     expect(resolution.usageContext).toMatchObject({
       credentialReceipt: CREDENTIAL_RECEIPT,
       modelId: testCase.expectedModelId,
@@ -139,17 +595,136 @@ describe('Pi model resolver', () => {
       expect.objectContaining({
         apiKey: 'secret-key',
         headers: expect.objectContaining({
-          Authorization: 'Bearer header-secret',
           'X-App-Name': 'CherryStudioMobile',
           'X-Custom': 'custom',
         }),
         maxRetries: 0,
         maxTokens: 1024,
         temperature: 0.25,
-        timeoutMs: 600_000,
       }),
     );
   });
+
+  test('resolves Azure Responses and forwards the Azure API version', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      'https://resource.openai.azure.com/openai',
+      'azure-responses',
+    );
+    provider.authMethods = undefined;
+    provider.authType = 'iam-azure';
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    mockGetAuthConfig.mockResolvedValue({ type: 'iam-azure', apiVersion: '2025-04-01-preview' });
+
+    const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
+
+    expect(resolution.model).toMatchObject({
+      api: 'azure-openai-responses',
+      baseUrl: 'https://resource.openai.azure.com/openai',
+    });
+    expect(mockGetAuthConfig).toHaveBeenCalledWith('test-provider');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'azure-openai-responses' }),
+      expect.objectContaining({ azureApiVersion: '2025-04-01-preview' }),
+    );
+  });
+
+  test.each(CASES.filter((testCase) => testCase.adapterFamily !== 'google'))(
+    'adds the OpenCode session header to the $api model and transport',
+    async (testCase) => {
+      for (const id of ['opencode', 'opencode-copy']) {
+        const provider = {
+          ...makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily),
+          id,
+          presetProviderId: id === 'opencode-copy' ? 'opencode' : undefined,
+        };
+        mockGetProviderById.mockResolvedValue(provider);
+        mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType, { providerId: id }));
+
+        for (const sessionId of ['session-1', 'session-2']) {
+          const resolution = await resolver.resolveModel(
+            { modelId: 'test-model', providerId: id },
+            {},
+            sessionId,
+          );
+
+          expect(resolution.model.headers).toMatchObject({
+            'x-opencode-session': sessionId,
+            'X-Custom': 'custom',
+          });
+          expect(mockBindPiStream).toHaveBeenLastCalledWith(
+            expect.anything(),
+            expect.objectContaining({ headers: resolution.model.headers }),
+          );
+        }
+        expect(provider.settings.extraHeaders).not.toHaveProperty('x-opencode-session');
+      }
+    },
+  );
+
+  test('preserves an explicit OpenCode session header regardless of casing', async () => {
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      'https://opencode.ai/zen/go/v1',
+      'openai-compatible',
+    );
+    provider.presetProviderId = 'opencode';
+    provider.settings.extraHeaders = { 'X-OpenCode-Session': 'configured-session' };
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS));
+
+    const resolution = await resolve(resolver);
+
+    expect(resolution.model.headers).toMatchObject({ 'X-OpenCode-Session': 'configured-session' });
+    expect(resolution.model.headers).not.toHaveProperty('x-opencode-session');
+    expect(mockBindPiStream).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ headers: resolution.model.headers }),
+    );
+  });
+
+  test.each([
+    [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai-completions', 'https://opencode.ai/zen/go/v1'],
+    [ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai-responses', 'https://opencode.ai/zen/go/v1'],
+    [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropic-messages', 'https://opencode.ai/zen/go'],
+  ] as const)(
+    'keeps OpenCode Go conversations on the bundled %s route',
+    async (endpointType, api, baseUrl) => {
+      const preset = providerRegistryService.loadProviders().find(({ id }) => id === 'opencode');
+      if (!preset) throw new Error('Missing OpenCode provider preset');
+      const provider = {
+        ...makeProvider(endpointType, baseUrl, ''),
+        id: 'opencode',
+        presetProviderId: 'opencode',
+        endpointConfigs: buildRuntimeEndpointConfigs(preset.endpointConfigs),
+      };
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpointType, { providerId: provider.id }));
+
+      const resolution = await resolver.resolveModel(
+        { modelId: 'test-model', providerId: provider.id },
+        {},
+        'conversation-session',
+      );
+
+      expect(resolution.model).toMatchObject({
+        api,
+        baseUrl,
+        headers: {
+          'User-Agent': 'CherryStudioMobile/1.0',
+          'x-opencode-session': 'conversation-session',
+        },
+      });
+      expect(mockBindPiStream).toHaveBeenLastCalledWith(
+        expect.objectContaining({ api }),
+        expect.objectContaining({
+          apiKey: 'secret-key',
+          headers: resolution.model.headers,
+        }),
+      );
+    },
+  );
 
   test.each(CASES)(
     'normalizes DeepSeek responses on the configured $api route',
@@ -186,7 +761,10 @@ describe('Pi model resolver', () => {
       };
       source.push({ type: 'done', reason: 'stop', message: response });
       mockBoundStreamFn.mockReturnValueOnce(source);
-      const stream = await resolution.streamFn(resolution.model, { messages: [] });
+      const stream = await resolution.streamFn(
+        resolution.model,
+        normalizeContext({ messages: [] }),
+      );
       expect(await stream.result()).toMatchObject({
         stopReason: 'toolUse',
         content: [
@@ -211,10 +789,55 @@ describe('Pi model resolver', () => {
 
     const resolution = await resolve(resolver, { maxOutputTokens: 1024 });
 
-    expect(toPiModelPreflight(model).maxInputTokens).toBe(96_000);
+    expect(toPiModelPreflight(model).maxInputTokens).toBe(120_000);
     expect(resolution.maxInputTokens).toBe(120_000);
     expect(resolution.model.contextWindow).toBe(128_000);
     expect(resolution.model.maxTokens).toBe(32_000);
+  });
+
+  test('preserves input capacity and the output capability when both span the full context', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    const model = makeModel(endpoint, {
+      apiModelId: 'grok-4.5',
+      contextWindow: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(endpoint, 'https://api.x.ai/v1', 'xai-responses'),
+    );
+    mockGetModelById.mockResolvedValue(model);
+
+    const preflight = await resolver.preflightModel({
+      providerId: 'test-provider',
+      modelId: model.modelId,
+    });
+    const resolution = await resolve(resolver);
+
+    expect(preflight).toMatchObject({
+      contextWindow: 500_000,
+      maxInputTokens: 500_000,
+      maxOutputTokens: 500_000,
+    });
+    expect(resolution.model.maxTokens).toBe(500_000);
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ maxTokens: 500_000 }),
+    );
+    const shortRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: '测试', timestamp: 1 }],
+      }),
+    );
+    const longerRequest = buildBaseOptions(
+      resolution.model,
+      normalizeContext({
+        messages: [{ role: 'user', content: 'x'.repeat(100_000), timestamp: 1 }],
+      }),
+    );
+    expect(shortRequest.maxTokens).toBeGreaterThan(16_384);
+    expect(shortRequest.maxTokens).toBeLessThan(500_000);
+    expect(longerRequest.maxTokens).toBeLessThan(shortRequest.maxTokens!);
   });
 
   test.each([{ id: 'perplexity' }, { id: 'copied-perplexity', presetProviderId: 'perplexity' }])(
@@ -274,7 +897,7 @@ describe('Pi model resolver', () => {
     ).resolves.toMatchObject({
       contextWindow: 128_000,
       inputModalities: ['text', 'image'],
-      maxInputTokens: 123_904,
+      maxInputTokens: 128_000,
       maxOutputTokens: 4_096,
       supportsTools: true,
     });
@@ -282,7 +905,7 @@ describe('Pi model resolver', () => {
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
 
-  test('bounds input capacity by both the model limit and reserved output', () => {
+  test('bounds the independent input limit by the total context window', () => {
     expect(
       toPiModelPreflight(
         makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
@@ -291,7 +914,7 @@ describe('Pi model resolver', () => {
           maxOutputTokens: 4_000,
         }),
       ),
-    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 12_000, maxOutputTokens: 4_000 });
+    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 16_000, maxOutputTokens: 4_000 });
   });
 
   test('uses the existing per-model gateway route', async () => {
@@ -322,6 +945,7 @@ describe('Pi model resolver', () => {
     const resolution = await resolver.resolveModel(
       { modelId: 'claude-sonnet-4-5', providerId: 'aihubmix' },
       {},
+      'session-1',
     );
 
     expect(resolution.model).toMatchObject({
@@ -408,7 +1032,6 @@ function makeProvider(
     name: 'Test Provider',
     settings: {
       extraHeaders: {
-        Authorization: 'Bearer header-secret',
         'X-Custom': 'custom',
       },
     },
@@ -437,5 +1060,9 @@ function resolve(
   resolver: PiRuntimeDependencies,
   options: Parameters<PiRuntimeDependencies['resolveModel']>[1] = {},
 ) {
-  return resolver.resolveModel({ modelId: 'test-model', providerId: 'test-provider' }, options);
+  return resolver.resolveModel(
+    { modelId: 'test-model', providerId: 'test-provider' },
+    options,
+    'session-1',
+  );
 }

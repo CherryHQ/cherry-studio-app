@@ -16,7 +16,7 @@ surfaces.
   across the mode change, so releasing the long press cannot open the editor or toggle it again.
   The shared selection toolbar selects all current search results or confirms batch deletion;
   back and Done exit selection. Changing the search clears selection. Agents have no detail screen.
-- The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
+- The editor's model row opens the shared model-picker bottom sheet for text and image models. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - The editor exposes the Agent definition fields (avatar, name, default model, and instructions),
   its two-mode tool-approval preference, and Agent-specific MCP extensions. Inference parameters
@@ -26,9 +26,10 @@ surfaces.
   Other fields save immediately. Writes run in order and retain only the latest queued change per
   field. Failed writes keep the draft and offer Retry. A blank name remains invalid and never
   replaces the stored name. New agents still require an explicit Save to create the record.
-- Calendar, reminders, health, location, and file capabilities are injected uniformly by the Host
+- Calendar, reminders, location, and file capabilities are injected uniformly by the Host
   when their system gates pass. The frontend keeps web search as a Session-scoped composer
-  selection; image generation is selected for one submission. Neither is saved on the Agent.
+  selection. Selecting an image model saves that model on the Agent; image parameters belong to
+  each submission. Image-model conversations remain ordinary Agent Sessions in the chat drawer.
 - New agents, including the initial Cherry Agent, default to automatic tool approval. Automatic
   approval promotes only eligible interactive `ask` tools for future turns; it cannot enable a
   missing/disabled tool or bypass system permission and managed-resource checks. Existing agents
@@ -55,3 +56,11 @@ surfaces.
   frame after the push finishes. The bottom inset stays hand-rolled either way, because the avatar
   picker's full-screen modal wipes whatever the scroll view adjusted for itself.
 - Cross-screen UI comes from neutral modules under `src/frontend/components`.
+
+
+Agents can also be created and edited through the conversation's built-in Agent management tools.
+The capabilities section toggles them per Agent through the `agents` capability group, in the same
+list as the device groups; new Agents start with it off, while the seeded default Agent keeps it on. The tools reuse `AgentService`; tool-created Agents inherit the global default model and the editor's
+capability defaults. Guarded tool updates preserve omitted fields and reject stale `updatedAt`
+versions. Committed create/update operations publish Data API cache invalidations for the list and
+changed record. Existing editor drafts are not replaced by incoming cache refreshes.

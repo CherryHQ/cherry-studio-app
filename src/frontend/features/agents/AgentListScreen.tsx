@@ -1,9 +1,10 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { AgentAvatar } from '@/frontend/components/Avatar';
@@ -22,6 +23,16 @@ import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
 const agentSelectionScope = 'agents';
+// A 40pt avatar, its 8pt vertical padding, and the hairline border.
+const AGENT_ROW_ESTIMATED_HEIGHT = 57;
+
+type AgentListExtraData = {
+  isEditing: boolean;
+  onEdit: (agentId: string) => void;
+  onStartSelection: (agentId: string) => void;
+  onToggle: (agentId: string) => void;
+  selectedIds: ReadonlySet<string>;
+};
 
 function AgentListScreenBody() {
   const { t } = useTranslation();
@@ -122,6 +133,48 @@ function AgentListScreenBody() {
     },
     [router],
   );
+  const listExtraData = useMemo<AgentListExtraData>(
+    () => ({
+      isEditing,
+      onEdit: openAgentEditor,
+      onStartSelection: handleStartSelection,
+      onToggle: toggleId,
+      selectedIds,
+    }),
+    [handleStartSelection, isEditing, openAgentEditor, selectedIds, toggleId],
+  );
+  const listEmpty = isFiltering ? (
+    <View className="px-8 py-16">
+      <ContentState.Empty title={t('agent.list.noResults')} />
+    </View>
+  ) : isLoading ? (
+    <View className="px-8 py-16">
+      <ContentState.Loading title={t('agent.list.loading')} />
+    </View>
+  ) : error ? (
+    <View className="px-8 py-16">
+      <ContentState.Error
+        primaryAction={{
+          children: t('agent.actions.retry'),
+          onPress: () => void refetch(),
+        }}
+        title={t('agent.list.loadFailed')}
+      />
+    </View>
+  ) : (
+    <View className="px-8 py-16">
+      <ContentState.Empty
+        description={t('agent.list.emptyDescription')}
+        primaryAction={{
+          accessibilityLabel: t('agent.actions.create'),
+          children: t('agent.actions.create'),
+          onPress: openCreateAgent,
+        }}
+        prominence="prominent"
+        title={t('agent.list.emptyTitle')}
+      />
+    </View>
+  );
 
   return (
     <>
@@ -132,60 +185,21 @@ function AgentListScreenBody() {
       />
       <View className="flex-1">
         <InlineSearch onChangeText={handleSearchChange} value={query} />
-        <ScrollView
+        <LegendList
           alwaysBounceVertical={false}
-          className="flex-1"
           contentContainerStyle={listContentStyle}
           contentInsetAdjustmentBehavior="automatic"
+          data={listedAgents}
+          estimatedItemSize={AGENT_ROW_ESTIMATED_HEIGHT}
+          extraData={listExtraData}
+          keyExtractor={agentKeyExtractor}
+          ListEmptyComponent={listEmpty}
+          maintainVisibleContentPosition={false}
+          recycleItems
+          renderItem={renderAgentItem}
           showsVerticalScrollIndicator={false}
-        >
-          {listedAgents.length > 0 ? (
-            <View>
-              {listedAgents.map((agent) => (
-                <AgentListRow
-                  key={agent.id}
-                  agent={agent}
-                  isEditing={isEditing}
-                  isSelected={selectedIds.has(agent.id)}
-                  onEdit={openAgentEditor}
-                  onStartSelection={handleStartSelection}
-                  onToggle={toggleId}
-                />
-              ))}
-            </View>
-          ) : isFiltering ? (
-            <View className="px-8 py-16">
-              <ContentState.Empty title={t('agent.list.noResults')} />
-            </View>
-          ) : isLoading ? (
-            <View className="px-8 py-16">
-              <ContentState.Loading title={t('agent.list.loading')} />
-            </View>
-          ) : error ? (
-            <View className="px-8 py-16">
-              <ContentState.Error
-                primaryAction={{
-                  children: t('agent.actions.retry'),
-                  onPress: () => void refetch(),
-                }}
-                title={t('agent.list.loadFailed')}
-              />
-            </View>
-          ) : (
-            <View className="px-8 py-16">
-              <ContentState.Empty
-                description={t('agent.list.emptyDescription')}
-                primaryAction={{
-                  accessibilityLabel: t('agent.actions.create'),
-                  children: t('agent.actions.create'),
-                  onPress: openCreateAgent,
-                }}
-                prominence="prominent"
-                title={t('agent.list.emptyTitle')}
-              />
-            </View>
-          )}
-        </ScrollView>
+          style={styles.list}
+        />
         <SelectionControls scope={agentSelectionScope} />
       </View>
     </>
@@ -200,6 +214,26 @@ export default function AgentListScreen() {
   );
 }
 
+function agentKeyExtractor(agent: Agent) {
+  return agent.id;
+}
+
+function renderAgentItem({ extraData, item }: LegendListRenderItemProps<Agent>) {
+  const { isEditing, onEdit, onStartSelection, onToggle, selectedIds } =
+    extraData as AgentListExtraData;
+
+  return (
+    <AgentListRow
+      agent={item}
+      isEditing={isEditing}
+      isSelected={selectedIds.has(item.id)}
+      onEdit={onEdit}
+      onStartSelection={onStartSelection}
+      onToggle={onToggle}
+    />
+  );
+}
+
 type AgentListRowProps = {
   agent: Agent;
   isEditing: boolean;
@@ -209,7 +243,7 @@ type AgentListRowProps = {
   onToggle: (agentId: string) => void;
 };
 
-function AgentListRow({
+const AgentListRow = memo(function AgentListRow({
   agent,
   isEditing,
   isSelected,
@@ -263,4 +297,8 @@ function AgentListRow({
       </View>
     </Pressable>
   );
-}
+});
+
+const styles = StyleSheet.create({
+  list: { flex: 1 },
+});

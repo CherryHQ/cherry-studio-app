@@ -53,6 +53,17 @@ export function isWebSearchToolPart(part: ToolMessagePart) {
   return WEB_SEARCH_TOOL_NAMES.has(getToolName(part));
 }
 
+/** The Host's `ask_user_question` tool; its record renders inline, never as process. */
+export function isUserQuestionToolPart(part: ToolMessagePart) {
+  return getToolName(part) === 'ask_user_question';
+}
+
+/** A built-in Agent write whose saved definition is a result worth showing inline. */
+export function isAgentMutationToolPart(part: ToolMessagePart) {
+  const name = getToolName(part);
+  return name === 'agent_create' || name === 'agent_update';
+}
+
 /** A provider-executed web search; its renderer suppresses it entirely. */
 export function isProviderWebSearchToolPart(part: ToolMessagePart) {
   return (
@@ -70,22 +81,23 @@ function getCherryToolType(part: ToolMessagePart) {
 }
 
 export type ToolGroupSummary = {
+  approvalCount: number;
   dangerCount: number;
   state: 'complete' | 'running';
-  tone: ToolStatusTone;
-  warningCount: number;
 };
 
-/** Derives one group-level state and tone from a run of tool calls. */
+/** Derives process state and pending approvals without promoting tool failures to group failures. */
 export function deriveToolGroupSummary(parts: readonly ToolMessagePart[]): ToolGroupSummary {
-  const dangerCount = parts.filter((part) => getToolStatusTone(part) === 'danger').length;
-  const warningCount = parts.filter((part) => getToolStatusTone(part) === 'warning').length;
-
+  const approvalCount = parts.filter((part) => part.state === 'approval-requested').length;
+  const dangerCount = parts.filter(
+    (part) =>
+      part.state === 'output-error' ||
+      (part.state === 'output-available' && isRecord(part.output) && part.output.isError === true),
+  ).length;
   return {
+    approvalCount,
     dangerCount,
     state: parts.some((part) => getToolDisplayState(part) === 'running') ? 'running' : 'complete',
-    tone: dangerCount > 0 ? 'danger' : warningCount > 0 ? 'warning' : 'default',
-    warningCount,
   };
 }
 

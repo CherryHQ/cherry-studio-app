@@ -1,15 +1,14 @@
-import { Button, ContentState, Input, useAlert, useToast } from '@cherrystudio/ui/components';
+import { ContentState, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
-import { useDesktopConnectionActions } from '@/frontend/hooks/useDesktopConnections';
-import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import {
@@ -17,9 +16,8 @@ import {
   DesktopPairingQrSchema,
 } from '@/shared/data/api/schemas/desktopConnections';
 
-import { desktopConnectionErrorMessage } from '../desktopConnectionError';
-
-const CAMERA_PERMISSION_SCOPES = ['camera.read'] as const;
+import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
   setupIntent,
@@ -28,164 +26,146 @@ export function DeviceConnectionScannerScreen({
   const connectionId = getSingleRouteParam(params.connectionId);
   const { t } = useTranslation();
   const router = useRouter();
-  const { alert } = useAlert();
   const { toast } = useToast();
   const permissions = useBackendModule('permissions');
-  const { refresh, statuses } = useDevicePermissionStatuses(CAMERA_PERMISSION_SCOPES);
-  const permission = statuses['camera.read'];
-  const hasRequestedPermission = useRef(false);
-  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
-  const [manualValue, setManualValue] = useState('');
+  const { camera, isPreparing, isActive, canSubmit, prepare } = useScannerPermissions();
+  const insets = useSafeAreaInsets();
   const [hasScanned, setHasScanned] = useState(false);
+  const [scanError, setScanError] = useState<string>();
   const scanInFlight = useRef(false);
-  const { isPairing, pair } = useDesktopConnectionActions();
+  const { setInput } = useDesktopPairingInput();
+  const isReady = isActive && !isPreparing;
+  const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
 
-  const requestCameraPermission = useCallback(async () => {
-    setIsRequestingPermission(true);
-    try {
-      await permissions.request(CAMERA_PERMISSION_SCOPES);
-      await refresh();
-    } catch {
+  const retryScan = () => {
+    scanInFlight.current = false;
+    setScanError(undefined);
+    setHasScanned(false);
+  };
+
+  const openSystemSettings = () => {
+    void permissions.openSystemSettings().catch(() => {
       toast.show({ label: t('settings.permissions.actionFailed'), variant: 'danger' });
-    } finally {
-      setIsRequestingPermission(false);
-    }
-  }, [permissions, refresh, t, toast]);
-
-  useEffect(() => {
-    if (
-      permission?.state === 'undetermined' &&
-      canRequestDevicePermission(permission) &&
-      !hasRequestedPermission.current
-    ) {
-      hasRequestedPermission.current = true;
-      void requestCameraPermission();
-    }
-  }, [permission, requestCameraPermission]);
+    });
+  };
 
   const submit = useCallback(
-    async (qr: DesktopPairingQr) => {
-      try {
-        const connection = await pair({ ...qr, ...(connectionId ? { connectionId } : {}) });
-        if (!connection) return;
-        router.replace({
-          params: { connectionId: connection.id },
-          pathname:
-            setupIntent === 'chat'
-              ? '/onboarding/device-connections/sync-guide'
-              : '/settings/device-connections/sync-guide',
-        });
-      } catch (error) {
-        scanInFlight.current = false;
-        alert.show({ title: desktopConnectionErrorMessage(error, t) });
-        setHasScanned(false);
-      }
+    (qr: DesktopPairingQr) => {
+      setInput({
+        ...qr,
+        capabilities: ['configuration', 'agent'],
+        ...(connectionId ? { connectionId } : {}),
+      });
+      router.replace(
+        setupIntent === 'chat'
+          ? '/onboarding/device-connections/pair'
+          : '/settings/device-connections/pair',
+      );
     },
-    [alert, connectionId, pair, router, setupIntent, t],
+    [connectionId, router, setInput, setupIntent],
   );
 
   const parseAndSubmit = useCallback(
     (value: string) => {
-      if (scanInFlight.current) return;
+      if (!canSubmit() || scanInFlight.current) return;
+      // Native scan events can arrive before React commits loading state.
       scanInFlight.current = true;
+      setHasScanned(true);
       try {
         const parsed = DesktopPairingQrSchema.safeParse(JSON.parse(value));
         if (!parsed.success) {
           throw new Error('invalid QR');
         }
-        setHasScanned(true);
-        void submit(parsed.data);
+        submit(parsed.data);
       } catch {
-        scanInFlight.current = false;
-        alert.show({ title: t('settings.deviceConnections.scan.invalidQr') });
-        setHasScanned(false);
+        setScanError(t('settings.deviceConnections.scan.invalidQr'));
       }
     },
-    [alert, submit, t],
+    [canSubmit, submit, t],
   );
 
   return (
     <View className="flex-1 bg-grouped-background">
-      <RouteHeader title={t('settings.deviceConnections.scan.title')} />
-      <View className="min-h-0 flex-1 overflow-hidden bg-black">
-        {!permission || isRequestingPermission ? (
-          <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
-        ) : permission.state === 'granted' ? (
-          <>
-            <CameraView
-              active={!isPairing}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-              onBarcodeScanned={
-                hasScanned || isPairing
-                  ? undefined
-                  : ({ data }) => {
-                      setHasScanned(true);
-                      parseAndSubmit(data);
-                    }
-              }
-              style={StyleSheet.absoluteFill}
+      <RouteHeader
+        title={t(
+          connectionId
+            ? 'settings.deviceConnections.location.scan'
+            : 'settings.deviceConnections.scan.title',
+        )}
+      />
+      <View className="flex-1 gap-5 px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
+        <View
+          className={
+            showCamera
+              ? 'aspect-square w-full overflow-hidden rounded-3xl bg-black'
+              : 'aspect-square w-full justify-center overflow-hidden rounded-3xl bg-card px-6'
+          }
+          style={styles.viewport}
+        >
+          {isPreparing ? (
+            <ContentState.Loading title={t('settings.deviceConnections.scan.loadingCamera')} />
+          ) : scanError ? (
+            <ContentState.Error
+              primaryAction={{ children: t('common.retry'), onPress: retryScan }}
+              title={scanError}
             />
-            <View className="flex-1 items-center justify-center" pointerEvents="none">
-              <View className="size-56 rounded-3xl border-2 border-white" />
-            </View>
-          </>
-        ) : (
-          <View className="flex-1 justify-center px-6">
+          ) : camera?.state === 'granted' ? (
+            <>
+              <CameraView
+                active={isReady && !hasScanned}
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={
+                  !isReady || hasScanned
+                    ? undefined
+                    : ({ data }) => {
+                        parseAndSubmit(data);
+                      }
+                }
+                style={StyleSheet.absoluteFill}
+              />
+              <View className="flex-1 items-center justify-center" pointerEvents="none">
+                <View className="aspect-square w-2/3">
+                  <View className="absolute top-0 left-0 size-10 rounded-tl-3xl border-white border-t-4 border-l-4" />
+                  <View className="absolute top-0 right-0 size-10 rounded-tr-3xl border-white border-t-4 border-r-4" />
+                  <View className="absolute bottom-0 left-0 size-10 rounded-bl-3xl border-white border-b-4 border-l-4" />
+                  <View className="absolute right-0 bottom-0 size-10 rounded-br-3xl border-white border-r-4 border-b-4" />
+                </View>
+              </View>
+            </>
+          ) : (
             <ContentState.Empty
               description={t('settings.deviceConnections.scan.permissionDescription')}
               primaryAction={
-                canRequestDevicePermission(permission)
+                canRequestDevicePermission(camera) || camera?.state === 'error'
                   ? {
                       children: t('settings.deviceConnections.scan.allowCamera'),
-                      onPress: () => void requestCameraPermission(),
+                      onPress: () => void prepare(true),
                     }
-                  : permission.state === 'denied'
+                  : camera?.state === 'denied'
                     ? {
                         children: t('settings.permissions.openSystemSettings'),
-                        onPress: () =>
-                          void permissions.openSystemSettings('camera').catch(() => {
-                            toast.show({
-                              label: t('settings.permissions.actionFailed'),
-                              variant: 'danger',
-                            });
-                          }),
+                        onPress: openSystemSettings,
                       }
                     : undefined
               }
               title={t('settings.deviceConnections.scan.permissionTitle')}
             />
-          </View>
-        )}
-      </View>
-      <View className="gap-3 border-border border-t bg-grouped-background px-4 py-5">
-        <Text className="text-sm text-muted-foreground">
-          {t('settings.deviceConnections.scan.manualDescription')}
+          )}
+        </View>
+        <Text className="px-6 text-center text-sm text-muted-foreground">
+          {t(
+            connectionId
+              ? 'settings.deviceConnections.location.scanHelp'
+              : 'settings.deviceConnections.scan.guidance',
+          )}
         </Text>
-        <Input
-          accessibilityLabel={t('settings.deviceConnections.scan.manualEntry')}
-          autoCapitalize="none"
-          autoCorrect={false}
-          multiline
-          onChangeText={setManualValue}
-          onSubmitEditing={() => {
-            const value = manualValue.trim();
-            if (value) {
-              parseAndSubmit(value);
-            }
-          }}
-          placeholder={t('settings.deviceConnections.scan.manualPlaceholder')}
-          returnKeyType="done"
-          submitBehavior="blurAndSubmit"
-          value={manualValue}
-        />
-        <Button
-          disabled={!manualValue.trim()}
-          loading={isPairing}
-          onPress={() => parseAndSubmit(manualValue.trim())}
-        >
-          {t('settings.deviceConnections.scan.pair')}
-        </Button>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  viewport: {
+    borderCurve: 'continuous',
+  },
+});

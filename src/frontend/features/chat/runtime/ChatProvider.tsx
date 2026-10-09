@@ -14,17 +14,24 @@ import {
 import { AppState } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
+import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import { AgentProtocolError, type AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
   createAgentChatDraftHandoffState,
 } from './agentChatDraftHandoff';
+import { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';
 import { createPendingChatMessages } from './agentMessageProjection';
-import { AgentSessionChatClient, type AgentSessionChatState } from './AgentSessionChatClient';
+import {
+  AgentSessionChatClient,
+  isAgentSessionBusy,
+  type AgentSessionChatState,
+} from './AgentSessionChatClient';
+import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
@@ -39,18 +46,12 @@ export type PendingChatSend = Readonly<{
   messages: ReturnType<typeof createPendingChatMessages>;
 }>;
 
-type AgentChatForkInput = {
-  fromMessageId: string;
-  sessionId: string;
-  /** Localized name for the copy; omitted, the fork inherits the source's. */
-  title?: string;
-};
-
 type AgentChatContextValue = {
   client: AgentSessionChatClient;
   completeDraftHandoff: (sessionId: string) => void;
-  forkSession: (input: AgentChatForkInput) => Promise<void>;
   getDraftHandoff: (sessionId: string | undefined) => AgentChatDraftHandoff | undefined;
+  /** Session metadata changed outside an observed event, such as a fork creating a new Session. */
+  onSessionChanged: (sessionId: string) => void;
   sendMessage: (input: AgentChatSendInput) => Promise<void>;
 };
 
@@ -58,12 +59,14 @@ const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
   activeTurn: null,
   liveMessages: Object.freeze([]),
   pendingApprovals: Object.freeze([]),
+  pendingQuestion: null,
   sessionId: '',
   status: 'idle',
 });
 
 const AgentChatContext = createContext<AgentChatContextValue | null>(null);
 
+/** Owns the local Session observation client together with composer navigation. */
 export function ChatProvider({ children }: PropsWithChildren) {
   const agent = useBackendModule('agent');
   const queryClient = useQueryClient();
@@ -71,17 +74,19 @@ export function ChatProvider({ children }: PropsWithChildren) {
   const router = useRouter();
   const [navigation] = useState(() => createChatNavigation({ pathname, router }));
   const [draftHandoff] = useState(createAgentChatDraftHandoffState);
+  const onSessionChanged = useCallback(
+    (sessionId: string) => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.detail(sessionId) }),
+      ]);
+    },
+    [queryClient],
+  );
   const [client] = useState(
     () =>
       new AgentSessionChatClient(agent, {
-        onSessionChanged: (sessionId) => {
-          void Promise.all([
-            queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() }),
-            queryClient.invalidateQueries({
-              queryKey: queryKeys.agentSessions.detail(sessionId),
-            }),
-          ]);
-        },
+        onSessionChanged,
         onTranscriptChanged: (sessionId) => {
           void queryClient.invalidateQueries({
             queryKey: queryKeys.agentSessions.messages(sessionId),
@@ -95,10 +100,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
   }, [navigation, pathname, router]);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'active') {
-        void client.refreshObservedSessions();
+      if (nextState === 'background') {
+        client.pauseObservedSessions();
+      } else if (nextState === 'active') {
+        void client.resumeObservedSessions();
       }
     });
+    if (AppState.currentState === 'background') {
+      client.pauseObservedSessions();
+    }
 
     return () => subscription.remove();
   }, [client]);
@@ -113,7 +123,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
         const session = await client.startSession({
           ...submission,
           agentId,
-          executionTarget: { kind: 'local' },
         });
         if (isCurrent()) {
           draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);
@@ -125,23 +134,15 @@ export function ChatProvider({ children }: PropsWithChildren) {
     },
     [client, draftHandoff, navigation, queryClient],
   );
-  const forkSession = useCallback(
-    async ({ fromMessageId, sessionId, title }: AgentChatForkInput) => {
-      const session = await client.forkSession(sessionId, fromMessageId, title);
-      navigation.openSession(session.id);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.agentSessions.all() });
-    },
-    [client, navigation, queryClient],
-  );
   const value = useMemo(
     () => ({
       client,
       completeDraftHandoff: draftHandoff.complete,
-      forkSession,
       getDraftHandoff: draftHandoff.get,
+      onSessionChanged,
       sendMessage,
     }),
-    [client, draftHandoff, forkSession, sendMessage],
+    [client, draftHandoff, onSessionChanged, sendMessage],
   );
 
   return (
@@ -180,9 +181,41 @@ function useAgentChatContext() {
   return context;
 }
 
-export function useAgentChatSession(sessionId: string | undefined): AgentSessionChatState {
+/** The observation client and its metadata invalidation, for the local read model. */
+export function useAgentChatClient() {
+  const { client, onSessionChanged } = useAgentChatContext();
+  return { client, onSessionChanged };
+}
+
+/** The complete observed state of one Session; selectors below narrow it for the composer. */
+export function useAgentSessionState(sessionId: string | undefined) {
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionState);
+}
+
+/** Retain the result as live messages settle into (or leave) the visible history window. */
+export function useAgentChatImageResult(
+  sessionId: string | undefined,
+  persistedResult: ConversationImageResult | undefined,
+) {
   const { client } = useAgentChatContext();
-  return useAgentSessionSelection(client, sessionId, selectSessionState);
+  const liveResult = useAgentSessionSelection(client, sessionId, selectImageResult);
+  const [remembered, setRemembered] = useState<{
+    sessionId: string | undefined;
+    message: ConversationImageResult | undefined;
+  }>({ sessionId, message: undefined });
+  const liveImage = useMemo(
+    () => (liveResult ? localImageResult(liveResult) : undefined),
+    [liveResult],
+  );
+  const candidates = [remembered.message, persistedResult, liveImage].filter(
+    (message): message is ConversationImageResult =>
+      Boolean(message && message.sessionId === sessionId),
+  );
+  const latest = latestConversationImageResult(candidates);
+  if (remembered.sessionId !== sessionId || remembered.message !== latest) {
+    setRemembered({ sessionId, message: latest });
+  }
+  return latest;
 }
 
 /** Keeps the Draft composer mounted while its accepted first message becomes a Session route. */
@@ -210,6 +243,7 @@ export function useAgentChatControls(input: {
   const { agentId, composerKey, sessionId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
+  const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
@@ -227,9 +261,10 @@ export function useAgentChatControls(input: {
     };
   }, [composerKey]);
 
+  const cancellationSessionId = sessionId ?? pendingSend?.sessionId;
   const cancel = useCallback(() => {
-    return sessionId ? client.cancelTurn(sessionId) : Promise.resolve();
-  }, [client, sessionId]);
+    return cancellationSessionId ? client.cancelTurn(cancellationSessionId) : Promise.resolve();
+  }, [client, cancellationSessionId]);
   const send = useCallback(
     async (
       message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
@@ -262,7 +297,10 @@ export function useAgentChatControls(input: {
           setSubmission((current) =>
             current?.send === pending ? { ...current, send: undefined } : current,
           );
-        throw error;
+        // Stop during admission: the composer takes the draft back without a failure.
+        throw error instanceof AgentProtocolError && error.view.code === 'CANCELLED'
+          ? Object.assign(new Error(error.message), { name: 'AbortError' })
+          : error;
       }
     },
     [agentId, composerKey, sendMessage, sessionId],
@@ -287,27 +325,15 @@ export function useAgentChatControls(input: {
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
-      pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready'))
+      isSessionBusy ||
+      (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
-    isApprovalPending: activeTurnStatus === 'awaiting-approval',
-    isBusy:
-      activeTurnStatus !== undefined &&
-      activeTurnStatus !== 'completed' &&
-      activeTurnStatus !== 'failed' &&
-      activeTurnStatus !== 'cancelled' &&
-      activeTurnStatus !== 'interrupted',
+    isApprovalPending:
+      activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
+    isBusy: isSessionBusy || Boolean(pendingSend?.isSubmitting),
     sendMessage: send,
   };
-}
-
-export function useAgentChatActions() {
-  return useAgentChatContext().client;
-}
-
-/** Forks a Session at one message and navigates to the copy. */
-export function useAgentChatFork() {
-  return useAgentChatContext().forkSession;
 }
 
 function useAgentSessionSelection<TValue>(
@@ -328,6 +354,10 @@ function useAgentSessionSelection<TValue>(
 
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
+}
+const selectSessionBusy = isAgentSessionBusy;
+function selectImageResult(state: AgentSessionChatState) {
+  return latestAgentImageResult(state.liveMessages);
 }
 function selectSessionState(state: AgentSessionChatState) {
   return state;

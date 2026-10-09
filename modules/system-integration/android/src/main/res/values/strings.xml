@@ -1,0 +1,8 @@
+<resources>
+  <string name="cherry_share_title">Share to Cherry</string>
+  <string name="cherry_share_continue">Continue in Cherry</string>
+  <string name="cherry_share_close">Close</string>
+  <string name="cherry_share_confirm">Cherry puts this in a new chat’s input, ready for you to edit and send.</string>
+  <string name="cherry_share_preparing">Preparing shared content…</string>
+  <string name="cherry_share_failed">Could not read this share. Share up to 10 files (25 MB each, 50 MB total) and try again.</string>
+</resources>

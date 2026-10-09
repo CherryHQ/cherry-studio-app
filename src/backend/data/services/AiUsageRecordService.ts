@@ -18,6 +18,7 @@ import {
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
+import { Emitter } from '@/backend/core/lifecycle/event';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { Database } from '@/backend/data/db/DbService';
 import { agentSessionMessageTable } from '@/backend/data/db/schemas/agentSessionMessage';
@@ -1041,7 +1042,7 @@ async function getMessageUsageProjectionTx(
 }
 
 /**
- * Materializes the message's usage columns from its records and returns the
+ * Materializes the message's statistics from its records and returns the
  * terminal message's Session for post-commit invalidation. Active messages still
  * refresh through the Agent protocol; tool usage can arrive after finalization.
  */
@@ -1083,30 +1084,20 @@ async function rebuildMessageUsageProjectionTx(
   };
   await db
     .update(agentSessionMessageTable)
-    .set({
-      stats,
-      usage:
-        projection.inputTokens !== undefined ||
-        projection.outputTokens !== undefined ||
-        projection.totalTokens !== undefined
-          ? {
-              ...(projection.inputTokens !== undefined
-                ? { inputTokens: projection.inputTokens }
-                : {}),
-              ...(projection.outputTokens !== undefined
-                ? { outputTokens: projection.outputTokens }
-                : {}),
-              ...(projection.totalTokens !== undefined
-                ? { totalTokens: projection.totalTokens }
-                : {}),
-            }
-          : null,
-    })
+    .set({ stats })
     .where(eq(agentSessionMessageTable.id, ref.id));
   if (message.status !== 'pending' && message.status !== 'streaming') {
     return message.sessionId;
   }
 }
+
+/** Persisted usage facts, without credentials or reporting-specific fields. */
+export type CommittedAiInvocationUsage = Readonly<
+  Pick<
+    InsertAiUsageRecordRow,
+    'requestId' | 'providerId' | 'modelId' | 'sourceType' | 'inputTokens' | 'outputTokens'
+  >
+>;
 
 /** Endpoint caches a newly committed usage record invalidates. */
 const USAGE_ANALYTICS_PATHS = [
@@ -1116,6 +1107,10 @@ const USAGE_ANALYTICS_PATHS = [
 ] as const;
 
 export class AiUsageRecordService {
+  private readonly committedInvocations = new Emitter<readonly CommittedAiInvocationUsage[]>();
+  /** Only newly inserted invocations, after commit. Subscribers own their lifetime. */
+  readonly onInvocationsCommitted = this.committedInvocations.event;
+
   async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
     return getMessageUsageProjectionTx(this.dbService.getDb(), ref);
   }
@@ -1141,8 +1136,8 @@ export class AiUsageRecordService {
     if (inputs.length === 0) return;
     try {
       const rows = inputs.map(invocationToRow);
-      const { insertedCount, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
-        let inserted = 0;
+      const { insertedRows, messagePaths } = await this.dbService.withWriteTx(async (tx) => {
+        const insertedRows: InsertAiUsageRecordRow[] = [];
         const messageRefs = new Map<string, MessageRef>();
         const messagePaths = new Set<string>();
         for (const row of rows) {
@@ -1152,7 +1147,7 @@ export class AiUsageRecordService {
             .onConflictDoNothing()
             .returning({ id: aiUsageRecordTable.id });
           if (returned.length > 0) {
-            inserted += 1;
+            insertedRows.push(row);
             if (row.messageKind && row.messageId)
               messageRefs.set(`${row.messageKind}:${row.messageId}`, {
                 kind: row.messageKind,
@@ -1176,9 +1171,26 @@ export class AiUsageRecordService {
           const sessionId = await rebuildMessageUsageProjectionTx(tx, ref);
           if (sessionId) messagePaths.add(`/agent-sessions/${sessionId}/messages`);
         }
-        return { insertedCount: inserted, messagePaths: [...messagePaths] };
+        return { insertedRows, messagePaths: [...messagePaths] };
       });
-      if (insertedCount > 0) publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
+      if (insertedRows.length > 0) {
+        publishDataApiChanges([...USAGE_ANALYTICS_PATHS, ...messagePaths]);
+        this.committedInvocations.fire(
+          Object.freeze(
+            insertedRows.map(
+              ({ requestId, providerId, modelId, sourceType, inputTokens, outputTokens }) =>
+                Object.freeze({
+                  requestId,
+                  providerId,
+                  modelId,
+                  sourceType,
+                  inputTokens,
+                  outputTokens,
+                }),
+            ),
+          ),
+        );
+      }
     } catch (error) {
       logger.error('Failed to record AI usage', error as Error, {
         requestIds: inputs.map(({ requestId }) => requestId),

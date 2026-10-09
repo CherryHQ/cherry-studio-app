@@ -39,6 +39,7 @@ function baseRequest(
 ): RuntimeExecutionRequest {
   return {
     turnId,
+    sessionId: 'session-1',
     instructions: 'You are a helpful assistant.',
     model: { providerId: 'fake-provider', modelId: 'fake-model' },
     history: [],
@@ -204,6 +205,7 @@ const harness: RuntimeConformanceHarness = {
           input: toolInput,
           signal: controller.signal,
           toolCallId,
+          turnId: controller.turnId,
         });
         controller.emit({
           type: 'part.replace',

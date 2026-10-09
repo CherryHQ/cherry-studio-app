@@ -1,6 +1,6 @@
 import type { Agent } from '@/shared/data/types/agent';
 
-import { buildAgentDto, createAgentFormState } from '../agentForm';
+import { buildAgentDto, createAgentFormState, setAgentCapabilityEnabled } from '../agentForm';
 
 const baseForm = createAgentFormState();
 
@@ -11,7 +11,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
     } as unknown as Agent);
@@ -23,16 +23,16 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
     });
   });
 
-  it('starts a new agent with no avatar draft and the device groups off', () => {
+  it('starts a new agent with no avatar draft and the device groups and Agent management off', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
-      disabledCapabilities: ['calendar', 'health', 'location', 'reminders'],
+      disabledCapabilities: ['agents', 'calendar', 'location', 'reminders'],
       toolApprovalMode: 'auto',
     });
   });
@@ -42,7 +42,7 @@ describe('createAgentFormState', () => {
       avatarUri: null,
       disabledCapabilities: [],
       instructions: '',
-      modelId: null,
+      model: null,
       name: 'Assistant',
       toolApprovalMode: 'default',
     } as unknown as Agent);
@@ -59,9 +59,9 @@ describe('buildAgentDto', () => {
     });
   });
 
-  it('omits modelId when creation delegates default-model resolution to the backend', () => {
+  it('omits model when creation delegates default-model resolution to the backend', () => {
     const dto = buildAgentDto(
-      { ...baseForm, modelId: 'openai::gpt-5', name: 'A' },
+      { ...baseForm, model: 'openai::gpt-5', name: 'A' },
       { inheritDefaultModel: true },
     );
 
@@ -69,7 +69,7 @@ describe('buildAgentDto', () => {
       throw new Error('expected ok');
     }
 
-    expect(dto.value).not.toHaveProperty('modelId');
+    expect(dto.value).not.toHaveProperty('model');
   });
 
   it('builds only the editable agent definition fields', () => {
@@ -80,7 +80,7 @@ describe('buildAgentDto', () => {
       avatarUri: 'file:///picker/avatar.jpg',
       disabledCapabilities: ['web'],
       instructions: 'system prompt',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: '  Researcher  ',
     });
 
@@ -91,9 +91,20 @@ describe('buildAgentDto', () => {
     expect(dto.value).toEqual({
       disabledCapabilities: ['web'],
       instructions: 'system prompt',
-      modelId: 'openai::gpt-5',
+      model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'auto',
     });
+  });
+});
+
+describe('setAgentCapabilityEnabled', () => {
+  it('removes an enabled group from the deny-list and adds a disabled one once', () => {
+    expect(setAgentCapabilityEnabled(['agents', 'location'], 'agents', true)).toEqual(['location']);
+    expect(setAgentCapabilityEnabled(['location'], 'agents', false)).toEqual([
+      'location',
+      'agents',
+    ]);
+    expect(setAgentCapabilityEnabled(['agents'], 'agents', false)).toEqual(['agents']);
   });
 });

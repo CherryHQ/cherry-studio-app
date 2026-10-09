@@ -11,8 +11,8 @@ describe('agent api schemas', () => {
   test.each([CreateAgentSchema, UpdateAgentSchema])(
     'accepts a nullable model assignment',
     (schema) => {
-      expect(schema.safeParse({ modelId: 'openai::gpt-4', name: 'Agent' }).success).toBe(true);
-      expect(schema.safeParse({ modelId: null, name: 'Agent' }).success).toBe(true);
+      expect(schema.safeParse({ model: 'openai::gpt-4', name: 'Agent' }).success).toBe(true);
+      expect(schema.safeParse({ model: null, name: 'Agent' }).success).toBe(true);
     },
   );
 

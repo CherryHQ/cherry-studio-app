@@ -1,11 +1,12 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/Message';
-import type { ImageParamDraft } from '@/frontend/data/paintings/imageGenerationParams';
+import type { PaintingReference } from '@/frontend/components/PaintingInput/usePaintingReference';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { PaintingGenerationStart } from '@/shared/contracts';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import type { Painting } from '@/shared/data/types/painting';
+import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import type {
   PaintingGenerationInput,
@@ -14,6 +15,7 @@ import type {
 import { PaintingComposer } from '../PaintingComposer';
 
 type PaintingInputProps = {
+  reference: PaintingReference;
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationStart | null>;
@@ -147,6 +149,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/frontend/components/Composer', () => ({
   ComposerDismissArea: ({ children }: { children: React.ReactNode }) => children,
   useComposerSendError: () => mockAlertShow,
+  useComposerState: () => ({ attachments: [], draft: '' }),
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
     const { useEffect } = jest.requireActual('react');
@@ -192,9 +195,15 @@ jest.mock('../PaintingAssistantMessage', () => ({
   },
 }));
 
-jest.mock('../PaintingInput', () => ({
+jest.mock('@/frontend/components/PaintingInput', () => ({
+  PaintingInputProvider: jest.requireActual(
+    '@/frontend/components/PaintingInput/PaintingInputProvider',
+  ).PaintingInputProvider,
   PaintingInput: (props: PaintingInputProps) => {
-    mockInputProps = props;
+    const { usePaintingInputSession } = jest.requireActual(
+      '@/frontend/components/PaintingInput/PaintingInputProvider',
+    );
+    mockInputProps = { ...props, reference: usePaintingInputSession().reference };
     return null;
   },
 }));
@@ -370,7 +379,7 @@ describe('PaintingComposer', () => {
     expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
-  it('keeps a failed turn but clears a cancelled turn', async () => {
+  it('keeps a failed turn and restores the last success when its retry is cancelled', async () => {
     renderComposer();
     mockGenerate.mockImplementationOnce(async () => {
       mockGeneration.error = new Error('provider unavailable');
@@ -389,7 +398,24 @@ describe('PaintingComposer', () => {
     await act(async () => {
       await mockInputProps?.onGenerate(input);
     });
-    expect(mockMessageListProps?.messages).toEqual([]);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: painting.prompt,
+      type: 'text',
+    });
+    expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
+  });
+
+  it('keeps the selected editing target when a follow-up is cancelled', async () => {
+    renderComposer();
+    act(() => mockInputProps?.reference.select(files.outputs[1]));
+    await act(async () => {
+      await mockInputProps?.onGenerate(input);
+    });
+    await act(async () => {
+      mockInputProps?.onCancel();
+    });
+    expect(mockInputProps?.reference.selection?.image.fileEntryId).toBe('output-1b');
+    expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
   });
 
   it('retries a failed active turn from its inline action', async () => {

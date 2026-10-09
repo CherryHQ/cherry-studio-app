@@ -3,13 +3,12 @@ import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/webCrypto';
 import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
-import * as Sentry from '@sentry/react-native';
-import { ObserveRoot } from 'expo-observe';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
@@ -17,6 +16,8 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
+import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
+import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -24,14 +25,23 @@ import {
   NavigationThemeProvider,
   paintingRouteId,
   paintingViewerHeaderShown,
+  paintingViewerRouteId,
 } from '@/frontend/appShell/navigation';
-import { configureObserve, configureSentry } from '@/frontend/appShell/observability';
+import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
+import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
+import { AppErrorBoundary } from '@/frontend/appShell/recovery';
 import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/appShell/search';
-import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/appShell/startup';
+import {
+  AppUpdateObserver,
+  StartupCoordinator,
+  StartupRouteReadyReporter,
+} from '@/frontend/appShell/startup';
+import { SystemEntryBridge } from '@/frontend/appShell/systemEntry';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 // Hold the native surface until the matching React Native startup cover has
 // committed its first layout.
@@ -39,15 +49,15 @@ void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // The router integration has to be live before the first screen mounts, so this
 // runs at module scope alongside the splash screen hold rather than in an effect.
-configureObserve();
-void configureSentry();
+configureReporting('layout');
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
 
 function RootLayout() {
   return (
     <RootGestureView className="flex-1">
-      <KeyboardProvider>
+      {/* iOS warmup focuses and removes a hidden input on the startup main thread. */}
+      <KeyboardProvider preload={Platform.OS !== 'ios'}>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
           <Portal.AccessibilityBoundary>
             <Toast.Provider>
@@ -56,17 +66,27 @@ function RootLayout() {
                   <BootstrapStartupCoordinator>
                     <AppBootstrapGate>
                       <StartupRouteReadyReporter>
-                        <NavigationThemeProvider>
-                          <AppAlertProvider>
-                            <BottomSheetProvider>
-                              <RouteHeaderProvider rootAction="back">
-                                <BackgroundActivityBridge />
-                                <LanguagePreferenceObserver />
-                                <RootStack />
-                              </RouteHeaderProvider>
-                            </BottomSheetProvider>
-                          </AppAlertProvider>
-                        </NavigationThemeProvider>
+                        {/* Inside the reporter so a failed first render still lays out and ends startup. */}
+                        <AppErrorBoundary>
+                          <NavigationThemeProvider>
+                            <AppAlertProvider>
+                              <BottomSheetProvider>
+                                <RouteHeaderProvider rootAction="back">
+                                  <AppUpdateObserver />
+                                  <BackgroundActivityBridge />
+                                  <LanguagePreferenceObserver />
+                                  <SystemEntryBridge />
+                                  <ConversationProvider>
+                                    <RootStack />
+                                  </ConversationProvider>
+                                  <PrivacyConsentGate />
+                                  <RestoreOutcomeNotice />
+                                  <BackupDialog />
+                                </RouteHeaderProvider>
+                              </BottomSheetProvider>
+                            </AppAlertProvider>
+                          </NavigationThemeProvider>
+                        </AppErrorBoundary>
                       </StartupRouteReadyReporter>
                     </AppBootstrapGate>
                   </BootstrapStartupCoordinator>
@@ -83,7 +103,7 @@ function RootLayout() {
 // `wrap` mounts the metrics root above the tree, which is what times the first
 // render. It has to sit outside `RootLayout` rather than inside its JSX so the
 // measurement starts before any provider below renders.
-export default Sentry.wrap(ObserveRoot.wrap(RootLayout));
+export default wrapReportingRoot(RootLayout);
 
 function AppAlertProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();
@@ -140,7 +160,12 @@ function RootStack() {
           headerShown: false,
         }}
       />
-      <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
+      <Stack.Screen
+        // Reopening the file already on top reuses it, so a repeated tap cannot stack a copy.
+        getId={({ params }) => getSingleRouteParam(params?.fileEntryId)}
+        name="files/[fileEntryId]"
+        options={{ headerTransparent: false }}
+      />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-export"
@@ -164,6 +189,7 @@ function RootStack() {
         }}
       />
       <Stack.Screen
+        getId={({ params }) => paintingViewerRouteId(params)}
         name="paintings/[paintingId]"
         options={{
           // The viewer runs the image full-bleed, so its chrome sits on the

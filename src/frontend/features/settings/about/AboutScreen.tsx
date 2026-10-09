@@ -2,7 +2,8 @@ import GithubIcon from '@cherrystudio/app-icons/icons/github';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import MailIcon from '@cherrystudio/app-icons/icons/mail';
 import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
-import { Image, Section, useToast } from '@cherrystudio/ui/components';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import { Chip, Image, Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { useRouter } from 'expo-router';
@@ -13,6 +14,7 @@ import { Linking, Platform, Text, View } from 'react-native';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
+import { useAppUpdateCheck } from './useAppUpdateCheck';
 
 const APP_VERSION = Constants.expoConfig?.version?.trim();
 const APP_BUILD = Platform.select({
@@ -34,6 +36,7 @@ export default function AboutSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateCheck();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
   const buildLabel = APP_BUILD ? t('settings.about.version.build', { build: APP_BUILD }) : null;
   const environmentLabel =
@@ -75,7 +78,7 @@ export default function AboutSettingsScreen() {
 
   return (
     <SettingsScrollPage
-      contentClassName="gap-6"
+      contentClassName="gap-4"
       headerProps={{
         rightActions: [
           {
@@ -89,19 +92,37 @@ export default function AboutSettingsScreen() {
         title: t('settings.about.header'),
       }}
     >
-      <View className="flex-row items-center gap-4 rounded-2xl bg-card px-4 py-5">
+      <View className="items-center gap-4 py-6">
         <Image
           accessibilityIgnoresInvertColors
-          className="size-18 shrink-0 rounded-full border border-border"
+          className="size-20 rounded-2xl"
           source={ABOUT_APP_LOGO}
         />
-        <View className="min-w-0 flex-1 gap-2">
+        <View className="items-center gap-1">
           <Text className="text-xl font-semibold text-foreground">{t('common.cherryStudio')}</Text>
-          <Text className="text-sm text-muted-foreground">{versionLabel}</Text>
+          <Text className="text-center text-sm text-muted-foreground">{versionDetails}</Text>
         </View>
       </View>
 
       <Section>
+        {isEnabled ? (
+          <Section.Item
+            accessibilityHint={hasAvailableUpdate ? t('settings.update.confirmTitle') : undefined}
+            accessibilityState={{ busy: isFetching }}
+            label={t('settings.update.check')}
+            leading={<RefreshCwIcon className="size-4 text-foreground" />}
+            onPress={checkForUpdates}
+            showChevron={false}
+            testID="settings-check-update"
+            trailing={
+              hasAvailableUpdate ? (
+                <Chip.Tag className="px-2 py-0.5" testID="settings-update-new">
+                  <Chip.Label className="text-xs">{t('settings.update.newBadge')}</Chip.Label>
+                </Chip.Tag>
+              ) : undefined
+            }
+          />
+        ) : null}
         <Section.Item
           label={t('settings.about.diagnostics.title')}
           description={t('settings.about.diagnostics.entryHint')}

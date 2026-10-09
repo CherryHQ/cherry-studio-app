@@ -6,6 +6,8 @@ import { useProviderApiServiceSheetClose } from '../useProviderApiServiceSheetCl
 type HookResult = ReturnType<typeof useProviderApiServiceSheetClose>;
 
 const mockGoBack = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
+const mockReplace = jest.fn();
 const mockDispatch = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
 const mockAlertConfirm = jest.fn();
@@ -13,9 +15,11 @@ const mockAlertConfirm = jest.fn();
 jest.mock('expo-router', () => ({
   useNavigation: () => ({
     addListener: mockAddListener,
+    canGoBack: mockCanGoBack,
     dispatch: mockDispatch,
     goBack: mockGoBack,
   }),
+  useRouter: () => ({ replace: mockReplace }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -95,5 +99,15 @@ describe('useProviderApiServiceSheetClose', () => {
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockAlertConfirm).not.toHaveBeenCalled();
+  });
+
+  test('returns home when the edit screen was opened without a previous screen', () => {
+    mockCanGoBack.mockReturnValueOnce(false);
+    renderHook(false);
+
+    act(() => hookResultRef.current?.requestClose());
+
+    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/');
   });
 });

@@ -8,9 +8,12 @@ import { ChatMessage } from '../ChatMessage';
 
 const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
 const mockCopyMessage = jest.fn();
+const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
+const mockLocalUsage = jest.fn(() => null);
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
   ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
   ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
@@ -19,6 +22,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
   useAssistantMessageActions: () => ({
     copyAssistantMessage: mockCopyMessage,
+    deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
   }),
 }));
@@ -50,7 +54,7 @@ jest.mock('../AssistantMessageToolbar', () => ({
 }));
 
 jest.mock('../AssistantMessageUsage', () => ({
-  AssistantMessageUsage: () => null,
+  AssistantMessageUsage: () => mockLocalUsage(),
 }));
 
 describe('ChatMessage', () => {
@@ -63,6 +67,26 @@ describe('ChatMessage', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('only displays usage supplied by the conversation owner, without reading the local ledger by default', () => {
+    act(() => {
+      renderer = create(renderMessage(createMessage('success')));
+    });
+    expect(mockLocalUsage).not.toHaveBeenCalled();
+    act(() => {
+      renderer!.update(
+        <ChatMessage
+          assistantPresentation={{ name: 'Assistant' }}
+          isMessageActionsEnabled
+          shouldShowTimestamp
+          message={createMessage('success')}
+          renderUsage={() => '42 Tokens'}
+        />,
+      );
+    });
+    expect(JSON.stringify(renderer!.toJSON())).toContain('42 Tokens');
+    expect(mockLocalUsage).not.toHaveBeenCalled();
   });
 
   test('enables copy and share only after an assistant answer settles', () => {
@@ -82,7 +106,6 @@ describe('ChatMessage', () => {
     expect(mockCopyMessage).toHaveBeenCalledWith({ messageId: 'assistant-1', text: 'Answer' });
     act(() => menu.items[1].onPress());
     expect(mockShareMessage).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(false);
   });
 
   test('copies user text and shares the selected user message through the existing actions', () => {
@@ -169,12 +192,25 @@ describe('ChatMessage', () => {
     expect(renderer!.root.findAllByType('Button')).toHaveLength(0);
   });
 
+  test('keeps the long-press menu free of destructive actions', () => {
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), turnId: 'turn-1' }));
+    });
+
+    // Deleting a turn lives on the assistant toolbar. A long press competes
+    // with native text selection and lands wherever the finger reaches, so it
+    // must not be able to remove anything.
+    const items = mockContextMenu.mock.lastCall![0].items;
+    expect(items.map((item) => item.id)).toEqual(['copy', 'share']);
+    expect(items.some((item) => item.destructive)).toBe(false);
+    expect(mockDeleteMessageTurn).not.toHaveBeenCalled();
+  });
+
   test('keeps native text selection available when message actions are disabled', () => {
     act(() => {
       renderer = create(renderMessage(createMessage('success'), false));
     });
 
-    expect(renderer?.root.findByType('AssistantMessage').props.isTextSelectionEnabled).toBe(true);
     expect(mockContextMenu).not.toHaveBeenCalled();
   });
 

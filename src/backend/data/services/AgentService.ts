@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import {
   type AgentRow,
   agentTable,
@@ -44,7 +45,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
     id: row.id,
     instructions: row.instructions,
-    modelId: row.modelId as UniqueModelId | null,
+    model: row.model as UniqueModelId | null,
     modelName,
     name: row.name,
     orderKey: row.orderKey,
@@ -87,7 +88,7 @@ export class AgentService {
       throw DataApiErrorFactory.notFound('Agent', id);
     }
 
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   get(id: string): Promise<Agent> {
@@ -137,11 +138,11 @@ export class AgentService {
         .where(whereClause),
     ]);
 
-    const modelNames = await modelService.getNamesByUniqueIds(rows.map((row) => row.modelId));
+    const modelNames = await modelService.getNamesByUniqueIds(rows.map((row) => row.model));
 
     return {
       items: rows.map((row) =>
-        rowToAgent(row, row.modelId ? (modelNames.get(row.modelId) ?? null) : null),
+        rowToAgent(row, row.model ? (modelNames.get(row.model) ?? null) : null),
       ),
       page: query.page,
       total: Number(countRows[0]?.count ?? 0),
@@ -152,8 +153,9 @@ export class AgentService {
     this.validateName(dto.name);
 
     const row = await this.dbService.withWriteTx((tx) => this.insertTx(tx, dto));
+    publishDataApiChanges(['/agents', `/agents/${row.id}`]);
 
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /** Seeds a fresh installation without recreating an Agent the user deleted. */
@@ -165,11 +167,30 @@ export class AgentService {
       return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
     });
 
-    return row ? rowToAgent(row, await this.getModelName(row.modelId)) : null;
+    if (!row) return null;
+    publishDataApiChanges(['/agents', `/agents/${row.id}`]);
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
-  async update(id: string, dto: UpdateAgentDto): Promise<Agent> {
+  async update(
+    id: string,
+    dto: UpdateAgentDto,
+    options: { expectedUpdatedAt?: string } = {},
+  ): Promise<Agent> {
     const current = await this.getById(id);
+    const expectedTimestamp =
+      options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
+    if (expectedTimestamp !== undefined && !Number.isFinite(expectedTimestamp)) {
+      throw DataApiErrorFactory.validation({ expectedUpdatedAt: ['Invalid Agent version'] });
+    }
+    if (
+      options.expectedUpdatedAt !== undefined &&
+      Date.parse(current.updatedAt) !== expectedTimestamp
+    ) {
+      throw DataApiErrorFactory.conflict(
+        'The Agent changed since it was read. Read it again before editing.',
+      );
+    }
 
     if (dto.name !== undefined) {
       this.validateName(dto.name);
@@ -184,10 +205,10 @@ export class AgentService {
     }
 
     const row = await this.dbService.withWriteTx(async (tx) => {
-      if (dto.modelId && !(await this.modelExistsTx(tx, dto.modelId))) {
+      if (dto.model && !(await this.modelExistsTx(tx, dto.model))) {
         throw DataApiErrorFactory.validation(
-          { modelId: [`Model '${dto.modelId}' is not registered in user_model`] },
-          `Agent modelId '${dto.modelId}' is not registered - add the model first or pass null`,
+          { model: [`Model '${dto.model}' is not registered in user_model`] },
+          `Agent model '${dto.model}' is not registered - add the model first or pass null`,
         );
       }
 
@@ -197,17 +218,31 @@ export class AgentService {
           ...updates,
           updatedAt: monotonicUpdateTimestamp(agentTable.updatedAt),
         })
-        .where(and(eq(agentTable.id, id), isNull(agentTable.deletedAt)))
+        .where(
+          and(
+            eq(agentTable.id, id),
+            isNull(agentTable.deletedAt),
+            expectedTimestamp === undefined
+              ? undefined
+              : eq(agentTable.updatedAt, expectedTimestamp),
+          ),
+        )
         .returning();
       if (!updated) {
+        if (expectedTimestamp !== undefined) {
+          throw DataApiErrorFactory.conflict(
+            'The Agent changed or was deleted while saving. Read it again before editing.',
+          );
+        }
         throw DataApiErrorFactory.notFound('Agent', id);
       }
       return updated as AgentRow;
     });
 
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
     const modelName =
-      dto.modelId !== undefined && dto.modelId !== current.modelId
-        ? await this.getModelName(dto.modelId)
+      dto.model !== undefined && dto.model !== current.model
+        ? await this.getModelName(dto.model)
         : current.modelName;
 
     return rowToAgent(row, modelName);
@@ -236,7 +271,8 @@ export class AgentService {
       return updated as AgentRow;
     });
 
-    return rowToAgent(row, await this.getModelName(row.modelId));
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
+    return rowToAgent(row, await this.getModelName(row.model));
   }
 
   /**
@@ -261,6 +297,7 @@ export class AgentService {
       throw DataApiErrorFactory.notFound('Agent', id);
     }
 
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
     return { deleted };
   }
 
@@ -282,6 +319,7 @@ export class AgentService {
         scope: isNull(agentTable.deletedAt),
       });
     });
+    publishDataApiChanges(['/agents', `/agents/${id}`]);
   }
 
   async reorderBatch(moves: { anchor: OrderRequest; id: string }[]): Promise<void> {
@@ -308,6 +346,7 @@ export class AgentService {
         scope: isNull(agentTable.deletedAt),
       });
     });
+    publishDataApiChanges(['/agents', ...moves.map(({ id }) => `/agents/${id}`)]);
   }
 
   private async resolveCreateModelId(
@@ -317,8 +356,8 @@ export class AgentService {
     if (dtoModelId !== undefined) {
       if (dtoModelId && !(await this.modelExistsTx(tx, dtoModelId))) {
         throw DataApiErrorFactory.validation(
-          { modelId: [`Model '${dtoModelId}' is not registered in user_model`] },
-          `Agent modelId '${dtoModelId}' is not registered - add the model first or pass null`,
+          { model: [`Model '${dtoModelId}' is not registered in user_model`] },
+          `Agent model '${dtoModelId}' is not registered - add the model first or pass null`,
         );
       }
       return dtoModelId;
@@ -339,13 +378,13 @@ export class AgentService {
   }
 
   private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
-    const modelId = await this.resolveCreateModelId(tx, dto.modelId);
+    const modelId = await this.resolveCreateModelId(tx, dto.model);
     return (await insertWithOrderKey(
       tx,
       agentTable,
       {
         ...dto,
-        modelId,
+        model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },
       { pkColumn: agentTable.id, scope: isNull(agentTable.deletedAt) },

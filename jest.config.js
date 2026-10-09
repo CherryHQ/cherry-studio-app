@@ -1,3 +1,8 @@
+const { dirname, join } = require('node:path');
+
+const piAgentDirectory = dirname(require.resolve('@earendil-works/pi-agent-core/package.json'));
+const piDependencyFile = (name, file) => join(piAgentDirectory, '..', name, 'dist', file);
+
 module.exports = {
   preset: 'jest-expo',
   testEnvironment: 'node',
@@ -19,28 +24,46 @@ module.exports = {
     '/.context/',
     '/ios/',
     '/android/',
-    '/packages/ai-core/',
     '/packages/ai-runtime/',
-    '/packages/ai-sdk-provider/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
-    // The desktop-sync audits spawn hundreds of real git subprocesses against
-    // fixture repos in tmpdir (~13s of the run). They guard against desktop
-    // drift, which is a local-sync concern rather than a per-PR one, so PR CI
-    // skips them and a full local run still covers them.
-    ...(process.env.PRCI ? ['/scripts/__tests__/'] : []),
+    // Tooling suites guard local-only tools, so PR CI skips them except the
+    // architecture rules and the React Native patch guard that protect every PR.
+    ...(process.env.PRCI
+      ? ['/scripts/__tests__/(?!(architectureBoundaries|reactNativeTextCache)\\.test\\.ts$)']
+      : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
   // them out of the Haste map so package names remain unique during tests.
   modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
-    // These patched Pi subpaths intentionally expose ESM through import-only
+    // pnpm installs several peer-resolved copies of `expo`, and which copy a
+    // package like `@expo/ui` links to shifts whenever the lockfile is
+    // re-resolved. jest-expo neutralises Expo.fx's dev-server side effects with
+    // `jest.mock('expo/src/async-require/messageSocket')`, which only covers the
+    // copy it resolves; any suite reaching a different copy crashes on
+    // `getDevServer` because the react-native mock reports a null scriptURL.
+    // Collapse every `expo` request onto the root copy, the same way the
+    // react-native preset pins `^react-native($|/.*)`.
+    '^expo($|/.*)$': '<rootDir>/node_modules/expo$1',
+    // remend only exports an import entry, which Jest's CommonJS resolver cannot
+    // select even when a test mocks it. Resolve the published file directly.
+    '^remend$': '<rootDir>/node_modules/remend/dist/index.js',
+    // Pi's official entries expose ESM through import-only
     // conditions. Jest resolves the app tests as CommonJS, so point it at the
     // same published files directly and let babel-jest transform them below.
-    '^@earendil-works/pi-agent-core/agent$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/agent.js',
-    '^@earendil-works/pi-agent-core/compaction$':
-      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/harness/compaction/compaction.js',
+    '^@earendil-works/pi-agent-core$':
+      '<rootDir>/node_modules/@earendil-works/pi-agent-core/dist/index.js',
+    '^@earendil-works/chord$': piDependencyFile('chord', 'index.js'),
+    '^@earendil-works/chord/(context|delta)$': piDependencyFile('chord', '$1/index.js'),
+    '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
+    '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
+    '^@earendil-works/pi-ai/native-oauth$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/native-oauth.js',
+    '^@earendil-works/pi-ai/providers/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/providers/$1.js',
+    '^@earendil-works/pi-ai/api/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-ai/dist/api/$1.js',
     '^@earendil-works/pi-ai/utils/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-ai/dist/utils/$1.js',
     '^@cherrystudio/ui/background-activity/ios$':
@@ -62,13 +85,13 @@ module.exports = {
     '\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    // `fractional-indexing`, `standard-navigation`, and `uuid` are ESM-only, so
+    // `fractional-indexing`, `remend`, `standard-navigation`, and `uuid` are ESM-only, so
     // they need transforming for any suite that reaches them. `standard-navigation`
     // arrives transitively through Expo Router's public exports.
     // `typebox` is Pi's ESM-only tool argument validator, exercised by real-loop tests.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|uuid|voyage-ai-provider|@opeoginni|@earendil-works)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@cherrystudio/remote-protocol|@cherrystudio/remote-transport)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

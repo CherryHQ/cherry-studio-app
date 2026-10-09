@@ -7,8 +7,7 @@
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
- * offered as `ask`; execution prompts after in-app approval. HealthKit read
- * access remains unknown after prompting, so queries can return no data.
+ * offered as `ask`; execution prompts after in-app approval.
  *
  * Resolution is per turn on purpose. Permissions and the drawing-model setting
  * change outside Cherry, so a catalog cached across turns would offer tools the
@@ -19,8 +18,10 @@ import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Platform } from 'react-native';
 
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
+import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
 import {
@@ -42,9 +43,10 @@ import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 import type { TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
+import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
+import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
   createCalendarTools,
-  createHealthTools,
   createLocationTools,
   createReminderTools,
   type DeviceToolDependencies,
@@ -57,6 +59,7 @@ import {
   resolveConfiguredPaintingModel,
 } from './painting';
 import { createReadFileTool } from './readFileTool';
+import { createRunJsTool } from './runJsTool';
 import { createWebTools, type WebSearchToolDependencies } from './web';
 import { createWriteFileTool } from './writeFileTool';
 
@@ -85,6 +88,9 @@ export type { TurnFileScope, TurnToolResources } from '../resources/managedFileR
 export type SystemCapabilitySource = {
   /** The tools this turn may use; empty when the model cannot call any. */
   getTools(input: {
+    agentId?: string;
+    /** The Host's response channel for `ask_user_question`. */
+    askUser: AskUserQuestion;
     documentParserMode: DocumentParserMode;
     disabledCapabilities: readonly AgentCapability[];
     model: RuntimeModel;
@@ -96,6 +102,9 @@ export type SystemCapabilitySource = {
 
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
+    agents: AgentManagementData;
+    /** Null on clients built without the native sandbox, which omits `run_js`. */
+    jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
     platform: string;
     preference: PaintingToolDependencies['preference'];
@@ -121,6 +130,8 @@ export function createSystemCapabilitySource(
 ): SystemCapabilitySource {
   return {
     async getTools({
+      agentId,
+      askUser,
       disabledCapabilities,
       model,
       resources,
@@ -140,6 +151,8 @@ export function createSystemCapabilitySource(
         resources,
         documentParserMode,
         resolveUsageAttribution,
+        agentId,
+        askUser,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -186,7 +199,7 @@ export function resolveApproval(
       canUseDevicePermission(permission, scope.deviceAccess[permission]) ||
       canRequestDevicePermission(scope.deviceAccess[permission]),
   );
-  if (descriptor.permissionMatch === 'any' ? !available.some(Boolean) : !available.every(Boolean)) {
+  if (!available.every(Boolean)) {
     return null;
   }
   if (
@@ -219,10 +232,14 @@ function createCatalog(
   scope: BuiltInToolScope,
   resources: TurnToolResources,
   documentParserMode: DocumentParserMode,
-  resolveUsageAttribution?: AiUsageAttributionResolver,
+  resolveUsageAttribution: AiUsageAttributionResolver | undefined,
+  agentId: string | undefined,
+  askUser: AskUserQuestion,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
+    createAskUserQuestionTool(askUser),
+    ...createAgentManagementTools(deps.agents, agentId),
     createEditFileTool(
       {
         createTextEntry: fileContent.createTextEntry,
@@ -234,9 +251,9 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
+    ...(deps.jsSandbox ? [createRunJsTool({ sandbox: deps.jsSandbox, files: fileContent })] : []),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
-    ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
     createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),
@@ -350,7 +367,9 @@ function resolveDependencies(
   overrides: Partial<SystemCapabilitySourceDependencies>,
 ): SystemCapabilitySourceDependencies {
   return {
+    agents: overrides.agents ?? agentService,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
+    jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),
     platform: overrides.platform ?? Platform.OS,
     preference: overrides.preference ?? services.preference,

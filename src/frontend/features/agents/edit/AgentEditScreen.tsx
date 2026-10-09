@@ -139,7 +139,7 @@ function AgentEditForm({
   const isEditing = Boolean(agentId);
   const { createAgent, isCreating, isSettingAvatar, setAgentAvatar } = useAgentMutations();
   const { flush, hasFailedSave, retry, saveField, saveToolBindings } = useAgentAutoSave(agentId);
-  const modelPickerData = useModelPickerData({ modelType: 'text' });
+  const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
   );
@@ -153,7 +153,7 @@ function AgentEditForm({
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const safeAreaInsets = useSafeAreaInsets();
-  const selectedModel = modelPickerData.getModelItem(form.modelId);
+  const selectedModel = modelPickerData.getModelItem(form.model);
   // Resolving through the picker catalog keeps a stale preference (a model the
   // user has since removed) from being seeded, which the create endpoint would
   // reject as an unregistered model.
@@ -165,11 +165,11 @@ function AgentEditForm({
   // model catalog load asynchronously, so keep following them until the user
   // picks a model themselves — after that a late-arriving default must not
   // overwrite the deliberate choice. Editing an existing agent never seeds:
-  // its empty `modelId` is a real stored state, though such an agent cannot
+  // its empty `model` is a real stored state, though such an agent cannot
   // start a session until a model is assigned.
   if (!isEditing && !hasPickedModel && defaultModelId !== seededModelId) {
     setSeededModelId(defaultModelId);
-    setForm((current) => ({ ...current, modelId: defaultModelId }));
+    setForm((current) => ({ ...current, model: defaultModelId }));
   }
 
   const updateForm = useCallback(
@@ -191,7 +191,7 @@ function AgentEditForm({
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setHasPickedModel(true);
-      updateForm('modelId', item.modelId);
+      updateForm('model', item.modelId);
       setIsModelPickerOpen(false);
     },
     [updateForm],
@@ -438,12 +438,12 @@ function AgentEditForm({
       </KeyboardAwareScrollView>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="text"
+          modelType="all"
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
-          selectedModelId={form.modelId}
+          selectedModelId={form.model}
           title={t('agent.form.modelSelect')}
         />
       ) : null}

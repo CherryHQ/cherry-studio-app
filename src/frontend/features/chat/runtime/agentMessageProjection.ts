@@ -78,13 +78,13 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
   } as CherryMessagePart;
 }
 
-function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMessagePart {
+function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
   const base = {
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
-    title: part.displayName,
+    title: part.title,
     toolCallId: part.toolCallId,
-    toolName: part.providerName,
+    toolName: part.toolName,
     type: 'dynamic-tool',
   } as const;
 
@@ -134,13 +134,15 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMe
 }
 
 /** Shared tool renderers consume the capability value, not the Runtime envelope. */
-function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'tool' }>['output']) {
+function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'dynamic-tool' }>['output']) {
   const parsed = AgentToolResultSchema.safeParse(output);
   return parsed.success ? parsed.data.value : output;
 }
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
+    case 'data-compaction-anchor':
+      return part;
     case 'text':
       return part.pluginReferences?.length
         ? withCherryMeta(
@@ -154,20 +156,22 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
       return withCherryMeta(
         {
           type: 'file',
-          filename: part.name ?? 'File',
+          filename: part.filename ?? 'File',
           mediaType: part.mediaType,
           url: fileEntryUrl(part.fileEntryId as FileEntryId),
         } as Extract<CherryMessagePart, { type: 'file' }>,
         { fileEntryId: part.fileEntryId },
       );
-    case 'tool':
+    case 'dynamic-tool':
       return toToolPart(part);
-    case 'error':
-      return toErrorPart(part.error);
+    case 'data-error':
+      return toErrorPart(part.data);
   }
 }
 
-function toSourceUrlParts(part: Extract<AgentMessagePart, { type: 'tool' }>): SourceUrlPart[] {
+function toSourceUrlParts(
+  part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>,
+): SourceUrlPart[] {
   if (
     (part.state !== 'output-available' && part.state !== 'error') ||
     part.toolRef.source !== 'builtin'
@@ -218,7 +222,7 @@ function projectAgentPart(
 
   const projection = {
     part: toDisplayPart(part),
-    sourceParts: part.type === 'tool' ? toSourceUrlParts(part) : [],
+    sourceParts: part.type === 'dynamic-tool' ? toSourceUrlParts(part) : [],
   } satisfies AgentPartProjection;
   cache?.partsBySource.set(part, projection);
   return projection;
@@ -260,7 +264,7 @@ function toDisplayParts(
   };
 }
 
-function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
+export function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
   if (message.inferenceSnapshot?.status !== 'supported') {
     return undefined;
   }
@@ -298,10 +302,15 @@ export function toAgentMessageListItem(
     createdAt: message.createdAt,
     data: toDisplayParts(message.parts, cache),
     id: message.id,
+    ...(message.inferenceSnapshot?.status === 'supported' &&
+    message.inferenceSnapshot.snapshot.imageGeneration
+      ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
+      : {}),
     ...(model ? { model } : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
+    ...(message.turnId ? { turnId: message.turnId } : {}),
   } satisfies MessageListItem;
   cache?.itemsByMessageId.set(message.id, { item, source: message });
   return item;
@@ -309,7 +318,10 @@ export function toAgentMessageListItem(
 
 /** Immediate display of a send, using the same row IDs that persistence will receive. */
 export function createPendingChatMessages(
-  input: Pick<AgentSubmitMessageInput, 'parts' | 'userMessageId' | 'assistantMessageId'>,
+  input: Pick<
+    AgentSubmitMessageInput,
+    'parts' | 'userMessageId' | 'assistantMessageId' | 'imageGeneration'
+  >,
 ): readonly [MessageListItem, MessageListItem] {
   const createdAt = new Date().toISOString();
   const parts = input.parts.map(
@@ -330,6 +342,7 @@ export function createPendingChatMessages(
       createdAt,
       data: { parts: [] },
       id: input.assistantMessageId,
+      ...(input.imageGeneration ? { imageGeneration: input.imageGeneration } : {}),
       role: 'assistant',
       status: 'pending',
     },
@@ -355,6 +368,29 @@ export function mergeAgentMessageViews(
   }
 
   return merged;
+}
+
+/**
+ * Show an answer awaiting its replacement turn the way a just-sent message
+ * looks: empty and pending. Admission is too slow to leave the replaced answer
+ * standing, and an empty pending row is the one state the list already renders
+ * as "working on it". The Host's reserved view takes over as soon as it lands,
+ * restoring any prefix the retry keeps.
+ */
+export function projectRetryingMessage(
+  messages: readonly AgentMessageView[],
+  retryingMessageId: string | undefined,
+): readonly AgentMessageView[] {
+  if (!retryingMessageId) {
+    return messages;
+  }
+  const index = messages.findIndex((message) => message.id === retryingMessageId);
+  if (index < 0) {
+    return messages;
+  }
+  const projected = [...messages];
+  projected[index] = { ...messages[index], status: 'pending', parts: [] };
+  return projected;
 }
 
 export function toAgentMessageListItems(

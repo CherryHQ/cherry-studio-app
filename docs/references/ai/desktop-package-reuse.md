@@ -1,9 +1,10 @@
 # Desktop AI Reuse
 
-Status: **selected provider and non-conversation AI SDK changes from Cherry Desktop commit
-`246e46b6b04796696a9a4903f4604f5fe9d1ae4b` are ported. Mobile does not mirror Desktop's
-conversation Runtime. Provider registry admission remains incomplete, and Mobile's remote registry
-compatibility stays pinned to Desktop `2.0.8` pending an explicit compatibility review.**
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.1.0` and
+`@cherrystudio/ai-sdk-provider@0.1.7` in place of local source packages; Expo and device acceptance
+of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime. Provider
+registry admission remains incomplete, and Mobile's remote registry compatibility stays pinned to
+Desktop `2.0.8` pending an explicit compatibility review.**
 
 This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
 source of behavior to assess, not a tree to copy. Every port needs a concrete Mobile consumer and
@@ -15,7 +16,7 @@ Mobile has two AI execution paths:
 
 - Conversation turns run on `@earendil-works/pi-agent-core` and `@earendil-works/pi-ai` under
   `src/backend/ai/agent/runtime/pi`.
-- Non-conversation text generation, model checks, model listing, and image generation run through
+- Non-conversation text generation, SDK-only probes, model listing, and image generation run through
   `AiService` and the AI SDK.
 
 Desktop code is admitted only when all of the following are true:
@@ -31,8 +32,8 @@ Desktop code is admitted only when all of the following are true:
 
 | Desktop surface | Mobile treatment |
 | --- | --- |
-| `@cherrystudio/ai-core` | Selectively port AI SDK provider, plugin, text, and image behavior consumed by `AiService`; do not copy Desktop context or conversation-loop modules without a Mobile consumer |
-| `@cherrystudio/ai-sdk-provider` | Selectively port CherryIN, embedding, reranking, and image transport behavior used by Mobile's AI SDK path |
+| `@cherrystudio/ai-core` | Consume the published package through `AiService` and its provider/tool adapters; keep Mobile conversation execution in Pi |
+| `@cherrystudio/ai-sdk-provider` | Consume the published CherryIN and OpenAI-compatible provider package through Mobile's AI SDK path |
 | `@cherrystudio/provider-registry` | Port platform-neutral catalog semantics while retaining Mobile's static JSON loader and persisted-data compatibility projection |
 | Desktop custom providers and image transports | Port reusable wire behavior into Mobile's private `@cherrystudio/ai-runtime` when an existing Mobile feature consumes it |
 | Desktop Pi Runtime | Do not consume it directly; Mobile owns its Pi host, adapters, persistence, tools, and lifecycle |
@@ -41,34 +42,32 @@ Desktop code is admitted only when all of the following are true:
 Desktop UI and table packages are outside this AI Runtime decision and require separate React
 Native and ownership assessments.
 
-## Selected AI SDK Reuse
+## Published AI SDK Reuse
 
 ### `@cherrystudio/ai-core`
 
-Mobile imports `ai-core` through the private implementation behind `AiService`. Its production
-consumers use provider construction, non-conversation text generation, model probes, and image
-generation. This branch keeps relevant provider lazy loading, request-scoped provider cache
-identity, AI SDK compatibility, and image-result behavior.
+Mobile imports the published `ai-core` package through the private implementation behind
+`AiService`. Production consumers use provider construction, non-conversation text generation,
+model probes, and image generation. `packages/ai-runtime` owns Mobile's provider configuration and
+web-search option types that the published package does not expose.
 
-Desktop context compaction, model-message adaptation, offloading, and independent fallback-model
-resolution have no Mobile consumer. Mobile conversation context is owned by
-`src/backend/ai/agent/runtime/pi/contextCompaction.ts`; those Desktop `ai-core` modules are therefore
-not ported.
-
-The package is not an exact Desktop mirror. Upstream changes must be reviewed against Mobile's
-imports and execution paths before they are applied.
+The published package also contains Desktop context and Agent helpers. They have no Mobile
+conversation consumer: that execution and context are owned by
+`src/backend/ai/agent/runtime/pi/`. New versions must still be reviewed against the consumed
+exports, patched AI SDK dependencies, Metro graph, and Mobile adapters.
 
 ### `@cherrystudio/ai-sdk-provider`
 
-Mobile uses this package for CherryIN and OpenAI-compatible provider behavior. The selected update
-adds reasoning-model token conversion and the current embedding endpoint contract used by that
-provider path. Unrelated Desktop package changes are not admitted automatically.
+Mobile uses the published package for CherryIN and OpenAI-compatible provider behavior, including
+reranking, reasoning-model token conversion, and embedding. New versions require consumer and
+dependency review before the pinned version changes.
 
 ### Dependency resolution
 
-When a selected provider change requires a newer AI SDK contract, Mobile aligns the affected SDK
-versions and carries the matching patches. Expo-specific dependency choices and Pi patches remain
-Mobile-owned. A Desktop version bump by itself is not a reason to change the Mobile graph.
+The published `ai-core@2.1.0` and `ai-sdk-provider@0.1.7` require OpenAI SDK `3.0.109`; `ai-core`
+also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
+Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
+by itself is not a reason to change the Mobile graph.
 
 ## Provider Registry Is A Semantic Port
 
@@ -99,8 +98,12 @@ check, platform exports, and device acceptance before the registry compatibility
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
-| Full catalog compatibility review | Outstanding | Blocks compatibility-version and synchronization-manifest advancement |
+| Full catalog compatibility review | Outstanding | Blocks compatibility-version advancement |
 | Mobile-only `github` preset | Retained as a product extension | Its bundled provider-model namespace replaces any remote `github` rows |
+
+Last reviewed Desktop commit for `packages/provider-registry`:
+`55feedb21473daf04792962db81ca66ab53e58a0`. The reviewed commit records which Desktop changes have
+been assessed; it does not advance the registry compatibility line.
 
 ### Remote catalog policy
 
@@ -153,26 +156,28 @@ OAuth, timeout, logging, and translation enter through Mobile-owned adapters.
 
 ## Synchronization Procedure
 
-Use the project [sync-cherry-desktop skill](../../../.agents/skills/sync-cherry-desktop/SKILL.md)
-and `pnpm desktop:sync:audit` for scoped review. The legacy Port Bot workflow is retired; blanket
-copying into the former `src/aiCore` layout is not a supported synchronization path.
+Desktop changes are reviewed by hand against this document. Blanket copying into the former
+`src/aiCore` layout is not a supported synchronization path.
 
-1. Record the Desktop commit being assessed; never record a local absolute checkout path.
-2. Inventory the candidate behavior's Mobile callers and classify it as Pi conversation behavior,
+1. In a clean Desktop checkout, list the unreviewed changes with
+   `git log <last reviewed commit>..HEAD -- packages/provider-registry`, adding any other path this
+   document admits for the behavior under review. Never record a local absolute checkout path.
+2. Inventory each candidate behavior's Mobile callers and classify it as Pi conversation behavior,
    non-conversation `AiService` behavior, or shared provider data.
-3. Reject files and exports outside that consumer closure. In particular, do not copy Desktop
-   context, host, persistence, lifecycle, or tool-loop code into the Pi path.
-4. Port the smallest production change into the owning Mobile boundary and bring over only tests
-   that protect the selected behavior.
+3. Reject behavior outside that consumer closure. In particular, do not route Desktop context,
+   host, persistence, lifecycle, or tool-loop code into the Pi path.
+4. Update the published package only with the smallest Mobile adapter change and tests that protect
+   the consumed behavior.
 5. Retain Mobile's static registry loader, Expo transport, persisted-data compatibility, and
    product-specific providers.
 6. Change AI SDK dependencies and patches only when required by the selected behavior, then
    regenerate the lockfile with `pnpm@12.2.1`.
 7. Run the owning package tests, `pnpm typecheck`, `pnpm lint`, and `pnpm format:check`, followed by
    the required production platform exports and device acceptance.
-8. Advance a registry compatibility manifest only after all consumed required semantics are
+8. Advance the registry compatibility version only after all consumed required semantics are
    implemented, unsupported optional semantics are explicitly classified, and every required gate
    passes.
+9. After the port passes its gates, update the last reviewed Desktop commit recorded above.
 
 ## Published Package Admission
 

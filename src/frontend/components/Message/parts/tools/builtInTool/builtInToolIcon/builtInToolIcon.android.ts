@@ -1,6 +1,7 @@
 import type { LucideIconProps } from '@cherrystudio/app-icons';
 import BellRingIcon from '@cherrystudio/app-icons/icons/bell-ring';
 import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
+import CodeIcon from '@cherrystudio/app-icons/icons/code';
 import FileEditIcon from '@cherrystudio/app-icons/icons/file-edit';
 import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
@@ -14,6 +15,7 @@ import type { BuiltInToolIcon } from './builtInToolIcon.types';
 
 const icons: Record<BuiltInToolIconName, ComponentType<LucideIconProps>> = {
   calendar: CalendarIcon,
+  code: CodeIcon,
   fileEdit: FileEditIcon,
   fileText: FileTextIcon,
   health: HeartPulseIcon,

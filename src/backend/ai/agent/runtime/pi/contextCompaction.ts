@@ -1,28 +1,46 @@
-import type { AgentMessage, AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
 import {
+  BACKGROUND_CONTEXT,
   compact,
   estimateContextTokens,
+  estimateTokens,
   prepareCompaction,
   shouldCompact,
+  withAbortSignal,
+  type AgentMessage,
+  type AgentTool as PiAgentTool,
   type CompactionPreparation,
   type CompactionSettings,
-} from '@earendil-works/pi-agent-core/compaction';
+} from '@earendil-works/pi-agent-core';
 import type {
   Api as PiApi,
+  ImageContent,
+  Message as PiLlmMessage,
   Model as PiModel,
   Models,
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
+import {
+  getCurrentSystemMessage,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+} from '@earendil-works/pi-ai/utils/transcript';
 
-import type { RuntimeContextCheckpoint } from '../types';
+import type { RuntimeContextCheckpoint, RuntimeContextCompaction } from '../types';
 import type { PiConversation, PiHistoryTurn } from './modelMessages';
+import { estimatePiImageTokens } from './piImageTokens';
 
 const PI_CONTEXT_CHECKPOINT_KIND = 'pi-context-compaction';
+// Pi's own estimate prices every image at this flat cost; the dialect formula replaces it.
 const PI_ESTIMATED_IMAGE_TOKENS = 1_200;
 
 export const PI_ESTIMATED_CHARACTERS_PER_TOKEN = 4;
-export const PI_IMAGE_CONTEXT_TOKEN_RESERVE = 4_096;
 export const PI_CONTEXT_SAFETY_MARGIN_TOKENS = 1_024;
+// Pi's per-request output clamp keeps 4,096 tokens clear of the window before sizing output.
+export const PI_OUTPUT_CLAMP_SAFETY_TOKENS = 4_096;
+const PI_MIN_ANSWER_TOKENS = 1_024;
+// Admission needs room for a usable answer once Pi has fitted the output cap to the input.
+export const PI_MIN_OUTPUT_RESERVE_TOKENS =
+  PI_OUTPUT_CLAMP_SAFETY_TOKENS - PI_CONTEXT_SAFETY_MARGIN_TOKENS + PI_MIN_ANSWER_TOKENS;
 export const PI_COMPACTION_SETTINGS: CompactionSettings = {
   enabled: true,
   reserveTokens: 16_384,
@@ -50,6 +68,30 @@ export type PiContextCompactionOptions = {
   settings?: CompactionSettings;
 };
 
+type PiContextPlanInput = {
+  maxInputTokens?: number;
+  model: PiModel<PiApi>;
+  models: Pick<Models, 'completeSimple'>;
+  options?: PiContextCompactionOptions;
+  redactSummary: (summary: string) => string;
+  signal: AbortSignal;
+  thinkingLevel: Parameters<typeof compact>[4];
+  tools: readonly PiToolSchema[];
+  onCompaction?: (update: PiCompactionUpdate) => void;
+};
+
+/** Request context size, separate from accumulated billing usage. */
+export type PiContextUsage = {
+  inputTokens: number;
+  inputTokenLimit: number;
+  safetyMarginTokens: number;
+};
+
+export type PiCompactionUpdate = Pick<
+  RuntimeContextCompaction,
+  'status' | 'inputTokensBefore' | 'inputTokensAfter' | 'reason'
+>;
+
 export type PiContextPlan =
   | {
       ok: true;
@@ -71,6 +113,7 @@ type PiCheckpointPayload = {
   resume?: {
     turnId: string;
     messageOffset: number;
+    replayKind?: string;
   };
 };
 
@@ -92,6 +135,7 @@ type ProjectedContext = {
 type PiToolSchema = Pick<PiAgentTool, 'name' | 'description' | 'parameters'>;
 
 function estimatePiNonMessageContextCosts(input: {
+  api: PiApi;
   imageMessages: readonly AgentMessage[];
   outputReserveTokens: number;
   systemPrompt: string;
@@ -102,12 +146,12 @@ function estimatePiNonMessageContextCosts(input: {
     (total, tool) => total + estimateTextTokens(serializeTool(tool)),
     0,
   );
-  const imageCount = input.imageMessages.reduce(
-    (total, message) => total + countImages(message),
-    0,
-  );
-  const attachmentTokens =
-    imageCount * Math.max(0, PI_IMAGE_CONTEXT_TOKEN_RESERVE - PI_ESTIMATED_IMAGE_TOKENS);
+  const attachmentTokens = input.imageMessages
+    .flatMap(messageImages)
+    .reduce(
+      (total, image) => total + estimatePiImageTokens(input.api, image) - PI_ESTIMATED_IMAGE_TOKENS,
+      0,
+    );
   const outputReserveTokens = Math.max(0, input.outputReserveTokens);
   const safetyMarginTokens = PI_CONTEXT_SAFETY_MARGIN_TOKENS;
   return {
@@ -126,11 +170,45 @@ function estimatePiNonMessageContextCosts(input: {
 }
 
 export function estimatePiMessagesTokens(messages: AgentMessage[]): number {
-  return estimateContextTokens(messages).tokens;
+  return estimatePiContextTokens(messages).tokens;
+}
+
+/** Keep provider measurements intact; correct only content not covered by their usage. */
+function estimatePiContextTokens(messages: AgentMessage[]) {
+  const estimate = estimateContextTokens(messages);
+  const unmeasured = messages.slice((estimate.lastUsageIndex ?? -1) + 1);
+  const trailingTokens = unmeasured.reduce(
+    (total, message) => total + estimatePiMessageTokens(message),
+    0,
+  );
+  return { ...estimate, trailingTokens, tokens: estimate.usageTokens + trailingTokens };
+}
+
+/** Content only, even if an assistant message carries usage for an entire request. */
+export function estimatePiMessageTokens(message: AgentMessage): number {
+  // Instructions and tool declarations are accounted for separately from history.
+  if (message.role === 'system') return 0;
+  let reserve = 0;
+  if (message.role === 'compactionSummary' || message.role === 'branchSummary') {
+    reserve = nonAsciiTokenReserve(message.summary);
+  } else if ('content' in message) {
+    reserve =
+      typeof message.content === 'string'
+        ? nonAsciiTokenReserve(message.content)
+        : message.content.reduce((sum, part) => {
+            if (part.type === 'text') return sum + nonAsciiTokenReserve(part.text);
+            if (part.type === 'thinking') return sum + nonAsciiTokenReserve(part.thinking);
+            if (part.type === 'toolCall')
+              return sum + nonAsciiTokenReserve(part.name + safeJsonStringify(part.arguments));
+            return sum;
+          }, 0);
+  }
+  return Math.ceil(estimateTokens(message) + reserve);
 }
 
 /** Remaining room for model-loop messages before another provider request. */
 export function estimatePiLoopContextHeadroomTokens(input: {
+  api: PiApi;
   contextWindow: number;
   maxInputTokens?: number;
   messages: AgentMessage[];
@@ -138,15 +216,48 @@ export function estimatePiLoopContextHeadroomTokens(input: {
   systemPrompt: string;
   tools: readonly PiToolSchema[];
 }): number {
-  const messageTokens = estimatePiMessagesTokens(input.messages);
+  const usage = measurePiContext(input);
+  return usage.inputTokenLimit - usage.inputTokens;
+}
+
+export function measurePiContext(input: {
+  api: PiApi;
+  contextWindow: number;
+  maxInputTokens?: number;
+  messages: AgentMessage[];
+  outputReserveTokens: number;
+  systemPrompt: string;
+  tools: readonly PiToolSchema[];
+}): PiContextUsage {
+  const estimate = estimatePiContextTokens(input.messages);
+  const unmeasuredMessages =
+    estimate.lastUsageIndex === null
+      ? input.messages
+      : input.messages.slice(estimate.lastUsageIndex + 1);
   const fixedCosts = estimatePiNonMessageContextCosts({
-    imageMessages: input.messages,
+    api: input.api,
+    imageMessages: unmeasuredMessages,
     outputReserveTokens: input.outputReserveTokens,
-    systemPrompt: input.systemPrompt,
-    tools: input.tools,
+    // Live usage already covers the system prompt, tool definitions, and old images.
+    systemPrompt:
+      estimate.lastUsageIndex === null
+        ? input.systemPrompt
+        : getCurrentSystemPrompt(unmeasuredMessages),
+    tools: estimate.lastUsageIndex === null ? input.tools : getCurrentTools(unmeasuredMessages),
   });
 
-  return resolveContextBudget(input) - messageTokens - fixedCosts.totalTokens;
+  return {
+    inputTokens:
+      estimate.tokens +
+      fixedCosts.totalTokens -
+      fixedCosts.outputReserveTokens -
+      fixedCosts.safetyMarginTokens,
+    inputTokenLimit: Math.max(
+      0,
+      resolveContextBudget(input) - fixedCosts.outputReserveTokens - fixedCosts.safetyMarginTokens,
+    ),
+    safetyMarginTokens: fixedCosts.safetyMarginTokens,
+  };
 }
 
 /** Fixed costs include output once; an independent input cap does not reserve it again. */
@@ -164,13 +275,16 @@ function resolveContextBudget(input: {
 }
 
 export function estimatePiContextFixedCosts(input: {
+  api: PiApi;
   conversation: PiConversation;
   outputReserveTokens: number;
   tools: readonly PiToolSchema[];
 }): PiContextFixedCosts {
-  const currentInputTokens = estimateContextTokens([input.conversation.prompt]).tokens;
+  const currentMessages = [input.conversation.prompt, ...(input.conversation.resume ?? [])];
+  const currentInputTokens = estimatePiMessagesTokens(currentMessages);
   const fixedCosts = estimatePiNonMessageContextCosts({
-    imageMessages: [...input.conversation.history, input.conversation.prompt],
+    api: input.api,
+    imageMessages: currentMessages,
     outputReserveTokens: input.outputReserveTokens,
     systemPrompt: input.conversation.systemPrompt,
     tools: input.tools,
@@ -182,42 +296,95 @@ export function estimatePiContextFixedCosts(input: {
   };
 }
 
-export async function planPiContext(input: {
-  checkpoint: RuntimeContextCheckpoint | null;
-  conversation: PiConversation;
-  maxInputTokens?: number;
-  model: PiModel<PiApi>;
-  models: Pick<Models, 'completeSimple'>;
-  options?: PiContextCompactionOptions;
-  outputReserveTokens: number;
-  redactSummary: (summary: string) => string;
-  signal: AbortSignal;
-  thinkingLevel: Parameters<typeof compact>[5];
-  tools: readonly PiToolSchema[];
-}): Promise<PiContextPlan> {
-  const projected = projectContext(input.checkpoint, input.conversation.historyTurns);
+export async function planPiContext(
+  input: PiContextPlanInput & {
+    checkpoint: RuntimeContextCheckpoint | null;
+    conversation: PiConversation;
+  },
+): Promise<PiContextPlan> {
+  return planProjectedContext({
+    ...input,
+    projected: projectContext(input.checkpoint, input.conversation.historyTurns),
+    historyTurns: input.conversation.historyTurns,
+    // A retry's retained prefix belongs to the turn being produced, not to
+    // completed history, so it is never a compaction candidate.
+    currentMessages: [input.conversation.prompt, ...(input.conversation.resume ?? [])],
+    systemPrompt: input.conversation.systemPrompt,
+  });
+}
+
+/** Live Pi messages cannot supply durable offsets into the application transcript. */
+export async function planPiLoopContext(
+  input: PiContextPlanInput & {
+    messages: AgentMessage[];
+    systemPrompt: string;
+  },
+): Promise<PiContextPlan> {
+  // System deltas configure the live request; they are not summary candidates.
+  const systemMessage = getCurrentSystemMessage(input.messages);
+  const messages = input.messages.filter((message) => message.role !== 'system');
+  const entries: CompactionEntries = messages.map((message, index) => ({
+    id: `live:${index}`,
+    parentId: index === 0 ? null : `live:${index - 1}`,
+    seq: index,
+    timestamp: message.timestamp,
+    ...(message.role === 'compactionSummary'
+      ? {
+          type: 'compaction' as const,
+          summary: message.summary,
+          tokensBefore: message.tokensBefore,
+          retainedTail: [],
+          fromHook: false,
+        }
+      : { type: 'message' as const, message }),
+  }));
+  const result = await planProjectedContext({
+    ...input,
+    projected: { checkpoint: null, entries, messages: input.messages, metadata: new WeakMap() },
+    historyTurns: [],
+  });
+  if (!result.ok) return result;
+  return {
+    ...result,
+    messages:
+      result.messages === input.messages
+        ? input.messages
+        : systemMessage
+          ? [systemMessage, ...result.messages]
+          : result.messages,
+  };
+}
+
+async function planProjectedContext(
+  input: PiContextPlanInput & {
+    projected: ProjectedContext;
+    historyTurns: PiHistoryTurn[];
+    /** Current-turn messages: the prompt, plus any retained retry prefix. */
+    currentMessages?: AgentMessage[];
+    systemPrompt: string;
+  },
+): Promise<PiContextPlan> {
+  const { projected } = input;
   const contextBudget = resolveContextBudget({
     contextWindow: input.model.contextWindow,
     maxInputTokens: input.maxInputTokens,
-    outputReserveTokens: input.outputReserveTokens,
+    outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
   });
   const settings =
     input.options?.settings ??
     resolveCompactionSettings(
       Math.min(input.model.contextWindow, input.maxInputTokens ?? input.model.contextWindow),
     );
-  const estimateHistory =
-    input.options?.estimateHistoryTokens ??
-    ((messages: AgentMessage[]) => estimateContextTokens(messages).tokens);
-  const historyTokens = Math.max(0, estimateHistory(projected.messages));
-  const fixedCosts = estimatePiContextFixedCosts({
-    conversation: input.conversation,
-    outputReserveTokens: input.outputReserveTokens,
+  const currentMessages = input.currentMessages ?? [];
+  const fixedCosts = estimatePiNonMessageContextCosts({
+    api: input.model.api,
+    imageMessages: currentMessages,
+    outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
+    systemPrompt: input.systemPrompt,
     tools: input.tools,
   });
-  const compactionThreshold = Math.max(0, contextBudget - settings.reserveTokens);
 
-  if (fixedCosts.totalTokens > compactionThreshold) {
+  if (fixedCosts.totalTokens + estimatePiMessagesTokens(currentMessages) > contextBudget) {
     return {
       ok: false,
       code: 'context_window_exceeded',
@@ -226,13 +393,72 @@ export async function planPiContext(input: {
     };
   }
 
-  const totalTokens = historyTokens + fixedCosts.totalTokens;
-  if (!shouldCompact(totalTokens, contextBudget, settings)) {
-    return { ok: true, messages: projected.messages, checkpoint: null, usage: null };
+  const measure = (messages: AgentMessage[]) =>
+    measurePiContext({
+      api: input.model.api,
+      contextWindow: input.model.contextWindow,
+      maxInputTokens: input.maxInputTokens,
+      messages: [...messages, ...currentMessages],
+      outputReserveTokens: PI_MIN_OUTPUT_RESERVE_TOKENS,
+      systemPrompt: input.systemPrompt,
+      tools: input.tools,
+    });
+  const before = measure(projected.messages);
+  if (input.options?.estimateHistoryTokens) {
+    before.inputTokens +=
+      Math.max(0, input.options.estimateHistoryTokens(projected.messages)) -
+      estimatePiMessagesTokens(projected.messages);
+    before.inputTokens = Math.max(0, before.inputTokens);
+  }
+  const canSendWithoutCompaction = before.inputTokens <= before.inputTokenLimit;
+  const unchanged: PiContextPlan = {
+    ok: true,
+    messages: projected.messages,
+    checkpoint: null,
+    usage: null,
+  };
+  const overflow: PiContextPlan = {
+    ok: false,
+    code: 'context_window_exceeded',
+    message: 'The conversation exceeds the model context window.',
+    retryable: false,
+  };
+  const compactionWindow = Math.min(
+    input.model.contextWindow,
+    input.maxInputTokens ?? input.model.contextWindow,
+  );
+  // A small window must still reach compaction before the hard limit rejects the request.
+  const triggerSettings = {
+    ...settings,
+    reserveTokens: Math.max(settings.reserveTokens, PI_MIN_OUTPUT_RESERVE_TOKENS),
+  };
+  if (
+    !shouldCompact(
+      before.inputTokens + before.safetyMarginTokens,
+      compactionWindow,
+      triggerSettings,
+    )
+  ) {
+    return canSendWithoutCompaction ? unchanged : overflow;
   }
 
-  const preparation = prepareCompaction(projected.entries, settings);
+  // System deltas are not compaction entries, so they do not end the newest batch.
+  const history = projected.messages.filter((message) => message.role !== 'system');
+  const lastCallIndex = history.findLastIndex((message) => message.role === 'assistant');
+  // A cut inside the newest result has no following assistant boundary. Keep
+  // that whole batch so Pi can cut before it instead of retaining all history.
+  const newestBatchTokens =
+    history.at(-1)?.role === 'toolResult' && lastCallIndex >= 0
+      ? history
+          .slice(lastCallIndex)
+          .reduce((total, message) => total + estimateTokens(message), 0) + 1
+      : 0;
+  const preparation = prepareCompaction(projected.entries, {
+    ...settings,
+    keepRecentTokens: Math.max(settings.keepRecentTokens, newestBatchTokens),
+  });
   if (!preparation.ok) {
+    if (canSendWithoutCompaction) return unchanged;
     return {
       ok: false,
       code: 'context_compaction_failed',
@@ -245,29 +471,75 @@ export async function planPiContext(input: {
     (preparation.value.messagesToSummarize.length === 0 &&
       preparation.value.turnPrefixMessages.length === 0)
   ) {
-    return totalTokens > contextBudget
-      ? {
-          ok: false,
-          code: 'context_window_exceeded',
-          message: 'The conversation exceeds the model context window.',
-          retryable: false,
-        }
-      : { ok: true, messages: projected.messages, checkpoint: null, usage: null };
+    return canSendWithoutCompaction ? unchanged : overflow;
   }
 
   const cherryPreparation: CompactionPreparation = {
     ...preparation.value,
     fileOps: { read: new Set(), written: new Set(), edited: new Set() },
   };
-  const result = await compact(
-    cherryPreparation,
-    input.models as Models,
-    input.model,
-    CHERRY_COMPACTION_INSTRUCTIONS,
-    input.signal,
-    input.thinkingLevel,
-  );
+  // Pi skips previousSummary when a split turn has no complete older turns.
+  // Carry it as summary content so repeated loop compactions keep earlier goals.
+  const summaryPreparation =
+    cherryPreparation.isSplitTurn &&
+    cherryPreparation.messagesToSummarize.length === 0 &&
+    cherryPreparation.previousSummary
+      ? {
+          ...cherryPreparation,
+          messagesToSummarize: [createCompactionSummary(cherryPreparation.previousSummary, 0)],
+          previousSummary: undefined,
+        }
+      : cherryPreparation;
+  // The retained tail is sent verbatim. When it alone overflows, a summary
+  // cannot make the request fit, so do not pay for one.
+  if (!canSendWithoutCompaction) {
+    const retained = measure(withoutPrefixUsage(cherryPreparation.retainedTail));
+    if (retained.inputTokens > retained.inputTokenLimit) return overflow;
+  }
+  const report = (
+    status: RuntimeContextCompaction['status'],
+    reason?: RuntimeContextCompaction['reason'],
+    inputTokensAfter?: number,
+  ) => {
+    input.onCompaction?.({
+      status,
+      inputTokensBefore: before.inputTokens,
+      ...(reason ? { reason } : {}),
+      ...(inputTokensAfter === undefined ? {} : { inputTokensAfter }),
+    });
+  };
+  report('running');
+  let result: Awaited<ReturnType<typeof compact>>;
+  try {
+    result = await compact(
+      summaryPreparation,
+      input.models as Models,
+      input.model,
+      CHERRY_COMPACTION_INSTRUCTIONS,
+      input.thinkingLevel,
+      undefined,
+      undefined,
+      withAbortSignal(input.signal, BACKGROUND_CONTEXT),
+    );
+  } catch (error) {
+    report(
+      input.signal.aborted ? 'cancelled' : 'failed',
+      input.signal.aborted ? 'cancelled' : 'summary-failed',
+    );
+    input.signal.throwIfAborted();
+    if (canSendWithoutCompaction) return unchanged;
+    throw error;
+  }
+  if (input.signal.aborted) {
+    report('cancelled', 'cancelled');
+    input.signal.throwIfAborted();
+  }
   if (!result.ok) {
+    report(
+      result.error.code === 'aborted' ? 'cancelled' : 'failed',
+      result.error.code === 'aborted' ? 'cancelled' : 'summary-failed',
+    );
+    if (result.error.code !== 'aborted' && canSendWithoutCompaction) return unchanged;
     return {
       ok: false,
       code: 'context_compaction_failed',
@@ -282,34 +554,12 @@ export async function planPiContext(input: {
   const summary = input.redactSummary(result.value.summary);
   const messages = [
     createCompactionSummary(summary, result.value.tokensBefore),
-    ...result.value.retainedTail.map((message) =>
-      // Provider usage includes the discarded prefix. Estimate the compacted
-      // content until the next live response reports usage for the new context.
-      message.role === 'assistant'
-        ? {
-            ...message,
-            usage: {
-              ...message.usage,
-              input: 0,
-              output: 0,
-              cacheRead: 0,
-              cacheWrite: 0,
-              totalTokens: 0,
-            },
-          }
-        : message,
-    ),
+    ...withoutPrefixUsage(result.value.retainedTail),
   ];
-  if (
-    estimatePiLoopContextHeadroomTokens({
-      contextWindow: input.model.contextWindow,
-      maxInputTokens: input.maxInputTokens,
-      messages: [...messages, input.conversation.prompt],
-      outputReserveTokens: input.outputReserveTokens,
-      systemPrompt: input.conversation.systemPrompt,
-      tools: input.tools,
-    }) < 0
-  ) {
+  const after = measure(messages);
+  if (after.inputTokens > after.inputTokenLimit || after.inputTokens >= before.inputTokens) {
+    report('failed', 'insufficient-reduction');
+    if (canSendWithoutCompaction) return unchanged;
     return {
       ok: false,
       code: 'context_window_exceeded',
@@ -319,12 +569,13 @@ export async function planPiContext(input: {
   }
   const checkpoint = createCheckpoint(
     projected.checkpoint,
-    input.conversation.historyTurns,
+    input.historyTurns,
     cherryPreparation,
     projected.metadata,
     summary,
     result.value.tokensBefore,
   );
+  report('completed', undefined, after.inputTokens);
   return {
     ok: true,
     messages,
@@ -369,6 +620,7 @@ function projectContext(
       summary: payload.summary,
       retainedTail: [],
       tokensBefore: payload.tokensBefore,
+      fromHook: false,
     });
     parentId = entryId;
     messages.push(createCompactionSummary(payload.summary, payload.tokensBefore));
@@ -381,7 +633,9 @@ function projectContext(
     if (!resumeApplied) {
       if (turn.turnId !== payload?.resume?.turnId) continue;
       sourceOffset = payload.resume.messageOffset;
-      if (sourceOffset > turnMessages.length) {
+      if (sourceOffset > turnMessages.length || payload.resume.replayKind !== turn.replayKind) {
+        // The Host already trimmed the summarized prefix. Keep that summary, but never
+        // apply native-message offsets to a fallback display projection (or vice versa).
         sourceOffset = 0;
       }
       turnMessages = turnMessages.slice(sourceOffset);
@@ -441,7 +695,12 @@ function createCheckpoint(
     const previousTurn = findPreviousDurableTurn(historyTurns, splitTurn.turnIndex);
     anchorTurnId = previousTurn?.turnId ?? previous?.anchorTurnId ?? null;
     if (!anchorTurnId) return null;
-    resume = { turnId: splitTurn.turnId, messageOffset: splitTurn.messageOffset };
+    const replayKind = historyTurns[splitTurn.turnIndex]?.replayKind;
+    resume = {
+      turnId: splitTurn.turnId,
+      messageOffset: splitTurn.messageOffset,
+      ...(replayKind ? { replayKind } : {}),
+    };
   } else if (lastSummarized?.turnId === null) {
     return null;
   }
@@ -489,7 +748,15 @@ function parseCheckpointPayload(value: unknown): PiCheckpointPayload | null {
     ) {
       return null;
     }
-    resume = { turnId: value.resume.turnId, messageOffset: value.resume.messageOffset };
+    if (value.resume.replayKind !== undefined && typeof value.resume.replayKind !== 'string')
+      return null;
+    resume = {
+      turnId: value.resume.turnId,
+      messageOffset: value.resume.messageOffset,
+      ...(typeof value.resume.replayKind === 'string'
+        ? { replayKind: value.resume.replayKind }
+        : {}),
+    };
   }
   return {
     kind: PI_CONTEXT_CHECKPOINT_KIND,
@@ -499,8 +766,61 @@ function parseCheckpointPayload(value: unknown): PiCheckpointPayload | null {
   };
 }
 
+/**
+ * Provider usage includes the discarded prefix. Estimate the compacted content
+ * until the next live response reports usage for the new context.
+ */
+function withoutPrefixUsage(messages: readonly AgentMessage[]): AgentMessage[] {
+  return messages.map((message) =>
+    message.role === 'assistant'
+      ? {
+          ...message,
+          usage: {
+            ...message.usage,
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+          },
+        }
+      : message,
+  );
+}
+
 function createCompactionSummary(summary: string, tokensBefore: number): AgentMessage {
   return { role: 'compactionSummary', summary, tokensBefore, timestamp: Date.now() };
+}
+
+/**
+ * Pi's default conversion drops summary messages, so a compacted request would
+ * lose all earlier context and could open with an assistant message.
+ */
+export function convertPiMessagesToLlm(messages: AgentMessage[]): PiLlmMessage[] {
+  return messages.flatMap((message): PiLlmMessage[] => {
+    switch (message.role) {
+      case 'compactionSummary':
+        return [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `The conversation history before this point was compacted into the following summary:\n\n<summary>\n${message.summary}\n</summary>`,
+              },
+            ],
+            timestamp: message.timestamp,
+          },
+        ];
+      case 'system':
+      case 'user':
+      case 'assistant':
+      case 'toolResult':
+        return [message];
+      default:
+        return [];
+    }
+  });
 }
 
 function serializeTool(tool: PiToolSchema): string {
@@ -516,12 +836,25 @@ function safeJsonStringify(value: unknown): string {
 }
 
 function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / PI_ESTIMATED_CHARACTERS_PER_TOKEN);
+  return Math.ceil(text.length / PI_ESTIMATED_CHARACTERS_PER_TOKEN + nonAsciiTokenReserve(text));
 }
 
-function countImages(message: AgentMessage): number {
-  if (message.role !== 'user' || typeof message.content === 'string') return 0;
-  return message.content.filter((part) => part.type === 'image').length;
+function nonAsciiTokenReserve(text: string): number {
+  let reserve = 0;
+  for (const character of text.matchAll(/\P{ASCII}/gu)) {
+    reserve += 2 - character[0].length / PI_ESTIMATED_CHARACTERS_PER_TOKEN;
+  }
+  return reserve;
+}
+
+function messageImages(message: AgentMessage): ImageContent[] {
+  if (
+    (message.role !== 'user' && message.role !== 'toolResult') ||
+    typeof message.content === 'string'
+  ) {
+    return [];
+  }
+  return message.content.filter((part): part is ImageContent => part.type === 'image');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

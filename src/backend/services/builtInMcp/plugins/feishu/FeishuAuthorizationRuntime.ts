@@ -235,7 +235,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
       return Promise.reject(new PluginError('cancelled', 'Feishu authorization cancelled.'));
     const shared = this.resolutions.get(authorizationId);
     if (shared) return callerSignal ? waitForCaller(shared, callerSignal) : shared;
-    const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+    const signal = this.renewal.signal;
     const operation = this.serialize(async () => {
       signal.throwIfAborted();
       const current = await this.store.getGrant(authorizationId);
@@ -280,7 +280,7 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   get attemptSignal() {
-    return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
+    return this.attempt.signal;
   }
 
   async describeConnection(authorizationId: string): Promise<PluginConnectionStatus> {
@@ -352,14 +352,21 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
     });
   }
 
+  /** stop() aborts the current attempt and renewal; generations replaced afterwards start aborted. */
+  private nextGeneration() {
+    const controller = new AbortController();
+    if (this.lifetime.signal.aborted) controller.abort(this.lifetime.signal.reason);
+    return controller;
+  }
+
   interrupt() {
     this.attempt.abort();
-    this.attempt = new AbortController();
+    this.attempt = this.nextGeneration();
   }
 
   invalidateGrant() {
     this.renewal.abort();
-    this.renewal = new AbortController();
+    this.renewal = this.nextGeneration();
     this.resolutions.clear();
   }
 

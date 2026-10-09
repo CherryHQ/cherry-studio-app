@@ -27,7 +27,7 @@ import { createModelHandlers, type SystemModelSupportFilter } from './models';
 import { createPaintingHandlers } from './paintings';
 import { createPluginCatalogHandlers, type PluginCatalogReader } from './pluginCatalog';
 import { createPluginConnectionHandlers } from './pluginConnections';
-import { createProviderHandlers } from './providers';
+import { createProviderHandlers, type ProviderAccountCleanup } from './providers';
 import { createSearchHandlers } from './search';
 
 export type DataApiDependencies = {
@@ -40,6 +40,7 @@ export type DataApiDependencies = {
   aiUsageRecords: AiUsageRecordService;
   contentSearch: ContentSearchService;
   desktopConnections: DesktopConnectionService;
+  desktopConnectionEndpointsChanged: (id: string) => Promise<void>;
   entitySearch: EntitySearchService;
   files: FileEntryService;
   jobs: JobService;
@@ -51,6 +52,7 @@ export type DataApiDependencies = {
   pluginCatalog: PluginCatalogReader;
   pluginConnections: Pick<PluginAuthorizationService, 'listConnections'>;
   providers: ProviderService;
+  providerAccounts: ProviderAccountCleanup;
 };
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
@@ -60,7 +62,10 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
     ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
-    ...createDesktopConnectionHandlers(dependencies.desktopConnections),
+    ...createDesktopConnectionHandlers(
+      dependencies.desktopConnections,
+      dependencies.desktopConnectionEndpointsChanged,
+    ),
     ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
@@ -68,7 +73,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createPaintingHandlers(dependencies.paintings),
     ...createPluginCatalogHandlers(dependencies.pluginCatalog),
     ...createPluginConnectionHandlers(dependencies.pluginConnections),
-    ...createProviderHandlers(dependencies.providers),
+    ...createProviderHandlers(dependencies.providers, dependencies.providerAccounts),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
   };
 }

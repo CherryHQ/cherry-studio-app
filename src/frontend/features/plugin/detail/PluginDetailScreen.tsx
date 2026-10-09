@@ -10,14 +10,14 @@ import { Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
+import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import type { PluginDisconnectResult } from '@/shared/contracts/plugins';
 import { PluginIdSchema, type PluginId } from '@/shared/data/types/plugin';
 
 import { PluginIdentity } from '../components/PluginIdentity';
 import { PluginPage } from '../components/PluginPage';
-import { usePluginCatalog } from '../usePluginCatalog';
-import { usePluginConnections, useRefreshPluginConnections } from '../usePluginConnections';
+import { useRefreshPluginConnections } from '../useRefreshPluginConnections';
 
 export function PluginDetailScreen() {
   const { pluginId } = useLocalSearchParams<{ pluginId: string }>();

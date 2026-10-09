@@ -1,8 +1,8 @@
 import { TextInputWrapper } from 'expo-paste-input';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
-import { useResolveClassNames } from 'uniwind';
+import { useCSSVariable, useResolveClassNames } from 'uniwind';
 
 import type { ComposerInputHandle, ComposerInputProps } from '../composer.types';
 import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
@@ -43,6 +43,11 @@ export function ComposerInput({
   // native line box and caret.
   const baseTextStyle = useResolveClassNames('text-(length:--text-base) text-foreground');
   const placeholderStyle = useResolveClassNames('text-foreground-tertiary');
+  const [selectionTint, selectionBackground] = useCSSVariable([
+    '--color-muted-foreground',
+    '--color-secondary',
+  ]);
+  const selectionColor = Platform.OS === 'ios' ? selectionTint : selectionBackground;
   const fallbackRef = useRef<ComposerInputHandle | null>(null);
   const inputRef = ref ?? fallbackRef;
   // The field is uncontrolled — it owns its own text and we mirror it out. This
@@ -85,6 +90,8 @@ export function ComposerInput({
     <TextInputWrapper onPaste={onPaste} style={pasteWrapperStyle}>
       <EnrichedMarkdownTextInput
         autoFocus={autoFocus}
+        cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
+        selectionColor={typeof selectionColor === 'string' ? selectionColor : undefined}
         // Set once. Every later change goes through the sync effect above.
         defaultValue={value}
         // Turning `google.com` into a link as the user types would mint the one

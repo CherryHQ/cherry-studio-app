@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useComposerMeta, useComposerState } from '@/frontend/components/Composer';
-import { PluginIcon } from '@/frontend/features/plugin';
+import { PluginIcon } from '@/frontend/components/PluginIcon';
 
 import type { ChatInputPlugin } from '../utils/chatInputPlugins';
 import {

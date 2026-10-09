@@ -10,6 +10,7 @@
  */
 
 import { getLocales } from 'expo-localization';
+import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -17,9 +18,12 @@ import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
+import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
+import { discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -33,6 +37,8 @@ import {
 } from '../tools/builtInToolSource';
 import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
+import { createAgentImageGeneration } from './agentImageGeneration';
+import { AgentReplayCache } from './AgentReplayCache';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
@@ -52,7 +58,11 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly files = managedFileResolver;
   readonly inferenceModel = createAgentInferenceModelResolver(modelService);
   readonly runtimeTools;
+  readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
+  readonly replayCache = new AgentReplayCache(() =>
+    createMMKV({ id: 'cherry-agent-replay-cache' }),
+  );
 
   constructor(
     private readonly store: AgentSessionStore,
@@ -63,6 +73,15 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     readonly traces: TraceRecorder,
   ) {
     super();
+    this.imageGeneration = createAgentImageGeneration({
+      ai: aiService,
+      models: modelService,
+      files: this.files,
+      storage: {
+        createInternalEntry: (input) => createInternalEntryWithPreview(fileEntryService, input),
+        discard: (entries) => discardInternalEntries(fileEntryService, entries),
+      },
+    });
     this.runtimeTools = createAgentRuntimeToolResolver({
       bindings: agentToolBindingService,
       servers: mcpServerService,

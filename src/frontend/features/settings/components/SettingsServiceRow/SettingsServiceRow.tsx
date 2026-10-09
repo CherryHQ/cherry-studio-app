@@ -4,12 +4,13 @@ import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
 import type { AccessibilityProps } from 'react-native';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 
 export type SettingsServiceRowProps = {
   accessibilityActions?: AccessibilityProps['accessibilityActions'];
+  accessibilityLabel?: string;
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
   avatar?: ReactNode;
   disabled?: boolean;
@@ -18,6 +19,8 @@ export type SettingsServiceRowProps = {
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
   name: string;
+  /** Inert content beside the name; include its meaning in `accessibilityLabel`. */
+  nameAccessory?: ReactNode;
   onAccessibilityAction?: AccessibilityProps['onAccessibilityAction'];
   onPress?: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
@@ -32,6 +35,7 @@ export type SettingsServiceRowProps = {
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
   accessibilityActions,
+  accessibilityLabel,
   avatar,
   disabled = false,
   enabledSwitch,
@@ -39,6 +43,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   id,
   imageSource,
   name,
+  nameAccessory,
   onAccessibilityAction,
   onPress,
   onPressedChange,
@@ -49,7 +54,8 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   testID,
   trailingAction,
 }: SettingsServiceRowProps) {
-  const accessibilityLabel = [name, statusLabel, subtitle].filter(Boolean).join(', ');
+  const spokenLabel =
+    accessibilityLabel ?? [name, statusLabel, subtitle].filter(Boolean).join(', ');
   const [isPressed, setIsPressed] = useState(false);
 
   return (
@@ -57,7 +63,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
       {showSeparator ? <SettingsGroupedSeparator hidden={hideSeparator || isPressed} /> : null}
       <Section.Item
         accessibilityActions={accessibilityActions}
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={spokenLabel}
         disabled={disabled}
         description={
           subtitle ? (
@@ -67,9 +73,12 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           ) : undefined
         }
         label={
-          <Text className="min-w-0 text-base text-foreground" numberOfLines={1}>
-            {name}
-          </Text>
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
+              {name}
+            </Text>
+            {nameAccessory}
+          </View>
         }
         leading={
           avatar ??
@@ -98,10 +107,11 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         trailing={
           <View className="flex-row items-center gap-2">
             {statusLabel && statusTone === 'success' ? (
-              <View className="h-5 shrink-0 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5">
+              <View className="shrink-0 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5 py-0.5">
                 <Text
                   className="font-medium text-success-subtle-foreground text-xs"
                   numberOfLines={1}
+                  style={styles.statusLabel}
                 >
                   {statusLabel}
                 </Text>
@@ -125,4 +135,11 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
       />
     </View>
   );
+});
+
+const styles = StyleSheet.create({
+  statusLabel: {
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
 });

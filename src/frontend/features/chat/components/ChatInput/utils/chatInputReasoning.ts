@@ -126,13 +126,6 @@ export function getChatInputReasoningEffortSnapshot(
   );
 }
 
-export function isChatInputReasoningEffortAvailable(
-  reasoningEffort: ChatInputReasoningEffort,
-  availableEfforts: readonly ChatInputReasoningEffort[],
-) {
-  return normalizeChatInputReasoningEfforts(availableEfforts).includes(reasoningEffort);
-}
-
 function normalizeChatInputReasoningEfforts(values: readonly string[]): ChatInputReasoningEffort[] {
   const result = new Set<ChatInputReasoningEffort>();
 

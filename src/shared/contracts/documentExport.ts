@@ -1,8 +1,21 @@
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ResolvedFile } from './file';
+import type { ExportFile, ExportWatermark } from './fileExport';
 
 export const DOCUMENT_EXPORT_MAX_SECTIONS = 128;
+
+/** Resolved product copy travels with the snapshot, including portable text fallbacks. */
+export type ExportContentLabels = {
+  code: string;
+  codeOmitted: string;
+  file: string;
+  fileMetadataOnly: string;
+  image: string;
+  imageUnavailable: string;
+  sources: string;
+  table: string;
+};
 
 export type ExportBlock =
   | { kind: 'text'; text: string }
@@ -15,15 +28,24 @@ export type ExportBlock =
       presentation?: 'process' | 'reasoning';
       blocks: readonly ExportBlock[];
     }
-  | { kind: 'links'; items: readonly { label: string; url: string }[] };
+  | {
+      kind: 'links';
+      /** Source-localized count label for the compact summary. */
+      summary?: string;
+      items: readonly { label: string; url: string }[];
+    };
 
 export type ExportDocument = {
   title?: string;
+  labels?: ExportContentLabels;
   sections: readonly {
     id: string;
     heading?: string;
     /** Source-owned visual hierarchy, independent of chat models or live UI. */
     presentation?: 'bubble' | 'message';
+    /** Message author row: an emoji avatar and the model beside the heading. */
+    avatar?: string;
+    model?: string;
     metadata?: readonly { label: string; value: string }[];
     blocks: readonly ExportBlock[];
   }[];
@@ -37,19 +59,14 @@ export type ExportDocument = {
 
 export type DocumentExportInput =
   | { kind: 'document'; document: ExportDocument }
-  | { kind: 'markdown'; source: string; title?: string };
+  | { kind: 'markdown'; source: string; title?: string; labels?: ExportContentLabels };
 
 export type ExportFormat = 'markdown' | 'html' | 'image';
+export type ExportImageLayout = 'pages' | 'single';
 /** Optional print treatment supplied by the frontend, independent of the shared signature. */
 export type ExportImageFrame = {
   background: string;
   label: string;
-};
-export type ExportSignature = {
-  foreground: string;
-  logoDataUrl: string;
-  brandName: string;
-  timestamp: string;
 };
 export type ExportPresentation = {
   width: number;
@@ -69,37 +86,83 @@ export type ExportPresentation = {
     inlineCodeForeground: string;
   };
   imageFrame?: ExportImageFrame;
-  signature?: ExportSignature;
+  watermark?: ExportWatermark;
 };
 export type DocumentExportIssue = { code: 'image-unavailable' | 'formula-fallback'; label: string };
-export type ExportFile = { uri: string; filename: string; mediaType: string };
+export type ExportImagePage = { file: ExportFile; width: number; height: number };
 export type DocumentExportArtifact = {
   id: string;
-  file: ExportFile;
   issues: readonly DocumentExportIssue[];
 } & (
-  | { format: 'markdown'; text: string }
-  | { format: 'html'; html: string }
-  | { format: 'image'; width: number; height: number }
+  | { format: 'markdown'; file: ExportFile; text: string }
+  | { format: 'html'; file: ExportFile; html: string }
+  | {
+      format: 'image';
+      layout: ExportImageLayout;
+      pages: readonly ExportImagePage[];
+    }
 );
 
-/** Returns a lossless PNG file. The page also owns cleanup of late/failed native output. */
+/** Delivers each PNG in order; the surface releases it after onPage settles. */
 export type CaptureExportHtml = (input: {
   html: string;
   width: number;
+  layout: ExportImageLayout;
   signal: AbortSignal;
-}) => Promise<{
+  onPage(image: {
+    uri: string;
+    width: number;
+    height: number;
+    index: number;
+    total: number;
+  }): Promise<void>;
+}) => Promise<void>;
+
+export type HtmlConversionFormat = 'image' | 'pptx';
+export type CapturedHtmlPage = {
   uri: string;
   width: number;
   height: number;
   release(): void;
-}>;
+};
+/** Capture one page at a time. The producer releases each PNG after onPage settles. */
+export type CaptureHtmlPages = (input: {
+  format: HtmlConversionFormat;
+  signal: AbortSignal;
+  onPage(page: CapturedHtmlPage, index: number, total: number): Promise<void>;
+}) => Promise<void>;
+export type HtmlConversionInput = {
+  title: string;
+  format: HtmlConversionFormat;
+  capture: CaptureHtmlPages;
+};
+export type HtmlConversionContext = {
+  signal?: AbortSignal;
+  onProgress?: (progress: {
+    stage: 'capturing' | 'writing';
+    current: number;
+    total: number;
+  }) => void;
+};
+export const HTML_CONVERSION_MAX_PAGES = 64;
+export const HTML_CONVERSION_MAX_PIXELS = 16_000_000;
+export const HTML_CONVERSION_MAX_EDGE = 8192;
 
 export type DocumentExportTarget =
-  | { format: 'markdown'; signature?: Pick<ExportSignature, 'brandName' | 'timestamp'> }
+  | { format: 'markdown'; watermark?: ExportWatermark }
   | { format: 'html'; presentation: ExportPresentation }
-  | { format: 'image'; presentation: ExportPresentation; capture: CaptureExportHtml };
-export type DocumentExportProgress = 'rendering' | 'resolving-assets' | 'capturing' | 'writing';
+  | {
+      format: 'image';
+      layout: ExportImageLayout;
+      presentation: ExportPresentation;
+      capture: CaptureExportHtml;
+    };
+export type DocumentExportProgress =
+  | 'rendering'
+  | 'resolving-assets'
+  | 'capturing'
+  | 'writing'
+  | { stage: 'capturing'; page: number; total: number };
 
 export class DocumentExportError extends Error {
   constructor(
@@ -107,7 +170,6 @@ export class DocumentExportError extends Error {
       | 'invalid-input'
       | 'size-limit'
       | 'image-size-limit'
-      | 'image-resource-limit'
       | 'busy'
       | 'disposed'
       | 'inactive'
@@ -122,8 +184,10 @@ export class DocumentExportError extends Error {
 export interface DocumentExportSession {
   /** Frozen source snapshot for structured previews; does not resolve assets or create files. */
   readonly document: ExportDocument;
-  /** Portable source Markdown without presentation signatures; no files or resource reads. */
+  /** Lightweight fallback Markdown without embedded assets or signatures; no files or resource reads. */
   readonly markdown: string;
+  /** Styled view of prepared Markdown: embedded pictures display, remote links need no network read. */
+  previewMarkdown(text: string, presentation: ExportPresentation): string;
   render(
     target: DocumentExportTarget,
     context?: {
@@ -131,11 +195,13 @@ export interface DocumentExportSession {
       onProgress?: (progress: DocumentExportProgress) => void;
     },
   ): Promise<DocumentExportArtifact>;
-  /** Explicit user intent: persist once per artifact, retaining bytes after page exit. */
-  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<ResolvedFile>;
+  /** Persist in order. A retry reuses pages already committed before an interruption. */
+  save(artifact: DocumentExportArtifact, signal?: AbortSignal): Promise<readonly ResolvedFile[]>;
   dispose(): Promise<void>;
 }
 
 export interface DocumentExportModule {
   createSession(input: DocumentExportInput): DocumentExportSession;
+  /** Explicit conversion creates a managed file, with temporary output owned by the runtime. */
+  convertHtml(input: HtmlConversionInput, context?: HtmlConversionContext): Promise<ResolvedFile>;
 }

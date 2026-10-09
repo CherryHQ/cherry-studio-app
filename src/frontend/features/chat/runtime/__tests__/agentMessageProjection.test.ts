@@ -5,6 +5,7 @@ import {
   createAgentMessageListProjectionCache,
   createPendingChatMessages,
   mergeAgentMessageViews,
+  projectRetryingMessage,
   toAgentMessageListItem,
   toAgentMessageListItems,
 } from '../agentMessageProjection';
@@ -19,7 +20,6 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
     status: 'streaming',
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -28,6 +28,78 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
+    const question = message('user-1', { role: 'user', status: 'success' });
+    const answer = message('assistant-1', {
+      status: 'error',
+      parts: [{ id: 'text-1', type: 'text', state: 'done', text: 'Broken answer' }],
+    });
+
+    const projected = projectRetryingMessage([question, answer], 'assistant-1');
+
+    expect(projected[0]).toBe(question);
+    expect(projected[1]).toMatchObject({ id: 'assistant-1', status: 'pending', parts: [] });
+    // Nothing to project once admission settles or when the row is off-window.
+    expect(projectRetryingMessage([question, answer], undefined)).toEqual([question, answer]);
+    expect(projectRetryingMessage([question], 'assistant-1')).toEqual([question]);
+  });
+
+  test('preserves compaction identity, data and position in live and reopened history', () => {
+    const anchor = {
+      id: 'compaction-anchor:turn-1:1',
+      type: 'data-compaction-anchor' as const,
+      data: { phase: 'in-loop' as const, status: 'compacting' as const },
+    };
+    const original = message('assistant-1', {
+      parts: [anchor, { id: 'answer', type: 'text', text: 'Answer', state: 'done' }],
+    });
+    const cache = createAgentMessageListProjectionCache();
+    const live = toAgentMessageListItem(original, cache);
+    const completed = {
+      ...anchor,
+      data: { ...anchor.data, status: 'done' as const, preTokens: 100_000, postTokens: 20_000 },
+    };
+    const reopened = toAgentMessageListItem(
+      { ...original, status: 'success', parts: [completed, original.parts[1]] },
+      cache,
+    );
+    expect(reopened?.data.partKeys).toEqual(live?.data.partKeys);
+    expect(reopened?.data.parts?.[0]).toEqual(completed);
+    expect(reopened?.data.parts?.[1]).toBe(live?.data.parts?.[1]);
+  });
+
+  test('keeps image request settings on pending and reopened assistant messages', () => {
+    const imageGeneration = { mode: 'generate' as const, paramValues: { aspectRatio: '16:9' } };
+    const [, pending] = createPendingChatMessages({
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [{ type: 'text', text: 'Draw a cherry' }],
+      imageGeneration,
+    });
+    const restored = toAgentMessageListItem(
+      message('assistant-1', {
+        inferenceSnapshot: {
+          status: 'supported',
+          snapshot: {
+            version: 1,
+            model: {
+              uniqueModelId: createUniqueModelId('provider', 'image'),
+              providerId: 'provider',
+              modelId: 'image',
+              name: 'Image',
+            },
+            parameters: {},
+            tools: [],
+            imageGeneration,
+          },
+        },
+      }),
+    );
+    expect(pending.imageGeneration).toEqual(imageGeneration);
+    expect(restored?.imageGeneration).toEqual(pending.imageGeneration);
+    expect(restored?.status).toBe('pending');
+  });
+
   test('keeps the same inline plugin snapshot in pending and persisted user messages', () => {
     const pluginReferences = [
       { type: 'plugin' as const, pluginId: 'feishu', label: '飞书', offset: 0 },
@@ -61,11 +133,11 @@ describe('agentMessageProjection', () => {
         parts: [
           {
             id: 'correction',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: { source: 'meta', name: 'tool_call' },
-            providerName: 'tool_call',
-            displayName: 'Call tool',
+            toolName: 'tool_call',
+            title: 'Call tool',
             state: 'error',
             error: {
               code: 'EXECUTION_FAILED',
@@ -91,11 +163,10 @@ describe('agentMessageProjection', () => {
     ]);
   });
 
-  test('prefers materialized statistics over the basic usage projection', () => {
+  test('preserves materialized statistics without inventing missing token counts', () => {
     const stats = { requestCount: 2, inputTokens: 200, totalTokens: 220 };
     const item = toAgentMessageListItem(
       message('materialized', {
-        usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
         stats,
       }),
     );
@@ -112,11 +183,11 @@ describe('agentMessageProjection', () => {
         parts: [
           {
             id: 'web-call',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'web_fetch' },
-            providerName: 'web_fetch',
-            displayName: 'Fetch web page',
+            toolName: 'web_fetch',
+            title: 'Fetch web page',
             state: 'error',
             error: { code: 'EXECUTION_FAILED', message: error.message, retryable: false },
             output: {
@@ -161,7 +232,7 @@ describe('agentMessageProjection', () => {
       type: 'file' as const,
       fileEntryId: '00000000-0000-7000-8000-000000000001',
       mediaType: 'application/pdf',
-      name: 'report.pdf',
+      filename: 'report.pdf',
       purpose: 'input-attachment' as const,
     };
     const projected = toAgentMessageListItem(
@@ -220,7 +291,7 @@ describe('agentMessageProjection', () => {
       message('assistant-error', {
         parts: [
           {
-            error: {
+            data: {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (403): access denied',
               retryable: false,
@@ -232,7 +303,7 @@ describe('agentMessageProjection', () => {
               },
             },
             id: 'error-1',
-            type: 'error',
+            type: 'data-error',
           },
         ],
         status: 'error',
@@ -265,13 +336,13 @@ describe('agentMessageProjection', () => {
       message('assistant-legacy-error', {
         parts: [
           {
-            error: {
+            data: {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (429): too many requests',
               retryable: true,
             },
             id: 'error-legacy',
-            type: 'error',
+            type: 'data-error',
           },
         ],
         status: 'error',
@@ -297,14 +368,14 @@ describe('agentMessageProjection', () => {
           { id: 'reasoning-1', state: 'streaming', text: 'Thinking', type: 'reasoning' },
           {
             approvalId: 'approval-1',
-            displayName: 'Read file',
+            title: 'Read file',
             id: 'tool-1',
             input: { fileEntryId: 'file-1' },
-            providerName: 'builtin_read_file_a1b2',
+            toolName: 'builtin_read_file_a1b2',
             state: 'awaiting-approval',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'read_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
       }),
@@ -336,13 +407,13 @@ describe('agentMessageProjection', () => {
       message('assistant-tool-input-streaming', {
         parts: [
           {
-            displayName: 'Write file',
+            title: 'Write file',
             id: 'tool-streaming',
-            providerName: 'write_file',
+            toolName: 'write_file',
             state: 'input-streaming',
             toolCallId: 'call-streaming',
             toolRef: { source: 'builtin', capabilityId: 'write_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
       }),
@@ -364,7 +435,7 @@ describe('agentMessageProjection', () => {
       message('assistant-tool-result', {
         parts: [
           {
-            displayName: 'Write file',
+            title: 'Write file',
             id: 'tool-1',
             input: { filename: 'report.md' },
             output: {
@@ -378,11 +449,11 @@ describe('agentMessageProjection', () => {
                 },
               ],
             },
-            providerName: 'write_file',
+            toolName: 'write_file',
             state: 'output-available',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'write_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
         status: 'success',
@@ -407,7 +478,7 @@ describe('agentMessageProjection', () => {
       message('assistant-web-sources', {
         parts: [
           {
-            displayName: 'Web search',
+            title: 'Web search',
             id: 'tool-1',
             input: { query: 'Cherry Studio' },
             output: {
@@ -421,11 +492,11 @@ describe('agentMessageProjection', () => {
               ],
               artifacts: [],
             },
-            providerName: 'web_search',
+            toolName: 'web_search',
             state: 'output-available',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'web_search' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
           { id: 'text-1', state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
         ],
@@ -454,7 +525,7 @@ describe('agentMessageProjection', () => {
             fileEntryId,
             id: 'input-0',
             mediaType: 'image/png',
-            name: 'managed.png',
+            filename: 'managed.png',
             purpose: 'input-attachment',
             type: 'file',
           },
