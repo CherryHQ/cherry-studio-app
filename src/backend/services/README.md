@@ -52,6 +52,9 @@ suffix.
   `app.user.id`, which a desktop pairing replaces. Local usage facts stay in
   `src/backend/data/services/AiUsageRecordService`, which forwards each newly committed invocation
   here; this module owns no persistence of its own.
+- `jsSandbox` adapts the native `modules/js-sandbox` runtime for the Agent's `run_js` tool: run
+  ids, cancellation through the turn's `AbortSignal`, and outcome validation. The tool owns the
+  limits and output handling.
 - `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
   provider adaptation, and MCP connection behavior.
 - `http` owns non-streaming HTTP(S) request/response infrastructure for external services. It

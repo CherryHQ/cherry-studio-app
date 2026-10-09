@@ -35,6 +35,7 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'reminder_list_collections',
   'reminder_list_items',
   'reminder_update_item',
+  'run_js',
   'web_fetch',
   'web_search',
   'write_file',
@@ -158,6 +159,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('edit_file', 'auto'),
   describe('read_file', 'auto'),
   describe('write_file', 'auto'),
+  describe('run_js', 'auto'),
 ];
 
 export type AgentCapabilityAvailability = {

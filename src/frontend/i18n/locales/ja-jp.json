@@ -222,6 +222,7 @@
   "chat.builtinTool.calendar.listCalendars": "Get calendar list",
   "chat.builtinTool.calendar.listEvents": "Find calendar events",
   "chat.builtinTool.calendar.updateEvent": "Update calendar event",
+  "chat.builtinTool.code.runJs": "JavaScript を実行する",
   "chat.builtinTool.file.characters": "文字",
   "chat.builtinTool.file.created": "ファイルが作成されました",
   "chat.builtinTool.file.edit": "ファイルを編集する",
