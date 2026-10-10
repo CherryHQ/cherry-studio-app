@@ -49,7 +49,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
-  shrinks with them.
+  shrinks with them. Ready still images open the shared preview with optional crop/rotate editing.
+  Saving replaces the matching attachment in place; cancellation, failure and a removed/stale
+  source preserve the current draft. The source library file remains unchanged.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator. `onPickFiles` can replace the files destination;
   the menu still settles input dismissal before calling it.

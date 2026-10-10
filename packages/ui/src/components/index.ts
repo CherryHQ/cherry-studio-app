@@ -9,6 +9,8 @@ export * from './content-state';
 export * from './dialog';
 export * from './file-preview';
 export * from './image';
+export * from './image-editor';
+export * from './image-preview-toolbar';
 export * from './input';
 export * from './loading';
 export * from './markdown-text';

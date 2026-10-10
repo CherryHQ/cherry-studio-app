@@ -11,11 +11,15 @@ import {
   useState,
 } from 'react';
 
+import type { FileEntryId } from '@/shared/data/types/file';
+
 import { useComposerPresentation } from '../hooks/useComposerPresentation';
 import {
   appendComposerAttachments,
   type ComposerAttachmentDraft,
   removeComposerAttachment,
+  replaceComposerAttachment,
+  type ComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
 /**
@@ -34,6 +38,11 @@ type ComposerActionsContextValue = {
   clearAttachments: () => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
+  replaceAttachment: (
+    attachmentId: string,
+    sourceId: FileEntryId,
+    replacement: ComposerAttachmentReady,
+  ) => boolean;
   /**
    * Replaces the whole draft. Only for the cases that own it wholesale — send
    * clearing it, a failed send restoring it with a functional update to preserve newer text. Anything that *adds* to what the
@@ -45,7 +54,11 @@ type ComposerActionsContextValue = {
 
 export type ComposerAttachmentStore = Pick<
   ComposerActionsContextValue,
-  'addAttachments' | 'clearAttachments' | 'removeAttachment' | 'setAttachments'
+  | 'addAttachments'
+  | 'clearAttachments'
+  | 'removeAttachment'
+  | 'setAttachments'
+  | 'replaceAttachment'
 > & {
   attachments: readonly ComposerAttachmentDraft[];
 };
@@ -78,6 +91,8 @@ type ComposerProviderProps = PropsWithChildren<{
   initialDraft?: string | (() => string);
 }>;
 
+const EMPTY_ATTACHMENTS: readonly ComposerAttachmentDraft[] = [];
+
 /**
  * The draft, its attachments, and a handle on the field — the three things both
  * the composer and its caller need, which is why they are context rather than
@@ -87,33 +102,60 @@ type ComposerProviderProps = PropsWithChildren<{
 export function ComposerProvider({
   attachmentStore,
   children,
-  initialAttachments = [],
+  initialAttachments = EMPTY_ATTACHMENTS,
   initialDraft = '',
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
   const presentation = useComposerPresentation(inputRef);
-  const [localAttachments, setLocalAttachments] = useState<ComposerAttachmentDraft[]>(() => [
+  const [localAttachments, setLocalAttachmentState] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,
   ]);
-
-  const addLocalAttachments = useCallback((nextAttachments: ComposerAttachmentDraft[]) => {
-    setLocalAttachments((current) => appendComposerAttachments(current, nextAttachments));
+  const localAttachmentsRef = useRef(localAttachments);
+  const setLocalAttachments = useCallback((update: SetStateAction<ComposerAttachmentDraft[]>) => {
+    const next = typeof update === 'function' ? update(localAttachmentsRef.current) : update;
+    localAttachmentsRef.current = next;
+    setLocalAttachmentState(next);
   }, []);
 
-  const removeLocalAttachment = useCallback((attachmentId: string) => {
-    setLocalAttachments((current) => removeComposerAttachment(current, attachmentId));
-  }, []);
+  const addLocalAttachments = useCallback(
+    (nextAttachments: ComposerAttachmentDraft[]) => {
+      setLocalAttachments((current) => appendComposerAttachments(current, nextAttachments));
+    },
+    [setLocalAttachments],
+  );
+
+  const removeLocalAttachment = useCallback(
+    (attachmentId: string) => {
+      setLocalAttachments((current) => removeComposerAttachment(current, attachmentId));
+    },
+    [setLocalAttachments],
+  );
 
   const clearLocalAttachments = useCallback(() => {
     setLocalAttachments([]);
-  }, []);
+  }, [setLocalAttachments]);
 
   const attachments = attachmentStore?.attachments ?? localAttachments;
   const addAttachments = attachmentStore?.addAttachments ?? addLocalAttachments;
   const clearAttachments = attachmentStore?.clearAttachments ?? clearLocalAttachments;
   const removeAttachment = attachmentStore?.removeAttachment ?? removeLocalAttachment;
   const setAttachments = attachmentStore?.setAttachments ?? setLocalAttachments;
+  const replaceLocalAttachment = useCallback(
+    (attachmentId: string, sourceId: FileEntryId, replacement: ComposerAttachmentReady) => {
+      const next = replaceComposerAttachment(
+        localAttachmentsRef.current,
+        attachmentId,
+        sourceId,
+        replacement,
+      );
+      if (!next) return false;
+      setLocalAttachments(next);
+      return true;
+    },
+    [setLocalAttachments],
+  );
+  const replaceAttachment = attachmentStore?.replaceAttachment ?? replaceLocalAttachment;
 
   const stateValue = useMemo(() => ({ attachments, draft }), [attachments, draft]);
 
@@ -123,9 +165,10 @@ export function ComposerProvider({
       clearAttachments,
       removeAttachment,
       setAttachments,
+      replaceAttachment,
       setDraft,
     }),
-    [addAttachments, clearAttachments, removeAttachment, setAttachments],
+    [addAttachments, clearAttachments, removeAttachment, setAttachments, replaceAttachment],
   );
 
   const metaValue = useMemo(() => ({ inputRef }), []);

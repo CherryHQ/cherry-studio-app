@@ -65,8 +65,9 @@ Generated-file badges fit inside library cards. Text excerpt cards are deferred;
 
 ## Viewer
 
-The route is `/files/[fileEntryId]`, implemented by `src/frontend/features/files`. Its identity is
-only the file entry id. File resolution uses the same query as the cards. Invalid or unavailable
+The route is `/files/[fileEntryId]`, implemented by `src/frontend/features/files`. Ordinary previews
+use the file entry id; editable previews also carry an opaque `imageEditRequestId` to distinguish
+their source owner. File resolution uses the same query as the cards. Invalid or unavailable
 entries show an inline unavailable state; reads and image loads have explicit retry states.
 
 The native stack owns entry, exit, and back. The header is opaque so content does not disappear
@@ -74,14 +75,25 @@ under system bars. Images use constant black/white chrome; text uses theme surfa
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
-Every resolved file has Share and Open with actions in the overflow menu.
-Images also have Save to Photos, using the add-only permission flow shared with the painting viewer.
+Every resolved file has an Open with action in the overflow menu. Images put Share and Save to
+Photos in a bottom toolbar; other files retain Share in the overflow menu. Saving to Photos uses
+the add-only permission flow shared with the painting viewer.
 
 ### Image
 
 `ArtifactImageViewer` provides pinch, pan, and double-tap zoom. Its optional error callback lets the
-page render a retry state without losing sharing or system opening. The painting viewer retains
+page render a retry state without losing sharing or system opening. Optional children compose
+caller-owned controls below the image. The painting viewer retains
 its own route and painting-specific actions.
+
+Composer images opt into Edit through `FileEntryPreview.onImageReplace`. Static JPEG, PNG and WebP
+images support freeform cropping, clockwise quarter-turn rotation and reset in CherryUI's
+`ImageEditor`. GIF, vector images and images reported as animated retain ordinary preview actions.
+Done creates a new managed file and replaces the same draft attachment, preserving its position
+and the text draft. The source file and sent messages are unchanged. Cancel discards only local
+edit state; a failed or stale save cannot replace the source. Backend storage owns pixel writes
+and derivative cleanup. The viewer blocks leaving during a save and first cancels an active edit
+on back. Gesture, orientation, save/cancel and theme acceptance remain pending device verification.
 
 PNG files with `document-export` provenance use `ArtifactImagePages` instead. The viewer reads only
 the PNG header, displays bounded pages at original decode resolution and reading width, and scrolls

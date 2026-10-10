@@ -19,6 +19,7 @@ import {
 } from '@/shared/data/types/file';
 
 import { readDocumentUriText } from './documentText';
+import { editFileImage } from './editFileImage';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
@@ -59,6 +60,7 @@ const createTextEntryInputSchema = z.strictObject({
  */
 export const fileContent = {
   subscribeChanges: subscribeFileChanges,
+  editImage: editFileImage,
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
    * port is import-only by contract, which is why it fixes the provenance

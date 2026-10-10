@@ -8,6 +8,8 @@ import {
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { ReplacePreviewImage } from '@/frontend/appShell/imagePreview';
+import type { ResolvedFile } from '@/shared/contracts/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
@@ -25,13 +27,17 @@ export function FileEntryPreview({
   size,
   variant,
   transfer,
+  onImageReplace,
 }: {
   entryId: FileEntryId;
   size?: number;
   variant?: FilePreviewVariant;
   transfer?: FilePreviewTransfer;
+  /** Explicitly enables editing for this caller; ordinary file previews stay read-only. */
+  onImageReplace?: ReplacePreviewImage;
 }) {
   const { data, isLoading } = useResolvedFile(entryId);
+  const { openFileEntry } = useOpenFileEntry();
 
   if (isLoading) {
     return <FileEntrySkeleton size={size} variant={variant} />;
@@ -45,6 +51,7 @@ export function FileEntryPreview({
       uri={data?.uri}
       variant={variant}
       transfer={transfer}
+      onOpen={(file) => openFileEntry(file, onImageReplace)}
     />
   );
 }
@@ -95,6 +102,7 @@ export function LoadedFileEntryPreview({
   uri: string | undefined;
   variant?: FilePreviewVariant;
 }) {
+  const { openFileEntry } = useOpenFileEntry();
   return (
     <EntryPreview
       badge={badge}
@@ -104,6 +112,7 @@ export function LoadedFileEntryPreview({
       size={size}
       uri={uri}
       variant={variant}
+      onOpen={openFileEntry}
     />
   );
 }
@@ -117,6 +126,7 @@ function EntryPreview({
   uri,
   variant,
   transfer,
+  onOpen,
 }: {
   badge?: ReactNode;
   entry: FileEntry | undefined;
@@ -126,9 +136,9 @@ function EntryPreview({
   uri: string | undefined;
   variant?: FilePreviewVariant;
   transfer?: FilePreviewTransfer;
+  onOpen: (file: ResolvedFile) => void;
 }) {
   const { handleError, t } = useFileEntryPreviewError(entryId);
-  const { openFileEntry } = useOpenFileEntry();
   const file = entry && uri ? toFilePreviewFile(entry, uri, previewUri) : null;
 
   return (
@@ -141,7 +151,7 @@ function EntryPreview({
       }}
       onError={handleError}
       onPress={() => {
-        if (entry && uri) openFileEntry({ entry, uri });
+        if (entry && uri) onOpen({ entry, uri });
       }}
       size={size}
       variant={variant}

@@ -163,7 +163,11 @@ function RootStack() {
       />
       <Stack.Screen
         // Reopening the file already on top reuses it, so a repeated tap cannot stack a copy.
-        getId={({ params }) => getSingleRouteParam(params?.fileEntryId)}
+        getId={({ params }) => {
+          const fileEntryId = getSingleRouteParam(params?.fileEntryId);
+          const imageEditRequestId = getSingleRouteParam(params?.imageEditRequestId);
+          return imageEditRequestId ? `${fileEntryId}:${imageEditRequestId}` : fileEntryId;
+        }}
         name="files/[fileEntryId]"
         options={{ headerTransparent: false }}
       />

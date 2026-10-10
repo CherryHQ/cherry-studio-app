@@ -7,6 +7,8 @@ This shared component family connects an artifact preview surface to its viewer 
 - `ArtifactImageViewer` renders a measured, pannable, pinch- and double-tap-zoomable image inside
   the transition target. Callers supply its accessible label and observe zoom state when navigation
   gestures must be disabled.
+  Optional children provide controls below the image; compose CherryUI's `ImagePreviewToolbar`
+  there when the calling surface has actions. Omitting children retains a plain image viewer.
 - `ArtifactImagePages` displays ordered image files with known dimensions at reading width.
   It shares the existing pinch/pan interaction, keeps bounded pages at original decode resolution,
   and disables the surrounding list during zoom. Large single images use a viewport-sized browser

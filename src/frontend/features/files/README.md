@@ -17,8 +17,12 @@ delivering each captured page; the shared executor owns capture, cancellation an
 See [HTML Conversion](../../../../docs/references/html-conversion.md)
 for format behavior, limits, selection evidence and pending acceptance.
 
-- `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. The header offers
-  sharing, saving to Photos, and system opening.
+- `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
+  bottom toolbar offers sharing and saving to Photos; the header retains system opening. A
+  caller-owned image editing request also supplies Edit. Crop/rotate happens before sending and
+  creates a new managed image through `Backend.file.editImage`. Only an accepted source-matching
+  callback replaces the caller's attachment. The source file and existing messages retain their
+  original bytes. Cancellation and failed saves retain the current draft image.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
   in source view. `FileTextBody` renders plain text and source as a virtualized list of bounded
   blocks from `splitTextBlocks`. Copy uses the displayed source text and explicitly says when it is partial;
@@ -40,6 +44,13 @@ Whole-text copying is explicit. Native partial selection is disabled on this scr
 its cancellation behavior is accepted on both platforms. The image viewer uses the existing
 pinch/pan/double-tap interaction; native navigation owns back, and image zoom disables the iOS pop
 gesture as in the painting viewer. The new page uses ordinary stack transitions.
+
+An editable preview adds `imageEditRequestId` to its route identity. This opaque in-memory request
+is owned by `appShell/imagePreview`; callbacks never enter URLs, persisted drafts or file rows.
+Back first cancels an active edit. Leaving the preview or disposing its source releases the request;
+late results cannot restore a removed attachment. Repeated edits stay in the same preview and use
+the last accepted image. The crop/rotate change adds no native dependency. Its gesture, orientation,
+save/cancel and light/dark acceptance remain pending authorized device verification.
 
 The new native dependencies require a development-client rebuild before device acceptance.
 No device acceptance or automated tests were run as part of implementation. See the
