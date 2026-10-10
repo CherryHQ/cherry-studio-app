@@ -16,6 +16,12 @@ concurrency:
   group: build-apk-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  # No Sentry auth token is configured for this build, so skip the source-map
+  # upload step (it otherwise fails the release bundle task).
+  SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+  SENTRY_ALLOW_FAILURE: 'true'
+
 jobs:
   build:
     name: Build release APK
