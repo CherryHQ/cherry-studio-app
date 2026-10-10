@@ -1,0 +1,75 @@
+name: Build Android APK
+
+# Standalone APK build that does not depend on EAS. Produces an installable
+# release APK as a workflow artifact and, on a version tag, attaches it to a
+# GitHub Release.
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Setup Java (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prebuild Android native project
+        env:
+          PROFILE: production
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Build standalone release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CherryStudio-SuperAgent-APK
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
