@@ -1,5 +1,8 @@
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
-import { MAX_IMAGE_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+import {
+  MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_CHARACTERS,
+} from '@/shared/utils/fileAttachmentPolicy';
 
 import { parseAnydocDocument } from '../anydocParser';
 import { prepareFileAttachments } from '../prepareFileAttachments';
@@ -69,6 +72,21 @@ describe('prepareFileAttachments', () => {
         target: { purpose: 'painting', acceptsImages: true, maxImages: 1 },
       }),
     ).rejects.toEqual(new FileAttachmentError({ code: 'count', limit: 1 }));
+  });
+
+  test('admits a larger text source while retaining the model-facing character ceiling', async () => {
+    const bytes = new TextEncoder().encode('x'.repeat(2 * 1024 * 1024));
+    const request = input([{ ...text, size: bytes.byteLength }]);
+    request.readBytes.mockResolvedValueOnce(bytes);
+    const result = await prepareFileAttachments(request);
+    expect(result.get(FILE_ID)).toMatchObject({
+      content: { kind: 'text', text: 'x'.repeat(MAX_TEXT_ATTACHMENT_CHARACTERS) },
+      report: {
+        sourceTruncated: false,
+        requestTruncated: true,
+        includedCharacters: MAX_TEXT_ATTACHMENT_CHARACTERS,
+      },
+    });
   });
 
   test('distinguishes source extraction from request truncation and charges repeated references', async () => {

@@ -3,6 +3,7 @@ package expo.modules.pdftextextractor
 import android.content.Context
 import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import expo.modules.kotlin.exception.CodedException
@@ -13,6 +14,8 @@ import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class ExtractOptions : Record {
@@ -40,6 +43,9 @@ class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
 
 class PdfTextExtractorModule : Module() {
     private val defaultMaxPages = 100
+    private val maxStreamMemoryBytes = 16 * 1024 * 1024L
+    private val maxStreamStorageBytes = 128 * 1024 * 1024L
+    private val documentMutex = Mutex()
     @Volatile
     private var isInitialized = false
 
@@ -55,11 +61,15 @@ class PdfTextExtractorModule : Module() {
 
         // Plain AsyncFunctions share one serial thread with every Expo module.
         AsyncFunction("extractText") Coroutine { filePath: String, options: ExtractOptions? ->
-            withContext(Dispatchers.IO) { extractTextFromPDF(filePath, options) }
+            withContext(Dispatchers.IO) {
+                documentMutex.withLock { extractTextFromPDF(filePath, options) }
+            }
         }
 
         AsyncFunction("getPageCount") Coroutine { filePath: String ->
-            withContext(Dispatchers.IO) { getPageCount(filePath) }
+            withContext(Dispatchers.IO) {
+                documentMutex.withLock { getPageCount(filePath) }
+            }
         }
     }
 
@@ -76,7 +86,7 @@ class PdfTextExtractorModule : Module() {
 
         try {
             val document: PDDocument = try {
-                PDDocument.load(file)
+                loadDocument(file)
             } catch (e: Exception) {
                 throw FailedToLoadDocumentException(e)
             }
@@ -131,7 +141,7 @@ class PdfTextExtractorModule : Module() {
             val isTempFile = filePath.startsWith("content://")
             val file = parseFilePath(filePath)
             try {
-                PDDocument.load(file).use { doc ->
+                loadDocument(file).use { doc ->
                     doc.numberOfPages
                 }
             } finally {
@@ -142,6 +152,15 @@ class PdfTextExtractorModule : Module() {
         } catch (e: Exception) {
             0
         }
+    }
+
+    private fun loadDocument(file: File): PDDocument {
+        // Spill PDF stream buffers into the cache instead of retaining them all in RAM.
+        // This bounds scratch storage, not every parsed object or the extracted text.
+        val memoryUsage = MemoryUsageSetting
+            .setupMixed(maxStreamMemoryBytes, maxStreamStorageBytes)
+            .setTempDir(context.cacheDir)
+        return PDDocument.load(file, memoryUsage)
     }
 
     private fun parseFilePath(filePath: String): File {
