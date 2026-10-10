@@ -20,6 +20,9 @@ export type PluginCredentialField = {
   readonly secret: boolean;
   readonly maxLength: number;
   readonly pattern?: string;
+  /** Inline fallback label, used by catalog plugins that carry no locale entry. */
+  readonly label?: string;
+  readonly errorLabel?: string;
 };
 
 export type PluginCredentialMethod = {
@@ -27,6 +30,9 @@ export type PluginCredentialMethod = {
   readonly kind: 'credentials';
   readonly fields: readonly PluginCredentialField[];
   readonly requiresDisconnect?: boolean;
+  /** Inline fallback method copy, used by catalog plugins that carry no locale entry. */
+  readonly label?: string;
+  readonly setup?: string;
 };
 
 /** Browser interaction is explicit; application entry is optional. */
@@ -36,6 +42,10 @@ export type PluginInteractiveMethod = {
   readonly interaction: 'polling' | 'callback';
   readonly stages: readonly string[];
   readonly applicationFields?: readonly PluginCredentialField[];
+  /** Inline fallback method copy, used by catalog plugins that carry no locale entry. */
+  readonly label?: string;
+  readonly setup?: string;
+  readonly permissions?: string;
 };
 
 export type PluginAuthorizationMethod = PluginCredentialMethod | PluginInteractiveMethod;
@@ -47,6 +57,19 @@ export type PluginAuthorizationMethod = PluginCredentialMethod | PluginInteracti
 export type PluginCatalogEntry = {
   readonly id: PluginId;
   readonly icon?: string;
+  /**
+   * Authored display name and one-line summary. The curated remote-MCP catalog
+   * carries these inline so adding a hosted server is a data entry, not a
+   * translation pass across every locale; entries that omit them fall back to
+   * `plugins.catalog.<id>.name` / `.summary`.
+   */
+  readonly name?: string;
+  readonly summary?: string;
+  readonly category?: string;
+  /** Longer setup copy shown on the detail screen; falls back to `plugins.catalog.<id>.description`. */
+  readonly description?: string;
+  /** Credential-link label; falls back to `plugins.catalog.<id>.credentialLink`. */
+  readonly credentialLink?: string;
   readonly links: {
     readonly credentials: string;
     readonly website: string;
