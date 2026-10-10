@@ -124,11 +124,60 @@ describe('validateSkillPackage', () => {
     expect(parsed).toEqual({
       frontmatter: {
         name: 'x',
-        description: 'First line second line',
+        description: 'First line second line\n',
         compatibility: "needs 'python'",
       },
       body: 'body',
     });
     expect(parseSkillEntry('---\nname: x\n')).toEqual({ error: 'unterminated' });
+  });
+
+  it('accepts standard YAML collections and keeps scripts and arbitrary metadata', () => {
+    const result = validateSkillPackage(
+      files({
+        'SKILL.md': `---
+name: pdf-notes
+description: >-
+  Read a document
+  and write notes.
+compatibility: Requires Python for extraction
+metadata:
+  author: example
+  tags: [pdf, notes]
+  custom:
+    outputs:
+      - markdown
+allowed-tools: Read Bash(python:*)
+---
+Run scripts/extract.py and follow references/format.md.
+`,
+        'scripts/extract.py': 'print("extracted")',
+        'references/format.md': '# Format',
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.package).toMatchObject({
+      description: 'Read a document and write notes.',
+      compatibility: 'Requires Python for extraction',
+      tags: ['pdf', 'notes'],
+      frontmatter: { metadata: { custom: { outputs: ['markdown'] } } },
+      manifest: [
+        { path: 'SKILL.md' },
+        { path: 'references/format.md' },
+        { path: 'scripts/extract.py' },
+      ],
+    });
+  });
+
+  it.each([
+    'name: first\nname: duplicate\ndescription: d',
+    'name: "unterminated\ndescription: d',
+    '- name\n- description',
+  ])('rejects invalid frontmatter instead of guessing its values', (yaml) => {
+    expect(validateSkillPackage(files({ 'SKILL.md': `---\n${yaml}\n---\nBody` }))).toMatchObject({
+      ok: false,
+      issues: [{ code: 'frontmatter-invalid' }],
+    });
   });
 });

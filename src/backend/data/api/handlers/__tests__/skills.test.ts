@@ -8,19 +8,19 @@ import { createSkillHandlers } from '../skills';
 
 const AGENT_ID = '00000000-0000-4000-8000-000000000001';
 
-it('fills composer pages from eligible results beyond a blocked SQL page and keeps a usable cursor', async () => {
+it('fills composer pages from readable results beyond a missing-package SQL page and keeps a usable cursor', async () => {
   const row = (name: string) => ({ skill: { id: name, name } as Skill, binding: null });
   const list = jest
     .fn(async (): Promise<ListSkillsResult> => ({ items: [] }))
-    .mockResolvedValueOnce({ items: [row('blocked')], nextCursor: 'sql-next' })
+    .mockResolvedValueOnce({ items: [row('missing')], nextCursor: 'sql-next' })
     .mockResolvedValueOnce({ items: [row('ready-a'), row('ready-b')] });
   const service = { list } as unknown as AgentGlobalSkillService;
   const handlers = createSkillHandlers(service, {
     evaluate: async (skills) =>
       skills.map((skill) => {
         const admission: SkillAdmission = {
-          status: skill.name === 'blocked' ? 'setup-required' : 'ready',
-          reasons: [],
+          status: skill.name === 'missing' ? 'setup-required' : 'unverified',
+          reasons: skill.name === 'missing' ? [{ code: 'package-unavailable', subject: null }] : [],
         };
         return { admission, agentAdmission: admission };
       }),

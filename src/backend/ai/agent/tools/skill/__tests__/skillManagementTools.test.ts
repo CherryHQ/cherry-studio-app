@@ -139,18 +139,18 @@ describe('conversation Skill installation', () => {
     expect(f.workflow.install).not.toHaveBeenCalled();
   });
 
-  it('returns admission failures as tool results', async () => {
+  it('returns package validation failures as tool results', async () => {
     const f = fixture();
     f.workflow.install.mockRejectedValueOnce(
-      new SkillsError('admission-unsupported', 'needs execution-unsupported (python)'),
+      new SkillsError('package-invalid', 'Invalid Skill package'),
     );
     expect(await run(f.tools, 'install_skill', { url: candidate.source.url! })).toMatchObject({
       status: 'error',
-      code: 'admission-unsupported',
+      code: 'package-invalid',
     });
   });
 
-  it('preserves pinned revisions and refuses unrelated or unready additions', () => {
+  it('preserves pinned revisions and permits readable additions with execution limitations', () => {
     const expanding = createExpandingSkillScope(checked);
     const changed = {
       ...checked,
@@ -168,8 +168,8 @@ describe('conversation Skill installation', () => {
         },
       ],
     };
-    expect(expanding.include(blocked, 'blocked', installed.contentHash)).toBe(false);
-    expect(expanding.scope.entries).toEqual(checked.entries);
+    expect(expanding.include(blocked, 'blocked', installed.contentHash)).toBe(true);
+    expect(expanding.scope.entries).toEqual([...checked.entries, ...blocked.entries]);
   });
 
   it('keeps ordinary install approval while the composer action supplies explicit install intent', () => {

@@ -280,7 +280,7 @@ function summarize(entry: SkillTurnEntry) {
     skill_id: entry.id,
     name: entry.name,
     description: entry.description,
-    verified: entry.admission.status === 'ready',
+    environment: entry.admission,
   };
 }
 

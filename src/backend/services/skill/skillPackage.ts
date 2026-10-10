@@ -7,6 +7,8 @@
  * validity is a property of the bytes alone, distinct from compatibility.
  */
 
+import { isMap, parseDocument } from 'yaml';
+
 import {
   SKILL_COMPATIBILITY_MAX_LENGTH,
   SKILL_DESCRIPTION_MAX_LENGTH,
@@ -275,87 +277,16 @@ export function parseSkillEntry(text: string): ParsedEntry {
   if (lines[0]?.trim() !== '---') return null;
   const end = lines.findIndex((line, index) => index > 0 && line.trim() === '---');
   if (end === -1) return { error: 'unterminated' };
-  const result = parseYamlSubset(lines.slice(1, end));
-  if ('error' in result) return result;
-  return { frontmatter: result.value as SkillFrontmatter, body: lines.slice(end + 1).join('\n') };
-}
-
-/**
- * The YAML subset the specification's frontmatter needs: scalar `key: value`
- * pairs, one nested mapping level (`metadata`), quoted strings, booleans,
- * numbers, and `|` / `>` block scalars. Anything else is a parse error rather
- * than a guess.
- */
-function parseYamlSubset(
-  lines: readonly string[],
-): { value: Record<string, unknown> } | { error: string } {
-  const root: Record<string, unknown> = {};
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index]!;
-    if (line.trim() === '' || line.trim().startsWith('#')) {
-      index += 1;
-      continue;
-    }
-    if (/^\s/.test(line)) return { error: `unexpected indentation at line ${index + 1}` };
-    const match = /^([A-Za-z0-9_-]+):(.*)$/.exec(line);
-    if (!match) return { error: `invalid key at line ${index + 1}` };
-    const key = match[1]!;
-    const rest = match[2]!.trim();
-    if (Object.hasOwn(root, key)) return { error: `duplicate key ${key}` };
-    index += 1;
-    if (rest === '|' || rest === '>') {
-      const block: string[] = [];
-      while (index < lines.length && (/^\s/.test(lines[index]!) || lines[index]!.trim() === '')) {
-        block.push(lines[index]!.replace(/^\s{1,2}/, ''));
-        index += 1;
-      }
-      const text = block.join('\n').replace(/\s+$/, '');
-      root[key] = rest === '|' ? text : text.replace(/\n(?!\n)/g, ' ').replace(/\n\n/g, '\n');
-      continue;
-    }
-    if (rest === '') {
-      const nested: Record<string, unknown> = {};
-      let sawChild = false;
-      while (index < lines.length) {
-        const child = lines[index]!;
-        if (child.trim() === '' || child.trim().startsWith('#')) {
-          index += 1;
-          continue;
-        }
-        if (!/^\s+/.test(child)) break;
-        const childMatch = /^\s+([A-Za-z0-9_-]+):(.*)$/.exec(child);
-        if (!childMatch) return { error: `invalid nested key at line ${index + 1}` };
-        nested[childMatch[1]!] = parseScalar(childMatch[2]!.trim());
-        sawChild = true;
-        index += 1;
-      }
-      root[key] = sawChild ? nested : null;
-      continue;
-    }
-    root[key] = parseScalar(rest);
+  try {
+    const document = parseDocument(lines.slice(1, end).join('\n'), { stringKeys: true });
+    const issue = document.errors[0] ?? document.warnings[0];
+    if (issue) return { error: issue.message };
+    if (!isMap(document.contents)) return { error: 'frontmatter must be a mapping' };
+    const frontmatter: SkillFrontmatter = document.toJS({ maxAliasCount: 100 });
+    return { frontmatter, body: lines.slice(end + 1).join('\n') };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'invalid YAML' };
   }
-  return { value: root };
-}
-
-function parseScalar(raw: string): unknown {
-  if (raw === '') return null;
-  if (
-    (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) ||
-    (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2)
-  ) {
-    const inner = raw.slice(1, -1);
-    return raw.startsWith('"')
-      ? inner.replace(
-          /\\(["\\nt])/g,
-          (_, c: string) => ({ '"': '"', '\\': '\\', n: '\n', t: '\t' })[c]!,
-        )
-      : inner.replace(/''/g, "'");
-  }
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  if (/^-?\d+(\.\d+)?$/.test(raw)) return Number(raw);
-  return raw.replace(/\s+#.*$/, '');
 }
 
 function optionalString(value: unknown): string | null {
@@ -376,7 +307,11 @@ function readMetadata(value: unknown): {
           .split(/[,\s]+/)
           .map((tag) => tag.trim())
           .filter(Boolean)
-      : [];
+      : Array.isArray(rawTags)
+        ? rawTags
+            .filter((tag): tag is string => typeof tag === 'string' && Boolean(tag.trim()))
+            .map((tag) => tag.trim())
+        : [];
   const version = record.version;
   return {
     author: optionalString(record.author),

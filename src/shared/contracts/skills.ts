@@ -25,8 +25,8 @@ export type SkillInspectedPackage = {
 };
 
 /**
- * The result of inspecting one candidate: validation issues first, then the
- * profile and admission derived for the current application environment.
+ * Package validation determines installation. The profile and environment
+ * guidance describe known execution limitations without blocking installation.
  */
 export type SkillInspection = {
   candidate: SkillCandidate;
@@ -94,7 +94,7 @@ export interface SkillsModule {
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
   /** The curated recommendation list bundled with this build. */
   listRecommended(): Promise<SkillCandidate[]>;
-  /** Download into disposable staging, validate, and admit; never installs. */
+  /** Download, validate, and report environment guidance; never installs. */
   inspect(candidateId: string, signal?: AbortSignal): Promise<SkillInspection>;
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;
   /** Re-acquire the accepted source; a rejected revision leaves the installation intact. */

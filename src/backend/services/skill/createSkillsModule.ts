@@ -27,11 +27,7 @@ import type {
 } from '@/shared/data/types/skill';
 
 import type { BundledSkillDefinition } from './bundled';
-import {
-  analyzeSkillRequirements,
-  evaluateSkillAdmission,
-  type SkillAgentFacts,
-} from './skillAdmission';
+import { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
 import type { SkillEnvironmentReader } from './skillEnvironment';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
@@ -108,7 +104,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       author: candidate.author,
       version: candidate.version,
       tags: candidate.tags,
-      profileProvenance: candidate.reviewed ? 'reviewed' : 'analyzed',
+      profileProvenance: candidate.reviewed ? 'reviewed' : 'unverified',
       installedSkillId: installed?.id ?? null,
     };
   }
@@ -121,10 +117,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       : null;
   }
 
-  function buildProfile(
-    pkg: ValidatedSkillPackage,
-    reviewed: BundledSkillDefinition | null,
-  ): SkillProfile {
+  function buildProfile(reviewed: BundledSkillDefinition | null): SkillProfile {
     if (reviewed) {
       return {
         provenance: 'reviewed',
@@ -132,10 +125,14 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         workflowScope: reviewed.workflowScope,
       };
     }
-    return analyzeSkillRequirements(pkg, deps.environment.pluginToolCatalog());
+    return {
+      provenance: 'unverified',
+      requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
+      workflowScope: null,
+    };
   }
 
-  /** Acquire, validate, and admit one candidate; returns the staged package for installation. */
+  /** Validate package bytes and report environment guidance separately. */
   async function acquireAndInspect(
     candidate: SkillSourceCandidate,
     signal?: AbortSignal,
@@ -164,7 +161,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       };
     }
     const pkg = validation.package;
-    const profile = buildProfile(pkg, candidate.reviewed);
+    const profile = buildProfile(candidate.reviewed);
     const admission = evaluateSkillAdmission(profile, await deps.environment.read());
     return {
       inspection: {
@@ -209,23 +206,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       profile,
       invocation: pkg.invocation,
     };
-  }
-
-  function assertInstallable(admission: SkillAdmission): void {
-    if (admission.status === 'ready') return;
-    // Reason codes let the conversation explain the blocker without another inspection.
-    const reasons = admission.reasons
-      .map(({ code, subject }) => (subject ? `${code} (${subject})` : code))
-      .join(', ');
-    if (admission.status === 'unsupported')
-      throw new SkillsError(
-        'admission-unsupported',
-        `This Skill needs capabilities this device does not provide: ${reasons}.`,
-      );
-    throw new SkillsError(
-      'admission-setup-required',
-      `Configure the required capabilities first: ${reasons}.`,
-    );
   }
 
   const admissions: SkillAdmissionReader = {
@@ -291,13 +271,9 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       if (!pkg || !files || !inspection.profile || !inspection.admission) {
         throw new SkillsError('package-invalid', 'The Skill package failed validation.');
       }
-      assertInstallable(inspection.admission);
       for (const agentId of input.agentIds ?? []) {
         const facts = await deps.agentFacts(agentId);
         if (!facts) throw new SkillsError('not-found', 'The target Agent no longer exists.');
-        assertInstallable(
-          evaluateSkillAdmission(inspection.profile, await deps.environment.read(), facts),
-        );
       }
       signal?.throwIfAborted();
 
@@ -362,9 +338,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       }
       if (pkg.contentHash === current.contentHash && deps.storage.hasRevision(current)) {
         return { outcome: 'unchanged', skill: current };
-      }
-      if (inspection.admission.status !== 'ready') {
-        return { outcome: 'rejected', skill: current, inspection };
       }
       const handle = await deps.storage.stage(files);
       try {

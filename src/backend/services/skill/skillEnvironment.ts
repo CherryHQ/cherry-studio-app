@@ -1,18 +1,13 @@
 /**
- * Reads the environment facts admission needs from their owners. Nothing is
- * cached across calls: permissions, provider configuration, and plugin
- * connections change outside Cherry, and a stale fact would admit a Skill the
- * user just made unusable.
+ * Reads current environment facts for reviewed workflow guidance. Actual
+ * tools still own permission and capability checks when a step executes.
  */
 
 import { Platform } from 'react-native';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
-import {
-  getBuiltInPluginCatalog,
-  getPluginDefinition,
-} from '@/backend/services/builtInMcp/pluginRegistry';
+import { getPluginDefinition } from '@/backend/services/builtInMcp/pluginRegistry';
 import type { PermissionsModule } from '@/shared/contracts/permissions';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { BUILT_IN_TOOL_DESCRIPTORS } from '@/shared/data/types/builtInTool';
@@ -33,8 +28,6 @@ export type SkillEnvironmentDependencies = {
 
 export type SkillEnvironmentReader = {
   read(): Promise<SkillEnvironmentFacts>;
-  /** Static tool inventory of every bundled plugin, connected or not, for package analysis. */
-  pluginToolCatalog(): ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 export function createSkillEnvironmentReader(
@@ -63,13 +56,9 @@ export function createSkillEnvironmentReader(
       const hasPaintingModel =
         isUniqueModelId(paintingModelId) &&
         (await deps.models.getById(paintingModelId).catch(() => null)) !== null;
-      const pluginServerIds = new Map<string, Set<string>>();
       const connectedPlugins = new Map<string, ReadonlySet<string>>();
       for (const connection of connections) {
         if (connection.authorization && connection.authorization.status !== 'connected') continue;
-        const ids = pluginServerIds.get(connection.pluginId) ?? new Set<string>();
-        ids.add(connection.serverId);
-        pluginServerIds.set(connection.pluginId, ids);
         const definition = getPluginDefinition(connection.pluginId);
         if (definition)
           connectedPlugins.set(connection.pluginId, new Set(Object.keys(definition.tools)));
@@ -83,16 +72,7 @@ export function createSkillEnvironmentReader(
         },
         hasPaintingModel,
         connectedPlugins,
-        pluginServerIds,
       };
-    },
-    pluginToolCatalog() {
-      const catalog = new Map<string, ReadonlySet<string>>();
-      for (const { id: pluginId } of getBuiltInPluginCatalog()) {
-        const definition = getPluginDefinition(pluginId);
-        if (definition) catalog.set(pluginId, new Set(Object.keys(definition.tools)));
-      }
-      return catalog;
     },
   };
 }

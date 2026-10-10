@@ -8,6 +8,7 @@ import {
 describe('skill status helpers', () => {
   it('maps admission outcomes to tones and prefers the Agent evaluation', () => {
     expect(skillStatusTone('ready')).toBe('success');
+    expect(skillStatusTone('unverified')).toBe('default');
     expect(skillStatusTone('unsupported')).toBe('danger');
     expect(skillStatusTone('setup-required')).toBe('default');
     expect(effectiveSkillStatus({ status: 'ready', reasons: [] })).toBe('ready');

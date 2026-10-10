@@ -1,11 +1,6 @@
 import type { SkillProfile } from '@/shared/data/types/skill';
 
-import {
-  analyzeSkillRequirements,
-  evaluateSkillAdmission,
-  type SkillEnvironmentFacts,
-} from '../skillAdmission';
-import { validateSkillPackage } from '../skillPackage';
+import { evaluateSkillAdmission, type SkillEnvironmentFacts } from '../skillAdmission';
 
 const environment: SkillEnvironmentFacts = {
   platform: 'ios',
@@ -63,10 +58,22 @@ describe('evaluateSkillAdmission', () => {
       }),
     ).toMatchObject({ status: 'unsupported', reasons: [{ code: 'capability-unavailable' }] });
     expect(evaluateSkillAdmission(profile({}, 'analyzed'), environment)).toEqual({
-      status: 'ready',
+      status: 'unverified',
       reasons: [],
     });
   });
+
+  it.each(['unverified', 'analyzed'] as const)(
+    'does not treat %s requirements as verified dependencies',
+    (provenance) => {
+      expect(
+        evaluateSkillAdmission(
+          profile({ execution: 'python', builtInTools: ['web_search'] }, provenance),
+          environment,
+        ),
+      ).toEqual({ status: 'unverified', reasons: [] });
+    },
+  );
 
   it('treats plugins and permissions as setup, and unavailable plugin tools as unsupported', () => {
     expect(
@@ -114,53 +121,6 @@ describe('evaluateSkillAdmission', () => {
         { code: 'capability-disabled', subject: 'calendar' },
         { code: 'model-tool-calling-unsupported', subject: null },
       ],
-    });
-  });
-});
-
-describe('analyzeSkillRequirements', () => {
-  const encoder = new TextEncoder();
-  const analyze = (entry: string, extra: Record<string, string> = {}) => {
-    const validation = validateSkillPackage(
-      new Map(
-        Object.entries({ 'SKILL.md': entry, ...extra }).map(([p, t]) => [p, encoder.encode(t)]),
-      ),
-    );
-    if (!validation.ok) throw new Error(JSON.stringify(validation.issues));
-    return analyzeSkillRequirements(
-      validation.package,
-      new Map([['github', new Set(['issue_read'])]]),
-    );
-  };
-
-  it('requires execution only when instructions call bundled scripts', () => {
-    expect(
-      analyze('---\nname: x\ndescription: d\n---\nRun `python scripts/fill.py` first.', {
-        'scripts/fill.py': 'print(1)',
-      }).requirements,
-    ).toMatchObject({ execution: 'python' });
-    // A command example without a bundled script is not treated as a dependency.
-    expect(
-      analyze('---\nname: x\ndescription: d\n---\n```bash\nnpx prettier --write .\n```')
-        .requirements,
-    ).toMatchObject({ execution: 'none' });
-    // An unreferenced helper script does not make the workflow depend on it.
-    expect(
-      analyze('---\nname: x\ndescription: d\n---\nJust write.', { 'scripts/helper.sh': 'echo' })
-        .requirements,
-    ).toMatchObject({ execution: 'none' });
-  });
-
-  it('collects explicitly named Cherry tools and plugin tools', () => {
-    const result = analyze(
-      '---\nname: x\ndescription: d\n---\nCall calendar_list_events then web_search; use `github issue_read`.',
-    );
-    expect(result).toMatchObject({
-      provenance: 'analyzed',
-      requirements: {
-        builtInTools: ['calendar_list_events', 'web_search'],
-        pluginTools: [{ pluginId: 'github', tools: ['issue_read'] }],
-      },
     });
   });
 });

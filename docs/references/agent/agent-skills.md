@@ -3,14 +3,14 @@
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. The first implementation includes three reviewed bundled packages: structured
 notes, research brief and daily agenda. The sidebar's Plugins page has separate Plugins and Skills
-tabs. The Skills library provides installed search, details, prerequisites, enablement, update and
+tabs. The Skills library provides installed search, details, environment guidance, enablement, update and
 uninstall. Agent settings bind installed Skills; the chat composer selects eligible bindings for a
 message.
 
 ## Ownership And Authority
 
 ```text
-backend/services/skill       sources → validation → admission → managed installation
+backend/services/skill       sources → package validation → managed installation
 backend/data                 installed package facts + Agent binding preferences
 backend/ai/agent/host         current eligibility → pinned scope → active instructions
 backend/ai/agent/runtime      Pi Durable model history, compaction and tool loop
@@ -19,9 +19,10 @@ backend/ai/agent/runtime      Pi Durable model history, compaction and tool loop
 A Skill is an instruction package, not an executable extension. Loading cannot add tools, change
 approval, grant OS access, expose credentials, expand MCP access or widen the conversation file
 ledger. Existing tool and permission owners remain authoritative. Skill instructions are subordinate
-to application policy, Agent instructions and the user's current request. Because a Skill grants
-nothing, an installed Skill whose instructions name an unavailable command can only fail to be
-followed; admission therefore blocks only what is known not to work, not what is unproven.
+to application policy, Agent instructions and the user's current request. Package acceptance,
+instruction access and step execution are separate: a valid package can be installed and read even
+when some steps need unavailable tools or a script runtime. Installation never claims that the
+whole workflow can execute.
 
 General Skills are separate from the existing bundled plugin guides. Those guides retain their
 [plugin module contract](../../../src/backend/services/builtInMcp/README.md#plugin-guides), global
@@ -44,9 +45,10 @@ bounded responses and cancellation. There is no script runner or package editor.
 
 Packages require UTF-8 `SKILL.md` with leading YAML frontmatter and a nonempty conforming name and
 description. A named package directory must match the declared name; root packages use the entry's
-declared name. The supported YAML subset includes scalar key/value pairs, quoted strings, booleans,
-numbers, block scalars and one nested mapping level for metadata. Full YAML compatibility is not
-promised. Optional author, version, tags, license and compatibility metadata are retained.
+declared name. The `yaml` parser reads frontmatter mappings, including block scalars, collections
+and nested metadata; malformed YAML and duplicate keys are rejected. Original bytes and unknown
+metadata remain in the package. Author, version, tags, license and compatibility notes are extracted
+for inspection; declared compatibility notes also accompany loaded instructions.
 
 - `disable-model-invocation: true` excludes a Skill from automatic discovery and loading.
 - `user-invocable: false` excludes it from explicit composer selection.
@@ -58,26 +60,30 @@ promised. Optional author, version, tags, license and compatibility metadata are
   instructions. Every file contributes to the SHA-256 manifest and to the content hash, which uses
   desktop's `directory-sha256:` algorithm so one package has the same hash on both clients.
 
-## Admission
+## Package Acceptance And Environment Guidance
 
-Compatibility is derived from the package profile and current environment facts on each read; it is
-not a persisted boolean. A profile declares required built-in tools, plugin tools, platforms and
-execution requirements. Bundled packages use their reviewed profile. Other packages get an
-`analyzed` profile from deterministic rules: instructions that call the package's own bundled
-scripts require an interpreter Cherry Mobile does not provide, and Cherry or plugin tool names the
-instructions use explicitly become tool requirements. Environment checks consult the existing
-permission, web-search, painting-model and plugin owners. A permission still requestable through the
-normal OS flow is allowed; a denied permission requires setup.
+Installation and updates validate the package format, paths, integrity and size. Missing tools,
+permissions, model tool calling or script interpreters do not block installation or instruction
+loading. Scripts, references, templates and other accepted resources are preserved together.
 
-| Status | Meaning | Installation |
-| --- | --- | --- |
-| `ready` | Current prerequisites are satisfied | Allowed |
-| `setup-required` | Configuration, permission, model or package files need repair | Blocked |
-| `unsupported` | Required platform, script execution or tool is unavailable on mobile | Blocked |
+Bundled packages retain their reviewed requirement profiles as environment guidance. Their checks
+consult permission, web-search, painting-model and plugin owners; actual execution checks remain
+with the tools. External packages are `unverified`: the app does not infer dependencies from prose,
+script filenames or mentioned tool names. Older stored `analyzed` profiles remain readable and are
+also treated as unverified, without a database migration.
 
-Agent admission additionally checks disabled capabilities and native tool calling. At turn
-preparation, required tools must also exist in the actual executable tool snapshot, including the
-correct plugin connection. Failed live discovery therefore cannot leave an apparently usable Skill.
+| Status | Meaning |
+| --- | --- |
+| `ready` | No known limitation in the reviewed requirements; not a guarantee of execution |
+| `unverified` | The external workflow's execution requirements have not been verified |
+| `setup-required` | Known configuration or permission needs; also used for missing package bytes |
+| `unsupported` | A reviewed step needs an unavailable platform, tool or script runtime |
+
+These statuses describe the environment rather than grant access. Binding, global enablement,
+invocation policy and readable package bytes determine instruction access. Missing package bytes
+exclude a Skill from loading and composer selection; execution limitations do not. The Agent sees
+known limitations with loaded instructions and must explain an unavailable capability before a step
+that needs it. Reading a script must never be reported as running it.
 
 ## Conversation Installation
 
@@ -93,9 +99,9 @@ composer plus menu only selects already installed Skills. Manual search and bund
 are a secondary destination in the Skills tab's overflow menu.
 
 The Agent uses two tools. `find_skills` searches skills.sh with keywords or lists the Skills behind a
-URL; it never installs. `install_skill` takes one URL, resolves and downloads it, validates and
-admits it, installs it and enables it for the current Agent in the same transaction. A URL with
-several Skills returns their URLs for the model to choose from. Admission failures return their
+URL; it never installs. `install_skill` takes one URL, resolves and downloads it, validates
+the package, installs it and enables it for the current Agent in the same transaction. A URL with
+several Skills returns their URLs for the model to choose from. Package validation failures return their
 reason codes so the Agent can explain them. The chip expresses installation intent and makes
 `install_skill` approval automatic; otherwise it asks. Agent approval policy still applies, and
 search-only requests do not authorize installation. An identical installation is reused for a new
@@ -109,7 +115,7 @@ writes `source` as `builtin` (bundled recommendations) or `marketplace` (GitHub-
 installations and conversation bindings are written enabled. Desktop's `namespace` is absent
 because mobile has no built-in namespaces or system skill placements. Three mobile columns follow
 the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
-`profile` holds the requirements admission evaluates on every read without opening packages, and
+`profile` holds reviewed environment guidance or unverified provenance, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
 Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding
 changes preserve unrelated bindings; global disablement preserves binding preferences.
@@ -132,7 +138,7 @@ them with the database. Missing referenced files block backup instead of produci
 archive. Package writes and backup capture exclude each other.
 
 Library reads use `/skills` and `/skills/:skillId`; `/agents/:agentId/skills` reads and updates
-bindings. Composer search applies binding, global enablement, invocation and admission filters before
+bindings. Composer search applies binding, global enablement, invocation and package-presence filters before
 its public page boundary. Local metadata search uses stable name/ID cursors. Installation and
 lifecycle operations belong to `Backend.skills`, separate from the ordinary Data API.
 
@@ -140,8 +146,7 @@ lifecycle operations belong to `Backend.skills`, separate from the ordinary Data
 
 The Host resolves installed, globally enabled, bound-enabled and currently eligible packages for this
 Agent, pinning each revision for the turn. After a successful conversation install, it may append
-only that installed ID and exact digest from a freshly checked scope using the turn's actual tool
-catalog. It never replaces a pinned revision. A refresh failure preserves the installation but
+only that installed ID and exact digest from a freshly checked access scope. It never replaces a pinned revision. A refresh failure preserves the installation but
 reports it unavailable in this turn. Tools cannot name another Agent or revision, and reads are
 limited to paths in the accepted manifest. The model-facing tools are:
 
@@ -152,7 +157,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `list_skill_files` | List package paths after loading or explicit selection |
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
 | `find_skills` | Search skills.sh, or list the Skills behind a supported URL |
-| `install_skill` | Resolve, admit, install and bind one Skill for this Agent; append it to the turn |
+| `install_skill` | Validate, install and bind one Skill for this Agent; append it to the turn |
 
 The initial catalog contains at most 40 bounded descriptions. Search covers the remaining eligible
 scope, including eligible additions installed during the turn. A new installation still uses
@@ -161,8 +166,8 @@ cannot be guessed into automatic loading. The composer accepts up to eight eligi
 not silently create bindings.
 
 Active entry instructions have a 48,000-character aggregate limit; oversized activation fails rather
-than truncating instructions. Pi Durable owns model history and compaction, and a conversation's
-system instructions are fixed for the duration of a turn. `load_skill` therefore returns the
+than truncating instructions. Pi Durable owns model history and compaction. This first implementation
+keeps Cherry's prepared system instructions fixed for the duration of a turn. `load_skill` therefore returns the
 instructions in its result so the current turn can follow them, and explicit selections are quoted
 in that turn's system instructions. References are read progressively and can be read again after
 compaction.
@@ -174,3 +179,12 @@ rebuilt. It loads the Skill's current revision while the Skill stays bound, enab
 invocable in the same way; a Skill that no longer qualifies simply stops contributing instructions.
 Retry and regeneration resubmit the original message's selections and find-and-install action. The
 UI shows Skill name and revision receipts, without dumping instruction bodies into the tool trace.
+
+## First-Version Scope
+
+The current implementation reuses the existing load receipts and Host prompt assembly. Later turns
+use the current installed revision; a running turn keeps its prepared package scope. This version
+adds no request-level Skill sections, separate activation-state store, session-specific unload
+protocol, or long-term revision retention. Exact old-version recovery across restart, advanced
+queue/history interactions and remote script execution remain outside this version's contract.
+Backups continue to include live installations, not a separate archive of historical activations.

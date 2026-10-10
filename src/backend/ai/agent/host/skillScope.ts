@@ -2,8 +2,8 @@
  * Per-turn Skill scope for the Mobile Agent Host.
  *
  * The scope is the intersection the design defines: installed accepted
- * packages ∩ globally enabled ∩ this Agent's enabled bindings ∩ current
- * environment and model eligibility. It pins each accepted revision; an
+ * packages ∩ globally enabled ∩ this Agent's enabled bindings. Environment
+ * diagnostics never prevent reading instructions. It pins each revision; an
  * installation can append only its freshly checked revision during the turn.
  * It is the only thing the Skill tools can read.
  */
@@ -73,14 +73,9 @@ export type SkillScopeSourceDependencies = {
   models: Pick<ModelService, 'getById'>;
 };
 
-/** Only accepted, currently ready packages can enter a turn. */
-export function isSkillUsable(admission: SkillAdmission): boolean {
-  return admission.status === 'ready';
-}
-
 export function createSkillScopeSource(deps: SkillScopeSourceDependencies): SkillScopeSource {
   return {
-    async resolve({ agentId, disabledCapabilities, model, tools, signal }) {
+    async resolve({ agentId, disabledCapabilities, model, signal }) {
       const projections = await deps.skills.listUsableForAgent(agentId);
       signal.throwIfAborted();
       if (projections.length === 0) return EMPTY_SKILL_SCOPE;
@@ -97,35 +92,6 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
       const entries: SkillTurnEntry[] = [];
       for (const { skill } of projections) {
         const admission = evaluateSkillAdmission(skill.profile, environment, agent);
-        if (!isSkillUsable(admission)) continue;
-        const { builtInTools, pluginTools } = skill.profile.requirements;
-        if (
-          builtInTools.some(
-            (id) =>
-              !tools.some(
-                (tool) =>
-                  tool.approval !== 'deny' &&
-                  tool.ref.source === 'builtin' &&
-                  tool.ref.capabilityId === id,
-              ),
-          )
-        )
-          continue;
-        if (
-          pluginTools.some(({ pluginId, tools: required }) =>
-            required.some(
-              (name) =>
-                !tools.some(
-                  (tool) =>
-                    tool.approval !== 'deny' &&
-                    tool.ref.source === 'mcp' &&
-                    tool.ref.rawToolName === name &&
-                    environment.pluginServerIds?.get(pluginId)?.has(tool.ref.serverId),
-                ),
-            ),
-          )
-        )
-          continue;
         const ref = { folderName: skill.folderName, contentHash: skill.contentHash };
         if (!deps.storage.hasRevision(ref)) {
           logger.warn('Installed Skill package is missing; excluding it from the turn', {
@@ -161,7 +127,20 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           const text = bytes ? decodeUtf8(bytes) : null;
           if (text === null) return null;
           const parsed = parseSkillEntry(text);
-          return parsed && 'body' in parsed ? parsed.body.trim() : null;
+          if (!parsed || !('body' in parsed)) return null;
+          const compatibility = parsed.frontmatter.compatibility;
+          const reasons = byId.get(skillId)!.admission.reasons;
+          return [
+            typeof compatibility === 'string' && compatibility.trim()
+              ? `Package environment requirements (not verified): ${compatibility.trim()}`
+              : '',
+            reasons.length
+              ? `Known environment limitations: ${reasons.map(({ code, subject }) => (subject ? `${code} (${subject})` : code)).join(', ')}.`
+              : '',
+            parsed.body.trim(),
+          ]
+            .filter(Boolean)
+            .join('\n\n');
         },
         async readFile(skillId, path) {
           return readPackageFile(skillId, path);
@@ -188,11 +167,7 @@ export function createExpandingSkillScope(initial: SkillTurnScope) {
       const entry = checked.entries.find(
         (item) => item.id === skillId && item.contentHash === digest,
       );
-      if (
-        !entry ||
-        !isSkillUsable(entry.admission) ||
-        (entries.has(skillId) && entries.get(skillId)!.contentHash !== digest)
-      )
+      if (!entry || (entries.has(skillId) && entries.get(skillId)!.contentHash !== digest))
         return false;
       entries.set(skillId, entry);
       readers.set(skillId, checked);

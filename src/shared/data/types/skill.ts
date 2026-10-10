@@ -106,21 +106,27 @@ export const SkillRequirementsSchema = z.strictObject({
 export type SkillRequirements = z.infer<typeof SkillRequirementsSchema>;
 
 /**
- * `reviewed` profiles ship with the curated catalog. `analyzed` profiles are
- * derived from the package text by deterministic rules.
+ * `reviewed` profiles ship with the curated catalog. External packages are
+ * `unverified`; `analyzed` remains readable for earlier installations, but its
+ * inferred requirements no longer determine availability.
  */
-export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'analyzed']);
+export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'unverified', 'analyzed']);
 export type SkillProfileProvenance = z.infer<typeof SkillProfileProvenanceSchema>;
 
 export const SkillProfileSchema = z.strictObject({
   provenance: SkillProfileProvenanceSchema,
   requirements: SkillRequirementsSchema,
-  /** Human summary of the reviewed workflow scope; null for analyzed profiles. */
+  /** Human summary of the reviewed workflow scope; null for external packages. */
   workflowScope: z.string().nullable(),
 });
 export type SkillProfile = z.infer<typeof SkillProfileSchema>;
 
-export const SkillAdmissionStatusSchema = z.enum(['ready', 'setup-required', 'unsupported']);
+export const SkillAdmissionStatusSchema = z.enum([
+  'ready',
+  'unverified',
+  'setup-required',
+  'unsupported',
+]);
 export type SkillAdmissionStatus = z.infer<typeof SkillAdmissionStatusSchema>;
 
 export const SkillAdmissionReasonCodeSchema = z.enum([
@@ -145,7 +151,7 @@ export const SkillAdmissionReasonSchema = z.strictObject({
 });
 export type SkillAdmissionReason = z.infer<typeof SkillAdmissionReasonSchema>;
 
-/** A derived result for one scope; it is never persisted as authority. */
+/** Environment guidance, not installation or instruction-loading authorization. */
 export const SkillAdmissionSchema = z.strictObject({
   status: SkillAdmissionStatusSchema,
   reasons: z.array(SkillAdmissionReasonSchema),

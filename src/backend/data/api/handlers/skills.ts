@@ -63,14 +63,14 @@ export function createSkillHandlers(
         if (parsed.data.scope === 'composer') {
           const items: SkillListItem[] = [];
           let cursor = parsed.data.cursor;
-          // Admission precedes the public page boundary. Unavailable matches
-          // must not consume slots or hide eligible Skills on later SQL pages.
+          // Missing packages cannot be read. Environment guidance must not hide
+          // otherwise accessible instructions from the composer.
           do {
             const page = await service.list({ ...parsed.data, cursor, limit: 200 });
             items.push(
               ...(await project(page.items, parsed.data.agentId)).filter(
                 (item) =>
-                  item.admission.status === 'ready' && item.agentAdmission?.status === 'ready',
+                  !item.admission.reasons.some(({ code }) => code === 'package-unavailable'),
               ),
             );
             cursor = page.nextCursor;

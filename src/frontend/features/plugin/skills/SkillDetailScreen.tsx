@@ -165,6 +165,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           </Text>
         ) : null}
         <SkillReasonList reasons={skill.admission.reasons} />
+        <Text className="text-sm text-muted-foreground">{t('skills.executionHint')}</Text>
       </View>
       <Section>
         <Section.SwitchItem

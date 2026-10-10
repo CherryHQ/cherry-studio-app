@@ -52,10 +52,10 @@ resolved afresh for every turn. After freezing the tool snapshot, the Host combi
 Runtime rules, guidance for application capabilities that are actually present, and the
 user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
 that policy without appending another application policy fragment; Pi appends only the
-binding-specific instructions for its deferred MCP catalog when that catalog is present. Mobile
-Skill persistence and prompt projection are not implemented; their target boundary is documented
-separately and does not change the current Runtime input. The injected Pi Runtime remains stable for
-the Host lifetime.
+binding-specific instructions for its deferred MCP catalog when that catalog is present. The Host
+also supplies selected and previously loaded Skill instructions through the existing Runtime input;
+Skill loading adds no executable capabilities. The injected Pi Runtime remains stable for the Host
+lifetime.
 
 ## Production Pi binding
 
@@ -585,9 +585,9 @@ later model attachments. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 Absolute paths and large base64 payloads are never tool results.
 
-Mobile Skills are not resolved by the current Host. Their target contract keeps them as instruction
-context that cannot change the tool snapshot, approval policy, OS permission, or turn resource
-ledger. See [Agent Skills](./agent-skills.md).
+The Host resolves installed and enabled Skills within the Agent's bindings. Their instruction
+context cannot change the tool snapshot, approval policy, OS permission, or turn resource ledger.
+Package-local reads remain within the accepted manifest. See [Agent Skills](./agent-skills.md).
 
 ## Execution output
 

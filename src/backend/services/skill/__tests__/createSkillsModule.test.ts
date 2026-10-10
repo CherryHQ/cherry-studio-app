@@ -146,7 +146,7 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
-    environment: { read: async () => environment, pluginToolCatalog: () => new Map() },
+    environment: { read: async () => environment },
     sources: {
       bundled: {
         registry: 'bundled',
@@ -190,7 +190,7 @@ describe('createSkillsModule', () => {
     expect(fakes.bound).toEqual([`first:${installed.id}`, `second:${installed.id}`]);
   });
 
-  it('inspects, installs once, binds explicitly, and refuses unsupported packages', async () => {
+  it('inspects, binds explicitly, and installs packages despite environment limitations', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed, needsWeb, needsPython]);
     const changes = jest.fn();
@@ -211,11 +211,8 @@ describe('createSkillsModule', () => {
     expect(await module.inspect(web!.candidateId)).toMatchObject({
       admission: { status: 'setup-required' },
     });
-    await expect(module.install({ candidateId: py!.candidateId })).rejects.toMatchObject({
-      code: 'admission-unsupported',
-    });
-    await expect(module.install({ candidateId: web!.candidateId })).rejects.toMatchObject({
-      code: 'admission-setup-required',
+    expect(await module.inspect(py!.candidateId)).toMatchObject({
+      admission: { status: 'unsupported' },
     });
     expect(fakes.staged.size).toBe(0);
 
@@ -242,6 +239,13 @@ describe('createSkillsModule', () => {
     expect(await module.inspect(web!.candidateId)).toMatchObject({
       candidate: { installedSkillId: null },
     });
+    await expect(module.install({ candidateId: py!.candidateId })).resolves.toMatchObject({
+      name: 'py-notes',
+    });
+    await expect(
+      module.install({ candidateId: web!.candidateId, agentIds: ['agent-1'] }),
+    ).resolves.toMatchObject({ name: 'web-notes' });
+    expect(fakes.rows.size).toBe(3);
   });
 
   it('keeps the installation when a record commit fails and cleans staging', async () => {
@@ -258,7 +262,7 @@ describe('createSkillsModule', () => {
     expect(fakes.staged.size).toBe(0);
   });
 
-  it('updates in place, reports unchanged revisions, rejects unsupported updates, and uninstalls', async () => {
+  it('updates despite execution limitations, preserves the last valid package, and uninstalls', async () => {
     const fakes = createFakes();
     const definitions: BundledSkillDefinition[] = [reviewed];
     const module = createModule(fakes, definitions);
@@ -286,23 +290,34 @@ describe('createSkillsModule', () => {
       revision: 3,
       files: { 'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun python.' },
     };
+    const pythonUpdate = await module.update(installed.id);
+    expect(pythonUpdate.outcome).toBe('updated');
+    expect(fakes.published).toHaveLength(3);
+
+    definitions[0] = {
+      ...reviewed,
+      revision: 4,
+      files: { 'SKILL.md': '---\nname: notes\n---\nMissing description.' },
+    };
     expect(await module.update(installed.id)).toMatchObject({
       outcome: 'rejected',
-      skill: { contentHash: updated.skill.contentHash },
+      skill: { contentHash: pythonUpdate.skill.contentHash },
     });
-    expect(fakes.published).toHaveLength(2);
+    expect(fakes.published).toHaveLength(3);
 
     await module.uninstall(installed.id);
     expect(fakes.rows.size).toBe(0);
-    expect(fakes.published).toHaveLength(2); // Active turns retain immutable revisions.
+    expect(fakes.published).toHaveLength(3); // Active turns retain immutable revisions.
     await module.reconcileStorage();
     expect(fakes.storage.reconcile).toHaveBeenCalledWith([]);
   });
 
-  it('admits analyzed packages and rejects an update that starts calling bundled scripts', async () => {
+  it('installs and updates complete external packages without inferring execution support', async () => {
     const fakes = createFakes();
     let files: Record<string, string> = {
-      'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nUse references/outline.md.',
+      'SKILL.md':
+        '---\nname: notes\ndescription: Take notes\ncompatibility: Requires Python\n---\nRead references/outline.md, then run scripts/fill.py.',
+      'scripts/fill.py': 'print(1)',
       'references/outline.md': 'Use headings.',
     };
     const candidate: SkillSourceCandidate = {
@@ -325,7 +340,7 @@ describe('createSkillsModule', () => {
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      environment: { read: async () => environment, pluginToolCatalog: () => new Map() },
+      environment: { read: async () => environment },
       sources: {
         bundled: createBundledSkillSource([]),
         github: {
@@ -340,28 +355,38 @@ describe('createSkillsModule', () => {
           resolveUrl: async () => candidate,
         },
       },
-      agentFacts: async () => null,
+      agentFacts: async () => ({ disabledCapabilities: ['web'], supportsToolCalling: false }),
     });
     const [resolved] = await module.resolve(candidate.source.url!);
     expect(await module.inspect(resolved!.candidateId)).toMatchObject({
-      profile: { provenance: 'analyzed' },
-      admission: { status: 'ready', reasons: [] },
+      profile: {
+        provenance: 'unverified',
+        requirements: { execution: 'none', builtInTools: [], pluginTools: [] },
+      },
+      admission: { status: 'unverified', reasons: [] },
     });
-    const installed = await module.install({ candidateId: resolved!.candidateId });
+    const installed = await module.install({
+      candidateId: resolved!.candidateId,
+      agentIds: ['agent-1'],
+    });
+    expect(installed.manifest.map(({ path }) => path)).toEqual([
+      'SKILL.md',
+      'references/outline.md',
+      'scripts/fill.py',
+    ]);
+    expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
     expect((await module.update(installed.id)).outcome).toBe('unchanged');
     files = {
       'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun `python scripts/fill.py`.',
       'scripts/fill.py': 'print(1)',
     };
     expect(await module.update(installed.id)).toMatchObject({
-      outcome: 'rejected',
-      inspection: {
-        admission: {
-          status: 'unsupported',
-          reasons: [{ code: 'execution-unsupported', subject: 'python' }],
-        },
+      outcome: 'updated',
+      skill: {
+        profile: { provenance: 'unverified' },
+        manifest: [{ path: 'SKILL.md' }, { path: 'scripts/fill.py' }],
       },
     });
-    expect((await fakes.skills.getById(installed.id)).contentHash).toBe(installed.contentHash);
+    expect((await fakes.skills.getById(installed.id)).contentHash).not.toBe(installed.contentHash);
   });
 });

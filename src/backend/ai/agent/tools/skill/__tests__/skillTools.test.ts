@@ -61,8 +61,8 @@ describe('skill tools', () => {
       returned: 2,
       nextCursor: null,
       skills: [
-        { skill_id: 'a', name: 'daily-agenda', verified: true },
-        { skill_id: 'b', name: 'research-brief', verified: true },
+        { skill_id: 'a', name: 'daily-agenda', environment: { status: 'ready', reasons: [] } },
+        { skill_id: 'b', name: 'research-brief', environment: { status: 'ready', reasons: [] } },
       ],
     });
     expect(await run(search, { query: 'RESEARCH' })).toMatchObject({

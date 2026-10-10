@@ -1,10 +1,10 @@
 /**
- * Environment admission for Skill packages.
+ * Environment guidance for reviewed Skill workflows.
  *
  * A profile lists what a workflow needs; the environment facts say what the
  * app, device, and Agent currently provide. The result is derived on every
- * read and carries reasons the UI can act on. Nothing here is persisted as a
- * compatibility boolean.
+ * read and carries reasons the UI can act on. It never blocks package
+ * installation or instruction loading; actual tools own execution checks.
  */
 
 import {
@@ -14,22 +14,14 @@ import {
   type PermissionStatuses,
 } from '@/shared/contracts/permissions';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
-import {
-  BUILT_IN_TOOL_CAPABILITY_IDS,
-  BUILT_IN_TOOL_DESCRIPTORS,
-  type BuiltInToolCapabilityId,
-} from '@/shared/data/types/builtInTool';
+import { BUILT_IN_TOOL_DESCRIPTORS } from '@/shared/data/types/builtInTool';
 import type {
   SkillAdmission,
   SkillAdmissionReason,
-  SkillExecutionRequirement,
   SkillPlatform,
   SkillProfile,
-  SkillRequirements,
 } from '@/shared/data/types/skill';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
-
-import type { ValidatedSkillPackage } from './skillPackage';
 
 /** Facts about the application environment, read from their owners per evaluation. */
 export type SkillEnvironmentFacts = {
@@ -39,7 +31,6 @@ export type SkillEnvironmentFacts = {
   hasPaintingModel: boolean;
   /** Connected plugin ids mapped to the tool names their bundled definition admits. */
   connectedPlugins: ReadonlyMap<string, ReadonlySet<string>>;
-  pluginServerIds?: ReadonlyMap<string, ReadonlySet<string>>;
 };
 
 /** Facts about one Agent, added at binding time and turn preparation. */
@@ -48,7 +39,6 @@ export type SkillAgentFacts = {
   supportsToolCalling: boolean;
 };
 
-const BUILT_IN_TOOL_IDS = new Set<string>(BUILT_IN_TOOL_CAPABILITY_IDS);
 const DESCRIPTORS_BY_ID = new Map(
   BUILT_IN_TOOL_DESCRIPTORS.map((descriptor) => [descriptor.capabilityId, descriptor] as const),
 );
@@ -62,6 +52,9 @@ export function evaluateSkillAdmission(
   environment: SkillEnvironmentFacts,
   agent?: SkillAgentFacts,
 ): SkillAdmission {
+  // Earlier inferred profiles are unverified too: mentioning a command does
+  // not establish that every workflow requires it.
+  if (profile.provenance !== 'reviewed') return { status: 'unverified', reasons: [] };
   const reasons: SkillAdmissionReason[] = [];
   const { requirements } = profile;
   let unsupported = false;
@@ -159,57 +152,4 @@ function findBlockedPermission(
         !canRequestDevicePermission(permissions[scope]),
     ) ?? null
   );
-}
-
-const SCRIPT_PATH = /^scripts\/|\.(?:py|sh|bash|zsh|js|mjs|ts|rb|ps1)$/i;
-
-/**
- * Derives an `analyzed` profile from the package text. A package whose
- * instructions call its own bundled scripts needs an interpreter Cherry Mobile
- * does not provide. Other workflows are admitted; instructions that name an
- * unavailable command simply cannot be followed, and loading grants nothing.
- */
-export function analyzeSkillRequirements(
-  pkg: Pick<ValidatedSkillPackage, 'instructions' | 'manifest'>,
-  pluginToolCatalog: ReadonlyMap<string, ReadonlySet<string>>,
-): SkillProfile {
-  const text = pkg.instructions;
-  const scripts = pkg.manifest
-    .map((entry) => entry.path)
-    .filter(
-      (path) =>
-        SCRIPT_PATH.test(path) && (text.includes(path) || text.includes(path.split('/').pop()!)),
-    );
-  const execution: SkillExecutionRequirement =
-    scripts.length === 0
-      ? 'none'
-      : scripts.some((path) => /\.py$/i.test(path))
-        ? 'python'
-        : scripts.some((path) => /\.(?:js|mjs|ts)$/i.test(path))
-          ? 'node'
-          : 'shell';
-
-  const builtInTools = [...BUILT_IN_TOOL_IDS]
-    .filter((id) => new RegExp(`\\b${id}\\b`).test(text))
-    .sort() as BuiltInToolCapabilityId[];
-  const pluginTools = [...pluginToolCatalog]
-    .flatMap(([pluginId, tools]) => {
-      const named = [...tools]
-        .filter((tool) => new RegExp(`\\b${pluginId}\\s+${tool}\\b|\`${tool}\``).test(text))
-        .sort();
-      return named.length > 0 ? [{ pluginId, tools: named }] : [];
-    })
-    .sort((a, b) => (a.pluginId < b.pluginId ? -1 : 1));
-
-  const requirements: SkillRequirements = {
-    platforms: null,
-    execution,
-    builtInTools,
-    pluginTools,
-  };
-  return {
-    provenance: 'analyzed',
-    requirements,
-    workflowScope: null,
-  };
 }

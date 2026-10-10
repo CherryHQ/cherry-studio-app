@@ -70,7 +70,7 @@ const projection = (s: Skill): AgentSkillProjection => ({
 });
 
 describe('createSkillScopeSource', () => {
-  it('keeps ready Skills, drops blocked or missing packages, and pins revisions', async () => {
+  it('keeps readable Skills with execution guidance, excludes missing packages, and pins revisions', async () => {
     const source = createSkillScopeSource({
       skills: {
         listUsableForAgent: async () =>
@@ -103,16 +103,21 @@ describe('createSkillScopeSource', () => {
     });
     expect(scope.entries.map((entry) => [entry.id, entry.admission.status])).toEqual([
       ['ready', 'ready'],
-      ['analyzed', 'ready'],
+      ['analyzed', 'unverified'],
+      ['needs-image', 'setup-required'],
+      ['needs-python', 'unsupported'],
     ]);
     expect(await scope.readInstructions('ready')).toBe('Body of digest-ready');
-    expect(await scope.readInstructions('needs-python')).toBeNull();
+    expect(await scope.readInstructions('needs-python')).toContain(
+      'execution-unsupported (python)',
+    );
+    expect(await scope.readInstructions('needs-python')).toContain('Body of digest-needs-python');
     expect(await scope.readFile('ready', 'SKILL.md')).toBeInstanceOf(Uint8Array);
     expect(await scope.readFile('missing', 'SKILL.md')).toBeNull();
     expect(await scope.readFile('ready', 'unlisted.md')).toBeNull();
   });
 
-  it('applies the Agent deny-list and model facts to eligibility', async () => {
+  it('keeps instructions accessible when a required tool is absent or disabled', async () => {
     const source = createSkillScopeSource({
       skills: {
         listUsableForAgent: async () => [
@@ -132,9 +137,12 @@ describe('createSkillScopeSource', () => {
     expect((await source.resolve({ ...base, disabledCapabilities: [] })).entries).toHaveLength(1);
     expect(
       (await source.resolve({ ...base, disabledCapabilities: [], tools: [] })).entries,
-    ).toHaveLength(0);
-    expect((await source.resolve({ ...base, disabledCapabilities: ['web'] })).entries).toHaveLength(
-      0,
-    );
+    ).toHaveLength(1);
+    expect(
+      (await source.resolve({ ...base, disabledCapabilities: ['web'] })).entries[0]!.admission,
+    ).toMatchObject({
+      status: 'setup-required',
+      reasons: [{ code: 'capability-disabled', subject: 'web' }],
+    });
   });
 });

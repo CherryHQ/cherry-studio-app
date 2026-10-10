@@ -65,7 +65,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
   const status = admission?.status ?? null;
   const tone = status ? skillStatusTone(status) : 'danger';
   const isInstalled = candidate.installedSkillId !== null;
-  const canInstall = !isInstalled && pkg !== null && status === 'ready';
+  const canInstall = !isInstalled && pkg !== null;
 
   async function install() {
     setIsInstalling(true);
@@ -120,6 +120,11 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           </Text>
         ) : null}
         {admission ? <SkillReasonList reasons={admission.reasons} /> : null}
+        {pkg?.compatibility ? (
+          <Text className="text-sm text-muted-foreground" selectable>
+            {pkg.compatibility}
+          </Text>
+        ) : null}
         {issues.length > 0 ? (
           <View className="gap-1">
             {issues.map((issue) => (
@@ -183,7 +188,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           </Section.Item>
         </Section>
       ) : null}
-      {isInstalled && status === 'ready' ? (
+      {isInstalled && pkg !== null ? (
         <Button disabled={isInstalling} onPress={() => void install()}>
           {t('skills.candidate.applyUpdate')}
         </Button>
@@ -206,10 +211,8 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
           {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
         </Button>
       )}
-      {status === 'unsupported' ? (
-        <Text className="px-1 text-muted-foreground text-xs">
-          {t('skills.candidate.unsupportedHint')}
-        </Text>
+      {pkg ? (
+        <Text className="px-1 text-muted-foreground text-xs">{t('skills.executionHint')}</Text>
       ) : null}
     </SkillPage>
   );

@@ -22,7 +22,7 @@ function record(name: string, description = 'Draft a short brief'): SkillInstall
     contentHash: `directory-sha256:${name}`,
     manifest: [{ path: 'SKILL.md', size: 10, digest: 'd' }],
     profile: {
-      provenance: 'analyzed',
+      provenance: 'unverified',
       requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
       workflowScope: null,
     },
@@ -58,6 +58,7 @@ describe('AgentGlobalSkillService', () => {
     const first = await install(record('brief'));
     const second = await install(record('status', 'Weekly status summary'));
     expect(first).toMatchObject({ folderName: 'brief', source: 'marketplace', isEnabled: true });
+    expect((await service.getById(first.id)).profile.provenance).toBe('unverified');
     await expect(install(record('brief'))).rejects.toMatchObject({ code: 'CONFLICT' });
 
     const page = await service.list({ search: 'status', scope: 'library' });

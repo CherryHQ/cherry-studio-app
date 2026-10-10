@@ -73,7 +73,7 @@ export function createSkillManagementTools(options: {
       providerName: 'install_skill',
       displayName: 'Install Skill',
       description:
-        'Download, check and install one Skill from a URL returned by find_skills or supplied by the user, and enable it for the current Agent. Only call it when the user wants to add a Skill. If the URL contains several Skills, the result lists them; call again with the chosen URL. The app approval policy applies; do not ask for duplicate confirmation.',
+        'Download, validate and install one Skill package from a URL returned by find_skills or supplied by the user, and enable it for the current Agent. Installation does not verify execution support or add a script runtime. Only call it when the user wants to add a Skill. If the URL contains several Skills, the result lists them; call again with the chosen URL. The app approval policy applies; do not ask for duplicate confirmation.',
       approval: options.installIntent ? 'auto' : 'ask',
       inputSchema: toRuntimeInputSchema(installSchema),
       inputPreview: { textField: 'url' },
@@ -115,8 +115,8 @@ export function createSkillManagementTools(options: {
             source: skill.sourceUrl,
             availableThisTurn: available,
             next: available
-              ? 'Call load_skill to continue the user task.'
-              : 'Installed and enabled for this Agent; it becomes usable once its prerequisites are met.',
+              ? 'Call load_skill to read the instructions, then check whether the actual tools support the requested steps.'
+              : 'Installed and enabled for this Agent, but instructions are not available for automatic loading in this turn.',
           },
           artifacts: [],
         };

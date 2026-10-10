@@ -33,8 +33,9 @@ Branching is a fork, not a message tree, so `agent_session` carries nullable sou
 boundary metadata but no per-message parent/active-path columns
 ([Agent Protocol](./agent-protocol.md#branching)).
 
-Out of scope: message-tree columns, Mobile Skill configuration/loading, and broader
-Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
+Out of scope: message-tree columns and broader Pi provider coverage. Mobile Skill persistence and
+loading are documented in [Agent Skills](./agent-skills.md).
+The Host projects Agent-specific MCP bindings into each Runtime snapshot.
 System capability enablement persists on the Agent row as a capability-group deny-list
 (`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
 capability resolves per turn and needs no Session persistence.
@@ -157,7 +158,8 @@ The Agent row's separate `toolApprovalMode` may promote the resulting per-turn `
 The physical table and typed Data API accept only MCP bindings. Built-in capability enablement
 lives on the Agent row's group-level deny-list, never in this per-tool relation.
 
-Skill configuration remains deferred. Pi reads neither tool nor Skill persistence directly.
+Skill installations and Agent bindings live in Cherry; the Host resolves their instructions and
+resource scope. Pi reads neither tool nor Skill persistence directly.
 
 **Naming and types.** DB columns use the protocol vocabulary (`name`, `isNameManuallyEdited`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
