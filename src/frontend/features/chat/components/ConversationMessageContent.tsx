@@ -1,9 +1,10 @@
-import { ContentState, FileAttachmentPreview, MessagePart } from '@cherrystudio/ui/components';
+import { ContentState, FilePreview, MessagePart } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
+import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { ToolRendererProvider } from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
 
@@ -92,13 +93,14 @@ export function ConversationAttachments({
 }) {
   const { t } = useTranslation();
   return (
-    <View className="w-full gap-2">
+    <>
       {attachments.map((item) => (
-        <FileAttachmentPreview
+        <FilePreview
           key={item.key}
-          categoryLabel={t('filePreview.document')}
+          variant="attachment"
           disabled
-          file={{
+          metadata={{
+            kind: fileEntryPreviewKind({ mediaType: item.mediaType ?? 'application/octet-stream' }),
             displayName: item.name,
             extensionLabel: filenameExtension(item.name)?.slice(0, 5).toUpperCase() ?? '',
           }}
@@ -109,6 +111,6 @@ export function ConversationAttachments({
           onPress={() => {}}
         />
       ))}
-    </View>
+    </>
   );
 }

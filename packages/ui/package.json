@@ -121,7 +121,8 @@
     "react-native-safe-area-context": "*",
     "react-native-streamdown": "*",
     "react-native-worklets": "*",
-    "uniwind": "*"
+    "uniwind": "*",
+    "react-native-svg": "*"
   },
   "devDependencies": {
     "nitrogen": "0.36.4"

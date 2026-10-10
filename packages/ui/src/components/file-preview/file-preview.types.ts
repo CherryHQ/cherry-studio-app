@@ -52,7 +52,16 @@ export type FilePreviewPlugin = {
   kind: FilePreviewKind;
 };
 
+export type FilePreviewTransfer = {
+  progress?: number;
+  state: 'uploading' | 'failed';
+  label: string;
+};
+
 export type FilePreviewProps = {
+  disabled?: boolean;
+  metadata?: Pick<FilePreviewFile, 'displayName' | 'extensionLabel' | 'kind'>;
+  transfer?: FilePreviewTransfer;
   badge?: ReactNode;
   file?: FilePreviewFile | null;
   labels: FilePreviewLabels;
