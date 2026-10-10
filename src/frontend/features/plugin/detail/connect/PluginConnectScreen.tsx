@@ -41,7 +41,9 @@ function PluginConnect({ entry }: { entry: PluginCatalogEntry }) {
           .filter((candidate) => candidate.id !== method.id)
           .map((candidate) => (
             <Button key={candidate.id} variant="ghost" onPress={() => setMethodId(candidate.id)}>
-              {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`)}
+              {t(`plugins.catalog.${entry.id}.authMethods.${candidate.id}.label`, {
+                defaultValue: candidate.label ?? candidate.id,
+              })}
             </Button>
           ))}
       </View>
