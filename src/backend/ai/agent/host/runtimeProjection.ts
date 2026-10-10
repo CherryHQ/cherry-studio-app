@@ -13,48 +13,7 @@ import {
 } from '@/shared/contracts/agent';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
-import type {
-  RuntimeApproval,
-  RuntimeContextCompaction,
-  RuntimeError,
-  RuntimeOutputPart,
-} from '../runtime';
-
-export function toCompactionAnchorPart(
-  compaction: RuntimeContextCompaction,
-  turnId: string,
-): Extract<AgentMessagePart, { type: 'data-compaction-anchor' }> {
-  const status =
-    compaction.status === 'running'
-      ? 'compacting'
-      : compaction.status === 'completed'
-        ? 'done'
-        : 'skipped';
-  return {
-    id: `compaction-anchor:${turnId}:${compaction.id}`,
-    type: 'data-compaction-anchor',
-    data: {
-      status,
-      phase: compaction.phase === 'preflight' ? 'turn-start' : 'in-loop',
-      trigger: 'auto',
-      startedAt: new Date(compaction.startedAt).toISOString(),
-      ...(compaction.completedAt === undefined
-        ? {}
-        : {
-            completedAt: new Date(compaction.completedAt).toISOString(),
-            durationMs: Math.max(0, compaction.completedAt - compaction.startedAt),
-          }),
-      ...(status === 'skipped'
-        ? {}
-        : {
-            preTokens: compaction.inputTokensBefore,
-            ...(compaction.inputTokensAfter === undefined
-              ? {}
-              : { postTokens: compaction.inputTokensAfter }),
-          }),
-    },
-  };
-}
+import type { RuntimeApproval, RuntimeError, RuntimeOutputPart } from '../runtime';
 
 export function toAgentErrorView(error: RuntimeError): AgentErrorView {
   return { code: 'EXECUTION_FAILED', ...createAiFailure(error) };
