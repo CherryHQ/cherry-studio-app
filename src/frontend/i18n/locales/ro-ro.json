@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Adăugați agent",
   "agent.actions.create": "Agent nou",
+  "agent.actions.delete": "Ștergeți agentul",
   "agent.actions.retry": "Reîncercați",
   "agent.capabilities.agents.label": "Gestionarea agenților",
   "agent.capabilities.calendar.label": "Calendar",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Instrucțiuni de sistem pentru agent",
   "agent.form.loadFailed": "Agentul nu a putut fi încărcat.",
   "agent.form.loading": "Se încarcă agentul...",
+  "agent.form.model": "Model",
   "agent.form.modelSelect": "Selectarea modelului",
   "agent.form.name": "Nume",
   "agent.form.namePlaceholder": "Nume agent",

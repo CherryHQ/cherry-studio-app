@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Προσθήκη πράκτορα",
   "agent.actions.create": "Νέος πράκτορας",
+  "agent.actions.delete": "Διαγραφή πράκτορα",
   "agent.actions.retry": "Επανάληψη",
   "agent.capabilities.agents.label": "Διαχείριση πρακτόρων",
   "agent.capabilities.calendar.label": "Ημερολόγιο",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Οδηγίες συστήματος πράκτορα",
   "agent.form.loadFailed": "Δεν ήταν δυνατή η φόρτωση του πράκτορα.",
   "agent.form.loading": "Φόρτωση πράκτορα...",
+  "agent.form.model": "Μοντέλο",
   "agent.form.modelSelect": "Επιλογή μοντέλου",
   "agent.form.name": "Όνομα",
   "agent.form.namePlaceholder": "Όνομα πράκτορα",

@@ -18,10 +18,8 @@ export default function AgentsStackLayout() {
   // this screen is styled after already sits under an opaque header.
   const formScreen = { headerTransparent: false };
 
-  // Every screen here keeps the ordinary page background. The editor used to be
-  // a grouped-card screen, which needs the gray page for its white cards to sit
-  // on; it now draws bare fields, and those need the page to stay lighter than
-  // the field fill or the outlines are all that separate them.
+  // Every screen here keeps the ordinary page background, which the grouped
+  // cards of both the list and the editor sit on, as in settings.
   return (
     <Stack
       screenLayout={FormContentFrame}

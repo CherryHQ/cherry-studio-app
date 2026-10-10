@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "エージェントを追加",
   "agent.actions.create": "新しいエージェント",
+  "agent.actions.delete": "エージェントを削除",
   "agent.actions.retry": "再試行",
   "agent.capabilities.agents.label": "エージェント管理",
   "agent.capabilities.calendar.label": "カレンダー",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "エージェントシステムの命令",
   "agent.form.loadFailed": "エージェントをロードできませんでした。",
   "agent.form.loading": "エージェントをロード中...",
+  "agent.form.model": "モデル",
   "agent.form.modelSelect": "モデルの選択",
   "agent.form.name": "名前",
   "agent.form.namePlaceholder": "エージェント名",

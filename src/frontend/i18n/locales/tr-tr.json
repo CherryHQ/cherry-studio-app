@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Ajan ekle",
   "agent.actions.create": "Yeni ajan",
+  "agent.actions.delete": "Ajanı sil",
   "agent.actions.retry": "Yeniden dene",
   "agent.capabilities.agents.label": "Ajan yönetimi",
   "agent.capabilities.calendar.label": "Takvim",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Ajan sistem talimatları",
   "agent.form.loadFailed": "Ajan yüklenemedi.",
   "agent.form.loading": "Ajan yükleniyor...",
+  "agent.form.model": "Model",
   "agent.form.modelSelect": "Model seçimi",
   "agent.form.name": "Ad",
   "agent.form.namePlaceholder": "Ajan adı",

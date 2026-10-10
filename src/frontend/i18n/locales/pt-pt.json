@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Adicionar agente",
   "agent.actions.create": "Novo agente",
+  "agent.actions.delete": "Eliminar agente",
   "agent.actions.retry": "Tentar novamente",
   "agent.capabilities.agents.label": "Gestão de agentes",
   "agent.capabilities.calendar.label": "Calendário",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Instruções do sistema do agente",
   "agent.form.loadFailed": "O agente não pôde ser carregado.",
   "agent.form.loading": "A carregar agente...",
+  "agent.form.model": "Modelo",
   "agent.form.modelSelect": "Seleção do modelo",
   "agent.form.name": "Nome",
   "agent.form.namePlaceholder": "Nome do agente",
