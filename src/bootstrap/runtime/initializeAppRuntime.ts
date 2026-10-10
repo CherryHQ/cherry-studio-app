@@ -19,4 +19,5 @@ export async function initializeAppRuntime(services: BackendServices) {
   applyThemePreferences(preferences.themeMode, preferences.fontSizeStep);
   await initI18n(preferences.language);
   await services.agentData.createInitialAgent({ name: i18n.t('agent.default.name') });
+  await services.agentData.ensureSuperAgent();
 }
