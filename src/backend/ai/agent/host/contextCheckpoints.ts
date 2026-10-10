@@ -43,17 +43,3 @@ export function validateRuntimeContextCheckpointCandidate(
 
   return { checkpoint: parsed.data, issue: null };
 }
-
-export function validateRuntimeContextCheckpoint(
-  value: unknown,
-  sessionTurnIds: ReadonlySet<string>,
-): RuntimeContextCheckpointValidation {
-  const validation = validateRuntimeContextCheckpointCandidate(value);
-  if (!validation.checkpoint) {
-    return validation;
-  }
-  if (!sessionTurnIds.has(validation.checkpoint.anchorTurnId)) {
-    return { checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' };
-  }
-  return validation;
-}

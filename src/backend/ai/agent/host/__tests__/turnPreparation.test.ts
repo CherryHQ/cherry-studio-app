@@ -59,7 +59,6 @@ const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
   hasMessages: false,
   history: [],
   referencedFileEntryIds: [],
-  sessionTurnIds: [],
 };
 
 jest.mock('@/backend/services/file/anydocParser', () => ({
@@ -142,7 +141,6 @@ describe('turn preparation', () => {
         hasMessages: true,
         history,
         referencedFileEntryIds: [FILE_ENTRY_ID],
-        sessionTurnIds: ['old-turn'],
       });
       const next = await prepareTurn(
         harness.dependencies,
@@ -194,7 +192,6 @@ describe('turn preparation', () => {
 
     expect(plan.hasMessages).toBe(false);
     expect(plan.history).toEqual([]);
-    expect(plan.sessionTurnIds).toEqual([]);
     expect(harness.getSession).not.toHaveBeenCalled();
     expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
@@ -336,7 +333,6 @@ describe('turn preparation', () => {
     });
     expect(plan.hasMessages).toBe(false);
     expect(plan.runtimeContextCheckpoint).toBeNull();
-    expect(plan.sessionTurnIds).toEqual([]);
   });
 
   test('keeps an auto-ineligible ask unchanged under the auto approval mode', async () => {
@@ -471,7 +467,6 @@ describe('turn preparation', () => {
       hasMessages: true,
       history,
       referencedFileEntryIds: [],
-      sessionTurnIds: ['turn-later'],
     });
 
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
@@ -480,7 +475,6 @@ describe('turn preparation', () => {
     expect(plan.runtimeContextCheckpoint).toBeNull();
     expect(plan.history).toEqual(history);
     expect(plan.hasMessages).toBe(true);
-    expect(plan.sessionTurnIds).toEqual(['turn-later']);
   });
 });
 

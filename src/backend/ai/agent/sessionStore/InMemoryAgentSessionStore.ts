@@ -22,13 +22,8 @@ import type {
   ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
-  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import {
-  finalizeMessageStats,
-  interruptNonTerminalToolParts,
-  settleInterruptedAssistantParts,
-} from './messageSettlement';
+import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -157,14 +152,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   private readonly runtimeRevisions = new Map<string, number>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
-
-  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
-    const ids = new Set(messageIds);
-    const existing = new Set<string>();
-    for (const list of this.messages.values())
-      for (const { view } of list) if (ids.has(view.id)) existing.add(view.id);
-    return existing;
-  }
 
   async listUnsettledAssistantMessages() {
     const rows: { sessionId: string; assistantMessageId: string; turnId: string | null }[] = [];
@@ -501,16 +488,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         ),
       ),
     ].sort();
-    const sessionTurnIds = [
-      ...new Set(transcript.flatMap(({ view }) => (view.turnId === null ? [] : [view.turnId]))),
-    ].sort();
 
     return cloneJson({
       anchorFound,
       hasMessages: transcript.length > 0,
       history,
       referencedFileEntryIds,
-      sessionTurnIds,
     });
   }
 
@@ -527,27 +510,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
     }
     return null;
-  }
-
-  async updateStreamingAssistantMessage(
-    input: UpdateStreamingAssistantMessageInput,
-  ): Promise<void> {
-    for (const transcript of this.messages.values()) {
-      const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
-      if (!stored) {
-        continue;
-      }
-      if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
-        return;
-      }
-      stored.view = {
-        ...stored.view,
-        status: 'streaming',
-        parts: cloneJson(input.parts),
-        updatedAt: nowIso(),
-      };
-      return;
-    }
   }
 
   async saveContextCheckpoint(
@@ -597,40 +559,5 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return cloneJson(stored.view);
     }
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
-  }
-
-  async reconcileInterrupted(
-    error: AgentErrorView,
-    options: { excludeSessionIds?: readonly string[] } = {},
-  ): Promise<AgentMessageView[]> {
-    const excluded = new Set(options.excludeSessionIds ?? []);
-    const reconciled: AgentMessageView[] = [];
-    for (const [sessionId, transcript] of this.messages) {
-      if (excluded.has(sessionId)) continue;
-      for (const stored of transcript) {
-        if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
-          continue;
-        }
-        const interruptedParts =
-          stored.view.role === 'assistant'
-            ? settleInterruptedAssistantParts(
-                stored.view.parts,
-                error,
-                `error-${stored.view.turnId ?? stored.view.id}`,
-              )
-            : interruptNonTerminalToolParts(stored.view.parts, error.message);
-        stored.view = {
-          ...stored.view,
-          status: 'interrupted',
-          parts: interruptedParts,
-          updatedAt: nowIso(),
-        };
-        if (stored.view.role === 'assistant') {
-          stored.error = cloneJson(error);
-          reconciled.push(cloneJson(stored.view));
-        }
-      }
-    }
-    return reconciled;
   }
 }

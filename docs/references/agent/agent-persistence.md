@@ -314,9 +314,7 @@ projection:
 - Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
-  native admission is interrupted with its saved parts retained. The old store streaming-snapshot
-  and bulk-interruption methods remain available to store consumers, but are not the Pi recovery
-  strategy.
+  native admission is interrupted with its saved parts retained.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
