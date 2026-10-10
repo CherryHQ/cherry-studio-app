@@ -52,7 +52,7 @@ export function useInteractiveConnect(entry: PluginCatalogEntry, method: PluginI
   const finalization = useRef<Promise<void> | null>(null);
   const navigated = useRef(false);
   const browserAttempt = useRef<string | null>(null);
-  const name = t(`plugins.catalog.${entry.id}.name`);
+  const name = t(`plugins.catalog.${entry.id}.name`, { defaultValue: entry.name ?? entry.id });
   const applicationFields = method.applicationFields;
 
   useFocusEffect(
