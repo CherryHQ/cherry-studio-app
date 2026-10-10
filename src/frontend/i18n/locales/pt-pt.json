@@ -1157,6 +1157,7 @@
   "remoteAgent.loading": "A carregar…",
   "remoteAgent.local": "Este dispositivo",
   "remoteAgent.messagePlaceholder": "Enviar uma mensagem ao Agent do PC",
+  "remoteAgent.missingAttachments": "Não foi possível restaurar estes anexos: {{names}}. O texto e os ficheiros disponíveis foram restaurados.",
   "remoteAgent.newSession": "Nova conversa",
   "remoteAgent.noAgents": "Não há Agents neste PC",
   "remoteAgent.noSessions": "Ainda não há conversas",

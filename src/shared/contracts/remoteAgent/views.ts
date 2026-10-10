@@ -49,7 +49,7 @@ export type RemoteSourceState = Readonly<{
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
   reason?: string;
   attachments?: boolean;
-  upload?: { sent: number; total: number; sessionId?: string; draftId?: string };
+  upload?: { id: string; sent: number; total: number; sessionId?: string; draftId?: string };
 }>;
 export type RemoteSessionView = {
   id: string;

@@ -1139,6 +1139,7 @@
   "remoteAgent.loading": "正在載入…",
   "remoteAgent.local": "本機",
   "remoteAgent.messagePlaceholder": "向 PC Agent 傳送訊息",
+  "remoteAgent.missingAttachments": "無法還原以下附件：{{names}}。文字和可用檔案已還原。",
   "remoteAgent.newSession": "新增對話",
   "remoteAgent.noAgents": "此 PC 尚無 Agent",
   "remoteAgent.noSessions": "尚無歷史對話",

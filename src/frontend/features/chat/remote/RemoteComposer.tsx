@@ -32,11 +32,11 @@ import {
   useComposerActions,
 } from '@/frontend/components/Composer';
 import { usePersistCache, useBackendModule } from '@/frontend/data';
-import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 
 export function RemoteComposer({
@@ -114,31 +114,14 @@ export function RemoteComposer({
       <UndeliveredMessageRow
         message={undelivered}
         onEdit={async (input) => {
-          const restored = await Promise.all(
-            input.parts
-              .flatMap((part) => (part.type === 'file' ? [part] : []))
-              .map(async (part) => {
-                const fileEntryId = FileEntryIdSchema.parse(part.fileEntryId);
-                const uri = await files.getUri(fileEntryId);
-                if (!uri) throw new Error('RESOURCE_UNAVAILABLE');
-                return {
-                  id: fileEntryId,
-                  fileEntryId,
-                  uri,
-                  name: part.name ?? 'file',
-                  mediaType: part.mediaType,
-                  kind: part.mediaType.startsWith('image/')
-                    ? ('image' as const)
-                    : ('file' as const),
-                  status: 'ready' as const,
-                };
-              }),
-          );
-          addAttachments(restored);
-          const restoredText = input.parts
-            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
-            .join('\n');
-          setDraft((current) => [restoredText, current].filter(Boolean).join('\n'));
+          const restored = await restoreRemoteInput(input, (id) => files.getUri(id));
+          addAttachments(restored.attachments);
+          setDraft((current) => [restored.text, current].filter(Boolean).join('\n'));
+          if (restored.missing.length)
+            toast.show({
+              label: t('remoteAgent.missingAttachments', { names: restored.missing.join(', ') }),
+              variant: 'danger',
+            });
         }}
       />
       <ComposerSurface

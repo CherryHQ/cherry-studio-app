@@ -1166,6 +1166,7 @@
   "remoteAgent.loading": "Загрузка…",
   "remoteAgent.local": "Это устройство",
   "remoteAgent.messagePlaceholder": "Сообщение Agent на PC",
+  "remoteAgent.missingAttachments": "Не удалось восстановить вложения: {{names}}. Текст и доступные файлы восстановлены.",
   "remoteAgent.newSession": "Новый разговор",
   "remoteAgent.noAgents": "На этом PC нет Agent",
   "remoteAgent.noSessions": "Разговоров пока нет",

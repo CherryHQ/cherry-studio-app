@@ -1139,6 +1139,7 @@
   "remoteAgent.loading": "正在加载…",
   "remoteAgent.local": "本机",
   "remoteAgent.messagePlaceholder": "向 PC Agent 发送消息",
+  "remoteAgent.missingAttachments": "无法恢复以下附件：{{names}}。文字和可用文件已恢复。",
   "remoteAgent.newSession": "新建会话",
   "remoteAgent.noAgents": "此 PC 暂无 Agent",
   "remoteAgent.noSessions": "暂无历史会话",

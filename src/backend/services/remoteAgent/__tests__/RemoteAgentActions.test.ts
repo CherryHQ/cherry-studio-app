@@ -615,3 +615,125 @@ it('freezes uploaded references before sending and recovers a lost receipt witho
   expect(calls).toEqual(['agent.commands.get']);
   expect(recovered.get()[0]).toMatchObject({ status: 'applied', attachments });
 });
+
+const uploadAttachment = {
+  fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+  name: 'report.zip',
+  mediaType: 'application/zip',
+};
+
+it.each(['send', 'start'] as const)(
+  'persists cancellation before cleanup and never revives a cancelled %s after restart or late upload success',
+  async (kind) => {
+    const { storage, port } = journal();
+    let finish!: (refs: { uploadId: string }[]) => void;
+    const request = jest.fn(async () => {
+      throw new Error('Cancelled input must never reach the desktop');
+    });
+    const actions = new RemoteAgentActions(
+      'pc:grant',
+      port,
+      request,
+      () => {},
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const work =
+      kind === 'send'
+        ? actions.create('send', method, params, params.text, undefined, [uploadAttachment])
+        : actions.start({ ...startInput, attachments: [uploadAttachment] });
+    const id = actions.pendingUploads()[0].id;
+    expect(actions.cancelUpload(id)).toEqual([]);
+    const persisted = JSON.parse(storage.read('pc:grant')!);
+    expect(kind === 'send' ? persisted.records[0].action : persisted.starts[0]).toMatchObject({
+      status: 'rejected',
+      error: 'UPLOAD_CANCELLED',
+    });
+    const restored = new RemoteAgentActions(
+      'pc:grant',
+      port,
+      request,
+      () => {},
+      async () => {
+        throw new Error('Cancelled upload must not resume');
+      },
+    );
+    await restored.recover();
+    finish([{ uploadId: 'late-upload' }]);
+    expect(await work).toMatchObject({ status: 'rejected', error: 'UPLOAD_CANCELLED' });
+    expect(request.mock.calls).toEqual([]);
+    expect(actions.pendingUploads()).toEqual([]);
+  },
+);
+
+it('allows cancellation while waiting for reconnect but refuses it after send parameters are frozen', async () => {
+  const { port } = journal();
+  const request = jest.fn(async () => {
+    throw new RemoteAgentError('CONNECTION_LOST', true);
+  });
+  let offline = true;
+  const actions = new RemoteAgentActions(
+    'pc:grant',
+    port,
+    request,
+    () => {},
+    async () => {
+      if (offline) throw new RemoteAgentError('CONNECTION_LOST', true);
+      return [{ uploadId: 'ready-upload' }];
+    },
+  );
+  const waiting = await actions.create('send', method, params, params.text, undefined, [
+    uploadAttachment,
+  ]);
+  expect(waiting.status).toBe('pending');
+  expect(actions.pendingUploads()[0].id).toBe(waiting.id);
+  actions.cancelUpload(waiting.id);
+  await actions.recover();
+  expect(request.mock.calls).toEqual([]);
+  offline = false;
+  const frozen = await actions.create('send', method, params, params.text, undefined, [
+    uploadAttachment,
+  ]);
+  expect(frozen.status).toBe('pending');
+  expect(actions.cancelUpload(frozen.id)).toBeUndefined();
+  expect(actions.get().find((entry) => entry.id === frozen.id)?.status).toBe('pending');
+});
+
+it('recovers a first message after upload completed without losing its frozen references', async () => {
+  const { port } = journal();
+  const refs = [{ uploadId: 'verified-before-create' }];
+  const original = new RemoteAgentActions(
+    'pc:grant',
+    port,
+    async () => {
+      throw new RemoteAgentError('CONNECTION_LOST', true);
+    },
+    () => {},
+    async () => refs,
+  );
+  const start = await original.start({ ...startInput, attachments: [uploadAttachment] });
+  expect(start.status).toBe('pending');
+  expect(original.pendingUploads()).toEqual([]);
+  original.stop();
+  const sent: unknown[] = [];
+  const recovered = new RemoteAgentActions(
+    'pc:grant',
+    port,
+    async (name, body: any) => {
+      if (name === 'agent.sessions.get') return sessionResult('s');
+      if (name === 'agent.commands.get')
+        return { ...receipt(body.commandId, 'applied'), method: 'agent.sessions.create' };
+      if (name === method) sent.push(body);
+      return { ...receipt(body.commandId, 'applied'), method: name };
+    },
+    () => {},
+    async () => {
+      throw new Error('Verified upload must not restart');
+    },
+  );
+  await recovered.recover();
+  expect(recovered.getStarts()[0].status).toBe('applied');
+  expect(sent).toEqual([expect.objectContaining({ text: startInput.text, attachments: refs })]);
+});

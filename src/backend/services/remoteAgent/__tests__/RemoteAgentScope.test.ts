@@ -4,18 +4,26 @@ import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCo
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
 import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
 import {
+  DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
+import { RemoteAgentActions } from '../RemoteAgentActions';
 import { RemoteAgentScope, type RemoteBackgroundExecution } from '../RemoteAgentScope';
 import { integrity } from '../remoteContent';
 import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
+import * as remoteUploads from '../remoteUploads';
 import { createCheckpointFixture } from './_checkpointFixture';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture(cache = new RemoteSessionReadCache(), background?: RemoteBackgroundExecution) {
+function fixture(
+  cache = new RemoteSessionReadCache(),
+  background?: RemoteBackgroundExecution,
+  files?: remoteUploads.RemoteUploadFiles,
+) {
   let state: DesktopLeaseState = { status: 'ready' };
   const controller = new AbortController();
   const listeners = new Set<() => void>();
@@ -37,7 +45,7 @@ function fixture(cache = new RemoteSessionReadCache(), background?: RemoteBackgr
     tombstones: [],
   };
   let checkpoint: ReturnType<typeof createCheckpointFixture>;
-  const request = jest.fn(async (method: string, params: any) => {
+  const request = jest.fn(async (method: string, params: any): Promise<unknown> => {
     switch (method) {
       case 'agent.agents.list':
         return {
@@ -83,6 +91,7 @@ function fixture(cache = new RemoteSessionReadCache(), background?: RemoteBackgr
   });
   const notifications = new Set<(notification: DesktopNotification) => void>();
   const connection = {
+    agentUploadsVersion: 1,
     request,
     onNotification: (listener: (notification: DesktopNotification) => void) => {
       notifications.add(listener);
@@ -120,6 +129,7 @@ function fixture(cache = new RemoteSessionReadCache(), background?: RemoteBackgr
     journal,
     cache,
     background,
+    files,
   );
   return {
     source,
@@ -908,6 +918,172 @@ it('keeps a command whose reply was lost in transit uncertain rather than failed
     retryable: true,
   });
   unobserve();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it.each(['offline', 'suspended'] as const)(
+  'keeps an upload recoverable when the lease becomes %s between requests',
+  async (status) => {
+    const test = fixture(undefined, undefined, { resolve: jest.fn() });
+    let snapshot: RemoteSessionSnapshot | undefined;
+    const unobserve = test.source.observe('s', (value) => {
+      snapshot = value;
+    });
+    await settle();
+    const attachment = {
+      fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+      name: 'report.pdf',
+      mediaType: 'application/pdf',
+    };
+    const saved = {
+      fileEntryId: attachment.fileEntryId,
+      metadata: {
+        uploadId: 'durable-id',
+        filename: 'report.pdf',
+        mediaType: 'application/pdf',
+        byteLength: 100,
+        sha256: 'a'.repeat(64),
+      },
+    };
+    const upload = jest
+      .spyOn(remoteUploads, 'uploadAttachments')
+      .mockImplementationOnce(
+        async (_attachments, _files, request, signal, progress, _saved, save) => {
+          save([saved]);
+          progress(50, 100);
+          test.setState({ status });
+          jest
+            .mocked(test.lease.ready)
+            .mockRejectedValueOnce(new DesktopUnreachableError([status]));
+          await request('agent.uploads.get', { uploadId: saved.metadata.uploadId }, signal);
+          throw new Error('Offline request must fail');
+        },
+      )
+      .mockImplementationOnce(
+        async (_attachments, _files, _request, _signal, _progress, stored) => {
+          expect(stored).toEqual([saved]);
+          return [{ uploadId: saved.metadata.uploadId }];
+        },
+      );
+    try {
+      const action = await test.source.send(snapshot!.sendTarget!, '', [attachment]);
+      expect(action.status).toBe('pending');
+      expect(test.source.getState().upload).toMatchObject({ id: action.id, sent: 50, total: 100 });
+      const original = test.request.getMockImplementation()!;
+      test.request.mockImplementation(async (method, params) => {
+        if (method === 'agent.commands.get')
+          throw new RemoteFailureError({ reason: 'NOT_FOUND', message: 'No receipt' });
+        return original(method, params);
+      });
+      test.setState({ status: 'ready' });
+      await settle();
+      await settle();
+      const sends = test.request.mock.calls.filter(([method]) => method === 'agent.messages.send');
+      expect(sends.map(([, body]) => body)).toEqual([
+        expect.objectContaining({
+          commandId: action.id,
+          attachments: [{ uploadId: 'durable-id' }],
+        }),
+      ]);
+      expect(test.source.getState().upload).toBeUndefined();
+    } finally {
+      upload.mockRestore();
+      unobserve();
+      test.source.dispose();
+      await test.source.drain();
+    }
+  },
+);
+
+it('persists upload cancellation synchronously while remote cleanup is still pending', async () => {
+  const test = fixture(undefined, undefined, { resolve: jest.fn() });
+  let snapshot: RemoteSessionSnapshot | undefined;
+  const unobserve = test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  let started!: () => void;
+  const uploading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let finishCleanup!: () => void;
+  const original = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.uploads.cancel') {
+      await new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      });
+      return { cancelled: true };
+    }
+    return original(method, params);
+  });
+  const upload = jest
+    .spyOn(remoteUploads, 'uploadAttachments')
+    .mockImplementation(async (attachments, _files, _request, signal, progress, _saved, save) => {
+      save([
+        {
+          fileEntryId: attachments[0].fileEntryId,
+          metadata: {
+            uploadId: 'staged-id',
+            filename: 'report.pdf',
+            mediaType: 'application/pdf',
+            byteLength: 10,
+            sha256: 'a'.repeat(64),
+          },
+        },
+      ]);
+      progress(5, 10);
+      started();
+      await new Promise<void>((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+      );
+      return [];
+    });
+  try {
+    const send = test.source.send(snapshot!.sendTarget!, '', [
+      {
+        fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+        name: 'report.pdf',
+        mediaType: 'application/pdf',
+      },
+    ]);
+    await uploading;
+    test.source.cancelUpload(test.source.getState().upload!.id);
+    expect(test.source.getCommands()[0]).toMatchObject({
+      status: 'rejected',
+      error: 'UPLOAD_CANCELLED',
+    });
+    const restored = new RemoteAgentActions(
+      'pc:pairing-scope',
+      test.journal,
+      async () => {
+        throw new Error('Cancelled command recovered');
+      },
+      () => {},
+    );
+    expect(restored.get()[0]).toMatchObject({ status: 'rejected', error: 'UPLOAD_CANCELLED' });
+    expect(await send).toMatchObject({ status: 'rejected', error: 'UPLOAD_CANCELLED' });
+    await settle();
+    expect(test.source.getState().upload).toBeUndefined();
+    expect(test.request.mock.calls.filter(([method]) => method === 'agent.messages.send')).toEqual(
+      [],
+    );
+    finishCleanup();
+  } finally {
+    upload.mockRestore();
+    unobserve();
+    test.source.dispose();
+    await test.source.drain();
+  }
+});
+
+it('classifies an already closed session as retryable instead of a local file failure', async () => {
+  const test = fixture();
+  test.request.mockRejectedValueOnce(new DesktopUnreachableError(['connection closed']));
+  await expect(
+    test.source.listAgents(undefined, new AbortController().signal),
+  ).rejects.toMatchObject({ code: 'CONNECTION_LOST', retryable: true });
   test.source.dispose();
   await test.source.drain();
 });

@@ -143,7 +143,7 @@ export class RemoteAgentActions {
       attachments: RemoteAttachment[],
       saved: SavedUpload[],
       save: (value: SavedUpload[]) => void,
-      owner: { sessionId?: string; draftId?: string },
+      owner: { id: string; sessionId?: string; draftId?: string },
     ) => Promise<AgentUploadReference[]>,
   ) {
     const parsed = readJournal(journal, binding);
@@ -233,6 +233,56 @@ export class RemoteAgentActions {
         isUncertain(entry) ? [this.run(entry.action.id, true)] : [],
       ),
     ]);
+  }
+  pendingUploads() {
+    return [
+      ...this.starts
+        .filter(
+          (entry) =>
+            entry.status === 'pending' &&
+            entry.attachments?.length &&
+            !entry.uploaded &&
+            !this.records.some((record) => record.action.id === entry.createId),
+        )
+        .map((entry) => ({
+          id: entry.id,
+          draftId: entry.draftId,
+          sessionId: undefined,
+          uploads: entry.uploads ?? [],
+        })),
+      ...this.records
+        .filter(
+          (entry) =>
+            isUncertain(entry) && entry.action.attachments?.length && !entry.params.attachments,
+        )
+        .map((entry) => ({
+          id: entry.action.id,
+          sessionId: entry.action.sessionId,
+          draftId: undefined,
+          uploads: entry.uploads ?? [],
+        })),
+    ];
+  }
+  cancelUpload(id: string): SavedUpload[] | undefined {
+    const pending = this.pendingUploads().find((entry) => entry.id === id);
+    if (!pending) return undefined;
+    this.commit(
+      this.records.map((entry) =>
+        entry.action.id === id
+          ? { ...entry, action: { ...entry.action, status: 'rejected', error: 'UPLOAD_CANCELLED' } }
+          : entry,
+      ),
+      this.starts.map((entry) =>
+        entry.id === id ? { ...entry, status: 'rejected', error: 'UPLOAD_CANCELLED' } : entry,
+      ),
+    );
+    this.changed();
+    return pending.uploads;
+  }
+  private assertUploading(id: string) {
+    if (this.stopped) throw new RemoteAgentError('CLOSED');
+    if (!this.pendingUploads().some((entry) => entry.id === id))
+      throw new RemoteAgentError('UPLOAD_CANCELLED');
   }
   discard(id: string) {
     const start = this.starts.find((entry) => entry.id === id);
@@ -353,18 +403,22 @@ export class RemoteAgentActions {
     try {
       if (
         entry.attachments?.length &&
+        !entry.uploaded &&
         !this.records.some((record) => record.action.id === entry.sendId)
       ) {
         if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
+        this.assertUploading(entry.id);
         const uploaded = await this.upload(
           entry.attachments,
           entry.uploads ?? [],
           (uploads) => {
+            this.assertUploading(entry.id);
             entry = { ...entry, uploads };
             this.updateStart(entry);
           },
-          { draftId: entry.draftId },
+          { id: entry.id, draftId: entry.draftId },
         );
+        this.assertUploading(entry.id);
         entry = { ...entry, uploaded };
         this.updateStart(entry);
       }
@@ -406,6 +460,9 @@ export class RemoteAgentActions {
       }
       if (!this.stopped) return this.finishStart(entry, sent, true);
     } catch (error) {
+      const current = this.starts.find((value) => value.id === entry.id);
+      if (!current || current.status !== 'pending')
+        return current ? projectStart(current, this.records) : settled;
       if (
         error instanceof RemoteAgentError &&
         !error.retryable &&
@@ -490,20 +547,22 @@ export class RemoteAgentActions {
       if (receipt === undefined) {
         if (entry.action.attachments?.length && !entry.params.attachments) {
           if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
+          this.assertUploading(action.id);
           const attachments = uploadReferencesSchema.parse(
             await this.upload(
               entry.action.attachments,
               entry.uploads ?? [],
               (uploads) => {
+                this.assertUploading(action.id);
                 entry = { ...entry, uploads };
                 this.commit(
                   this.records.map((record) => (record.action.id === action.id ? entry : record)),
                 );
               },
-              { sessionId: entry.action.sessionId },
+              { id: action.id, sessionId: entry.action.sessionId },
             ),
           );
-          if (this.stopped) throw new RemoteAgentError('CLOSED');
+          this.assertUploading(action.id);
           entry = { ...entry, params: { ...entry.params, attachments } };
           this.commit(
             this.records.map((record) => (record.action.id === action.id ? entry : record)),
@@ -538,7 +597,7 @@ export class RemoteAgentActions {
     }
     this.commit(
       this.records.map((record) =>
-        record.action.id === action.id
+        record.action.id === action.id && isUncertain(record)
           ? { ...record, action, ...(storedReceipt ? { receipt: storedReceipt } : {}) }
           : record,
       ),

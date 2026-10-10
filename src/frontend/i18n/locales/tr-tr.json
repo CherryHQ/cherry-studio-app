@@ -1148,6 +1148,7 @@
   "remoteAgent.loading": "Yükleniyor…",
   "remoteAgent.local": "Bu cihaz",
   "remoteAgent.messagePlaceholder": "PC Agent’a mesaj gönder",
+  "remoteAgent.missingAttachments": "Şu ekler geri yüklenemedi: {{names}}. Metin ve kullanılabilir dosyalar geri yüklendi.",
   "remoteAgent.newSession": "Yeni sohbet",
   "remoteAgent.noAgents": "Bu PC’de Agent yok",
   "remoteAgent.noSessions": "Henüz sohbet yok",

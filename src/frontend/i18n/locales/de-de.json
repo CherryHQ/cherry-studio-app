@@ -1148,6 +1148,7 @@
   "remoteAgent.loading": "Wird geladen…",
   "remoteAgent.local": "Dieses Gerät",
   "remoteAgent.messagePlaceholder": "Nachricht an den PC-Agent senden",
+  "remoteAgent.missingAttachments": "Diese Anhänge konnten nicht wiederhergestellt werden: {{names}}. Text und verfügbare Dateien wurden wiederhergestellt.",
   "remoteAgent.newSession": "Neue Unterhaltung",
   "remoteAgent.noAgents": "Keine Agents auf diesem PC",
   "remoteAgent.noSessions": "Noch keine Unterhaltungen",

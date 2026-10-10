@@ -16,7 +16,12 @@ questions and small-file assumptions.
   A local source is hashed again on recovery to reject changed bytes. No entire file enters JS memory.
 - Before send, an expired staging record can be uploaded again. Once send parameters are frozen,
   receipt recovery uses the exact command ID and upload references. It never silently creates a
-  second Agent execution. Terminal failure retains local references for retry or edit.
+  second Agent execution. Cancellation is recorded in the command journal before aborting work or
+  cleaning up remote staging, and remains available while an upload waits for reconnection. Once
+  send parameters are frozen, upload cancellation cannot retract an uncertain submitted message.
+  Unreachable/closed connections remain retryable, including failures between chunk requests.
+  Terminal failure retains local references for retry or edit; editing restores text and available
+  attachments and reports missing files individually.
 - Desktop staging retains data for 24 hours idle, at most seven days. Device/global staging
   reservations are 4/8 GiB. Shutdown drains work and preserves staging; cancellation, revocation
   and expiry reclaim it. Accepted messages keep FileManager originals independently.
@@ -25,8 +30,12 @@ questions and small-file assumptions.
   Workspace edits cannot change historical download bytes.
 - Tapping an attachment downloads bounded content pages, checks the digest, and exposes image
   preview or the system share/save sheet. Merely opening history never downloads large files.
-  Completed downloads use the OS cache; interrupted downloads are removed and currently restart
-  from zero. Upload resumption is independent of this readback policy.
+  Completed downloads reuse a verified OS-cache file keyed by pairing identity/grant, session,
+  attachment revision and digest. Concurrent consumers share the transfer and cancel independently;
+  the last consumer leaving aborts incomplete work. Only verified bytes are promoted to the reusable
+  file. Missing cache files are downloaded again. Interrupted downloads currently restart from zero.
+  Cache capacity limits and a user-facing clear action remain follow-up work.
+  Upload resumption is independent of this readback policy.
 - iOS suspension can pause JavaScript transfer. Foreground/relaunch recovery resumes uploaded
   bytes; continuous background transfer is not promised. Network changes must reach the paired PC
   directly (LAN/company/VPN); there is no cloud relay or offline desktop inbox.

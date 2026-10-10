@@ -315,16 +315,17 @@ export function createRemoteConversationSource(
               },
               discard,
             );
+          const upload = remote.getState().upload;
           return {
             inputPolicy: {
               ...REMOTE_INPUT_POLICY,
               attachments: remote.getState().attachments === true,
             },
             upload:
-              remote.getState().upload?.draftId === input.draftId
+              upload?.draftId === input.draftId
                 ? {
-                    ...remote.getState().upload!,
-                    cancel: () => remote.cancelUpload?.(),
+                    ...upload,
+                    cancel: () => remote.cancelUpload?.(upload.id),
                   }
                 : undefined,
             start,

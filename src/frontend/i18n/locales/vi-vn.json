@@ -1139,6 +1139,7 @@
   "remoteAgent.loading": "Đang tải…",
   "remoteAgent.local": "Thiết bị này",
   "remoteAgent.messagePlaceholder": "Gửi tin nhắn cho Agent trên PC",
+  "remoteAgent.missingAttachments": "Không thể khôi phục các tệp đính kèm sau: {{names}}. Văn bản và các tệp còn khả dụng đã được khôi phục.",
   "remoteAgent.newSession": "Cuộc trò chuyện mới",
   "remoteAgent.noAgents": "PC này chưa có Agent",
   "remoteAgent.noSessions": "Chưa có cuộc trò chuyện",

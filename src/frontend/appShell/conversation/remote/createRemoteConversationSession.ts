@@ -310,7 +310,7 @@ export function createRemoteConversationSession(
         sourceState.upload?.sessionId === ref.sessionId
           ? {
               ...sourceState.upload,
-              cancel: () => source.cancelUpload?.(),
+              cancel: () => source.cancelUpload?.(sourceState.upload!.id),
             }
           : undefined,
       undelivered:

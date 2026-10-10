@@ -5,7 +5,38 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { RemoteAgentError } from './RemoteAgentError';
-import type { AgentRequest } from './remoteContent';
+import { integrity, type AgentRequest } from './remoteContent';
+import { RemoteReadCoordinator } from './RemoteReadCoordinator';
+
+/** The scope owns in-flight work; completed, verified bytes survive in the OS cache. */
+export function createAttachmentDownloader() {
+  const reads = new RemoteReadCoordinator();
+  return (
+    binding: string,
+    request: AgentRequest,
+    sessionId: string,
+    ref: ContentRef,
+    name: string,
+    signal: AbortSignal,
+  ): Promise<string> => {
+    const key = integrity.sha256(
+      new TextEncoder().encode(
+        JSON.stringify([
+          binding,
+          sessionId,
+          ref.contentId,
+          ref.revision,
+          ref.sha256,
+          ref.byteLength,
+          name,
+        ]),
+      ),
+    );
+    return reads.share(key, signal, (sharedSignal) =>
+      downloadAttachment(request, sessionId, ref, name, sharedSignal, key),
+    );
+  };
+}
 
 /** Downloads only when opened; the native file handle keeps JS memory bounded. */
 export async function downloadAttachment(
@@ -14,13 +45,14 @@ export async function downloadAttachment(
   ref: ContentRef,
   name: string,
   signal: AbortSignal,
+  cacheKey = randomUUID(),
 ): Promise<string> {
   const size = Number(ref.byteLength);
   if (!Number.isSafeInteger(size) || size < 0 || size > agentUploadLimits.fileBytes)
     throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
   signal.throwIfAborted();
-  const directory = new Directory(Paths.cache, 'RemoteAttachments', randomUUID());
-  directory.create({ intermediates: true });
+  const directory = new Directory(Paths.cache, 'RemoteAttachments', cacheKey);
+  directory.create({ intermediates: true, idempotent: true });
   const filename = name
     .replace(/[\\/:*?"<>|]/g, '_')
     .split('')
@@ -30,10 +62,13 @@ export async function downloadAttachment(
     directory,
     !filename || filename === '.' || filename === '..' ? 'attachment' : filename,
   );
-  file.create();
-  const handle = file.open();
+  if (file.exists && file.size === size) return file.uri;
+  const partial = new File(directory, `${randomUUID()}.part`);
+  let handle: ReturnType<File['open']> | undefined;
   let complete = false;
   try {
+    partial.create();
+    handle = partial.open();
     const hash = sha256.create();
     let offset = 0;
     do {
@@ -89,9 +124,15 @@ export async function downloadAttachment(
     if (digest !== ref.sha256) throw new RemoteAgentError('PROTOCOL_ERROR');
     signal.throwIfAborted();
     complete = true;
+  } finally {
+    handle?.close();
+    if (!complete && partial.exists) partial.delete();
+  }
+  try {
+    if (file.exists) file.delete();
+    partial.moveSync(file);
     return file.uri;
   } finally {
-    handle.close();
-    if (!complete && directory.exists) directory.delete();
+    if (partial.uri !== file.uri && partial.exists) partial.delete();
   }
 }

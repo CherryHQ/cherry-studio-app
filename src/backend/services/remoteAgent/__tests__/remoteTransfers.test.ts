@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,7 +8,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentError } from '../RemoteAgentError';
 import { integrity, type AgentRequest } from '../remoteContent';
-import { downloadAttachment } from '../remoteDownloads';
+import { createAttachmentDownloader, downloadAttachment } from '../remoteDownloads';
 import { uploadAttachments, type SavedUpload, type RemoteUploadFiles } from '../remoteUploads';
 
 jest.mock('expo-file-system', () => {
@@ -45,6 +45,13 @@ jest.mock('expo-file-system', () => {
     }
     create() {
       fs.writeFileSync(this.uri, '');
+    }
+    delete() {
+      fs.rmSync(this.uri, { force: true });
+    }
+    moveSync(destination: File) {
+      fs.renameSync(this.uri, destination.uri);
+      this.uri = destination.uri;
     }
     open() {
       const fd = fs.openSync(this.uri, 'r+');
@@ -184,4 +191,94 @@ it('downloads exact binary bytes in bounded windows and rejects a corrupt final 
   await expect(
     downloadAttachment(request, 'session', ref, '../escape.zip', new AbortController().signal),
   ).rejects.toMatchObject({ code: 'PROTOCOL_ERROR' });
+});
+
+it('reuses verified downloads across reopen and scope recreation, isolates desktops and redownloads evicted files', async () => {
+  const bytes = Buffer.from('verified original bytes');
+  const ref = {
+    contentId: root,
+    revision: '1',
+    byteLength: String(bytes.length),
+    sha256: integrity.sha256(bytes),
+    mediaType: 'text/plain',
+  };
+  let reads = 0;
+  const request = (async () => {
+    reads++;
+    return {
+      ...ref,
+      offset: '0',
+      nextOffset: String(bytes.length),
+      eof: true,
+      dataBase64: bytes.toString('base64'),
+    };
+  }) as AgentRequest;
+  const download = createAttachmentDownloader();
+  const read = (fn = download, binding = 'desktop-a') =>
+    fn(binding, request, 's', ref, 'original.txt', new AbortController().signal);
+  const [first, concurrent] = await Promise.all([read(), read()]);
+  expect(first).toBe(concurrent);
+  expect(await read()).toBe(first);
+  expect(await read(createAttachmentDownloader())).toBe(first);
+  expect(reads).toBe(1);
+  expect(readFileSync(first)).toEqual(bytes);
+  const other = await read(download, 'desktop-b');
+  expect(other).not.toBe(first);
+  expect(reads).toBe(2);
+  rmSync(first);
+  expect(await read()).toBe(first);
+  expect(reads).toBe(3);
+  for (const uri of [first, other]) rmSync(path.dirname(uri), { recursive: true, force: true });
+});
+
+it('closing one consumer does not cancel a shared download, while closing all removes partial bytes', async () => {
+  const bytes = Buffer.from('shared');
+  const ref = {
+    contentId: root,
+    revision: '2',
+    byteLength: String(bytes.length),
+    sha256: integrity.sha256(bytes),
+    mediaType: 'text/plain',
+  };
+  let reply!: () => void;
+  let transferSignal!: AbortSignal;
+  const request = (async (_method: unknown, _params: unknown, signal: AbortSignal) => {
+    transferSignal = signal;
+    await new Promise<void>((resolve) => {
+      reply = resolve;
+    });
+    return {
+      ...ref,
+      offset: '0',
+      nextOffset: String(bytes.length),
+      eof: true,
+      dataBase64: bytes.toString('base64'),
+    };
+  }) as AgentRequest;
+  const download = createAttachmentDownloader();
+  const first = new AbortController();
+  const second = new AbortController();
+  const a = download('pc', request, 's', ref, 'shared.txt', first.signal);
+  const rejected = expect(a).rejects.toMatchObject({ name: 'AbortError' });
+  const b = download('pc', request, 's', ref, 'shared.txt', second.signal);
+  await Promise.resolve();
+  first.abort();
+  await rejected;
+  expect(transferSignal.aborted).toBe(false);
+  reply();
+  const uri = await b;
+  expect(readFileSync(uri)).toEqual(bytes);
+  rmSync(path.dirname(uri), { recursive: true, force: true });
+
+  const last = new AbortController();
+  const c = download('pc', request, 's', ref, 'shared.txt', last.signal);
+  const cancelled = expect(c).rejects.toMatchObject({ name: 'AbortError' });
+  await Promise.resolve();
+  last.abort();
+  await cancelled;
+  expect(transferSignal.aborted).toBe(true);
+  reply();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(existsSync(path.dirname(uri)) ? readdirSync(path.dirname(uri)) : []).toEqual([]);
+  rmSync(path.dirname(uri), { recursive: true, force: true });
 });

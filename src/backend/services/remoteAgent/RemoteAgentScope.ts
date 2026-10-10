@@ -20,6 +20,7 @@ import type {
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
 import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
 import {
+  DesktopUnreachableError,
   RemoteFailureError,
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
@@ -41,7 +42,7 @@ import {
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
-import { downloadAttachment } from './remoteDownloads';
+import { createAttachmentDownloader } from './remoteDownloads';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
 import { uploadAttachments, type RemoteUploadFiles } from './remoteUploads';
@@ -114,7 +115,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly unsubscribe: () => void;
   private stopped = false;
   private preparing = 0;
-  private uploadAbort?: AbortController;
+  private readonly downloadAttachment = createAttachmentDownloader();
+  private uploadAbort?: { id: string; controller: AbortController };
   private backgroundBlocked = false;
   private pendingCommandLease?: ReturnType<KeepAliveSource['acquire']>;
   private readonly pendingStarts = new Set<string>();
@@ -145,51 +147,37 @@ export class RemoteAgentScope implements RemoteAgentSource {
       async (attachments, saved, save, owner) => {
         if (this.uploadAbort) throw new RemoteAgentError('CONFLICT', true);
         if (!this.files) throw new RemoteAgentError('UPGRADE_REQUIRED');
-        const session = await this.lease.ready(this.lease.signal);
-        if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
-        if (this.uploadAbort) throw new RemoteAgentError('CONFLICT', true);
-        let staged = saved;
         const abort = new AbortController();
-        this.uploadAbort = abort;
+        this.uploadAbort = { id: owner.id, controller: abort };
         try {
+          const signal = AbortSignal.any([abort.signal, this.lease.signal]);
+          const session = await this.ready(signal);
+          signal.throwIfAborted();
+          if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
           return await uploadAttachments(
             attachments,
             this.files,
             this.request,
-            AbortSignal.any([abort.signal, this.lease.signal]),
+            signal,
             (sent, total) => {
               this.state = { ...this.state, upload: { sent, total, ...owner } };
               for (const listener of this.stateListeners) listener();
             },
             saved,
-            (value) => {
-              staged = value;
-              save(value);
-            },
+            save,
           );
         } catch (error) {
-          if (abort.signal.aborted) {
-            await Promise.allSettled(
-              staged.map((entry) =>
-                this.request(
-                  'agent.uploads.cancel',
-                  { uploadId: entry.metadata.uploadId },
-                  AbortSignal.timeout(3000),
-                ),
-              ),
-            );
-            throw new RemoteAgentError('UPLOAD_CANCELLED');
-          }
+          if (abort.signal.aborted) throw new RemoteAgentError('UPLOAD_CANCELLED');
           if (error instanceof RemoteAgentError) throw error;
           throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
         } finally {
           this.uploadAbort = undefined;
-          this.state = { ...this.state, upload: undefined };
-          for (const listener of this.stateListeners) listener();
+          this.publishUpload();
         }
       },
     );
     this.unoperations = this.actions.subscribe(() => {
+      this.publishUpload();
       for (const [id, observation] of this.observations) {
         if (!observation.pendingCommandId) continue;
         const command = this.actions
@@ -203,6 +191,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }
       this.reconcileCommandProtection();
     });
+    this.publishUpload();
     this.reconcileCommandProtection();
     this.unsubscribe = lease.subscribe(() => this.onConnectionChanged());
     if (this.state.status === 'ready') void this.actions.recover();
@@ -274,7 +263,40 @@ export class RemoteAgentScope implements RemoteAgentSource {
     for (const listener of this.executionListeners) listener();
   }
 
-  cancelUpload = () => this.uploadAbort?.abort();
+  private publishUpload() {
+    const pending = this.actions.pendingUploads();
+    const current = pending.find((entry) => entry.id === this.state.upload?.id) ?? pending[0];
+    const upload = current
+      ? this.state.upload?.id === current.id
+        ? this.state.upload
+        : {
+            id: current.id,
+            sessionId: current.sessionId,
+            draftId: current.draftId,
+            sent: 0,
+            total: current.uploads.reduce((sum, entry) => sum + entry.metadata.byteLength, 0),
+          }
+      : undefined;
+    this.state = { ...this.state, upload };
+    for (const listener of this.stateListeners) listener();
+  }
+  cancelUpload = (id: string) => {
+    const active = this.uploadAbort;
+    const uploads = this.actions.cancelUpload(id);
+    if (!uploads) return;
+    if (active?.id === id) active.controller.abort();
+    this.track(
+      Promise.allSettled(
+        uploads.map((entry) =>
+          this.request(
+            'agent.uploads.cancel',
+            { uploadId: entry.metadata.uploadId },
+            AbortSignal.timeout(3000),
+          ),
+        ),
+      ),
+    );
+  };
   getState = () => this.state;
   subscribeState = (listener: () => void) => {
     this.stateListeners.add(listener);
@@ -375,10 +397,19 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (observation.projection && observation.snapshot?.current)
       this.publishObservation(sessionId, observation, observation.projection, true);
   }
+  private async ready(signal: AbortSignal) {
+    try {
+      return await this.lease.ready(signal);
+    } catch (error) {
+      if (error instanceof DesktopUnreachableError)
+        throw new RemoteAgentError('CONNECTION_LOST', true, error.message);
+      throw error;
+    }
+  }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
     const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
-    const session = await this.lease.ready(signal);
+    const session = await this.ready(signal);
     if (this.state.attachments !== (session.agentUploadsVersion === 1)) {
       this.state = { ...this.state, attachments: session.agentUploadsVersion === 1 };
       for (const listener of this.stateListeners) listener();
@@ -400,7 +431,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       return value;
     } catch (error) {
       // A lost reply is not a desktop verdict: the command stays uncertain and is recovered by receipt.
-      if (error instanceof RemoteTransportError)
+      if (error instanceof RemoteTransportError || error instanceof DesktopUnreachableError)
         throw new RemoteAgentError('CONNECTION_LOST', true, error.message);
       if (error instanceof RemoteFailureError) {
         if (
@@ -678,7 +709,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (part.kind === 'file')
       return {
         kind: 'file',
-        uri: await downloadAttachment(
+        uri: await this.downloadAttachment(
+          this.lease.scope,
           this.historyRequest,
           sessionId,
           part.ref,

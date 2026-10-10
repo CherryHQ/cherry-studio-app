@@ -1148,6 +1148,7 @@
   "remoteAgent.loading": "Φόρτωση…",
   "remoteAgent.local": "Αυτή η συσκευή",
   "remoteAgent.messagePlaceholder": "Μήνυμα στον Agent του PC",
+  "remoteAgent.missingAttachments": "Δεν ήταν δυνατή η επαναφορά αυτών των συνημμένων: {{names}}. Το κείμενο και τα διαθέσιμα αρχεία επαναφέρθηκαν.",
   "remoteAgent.newSession": "Νέα συνομιλία",
   "remoteAgent.noAgents": "Δεν υπάρχουν Agent σε αυτόν τον PC",
   "remoteAgent.noSessions": "Δεν υπάρχουν συνομιλίες ακόμη",
