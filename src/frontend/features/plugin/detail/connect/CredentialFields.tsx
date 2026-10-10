@@ -26,7 +26,9 @@ export function CredentialFields({
     <>
       {fields.map((field) => {
         const invalid = invalidFields.has(field.id);
-        const label = t(`plugins.catalog.${pluginId}.fields.${field.id}.label`);
+        const label = t(`plugins.catalog.${pluginId}.fields.${field.id}.label`, {
+          defaultValue: field.label ?? field.id,
+        });
         return (
           <TextField key={field.id} invalid={invalid} disabled={disabled}>
             <TextField.Label>{label}</TextField.Label>
@@ -55,7 +57,9 @@ export function CredentialFields({
               testID={`plugin-field-${field.id}`}
             />
             <TextField.Error>
-              {t(`plugins.catalog.${pluginId}.fields.${field.id}.error`)}
+              {t(`plugins.catalog.${pluginId}.fields.${field.id}.error`, {
+                defaultValue: field.errorLabel ?? 'Enter a valid value',
+              })}
             </TextField.Error>
           </TextField>
         );
