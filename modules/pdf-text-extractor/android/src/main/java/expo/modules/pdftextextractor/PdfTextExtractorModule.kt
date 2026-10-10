@@ -3,6 +3,8 @@ package expo.modules.pdftextextractor
 import android.content.Context
 import android.net.Uri
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.contentstream.operator.Operator
+import com.tom_roush.pdfbox.cos.COSBase
 import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
@@ -13,6 +15,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -40,6 +43,18 @@ class FailedToLoadDocumentException(cause: Throwable? = null) : CodedException(
     "Failed to load PDF document. The file may be corrupted or password-protected",
     cause
 )
+
+internal class StrictPdfTextStripper : PDFTextStripper() {
+    override fun operatorException(
+        operator: Operator,
+        operands: MutableList<COSBase>,
+        exception: IOException
+    ) {
+        // PDFBox swallows I/O failures in Form XObjects (Do), including scratch-budget
+        // exhaustion. Propagate them so the caller can reject incomplete extraction.
+        throw exception
+    }
+}
 
 class PdfTextExtractorModule : Module() {
     private val defaultMaxPages = 100
@@ -107,7 +122,7 @@ class PdfTextExtractorModule : Module() {
                     )
                 }
 
-                val stripper = PDFTextStripper().apply {
+                val stripper = StrictPdfTextStripper().apply {
                     startPage = 1
                     this.endPage = endPage
                 }
