@@ -37,7 +37,7 @@ beforeEach(() => {
 test('requires complete installed packages, including nested resources', async () => {
   const description = await describeDatabase(new File('file:///backup/database/cherry.db'));
   expect(description.requiredPaths).toEqual(
-    ['SKILL.md', 'references/format.md'].map((path) => `skills/brief/revisions/${digest}/${path}`),
+    ['SKILL.md', 'references/format.md'].map((path) => `skills/brief/${digest}/${path}`),
   );
   const manifest = {
     counts: description.counts,

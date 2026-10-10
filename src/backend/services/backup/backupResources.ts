@@ -85,7 +85,7 @@ export async function describeDatabase(database: File): Promise<{
         const files = SkillManifestEntrySchema.array().parse(JSON.parse(skill.manifest));
         for (const file of files)
           requiredPaths.push(
-            `skills/${skill.folderName}/revisions/${skillContentHashHex(skill.contentHash)}/${file.path}`,
+            `skills/${skill.folderName}/${skillContentHashHex(skill.contentHash)}/${file.path}`,
           );
         if (requiredPaths.length + 1 > BACKUP_LIMITS.entries) throw new BackupError('too-large');
       }

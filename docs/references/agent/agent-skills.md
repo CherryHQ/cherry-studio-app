@@ -121,7 +121,7 @@ Agent IDs were explicitly supplied; conversation tools supply only the current A
 changes preserve unrelated bindings; global disablement preserves binding preferences.
 
 Accepted packages live in the selected storage generation beside its database, under
-`Data/Skills/<folder_name>/revisions/<content hash hex>/`; absolute sandbox paths are never persisted.
+`Data/Skills/<folder_name>/<content hash hex>/`; absolute sandbox paths are never persisted.
 Cache staging is disposable. A complete tree is published before the SQLite acceptance transaction
 commits. A failed commit leaves an unreferenced tree for cleanup.
 

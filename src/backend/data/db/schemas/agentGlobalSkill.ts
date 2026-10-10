@@ -21,7 +21,7 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
  * every read without opening packages, and `invocation` lets list queries
  * filter by the package's invocation policy.
  *
- * Package bytes live at `Data/Skills/<folder_name>/revisions/<hash hex>/`;
+ * Package bytes live at `Data/Skills/<folder_name>/<hash hex>/`;
  * only the folder name and hash are persisted, never a sandbox path.
  */
 export const agentGlobalSkillTable = sqliteTable(

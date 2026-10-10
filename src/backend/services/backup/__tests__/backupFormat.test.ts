@@ -33,17 +33,17 @@ test.each([
   'avatars/user/',
   'files/x\u0000y',
   'preferences.json',
-  `skills/brief/revisions/${sha256}/../SKILL.md`,
-  `skills/brief/revisions/${sha256}/./SKILL.md`,
-  `skills/brief/revisions/${sha256}/references//format.md`,
-  `skills/brief/revisions/invalid/SKILL.md`,
+  `skills/brief/${sha256}/../SKILL.md`,
+  `skills/brief/${sha256}/./SKILL.md`,
+  `skills/brief/${sha256}/references//format.md`,
+  `skills/brief/invalid/SKILL.md`,
 ])('rejects unsafe or undeclared archive path %s', (path) => {
   expect(() => assertBackupPath(path)).toThrow('Unsafe archive path');
 });
 
 test('accepts nested files in pinned Skill revisions', () => {
   const base = manifest();
-  const entry = { path: `skills/brief/revisions/${sha256}/references/format.md`, size: 40, sha256 };
+  const entry = { path: `skills/brief/${sha256}/references/format.md`, size: 40, sha256 };
   expect(validateManifest({ ...base, entries: [...base.entries, entry] }).entries).toContainEqual(
     entry,
   );

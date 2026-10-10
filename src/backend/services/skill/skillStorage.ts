@@ -3,7 +3,7 @@
  *
  * Layout below the selected storage generation, beside its database:
  *
- *   Data/Skills/<folderName>/revisions/<content hash hex>/<package files>
+ *   Data/Skills/<folderName>/<content hash hex>/<package files>
  *
  * Roots are resolved at access time and never persisted.
  * Staging lives under the cache directory and is disposable; publication moves
@@ -24,7 +24,6 @@ import { isSafePackagePath, type SkillPackageFiles } from './skillPackage';
 const logger = loggerService.withContext('SkillStorage');
 const SKILL_DIRECTORY = ['Data', 'Skills'] as const;
 const STAGING_DIRECTORY = 'SkillStaging';
-const REVISIONS_DIRECTORY = 'revisions';
 const SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 /** Minimal file operations the store needs; the fake in tests implements the same port. */
@@ -68,7 +67,7 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
     assertSegment(ref.folderName);
     const revision = skillContentHashHex(ref.contentHash);
     assertSegment(revision);
-    return [...skillsRoot(), ref.folderName, REVISIONS_DIRECTORY, revision];
+    return [...skillsRoot(), ref.folderName, revision];
   };
 
   return {
@@ -162,10 +161,10 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
             safeRemove(fs, [...skills, folder]);
             continue;
           }
-          const revisions = [...skills, folder, REVISIONS_DIRECTORY];
-          if (!fs.isDirectory(revisions)) continue;
-          for (const digest of fs.list(revisions)) {
-            if (!digests.has(digest)) safeRemove(fs, [...revisions, digest]);
+          const folderPath = [...skills, folder];
+          if (!fs.isDirectory(folderPath)) continue;
+          for (const digest of fs.list(folderPath)) {
+            if (!digests.has(digest)) safeRemove(fs, [...folderPath, digest]);
           }
         }
       }

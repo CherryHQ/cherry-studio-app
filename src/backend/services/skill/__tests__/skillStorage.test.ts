@@ -104,8 +104,8 @@ describe('createSkillStorage', () => {
     expect(storage.hasRevision(ref)).toBe(false);
     await storage.publish(handle, ref);
     expect(snapshot()).toEqual([
-      'store/Data/Skills/brief/revisions/abc/SKILL.md',
-      'store/Data/Skills/brief/revisions/abc/references/format.md',
+      'store/Data/Skills/brief/abc/SKILL.md',
+      'store/Data/Skills/brief/abc/references/format.md',
     ]);
     expect(storage.hasRevision(ref)).toBe(true);
     expect(storage.listFiles(ref)).toEqual(['SKILL.md', 'references/format.md']);
@@ -137,8 +137,8 @@ describe('createSkillStorage', () => {
 
     storage.reconcile([{ folderName: 'brief', contentHash: 'v2' }]);
     expect(snapshot()).toEqual([
-      'store/Data/Skills/brief/revisions/v2/SKILL.md',
-      'store/Data/Skills/brief/revisions/v2/references/format.md',
+      'store/Data/Skills/brief/v2/SKILL.md',
+      'store/Data/Skills/brief/v2/references/format.md',
     ]);
     storage.removeSkill('brief');
     expect(snapshot()).toEqual([]);
