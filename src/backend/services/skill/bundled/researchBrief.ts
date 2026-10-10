@@ -2,7 +2,7 @@ import type { BundledSkillDefinition } from './index';
 
 export const researchBriefSkill: BundledSkillDefinition = {
   name: 'research-brief',
-  revision: 1,
+  revision: 2,
   requirements: {
     platforms: null,
     execution: 'none',
@@ -17,7 +17,7 @@ description: Research a question on the web and write a short, sourced brief. Us
 license: Apache-2.0
 metadata:
   author: Cherry Studio
-  version: "1"
+  version: "2"
 ---
 
 # Research brief
@@ -26,7 +26,7 @@ metadata:
 2. Run one \`web_search\` round covering those sub-questions together.
 3. Use \`web_fetch\` only for the pages whose content is needed for a claim; skip pages that the
    search snippet already answers.
-4. Write the brief using \`references/structure.md\`. Cite every factual statement with the
+4. Write the brief using the structure included below. Cite every factual statement with the
    returned citation ids.
 5. State what remains uncertain. Do not run more searches to fill minor gaps.
 `,

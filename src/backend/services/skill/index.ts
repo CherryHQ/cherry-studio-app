@@ -9,3 +9,4 @@ export {
   createGithubSkillSource,
 } from './skillSources';
 export { skillStorage, type SkillStorage } from './skillStorage';
+export { getSystemSkillInstructions } from './bundled';

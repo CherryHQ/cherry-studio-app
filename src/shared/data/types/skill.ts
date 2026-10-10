@@ -70,8 +70,8 @@ export function skillContentHashHex(contentHash: string): string {
 }
 
 /**
- * Desktop `agent_global_skill.source` vocabulary. Mobile installs app-shipped
- * recommendations (`builtin`) and GitHub-hosted packages (`marketplace`).
+ * Desktop `agent_global_skill.source` vocabulary. User installations are
+ * GitHub-hosted packages (`marketplace`); `builtin` remains readable for legacy data.
  */
 export const SkillSourceKindSchema = z.enum(['builtin', 'marketplace']);
 export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>;

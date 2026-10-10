@@ -142,7 +142,9 @@ export class AgentGlobalSkillService {
     const [row] = await this.db
       .select()
       .from(agentGlobalSkillTable)
-      .where(eq(agentGlobalSkillTable.id, skillId))
+      .where(
+        and(eq(agentGlobalSkillTable.id, skillId), eq(agentGlobalSkillTable.source, 'marketplace')),
+      )
       .limit(1);
     if (!row) {
       throw DataApiErrorFactory.notFound('Skill', skillId);
@@ -155,7 +157,12 @@ export class AgentGlobalSkillService {
     const [row] = await this.db
       .select()
       .from(agentGlobalSkillTable)
-      .where(eq(agentGlobalSkillTable.folderName, folderName))
+      .where(
+        and(
+          eq(agentGlobalSkillTable.folderName, folderName),
+          eq(agentGlobalSkillTable.source, 'marketplace'),
+        ),
+      )
       .limit(1);
     return row ? rowToSkill(row) : null;
   }
@@ -167,7 +174,9 @@ export class AgentGlobalSkillService {
    */
   async list(params: ListSkillsQueryParams): Promise<ListSkillsResult> {
     const query = ListSkillsQuerySchema.parse(params);
-    const conditions: SQL[] = [];
+    // App-owned system workflows are not part of the user-managed library,
+    // including copies installed by earlier builds.
+    const conditions: SQL[] = [eq(agentGlobalSkillTable.source, 'marketplace')];
     if (query.search) {
       const pattern = escapeLike(query.search);
       conditions.push(
@@ -242,7 +251,12 @@ export class AgentGlobalSkillService {
           isEnabled: dto.isEnabled,
           updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
         })
-        .where(eq(agentGlobalSkillTable.id, skillId))
+        .where(
+          and(
+            eq(agentGlobalSkillTable.id, skillId),
+            eq(agentGlobalSkillTable.source, 'marketplace'),
+          ),
+        )
         .returning();
       if (!updated) {
         throw DataApiErrorFactory.notFound('Skill', skillId);
@@ -257,7 +271,12 @@ export class AgentGlobalSkillService {
     const rows = await this.db
       .select()
       .from(agentSkillTable)
-      .where(eq(agentSkillTable.agentId, agentId))
+      .where(
+        and(
+          eq(agentSkillTable.agentId, agentId),
+          inArray(agentSkillTable.skillId, userSkillIds(this.db)),
+        ),
+      )
       .orderBy(asc(agentSkillTable.skillId));
     return { items: rows.map(rowToBinding) };
   }
@@ -275,7 +294,15 @@ export class AgentGlobalSkillService {
     const rows = await this.dbService.withWriteTx(async (tx) => {
       await this.assertAgentWritable(tx, agentId);
       await this.applyBindingUpdatesTx(tx, agentId, updates);
-      return tx.select().from(agentSkillTable).where(eq(agentSkillTable.agentId, agentId));
+      return tx
+        .select()
+        .from(agentSkillTable)
+        .where(
+          and(
+            eq(agentSkillTable.agentId, agentId),
+            inArray(agentSkillTable.skillId, userSkillIds(tx)),
+          ),
+        );
     });
     return { items: rows.map(rowToBinding) };
   }
@@ -294,7 +321,12 @@ export class AgentGlobalSkillService {
     const liveRows = await tx
       .select({ id: agentGlobalSkillTable.id })
       .from(agentGlobalSkillTable)
-      .where(inArray(agentGlobalSkillTable.id, skillIds));
+      .where(
+        and(
+          inArray(agentGlobalSkillTable.id, skillIds),
+          eq(agentGlobalSkillTable.source, 'marketplace'),
+        ),
+      );
     const live = new Set(liveRows.map((row) => row.id));
     const missing = skillIds.filter((id) => !live.has(id));
     if (missing.length > 0) {
@@ -328,6 +360,7 @@ export class AgentGlobalSkillService {
       .from(agentGlobalSkillTable)
       .where(
         and(
+          eq(agentGlobalSkillTable.source, 'marketplace'),
           eq(agentGlobalSkillTable.isEnabled, true),
           inArray(agentGlobalSkillTable.id, enabledBindingSkillIds(agentId)),
         ),
@@ -350,13 +383,16 @@ export class AgentGlobalSkillService {
     agentIds: readonly string[] = [],
   ): Promise<Skill> {
     const [existing] = await tx
-      .select({ id: agentGlobalSkillTable.id })
+      .select({ id: agentGlobalSkillTable.id, source: agentGlobalSkillTable.source })
       .from(agentGlobalSkillTable)
       .where(eq(agentGlobalSkillTable.folderName, record.name))
       .limit(1);
-    if (existing) {
+    if (existing?.source === 'marketplace') {
       throw DataApiErrorFactory.conflict('Skill is already installed', record.name);
     }
+    // A hidden legacy system copy must not reserve a user package's folder.
+    // Its immutable bytes remain until the ordinary startup reconciliation.
+    if (existing) await this.deleteTx(tx, existing.id);
     const [row] = await tx
       .insert(agentGlobalSkillTable)
       .values({ ...toInsertRow(record), folderName: record.name, isEnabled: true })
@@ -423,6 +459,13 @@ export class AgentGlobalSkillService {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
   }
+}
+
+function userSkillIds(db: Database) {
+  return db
+    .select({ id: agentGlobalSkillTable.id })
+    .from(agentGlobalSkillTable)
+    .where(eq(agentGlobalSkillTable.source, 'marketplace'));
 }
 
 function enabledBindingSkillIds(agentId: string) {

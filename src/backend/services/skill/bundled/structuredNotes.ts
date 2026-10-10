@@ -2,7 +2,7 @@ import type { BundledSkillDefinition } from './index';
 
 export const structuredNotesSkill: BundledSkillDefinition = {
   name: 'structured-notes',
-  revision: 1,
+  revision: 2,
   requirements: {
     platforms: null,
     execution: 'none',
@@ -17,13 +17,13 @@ description: Turn meeting transcripts, pasted text, or attached documents into s
 license: Apache-2.0
 metadata:
   author: Cherry Studio
-  version: "1"
+  version: "2"
 ---
 
 # Structured notes
 
 1. Read the whole input before writing. For long attachments, page through them completely.
-2. Follow \`references/template.md\`. Keep the user's terminology and names exactly.
+2. Follow the notes template included below. Keep the user's terminology and names exactly.
 3. Every action item needs an owner and a due date when the source states one; write "unassigned"
    or "no date" otherwise. Never invent either.
 4. If the user asks to save the notes as a file, use the managed file tool with a descriptive name;

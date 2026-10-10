@@ -21,6 +21,47 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
+  test('provides system workflows without installation and only with their available built-in tools', () => {
+    const base = { agentInstructions: '', appLanguage: 'en-US' as const };
+    const textOnly = buildAgentSystemPrompt({ ...base, tools: [] });
+    expect(textOnly).toContain('### structured-notes');
+    expect(textOnly).toContain('## Action items');
+    expect(textOnly).not.toContain('### daily-agenda');
+    expect(textOnly).not.toContain('### research-brief');
+    expect(textOnly).not.toContain('### Available Skills');
+
+    const complete = buildAgentSystemPrompt({
+      ...base,
+      tools: [
+        tool('calendar_list_collections', 'mobile_calendar_collections'),
+        tool('calendar_list_events', 'mobile_calendar_events'),
+        tool('web_search', 'mobile_web_search'),
+        tool('web_fetch', 'mobile_web_fetch'),
+      ],
+    });
+    expect(complete).toContain('### daily-agenda');
+    expect(complete).toContain('`mobile_calendar_collections`');
+    expect(complete).toContain('`mobile_calendar_events`');
+    expect(complete).toContain('travel gaps under 15 minutes');
+    expect(complete).toContain('### research-brief');
+    expect(complete).toContain('`mobile_web_fetch`');
+    expect(complete).toContain('at most five bullets');
+    expect(complete).not.toContain('Read `references/');
+
+    const incomplete = buildAgentSystemPrompt({
+      ...base,
+      tools: [tool('calendar_list_events'), tool('web_search')],
+    });
+    expect(incomplete).not.toContain('### daily-agenda');
+    expect(incomplete).not.toContain('### research-brief');
+
+    const denied = buildAgentSystemPrompt({
+      ...base,
+      tools: [tool('web_search'), { ...tool('web_fetch'), approval: 'deny' }],
+    });
+    expect(denied).not.toContain('### research-brief');
+  });
+
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

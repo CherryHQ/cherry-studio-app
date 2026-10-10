@@ -92,8 +92,6 @@ export interface SkillsModule {
   search(query: string, signal?: AbortSignal): Promise<SkillListing[]>;
   /** Resolve a skills.sh page or a public GitHub repository, directory, or `SKILL.md` URL. */
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
-  /** The curated recommendation list bundled with this build. */
-  listRecommended(): Promise<SkillCandidate[]>;
   /** Download, validate, and report environment guidance; never installs. */
   inspect(candidateId: string, signal?: AbortSignal): Promise<SkillInspection>;
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;

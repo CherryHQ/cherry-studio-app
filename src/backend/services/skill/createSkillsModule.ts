@@ -56,7 +56,7 @@ export type SkillsModuleDependencies = {
   storage: SkillStorage;
   environment: SkillEnvironmentReader;
   sources: {
-    bundled: SkillSourceAdapter & { list(): SkillSourceCandidate[] };
+    bundled: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
@@ -256,13 +256,12 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
+      if (resolved.some((candidate) => candidate.source.registry !== 'github'))
+        throw new SkillsError(
+          'source-invalid',
+          'System Skills are not available for installation.',
+        );
       return Promise.all(resolved.map((candidate) => toPublicCandidate(remember(candidate))));
-    },
-
-    async listRecommended() {
-      return Promise.all(
-        deps.sources.bundled.list().map((candidate) => toPublicCandidate(remember(candidate))),
-      );
     },
 
     async inspect(candidateId, signal) {
@@ -378,6 +377,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     async uninstall(skillId) {
+      await deps.skills.getById(skillId);
       await deps.db.withWriteTx((tx) => deps.skills.deleteTx(tx, skillId));
       changes.fire();
       // Existing turns keep their pinned files until startup reconciliation.

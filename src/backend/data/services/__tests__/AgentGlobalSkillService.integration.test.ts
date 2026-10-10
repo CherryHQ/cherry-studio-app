@@ -79,6 +79,59 @@ describe('AgentGlobalSkillService', () => {
     expect(second.nextCursor).toBeUndefined();
   });
 
+  it('keeps legacy built-in packages outside user library, binding, and runtime scopes', async () => {
+    const agent = await agentService.create({ name: 'Writer' });
+    const internal = await install(
+      { ...record('daily-agenda'), source: 'builtin', sourceUrl: null },
+      [agent.id],
+    );
+    const user = await install(record('user-notes'), [agent.id]);
+
+    for (const scope of ['library', 'agent', 'composer'] as const) {
+      const page = await service.list({ scope, agentId: agent.id, limit: 1 });
+      expect(page.items.map(({ skill }) => skill.id)).toEqual([user.id]);
+      expect(page.nextCursor).toBeUndefined();
+    }
+    expect((await service.listBindings(agent.id)).items.map(({ skillId }) => skillId)).toEqual([
+      user.id,
+    ]);
+    expect((await service.listUsableForAgent(agent.id)).map(({ skill }) => skill.id)).toEqual([
+      user.id,
+    ]);
+    await expect(service.getById(internal.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(service.update(internal.id, { isEnabled: false })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      service.replaceBindings(agent.id, { updates: [{ skillId: internal.id, isEnabled: true }] }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    const bindings = await service.replaceBindings(agent.id, { updates: [] });
+    expect(bindings.items.map(({ skillId }) => skillId)).toEqual([user.id]);
+    expect(await service.listStorageReferences()).toEqual(
+      expect.arrayContaining([
+        { folderName: internal.folderName, contentHash: internal.contentHash },
+      ]),
+    );
+  });
+
+  it('lets a user package replace a legacy system copy with the same folder name', async () => {
+    const agent = await agentService.create({ name: 'Writer' });
+    const internal = await install(
+      { ...record('structured-notes'), source: 'builtin', sourceUrl: null },
+      [agent.id],
+    );
+    expect(await service.findByFolderName('structured-notes')).toBeNull();
+    const user = await install(record('structured-notes'), [agent.id]);
+    expect(user.id).not.toBe(internal.id);
+    expect((await service.findByFolderName('structured-notes'))?.id).toBe(user.id);
+    expect((await service.listBindings(agent.id)).items.map(({ skillId }) => skillId)).toEqual([
+      user.id,
+    ]);
+    expect(await service.listStorageReferences()).toEqual([
+      { folderName: user.folderName, contentHash: user.contentHash },
+    ]);
+  });
+
   it('scopes Agent and composer reads by binding, global enablement, and invocation policy', async () => {
     const agent = await agentService.create({ name: 'Writer' });
     const other = await agentService.create({ name: 'Other' });

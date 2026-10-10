@@ -1,14 +1,22 @@
 # Agent Skills
 
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
-instruction context. The first implementation includes three reviewed bundled packages: structured
-notes, research brief and daily agenda. Plugins and Skills have separate sidebar entries and pages.
+instruction context. Plugins and Skills have separate sidebar entries and pages.
 The Skills library provides installed search, details, environment guidance, update and uninstall.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
+
+Structured notes, research brief and daily agenda are app-owned system workflows. The Host includes
+their instructions and templates in internal system context, independently of installed packages or
+Agent bindings. Calendar and research workflows are included only when all their required built-in
+tools are present in the current turn. They are not listed, recommended, installable or selectable
+in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
+backups, but are excluded from user reads, binding updates and installed runtime scope. Installing a
+user package with the same folder name replaces that hidden legacy record and its bindings; its old
+bytes follow ordinary storage reconciliation.
 
 ## Ownership And Authority
 
@@ -33,12 +41,12 @@ plugin connection ownership and per-turn tool filtering.
 
 ## Sources And Package Format
 
-Bundled recommendations carry app-owned compatibility profiles. Keyword search uses skills.sh and
-returns listings only; nothing is downloaded until a listing URL is resolved. skills.sh pages and
+Keyword search uses skills.sh and returns listings only; nothing is downloaded until a listing URL
+is resolved. skills.sh pages and
 public GitHub repository, directory, raw entry and `SKILL.md` links resolve to GitHub packages;
 repositories with multiple Skills return candidates, with a maximum of 20 package directories.
 Like desktop, a package's folder name is its declared name and holds one installation. A candidate
-from the same origin (bundled name, or GitHub owner, repository and directory) reuses it; a
+from the same origin (GitHub owner, repository and directory) reuses it; a
 different package with the same name is refused.
 
 GitHub resolution pins a ref to a commit and acquires the complete package directory, including a
@@ -69,7 +77,7 @@ Installation and updates validate the package format, paths, integrity and size.
 permissions, model tool calling or script interpreters do not block installation or instruction
 loading. Scripts, references, templates and other accepted resources are preserved together.
 
-Bundled packages retain their reviewed requirement profiles as environment guidance. Their checks
+Reviewed requirement profiles provide environment guidance. Their checks
 consult permission, web-search, painting-model and plugin owners; actual execution checks remain
 with the tools. External packages are `unverified`: the app does not infer dependencies from prose,
 script filenames or mentioned tool names. Older stored `analyzed` profiles remain readable and are
@@ -101,8 +109,8 @@ message, including retries. Deleting the reference cancels the installation inte
 retain the reference, successful sends clear the submitted selection, and switching Agents clears it.
 The app-owned discovery instructions are always available
 when management tools are present, so no bootstrap package needs to be installed first. The
-composer plus menu only selects already installed Skills. Manual search and bundled recommendations
-are available through **Discover Skills** in the same **More** menu.
+composer plus menu only selects already installed Skills. Manual search is available through
+**Discover Skills** in the same **More** menu.
 
 Installed and discovery searches use the shared App Search route, which owns the input, cancellation
 and result selection. Selecting a discovery listing opens its detail page before resolving and
@@ -129,11 +137,12 @@ Agent without republishing its files.
 ## Persistence And Lifecycle
 
 `agent_global_skill` and `agent_skill` match desktop's columns, defaults and index names. Mobile
-writes `source` as `builtin` (bundled recommendations) or `marketplace` (GitHub-hosted packages),
-`source_url` as the URL updates re-resolve, and `is_enabled` as global enablement; new
+writes `source` as `marketplace` (GitHub-hosted packages); `builtin` remains readable for legacy
+installations and backups. It writes `source_url` as the URL updates re-resolve, and `is_enabled`
+as global enablement; new
 installations and conversation bindings are written enabled. Desktop's `namespace` is absent
-because mobile has no built-in namespaces or system skill placements. Three mobile columns follow
-the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
+because app-owned system workflows live in Host instructions rather than user installations.
+Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
 `profile` holds reviewed environment guidance or unverified provenance, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
 Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding

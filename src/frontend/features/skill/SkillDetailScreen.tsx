@@ -174,9 +174,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
         <Section.Item
           label={t('skills.detail.source')}
           trailing={
-            <Text className="text-sm text-muted-foreground">
-              {t(skill.source === 'builtin' ? 'skills.source.bundled' : 'skills.source.github')}
-            </Text>
+            <Text className="text-sm text-muted-foreground">{t('skills.source.github')}</Text>
           }
         />
         {skill.author ? (

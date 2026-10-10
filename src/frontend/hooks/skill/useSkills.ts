@@ -1,13 +1,7 @@
-import { useQuery as useTanStackQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import {
-  queryKeys,
-  useBackendModule,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-} from '@/frontend/data';
+import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { isSkillQuery } from '@/frontend/data/queryKeys/skills';
 import type { AgentSkillUpdate, ListSkillsQueryParams } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
@@ -68,15 +62,6 @@ export function useAgentSkillsApi(agentId: string | undefined) {
     refetch: result.refetch,
     skills: result.data?.items ?? EMPTY_SKILLS,
   };
-}
-
-export function useRecommendedSkills() {
-  const skills = useBackendModule('skills');
-  return useTanStackQuery({
-    queryFn: () => skills.listRecommended(),
-    queryKey: queryKeys.skills.recommended(),
-    retry: false,
-  });
 }
 
 export function useSkillMutations() {

@@ -2,7 +2,7 @@ import type { BundledSkillDefinition } from './index';
 
 export const dailyAgendaSkill: BundledSkillDefinition = {
   name: 'daily-agenda',
-  revision: 1,
+  revision: 2,
   requirements: {
     platforms: null,
     execution: 'none',
@@ -17,7 +17,7 @@ description: Build a prioritized agenda for today or a chosen day from the devic
 license: Apache-2.0
 metadata:
   author: Cherry Studio
-  version: "1"
+  version: "2"
 ---
 
 # Daily agenda
@@ -26,7 +26,7 @@ metadata:
 2. Call \`calendar_list_collections\` once, then \`calendar_list_events\` for that day across the
    user's calendars. Do not request permissions yourself; the application handles them.
 3. Group events by morning, afternoon, and evening. Flag overlaps and back-to-back meetings.
-4. Read \`references/format.md\` and produce the agenda in that layout.
+4. Produce the agenda using the format included below.
 5. If the calendar is empty or unavailable, say so plainly; do not invent events.
 `,
     'references/format.md': `# Agenda format

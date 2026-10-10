@@ -1,6 +1,5 @@
 export {
   useAgentSkillsApi,
-  useRecommendedSkills,
   useSkillApiById,
   useSkillInstructionsApi,
   useSkillMutations,

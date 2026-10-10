@@ -141,31 +141,41 @@ function createFakes() {
 const marketplace = { resolveUrl: async () => [], search: async () => [] };
 
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
+  const candidates = (): SkillSourceCandidate[] =>
+    createBundledSkillSource(definitions)
+      .list()
+      .map((candidate) => ({
+        ...candidate,
+        candidateId: `github:${candidate.name}@${candidate.version}`,
+        source: {
+          ...candidate.source,
+          registry: 'github',
+          locator: `github:owner/repo/${candidate.name}`,
+          url: `https://github.com/owner/repo/blob/main/${candidate.name}/SKILL.md`,
+        },
+      }));
   return createSkillsModule({
-    marketplace,
+    marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
     environment: { read: async () => environment },
     sources: {
-      bundled: {
-        registry: 'bundled',
-        list: () => createBundledSkillSource(definitions).list(),
-        resolve: (locator, signal) =>
-          createBundledSkillSource(definitions).resolve(locator, signal),
-        acquire: (candidate, signal) =>
-          createBundledSkillSource(definitions).acquire(candidate, signal),
-      },
+      bundled: createBundledSkillSource([]),
       github: {
         registry: 'github',
         resolve: async () => {
           throw new Error('unused');
         },
-        acquire: async () => {
-          throw new Error('unused');
-        },
-        resolveUrl: async () => {
-          throw new Error('unused');
+        acquire: (candidate, signal) =>
+          createBundledSkillSource(definitions).acquire(
+            { ...candidate, source: { ...candidate.source, locator: `bundled:${candidate.name}` } },
+            signal,
+          ),
+        resolveUrl: async (url) => {
+          const candidate = candidates().find((item) => item.source.url === url);
+          if (!candidate) throw new Error('not found');
+          return candidate;
         },
       },
     },
@@ -174,10 +184,40 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
+  it('refuses to expose system workflows as installable candidates', async () => {
+    const fakes = createFakes();
+    const bundled = createBundledSkillSource();
+    const module = createSkillsModule({
+      marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
+      db: fakes.db,
+      skills: fakes.skills,
+      storage: fakes.storage,
+      environment: { read: async () => environment },
+      sources: {
+        bundled,
+        github: {
+          ...bundled,
+          registry: 'github',
+          resolveUrl: async () => {
+            throw new Error('unused');
+          },
+        },
+      },
+      agentFacts: async () => ({ disabledCapabilities: [], supportsToolCalling: true }),
+    });
+    await expect(module.resolve('https://github.com/owner/repo')).rejects.toMatchObject({
+      code: 'source-invalid',
+    });
+    await expect(module.inspect(bundled.list()[0]!.candidateId)).rejects.toMatchObject({
+      code: 'candidate-expired',
+    });
+    expect(fakes.rows.size).toBe(0);
+  });
+
   it('reads the complete instruction body from the supplied immutable revision without an interpreter', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [needsPython]);
-    const [candidate] = await module.listRecommended();
+    const [candidate] = await module.resolve('https://github.com/owner/repo');
     const installed = await module.install({ candidateId: candidate!.candidateId });
     fakes.storage.readFile = async (ref, path) =>
       ref.contentHash === installed.contentHash && path === 'SKILL.md'
@@ -193,12 +233,12 @@ describe('createSkillsModule', () => {
   it('reuses the same accepted package for a new Agent without republishing it', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed]);
-    const [first] = await module.listRecommended();
+    const [first] = await module.resolve('https://github.com/owner/repo');
     const installed = await module.install({
       candidateId: first!.candidateId,
       agentIds: ['first'],
     });
-    const [again] = await module.listRecommended();
+    const [again] = await module.resolve('https://github.com/owner/repo');
     const reused = await module.install({ candidateId: again!.candidateId, agentIds: ['second'] });
     expect(reused.id).toBe(installed.id);
     expect(fakes.rows.size).toBe(1);
@@ -211,7 +251,7 @@ describe('createSkillsModule', () => {
     const module = createModule(fakes, [reviewed, needsWeb, needsPython]);
     const changes = jest.fn();
     module.subscribeChanges(changes);
-    const [notes, web, py] = await module.listRecommended();
+    const [notes, web, py] = await module.resolve('https://github.com/owner/repo');
     expect(notes).toMatchObject({
       name: 'notes',
       profileProvenance: 'reviewed',
@@ -247,7 +287,7 @@ describe('createSkillsModule', () => {
     await expect(module.install({ candidateId: notes!.candidateId })).rejects.toMatchObject({
       code: 'candidate-expired',
     });
-    const [again] = await module.listRecommended();
+    const [again] = await module.resolve('https://github.com/owner/repo');
     expect(again!.installedSkillId).toBe(installed.id);
     await expect(module.install({ candidateId: again!.candidateId })).rejects.toMatchObject({
       code: 'already-installed',
@@ -270,7 +310,7 @@ describe('createSkillsModule', () => {
     fakes.db.withWriteTx = async () => {
       throw new Error('commit failed');
     };
-    const [notes] = await module.listRecommended();
+    const [notes] = await module.resolve('https://github.com/owner/repo');
     await expect(module.install({ candidateId: notes!.candidateId })).rejects.toThrow(
       'commit failed',
     );
@@ -282,7 +322,7 @@ describe('createSkillsModule', () => {
     const fakes = createFakes();
     const definitions: BundledSkillDefinition[] = [reviewed];
     const module = createModule(fakes, definitions);
-    const [notes] = await module.listRecommended();
+    const [notes] = await module.resolve('https://github.com/owner/repo');
     const installed = await module.install({ candidateId: notes!.candidateId });
 
     expect(await module.update(installed.id)).toMatchObject({ outcome: 'unchanged' });
@@ -295,7 +335,7 @@ describe('createSkillsModule', () => {
     const updated = await module.update(installed.id);
     expect(updated).toMatchObject({
       outcome: 'updated',
-      skill: { id: installed.id, source: 'builtin' },
+      skill: { id: installed.id, source: 'marketplace' },
     });
     expect(updated.skill.contentHash).not.toBe(installed.contentHash);
     expect(fakes.published).toHaveLength(2);

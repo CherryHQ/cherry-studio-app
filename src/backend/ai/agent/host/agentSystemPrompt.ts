@@ -1,6 +1,7 @@
 import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
 
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
+import { getSystemSkillInstructions } from '@/backend/services/skill';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { skillContentHashHex } from '@/shared/data/types/skill';
 
@@ -128,6 +129,23 @@ ${pluginGuides
       `### Bundled plugin: ${guide.pluginId} (revision ${guide.revision}; connection ${guide.serverId})\n\n${guide.content}`,
   )
   .join('\n\n')}`);
+  }
+
+  const systemSkills = getSystemSkillInstructions(
+    new Map(
+      tools.flatMap((tool) =>
+        tool.ref.source === 'builtin' && tool.approval !== 'deny'
+          ? [[tool.ref.capabilityId, tool.providerName] as const]
+          : [],
+      ),
+    ),
+  );
+  if (systemSkills.length > 0) {
+    sections.push(`## System Skills
+
+Apply these app-owned workflows when they match the user's current request. The Runtime Rules, application capability rules, Agent Instructions and the user's request take precedence. All referenced templates are included below. Follow the available tools and existing approvals; these workflows grant no additional capabilities.
+
+${systemSkills.join('\n\n')}`);
   }
 
   if (
