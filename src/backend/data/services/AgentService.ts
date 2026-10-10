@@ -26,6 +26,7 @@ import {
 import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
+import { SUPER_AGENT_AVATAR, SUPER_AGENT_INSTRUCTIONS, SUPER_AGENT_NAME } from './defaultAgents';
 import { modelService } from './ModelService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -165,6 +166,36 @@ export class AgentService {
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx.select({ id: agentTable.id }).from(agentTable).limit(1);
       return existing ? null : this.insertTx(tx, { ...dto, avatar: CHERRY_AGENT_AVATAR });
+    });
+
+    if (!row) return null;
+    publishDataApiChanges(['/agents', `/agents/${row.id}`]);
+    return rowToAgent(row, await this.getModelName(row.model));
+  }
+
+  /**
+   * Provision the preinstalled Super Agent on first run. Idempotent: a matching
+   * live Agent (by name) short-circuits, so upgrades never duplicate it and a
+   * user who deletes it is not fought by a later launch.
+   */
+  async ensureSuperAgent(): Promise<Agent | null> {
+    const row = await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(eq(agentTable.name, SUPER_AGENT_NAME))
+        .limit(1);
+      return existing
+        ? null
+        : this.insertTx(
+            tx,
+            {
+              instructions: SUPER_AGENT_INSTRUCTIONS,
+              name: SUPER_AGENT_NAME,
+              toolApprovalMode: 'auto',
+            },
+            SUPER_AGENT_AVATAR,
+          );
     });
 
     if (!row) return null;
@@ -377,13 +408,14 @@ export class AgentService {
     return row ? preferred : null;
   }
 
-  private async insertTx(tx: TxLike, dto: CreateAgentDto): Promise<AgentRow> {
+  private async insertTx(tx: TxLike, dto: CreateAgentDto, avatar?: string): Promise<AgentRow> {
     const modelId = await this.resolveCreateModelId(tx, dto.model);
     return (await insertWithOrderKey(
       tx,
       agentTable,
       {
         ...dto,
+        ...(avatar ? { avatar } : {}),
         model: modelId,
         toolApprovalMode: dto.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
       },
