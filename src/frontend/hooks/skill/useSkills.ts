@@ -73,24 +73,13 @@ export function useRecommendedSkills() {
 
 export function useSkillMutations() {
   const queryClient = useQueryClient();
-  const globalEnableMutation = useMutation('PATCH', '/skills/:skillId', {
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: ({ queryKey }) => isSkillQuery(queryKey) });
-    },
-  });
   const bindingsMutation = useMutation('PUT', '/agents/:agentId/skills', {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ predicate: ({ queryKey }) => isSkillQuery(queryKey) });
     },
   });
-  const triggerGlobal = globalEnableMutation.trigger;
   const triggerBindings = bindingsMutation.trigger;
 
-  const setSkillGlobalEnabled = useCallback(
-    (skillId: string, isEnabled: boolean) =>
-      triggerGlobal({ body: { isEnabled }, params: { skillId } }),
-    [triggerGlobal],
-  );
   const replaceAgentSkills = useCallback(
     (agentId: string, updates: readonly AgentSkillUpdate[]) =>
       triggerBindings({ body: { updates: [...updates] }, params: { agentId } }),
@@ -99,8 +88,6 @@ export function useSkillMutations() {
 
   return {
     isSavingBindings: bindingsMutation.isLoading,
-    isSavingGlobal: globalEnableMutation.isLoading,
     replaceAgentSkills,
-    setSkillGlobalEnabled,
   };
 }

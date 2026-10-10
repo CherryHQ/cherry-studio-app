@@ -1,5 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
-import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
+import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,14 +40,6 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu onPickFiles={() => setIsFilePickerOpen(true)} triggerRef={triggerRef}>
-        {onPickSkills ? (
-          <Composer.Menu.Item
-            icon={<SparklesIcon className="size-5 text-foreground" />}
-            label={t('skills.title')}
-            onPress={onPickSkills}
-            testID="chat-composer-skills"
-          />
-        ) : null}
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}
@@ -56,6 +48,14 @@ export function ChatInputMenu({
             testID="chat-composer-plugins"
           />
         )}
+        {onPickSkills ? (
+          <Composer.Menu.Item
+            icon={<ToolCaseIcon className="size-5 text-foreground" />}
+            label={t('skills.title')}
+            onPress={onPickSkills}
+            testID="chat-composer-skills"
+          />
+        ) : null}
       </ComposerMenu>
       {isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />

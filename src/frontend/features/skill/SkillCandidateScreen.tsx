@@ -8,41 +8,62 @@ import { Text, View } from 'react-native';
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
-import { isSkillsError, type SkillInspection } from '@/shared/contracts/skills';
+import { isSkillsError, SkillsError, type SkillInspection } from '@/shared/contracts/skills';
 
 import { SkillPage } from './SkillPage';
 import { SkillReasonList } from './SkillReasonList';
 
 export function SkillCandidateScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ candidateId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    candidateId?: string | string[];
+    url?: string | string[];
+    name?: string | string[];
+    description?: string | string[];
+  }>();
   const candidateId = getSingleRouteParam(params.candidateId) ?? '';
+  const url = getSingleRouteParam(params.url) ?? '';
+  const name = getSingleRouteParam(params.name);
+  const description = getSingleRouteParam(params.description);
+  const queryKey = ['skills', 'inspect', candidateId || url];
   const skillsModule = useBackendModule('skills');
   const inspection = useQuery({
-    enabled: Boolean(candidateId),
-    queryFn: ({ signal }) => skillsModule.inspect(candidateId, signal),
-    queryKey: ['skills', 'inspect', candidateId],
+    enabled: Boolean(candidateId || url),
+    queryFn: async ({ signal }) => {
+      if (candidateId) return skillsModule.inspect(candidateId, signal);
+      const candidates = await skillsModule.resolve(url, signal);
+      signal.throwIfAborted();
+      if (candidates.length !== 1) {
+        throw new SkillsError(
+          candidates.length === 0 ? 'not-found' : 'source-invalid',
+          'The selected listing must resolve to exactly one Skill.',
+        );
+      }
+      return skillsModule.inspect(candidates[0]!.candidateId, signal);
+    },
+    queryKey,
     retry: false,
     staleTime: 60_000,
   });
   const refetch = inspection.refetch;
   useFocusEffect(
     useCallback(() => {
-      if (candidateId) void refetch();
-    }, [candidateId, refetch]),
+      if (candidateId || url) void refetch();
+    }, [candidateId, refetch, url]),
   );
 
   if (inspection.isLoading) {
     return (
-      <SkillPage headerProps={{ title: t('skills.candidate.title') }}>
-        <ContentState.Loading title={t('skills.candidate.inspecting')} />
+      <SkillPage headerProps={{ title: name ?? t('skills.candidate.title') }}>
+        {description ? <Text className="text-base text-foreground">{description}</Text> : null}
+        <ContentState.Loading layout="row" title={t('skills.loading')} />
       </SkillPage>
     );
   }
   if (inspection.isError || !inspection.data) {
     const code = isSkillsError(inspection.error) ? inspection.error.code : 'source-unreachable';
     return (
-      <SkillPage headerProps={{ title: t('skills.candidate.title') }}>
+      <SkillPage headerProps={{ title: name ?? t('skills.candidate.title') }}>
         <ContentState.Error
           primaryAction={{ children: t('common.retry'), onPress: () => void inspection.refetch() }}
           title={t(`skills.error.${code}`)}
@@ -50,10 +71,16 @@ export function SkillCandidateScreen() {
       </SkillPage>
     );
   }
-  return <SkillCandidate inspection={inspection.data} />;
+  return <SkillCandidate inspection={inspection.data} queryKey={queryKey} />;
 }
 
-function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
+function SkillCandidate({
+  inspection,
+  queryKey,
+}: {
+  inspection: SkillInspection;
+  queryKey: readonly string[];
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
@@ -77,7 +104,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
             skill: await skillsModule.install({ candidateId: candidate.candidateId }),
           };
       if (result.outcome === 'rejected') {
-        queryClient.setQueryData(['skills', 'inspect', candidate.candidateId], result.inspection);
+        queryClient.setQueryData(queryKey, result.inspection);
         toast.show({ label: t('skills.toast.update.rejected'), variant: 'danger' });
         return;
       }
@@ -90,7 +117,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
         ),
         variant: 'success',
       });
-      router.replace({ pathname: '/plugins/skills/[skillId]', params: { skillId: skill.id } });
+      router.replace({ pathname: '/skills/[skillId]', params: { skillId: skill.id } });
     } catch (error) {
       const code = isSkillsError(error) ? error.code : 'source-unreachable';
       toast.show({ label: t(`skills.error.${code}`), variant: 'danger' });
@@ -197,7 +224,7 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
         <Button
           onPress={() =>
             router.replace({
-              pathname: '/plugins/skills/[skillId]',
+              pathname: '/skills/[skillId]',
               params: { skillId: candidate.installedSkillId! },
             })
           }

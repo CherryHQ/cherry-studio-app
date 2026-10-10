@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
-import { useSkillApiById, useSkillMutations } from '@/frontend/hooks/skill';
+import { useSkillApiById } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
@@ -56,19 +56,9 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
   const { alert } = useAlert();
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
-  const { isSavingGlobal, setSkillGlobalEnabled } = useSkillMutations();
   const [isBusy, setIsBusy] = useState(false);
   const status = skill.admission.status;
   const tone = skillStatusTone(status);
-
-  async function toggleGlobal(enabled: boolean) {
-    try {
-      await setSkillGlobalEnabled(skill.id, enabled);
-    } catch (error) {
-      logger.error('Failed to change Skill enablement', error as Error, { skillId: skill.id });
-      toast.show({ label: t('skills.toast.saveFailed'), variant: 'danger' });
-    }
-  }
 
   async function checkForUpdates() {
     setIsBusy(true);
@@ -76,7 +66,7 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
       const result = await skillsModule.update(skill.id);
       if (result.outcome === 'rejected') {
         router.push({
-          pathname: '/plugins/skills/candidate',
+          pathname: '/skills/candidate',
           params: { candidateId: result.inspection.candidate.candidateId },
         });
       }
@@ -167,15 +157,6 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
         <SkillReasonList reasons={skill.admission.reasons} />
         <Text className="text-sm text-muted-foreground">{t('skills.executionHint')}</Text>
       </View>
-      <Section>
-        <Section.SwitchItem
-          description={t('skills.detail.globalEnabledHint')}
-          disabled={isSavingGlobal}
-          label={t('skills.detail.globalEnabled')}
-          onValueChange={(value) => void toggleGlobal(value)}
-          value={skill.isEnabled}
-        />
-      </Section>
       <Section title={t('skills.detail.about')}>
         <Section.Item
           label={t('skills.detail.source')}

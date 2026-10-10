@@ -61,15 +61,15 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `home`, `library`,
-  `agents`, `drawings`, `onboarding`, `search`, `settings`,
+  `agents`, `drawings`, `plugins`, `skills`, `onboarding`, `search`, `settings`,
   and `paintings` flows. Directories with their own nested Stack hide the root header and draw the
   page header inside that nested Stack.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) and contains
   only the `(chat)` scene. The chat header is therefore the only header that can open the sidebar,
   and the full-width drawer gesture exists only on the chat surface.
 - The sidebar is the `frontend/appShell/sidebar` compound. Its destinations close the drawer and push
-  `library`, `agents`, `drawings`, `search`, or `settings` onto the root Stack. Their root
-  headers lead with back; popping returns to the exact chat route that opened them. A cold-start
+  `library`, `agents`, `drawings`, `plugins`, `skills`, `search`, or `settings` onto the root Stack.
+  Their root headers lead with back; popping returns to the exact chat route that opened them. A cold-start
   deep link with no back history replaces to `/` when that leading action is pressed.
 - Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
   root and child screens use back navigation like every other non-chat page flow.

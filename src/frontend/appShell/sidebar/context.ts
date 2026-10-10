@@ -5,6 +5,7 @@ export type SidebarActions = {
   navigateAgents: () => void;
   openLibrary: () => void;
   openPlugins: () => void;
+  openSkills: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   openSearch?: () => void;

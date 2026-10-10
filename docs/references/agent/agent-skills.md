@@ -2,10 +2,10 @@
 
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. The first implementation includes three reviewed bundled packages: structured
-notes, research brief and daily agenda. The sidebar's Plugins page has separate Plugins and Skills
-tabs. The Skills library provides installed search, details, environment guidance, enablement, update and
-uninstall. Agent settings bind installed Skills; the chat composer selects eligible bindings for a
-message.
+notes, research brief and daily agenda. Plugins and Skills have separate sidebar entries and pages.
+The Skills library provides installed search, details, environment guidance, update and uninstall.
+Installed Skills are available by default, with no library enablement switch. Agent settings enable
+Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 
 ## Ownership And Authority
 
@@ -87,22 +87,36 @@ that needs it. Reading a script must never be reported as running it.
 
 ## Conversation Installation
 
-The main entry is **Sidebar → Plugins → Skills → Add Skill**. It returns to chat with a fresh
-draft and a removable built-in `find-skills` chip, using the current available Agent or the first
-available Agent as fallback. A shared composer handoff carries the action exactly as draft content;
+The main entry is **Sidebar → Skills → More → Add in chat**, with a direct **Add Skill** action in the
+empty library. It returns to chat with a fresh
+draft and a removable built-in `find-skills` reference inside the input, using the same presentation
+as plugin references. It uses the current available Agent or the first available Agent as fallback.
+A shared composer handoff carries the action exactly as draft content;
 its token is the only handoff data in navigation parameters. Opening the draft does not send a
 message or install a package. Sending persists the structured `find-and-install` intent on the user
-message, including retries. Rejected sends retain the chip, successful sends clear the submitted
-selection, and switching Agents clears it. The app-owned discovery instructions are always available
+message, including retries. Deleting the reference cancels the installation intent. Rejected sends
+retain the reference, successful sends clear the submitted selection, and switching Agents clears it.
+The app-owned discovery instructions are always available
 when management tools are present, so no bootstrap package needs to be installed first. The
 composer plus menu only selects already installed Skills. Manual search and bundled recommendations
-are a secondary destination in the Skills tab's overflow menu.
+are available through **Discover Skills** in the same **More** menu.
+
+Installed and discovery searches use the shared App Search route, which owns the input, cancellation
+and result selection. Selecting a discovery listing opens its detail page before resolving and
+inspecting the package. The chat's separate Skills menu uses the same anchored popover as Plugins;
+it preserves the keyboard and inserts existing Agent bindings as inline references. Deleting a
+reference removes its selection. Sending resolves Skill labels before plugin labels so plugin
+reference offsets still address the final prompt.
+Skill references display desktop's ToolCase icon beside the name at the input's font size and in its
+link color. The plus menu, picker rows and sidebar use the same Lucide icon. Their identity stays in
+the editor link. Inline artwork is tagged so the native paste wrapper keeps it inside the text and
+does not import it as a file attachment.
 
 The Agent uses two tools. `find_skills` searches skills.sh with keywords or lists the Skills behind a
 URL; it never installs. `install_skill` takes one URL, resolves and downloads it, validates
 the package, installs it and enables it for the current Agent in the same transaction. A URL with
 several Skills returns their URLs for the model to choose from. Package validation failures return their
-reason codes so the Agent can explain them. The chip expresses installation intent and makes
+reason codes so the Agent can explain them. The built-in reference expresses installation intent and makes
 `install_skill` approval automatic; otherwise it asks. Agent approval policy still applies, and
 search-only requests do not authorize installation. An identical installation is reused for a new
 Agent without republishing its files.

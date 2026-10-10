@@ -56,7 +56,7 @@ the common fallback.
 A connected PC is represented by a green status dot beside the list view heading, with the device
 name retained in its accessibility label. Connection problems keep their message and recovery
 action. Source switching stays inside the drawer chat stack. On a desktop, the drawer shows only
-what exists there: the search button and the Agents, Paintings, Plugins and Library rows are hidden
+what exists there: the search button and the Agents, Paintings, Plugins, Skills and Library rows are hidden
 because they manage this phone.
 
 Conversation source acquisition and loaded content share the same header frame, including a reserved status

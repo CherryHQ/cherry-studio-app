@@ -71,7 +71,7 @@ function SkillManagementPart({
             variant="ghost"
             onPress={() =>
               router.push({
-                pathname: '/plugins/skills/[skillId]',
+                pathname: '/skills/[skillId]',
                 params: { skillId: skillId.data },
               })
             }

@@ -2,6 +2,7 @@ import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
+import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,7 +82,7 @@ function SidebarBodyContent({
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings, openPlugins } =
+  const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
   const { source } = useChatSource();
 
@@ -107,6 +108,12 @@ function SidebarBodyContent({
             label={t('plugins.title')}
             onPress={openPlugins}
             testID="sidebar-plugins"
+          />
+          <SidebarNavRow
+            icon={ToolCaseIcon}
+            label={t('skills.title')}
+            onPress={openSkills}
+            testID="sidebar-skills"
           />
           <SidebarNavRow
             icon={FolderIcon}

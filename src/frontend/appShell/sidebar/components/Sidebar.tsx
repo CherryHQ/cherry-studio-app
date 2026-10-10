@@ -24,11 +24,11 @@ type SidebarProps = {
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
   const chatRoute = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
-  const pluginAgentId =
+  const agentId =
     chatRoute.status === 'ready' && chatRoute.target.kind === 'draft'
       ? chatRoute.target.agentId
       : undefined;
-  const pluginSessionId =
+  const sessionId =
     chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
       ? chatRoute.target.sessionId
       : undefined;
@@ -62,8 +62,12 @@ export function Sidebar({ navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push({
           pathname: '/plugins',
-          params: { agentId: pluginAgentId, sessionId: pluginSessionId },
+          params: { agentId, sessionId },
         });
+      },
+      openSkills: () => {
+        navigation.closeDrawer();
+        router.push({ pathname: '/skills', params: { agentId, sessionId } });
       },
       openSettings: () => {
         navigation.closeDrawer();
@@ -76,8 +80,8 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
     }),
     [
-      pluginAgentId,
-      pluginSessionId,
+      agentId,
+      sessionId,
       navigation,
       openSessionSearch,
       router,

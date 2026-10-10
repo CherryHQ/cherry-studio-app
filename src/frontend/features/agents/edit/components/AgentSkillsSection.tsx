@@ -19,8 +19,8 @@ type AgentSkillsSectionProps = {
 
 /**
  * Per-Agent Skill bindings. The switch expresses the user's intent; the caption
- * explains why a bound Skill cannot currently be used by this Agent. Installing
- * and global enablement live in Plugins, linked from the footer.
+ * explains why a bound Skill cannot currently be used by this Agent. Installation
+ * and updates live in the Skill library, linked from the footer.
  */
 export function AgentSkillsSection({
   agentId,
@@ -68,7 +68,7 @@ export function AgentSkillsSection({
       })}
       <Section.Item
         label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-        onPress={() => router.push({ pathname: '/plugins', params: { tab: 'skills', agentId } })}
+        onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
         trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
       />
     </Section>
