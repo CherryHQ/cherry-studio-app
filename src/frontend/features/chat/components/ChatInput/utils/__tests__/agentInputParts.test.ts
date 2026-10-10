@@ -12,6 +12,19 @@ describe('toAgentInputParts', () => {
       [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
     );
   });
+  test('carries Skill references separately from plain message text', () => {
+    const skillReferences = [
+      {
+        type: 'skill' as const,
+        skillId: '00000000-0000-4000-8000-000000000001',
+        label: 'notes',
+        offset: 0,
+      },
+    ];
+    expect(toAgentInputParts({ text: 'notes 整理', attachments: [] }, [], skillReferences)).toEqual(
+      [{ type: 'text', text: 'notes 整理', skillReferences }],
+    );
+  });
   test('projects ready attachments by managed id without their preview URI', () => {
     const fileEntryId = FileEntryIdSchema.parse('00000000-0000-7000-8000-000000000001');
     const payload: ComposerSendPayload = {

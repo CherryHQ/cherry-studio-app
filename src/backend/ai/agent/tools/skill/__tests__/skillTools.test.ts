@@ -1,3 +1,5 @@
+import { SKILL_ACTIVE_MAX_CHARACTERS } from '@/shared/data/types/skill';
+
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import type { RuntimeTool } from '../../../runtime';
 import { createSkillTools } from '../skillTools';
@@ -75,7 +77,7 @@ describe('skill tools', () => {
   it('loads instructions and lists files only for scoped Skills', async () => {
     tools = createSkillTools(scope);
     const load = toolNamed(tools, 'load_skill');
-    // The result carries the instructions: the turn's system prompt cannot change mid-run.
+    // Every successful read carries the complete pinned instructions.
     expect(await run(load, { skill_id: 'a' })).toMatchObject({
       status: 'ok',
       skill_id: 'a',
@@ -85,14 +87,18 @@ describe('skill tools', () => {
     });
     expect(await run(load, { skill_id: 'manual' })).toMatchObject({ status: 'error' });
     const repeated = await run(load, { skill_id: 'a' });
-    expect(repeated).toMatchObject({ alreadyLoaded: true });
-    expect(repeated).not.toHaveProperty('instructions');
+    expect(repeated).toMatchObject({ alreadyLoaded: true, instructions: '# a\n\nDo it.' });
     const selectedTools = createSkillTools(scope, {
       loadedSkillIds: ['manual'],
       explicitSkillIds: ['manual'],
     });
     expect(await run(toolNamed(selectedTools, 'load_skill'), { skill_id: 'manual' })).toMatchObject(
-      { status: 'ok', alreadyLoaded: true, activation: { origin: 'explicit' } },
+      {
+        status: 'ok',
+        alreadyLoaded: true,
+        instructions: '# manual\n\nDo it.',
+        activation: { origin: 'explicit' },
+      },
     );
     expect(await run(load, { skill_id: 'other' })).toMatchObject({ status: 'error' });
     expect(
@@ -101,6 +107,41 @@ describe('skill tools', () => {
       skill_id: 'a',
       name: 'daily-agenda',
       files: ['references/format.md'],
+    });
+  });
+
+  it('recovers an already active body even when the unique instruction budget is full', async () => {
+    const tools = createSkillTools(scope, {
+      loadedSkillIds: ['a'],
+      instructionCharacters: SKILL_ACTIVE_MAX_CHARACTERS,
+    });
+    const load = toolNamed(tools, 'load_skill');
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({
+      alreadyLoaded: true,
+      instructions: '# a\n\nDo it.',
+    });
+    expect(await run(load, { skill_id: 'b' })).toMatchObject({ status: 'error' });
+  });
+
+  it('emits trusted retained instructions for a new load, with references still readable', async () => {
+    const result = await toolNamed(tools, 'load_skill').execute({
+      input: { skill_id: 'a' },
+      signal,
+      toolCallId: 'read',
+      turnId: 'turn',
+    });
+    expect(result.instructions).toMatchObject({
+      key: 'skill:a',
+      text: expect.stringContaining('<skill_instructions>\n# a\n\nDo it.\n</skill_instructions>'),
+    });
+    expect(
+      await run(toolNamed(tools, 'read_skill_file'), {
+        skill_id: 'a',
+        path: 'references/format.md',
+      }),
+    ).toMatchObject({
+      status: 'ok',
+      text: 'line 1\nline 2\nline 3',
     });
   });
 

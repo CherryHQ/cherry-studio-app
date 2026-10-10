@@ -1,3 +1,4 @@
+import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Button, MessagePart } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,7 @@ import { getToolName, isRecord, type ToolMessagePart } from './toolPartState';
 /** A load receipt is activity; its instruction body is not a completed user task. */
 export function SkillToolPart({ part }: { part: ToolMessagePart }) {
   const { t } = useTranslation();
+  const router = useRouter();
   const output = part.state === 'output-available' && isRecord(part.output) ? part.output : null;
   if (getToolName(part) !== 'load_skill')
     return <SkillManagementPart part={part} output={output} />;
@@ -24,14 +26,42 @@ export function SkillToolPart({ part }: { part: ToolMessagePart }) {
   if (!activation.success) return <GenericToolPart part={part} />;
   return (
     <MessagePart.Tool
+      icon={ToolCaseIcon}
       title={t('skills.activity.load')}
       state="complete"
-      statusText={t('skills.activity.loaded')}
+      statusText={activation.data.name}
       testID="skill-load-receipt"
     >
-      <Text className="text-sm text-muted-foreground" selectable>
-        {activation.data.name} · {skillContentHashHex(activation.data.contentHash).slice(0, 12)}
-      </Text>
+      <View className="gap-2">
+        <Text className="text-sm text-foreground" selectable>
+          {activation.data.name}
+        </Text>
+        {typeof output?.description === 'string' ? (
+          <Text className="text-sm text-muted-foreground" selectable>
+            {output.description}
+          </Text>
+        ) : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          onPress={() =>
+            router.push({
+              pathname: '/skills/[skillId]',
+              params: { skillId: activation.data.skillId },
+            })
+          }
+        >
+          {t('skills.activity.view')}
+        </Button>
+        {typeof output?.instructions === 'string' ? (
+          <MessagePart.TextSection
+            title={t('skills.activity.instructions', {
+              revision: skillContentHashHex(activation.data.contentHash).slice(0, 12),
+            })}
+            value={output.instructions}
+          />
+        ) : null}
+      </View>
     </MessagePart.Tool>
   );
 }

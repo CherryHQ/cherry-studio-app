@@ -506,16 +506,77 @@ describe('Skill turn preparation', () => {
     readFile: async () => null,
   };
 
+  test('enabled Skills expose metadata without eagerly reading entry instructions', async () => {
+    const harness = createHarness();
+    const readInstructions = jest.fn(scope.readInstructions);
+    harness.dependencies.skills = { resolve: async () => ({ ...scope, readInstructions }) };
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    expect(plan.skills.scope.entries).toHaveLength(1);
+    expect(plan.skills.selected).toHaveLength(0);
+    expect(plan.skills.active?.size).toBe(0);
+    expect(readInstructions).not.toHaveBeenCalled();
+  });
+
+  test('repeated activation receipts consume the restoration budget only once per Skill', async () => {
+    const harness = createHarness();
+    const otherId = '00000000-0000-4000-8000-000000000124';
+    const other = {
+      ...scope.entries[0]!,
+      id: otherId,
+      name: 'other-notes',
+      folderName: 'other-notes',
+    };
+    const readInstructions = jest.fn(async (id: string) =>
+      (id === skillId ? 'a' : 'b').repeat(24_000),
+    );
+    harness.dependencies.skills = {
+      resolve: async () => ({ ...scope, entries: [...scope.entries, other], readInstructions }),
+    };
+    harness.loadSkillActivations.mockResolvedValue([
+      {
+        messageId: 'older-other',
+        activation: { ...activation, skillId: otherId, name: other.name },
+      },
+      { messageId: 'first-read', activation },
+      { messageId: 'repeat-read', activation },
+    ]);
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    expect(plan.skills.active?.get(skillId)?.instructions).toBe('a'.repeat(24_000));
+    expect(plan.skills.active?.get(otherId)?.instructions).toBe('b'.repeat(24_000));
+    expect(readInstructions).toHaveBeenCalledTimes(2);
+  });
+
   test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
     const harness = createHarness();
     harness.dependencies.skills = { resolve: async () => scope };
     const plan = await prepareTurn(
       harness.dependencies,
-      { ...textInput(), skillIds: [skillId] },
+      {
+        ...textInput(),
+        skillIds: [skillId],
+        parts: [
+          {
+            type: 'text',
+            text: 'notes',
+            skillReferences: [{ type: 'skill', skillId, label: 'notes', offset: 0 }],
+          },
+        ],
+      },
       new AbortController().signal,
     );
     expect(plan.userParts[0]).toMatchObject({
       skillSelections: [{ ...activation, origin: 'explicit' }],
+      skillReferences: [{ type: 'skill', skillId, label: 'notes', offset: 0 }],
     });
     expect(plan.skills.selected[0]?.instructions).toBe('Use a concise outline.');
     await expect(

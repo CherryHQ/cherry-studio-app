@@ -49,6 +49,14 @@ export function useSkillApiById(skillId: string | undefined) {
   };
 }
 
+export function useSkillInstructionsApi(skillId: string, enabled: boolean) {
+  return useQuery('/skills/:skillId/instructions', {
+    enabled,
+    params: { skillId },
+    staleTime: 0,
+  });
+}
+
 export function useAgentSkillsApi(agentId: string | undefined) {
   const result = useQuery('/agents/:agentId/skills', {
     enabled: Boolean(agentId),

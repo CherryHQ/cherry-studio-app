@@ -144,12 +144,16 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'data-compaction-anchor':
       return part;
     case 'text':
-      return part.pluginReferences?.length || part.skillSelections?.length || part.skillAction
+      return part.pluginReferences?.length ||
+        part.skillReferences?.length ||
+        part.skillSelections?.length ||
+        part.skillAction
         ? withCherryMeta(
             { type: 'text', text: part.text, state: part.state },
             {
               references: [
                 ...(part.pluginReferences ?? []),
+                ...(part.skillReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',

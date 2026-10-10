@@ -1,19 +1,18 @@
 import { ContextMenuExclusion } from '@cherrystudio/ui/components';
-import { useTranslation } from 'react-i18next';
-import { Image, Text, View, useWindowDimensions } from 'react-native';
+import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
+import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
-import { splitPluginReferences } from '@/frontend/utils/pluginReferences';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
-import { SkillActivationSchema, skillContentHashHex } from '@/shared/data/types/skill';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
+import { splitTextReferences } from './textReferences';
 
 type TextPartProps = {
   isStreaming: boolean;
@@ -49,8 +48,8 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
  * along with it.
  */
 function PlainTextWithMentions({ text, references }: { text: string; references?: unknown[] }) {
-  const segments = splitPluginReferences(text, references);
-  const color = useThemeColor('primary');
+  const segments = splitTextReferences(text, references);
+  const color = useThemeColor('link');
   const { theme } = useUniwind();
   const { fontScale } = useWindowDimensions();
   const textStyle = useResolveClassNames('text-base');
@@ -60,9 +59,12 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
     <Text className="text-base text-foreground" accessibilityLabel={text} selectable>
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
-        const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
+        const icon =
+          segment.reference.type === 'plugin'
+            ? getPluginInlineIcon(segment.reference.pluginId, theme)
+            : { base64: skillInlineIcon['tool-case'], tint: true };
         return (
-          <Text className="text-primary" key={segment.reference.offset}>
+          <Text className="text-link" key={segment.reference.offset}>
             <Image
               accessible={false}
               accessibilityIgnoresInvertColors
@@ -70,7 +72,6 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
               style={{
                 width: iconSize,
                 height: iconSize,
-                opacity: 0.8,
                 tintColor: icon.tint ? color : undefined,
               }}
             />
@@ -89,41 +90,18 @@ export function TextPart({
   renderMode = 'markdown',
   resolvedText,
 }: TextPartProps) {
-  const { t } = useTranslation();
-  const findSkills = (readCherryMeta(part)?.references ?? []).some(
-    (value) =>
-      value && typeof value === 'object' && 'type' in value && value.type === 'skill-action',
-  );
-  const skillSelections = (readCherryMeta(part)?.references ?? []).flatMap((value) => {
-    if (!value || typeof value !== 'object' || !('type' in value) || value.type !== 'skill')
-      return [];
-    const { type: _type, ...receipt } = value;
-    const parsed = SkillActivationSchema.safeParse(receipt);
-    return parsed.success ? [parsed.data] : [];
-  });
   // Native selection, links and block menus own touches inside the text region.
   // Keep the boundary mounted while streaming so completion preserves the native text.
   return (
     <ContextMenuExclusion>
-      <View className="gap-2">
-        {renderMode === 'plainText' ? (
-          <PlainTextWithMentions
-            text={resolvedText?.plainText ?? part.text}
-            references={readCherryMeta(part)?.references}
-          />
-        ) : (
-          <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
-        )}
-        {findSkills ? (
-          <Text className="text-xs text-muted-foreground">{t('skills.find.name')}</Text>
-        ) : null}
-        {skillSelections.map((selection) => (
-          <Text key={selection.skillId} className="text-xs text-muted-foreground">
-            {t('skills.activity.selected', { name: selection.name })} ·{' '}
-            {skillContentHashHex(selection.contentHash).slice(0, 12)}
-          </Text>
-        ))}
-      </View>
+      {renderMode === 'plainText' ? (
+        <PlainTextWithMentions
+          text={resolvedText?.plainText ?? part.text}
+          references={readCherryMeta(part)?.references}
+        />
+      ) : (
+        <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />
+      )}
     </ContextMenuExclusion>
   );
 }

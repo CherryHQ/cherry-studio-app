@@ -157,6 +157,39 @@ describe('agentMessageProjection', () => {
       },
     ]);
   });
+  test('keeps Skill inline ranges in pending and reopened messages alongside activation receipts', () => {
+    const skillId = '00000000-0000-4000-8000-000000000001';
+    const skillReferences = [{ type: 'skill' as const, skillId, label: 'grill-me', offset: 0 }];
+    const input = { type: 'text' as const, text: 'grill-me ask about launch', skillReferences };
+    const [pending] = createPendingChatMessages({
+      userMessageId: 'user-1',
+      assistantMessageId: 'assistant-1',
+      parts: [input],
+    });
+    const selection = {
+      skillId,
+      name: 'grill-me',
+      contentHash: 'accepted',
+      origin: 'explicit' as const,
+    };
+    const persisted = toAgentMessageListItem(
+      message('user-1', {
+        role: 'user',
+        status: 'success',
+        parts: [{ ...input, id: 'input-0', state: 'done', skillSelections: [selection] }],
+      }),
+    );
+    expect(pending.data.parts?.[0]).toMatchObject({
+      text: input.text,
+      providerMetadata: { cherry: { references: skillReferences } },
+    });
+    expect(persisted?.data.parts?.[0]).toMatchObject({
+      text: input.text,
+      providerMetadata: {
+        cherry: { references: [...skillReferences, { type: 'skill', ...selection }] },
+      },
+    });
+  });
   test('preserves the original tool failure code for localized correction hints', () => {
     const item = toAgentMessageListItem(
       message('tool-correction', {

@@ -85,10 +85,7 @@ export type MessagePartSummaryProps = {
   titleAnimation?: 'none' | 'shimmer';
 };
 
-export type MessagePartToolProps = Omit<
-  MessagePartSummaryProps,
-  'icon' | 'imageSource' | 'onPress'
-> & {
+export type MessagePartToolProps = Omit<MessagePartSummaryProps, 'imageSource' | 'onPress'> & {
   children: ReactNode;
   detailTitle?: string;
   detailVariant?: 'default' | 'source-list';

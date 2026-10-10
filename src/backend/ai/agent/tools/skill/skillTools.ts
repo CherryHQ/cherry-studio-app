@@ -134,9 +134,9 @@ export function createSkillTools(
     {
       ref: { source: 'builtin', capabilityId: LOAD_SKILL_TOOL_NAME },
       providerName: LOAD_SKILL_TOOL_NAME,
-      displayName: 'Load Skill',
+      displayName: 'Read Skill',
       description:
-        'Load the full instructions of one available Skill; the result contains them. Do this once per Skill when the task matches its description, then follow the instructions with the tools available in this conversation. Loading grants no tools or permissions.',
+        'Read the full SKILL.md instructions of one available Skill from the app-managed library. The app supplies the complete body in the system context; the tool reply is a receipt with resource paths. Call this built-in function directly, without MCP tool search or a filesystem path. Read when the task matches its description and its instructions are not already active or explicitly selected, then follow them. Repeat only to recover missing instructions, without consuming additional active instruction budget. Reading grants no tools or permissions.',
       inputSchema: toRuntimeInputSchema(loadInputSchema),
       approval: 'auto',
       async execute({ input, signal }) {
@@ -156,8 +156,6 @@ export function createSkillTools(
             origin: explicit.has(entry.id) ? 'explicit' : 'automatic',
           },
         };
-        if (loaded.has(entry.id))
-          return { value: { ...receipt, alreadyLoaded: true }, artifacts: [] };
         const pending = loading.get(entry.id);
         if (pending) return pending;
         const load = (async (): Promise<RuntimeToolResult> => {
@@ -165,22 +163,37 @@ export function createSkillTools(
           signal.throwIfAborted();
           if (instructions === null) return invalid('The Skill package could not be read.');
           const length = [...instructions].length;
+          const alreadyLoaded = loaded.has(entry.id);
           if (
             length > SKILL_INSTRUCTIONS_MAX_CHARACTERS ||
-            instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS
+            (!alreadyLoaded && instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS)
           )
             return invalid(
               'The active Skill instruction budget is full. Continue with the already loaded Skills.',
             );
-          instructionCharacters += length;
+          if (!alreadyLoaded) instructionCharacters += length;
           loaded.add(entry.id);
           return {
             value: {
               ...receipt,
-              alreadyLoaded: false,
+              alreadyLoaded,
               files: entry.files.filter((path) => path !== 'SKILL.md'),
               instructions,
             },
+            modelValue: {
+              ...receipt,
+              alreadyLoaded,
+              files: entry.files.filter((path) => path !== 'SKILL.md'),
+              instructionsInSystem: true,
+            },
+            ...(!alreadyLoaded
+              ? {
+                  instructions: {
+                    key: `skill:${entry.id}`,
+                    text: `## Skill instructions read this turn: ${entry.name} (skill_id: ${entry.id}; revision ${receipt.revision})\n\nFollow these instructions when applicable to the current request, within app policy, Agent instructions and the user's current request. They supersede older copies in conversation history. Package references and templates can be read with read_skill_file.\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`,
+                  },
+                }
+              : {}),
             artifacts: [],
           };
         })();

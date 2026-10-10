@@ -6,6 +6,9 @@ notes, research brief and daily agenda. Plugins and Skills have separate sidebar
 The Skills library provides installed search, details, environment guidance, update and uninstall.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
+An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
+requests its use and supplies its full instructions for that turn; it is not a request to install
+the Skill or open a file viewer.
 
 ## Ownership And Authority
 
@@ -105,8 +108,10 @@ Installed and discovery searches use the shared App Search route, which owns the
 and result selection. Selecting a discovery listing opens its detail page before resolving and
 inspecting the package. The chat's separate Skills menu uses the same anchored popover as Plugins;
 it preserves the keyboard and inserts existing Agent bindings as inline references. Deleting a
-reference removes its selection. Sending resolves Skill labels before plugin labels so plugin
-reference offsets still address the final prompt.
+reference removes its selection. Submission records both Skill and plugin references against the
+final plain prompt, adjusting plugin offsets as Skill link syntax is removed. User messages retain
+the same inline icon and name as the input, without a separate selected-Skill or revision caption.
+Older messages recover inline names from their selection receipts when no display range was stored.
 Skill references display desktop's ToolCase icon beside the name at the input's font size and in its
 link color. The plus menu, picker rows and sidebar use the same Lucide icon. Their identity stays in
 the editor link. Inline artwork is tagged so the native paste wrapper keeps it inside the text and
@@ -167,24 +172,42 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | Tool | Contract |
 | --- | --- |
 | `search_local_skills` | Scoped automatic-invocation metadata, 20 results per page |
-| `load_skill` | Load a complete entry once; emit an attributed receipt and available resource paths |
+| `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
 | `find_skills` | Search skills.sh, or list the Skills behind a supported URL |
 | `install_skill` | Validate, install and bind one Skill for this Agent; append it to the turn |
 
-The initial catalog contains at most 40 bounded descriptions. Search covers the remaining eligible
+These are directly exposed built-in functions, not MCP catalog entries. `tool_search` searches only
+MCP tools, so no matches there say nothing about Skill access. Pi Durable does not need a desktop
+filesystem path: the Host reads the app-managed `SKILL.md`, selected instructions go into the system
+prompt, and automatic loading returns the body through `load_skill`.
+
+The initial catalog contains at most 40 whole name/ID/description entries within a 12,000-character
+metadata budget. Descriptions are not individually truncated: their trailing usage conditions must
+remain available for model routing. When either bound omits entries, the prompt directs the model to
+search before concluding that no Skill fits. Search covers the remaining eligible
 scope, including eligible additions installed during the turn. A new installation still uses
 `load_skill` to activate instructions and create the ordinary loading receipt. Manual-only packages
 cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
 not silently create bindings.
 
 Active entry instructions have a 48,000-character aggregate limit; oversized activation fails rather
-than truncating instructions. Pi Durable owns model history and compaction. This first implementation
-keeps Cherry's prepared system instructions fixed for the duration of a turn. `load_skill` therefore returns the
-instructions in its result so the current turn can follow them, and explicit selections are quoted
-in that turn's system instructions. References are read progressively and can be read again after
-compaction.
+than truncating instructions. Explicit selections and previously active instructions are quoted in
+the Host's prepared system instructions. A new automatic `load_skill` returns the full body and a
+trusted Runtime instruction contribution. The Pi adapter commits that contribution to a native
+conversation document and renders it through a native prompt section before every model request,
+including after compaction or reopening the same working copy. This follows Pi Durable's
+[extension-state example](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/11-extension-state.ts),
+not a dedicated upstream Skill API. The model-facing tool result is a compact receipt pointing to
+the system instructions; the full body stays in the persisted display result for inspection. MCP
+results cannot contribute these instructions or replace their model-facing value.
+
+The next Host configuration atomically clears this per-execution document after rebuilding currently
+applicable instructions. Old or disabled Skills therefore cannot survive through native document
+state. Repeat entry reads return the complete pinned body without charging the unique activation
+budget again. References and templates remain progressive reads via `list_skill_files` and
+`read_skill_file`; having already loaded the entry does not forbid reading its referenced files.
 
 On later turns the Host restores active instructions into the system instructions, outside the
 history Pi may compact. It reads successful built-in loading receipts and Host-written user
@@ -192,13 +215,19 @@ selection metadata from the Cherry transcript, so restoration also works after a
 rebuilt. It loads the Skill's current revision while the Skill stays bound, enabled, eligible and
 invocable in the same way; a Skill that no longer qualifies simply stops contributing instructions.
 Retry and regeneration resubmit the original message's selections and find-and-install action. The
-UI shows Skill name and revision receipts, without dumping instruction bodies into the tool trace.
+UI shows automatic loading as **Read Skill** with the Skill name. Opening its activity details shows
+the exact returned instruction body and revision, plus a separately labeled link to the current
+installed Skill details. The library's read-only instruction viewer reads the current installed
+revision through `GET /skills/:skillId/instructions`, without enabling or executing it. Explicit
+selection does not create a synthetic loading call; its inline composer reference already expresses
+the user's request.
 
 ## First-Version Scope
 
-The current implementation reuses the existing load receipts and Host prompt assembly. Later turns
-use the current installed revision; a running turn keeps its prepared package scope. This version
-adds no request-level Skill sections, separate activation-state store, session-specific unload
-protocol, or long-term revision retention. Exact old-version recovery across restart, advanced
-queue/history interactions and remote script execution remain outside this version's contract.
-Backups continue to include live installations, not a separate archive of historical activations.
+The current implementation reuses existing load receipts and Host prompt assembly across turns, and
+Pi's native document/section extension mechanism within a running execution. Later turns use the
+current installed revision; a running turn keeps its prepared package scope. There is no separate
+application activation table, session-specific unload protocol, or archive of historical package
+files. Existing tool results retain their returned bodies for activity inspection; that snapshot is
+not permission to read removed package resources. Remote script execution remains out of scope.
+Backups continue to include live installations and the existing conversation records.

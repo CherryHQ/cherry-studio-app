@@ -428,9 +428,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       {
         id: 'question',
         type: 'text',
-        text: 'Question',
+        text: 'Question outline',
         state: 'done',
         skillSelections: [selection],
+        skillReferences: [{ type: 'skill', skillId, label: 'outline', offset: 9 }],
       },
     ]);
     await state.host.initialize();
@@ -444,7 +445,10 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         'Use a concise outline.',
       );
       const [user] = await state.store.listMessages(state.sessionId);
-      expect(user.parts[0]).toMatchObject({ skillSelections: [selection] });
+      expect(user.parts[0]).toMatchObject({
+        skillSelections: [selection],
+        skillReferences: [{ type: 'skill', skillId, label: 'outline', offset: 9 }],
+      });
     } finally {
       await state.host.close();
     }

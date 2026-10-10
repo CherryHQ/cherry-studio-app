@@ -174,6 +174,22 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
+  it('reads the complete instruction body from the supplied immutable revision without an interpreter', async () => {
+    const fakes = createFakes();
+    const module = createModule(fakes, [needsPython]);
+    const [candidate] = await module.listRecommended();
+    const installed = await module.install({ candidateId: candidate!.candidateId });
+    fakes.storage.readFile = async (ref, path) =>
+      ref.contentHash === installed.contentHash && path === 'SKILL.md'
+        ? new TextEncoder().encode(needsPython.files['SKILL.md']!)
+        : null;
+    expect(await module.instructionReader.read({ ...installed, isEnabled: false })).toBe(
+      'Run python.',
+    );
+    expect(
+      await module.instructionReader.read({ ...installed, contentHash: 'missing-revision' }),
+    ).toBeNull();
+  });
   it('reuses the same accepted package for a new Agent without republishing it', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed]);

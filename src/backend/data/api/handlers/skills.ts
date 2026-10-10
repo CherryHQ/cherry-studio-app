@@ -2,11 +2,12 @@ import {
   encodeSkillCursor,
   type AgentGlobalSkillService,
 } from '@/backend/data/services/AgentGlobalSkillService';
-import { toDataApiError } from '@/shared/data/api/errors';
+import { DataApiErrorFactory, toDataApiError } from '@/shared/data/api/errors';
 import {
   ListSkillsQuerySchema,
   ReplaceAgentSkillsSchema,
   type SkillSchemas,
+  SkillInstructionsResponseSchema,
   UpdateSkillSchema,
 } from '@/shared/data/api/schemas/skills';
 import type { HandlersFor } from '@/shared/data/api/types';
@@ -29,9 +30,15 @@ export type SkillAdmissionReader = {
   ): Promise<{ admission: SkillAdmission; agentAdmission?: SkillAdmission }[]>;
 };
 
+/** Reads an immutable app-managed package revision without exposing device paths. */
+export type SkillInstructionReader = {
+  read(skill: Skill): Promise<string | null>;
+};
+
 export function createSkillHandlers(
   service: SkillData,
   admissions: SkillAdmissionReader,
+  instructions: SkillInstructionReader,
 ): HandlersFor<SkillSchemas> {
   async function project(
     entries: readonly { skill: Skill; binding: { isEnabled: boolean } | null }[],
@@ -102,6 +109,19 @@ export function createSkillHandlers(
           throw toDataApiError(parsed.error, 'Skill update');
         }
         return service.update(params.skillId, parsed.data);
+      },
+    },
+    '/skills/:skillId/instructions': {
+      GET: async ({ params }) => {
+        const skill = await service.getById(params.skillId);
+        const body = await instructions.read(skill);
+        if (body === null) throw DataApiErrorFactory.notFound('Skill instructions', skill.id);
+        return SkillInstructionsResponseSchema.parse({
+          skillId: skill.id,
+          name: skill.name,
+          contentHash: skill.contentHash,
+          instructions: body,
+        });
       },
     },
     '/agents/:agentId/skills': {

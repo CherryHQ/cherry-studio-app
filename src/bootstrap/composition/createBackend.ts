@@ -14,7 +14,10 @@ import {
 } from '@/backend/data/api/handlers/mcpServers';
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
-import type { SkillAdmissionReader } from '@/backend/data/api/handlers/skills';
+import type {
+  SkillAdmissionReader,
+  SkillInstructionReader,
+} from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
 import { DesktopConnectionService } from '@/backend/data/services/DesktopConnectionService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
@@ -86,6 +89,7 @@ export type BackendComposition = {
     mcpServerMutations: McpServerMutations;
     pluginCatalog: PluginCatalogReader;
     skillAdmissions: SkillAdmissionReader;
+    skillInstructions: SkillInstructionReader;
     systemModelSupport: SystemModelSupportFilter;
   };
 };
@@ -346,6 +350,7 @@ export function createBackend(
       mcpServerMutations,
       pluginCatalog: getBuiltInPluginCatalog,
       skillAdmissions: skills.admissions,
+      skillInstructions: skills.instructionReader,
       systemModelSupport,
     },
   };

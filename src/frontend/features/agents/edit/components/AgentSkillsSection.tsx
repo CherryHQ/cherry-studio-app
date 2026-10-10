@@ -32,7 +32,7 @@ export function AgentSkillsSection({
   const router = useRouter();
 
   return (
-    <Section title={t('agent.skills.section')}>
+    <Section footer={t('agent.skills.usageHint')} title={t('agent.skills.section')}>
       {skills.map((skill) => {
         const isEnabled = bindings.get(skill.id) === true;
         const status = effectiveSkillStatus(skill.admission, skill.agentAdmission);

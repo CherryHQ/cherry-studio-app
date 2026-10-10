@@ -87,6 +87,7 @@ const ErrorSchema = z.object({
 });
 const OutputSchema = z.object({
   value: RuntimeJsonValueSchema,
+  modelValue: RuntimeJsonValueSchema.optional(),
   artifacts: z.array(
     z.object({
       ref: z.object({ kind: z.literal('managed-file'), fileEntryId: z.string() }),

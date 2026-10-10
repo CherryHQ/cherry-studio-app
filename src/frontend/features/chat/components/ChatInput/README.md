@@ -76,6 +76,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Skill references use desktop's ToolCase icon beside their name at the editor's font size. The plus
   menu, picker rows and sidebar use the same Lucide vector. Native inline icons are tagged separately
   from pasted media so the iOS paste wrapper keeps them inside the editor instead of uploading them.
+  Submitted messages preserve the inline icon, name and link color through stored text ranges;
+  they do not add a selected-Skill or revision caption below the message.
   Up to eight explicit selections are submitted as Skill IDs; the Host revalidates
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills

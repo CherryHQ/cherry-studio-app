@@ -235,10 +235,20 @@ function TextChatInput({
     async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
       setIsSkillPickerOpen(false);
-      // Resolve Skill labels first so plugin offsets refer to the final prompt.
-      const { skills, skillAction, text: skillText } = readSkillMentions(text);
-      const { pluginReferences, text: prompt } = readPluginMentions(skillText);
-      const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
+      const plugins = readPluginMentions(text);
+      // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
+      const {
+        skills,
+        skillAction,
+        skillReferences,
+        pluginReferences,
+        text: prompt,
+      } = readSkillMentions(plugins.text, plugins.pluginReferences);
+      const parts = toAgentInputParts(
+        { attachments, text: prompt },
+        pluginReferences,
+        skillReferences,
+      );
       await sendMessage({
         parts,
         ...(skillAction ? { skillAction } : {}),

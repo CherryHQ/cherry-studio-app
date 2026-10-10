@@ -49,6 +49,15 @@ export const UpdateSkillSchema = z.strictObject({
 });
 export type UpdateSkillDto = z.infer<typeof UpdateSkillSchema>;
 
+/** Current installed instruction body, pinned to the revision returned by this read. */
+export const SkillInstructionsResponseSchema = z.strictObject({
+  skillId: SkillIdSchema,
+  name: z.string(),
+  contentHash: z.string().min(1),
+  instructions: z.string(),
+});
+export type SkillInstructionsResponse = z.infer<typeof SkillInstructionsResponseSchema>;
+
 export const AgentSkillUpdateSchema = z.strictObject({
   skillId: SkillIdSchema,
   /** `null` removes the binding; a boolean upserts it with that enablement. */
@@ -82,6 +91,12 @@ export type SkillSchemas = {
       body: UpdateSkillDto;
       params: { skillId: string };
       response: Skill;
+    };
+  };
+  '/skills/:skillId/instructions': {
+    GET: {
+      params: { skillId: string };
+      response: SkillInstructionsResponse;
     };
   };
   '/agents/:agentId/skills': {

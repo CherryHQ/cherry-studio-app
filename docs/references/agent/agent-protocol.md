@@ -331,7 +331,10 @@ activity such as catalog search without claiming that an application capability 
 cannot enter configuration, approval, or inference snapshots. `providerName` is the deterministic
 function alias used in model history; `displayName` is a snapshot for historical UI. For every
 persisted tool call, `output-available`, `denied`, `error`, and `interrupted` are terminal states with
-a paired normalized `RuntimeToolResult` JSON projection. No finalized message contains a tool left
+a paired normalized `RuntimeToolResult` JSON projection. A built-in result may retain a full display
+`value` plus an optional compact `modelValue` for replay when its instructions are already supplied
+in the system context; runtime-only instruction contribution metadata is not a protocol field.
+No finalized message contains a tool left
 in `input-streaming`, `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch
 persists only its requested target name and normalized error, never unresolved parameters.
 

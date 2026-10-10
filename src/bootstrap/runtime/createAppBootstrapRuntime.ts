@@ -210,6 +210,7 @@ export function createAppBootstrapRuntime(
       },
       providers: services.provider,
       skillAdmissions: dataApiDependencies.skillAdmissions,
+      skillInstructions: dataApiDependencies.skillInstructions,
       providerAccounts,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),

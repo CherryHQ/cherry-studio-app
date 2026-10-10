@@ -10,7 +10,7 @@ import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
-import { SkillActivationSchema } from '@/shared/data/types/skill';
+import { SkillActivationSchema, SkillTextReferenceSchema } from '@/shared/data/types/skill';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -233,6 +233,8 @@ export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
 
 export const AgentToolResultSchema = z.strictObject({
   value: JsonValueSchema,
+  /** Host-issued compact model value; full value remains available for activity inspection. */
+  modelValue: JsonValueSchema.optional(),
   artifacts: z.array(
     z.strictObject({
       ref: z.strictObject({
@@ -328,6 +330,7 @@ export const AgentMessagePartSchema = z.union([
     type: z.enum(['text', 'reasoning']),
     text: z.string(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
+    skillReferences: z.array(SkillTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
     skillAction: z.literal('find-and-install').optional(),
     state: z.enum(['streaming', 'done']),
@@ -371,22 +374,25 @@ export const AgentInputPartSchema = z.union([
       type: z.literal('text'),
       text: z.string(),
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
+      skillReferences: z.array(SkillTextReferenceSchema).optional(),
     })
     .refine(
-      ({ text, pluginReferences }) => {
+      ({ text, pluginReferences, skillReferences }) => {
         let end = 0;
-        return (pluginReferences ?? []).every((reference) => {
-          if (
-            reference.offset < end ||
-            text.slice(reference.offset, reference.offset + reference.label.length) !==
-              reference.label
-          )
-            return false;
-          end = reference.offset + reference.label.length;
-          return true;
-        });
+        return [...(pluginReferences ?? []), ...(skillReferences ?? [])]
+          .sort((left, right) => left.offset - right.offset)
+          .every((reference) => {
+            if (
+              reference.offset < end ||
+              text.slice(reference.offset, reference.offset + reference.label.length) !==
+                reference.label
+            )
+              return false;
+            end = reference.offset + reference.label.length;
+            return true;
+          });
       },
-      { message: 'Plugin references must match non-overlapping text ranges.' },
+      { message: 'Inline references must match non-overlapping text ranges.' },
     ),
   z.strictObject({
     type: z.literal('file'),

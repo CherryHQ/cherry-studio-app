@@ -11,6 +11,7 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
+import { toModelToolResult } from '../toolResults';
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
@@ -272,7 +273,7 @@ function appendAssistantHistory(
           role: 'toolResult',
           toolCallId: part.toolCallId,
           toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',
-          content: [{ type: 'text', text: JSON.stringify(part.output) }],
+          content: [{ type: 'text', text: JSON.stringify(toModelToolResult(part.output)) }],
           details: part.output,
           isError: part.isError,
           timestamp: Date.now(),

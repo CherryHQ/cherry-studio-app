@@ -184,6 +184,37 @@ describe('Agent tool and managed-file contracts', () => {
         .success,
     ).toBe(false);
   });
+  test('round-trips Skill display snapshots and rejects mismatched or overlapping ranges', () => {
+    const reference = {
+      type: 'skill',
+      skillId: '00000000-0000-4000-8000-000000000001',
+      label: 'notes',
+      offset: 3,
+    };
+    const input = { type: 'text', text: '📄 notes 飞书', skillReferences: [reference] };
+    expect(AgentInputPartSchema.parse(roundTrip(input))).toEqual(input);
+    expect(
+      AgentMessagePartSchema.parse(roundTrip({ ...input, id: 'part-1', state: 'done' })),
+    ).toEqual({ ...input, id: 'part-1', state: 'done' });
+    for (const skillReferences of [
+      [{ ...reference, offset: 0 }],
+      [reference, reference],
+      [{ ...reference, skillId: 'invalid' }],
+    ]) {
+      expect(AgentInputPartSchema.safeParse({ ...input, skillReferences }).success).toBe(false);
+    }
+    expect(
+      AgentInputPartSchema.safeParse({
+        ...input,
+        pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: 'notes', offset: 3 }],
+      }).success,
+    ).toBe(false);
+    const action = { type: 'skill-action', action: 'find-and-install', label: '找技能', offset: 0 };
+    expect(
+      AgentInputPartSchema.parse({ type: 'text', text: '找技能', skillReferences: [action] }),
+    ).toEqual({ type: 'text', text: '找技能', skillReferences: [action] });
+  });
+
   test('round-trips explicit plugin references for initial and subsequent messages', () => {
     const input = {
       sessionId: 'session-1',

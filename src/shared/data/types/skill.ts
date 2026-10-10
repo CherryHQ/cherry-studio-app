@@ -29,6 +29,23 @@ export const SkillActivationSchema = z.strictObject({
 });
 export type SkillActivation = z.infer<typeof SkillActivationSchema>;
 
+/** Composer display snapshots only; offsets use UTF-16 and grant no Skill access. */
+export const SkillTextReferenceSchema = z.union([
+  z.strictObject({
+    type: z.literal('skill'),
+    skillId: SkillIdSchema,
+    label: z.string().min(1),
+    offset: z.number().int().nonnegative(),
+  }),
+  z.strictObject({
+    type: z.literal('skill-action'),
+    action: z.literal('find-and-install'),
+    label: z.string().min(1),
+    offset: z.number().int().nonnegative(),
+  }),
+]);
+export type SkillTextReference = z.infer<typeof SkillTextReferenceSchema>;
+
 /** Agent Skills specification `name`: lowercase, digits, single hyphens, at most 64 characters. */
 export const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const SKILL_NAME_MAX_LENGTH = 64;

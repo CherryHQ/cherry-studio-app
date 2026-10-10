@@ -1,13 +1,20 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { Button, ContentState, Section, useAlert, useToast } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  Button,
+  ContentState,
+  Section,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
-import { useSkillApiById } from '@/frontend/hooks/skill';
+import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
@@ -57,6 +64,8 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
   const [isBusy, setIsBusy] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const instructions = useSkillInstructionsApi(skill.id, showInstructions);
   const status = skill.admission.status;
   const tone = skillStatusTone(status);
 
@@ -159,6 +168,10 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
       </View>
       <Section title={t('skills.detail.about')}>
         <Section.Item
+          label={t('skills.detail.instructions')}
+          onPress={() => setShowInstructions(true)}
+        />
+        <Section.Item
           label={t('skills.detail.source')}
           trailing={
             <Text className="text-sm text-muted-foreground">
@@ -201,6 +214,36 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
           }
         />
       </Section>
+      <BottomSheet
+        onClose={() => setShowInstructions(false)}
+        open={showInstructions}
+        size="large"
+        title={t('skills.detail.instructions')}
+      >
+        <ScrollView contentContainerClassName="gap-4 p-6">
+          {instructions.isLoading ? (
+            <ContentState.Loading title={t('skills.loading')} />
+          ) : instructions.error || !instructions.data ? (
+            <ContentState.Error
+              primaryAction={{
+                children: t('common.retry'),
+                onPress: () => void instructions.refetch(),
+              }}
+              title={t('skills.detail.instructionsUnavailable')}
+            />
+          ) : (
+            <>
+              <Text className="text-sm text-muted-foreground" selectable>
+                {instructions.data.name} ·{' '}
+                {skillContentHashHex(instructions.data.contentHash).slice(0, 12)}
+              </Text>
+              <Text className="text-base text-foreground" selectable>
+                {instructions.data.instructions}
+              </Text>
+            </>
+          )}
+        </ScrollView>
+      </BottomSheet>
       <Text className="px-1 text-muted-foreground text-xs">{t('skills.detail.bindHint')}</Text>
       {isBusy ? (
         <Button disabled size="sm" variant="secondary">

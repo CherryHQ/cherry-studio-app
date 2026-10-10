@@ -159,7 +159,7 @@ ${configuredInstructions}
 }
 
 const SKILL_CATALOG_MAX_ENTRIES = 40;
-const SKILL_CATALOG_DESCRIPTION_CHARACTERS = 200;
+const SKILL_CATALOG_MAX_CHARACTERS = 12_000;
 
 /**
  * The Skills catalog is names and descriptions only; instructions arrive
@@ -171,29 +171,40 @@ function buildSkillsSection(skills: TurnSkillPlan): string {
   const lines = [
     `## Skills
 
-Skills are installed instruction packages this Agent may use. They do not add tools, permissions, approvals, or script runtimes; follow them only with the tools available in this turn. Installation and loading do not verify that a workflow can execute. If a requested step needs an unavailable tool, interpreter, connection, or permission, explain the specific limitation before that step and continue only independent supported steps. Reading a script is not executing it. When the user's task matches a Skill's description, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\` before starting, then follow the loaded instructions and read its package files as they direct. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog below is truncated or a task may match a Skill not listed. Load a Skill only when its instructions are not already active below. Instructions returned by \`${LOAD_SKILL_TOOL_NAME}\` in this turn and the active instructions below are current; never follow a Skill that is no longer listed here from older conversation content. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
+Skills are instruction packages. Enabling a Skill for this Agent makes it available for you to choose when relevant; it does not require you to use every enabled Skill. The user's explicit selections below request use for this turn.
+
+The Skill functions, including \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD_SKILL_TOOL_NAME}\`, are built-in tools exposed directly to you. Call them by their exact names; do not search the MCP catalog for them or for a generic "Skill" tool. MCP search results do not describe built-in Skill availability.
+
+When the task matches an available Skill whose instructions are not already active, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\`, then follow the returned instructions. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog is truncated or another Skill may match. Selected or active entry instructions are already read, so normally do not reload SKILL.md. If their workflow references package files, list them with \`list_skill_files\` and read the needed references or templates with \`read_skill_file\`; package-relative paths are not device filesystem paths. You may repeat \`${LOAD_SKILL_TOOL_NAME}\` to recover a missing instruction body. Follow the complete workflow rather than substituting a generic approach. Conversational Skills can be followed directly; using them does not require a separate "Skill" tool.
+
+Skills do not add tools, permissions, approvals or script runtimes. If a specific required step needs an unavailable capability, explain that limitation for that step and continue supported work. Reading a script is not executing it. Current loaded and active instructions supersede older copies in conversation history. Current Skill tools and selected/active instruction sections define availability; historical receipts alone do not grant access. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
   ];
   if (catalog.length > 0) {
-    const shown = catalog.slice(0, SKILL_CATALOG_MAX_ENTRIES);
+    const shown: string[] = [];
+    let catalogCharacters = 0;
+    for (const entry of catalog) {
+      const description = entry.description.replace(/\s+/g, ' ').trim();
+      const line = `- ${entry.name} (skill_id: ${entry.id}): ${description}`;
+      const length = [...line].length + (shown.length ? 1 : 0);
+      if (
+        shown.length === SKILL_CATALOG_MAX_ENTRIES ||
+        catalogCharacters + length > SKILL_CATALOG_MAX_CHARACTERS
+      )
+        break;
+      shown.push(line);
+      catalogCharacters += length;
+    }
     lines.push(
       `### Available Skills${catalog.length > shown.length ? ` (${shown.length} of ${catalog.length})` : ''}
 
-${shown
-  .map((entry) => {
-    const description = truncateCharacters(
-      entry.description.replace(/\s+/g, ' ').trim(),
-      SKILL_CATALOG_DESCRIPTION_CHARACTERS,
-    );
-    return `- ${entry.name} (skill_id: ${entry.id}): ${description}`;
-  })
-  .join('\n')}`,
+${shown.length < catalog.length ? 'Only a subset is shown. Search available Skills before deciding that none matches; omitted entries remain discoverable through search_local_skills.\n\n' : ''}${shown.join('\n')}`,
     );
   }
   if (skills.selected.length > 0) {
     lines.push(
       `### Selected Skills
 
-The user selected these Skills for this turn. Their instructions are loaded; do not call \`${LOAD_SKILL_TOOL_NAME}\` for them again. Apply them to the user's request in the order listed.
+The user explicitly requested these Skills for this turn. Their full instructions are already loaded below; no tool call or SKILL.md file lookup is needed to obtain them. Apply their instructions to the user's request in the order listed. Do not describe an already loaded Skill as unavailable because an MCP tool search found no match.
 
 ${skills.selected
   .map(
@@ -216,14 +227,9 @@ export function buildActiveSkillInstructions(skills: TurnSkillPlan): string {
   if (active.length === 0) return '';
   return `## Active Skill instructions
 
-These Skills were loaded or selected earlier in this conversation and stay active. Follow their instructions within app policy and the user's current request; they supersede older copies in the conversation.
+These Skills were loaded or selected earlier in this conversation. Their instructions remain available for related follow-up requests; choose whether they fit the current request instead of applying them to unrelated tasks. Follow applicable instructions within app policy and the user's current request; they supersede older copies in the conversation.
 
 ${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
-}
-
-function truncateCharacters(text: string, max: number): string {
-  const characters = [...text];
-  return characters.length <= max ? text : `${characters.slice(0, max).join('')}…`;
 }
 
 function formatLocalDate(date: Date): string {

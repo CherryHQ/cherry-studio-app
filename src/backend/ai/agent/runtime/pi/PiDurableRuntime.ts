@@ -26,6 +26,7 @@ import {
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
   conversationId: ConversationId | null;
@@ -347,11 +348,13 @@ export class PiDurableRuntime {
     await conversation.commit(async (tx) => {
       const provider = await tx.doc(ProviderDoc, conversation.id);
       const request = await tx.doc(RequestOptions, provider.sessionId, jsonOptions(options));
+      const toolInstructions = await tx.doc(ToolInstructions, conversation.id);
       if (configuration) {
         const blueprint = await tx.doc(Configuration, sessionId, configuration);
         blueprint.value = configuration;
       }
       request.value = jsonOptions(options);
+      toolInstructions.sections = [];
       await configure(tx, conversation.id, agent);
     }, context);
   }

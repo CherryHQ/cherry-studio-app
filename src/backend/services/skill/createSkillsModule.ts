@@ -6,7 +6,10 @@
  */
 
 import { Emitter } from '@/backend/core/lifecycle/event';
-import type { SkillAdmissionReader } from '@/backend/data/api/handlers/skills';
+import type {
+  SkillAdmissionReader,
+  SkillInstructionReader,
+} from '@/backend/data/api/handlers/skills';
 import type { Database } from '@/backend/data/db/DbService';
 import type {
   AgentGlobalSkillService,
@@ -31,6 +34,8 @@ import { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
 import type { SkillEnvironmentReader } from './skillEnvironment';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
+  decodeUtf8,
+  parseSkillEntry,
   previewInstructions,
   validateSkillPackage,
   type ValidatedSkillPackage,
@@ -64,6 +69,7 @@ type ResolvedCandidate = { candidate: SkillSourceCandidate; resolvedAt: number }
 
 export type SkillsBackend = SkillsModule & {
   admissions: SkillAdmissionReader;
+  instructionReader: SkillInstructionReader;
   /** Startup-only cleanup, before any installations or Agent turns can start. */
   reconcileStorage(): Promise<void>;
 };
@@ -231,6 +237,15 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
   const module: SkillsBackend = {
     admissions,
+    instructionReader: {
+      async read(skill) {
+        if (!skill.manifest.some(({ path }) => path === 'SKILL.md')) return null;
+        const bytes = await deps.storage.readFile(skill, 'SKILL.md');
+        const text = bytes ? decodeUtf8(bytes) : null;
+        const parsed = text === null ? null : parseSkillEntry(text);
+        return parsed && 'body' in parsed ? parsed.body.trim() : null;
+      },
+    },
 
     async search(query, signal) {
       const trimmed = query.trim();

@@ -45,7 +45,15 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
           },
           artifacts: runtimeOutput.artifacts,
         }
-      : runtimeOutput;
+      : runtimeOutput
+        ? {
+            value: runtimeOutput.value,
+            artifacts: runtimeOutput.artifacts,
+            ...(part.toolRef.source === 'builtin' && runtimeOutput.modelValue !== undefined
+              ? { modelValue: runtimeOutput.modelValue }
+              : {}),
+          }
+        : undefined;
     return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'dynamic-tool',
