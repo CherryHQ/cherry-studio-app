@@ -1,6 +1,7 @@
 import { memo, type ReactNode, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { FilePart } from '../parts/FilePart';
 import { MessageParts } from '../parts/MessageParts';
 import type { MessageListItem } from '../types';
 import { partitionUserMessageParts } from './partitionUserMessageParts';
@@ -24,8 +25,11 @@ export const UserMessage = memo(function UserMessage({ attachments, message }: U
   return (
     <View className="w-full items-end">
       <View className="w-[88%] items-end gap-2">
-        {attachments ??
-          (fileParts.length > 0 ? <UserMessageAttachments attachments={fileParts} /> : null)}
+        {attachments || fileParts.length > 0 ? (
+          <UserMessageAttachments>
+            {attachments ?? fileParts.map(({ part }) => <FilePart key={part.url} part={part} />)}
+          </UserMessageAttachments>
+        ) : null}
         {bodyMessage ? (
           <View className="self-end rounded-[18px] bg-chat-user" style={styles.bubble}>
             <MessageParts message={bodyMessage} renderMode="plainText" />

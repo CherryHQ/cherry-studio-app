@@ -82,6 +82,21 @@ describe('UserMessage', () => {
     ]);
   });
 
+  test('places source-owned attachments in the same right-aligned wrapping group', () => {
+    const renderer = render(
+      <UserMessage
+        message={createMessage([textPart('Hello')])}
+        attachments={<View testID="remote-card" />}
+      />,
+    );
+    const card = renderer.root.findByProps({ testID: 'remote-card' });
+    const group = card.parent;
+    expect(group?.props.className).toEqual(expect.stringContaining('justify-end'));
+    expect(group?.props.className).toEqual(expect.stringContaining('flex-wrap'));
+    expect(renderer.root.findAllByType('MessageParts')).toHaveLength(1);
+    act(() => renderer.unmount());
+  });
+
   test('keeps attachment-only messages without an empty bubble', () => {
     const message = createMessage([
       managedFilePart('photo.png', '00000000-0000-7000-8000-000000000003'),
