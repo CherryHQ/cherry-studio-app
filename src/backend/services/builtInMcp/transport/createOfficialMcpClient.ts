@@ -12,6 +12,12 @@ type OfficialMcpConnection = {
   readonly url: string;
   /** Provider-owned authorization challenges can appear in HTTP or JSON-RPC error envelopes. */
   readonly inspectResponse?: (response: Response, signal?: AbortSignal) => Promise<void>;
+  /**
+   * Admission for servers whose tool set is discovered rather than declared.
+   * Returns the tool's effect, or `undefined` to reject. When omitted, only the
+   * static `context.tools` policy admits a call.
+   */
+  readonly admitTool?: (name: string) => 'read' | 'write' | undefined;
 };
 
 /** Shared fixed-endpoint HTTP mechanics; platform authorization belongs to the plugin. */
@@ -32,10 +38,15 @@ export async function createOfficialMcpClient(
         const message = JSON.parse(init.body);
         if (message.method === 'tools/call') {
           const name = message.params?.name;
-          if (typeof name !== 'string' || !Object.hasOwn(context.tools, name)) {
+          const effect =
+            typeof name === 'string'
+              ? (connection.admitTool?.(name) ??
+                (Object.hasOwn(context.tools, name) ? context.tools[name] : undefined))
+              : undefined;
+          if (!effect) {
             throw new PluginError('access', 'The plugin tool is not admitted.');
           }
-          isWrite = context.tools[name] === 'write';
+          isWrite = effect === 'write';
         }
       }
       init?.signal?.throwIfAborted();
