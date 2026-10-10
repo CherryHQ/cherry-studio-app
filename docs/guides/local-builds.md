@@ -259,6 +259,45 @@ phones use portrait, while `values-sw600dp` lets the system choose; the activity
 Rebuild the development client to receive these native changes. They cannot be delivered by a
 JavaScript update alone.
 
+### Android Barcode Scanning
+
+Desktop pairing uses `expo-camera`'s embedded `CameraView` and its bundled ML Kit barcode analyzer.
+`scripts/withEmbeddedBarcodeScanner.js` removes the unused
+`com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity` registration with
+an Android manifest merger rule. `expo-camera` includes this portrait-only activity through
+`play-services-code-scanner:16.1.0`; Google Play specifically flags it in
+[#1192](https://github.com/CherryHQ/cherry-studio-app/issues/1192).
+
+Keep `barcodeScannerEnabled: true`, which also controls the embedded analyzer. This exclusion does
+not change the main activity's phone/tablet orientation policy or remove the scanner dependency's
+classes. Do not use `CameraView.launchScanner()` on Android without restoring and adapting its
+delegate activity. A new native build is required; inspect the merged manifest, check embedded QR
+pairing on phones and rotated/resized tablets, and recheck Play Console before claiming the warning
+is resolved.
+
+### Android Edge-To-Edge Compatibility
+
+The Screens 4.26.2 patch raises its Material dependency to
+[1.14.0](https://github.com/material-components/material-components-android/releases/tag/1.14.0).
+That release routes `BottomSheetDialog`, `SheetDialog`, and `EdgeToEdgeUtils` through helpers which
+only read/write legacy system-bar colors below Android 15. Its minimum SDK 23 and AGP 8.11.1 baseline
+fit this project's minimum SDK 26 and React Native's AGP 8.12.0. Existing screen-transition and iOS
+patches remain required. This native dependency change requires a new installation package.
+
+Android continues to use the precompiled React Native artifact. The reported React Native
+`StatusBarModule` and `WindowUtilKt` calls remain unresolved in
+[#1192](https://github.com/CherryHQ/cherry-studio-app/issues/1192). A local Kotlin patch would require
+compiling React Native and Hermes from source; evaluate that cost against evidence from a new Play
+report before adopting it. The existing iOS source-build configuration and patches remain required.
+
+`scripts/__tests__/androidWindowCompatibility.test.ts` guards the Screens patch hash and installed
+Material version declaration in PR CI. These checks do not establish runtime compatibility or
+removal of the Play warning. Before release, inspect the merged manifest and resolved Material
+version, check native sheets/date pickers and Android 14/15/16 system bars with gesture and
+three-button navigation, and exercise embedded QR pairing on rotated/resized tablets. Record the
+new AAB's version code and expanded Play findings. The original report is for 0.1.0, before R8 was
+enabled; use comparable build settings when attributing changes to the dependency update.
+
 ## Expo 57 Dependency Baseline
 
 The project uses Expo 57.0.24 and React Native 0.86.3, which includes Hermes V1

@@ -172,6 +172,7 @@
           "barcodeScannerEnabled": true
         }
       ],
+      "./scripts/withEmbeddedBarcodeScanner.js",
       [
         "expo-calendar",
         {

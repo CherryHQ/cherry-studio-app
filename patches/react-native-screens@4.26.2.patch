@@ -133,3 +133,15 @@ index f9648bc29b24554299bd52d951c2bafa2ccbea6b..0d62c5f46db762ccc2095467e7eb1a43
              onUpdate()
          }
      }
+diff --git a/android/build.gradle b/android/build.gradle
+--- a/android/build.gradle
++++ b/android/build.gradle
+@@ -202,6 +202,7 @@
+     implementation 'androidx.transition:transition-ktx:1.7.0'
+     implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+-    implementation 'com.google.android.material:material:1.13.0'
++    // 1.14 guards legacy system-bar APIs on Android 15+ in native sheet dialogs.
++    implementation 'com.google.android.material:material:1.14.0'
+     implementation "androidx.core:core-ktx:1.17.0"
+ }
