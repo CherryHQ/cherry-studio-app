@@ -244,6 +244,7 @@ export function useAgentChatControls(input: {
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
+  const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
@@ -325,7 +326,7 @@ export function useAgentChatControls(input: {
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
-      isSessionBusy ||
+      isAdmitting ||
       (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
@@ -356,6 +357,9 @@ function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
 }
 const selectSessionBusy = isAgentSessionBusy;
+function selectIsAdmitting(state: AgentSessionChatState) {
+  return Boolean(state.isSubmitting);
+}
 function selectImageResult(state: AgentSessionChatState) {
   return latestAgentImageResult(state.liveMessages);
 }

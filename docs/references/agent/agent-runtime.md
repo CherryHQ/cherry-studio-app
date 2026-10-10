@@ -1,6 +1,12 @@
 # Cherry Agent Runtime
 
-> Status: as-built. Mobile Agent execution is device-local only.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.1.0.
+
+The experimental branch has replaced this per-turn production contract with upstream-owned durable
+history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
+persistent contract, storage, tools, presentation, and backup. The baseline below explains the
+legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
+Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -333,12 +339,6 @@ logs. Tool-side access follows the stricter managed-id ledger in
 type RuntimeHistoryTurn = {
   turnId: string | null
   messages: RuntimeMessage[]
-  replay?: RuntimeTurnReplay
-}
-
-type RuntimeTurnReplay = {
-  version: 1
-  payload: RuntimeJsonValue
 }
 
 type RuntimeMessage = {
@@ -381,27 +381,15 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
-Successful turns may additionally carry a bounded, versioned `RuntimeTurnReplay`. The Runtime
-decodes this private artifact to recover its original assistant/tool-result sequence, including
-thinking signatures, concurrent tool-call grouping, and model-visible discovery results. It contains
-only the turn's assistant and tool messages, never user attachments, connection credentials, or
-Host session/turn ids. Pi types and decoding stay inside `runtime/pi`; public message views, search,
-and traces do not expose the artifact. Missing, oversized, or unsupported artifacts use normalized
-history, and the Runtime logs why an artifact was dropped or ignored. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
-from the Host's current context anchor rather than stale per-request measurements.
-After live tool-loop compaction, the final request's context measurement is not persisted as an
-anchor: the next execution restores the full turn and estimates it before deciding to compact again.
-The optional `replay` field on `completed` carries the artifact to the Host's private MMKV cache,
-written only after the terminal message commits. It survives app restarts without adding a database
-column or entering backups. Each record is limited to 4 MiB; the cache evicts least recently used
-records above 128 entries or 32 MiB of payloads. Only its small index is retained in memory; payloads
-are read on demand for successful assistant rows matching Session, message, and Turn ids. Storage
-failures and eviction fall back to normalized history. Failed, cancelled, and interrupted executions
-do not cache replay. A resumed retry includes its retained prefix.
-Retries and deletions remove obsolete entries. Forks copy available artifacts to the new message/Turn
-ids using the store's committed identity mapping; restored application storage clears the cache.
-Compaction offsets record the replay representation; a mismatched representation retains the summary
-but replays the entire retained turn rather than slicing at an incompatible offset.
+Stored parts carry no provider signature, so the adapter omits historical `reasoning` parts instead
+of resending them as plain text; text, tool calls and tool results are paired as model messages.
+There is no stored model replay: the Pi working copy keeps signed content between launches, and
+normalized history is used only when that copy has to be rebuilt.
+
+Current compaction/reset context is exported to a bounded Cherry checkpoint at a completed-turn
+anchor; a missing working copy imports that context and the following normalized tail without a
+model call. See [Pi Durable Migration](./pi-durable-migration.md) for the active
+execution/recovery contract; the older per-turn interface below is historical.
 
 The Pi transport honors the provider's `cacheControl.enabled` setting (`none` when disabled,
 otherwise `short`) and receives the stable Host session id. Pi owns cache breakpoint placement;
@@ -619,7 +607,7 @@ type RuntimeEvent =
       context: RuntimeUsageContext
       completedAt: number
     }
-  | { type: 'completed'; contextTokens?: number; replay?: RuntimeTurnReplay }
+  | { type: 'completed'; contextTokens?: number }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
 

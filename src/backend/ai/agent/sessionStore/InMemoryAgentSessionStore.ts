@@ -9,6 +9,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -153,11 +154,30 @@ function reserveInTranscript(
 @AppStatePolicy('not-applicable')
 export class InMemoryAgentSessionStore extends BaseService implements AgentSessionStore {
   private readonly sessions = new Map<string, AgentSessionView>();
+  private readonly runtimeRevisions = new Map<string, number>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
 
+  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
+    const ids = new Set(messageIds);
+    const existing = new Set<string>();
+    for (const list of this.messages.values())
+      for (const { view } of list) if (ids.has(view.id)) existing.add(view.id);
+    return existing;
+  }
+
+  async listUnsettledAssistantMessages() {
+    const rows: { sessionId: string; assistantMessageId: string; turnId: string | null }[] = [];
+    for (const [sessionId, list] of this.messages)
+      for (const { view } of list)
+        if (view.role === 'assistant' && UNSETTLED_MESSAGE_STATUSES.has(view.status))
+          rows.push({ sessionId, assistantMessageId: view.id, turnId: view.turnId });
+    return rows;
+  }
+
   protected override onDestroy(): void {
     this.sessions.clear();
+    this.runtimeRevisions.clear();
     this.messages.clear();
   }
 
@@ -172,6 +192,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   async getSession(sessionId: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     return session ? cloneJson(session) : null;
+  }
+
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    return this.sessions.has(sessionId) ? (this.runtimeRevisions.get(sessionId) ?? 0) : null;
   }
 
   async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
@@ -213,6 +237,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    this.runtimeRevisions.delete(sessionId);
     // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
@@ -324,6 +349,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
 
     const deletedMessageIds = deleted.map((stored) => stored.view.id);
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     this.messages.set(
       input.sessionId,
       transcript.filter((stored) => stored.view.turnId !== input.turnId),
@@ -402,6 +431,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       throw new Error('The retry source is not the settled latest answer of this session.');
     }
     const session = this.sessions.get(input.sessionId)!;
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     const turnId = uuidv7();
     const updatedAt = nowIso();
     user.view = { ...user.view, turnId, parts: cloneJson(input.userParts), updatedAt };
@@ -517,6 +550,23 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
   }
 
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
+    for (const transcript of this.messages.values()) {
+      const stored = transcript.find(
+        ({ view }) =>
+          view.id === assistantMessageId && view.turnId === turnId && view.status === 'success',
+      );
+      if (stored) {
+        stored.contextCheckpoint = cloneJson(checkpoint);
+        return;
+      }
+    }
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     for (const [sessionId, transcript] of this.messages) {
       const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
@@ -525,6 +575,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
       // Synchronous section: message terminal state settles atomically
       // (invariant 5).
+      if (input.turnId !== undefined && stored.view.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const updatedAt = nowIso();
       stored.view = {
         ...stored.view,
@@ -547,9 +599,14 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+  async reconcileInterrupted(
+    error: AgentErrorView,
+    options: { excludeSessionIds?: readonly string[] } = {},
+  ): Promise<AgentMessageView[]> {
+    const excluded = new Set(options.excludeSessionIds ?? []);
     const reconciled: AgentMessageView[] = [];
-    for (const transcript of this.messages.values()) {
+    for (const [sessionId, transcript] of this.messages) {
+      if (excluded.has(sessionId)) continue;
       for (const stored of transcript) {
         if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
           continue;

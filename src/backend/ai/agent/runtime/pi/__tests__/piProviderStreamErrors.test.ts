@@ -1,4 +1,3 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import { stream as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { stream as streamAzure } from '@earendil-works/pi-ai/api/azure-openai-responses';
@@ -8,6 +7,7 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
+import type { PiStreamFn as StreamFn } from '../piModelTypes';
 
 function sse(event: string | undefined, data: unknown): string {
   return `${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`;

@@ -35,6 +35,8 @@ export type TurnResourceLedger = {
    * their own scope.
    */
   grantFile(fileEntryId: FileEntryId): void;
+  /** Host-only inherited authorization; an earlier turn's file never becomes this turn's draft. */
+  inheritFile(fileEntryId: FileEntryId): void;
 };
 
 /** The slice of the turn ledger a tool may consult: membership, not content. */
@@ -155,6 +157,9 @@ export function createTurnResourceLedger(
     draftFileEntryIds,
     fileEntryIds,
     inputFiles,
+    inheritFile(fileEntryId) {
+      fileEntryIds.add(fileEntryId);
+    },
     grantFile(fileEntryId) {
       fileEntryIds.add(fileEntryId);
       draftFileEntryIds.add(fileEntryId);

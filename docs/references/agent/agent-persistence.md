@@ -1,6 +1,10 @@
 # Agent Persistence
 
-> Status: as-built. Mobile Agent execution is device-local only.
+Cherry owns the complete durable transcript in `cherry.db`: message parts, checkpoints, usage and
+lifecycle metadata. The [Pi Durable integration](./pi-durable-migration.md) uses `pi-agent.db` for
+resumable execution working copies. Reads and search use Cherry directly; backup format v1 includes
+Cherry and managed resources. Pi copies persist across launches, are rebuilt from Cherry when
+missing, and are never a backup input.
 
 This document defines the durable SQLite schema and production adapter behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It
@@ -20,7 +24,8 @@ record for mobile-originated Agent Sessions only.
   `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
 - Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an
   Agent-table-backed `AgentDefinitionSource` used by the production Host. Session renames and
-  deletes delegate to the Host so an active turn is cancelled and drained before rows disappear.
+  removals delegate to the Host so an active turn is cancelled and drained before the row is
+  hard-deleted.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
@@ -28,7 +33,7 @@ Branching is a fork, not a message tree, so `agent_session` carries nullable sou
 boundary metadata but no per-message parent/active-path columns
 ([Agent Protocol](./agent-protocol.md#branching)).
 
-Out of scope: message-tree columns, background turns, Mobile Skill configuration/loading, and broader
+Out of scope: message-tree columns, Mobile Skill configuration/loading, and broader
 Pi provider coverage. The Host projects Agent-specific MCP bindings into each Runtime snapshot.
 System capability enablement persists on the Agent row as a capability-group deny-list
 (`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
@@ -61,18 +66,13 @@ these tables as a second source of truth. Any offline cache or projection requir
 versioned adapter and invalidation design.
 `contextCheckpoint` does not change this decision: it is a versioned, Runtime-produced content
 artifact anchored to a durable turn, not an engine id, resumable Runtime instance, provider cursor,
-or routing choice. The Host treats its payload as opaque and a process restart still interrupts an
-active turn.
+or routing choice. The Host treats its payload as opaque. Pi owns resumable task state outside
+these business tables; `runtimeRevision` only invalidates stale execution copies.
 
-**Native model replay is an optional local cache.** Successful Runtime turns may preserve signed
-thinking blocks and the original assistant/tool-result sequence in an Agent-private MMKV store,
-`cherry-agent-replay-cache`. It survives process restarts but is bounded and disposable, separate from
-the SQLite transcript and excluded from application backups. There is no replay column or schema
-migration. The Host writes it after terminal message persistence, reads it by Session/message/Turn
-identity, and removes it on retry or deletion. Fork transactions return backend-private source/copy
-identities so the Host can copy available cache entries after commit. Storage restore clears this
-cache before startup. Missing or invalid entries use normalized message history; see
-[Agent Runtime](./agent-runtime.md#history) for limits and decoding ownership.
+**Cherry stores no model-side replay.** Signed thinking and raw provider content live only in the
+Pi working copy, which persists between launches. A missing copy is rebuilt from normalized parts;
+historical reasoning is omitted because stored parts carry no signature. Migration `0005` drops the
+interim `replay` column, and the pre-Pi MMKV replay cache is cleared once at startup.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
@@ -90,8 +90,7 @@ none of them needs a row of its own:
 - a *correlation id* pairing one submission's user and assistant messages — a shared `turnId`
   column on both message rows;
 - *live lifecycle state* (`running`, `awaiting-approval`, `cancelling`) — Host memory by
-  definition: the protocol declares process death non-resumable and boot reconciliation
-  interrupts everything unfinished, so persisting these states stores only dead values;
+  definition: Pi persists task recovery and the Host reconstructs presentation from it;
 - *terminal facts* — turn terminal statuses map one-to-one onto message statuses
   (`completed→success`, `failed→error`, `cancelled`, `interrupted`), usage already lives on the
   assistant message, `startedAt`/`endedAt` come from its `stats.runtimeTiming`, and the turn-level
@@ -100,13 +99,11 @@ none of them needs a row of its own:
 The Host synthesizes `AgentTurnView` from the assistant message row plus its live state; the
 protocol keeps Turn as a UI-facing concept unchanged.
 
-**Approvals are not persisted.** Sessions cannot resume: boot reconciliation interrupts every
-unfinished turn, so a persisted pending approval is dead on arrival. Pending approvals live in
-adapter memory. A user decision is recorded in the terminal ToolPart state and normalized output;
-denial becomes `denied`. Cancellation, failure, or startup reconciliation converts every remaining
-`input-streaming` / `input-available` / `awaiting-approval` / `running` ToolPart to `interrupted`
-before the assistant message settles. Later model history therefore contains paired calls/results
-and never replays an unanswerable approval. No `agent_approval` table.
+**Approval decisions are not reusable grants.** Pending UI callbacks live in Host memory. Pi owns
+execution interruption/recovery; current tool and approval policy is reconstructed before resume.
+Completed decisions appear in terminal ToolPart state and normalized output. Missing native work
+is reconciled as interrupted, closing unfinished parts rather than replaying a dead callback.
+No `agent_approval` table is needed.
 
 **Avatar stores the built-in Cherry emoji or a stable file reference.** The initial Cherry Agent
 and the onboarding fallback store `🍒`, matching Desktop's Cherry Assistant. Existing records are
@@ -132,16 +129,16 @@ boundary, not in `AgentService`: resolving it is file-system work under `backend
 `dataApiDependencies`, the same channel `mcpServerMutations` uses.
 
 **Delete semantics.** `agent` soft-deletes (`deletedAt`), so Sessions never orphan; hard cleanup of
-an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-deletes and cascades
-messages — matching the store port's `deleteSession` contract. Before deleting rows, the Host
-installs a per-Session barrier, waits any already-admitted submission to install its turn state,
-then cancels and drains that turn. New submissions fail closed until deletion finishes.
+an Agent is refused while Sessions exist (`RESTRICT`). Session deletion aborts execution, drains
+settlement/usage, then hard-deletes Cherry rows and cascades messages. Forks are independent row
+copies and survive source deletion. The Host retires the Pi binding; no owner can be recreated from
+Pi. Retired upstream bytes remain until the next idle initialization closes and deletes the Pi
+file. No raw upstream SQL or archive tombstone is involved.
 
-Inside a Session the deletable unit is the turn, never the single message: replayed history pairs
-every `tool-call` with its `tool-result`, so half a turn is not a transcript any provider accepts.
-`deleteTurn` hard-deletes the turn's rows, and the Host refuses it while the Session is busy for
-the same reason a fork is refused. Deletion erases the record, not the side effects the record
-describes; nothing a tool already did is undone.
+The deletable message unit is a whole settled turn, keeping tool calls and results paired. Deleting
+its Cherry rows also clears checkpoints that may include the turn and increments `runtimeRevision`
+in the same transaction. The old Pi copy is then retired; a crash cannot make that stale revision
+usable. Deletion does not undo external tool actions or erase the independent usage ledger.
 
 **MCP bindings are mobile-owned Agent configuration.** `agent_tool_binding` stores a stable MCP
 `(serverId, rawToolName?)` identity, its enabled state, approval policy, and an optional display
@@ -224,6 +221,7 @@ listing/cascade and MCP server delete-time disabling.
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
 | `name` | text | NOT NULL DEFAULT `''` | |
 | `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
+| `runtimeRevision` | integer | NOT NULL DEFAULT `0` | Incremented on turn deletion/retry to invalidate Pi working copies |
 | `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
@@ -251,17 +249,9 @@ recency; no `orderKey`).
 | `ftsRowid` | integer | NULL, UNIQUE | Stable FTS5 `content_rowid`, trigger-assigned |
 | `createdAt` / `updatedAt` | integer | helper defaults | Physical row timestamps; hard delete via session cascade |
 
-Indexes: `(sessionId, createdAt)`, `turnId`, `status` (backs boot reconciliation), unique
-`ftsRowid`, and the invariant-1 guard:
-
-```sql
-UNIQUE (session_id) WHERE role = 'assistant' AND status IN ('pending', 'streaming')
-```
-
-At most one active turn per Session is a database constraint, not service discipline: a
-concurrent second submission fails the reservation insert. (Partial indexes serve uniqueness
-enforcement here; the plain `status` index exists because Drizzle's bound `status = ?` queries
-cannot match a partial index — see `message.ts`.)
+Indexes: `(sessionId, createdAt)`, `turnId`, `status` (backs settlement recovery), and unique
+`ftsRowid`. Multiple pending assistant rows represent queued inputs. Pi's scheduler serializes their
+execution; the old partial unique index on unsettled assistants is removed by migration `0004_agent_message_replay`.
 
 `data.parts` is exactly the protocol's `AgentMessagePart` union
 ([contract](../../../src/shared/contracts/agent/views.ts)). The database migration journal owns
@@ -299,7 +289,7 @@ transaction re-reads the two trailing rows and rejects anything else, so a messa
 being the last one between preparation and reservation cannot be replaced. The assistant is reset
 to `pending`, its error and context checkpoint cleared, runtime timing reset, and any retained
 tool results saved immediately. Retained part ids are reissued so new Runtime output cannot
-collide with them. Only the replaced answer's own checkpoint is dropped — it is the last message,
+collide with them. The transaction increments `runtimeRevision` to invalidate the old Pi copy. Only the replaced answer's own checkpoint is dropped — it is the last message,
 so no earlier summary can describe it, and earlier compaction work stays reusable. Invocation
 ledger totals remain intact. Preparation must finish before this operation; a rejected preflight
 does not clear the old answer. A restarted answer begins with empty parts; a resumed one keeps its
@@ -310,7 +300,7 @@ projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error, and an optional validated context
+  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error and an optional validated context
   checkpoint — in one write (invariant 5). Failed, cancelled, and interrupted terminal rows force
   the checkpoint to `NULL`. Failed turns write the same `AgentErrorView` to the inline part and
   diagnostic column. Cancellation retains its reason only in the column; historical rows without
@@ -321,23 +311,12 @@ projection:
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
   cascading the source delete to its messages.
-- File part additions or replacements and settled tool parts (`output-available`, `denied`,
-  `error`) request a snapshot of the current assistant `data.parts` while the message is
-  `streaming`, including any text already produced. The Host coalesces requests: the event loop
-  does not wait on the store, one snapshot write is in flight at a time, and requests that arrive
-  during a write collapse into one further write. A failed snapshot write is logged and execution
-  continues. Unfinished text and reasoning request a snapshot after a one-second batching window,
-  so a text-only stream has a durable prefix before its part finishes. This timer is scheduled only
-  after a delta, stops at finalization, and cannot write for a replaced or aborted turn. A slow or
-  failing store can leave a larger uncommitted suffix; the interval is not a durability guarantee.
-  Non-terminal tool states and input previews do not request writes; `interrupted` parts do not
-  either because the terminal write follows them. A pending tool may be included in another
-  part's snapshot, but its intermediate
-  states are not guaranteed to survive a restart. Finalization remains authoritative: it drains
-  the in-flight snapshot before the terminal write, and a late snapshot cannot reopen a settled
-  row. On restart, reconciliation keeps saved parts, closes streaming text, and interrupts
-  unfinished tools. This preserves recorded artifacts for later turns without resuming execution
-  or persisting a draft-file state.
+- Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
+  reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
+  write. Startup, next submission and backup retry matching native results; a reservation without
+  native admission is interrupted with its saved parts retained. The old store streaming-snapshot
+  and bulk-interruption methods remain available to store consumers, but are not the Pi recovery
+  strategy.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
@@ -359,7 +338,7 @@ projection:
   multi-row statements with ids generated in transcript order.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
-- Deleting a turn clears, in the same transaction, every checkpoint in that Session whose anchor
+- Deleting a turn increments `runtimeRevision` and clears, in the same transaction, every checkpoint in that Session whose anchor
   does not sit strictly before the deleted turn — including anchors the deletion itself orphans.
   A summary covers everything up to its anchor, and its text is opaque to the store, so a
   checkpoint that may have absorbed the deleted content cannot be replayed without putting that
@@ -378,11 +357,10 @@ projection:
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`
   from it plus the assistant message row. Terminal statuses derive from the message row alone,
   so transcript-history turns need no extra reads.
-- The invariant-1 partial unique index turns a concurrent second reservation into a constraint
-  violation the Host maps to `SESSION_BUSY`.
-- `reconcileInterrupted` is one bulk `UPDATE` over unsettled messages at `PostReady`, same phase
-  the in-memory adapter occupies today. It returns the reconciled assistant rows so the Host can
-  publish their settled state to observers that attached before recovery ran.
+- Every unsettled assistant row is a durable settlement receipt. The Host compares its message and
+  turn identity with Pi before accepting another input, at startup, and before backup. A failed
+  settlement cannot be skipped by a later cursor advance. Deleted owners and obsolete revisions
+  are retired, never reconstructed from Pi. Finalization rejects a mismatched retry turn id.
 - Approvals stay in Host/adapter memory, cleared on destroy — live-process state by design (see
   Decisions), not a missing table.
 - Row ↔ view mapping converts epoch millis to ISO strings and validates `data` against the

@@ -136,13 +136,13 @@ function makeSqliteHarness(): StoreHarness {
       const id = randomUUID();
       sqlite
         .prepare(
-          `INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+          `INSERT OR IGNORE INTO user_provider (provider_id, name, order_key, created_at, updated_at)
            VALUES ('mock-provider', 'Mock Provider', 'a0', 1, 1)`,
         )
         .run();
       sqlite
         .prepare(
-          `INSERT INTO user_model (
+          `INSERT OR IGNORE INTO user_model (
             id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at
           ) VALUES (?, 'mock-provider', 'mock-model', 'Mock Model', 'mock-model', 'a0', 1, 1)`,
         )
@@ -1295,6 +1295,101 @@ describe.each([
     expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
   });
 
+  test('a retry reissues the turn, bumps only its own revision and rejects the replaced execution', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hi', state: 'done' }],
+    });
+    const finalized = await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'success',
+      parts: [{ id: 'text-1', type: 'text', text: 'Hello', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect(
+      await store.existingMessageIds([finalized.id, reserved.userMessage.id, 'absent']),
+    ).toEqual(new Set([finalized.id, reserved.userMessage.id]));
+
+    const fork = await store.forkSession({ sessionId: session.id, fromMessageId: finalized.id });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    expect(
+      (await store.listMessages(fork.session.id)).find((message) => message.role === 'assistant'),
+    ).toMatchObject({ status: 'success', parts: finalized.parts });
+
+    const retried = await store.reserveRetry({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      userParts: reserved.userMessage.parts,
+      assistantParts: [],
+    });
+    expect(await store.getRuntimeRevision(session.id)).toBe(1);
+    expect(await store.getRuntimeRevision(fork.session.id)).toBe(0);
+    await expect(
+      store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        turnId: reserved.turnId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      }),
+    ).rejects.toThrow('replaced execution');
+    expect((await store.listMessages(session.id)).at(-1)).toMatchObject({
+      turnId: retried.turnId,
+      status: 'pending',
+    });
+  });
+
+  test('unsettled answers are listed and recovery can leave engine-owned sessions alone', async () => {
+    const running = await harness.createEmptySession({ agentId });
+    const orphaned = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: running.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Still running', state: 'done' }],
+    });
+    const second = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: orphaned.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Lost', state: 'done' }],
+    });
+    expect(await store.listUnsettledAssistantMessages()).toEqual([
+      {
+        sessionId: running.id,
+        assistantMessageId: first.assistantMessage.id,
+        turnId: first.turnId,
+      },
+      {
+        sessionId: orphaned.id,
+        assistantMessageId: second.assistantMessage.id,
+        turnId: second.turnId,
+      },
+    ]);
+    const reconciled = await store.reconcileInterrupted(INTERRUPTED, {
+      excludeSessionIds: [running.id],
+    });
+    expect(reconciled.map((message) => message.id)).toEqual([second.assistantMessage.id]);
+    expect(await store.listUnsettledAssistantMessages()).toEqual([
+      {
+        sessionId: running.id,
+        assistantMessageId: first.assistantMessage.id,
+        turnId: first.turnId,
+      },
+    ]);
+  });
+
   test('deleteSession removes the transcript with the session', async () => {
     const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
@@ -1470,50 +1565,26 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     ).toEqual({ count: 0 });
   });
 
-  test('the invariant-1 index rejects a second reservation while one is unsettled', async () => {
+  test('persists queued follow-ups beside the current pending answer', async () => {
     const { store } = harness;
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
-    const first = await store.reserveSubmission({
-      ...messageIds(),
-      ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
-    });
-
-    // The proxy driver wraps the SQLITE_CONSTRAINT_UNIQUE error; the rollback
-    // and post-settle assertions below pin that the unique index caused it.
-    await expect(
-      store.reserveSubmission({
+    for (const text of ['one', 'two'])
+      await store.reserveSubmission({
         ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
-        userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
-      }),
-    ).rejects.toThrow();
-    // The failed reservation rolled back whole: no orphan user message.
-    expect((await store.listMessages(session.id)).map((message) => message.role)).toEqual([
-      'user',
-      'assistant',
+        userParts: [{ id: 'input', type: 'text', text, state: 'done' }],
+      });
+    expect(
+      (await store.listMessages(session.id)).map(({ role, status }) => [role, status]),
+    ).toEqual([
+      ['user', 'success'],
+      ['assistant', 'pending'],
+      ['user', 'success'],
+      ['assistant', 'pending'],
     ]);
-
-    await store.finalizeAssistantMessage({
-      assistantMessageId: first.assistantMessage.id,
-      status: 'success',
-      parts: [],
-      usage: null,
-      error: null,
-      contextCheckpoint: null,
-      runtimeStats: { runtimeTiming: terminalTiming() },
-    });
-    await expect(
-      store.reserveSubmission({
-        ...messageIds(),
-        ...RESERVATION_FACTS,
-        sessionId: session.id,
-        userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
-      }),
-    ).resolves.toBeDefined();
+    expect(await store.listUnsettledAssistantMessages()).toHaveLength(2);
   });
 
   test('FTS triggers index text parts on insert and settle', async () => {

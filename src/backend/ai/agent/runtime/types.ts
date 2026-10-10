@@ -49,6 +49,8 @@ export type RuntimeDescriptor = {
 };
 
 export interface AgentRuntime {
+  /** Persistent production sessions; short-lived open() remains for isolated model probes. */
+  readonly conversations?: import('./durableTypes').DurableAgentRuntime;
   readonly descriptor: RuntimeDescriptor;
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight>;
   open(): Promise<AgentRuntimeSession>;
@@ -192,13 +194,6 @@ export type RuntimeMessage = {
 export type RuntimeHistoryTurn = {
   turnId: string | null;
   messages: RuntimeMessage[];
-  replay?: RuntimeTurnReplay;
-};
-
-/** Private per-turn model history; never a public message or an execution binding. */
-export type RuntimeTurnReplay = {
-  version: 1;
-  payload: RuntimeJsonValue;
 };
 
 /** Versioned, opaque Runtime context artifact persisted and replayed by the Host. */
@@ -366,6 +361,11 @@ export type RuntimeUsageReport = {
   usage: RuntimeUsage;
   context: RuntimeUsageContext;
   completedAt: number;
+  metrics?: {
+    timeFirstTokenMs?: number;
+    timeCompletionMs?: number;
+    timeThinkingMs?: number;
+  };
 };
 
 export type RuntimeErrorContext = {
@@ -399,7 +399,6 @@ export type RuntimeEvent =
       type: 'completed';
       /** Context size of the final request, when the provider reported its input. */
       contextTokens?: number;
-      replay?: RuntimeTurnReplay;
     }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' };

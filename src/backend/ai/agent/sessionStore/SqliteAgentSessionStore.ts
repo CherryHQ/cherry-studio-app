@@ -27,6 +27,7 @@ import {
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -56,10 +57,8 @@ const FORK_INSERT_CHUNK_SIZE = 50;
  * Durable SQLite adapter for {@link AgentSessionStore}
  * (docs/references/agent/agent-persistence.md).
  *
- * Multi-record operations run inside `DbService.withWriteTx()`. The
- * invariant-1 partial unique index turns a concurrent second reservation into
- * a constraint violation, which the Host's admission guard normally prevents
- * from ever reaching the database.
+ * Multi-record operations run inside `DbService.withWriteTx()`. Pending rows include queued
+ * follow-ups; the Host serializes admission and Pi owns one-at-a-time execution.
  */
 @Injectable('AgentSessionStore')
 @ServicePhase(Phase.PostReady)
@@ -68,6 +67,34 @@ const FORK_INSERT_CHUNK_SIZE = 50;
 export class SqliteAgentSessionStore extends BaseService implements AgentSessionStore {
   constructor(private readonly dbService: DbService) {
     super();
+  }
+
+  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
+    if (!messageIds.length) return new Set();
+    const rows = await this.dbService
+      .getDb()
+      .select({ id: agentSessionMessageTable.id })
+      .from(agentSessionMessageTable)
+      .where(inArray(agentSessionMessageTable.id, [...messageIds]));
+    return new Set(rows.map((row) => row.id));
+  }
+
+  async listUnsettledAssistantMessages() {
+    return this.dbService
+      .getDb()
+      .select({
+        sessionId: agentSessionMessageTable.sessionId,
+        assistantMessageId: agentSessionMessageTable.id,
+        turnId: agentSessionMessageTable.turnId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.role, 'assistant'),
+          inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+        ),
+      )
+      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
@@ -93,6 +120,16 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
     return row ? toAgentSessionView(row) : null;
+  }
+
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    const [row] = await this.dbService
+      .getDb()
+      .select({ revision: agentSessionTable.runtimeRevision })
+      .from(agentSessionTable)
+      .where(eq(agentSessionTable.id, sessionId))
+      .limit(1);
+    return row?.revision ?? null;
   }
 
   async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
@@ -400,6 +437,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         );
 
       const deletedMessageIds = turnRows.map((row) => row.id);
+      await tx
+        .update(agentSessionTable)
+        .set({ runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1` })
+        .where(eq(agentSessionTable.id, input.sessionId));
       // The boundary column is application-owned, so the delete below would
       // otherwise leave this Session pointing at a row that no longer exists.
       await tx
@@ -515,7 +556,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning(agentMessageViewColumns);
       await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: Date.now() })
+        .set({
+          lastActivityAt: Date.now(),
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+        })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
         turnId,
@@ -647,12 +691,32 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
+    await this.dbService.withWriteTx((tx) =>
+      tx
+        .update(agentSessionMessageTable)
+        .set({ contextCheckpoint: checkpoint })
+        .where(
+          and(
+            eq(agentSessionMessageTable.id, assistantMessageId),
+            eq(agentSessionMessageTable.turnId, turnId),
+            eq(agentSessionMessageTable.status, 'success'),
+          ),
+        ),
+    );
+  }
+
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
     const message = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select({
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
+          turnId: agentSessionMessageTable.turnId,
         })
         .from(agentSessionMessageTable)
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
@@ -660,6 +724,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (!existing) {
         throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
       }
+      if (input.turnId !== undefined && existing.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const [row] = await tx
         .update(agentSessionMessageTable)
         .set({
@@ -690,12 +756,23 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return message;
   }
 
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
+  async reconcileInterrupted(
+    error: AgentErrorView,
+    options: { excludeSessionIds?: readonly string[] } = {},
+  ): Promise<AgentMessageView[]> {
+    const excluded = options.excludeSessionIds ?? [];
     return this.dbService.withWriteTx(async (tx) => {
       const rows = await tx
         .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
-        .where(inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]));
+        .where(
+          and(
+            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            ...(excluded.length
+              ? [notInArray(agentSessionMessageTable.sessionId, [...excluded])]
+              : []),
+          ),
+        );
       const assistantIds: string[] = [];
 
       for (const row of rows) {

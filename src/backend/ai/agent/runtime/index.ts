@@ -1,4 +1,19 @@
 export type {
+  DurableAgentRuntime,
+  RuntimeConversationConfiguration,
+  RuntimeConversationEvent,
+  RuntimeConversationSeed,
+  RuntimeConversationSnapshot,
+  RuntimeDurableSubmission,
+  RuntimeDurableTurn,
+  RuntimeTurnTiming,
+  RuntimeExecutionIdentity,
+  RuntimeExecutionPorts,
+  RuntimeSqlDatabase,
+  RuntimeUsageOwner,
+} from './durableTypes';
+
+export type {
   AgentRuntime,
   AgentRuntimeSession,
   MessageRuntimeTimingSink,
@@ -14,7 +29,6 @@ export type {
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeHistoryTurn,
-  RuntimeTurnReplay,
   RuntimeInputPart,
   RuntimeInputModality,
   RuntimeJsonValue,
@@ -38,12 +52,6 @@ export type {
 } from './types';
 
 export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
-export {
-  MAX_RUNTIME_TURN_REPLAY_BYTES,
-  parseRuntimeTurnReplay,
-  type SerializedRuntimeTurnReplay,
-  serializeRuntimeTurnReplay,
-} from './runtimeTurnReplay';
 
 export type {
   FakeExecutionController,

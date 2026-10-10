@@ -112,6 +112,8 @@ export type UpdateStreamingAssistantMessageInput = {
 
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
+  /** Refuse a late completion from an execution that a retry has replaced. */
+  turnId?: string;
   status: 'success' | 'error' | 'cancelled' | 'interrupted';
   parts: AgentMessagePart[];
   /** Runtime fallback counts, used only when no invocation ledger projection exists. */
@@ -141,6 +143,7 @@ export type FinalizeAssistantMessageInput = {
  */
 export interface AgentSessionStore {
   getSession(sessionId: string): Promise<AgentSessionView | null>;
+  getRuntimeRevision(sessionId: string): Promise<number | null>;
   renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;
   /** Renames only when the current name still matches the caller's auto-name snapshot. */
   autoRenameSession(
@@ -150,6 +153,12 @@ export interface AgentSessionStore {
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
+  /** Which of these message ids have a row; lets the Host reserve a turn exactly once. */
+  existingMessageIds(messageIds: readonly string[]): Promise<Set<string>>;
+  /** Assistant rows still `pending`/`streaming`; the Host matches them against engine state. */
+  listUnsettledAssistantMessages(): Promise<
+    { sessionId: string; assistantMessageId: string; turnId: string | null }[]
+  >;
 
   /** Atomically creates a Session and reserves its first user/assistant message pair. */
   reserveInitialSubmission(
@@ -213,6 +222,12 @@ export interface AgentSessionStore {
     sessionId: string,
     excludeAssistantMessageId?: string,
   ): Promise<StoredRuntimeContextCheckpoint | null>;
+  /** Save idle background compaction without replacing the already committed answer or timing. */
+  saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ): Promise<void>;
 
   /**
    * Durably records the parts an active turn has produced so far and marks the
@@ -232,5 +247,8 @@ export interface AgentSessionStore {
    * Returns the reconciled assistant placeholders so the Host can publish
    * their settled state to observers attached before recovery ran.
    */
-  reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]>;
+  reconcileInterrupted(
+    error: AgentErrorView,
+    options?: { excludeSessionIds?: readonly string[] },
+  ): Promise<AgentMessageView[]>;
 }

@@ -1,0 +1,14 @@
+diff --git a/dist/json.js b/dist/json.js
+index 376682d69bc7824b840ea75660677e31b726075f..cd569ebba1288d405b80e4f4e02353fe4580a5a8 100644
+--- a/dist/json.js
++++ b/dist/json.js
+@@ -30,7 +30,8 @@ function copy(value, ancestors, omitUndefinedProperties) {
+             }
+             const result = new Array(value.length);
+             for (let index = 0; index < value.length; index++) {
+-                const descriptor = Object.getOwnPropertyDescriptor(value, index);
++                // Hermes can forward numeric keys unchanged to a draft Proxy's descriptor trap.
++                const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+                 if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+                     throw new TypeError("Value must contain strict JSON enumerable indexed data properties");
+                 }
