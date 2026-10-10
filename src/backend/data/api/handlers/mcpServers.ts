@@ -17,6 +17,7 @@ export type McpServerMutations = {
 
 type McpMutationRuntime = {
   invalidateServer(serverId: string, options?: { preserveSnapshot?: boolean }): void;
+  forgetOAuthAuthorization(authorizationId: string): Promise<void>;
 };
 
 type McpMutationData = Pick<McpServerService, 'create' | 'delete' | 'getById' | 'update'>;
@@ -40,8 +41,11 @@ export function createMcpServerMutations(dependencies: {
     },
 
     async removeServer(id) {
+      const previous = await servers.getById(id);
       await servers.delete(id);
       runtime.invalidateServer(id);
+      if (previous.origin !== 'builtin' && previous.oauth)
+        await runtime.forgetOAuthAuthorization(previous.oauth.authorizationId);
     },
 
     async updateServer(id, input) {
@@ -52,6 +56,14 @@ export function createMcpServerMutations(dependencies: {
       const toolsChanged = previous ? !isSameMcpConnectionConfig(previous, server) : false;
       if (toolsChanged) {
         runtime.invalidateServer(id);
+        if (
+          previous?.origin !== 'builtin' &&
+          previous?.oauth &&
+          server.origin !== 'builtin' &&
+          previous.oauth.authorizationId !== server.oauth?.authorizationId
+        ) {
+          await runtime.forgetOAuthAuthorization(previous.oauth.authorizationId);
+        }
       } else if (previous?.isEnabled && !server.isEnabled) {
         // The snapshot outlives the connection so the settings row can still
         // report what the server last offered.

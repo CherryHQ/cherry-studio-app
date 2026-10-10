@@ -22,10 +22,12 @@ import {
   PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
   PI_TOOL_CALL_TOOL_NAME,
 } from './piDeferredToolDiscovery';
+import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 type PiDurableToolOptions = {
   name: string;
   tools: readonly RuntimeTool[];
+  acceptsImages?: boolean;
   previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
   beforeCall?(call: ToolCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
@@ -116,12 +118,17 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       });
       // Callbacks cross into durable JSON here; reject invalid payloads before native persistence.
       const stored = RuntimeJsonValueSchema.parse(
-        JSON.parse(JSON.stringify(result)),
+        JSON.parse(JSON.stringify(persistentToolResult(result))),
       ) as RuntimeToolResult;
       if (result.failure?.scope === 'tool' && tool.failureGroup)
         failedGroups.add(tool.failureGroup);
       await options.onResult?.(tool, stored, api, context);
-      return stored;
+      return {
+        ...stored,
+        ...(result.modelImages && options.acceptsImages !== false
+          ? { modelImages: result.modelImages }
+          : {}),
+      };
     } catch (error) {
       signal.throwIfAborted();
       const failure = { ...normalizeAiError(error), origin: 'tool' as const };
@@ -181,7 +188,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
               const output = RuntimeJsonValueSchema.parse(result.details) as RuntimeToolResult;
               const target = dispatchedTargets.get(api.callId);
               return target
-                ? { ...result, ...resultWithDetails(target, output) }
+                ? { ...resultWithDetails(target, output), content: result.content }
                 : {
                     ...result,
                     isError: output.failure !== undefined,
@@ -250,11 +257,11 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
     ref: tool.ref,
     providerName: tool.providerName,
     displayName: tool.displayName,
-    output,
+    output: persistentToolResult(output),
     ...(tool.failureGroup ? { failureGroup: tool.failureGroup } : {}),
   };
   return {
-    content: [{ type: 'text', text: JSON.stringify(output) }],
+    content: piToolModelContent(output, tool.ref.source === 'mcp'),
     isError: output.failure !== undefined,
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };

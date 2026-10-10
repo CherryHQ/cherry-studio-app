@@ -72,7 +72,12 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
     });
   }
   if (part.type === 'tool') {
-    const runtimeOutput = part.output;
+    const runtimeOutput = part.output
+      ? (() => {
+          const { modelImages: _images, ...persistent } = part.output;
+          return persistent;
+        })()
+      : undefined;
     const output = runtimeOutput?.failure
       ? {
           value: {

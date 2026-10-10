@@ -19,7 +19,11 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { McpServerSchema, type McpServer } from '@/shared/data/types/mcpServer';
+import {
+  McpServerSchema,
+  type McpServer,
+  type RemoteMcpServer,
+} from '@/shared/data/types/mcpServer';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -39,6 +43,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     disabledTools: row.disabledTools,
     endpointUrl: row.endpointUrl,
     headers: row.headers ?? undefined,
+    ...(row.origin === 'remote' && row.oauth && { oauth: row.oauth }),
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -142,6 +147,8 @@ export class McpServerService {
     }
 
     const updates: Partial<InsertMcpServerRow> = {
+      ...(parsed.endpointUrl !== undefined &&
+        parsed.endpointUrl !== existing.endpointUrl && { oauth: null }),
       ...(parsed.disabledTools !== undefined && {
         disabledTools: [...new Set(parsed.disabledTools)],
       }),
@@ -165,6 +172,63 @@ export class McpServerService {
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
+    return rowToMcpServer(row);
+  }
+
+  /** Only the OAuth workflow can attach a native grant; ordinary DTOs cannot mint one. */
+  async saveOAuthConnection(
+    input: CreateMcpServerDto,
+    oauth: NonNullable<RemoteMcpServer['oauth']>,
+    previous?: McpServer,
+  ): Promise<McpServer> {
+    const parsed = CreateMcpServerSchema.parse(input);
+    const name = parsed.name.trim();
+    this.validateName(name);
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (previous) {
+        const [current] = await tx
+          .select()
+          .from(mcpServerTable)
+          .where(eq(mcpServerTable.id, previous.id));
+        if (
+          !current ||
+          current.origin !== 'remote' ||
+          timestampToISO(current.updatedAt) !== previous.updatedAt
+        ) {
+          throw DataApiErrorFactory.conflict(
+            'The MCP connection changed during authorization',
+            'McpServer',
+          );
+        }
+      }
+      await this.assertNameAvailable(tx, name, previous?.id);
+      const values = {
+        name,
+        endpointUrl: parsed.endpointUrl,
+        headers: parsed.headers,
+        oauth,
+        isEnabled: true,
+      };
+      return previous
+        ? tx
+            .update(mcpServerTable)
+            .set(values)
+            .where(eq(mcpServerTable.id, previous.id))
+            .returning()
+        : tx.insert(mcpServerTable).values(values).returning();
+    });
+    return rowToMcpServer(row);
+  }
+
+  async disconnectOAuth(id: string): Promise<McpServer> {
+    const [row] = await this.dbService.withWriteTx((tx) =>
+      tx
+        .update(mcpServerTable)
+        .set({ oauth: null, isEnabled: false })
+        .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.origin, 'remote')))
+        .returning(),
+    );
+    if (!row) throw DataApiErrorFactory.notFound('McpServer', id);
     return rowToMcpServer(row);
   }
 

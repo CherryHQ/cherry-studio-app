@@ -11,6 +11,7 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
 } from '@/frontend/components/Composer';
+import { McpAppContextNotice, useMcpAppConversation } from '@/frontend/components/McpApp';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
@@ -165,6 +166,7 @@ function TextChatInput({
 }) {
   const { t } = useTranslation();
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
   const selectedModelLabel = selectedModel?.name;
@@ -206,11 +208,14 @@ function TextChatInput({
     openProviderSetup();
   }, [openProviderSetup]);
   const handleSendPress = useCallback(
-    ({ attachments, text }: ComposerSendPayload) => {
+    async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
       const { pluginReferences, text: prompt } = readPluginMentions(text);
+      const appContexts = mcpApps?.snapshot() ?? [];
       const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
-      return sendMessage({
+      for (const context of appContexts)
+        parts.push({ type: 'text', text: `[MCP App context: ${context.title}]\n${context.text}` });
+      const result = await sendMessage({
         parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
@@ -223,8 +228,17 @@ function TextChatInput({
             }
           : {}),
       });
+      mcpApps?.consumed(appContexts);
+      return result;
     },
-    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
+    [
+      mcpApps,
+      isReasoningEffortSelected,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedModelId,
+      sendMessage,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -269,6 +283,7 @@ function TextChatInput({
                   style={isPluginPickerVisible ? foldedAttachmentsStyle : undefined}
                 >
                   <ComposerAttachments />
+                  <McpAppContextNotice />
                 </View>
                 <ChatInputSurface
                   streaming={isBusy}

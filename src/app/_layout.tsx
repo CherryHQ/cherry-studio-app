@@ -1,9 +1,10 @@
+import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
+
 import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/promise';
 import '@/bootstrap/preboot/webCrypto';
-import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
@@ -20,6 +21,7 @@ import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
+import { McpInteractionDialog } from '@/frontend/appShell/mcp';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
@@ -83,6 +85,7 @@ function RootLayout() {
                                   <PrivacyConsentGate />
                                   <RestoreOutcomeNotice />
                                   <BackupDialog />
+                                  <McpInteractionDialog />
                                 </RouteHeaderProvider>
                               </BottomSheetProvider>
                             </AppAlertProvider>

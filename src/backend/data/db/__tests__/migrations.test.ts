@@ -6,6 +6,33 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds an optional native OAuth reference without replacing existing MCP header connections', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0006_mcp_remote_oauth',
+      );
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO mcp_server (id, name, base_url, headers, is_active, disabled_tools, created_at, updated_at)
+        VALUES ('server', 'Existing', 'https://example.com/mcp', '{"Authorization":"Bearer existing"}', 1, '[]', 1, 1)`);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT headers, oauth, is_active FROM mcp_server').get()).toEqual({
+        headers: '{"Authorization":"Bearer existing"}',
+        oauth: null,
+        is_active: 1,
+      });
+      const oauth = JSON.stringify({
+        authorizationId: 'opaque-native-reference',
+        clientId: 'public-client',
+      });
+      database.prepare('UPDATE mcp_server SET oauth = ?').run(oauth);
+      expect(database.prepare('SELECT oauth FROM mcp_server').get()).toEqual({ oauth });
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds the runtime revision and drops interim replay without rewriting transcript data', () => {
     const database = new DatabaseSync(':memory:');
     try {

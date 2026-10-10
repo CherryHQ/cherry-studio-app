@@ -104,7 +104,27 @@ export function toRuntimeHistory(
             parts.push({
               type: 'tool-result',
               toolCallId: part.toolCallId,
-              output: output.data,
+              output: {
+                ...output.data,
+                ...(output.data.modelContent?.some((block) => block.type === 'image')
+                  ? {
+                      modelImages: output.data.modelContent.flatMap((block) => {
+                        if (block.type !== 'image') return [];
+                        const image = attachments.get(block.fileEntryId);
+                        const prefix = `data:${block.mimeType};base64,`;
+                        return image?.type === 'file' && image.uri.startsWith(prefix)
+                          ? [
+                              {
+                                fileEntryId: block.fileEntryId,
+                                data: image.uri.slice(prefix.length),
+                                mimeType: block.mimeType,
+                              },
+                            ]
+                          : [];
+                      }),
+                    }
+                  : {}),
+              },
               isError: part.state === 'error' || part.state === 'interrupted',
             });
           }

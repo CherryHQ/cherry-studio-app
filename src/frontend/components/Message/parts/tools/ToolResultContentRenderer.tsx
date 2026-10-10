@@ -1,5 +1,6 @@
 import { Button, Image, useToast } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -18,11 +19,15 @@ import {
 type ToolResultContentRendererProps = {
   contents: readonly ToolResultContent[];
   imageAccessibilityLabel: string;
+  renderResourceLink?: (
+    content: Extract<ToolResultContent, { kind: 'resource-link' }>,
+  ) => ReactNode;
 };
 
 export function ToolResultContentRenderer({
   contents,
   imageAccessibilityLabel,
+  renderResourceLink,
 }: ToolResultContentRendererProps) {
   const preview = createToolResultPreview(contents);
 
@@ -32,6 +37,7 @@ export function ToolResultContentRenderer({
         <ToolResultContentItem
           content={content}
           imageAccessibilityLabel={imageAccessibilityLabel}
+          renderResourceLink={renderResourceLink}
           key={createContentKey(content, index)}
         />
       ))}
@@ -72,9 +78,11 @@ function ToolResultOverflow({ contents }: { contents: readonly ToolResultContent
 function ToolResultContentItem({
   content,
   imageAccessibilityLabel,
+  renderResourceLink,
 }: {
   content: ToolResultContent;
   imageAccessibilityLabel: string;
+  renderResourceLink?: ToolResultContentRendererProps['renderResourceLink'];
 }) {
   switch (content.kind) {
     case 'audio':
@@ -96,6 +104,7 @@ function ToolResultContentItem({
     case 'markdown':
       return <MarkdownText markdown={content.content} selectable={false} />;
     case 'resource-link':
+      if (renderResourceLink) return renderResourceLink(content);
       return isExternalResourceUri(content.uri) ? (
         <SourceLink label={content.label} url={content.uri} variant="listItem" />
       ) : (

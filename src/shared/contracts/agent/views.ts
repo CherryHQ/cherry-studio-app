@@ -1,11 +1,13 @@
 import { ImageGenerationModeSchema, imageParamsSchema } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
+import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
+import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
  * and failures. Every shape is JSON-safe and validated at the boundary; see
  * `./index.ts` for the protocol overview.
  */
-
 import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
@@ -231,6 +233,9 @@ export const AgentSessionStatusSchema = z
 export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
 
 export const AgentToolResultSchema = z.strictObject({
+  mcpSource: McpResultSourceSchema.optional(),
+  mcpApp: McpAppReferenceSchema.optional(),
+  modelContent: McpModelContentSchema.optional(),
   value: JsonValueSchema,
   artifacts: z.array(
     z.strictObject({

@@ -490,6 +490,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     }
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${sessionId}`,
+      acceptsImages:
+        this.models.getModel(configuration.model, configuration.kind)?.input.includes('image') ??
+        false,
       tools: configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);

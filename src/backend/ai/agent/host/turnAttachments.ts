@@ -6,6 +6,7 @@
 
 import {
   AgentProtocolError,
+  AgentToolResultSchema,
   type AgentErrorView,
   type AgentInputPart,
   type AgentMessageView,
@@ -76,6 +77,19 @@ export async function resolveManagedInput(
 
   const historicalFileEntryIds = history.flatMap((message) =>
     message.parts.flatMap((part) => {
+      if (part.type === 'dynamic-tool' && part.toolRef.source === 'mcp') {
+        const result = AgentToolResultSchema.safeParse(part.output);
+        if (!result.success) return [];
+        // Only the explicit model channel admits tool images; arbitrary assistant artifacts do not.
+        const artifacts = new Set(
+          result.data.artifacts.flatMap((artifact) =>
+            artifact.ref.kind === 'managed-file' ? [artifact.ref.fileEntryId] : [],
+          ),
+        );
+        return (result.data.modelContent ?? []).flatMap((block) =>
+          block.type === 'image' && artifacts.has(block.fileEntryId) ? [block.fileEntryId] : [],
+        );
+      }
       if (part.type !== 'file' || part.purpose !== 'input-attachment') {
         return [];
       }

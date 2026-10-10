@@ -7,6 +7,8 @@ import {
 } from '@earendil-works/pi-durable';
 import { z } from 'zod';
 
+import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
+import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 import type { RuntimeDurableSubmission, RuntimeDurableTurn } from '../durableTypes';
@@ -86,6 +88,9 @@ const ErrorSchema = z.object({
     .optional(),
 });
 const OutputSchema = z.object({
+  mcpSource: McpResultSourceSchema.optional(),
+  mcpApp: McpAppReferenceSchema.optional(),
+  modelContent: McpModelContentSchema.optional(),
   value: RuntimeJsonValueSchema,
   artifacts: z.array(
     z.object({

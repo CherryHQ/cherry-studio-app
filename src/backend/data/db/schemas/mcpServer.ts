@@ -17,6 +17,8 @@ export const mcpServerTable = sqliteTable(
     builtinId: text().$type<PluginId>(),
     authorizationId: text().references(() => pluginAuthorizationTable.id, { onDelete: 'restrict' }),
     headers: text({ mode: 'json' }).$type<Record<string, string>>(),
+    /** Mobile remote OAuth grants live in native secret storage, outside exports and model input. */
+    oauth: text({ mode: 'json' }).$type<{ authorizationId: string; clientId: string }>(),
     isEnabled: integer('is_active', { mode: 'boolean' }).notNull().default(false),
     /**
      * Tool names this server may not offer, as the server reports them. The

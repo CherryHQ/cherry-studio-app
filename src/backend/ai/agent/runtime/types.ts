@@ -119,6 +119,12 @@ export type RuntimeArtifact = {
 };
 
 export type RuntimeToolResult = {
+  mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
+  mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
+  /** Ephemeral media for the current provider call; stripped from canonical tool details. */
+  modelImages?: { fileEntryId: string; data: string; mimeType: string }[];
+  /** Bounded model projection; value remains the user/app result. */
+  modelContent?: import('@/shared/contracts/mcpContent').McpModelContent;
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
   /** Trusted callback metadata; never inferred from the JSON inside value. */

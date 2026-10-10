@@ -161,9 +161,12 @@ discovery. A send arriving during that local cache handoff waits for it through 
 preparation path. The temporary validation client is closed; actual tool calls still use a
 grant-bound client and its live routing checks.
 
-There is no timed refresh: the catalog is reconciled where the network is already in
-use, when a fresh connection lists tools before its first call and whenever the settings screens
-read live. A catalog with partial-discovery warnings is served immediately and never written to
+Catalog entries carry an expiry: modern servers supply `ttlMs` (capped at one hour), while
+legacy and bundled clients use a five-minute fallback. An expired catalog remains a candidate for
+the frozen turn while foreground reconciliation refreshes it. Tools-list notifications, a return
+to the foreground, and a one-minute foreground timer also schedule reconciliation. Modern
+subscriptions close in the background; interrupted legacy event connections reconnect when idle.
+Execution lists an expired catalog before calling, and settings screens read live. A catalog with partial-discovery warnings is served immediately and never written to
 disk. Both partial and failed discoveries back off before a send can trigger another attempt;
 partial catalogs refresh in the background after that delay. Consecutive failures start at 30
 seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
@@ -282,13 +285,17 @@ never shape-matched as a Cherry result envelope. Only an application capability 
 artifacts, and it does so after creating and validating each entry and granting it through the turn
 ledger.
 
-Tool results never contain absolute device paths or large base64 payloads. The Pi adapter projects
-the typed outer envelope as the model's tool result, so an application artifact's bounded managed
-ref remains available for a follow-up tool call while an MCP payload with similar keys stays nested
-under `value`. Each artifact is also projected into a Runtime file part; the Host persists it as an
+Canonical tool results never contain absolute device paths or inline image bytes. Ordinary tools
+project their typed outer envelope to the model. MCP results instead carry an explicit bounded
+`modelContent` projection: text excludes `_meta` recursively and user-only content; supported images
+reference managed files. The MCP importer alone can create artifacts from bounded image, audio,
+and embedded binary content. Remote JSON never becomes an artifact merely by resembling one.
+Temporary `modelImages` bytes reach image-capable models but are removed from canonical results.
+Older MCP history uses the same metadata-stripping projection. Each artifact is also projected into a Runtime file part; the Host persists it as an
 Agent Protocol file part with `purpose: 'artifact'` so the transcript retains its reference and
-display metadata. Its content is not automatically projected as a model attachment in later
-history. If the managed entry still exists, a user may explicitly attach it again or the model may
+display metadata. Artifact file parts are not implicit later model attachments. An MCP result
+may explicitly retain an image in `modelContent`; the Host re-resolves that managed artifact for
+image-capable models, with a text fallback if it is missing or unsupported. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 `write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
@@ -329,13 +336,17 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### Streamable HTTP MCP
 
-- Persistence retains desktop-compatible `stdio`, `sse`, `streamableHttp`, `inMemory`, and unknown
-  transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
+- Custom remote servers use Streamable HTTP. The official TypeScript client negotiates modern
+  `2026-07-28` or legacy protocols automatically; bundled direct-API plugins keep their existing
+  adapters. Direct stdio and the separate deprecated HTTP+SSE transport are not exposed.
 - `McpRuntimeService` owns clients, live discovery state, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
-  a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
+  a 256 KiB JSON result projection. Remote payloads stay under `value`; a separate bounded native
+  importer may retain binary results as managed artifacts. Unknown remote effects are treated as
+  writes for failure classification. Neither authorization failure nor transport failure replays a
+  tool call; an uncertain write outcome requires the user to check the service.
 - The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
   generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
@@ -344,6 +355,47 @@ retry; cancellation still propagates without becoming a cached failure.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.
+
+### Remote Authorization, Content, And Apps
+
+Custom remote connections support headers or browser-based public-client OAuth. The native owner
+uses protected-resource and authorization-server discovery, PKCE S256, resource indicators, state
+and issuer validation, and endpoint-bound grants. Access and refresh tokens stay in native secure
+storage; SQLite keeps only the grant reference and public client ID. Refresh is shared, revocation
+wins over a pending refresh, and a rejected token requires authorization again without replaying
+an operation. Servers may use a pre-registered public client ID or hosted Client ID Metadata
+Document URL; dynamic registration is used only when the server offers it. The app does not publish
+a Client ID Metadata Document for every server or replace provider-specific plugin authorization.
+
+The composer lists resources, URI templates, and prompts for enabled custom servers. Selecting an
+entry reads it through its own server, previews it, and adds it to the user draft only after Add.
+Prompt roles remain quoted user content. Bounded binary content becomes managed attachments;
+neither listing nor preview starts an Agent turn. Tool-returned resource links use the same preview
+flow. Their host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
+sends the URI to that server even when the URI uses HTTPS or is absent from its resource list.
+An edited connection cannot reinterpret an old link. Form and URL elicitation belong to one initiating
+operation. Both legacy server requests and modern input-required rounds use the same native consent
+queue. Discovery cannot prompt. The active network budget pauses during consent; cancellation or
+the ten-minute consent deadline removes the request. Passwords and credentials belong in the
+service's browser flow, not in a form.
+
+MCP Apps uses the official `io.modelcontextprotocol/ui` extension and `AppBridge`. Tool visibility
+filters the model catalog; a tool's `ui://` resource produces a lazy interactive-view action in its
+result card. Opening revalidates the original endpoint/grant fingerprint and Agent binding, reads
+`text/html;profile=mcp-app`, and starts a fresh live view. History never executes a tool or restores
+an old bridge automatically. Apps can list/call allowed tools and list/read resources on their
+originating server. Every App tool call gets explicit consent and repeats availability, binding,
+visibility, and schema checks. Duplicate request IDs cannot execute a second write.
+
+The native WebView shell isolates server HTML in an opaque-origin sandbox and restricts network
+and resource origins using declared CSP domains. It denies nested frames, custom origins, browser
+device permissions, forms, popups, and direct navigation. External HTTPS links and messages require
+native confirmation. Messages are staged in the composer; text/structured model-context updates
+remain visible and removable until the user's next submission. Theme, locale, dimensions, and
+teardown use the Apps protocol. Closing, backgrounding, revocation, or route disposal ends the view.
+The inline native shell enforces CSP through meta directives; this is a mobile implementation
+constraint, not evidence of complete CSP-header or Apps conformance. iOS/Android WebView behavior,
+real OAuth providers, protocol negotiation, and third-party Apps still require acceptance.
 
 ### System Calendar
 
