@@ -1,9 +1,11 @@
 import type { RemoteMessageView } from '@/shared/contracts/remoteAgent';
 
 import type { ResourceRead } from '../../contracts';
+import { remoteInput } from '../createRemoteConversationSession';
 import {
   createRemoteMessageProjectionCache,
   remoteConversationFailure,
+  undeliveredMessage,
   remoteAvailability,
   remoteMessage,
   remoteTranscriptMessage,
@@ -180,7 +182,7 @@ it('preserves trailing live prose and keeps metadata-only files out of local fil
   );
   expect(projected.display.data.partKeys).toEqual(['call', 'reply:text:1']);
   expect(projected.display.data.parts?.[0]).toMatchObject({ state: 'input-streaming' });
-  expect(projected.attachments?.[0]).toEqual({
+  expect(projected.attachments?.[0]).toMatchObject({
     key: 'file',
     name: 'result.png',
     mediaType: 'image/png',
@@ -278,4 +280,42 @@ it('renders the historical remote model identity even when the phone has no matc
     ...message.model,
   });
   expect(remoteMessage({ ...message, model: undefined }, resource).display.model).toBeUndefined();
+});
+
+it('retains file-only failed input and rejects unmanaged file identifiers', async () => {
+  const id = '12345678-1234-4234-8234-123456789abc';
+  const input = {
+    parts: [
+      {
+        type: 'file' as const,
+        fileEntryId: id,
+        filename: 'report.zip',
+        mediaType: 'application/zip',
+      },
+    ],
+  };
+  expect(remoteInput(input)).toEqual({
+    text: '',
+    attachments: [{ fileEntryId: id, name: 'report.zip', mediaType: 'application/zip' }],
+  });
+  expect(() =>
+    remoteInput({ parts: [{ ...input.parts[0], fileEntryId: 'file:///private/arbitrary' }] }),
+  ).toThrow();
+  expect(() => remoteInput({ parts: [] })).toThrow();
+  let resent: unknown;
+  const failed = undeliveredMessage(
+    { status: 'rejected', attachments: remoteInput(input).attachments },
+    'send' as never,
+    {
+      availability: { state: 'enabled' },
+      execute: async (value) => {
+        resent = value;
+        return { state: 'pending', operationId: 'retry' as never };
+      },
+    },
+    () => {},
+  );
+  expect(failed?.input).toEqual(input);
+  await failed?.resend.execute(undefined);
+  expect(resent).toEqual(input);
 });

@@ -1,9 +1,18 @@
-import { ContentState, FilePreview, MessagePart } from '@cherrystudio/ui/components';
-import type { PropsWithChildren } from 'react';
+import {
+  BottomSheet,
+  Button,
+  ContentState,
+  FilePreview,
+  MessagePart,
+  useToast,
+} from '@cherrystudio/ui/components';
+import * as Sharing from 'expo-sharing';
+import { useState, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
+import { ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { ToolRendererProvider } from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
@@ -77,7 +86,7 @@ function ConversationResourceSection({
       ? result.data.text
       : result.data.kind === 'json'
         ? JSON.stringify(result.data.value, null, 2)
-        : result.data.kind === 'metadata'
+        : result.data.kind === 'metadata' || result.data.kind === 'file'
           ? result.data.name
           : JSON.stringify(
               result.data.kind === 'user-question' ? result.data.question : result.data.questions,
@@ -91,26 +100,92 @@ export function ConversationAttachments({
 }: {
   attachments: NonNullable<ConversationMessage['attachments']>;
 }) {
-  const { t } = useTranslation();
   return (
     <>
       {attachments.map((item) => (
-        <FilePreview
-          key={item.key}
-          variant="attachment"
-          disabled
-          metadata={{
-            kind: fileEntryPreviewKind({ mediaType: item.mediaType ?? 'application/octet-stream' }),
-            displayName: item.name,
-            extensionLabel: filenameExtension(item.name)?.slice(0, 5).toUpperCase() ?? '',
-          }}
-          labels={{
-            openWith: t('filePreview.openWith'),
-            unavailable: t('filePreview.unavailable'),
-          }}
-          onPress={() => {}}
-        />
+        <ConversationAttachment key={item.key} item={item} />
       ))}
+    </>
+  );
+}
+function ConversationAttachment({
+  item,
+}: {
+  item: NonNullable<ConversationMessage['attachments']>[number];
+}) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [opened, setOpened] = useState(false);
+  const kind = fileEntryPreviewKind({ mediaType: item.mediaType ?? 'application/octet-stream' });
+  const result = useConversationResourceValue(
+    opened || kind === 'image' ? item.resource : undefined,
+  );
+  const file = result.data?.kind === 'file' ? result.data : undefined;
+  const share = async () => {
+    if (!file) return;
+    try {
+      if (!(await Sharing.isAvailableAsync())) throw new Error('UNAVAILABLE');
+      await Sharing.shareAsync(file.uri, { dialogTitle: file.name, mimeType: file.mediaType });
+    } catch {
+      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+    }
+  };
+  return (
+    <>
+      <FilePreview
+        variant="attachment"
+        metadata={{
+          kind,
+          displayName: item.name,
+          extensionLabel: filenameExtension(item.name)?.slice(0, 5).toUpperCase() ?? '',
+        }}
+        file={
+          file
+            ? {
+                id: item.key,
+                revision: file.uri,
+                uri: file.uri,
+                kind: fileEntryPreviewKind({
+                  mediaType: file.mediaType ?? 'application/octet-stream',
+                }),
+                displayName: file.name,
+                extensionLabel: filenameExtension(file.name)?.slice(0, 5).toUpperCase() ?? '',
+              }
+            : undefined
+        }
+        labels={{ openWith: t('filePreview.openWith'), unavailable: t('filePreview.unavailable') }}
+        onPress={() => setOpened(true)}
+      />
+      {opened ? (
+        <BottomSheet
+          open
+          onClose={() => setOpened(false)}
+          title={item.name}
+          size="large"
+          footer={
+            file ? (
+              <Button onPress={() => void share()}>{t('filePreview.openWith')}</Button>
+            ) : undefined
+          }
+        >
+          {result.isError ? (
+            <ContentState.Error
+              title={t('remoteAgent.loadFailed')}
+              primaryAction={{ children: t('common.retry'), onPress: result.refetch }}
+            />
+          ) : !result.data ? (
+            <ContentState.Loading title={t('remoteAgent.loading')} />
+          ) : file?.mediaType?.startsWith('image/') ? (
+            <View className="h-96">
+              <ArtifactImageViewer accessibilityLabel={file.name} uri={file.uri} />
+            </View>
+          ) : (
+            <Text className="p-4 text-foreground">
+              {file?.name ?? t('filePreview.unavailable')}
+            </Text>
+          )}
+        </BottomSheet>
+      ) : null}
     </>
   );
 }

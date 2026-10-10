@@ -35,6 +35,11 @@ export function remoteConversationFailure(error: unknown): ConversationFailure {
 function classifyRemoteFailure(error: unknown): ConversationFailure {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   switch (code) {
+    case 'INVALID_ATTACHMENT':
+    case 'ATTACHMENT_LIMIT':
+      return { code: 'invalid-input', retry: 'revise-input' };
+    case 'UPLOAD_CANCELLED':
+      return { code: 'cancelled', retry: 'none' };
     case 'TARGET_UNAVAILABLE':
       return { code: 'target-unavailable', retry: 'revise-input' };
     case 'UPGRADE_REQUIRED':
@@ -71,14 +76,25 @@ function classifyRemoteFailure(error: unknown): ConversationFailure {
 }
 /** A final send or start outcome the user still has to resolve; resending through `action` replaces it. */
 export function undeliveredMessage(
-  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage'>,
+  operation: Pick<RemoteCommand, 'status' | 'text' | 'error' | 'errorMessage' | 'attachments'>,
   id: OperationId,
   action: ConversationAction<ConversationInput, Submission>,
   discard: () => void,
 ): UndeliveredMessage | undefined {
-  const { status, text } = operation;
-  if ((status !== 'rejected' && status !== 'interrupted') || !text) return undefined;
-  const input: ConversationInput = { parts: [{ type: 'text', text }] };
+  const { status, text, attachments } = operation;
+  if ((status !== 'rejected' && status !== 'interrupted') || (!text && !attachments?.length))
+    return undefined;
+  const input: ConversationInput = {
+    parts: [
+      ...(text ? [{ type: 'text' as const, text }] : []),
+      ...(attachments ?? []).map((file) => ({
+        type: 'file' as const,
+        filename: file.name,
+        mediaType: file.mediaType,
+        fileEntryId: file.fileEntryId,
+      })),
+    ],
+  };
   return {
     id,
     input,
@@ -186,7 +202,12 @@ export function remoteMessage(
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
     if (part.kind === 'file') {
-      attachments.push({ key: part.id, name: part.name, mediaType: part.mediaType });
+      attachments.push({
+        key: part.id,
+        name: part.name,
+        mediaType: part.mediaType,
+        resource: resource(part.resource),
+      });
       continue;
     }
     if (part.kind === 'data') continue;

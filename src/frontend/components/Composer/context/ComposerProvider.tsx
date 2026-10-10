@@ -30,6 +30,9 @@ type ComposerStateContextValue = {
 };
 
 type ComposerActionsContextValue = {
+  subscribeAttachmentChanges?: (
+    listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
+  ) => () => void;
   addAttachments: (attachments: ComposerAttachmentDraft[]) => void;
   clearAttachments: () => void;
   removeAttachment: (attachmentId: string) => void;
@@ -45,7 +48,11 @@ type ComposerActionsContextValue = {
 
 export type ComposerAttachmentStore = Pick<
   ComposerActionsContextValue,
-  'addAttachments' | 'clearAttachments' | 'removeAttachment' | 'setAttachments'
+  | 'addAttachments'
+  | 'clearAttachments'
+  | 'removeAttachment'
+  | 'setAttachments'
+  | 'subscribeAttachmentChanges'
 > & {
   attachments: readonly ComposerAttachmentDraft[];
 };
@@ -124,8 +131,15 @@ export function ComposerProvider({
       removeAttachment,
       setAttachments,
       setDraft,
+      subscribeAttachmentChanges: attachmentStore?.subscribeAttachmentChanges,
     }),
-    [addAttachments, clearAttachments, removeAttachment, setAttachments],
+    [
+      addAttachments,
+      clearAttachments,
+      removeAttachment,
+      setAttachments,
+      attachmentStore?.subscribeAttachmentChanges,
+    ],
   );
 
   const metaValue = useMemo(() => ({ inputRef }), []);

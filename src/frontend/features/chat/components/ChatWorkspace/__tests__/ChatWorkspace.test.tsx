@@ -118,6 +118,10 @@ jest.mock('@/frontend/components/Avatar', () => ({
   },
 }));
 
+jest.mock('@/frontend/components/ArtifactPreview', () => ({
+  ArtifactImageViewer: () => null,
+}));
+
 jest.mock('@/frontend/utils/constants', () => ({
   isIOS: false,
 }));

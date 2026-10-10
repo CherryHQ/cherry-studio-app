@@ -1,4 +1,5 @@
 import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import type { RemoteAttachment, RemoteAttachmentDraftView } from '@/shared/contracts/remoteAgent';
 
 import type {
   AgentRef,
@@ -34,6 +35,10 @@ export type ConversationInput = Pick<
   AgentSubmitMessageInput,
   'parts' | 'modelId' | 'reasoningEffort' | 'imageGeneration'
 >;
+export type AttachmentPreparation = {
+  draft?: RemoteAttachmentDraftView;
+  stage(attachments: RemoteAttachment[]): void;
+};
 export type InputPolicy = {
   attachments: boolean;
   pluginReferences: boolean;
@@ -68,6 +73,8 @@ export type RemoteConversationSnapshot = Omit<ConversationSnapshot, 'executions'
     inputPolicy: InputPolicy;
     send?: ConversationAction<ConversationInput, Submission>;
   };
+  attachmentPreparation?: AttachmentPreparation;
+  upload?: { sent: number; total: number; cancel(): void };
   undelivered?: UndeliveredMessage;
 };
 export type HistoryPage = {
@@ -112,6 +119,8 @@ export interface ConversationDraft {
     start: ConversationAction<ConversationInput, Submission>;
     /** The Session this draft's start created; the route hands off to it, then releases the start. */
     created?: { conversation: ConversationRef; release(): void };
+    attachmentPreparation?: AttachmentPreparation;
+    upload?: { sent: number; total: number; cancel(): void };
     undelivered?: UndeliveredMessage;
   }>;
   dispose(): void;
