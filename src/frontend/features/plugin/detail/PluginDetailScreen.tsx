@@ -40,7 +40,9 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const connection = connections.data?.find((item) => item.pluginId === pluginId);
   const entry = catalog.data?.find((item) => item.id === pluginId);
-  const name = entry ? t(`plugins.catalog.${pluginId}.name`) : pluginId;
+  const name = entry
+    ? t(`plugins.catalog.${pluginId}.name`, { defaultValue: entry.name ?? pluginId })
+    : pluginId;
   const connectionStatus = connection?.authorization?.status ?? 'connected';
   const managementUrl = connection?.authorization?.managementUrl;
   const isLoading = catalog.isLoading || connections.isLoading;
@@ -201,7 +203,9 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
                     {t('plugins.capabilities')}
                   </Text>
                   <Text className="text-base text-foreground">
-                    {t(`plugins.catalog.${pluginId}.description`)}
+                    {t(`plugins.catalog.${pluginId}.description`, {
+                      defaultValue: entry?.description ?? entry?.summary ?? '',
+                    })}
                   </Text>
                 </View>
                 <View className="gap-4">
@@ -212,10 +216,10 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
                     {t('plugins.examples.title')}
                   </Text>
                   <Text className="text-base text-foreground">
-                    {t(`plugins.catalog.${pluginId}.examples.first`)}
+                    {t(`plugins.catalog.${pluginId}.examples.first`, { defaultValue: '' })}
                   </Text>
                   <Text className="text-base text-foreground">
-                    {t(`plugins.catalog.${pluginId}.examples.second`)}
+                    {t(`plugins.catalog.${pluginId}.examples.second`, { defaultValue: '' })}
                   </Text>
                   <Text className="text-sm text-muted-foreground">{t('plugins.usage')}</Text>
                 </View>
@@ -227,7 +231,7 @@ function PluginDetail({ pluginId }: { pluginId: PluginId }) {
                     {t('plugins.privacy')}
                   </Text>
                   <Text className="text-sm text-muted-foreground">
-                    {t(`plugins.catalog.${pluginId}.access`)}
+                    {t(`plugins.catalog.${pluginId}.access`, { defaultValue: '' })}
                   </Text>
                   <Text className="text-sm text-muted-foreground">
                     {t('plugins.privacyDescription')}
