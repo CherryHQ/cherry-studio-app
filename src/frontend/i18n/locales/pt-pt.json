@@ -1409,7 +1409,7 @@
   "settings.mcp.oauth.authentication": "Autenticação",
   "settings.mcp.oauth.clientId": "ID de cliente público ou URL de metadados",
   "settings.mcp.oauth.clientIdHint": "Opcional para serviços com registo dinâmico. Caso contrário, introduza o ID de cliente público ou o URL HTTPS dos metadados para esta aplicação.",
-  "settings.mcp.oauth.disconnect": "Remover autorização",
+  "settings.mcp.oauth.disconnect": "Remover autorização OAuth",
   "settings.mcp.oauth.errors.cancelled": "Autorização cancelada.",
   "settings.mcp.oauth.errors.configuration": "Verifique o endereço HTTPS, o ID de cliente público e o suporte de retorno móvel. Com OAuth, remova o cabeçalho Authorization.",
   "settings.mcp.oauth.errors.invalid_response": "Não foi possível verificar a resposta de autorização. Reinicie a autorização.",

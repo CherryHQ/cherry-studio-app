@@ -1391,7 +1391,7 @@
   "settings.mcp.oauth.authentication": "認証方式",
   "settings.mcp.oauth.clientId": "公開クライアント ID またはメタデータ URL",
   "settings.mcp.oauth.clientIdHint": "動的登録に対応するサービスでは省略できます。それ以外は、このアプリ用の公開クライアント ID または HTTPS のクライアントメタデータ URL を入力してください。",
-  "settings.mcp.oauth.disconnect": "認証を削除",
+  "settings.mcp.oauth.disconnect": "OAuth 認可を削除",
   "settings.mcp.oauth.errors.cancelled": "認証をキャンセルしました。",
   "settings.mcp.oauth.errors.configuration": "HTTPS エンドポイント、公開クライアント ID、モバイルのコールバック対応を確認してください。OAuth を使う場合は Authorization ヘッダーを削除してください。",
   "settings.mcp.oauth.errors.invalid_response": "認証応答を検証できませんでした。認証をやり直してください。",

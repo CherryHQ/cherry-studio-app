@@ -1391,7 +1391,7 @@
   "settings.mcp.oauth.authentication": "授权方式",
   "settings.mcp.oauth.clientId": "公开客户端 ID 或元数据 URL",
   "settings.mcp.oauth.clientIdHint": "支持动态注册的服务可留空，否则请填写适用于本应用的公开客户端 ID 或 HTTPS 客户端元数据 URL。",
-  "settings.mcp.oauth.disconnect": "移除授权",
+  "settings.mcp.oauth.disconnect": "移除 OAuth 授权",
   "settings.mcp.oauth.errors.cancelled": "已取消授权。",
   "settings.mcp.oauth.errors.configuration": "请检查 HTTPS 地址、公开客户端 ID 及移动端回调支持。使用 OAuth 时请移除 Authorization 请求头。",
   "settings.mcp.oauth.errors.invalid_response": "无法验证授权响应，请重新发起授权。",

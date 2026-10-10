@@ -1409,7 +1409,7 @@
   "settings.mcp.oauth.authentication": "Autentificare",
   "settings.mcp.oauth.clientId": "ID de client public sau URL de metadate",
   "settings.mcp.oauth.clientIdHint": "Opțional pentru serviciile cu înregistrare dinamică. Altfel, introduceți ID-ul de client public sau URL-ul HTTPS al metadatelor pentru această aplicație.",
-  "settings.mcp.oauth.disconnect": "Elimină autorizarea",
+  "settings.mcp.oauth.disconnect": "Elimină autorizarea OAuth",
   "settings.mcp.oauth.errors.cancelled": "Autorizare anulată.",
   "settings.mcp.oauth.errors.configuration": "Verificați adresa HTTPS, ID-ul de client public și suportul pentru revenire pe mobil. Cu OAuth, eliminați antetul Authorization.",
   "settings.mcp.oauth.errors.invalid_response": "Răspunsul de autorizare nu a putut fi verificat. Reîncepeți autorizarea.",

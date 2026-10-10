@@ -1400,7 +1400,7 @@
   "settings.mcp.oauth.authentication": "Authentifizierung",
   "settings.mcp.oauth.clientId": "Öffentliche Client-ID oder Metadaten-URL",
   "settings.mcp.oauth.clientIdHint": "Bei Diensten mit dynamischer Registrierung optional. Andernfalls die öffentliche Client-ID oder HTTPS-Metadaten-URL für diese App eingeben.",
-  "settings.mcp.oauth.disconnect": "Autorisierung entfernen",
+  "settings.mcp.oauth.disconnect": "OAuth-Autorisierung entfernen",
   "settings.mcp.oauth.errors.cancelled": "Autorisierung abgebrochen.",
   "settings.mcp.oauth.errors.configuration": "HTTPS-Endpunkt, öffentliche Client-ID und Unterstützung mobiler Rückrufadressen prüfen. Bei OAuth den Authorization-Header entfernen.",
   "settings.mcp.oauth.errors.invalid_response": "Die Autorisierungsantwort konnte nicht überprüft werden. Bitte erneut starten.",

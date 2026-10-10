@@ -1391,7 +1391,7 @@
   "settings.mcp.oauth.authentication": "Xác thực",
   "settings.mcp.oauth.clientId": "ID ứng dụng khách công khai hoặc URL siêu dữ liệu",
   "settings.mcp.oauth.clientIdHint": "Không bắt buộc với dịch vụ hỗ trợ đăng ký động. Nếu không, hãy nhập ID ứng dụng khách công khai hoặc URL siêu dữ liệu HTTPS dành cho ứng dụng này.",
-  "settings.mcp.oauth.disconnect": "Xóa quyền truy cập",
+  "settings.mcp.oauth.disconnect": "Xóa quyền truy cập OAuth",
   "settings.mcp.oauth.errors.cancelled": "Đã hủy cấp quyền.",
   "settings.mcp.oauth.errors.configuration": "Kiểm tra địa chỉ HTTPS, ID ứng dụng khách công khai và hỗ trợ chuyển hướng về ứng dụng di động. Khi dùng OAuth, hãy xóa tiêu đề Authorization.",
   "settings.mcp.oauth.errors.invalid_response": "Không thể xác minh phản hồi cấp quyền. Hãy bắt đầu cấp quyền lại.",

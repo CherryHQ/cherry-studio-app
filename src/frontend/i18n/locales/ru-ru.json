@@ -1418,7 +1418,7 @@
   "settings.mcp.oauth.authentication": "Авторизация",
   "settings.mcp.oauth.clientId": "Публичный ID клиента или URL метаданных",
   "settings.mcp.oauth.clientIdHint": "Необязательно для сервисов с динамической регистрацией. Иначе укажите публичный ID клиента или HTTPS URL метаданных клиента для этого приложения.",
-  "settings.mcp.oauth.disconnect": "Удалить авторизацию",
+  "settings.mcp.oauth.disconnect": "Удалить авторизацию OAuth",
   "settings.mcp.oauth.errors.cancelled": "Авторизация отменена.",
   "settings.mcp.oauth.errors.configuration": "Проверьте HTTPS-адрес, публичный ID клиента и поддержку мобильного обратного вызова. При использовании OAuth удалите заголовок Authorization.",
   "settings.mcp.oauth.errors.invalid_response": "Не удалось проверить ответ авторизации. Начните авторизацию заново.",

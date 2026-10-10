@@ -1400,7 +1400,7 @@
   "settings.mcp.oauth.authentication": "Kimlik doğrulama",
   "settings.mcp.oauth.clientId": "Genel istemci kimliği veya meta veri URL’si",
   "settings.mcp.oauth.clientIdHint": "Dinamik kaydı destekleyen hizmetlerde isteğe bağlıdır. Diğer durumlarda bu uygulama için genel istemci kimliğini veya HTTPS meta veri URL’sini girin.",
-  "settings.mcp.oauth.disconnect": "Yetkilendirmeyi kaldır",
+  "settings.mcp.oauth.disconnect": "OAuth yetkilendirmesini kaldır",
   "settings.mcp.oauth.errors.cancelled": "Yetkilendirme iptal edildi.",
   "settings.mcp.oauth.errors.configuration": "HTTPS adresini, genel istemci kimliğini ve mobil geri dönüş desteğini kontrol edin. OAuth kullanırken Authorization başlığını kaldırın.",
   "settings.mcp.oauth.errors.invalid_response": "Yetkilendirme yanıtı doğrulanamadı. Yetkilendirmeyi yeniden başlatın.",

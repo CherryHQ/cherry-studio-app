@@ -1400,7 +1400,7 @@
   "settings.mcp.oauth.authentication": "Έλεγχος ταυτότητας",
   "settings.mcp.oauth.clientId": "Δημόσιο ID πελάτη ή URL μεταδεδομένων",
   "settings.mcp.oauth.clientIdHint": "Προαιρετικό για υπηρεσίες με δυναμική εγγραφή. Διαφορετικά, εισαγάγετε το δημόσιο ID πελάτη ή το HTTPS URL μεταδεδομένων για αυτήν την εφαρμογή.",
-  "settings.mcp.oauth.disconnect": "Κατάργηση εξουσιοδότησης",
+  "settings.mcp.oauth.disconnect": "Κατάργηση εξουσιοδότησης OAuth",
   "settings.mcp.oauth.errors.cancelled": "Η εξουσιοδότηση ακυρώθηκε.",
   "settings.mcp.oauth.errors.configuration": "Ελέγξτε το HTTPS endpoint, το δημόσιο ID πελάτη και την υποστήριξη επιστροφής σε κινητό. Με OAuth, αφαιρέστε την κεφαλίδα Authorization.",
   "settings.mcp.oauth.errors.invalid_response": "Δεν ήταν δυνατή η επαλήθευση της απόκρισης. Ξεκινήστε ξανά την εξουσιοδότηση.",

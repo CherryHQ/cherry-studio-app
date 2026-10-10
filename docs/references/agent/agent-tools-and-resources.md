@@ -367,6 +367,10 @@ an operation. Servers may use a pre-registered public client ID or hosted Client
 Document URL; dynamic registration is used only when the server offers it. The app does not publish
 a Client ID Metadata Document for every server or replace provider-specific plugin authorization.
 
+The grant reference is validated before persistence and rejects extra fields. OAuth connections
+cannot store a manual `Authorization` header. Disabling a connection retains its grant; removing
+OAuth authorization clears both the grant reference and client ID and disables the connection.
+
 OAuth metadata, registration, token exchange, and refresh use origin-scoped `HttpClient` routes
 through `mcpOAuthFetch`. The shared transport owns query serialization, response bounds, HTTP
 timeouts, redirect rejection, and safe transport errors. The native authorization owner retains

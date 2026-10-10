@@ -1400,7 +1400,7 @@
   "settings.mcp.oauth.authentication": "Authentication",
   "settings.mcp.oauth.clientId": "Public client ID or metadata URL",
   "settings.mcp.oauth.clientIdHint": "Optional for services that support dynamic registration. Otherwise enter the public client ID or HTTPS client metadata URL provided for this app.",
-  "settings.mcp.oauth.disconnect": "Remove authorization",
+  "settings.mcp.oauth.disconnect": "Remove OAuth authorization",
   "settings.mcp.oauth.errors.cancelled": "Authorization cancelled.",
   "settings.mcp.oauth.errors.configuration": "Check the HTTPS endpoint, public client ID, and mobile callback support. Remove any Authorization header when using OAuth.",
   "settings.mcp.oauth.errors.invalid_response": "The authorization response could not be verified. Start authorization again.",

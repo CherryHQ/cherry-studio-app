@@ -1391,7 +1391,7 @@
   "settings.mcp.oauth.authentication": "授權方式",
   "settings.mcp.oauth.clientId": "公開用戶端 ID 或中繼資料 URL",
   "settings.mcp.oauth.clientIdHint": "支援動態註冊的服務可留空，否則請填寫適用於本應用程式的公開用戶端 ID 或 HTTPS 用戶端中繼資料 URL。",
-  "settings.mcp.oauth.disconnect": "移除授權",
+  "settings.mcp.oauth.disconnect": "移除 OAuth 授權",
   "settings.mcp.oauth.errors.cancelled": "已取消授權。",
   "settings.mcp.oauth.errors.configuration": "請檢查 HTTPS 位址、公開用戶端 ID 及行動端回呼支援。使用 OAuth 時請移除 Authorization 請求標頭。",
   "settings.mcp.oauth.errors.invalid_response": "無法驗證授權回應，請重新發起授權。",

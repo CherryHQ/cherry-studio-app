@@ -20,6 +20,7 @@ import {
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import {
+  McpOAuthReferenceSchema,
   McpServerSchema,
   type McpServer,
   type RemoteMcpServer,
@@ -162,6 +163,14 @@ export class McpServerService {
     }
 
     const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (parsed.headers !== undefined && updates.oauth !== null) {
+        // Read inside the write transaction so a newly attached grant cannot be bypassed.
+        const [current] = await tx
+          .select({ oauth: mcpServerTable.oauth })
+          .from(mcpServerTable)
+          .where(eq(mcpServerTable.id, id));
+        if (current?.oauth) this.validateOAuthHeaders(parsed.headers);
+      }
       if (name !== undefined) {
         await this.assertNameAvailable(tx, name, id);
       }
@@ -182,8 +191,10 @@ export class McpServerService {
     previous?: McpServer,
   ): Promise<McpServer> {
     const parsed = CreateMcpServerSchema.parse(input);
+    const reference = McpOAuthReferenceSchema.parse(oauth);
     const name = parsed.name.trim();
     this.validateName(name);
+    this.validateOAuthHeaders(parsed.headers);
     const [row] = await this.dbService.withWriteTx(async (tx) => {
       if (previous) {
         const [current] = await tx
@@ -206,7 +217,7 @@ export class McpServerService {
         name,
         endpointUrl: parsed.endpointUrl,
         headers: parsed.headers,
-        oauth,
+        oauth: reference,
         isEnabled: true,
       };
       return previous
@@ -277,6 +288,14 @@ export class McpServerService {
   private validateName(name: string): void {
     if (!name) {
       throw DataApiErrorFactory.validation({ name: ['Name is required'] });
+    }
+  }
+
+  private validateOAuthHeaders(headers: Record<string, string> | undefined): void {
+    if (Object.keys(headers ?? {}).some((key) => key.toLowerCase() === 'authorization')) {
+      throw DataApiErrorFactory.validation({
+        headers: ['OAuth cannot be combined with a manual Authorization header'],
+      });
     }
   }
 }
