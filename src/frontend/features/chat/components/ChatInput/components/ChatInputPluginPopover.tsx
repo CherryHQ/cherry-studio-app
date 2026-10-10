@@ -64,7 +64,9 @@ export function ChatInputPluginPopover({
     setShouldRestoreFocus(true);
     if (!selectedIds.has(plugin.serverId)) {
       inputRef.current?.insertLink(
-        createPluginMentionLabel(t(`plugins.catalog.${plugin.id}.name`)),
+        createPluginMentionLabel(
+          t(`plugins.catalog.${plugin.id}.name`, { defaultValue: plugin.id }),
+        ),
         createPluginMentionUrl(plugin.serverId, plugin.id),
       );
       inputRef.current?.insertText(' ');
@@ -83,7 +85,7 @@ export function ChatInputPluginPopover({
     >
       {plugins.map((plugin, index) => {
         const isSelected = selectedIds.has(plugin.serverId);
-        const name = t(`plugins.catalog.${plugin.id}.name`);
+        const name = t(`plugins.catalog.${plugin.id}.name`, { defaultValue: plugin.id });
         return (
           <Pressable
             accessibilityLabel={name}
