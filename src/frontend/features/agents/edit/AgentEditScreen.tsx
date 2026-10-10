@@ -324,6 +324,7 @@ function AgentEditForm({
             toast.show({ label: t('agent.toast.deleteFailed'), variant: 'danger' });
           });
         },
+        role: 'destructive',
         title: t('agent.delete.title'),
       });
     },
