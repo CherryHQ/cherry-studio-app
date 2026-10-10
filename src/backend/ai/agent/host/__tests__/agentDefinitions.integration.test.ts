@@ -44,6 +44,7 @@ describe('agent-table definition source', () => {
 
     await expect(source.getAgent(agent.id)).resolves.toEqual({
       disabledCapabilities: ['location'],
+      mode: 'standard',
       id: agent.id,
       instructions: 'Be terse.',
       model: { modelId: 'gpt-4', providerId: 'openai' },
@@ -53,6 +54,9 @@ describe('agent-table definition source', () => {
     });
 
     await expect(source.getAgent('missing-agent')).resolves.toBeNull();
+
+    await agentService.update(agent.id, { mode: 'minimal' });
+    await expect(source.getAgent(agent.id)).resolves.toMatchObject({ mode: 'minimal' });
 
     await agentService.delete(agent.id);
     await expect(source.getAgent(agent.id)).resolves.toBeNull();

@@ -25,6 +25,7 @@ import {
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -63,6 +64,7 @@ export function ChatInput({
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
+  const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
@@ -119,7 +121,9 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
-      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
+      {mode === 'standard' &&
+      selectedModelItem &&
+      isImageGenerationModel(selectedModelItem.model) ? (
         <PaintingInput
           canSend={canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -130,6 +134,7 @@ export function ChatInput({
         />
       ) : (
         <TextChatInput
+          mode={mode}
           agentId={agentId}
           controls={controls}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -146,6 +151,7 @@ export function ChatInput({
 }
 
 function TextChatInput({
+  mode,
   agentId,
   controls,
   dismissKeyboardOnSend,
@@ -156,6 +162,7 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
 }: Omit<ChatInputProps, 'sessionId'> & {
+  mode: AgentMode;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
@@ -177,7 +184,7 @@ function TextChatInput({
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
-  const hasConnectedPlugins = connectedPlugins.length > 0;
+  const hasConnectedPlugins = mode === 'standard' && connectedPlugins.length > 0;
   const pluginMenuRef = useRef<View>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
   const isPluginPickerVisible = isPluginPickerOpen && !isApprovalPending && hasConnectedPlugins;
@@ -208,7 +215,8 @@ function TextChatInput({
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
-      const { pluginReferences, text: prompt } = readPluginMentions(text);
+      const { pluginReferences, text: prompt } =
+        mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
       const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
       return sendMessage({
         parts,
@@ -224,7 +232,14 @@ function TextChatInput({
           : {}),
       });
     },
-    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
+    [
+      isReasoningEffortSelected,
+      mode,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedModelId,
+      sendMessage,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -254,7 +269,12 @@ function TextChatInput({
           >
             {(effortGauge) => (
               <ChatInputComposer
-                canSend={selectedModelItem ? canSend : false}
+                canSend={
+                  selectedModelItem &&
+                  (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                    ? canSend
+                    : false
+                }
                 dismissKeyboardOnSend={dismissKeyboardOnSend}
                 getSendErrorLabel={getSendErrorLabel}
                 onSend={handleSendPress}
@@ -276,6 +296,7 @@ function TextChatInput({
                   fieldStyle={isPluginPickerVisible ? compactInputStyle : undefined}
                   leadingAction={
                     <ChatInputMenu
+                      media={mode === 'minimal' ? 'images' : 'all'}
                       onPickPlugins={
                         hasConnectedPlugins ? () => setIsPluginPickerOpen(true) : undefined
                       }
@@ -306,7 +327,7 @@ function TextChatInput({
       </ChatInputPluginPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="all"
+          modelType={mode === 'minimal' ? 'text' : 'all'}
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}

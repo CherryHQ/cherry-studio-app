@@ -6,6 +6,54 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('defaults existing and new Agents to standard mode without changing configuration or sessions', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0006_agent_mode',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, instructions, disabled_capabilities, tool_approval_mode, order_key, created_at, updated_at)
+        VALUES ('existing', 'Chat', 'Keep my instructions', '["web"]', 'default', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'existing', 'History', 1, 1, 1);
+      `);
+      database.exec('BEGIN');
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      database.exec('COMMIT');
+      expect(
+        database
+          .prepare(
+            'SELECT mode, instructions, disabled_capabilities, tool_approval_mode FROM agent',
+          )
+          .get(),
+      ).toEqual({
+        mode: 'standard',
+        instructions: 'Keep my instructions',
+        disabled_capabilities: '["web"]',
+        tool_approval_mode: 'default',
+      });
+      database.exec(`
+        UPDATE agent SET mode = 'minimal' WHERE id = 'existing';
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('new', 'New', 'a1', 1, 1);
+      `);
+      expect(database.prepare('SELECT id, mode FROM agent ORDER BY id').all()).toEqual([
+        { id: 'existing', mode: 'minimal' },
+        { id: 'new', mode: 'standard' },
+      ]);
+      expect(database.prepare('SELECT agent_id, name FROM agent_session').all()).toEqual([
+        { agent_id: 'existing', name: 'History' },
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds the runtime revision and drops interim replay without rewriting transcript data', () => {
     const database = new DatabaseSync(':memory:');
     try {

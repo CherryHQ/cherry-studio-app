@@ -39,6 +39,14 @@ System capability enablement persists on the Agent row as a capability-group den
 (`disabled_capabilities`, JSON group ids, unknown ids dropped on read); everything else about a
 capability resolves per turn and needs no Session persistence.
 
+The Agent's `mode` is either `standard` (the creation and migration default) or
+`minimal`. Minimal mode has a fixed text-chat and direct-image boundary: the Host skips built-in
+tools, MCP discovery and plugin guides, rejects new document attachments and image generation,
+and uses a compact application prompt. Capability, approval and MCP binding preferences stay
+stored when modes change, so switching back to standard restores them. Mode changes apply to
+subsequent turns; existing transcript content remains part of the conversation history.
+Provider-native web search is not configured by this mode setting.
+
 ## Current limitations
 
 The Agent Data API, `Backend.agent`, and frontend surfaces share these current constraints:

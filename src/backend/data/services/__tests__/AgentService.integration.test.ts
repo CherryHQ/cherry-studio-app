@@ -84,6 +84,7 @@ describe('AgentService persistence', () => {
       // capability enabled; the create form seeds its own deny-list.
       disabledCapabilities: [],
       instructions: '',
+      mode: 'standard',
       model: 'openai::gpt-4',
       name: 'Researcher',
       toolApprovalMode: 'auto',
@@ -119,6 +120,24 @@ describe('AgentService persistence', () => {
     } finally {
       unsubscribe();
     }
+  });
+
+  it('persists mode switches without resetting capability or approval preferences', async () => {
+    const agent = await agentService.create({
+      name: 'Chat',
+      mode: 'minimal',
+      disabledCapabilities: ['calendar', 'web'],
+      toolApprovalMode: 'default',
+    });
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({ mode: 'minimal' });
+    await agentService.update(agent.id, { name: 'Renamed' });
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({ mode: 'minimal' });
+    await agentService.update(agent.id, { mode: 'standard' });
+    await expect(agentService.getById(agent.id)).resolves.toMatchObject({
+      mode: 'standard',
+      disabledCapabilities: ['calendar', 'web'],
+      toolApprovalMode: 'default',
+    });
   });
 
   it('publishes committed avatar, ordering, deletion, and initial Agent changes', async () => {
