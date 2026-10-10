@@ -37,8 +37,9 @@ export function createBackendServices({
   preference,
   webSearch,
 }: BackendInfrastructure) {
+  const data = createDataServices({ cache, preference });
   return {
-    ...createDataServices({ cache, preference }),
+    ...data,
     agent,
     ai,
     // Module singletons, spread here only so the routing table reads one object.

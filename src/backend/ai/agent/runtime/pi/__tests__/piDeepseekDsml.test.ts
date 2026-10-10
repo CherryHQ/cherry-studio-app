@@ -1,17 +1,20 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { Agent } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   AssistantMessage,
   AssistantMessageEvent,
-  Context,
   Model,
+  TranscriptContext,
 } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { getCurrentTools, normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
+import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
 
 import type { RuntimeJsonValue, RuntimeTool } from '../../types';
 import { withPiDeepseekDsml } from '../piDeepseekDsml';
-import { createPiDeferredToolDiscoveryTools } from '../piDeferredToolDiscovery';
+import { createPiDurableModels } from '../piDurableModels';
+import { PiDurableRuntime } from '../PiDurableRuntime';
+import { createPiDurableToolExtension } from '../piDurableTools';
+import type { PiStreamFn as StreamFn } from '../piModelTypes';
 
 const MODEL: Model<'openai-completions'> = {
   api: 'openai-completions',
@@ -287,7 +290,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
     expect((await collect(() => source)).result.stopReason).toBe('error');
   });
 
-  test('runs MCP discovery, dispatch, and the follow-up answer through the real Pi agent loop', async () => {
+  test('runs MCP discovery, dispatch, and the follow-up answer through the durable Pi loop', async () => {
     const executions: RuntimeJsonValue[] = [];
     const target: RuntimeTool = {
       ref: { source: 'mcp', serverId: 'notes', rawToolName: 'save' },
@@ -296,77 +299,138 @@ describe('Pi DeepSeek DSML adaptation', () => {
       description: 'Save a note',
       inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       approval: 'ask',
-      execute: async () => ({ value: 'saved', artifacts: [] }),
-    };
-    const tools = createPiDeferredToolDiscoveryTools(
-      [target],
-      async (_tool, input) => {
+      execute: async ({ input }) => {
         executions.push(input);
         return { value: 'saved', artifacts: [] };
       },
-      async (_id, _signal, _activity, operation) => operation(32_000).modelOutput,
-    );
+    };
     const responses = [
       '<｜DSML｜Tool loop><search>save note</search></｜DSML｜Tool>',
       '<｜DSML｜tool_calls><｜DSML｜invoke name="tool_call"><｜DSML｜parameter name="name" string="true">mcp__notes__save</｜DSML｜parameter><｜DSML｜parameter name="params" string="false">{"text":"hello"}</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>',
       'Saved your note.',
     ];
-    const requests: Context[] = [];
-    const agent = new Agent({
-      initialState: { model: MODEL, tools },
-      streamFn: withPiDeepseekDsml((_model, context) => {
-        requests.push(context);
-        const response = responses.shift();
-        if (!response) throw new Error('Unexpected additional model request.');
-        return sourceOf(message([{ type: 'text', text: response }]));
-      }),
-    });
-    await agent.prompt('Save hello in notes.');
+    const { requests, messages } = await runDurableLoop(() => {
+      const response = responses.shift();
+      if (!response) throw new Error('Unexpected additional model request.');
+      return sourceOf(message([{ type: 'text', text: response }]));
+    }, [target]);
     expect(executions).toEqual([{ text: 'hello' }]);
     expect(requests).toHaveLength(3);
-    expect(getCurrentTools(requests[1].messages).map((tool) => tool.name)).toEqual([
-      'tool_search',
-      'tool_describe',
-      'tool_call',
-    ]);
-    expect(agent.state.messages.at(-1)).toMatchObject({
+    expect(getCurrentTools(requests[1]!.messages).map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['tool_search', 'tool_describe', 'tool_call']),
+    );
+    expect(messages.at(-1)).toMatchObject({
       role: 'assistant',
       content: [{ type: 'text', text: 'Saved your note.' }],
     });
-    expect(agent.state.messages.filter((item) => item.role === 'toolResult')).toHaveLength(2);
-    expect(JSON.stringify(agent.state.messages)).not.toContain('DSML');
+    expect(messages.filter((item) => item.role === 'toolResult')).toHaveLength(2);
+    expect(JSON.stringify(messages)).not.toContain('DSML');
   });
 
   test.each(['error', 'length'] as const)(
     'never executes recovered calls from a %s turn',
     async (reason) => {
       const executed: string[] = [];
-      const agent = new Agent({
-        initialState: {
-          model: MODEL,
-          tools: [
-            {
-              ...LOOKUP_TOOL,
-              label: 'Lookup',
-              execute: async () => {
-                executed.push('lookup');
-                return { content: [{ type: 'text', text: 'done' }], details: {} };
-              },
-            },
-          ],
+      const lookup: RuntimeTool = {
+        ref: { source: 'builtin', capabilityId: 'lookup' },
+        providerName: 'lookup',
+        displayName: 'Lookup',
+        description: 'Find notes',
+        inputSchema: { type: 'object', properties: { query: { type: 'string' } } },
+        approval: 'auto',
+        execute: async () => {
+          executed.push('lookup');
+          return { value: 'done', artifacts: [] };
         },
-        finishTurn: async () => ({ action: 'end' }),
-        streamFn: withPiDeepseekDsml(() =>
+      };
+      await runDurableLoop(
+        () =>
           sourceOf(
             message(
               [{ type: 'text', text: reason === 'error' ? `${CALL}<｜DSML｜tool_calls>` : CALL }],
               reason === 'error' ? 'stop' : 'length',
             ),
           ),
-        ),
-      });
-      await agent.prompt('Find notes.');
+        [lookup],
+      );
       expect(executed).toEqual([]);
     },
   );
 });
+
+/** One input through a real Pi Durable Harness whose provider stream is DSML-adapted. */
+async function runDurableLoop(source: StreamFn, tools: RuntimeTool[]) {
+  const requests: TranscriptContext[] = [];
+  const reference = { providerId: MODEL.provider, modelId: MODEL.id };
+  let runtime!: PiDurableRuntime;
+  const bridge = createPiDurableModels(
+    {
+      preflightModel: async () => ({
+        contextWindow: 32768,
+        maxInputTokens: 28672,
+        maxOutputTokens: 256,
+        inputModalities: ['text'],
+        supportsTools: true,
+      }),
+      resolveModel: async () => ({
+        model: MODEL,
+        defaultThinkingLevel: 'off',
+        redactionValues: [],
+        supportsTools: true,
+        usageContext: {
+          providerId: MODEL.provider,
+          providerName: null,
+          modelId: MODEL.id,
+          modelName: null,
+          pricingSnapshot: null,
+          trustProviderReportedCost: false,
+          reportedCostCurrency: null,
+          credentialReceipt: { attribution: 'unknown' },
+        },
+        streamFn: withPiDeepseekDsml((model, context, options) => {
+          requests.push(context);
+          return source(model, context, options);
+        }),
+      }),
+    },
+    (affinity) => runtime.requestOptions(affinity),
+  );
+  await bridge.registerModel(reference);
+  const registry = createRegistry();
+  const extension = createPiDurableToolExtension({
+    name: 'capabilities',
+    tools,
+    resolve: async (tool) => ({ tool, turnId: 'turn' }),
+    approve: async () => true,
+  });
+  registry.install(extension);
+  runtime = await PiDurableRuntime.open(new MemoryStorage(), {
+    models: bridge.models,
+    registry,
+    settings: { compaction: { enabled: false }, retry: { enabled: false } },
+  });
+  try {
+    await runtime.ensureConversation({
+      sessionId: 'session',
+      revision: 0,
+      agent: {
+        model: { provider: reference.providerId, modelId: reference.modelId },
+        instructions: 'Help the user.',
+        extensions: [extension],
+      },
+    });
+    const submission = await runtime.submit(
+      'session',
+      { type: 'input', requestId: 'request', content: 'Save hello in notes.' },
+      { turnId: 'turn' },
+    );
+    await submission.wait(BACKGROUND_CONTEXT);
+    const history = await runtime.history('session', 256);
+    return {
+      requests,
+      messages: history.entries.toReversed().flatMap((entry) => entry.model ?? []),
+    };
+  } finally {
+    await runtime.close();
+  }
+}

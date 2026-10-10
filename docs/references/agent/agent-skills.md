@@ -13,7 +13,7 @@ message.
 backend/services/skill       sources → validation → admission → managed installation
 backend/data                 installed package facts + Agent binding preferences
 backend/ai/agent/host         current eligibility → pinned scope → active instructions
-backend/ai/agent/runtime      generic prepared context and context-budget accounting
+backend/ai/agent/runtime      Pi Durable model history, compaction and tool loop
 ```
 
 A Skill is an instruction package, not an executable extension. Loading cannot add tools, change
@@ -160,15 +160,17 @@ scope, including eligible additions installed during the turn. A new installatio
 cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
 not silently create bindings.
 
-Active entry instructions have a 48,000-character aggregate limit. They live in Host-owned context
-outside compactable tool-result history. The generic Runtime callback refreshes that context through
-Pi system-section updates before the next tool-loop budget and compaction decision. Oversized
-activation fails rather than truncating instructions. References are read progressively and can be
-read again after compaction.
+Active entry instructions have a 48,000-character aggregate limit; oversized activation fails rather
+than truncating instructions. Pi Durable owns model history and compaction, and a conversation's
+system instructions are fixed for the duration of a turn. `load_skill` therefore returns the
+instructions in its result so the current turn can follow them, and explicit selections are quoted
+in that turn's system instructions. References are read progressively and can be read again after
+compaction.
 
-Successful built-in loading receipts and Host-written user selection metadata, collected across the
-whole transcript including compacted turns, restore active instructions on later turns. Restoration
-loads the Skill's current revision while it stays bound, enabled, eligible and invocable in the same
-way; a Skill that no longer qualifies simply stops contributing instructions. Retries exclude
-receipts from the answer they replace. The UI shows Skill name and revision receipts, without dumping
-instruction bodies into the tool trace.
+On later turns the Host restores active instructions into the system instructions, outside the
+history Pi may compact. It reads successful built-in loading receipts and Host-written user
+selection metadata from the Cherry transcript, so restoration also works after a working copy is
+rebuilt. It loads the Skill's current revision while the Skill stays bound, enabled, eligible and
+invocable in the same way; a Skill that no longer qualifies simply stops contributing instructions.
+Retry and regeneration resubmit the original message's selections and find-and-install action. The
+UI shows Skill name and revision receipts, without dumping instruction bodies into the tool trace.

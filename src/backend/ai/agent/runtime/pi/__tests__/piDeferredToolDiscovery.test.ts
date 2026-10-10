@@ -1,5 +1,3 @@
-import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
-
 import {
   getBuiltInPluginCatalog,
   requirePluginDefinition,
@@ -65,7 +63,11 @@ function searchNames(result: RuntimeToolResult): string[] {
   return (value.matchedNamespaces ?? []).flatMap((group) => group.tools.map((tool) => tool.name));
 }
 
-function execute(tool: PiAgentTool, input: RuntimeJsonValue, toolCallId = 'call-1') {
+function execute(
+  tool: ReturnType<typeof createPiDeferredToolDiscoveryTools>[number],
+  input: RuntimeJsonValue,
+  toolCallId = 'call-1',
+) {
   return tool.execute(toolCallId, input as never, SIGNAL);
 }
 

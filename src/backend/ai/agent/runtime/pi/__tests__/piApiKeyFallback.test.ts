@@ -1,4 +1,3 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessage,
   AssistantMessageEvent,
@@ -9,6 +8,7 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
+import type { PiStreamFn as StreamFn } from '../piModelTypes';
 
 const MODEL: Model<'openai-completions'> = {
   api: 'openai-completions',

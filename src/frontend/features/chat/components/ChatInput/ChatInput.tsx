@@ -11,7 +11,6 @@ import {
   ComposerAttachments,
   ComposerModelPill,
   type ComposerSendPayload,
-  ComposerSurface,
   useComposerPresentationActions,
 } from '@/frontend/components/Composer';
 import {
@@ -32,7 +31,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { ChatInputSurface } from './ChatInputSurface';
+import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -305,7 +304,7 @@ function TextChatInput({
             reasoningEfforts={reasoningEfforts}
           >
             {(effortGauge) => (
-              <ComposerSurface
+              <ChatInputComposer
                 canSend={selectedModelItem ? canSend : false}
                 dismissKeyboardOnSend={dismissKeyboardOnSend}
                 getSendErrorLabel={getSendErrorLabel}
@@ -354,6 +353,7 @@ function TextChatInput({
                 <ChatInputSurface
                   streaming={isBusy}
                   placeholder={findSkills ? t('skills.find.hint') : undefined}
+                  onStop={() => void cancel()}
                   fieldStyle={isPluginPickerVisible ? compactInputStyle : undefined}
                   leadingAction={
                     <ChatInputMenu
@@ -387,7 +387,7 @@ function TextChatInput({
                   }
                   trailingAction={effortGauge}
                 />
-              </ComposerSurface>
+              </ChatInputComposer>
             )}
           </ChatInputEffortOverlay>
         </View>

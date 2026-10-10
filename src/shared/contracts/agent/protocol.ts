@@ -51,8 +51,8 @@ export interface AgentProtocol {
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 
-  /** Replaces a settled answer in place using context up to its original user input. */
-  retryMessage(input: AgentRetryMessageInput): Promise<void>;
+  /** Local persistent regeneration opens a new branch and preserves the original answer. */
+  retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
 
   submitMessage(
     input: AgentSubmitMessageInput,

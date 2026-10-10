@@ -107,6 +107,41 @@ async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> 
 }
 
 describe('AgentSessionChatClient', () => {
+  test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
+    const activeTurn = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      status: 'running' as const,
+      assistantMessageId: 'assistant-1',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: { ...snapshot(), activeTurn, streamingMessage: assistantMessage() },
+      unsubscribe: jest.fn(),
+    }));
+    const client = new AgentSessionChatClient(protocol);
+    const unsubscribe = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    const before = client.getState('session-1');
+    await client.submitMessage({
+      sessionId: 'session-1',
+      userMessageId: 'queued-user',
+      assistantMessageId: 'queued-answer',
+      parts: [{ type: 'text', text: 'Follow up' }],
+    });
+    expect(client.getState('session-1').activeTurn).toEqual(activeTurn);
+    expect(client.getState('session-1').liveMessages).toEqual(before.liveMessages);
+    expect(isAgentSessionBusy(client.getState('session-1'))).toBe(true);
+    await expect(
+      client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' }),
+    ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+    expect(protocol.submitMessage).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    client.dispose();
+  });
+
   test('pauses live observation in background and restores missed text from the next snapshot', async () => {
     let publish!: (event: AgentEvent) => void;
     let snapshotText = 'before';
@@ -237,7 +272,7 @@ describe('AgentSessionChatClient', () => {
     unsubscribe();
   });
 
-  test('marks the answer as retrying from the press until admission settles, across a refresh', async () => {
+  test('keeps the original answer visible while a new branch is admitted, across a refresh', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),
       unsubscribe: jest.fn(),
@@ -253,10 +288,11 @@ describe('AgentSessionChatClient', () => {
     const unsubscribe = client.subscribe('session-1', () => undefined);
     const retry = client.retryMessage({ sessionId: 'session-1', messageId: 'assistant-1' });
 
-    expect(client.getState('session-1').retryingMessageId).toBe('assistant-1');
-    // A re-observation mid-admission must not drop the projection.
+    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
+    expect(client.getState('session-1').isSubmitting).toBe(true);
+    // A re-observation does not replace the original answer with a pending projection.
     await client.refresh('session-1');
-    expect(client.getState('session-1').retryingMessageId).toBe('assistant-1');
+    expect(client.getState('session-1').retryingMessageId).toBeUndefined();
 
     admitRetry();
     await retry;

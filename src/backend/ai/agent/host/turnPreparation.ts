@@ -43,7 +43,6 @@ import type {
   AgentSessionStore,
   StoredRuntimeTurnContext,
 } from '../sessionStore/AgentSessionStore';
-import { collectSkillActivations } from '../sessionStore/skillActivations';
 import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
@@ -92,7 +91,7 @@ export type TurnPreparationDependencies = {
   skillWorkflow?: SkillsModule;
   store: Pick<
     AgentSessionStore,
-    'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext'
+    'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext' | 'loadSkillActivations'
   >;
   systemCapabilities: SystemCapabilitySource;
 };
@@ -137,8 +136,8 @@ export type TurnSkillPlan = {
   findAndInstall?: boolean;
   /** Explicitly selected Skills with their instructions already loaded. */
   selected: readonly { entry: SkillTurnEntry; instructions: string }[];
-  /** Host-owned active instructions, updated by successful read-only loading tools. */
-  active?: Map<string, { entry: SkillTurnEntry; instructions: string }>;
+  /** Instructions restored from earlier turns' receipts; they ride with the system prompt. */
+  active?: ReadonlyMap<string, { entry: SkillTurnEntry; instructions: string }>;
 };
 
 export const EMPTY_TURN_SKILL_PLAN: TurnSkillPlan = Object.freeze({
@@ -178,6 +177,7 @@ export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput,
   signal: AbortSignal,
+  excludeCheckpointMessageId?: string,
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const { sessionId } = parsed;
@@ -194,6 +194,7 @@ export async function prepareTurn(
     dependencies,
     sessionId,
     signal,
+    excludeCheckpointMessageId,
   );
 
   return prepareResolvedTurn(
@@ -284,6 +285,35 @@ export async function prepareInitialTurn(
     emptyContext,
     null,
     documentParserMode,
+    signal,
+  );
+}
+
+/** Native conversations prepare capabilities and new input without reconstructing model history. */
+export async function prepareDurableTurn(
+  dependencies: TurnPreparationDependencies,
+  parsed: AgentSubmitMessageInput,
+  referencedFileEntryIds: readonly string[],
+  signal: AbortSignal,
+): Promise<TurnPlan> {
+  const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
+  if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+  const agent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
+  if (!agent) fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    agent,
+    {
+      anchorFound: true,
+      hasMessages: true,
+      history: [],
+      referencedFileEntryIds: [...referencedFileEntryIds],
+      sessionTurnIds: [],
+    },
+    null,
+    dependencies.documentParserMode(),
     signal,
   );
 }
@@ -405,9 +435,12 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
-  const receipts = latestSkillActivations(
-    storedTurnContext.skillActivations ?? collectSkillActivations(storedTurnContext.history),
-  );
+  // Receipts come from the Cherry transcript, so they also cover turns Pi has compacted.
+  const receipts = dependencies.skills
+    ? latestSkillActivations(
+        await raceAbort(dependencies.store.loadSkillActivations(parsed.sessionId), signal),
+      )
+    : [];
   if (runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
@@ -457,7 +490,6 @@ export async function prepareResolvedTurn(
     skills = {
       ...skills,
       scope: expanding.scope,
-      active: skills.active ?? new Map(),
       findAndInstall: parsed.skillAction === 'find-and-install',
     };
     if (skills.scope.entries.length > 0 || dependencies.skillWorkflow) {
@@ -477,7 +509,6 @@ export async function prepareResolvedTurn(
           (sum, { instructions }) => sum + [...instructions].length,
           0,
         ),
-        onLoad: (entry, instructions) => skills.active?.set(entry.id, { entry, instructions }),
       });
     }
     if (dependencies.skillWorkflow && dependencies.skills) {

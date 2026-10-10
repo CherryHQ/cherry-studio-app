@@ -63,6 +63,7 @@ export class AgentSessionService {
         SELECT id, agent_id AS "agentId", name,
           is_name_manually_edited AS "isNameManuallyEdited",
           last_activity_at AS "lastActivityAt", created_at AS "createdAt", updated_at AS "updatedAt",
+          runtime_revision AS "runtimeRevision",
           forked_from_session_id AS "forkedFromSessionId", fork_boundary_message_id AS "forkBoundaryMessageId"
         FROM ${agentSessionTable}
         WHERE ${condition ?? sql`1 = 1`}

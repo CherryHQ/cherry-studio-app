@@ -17,7 +17,7 @@ const RESOURCE_DIRECTORIES = {
 
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
-  if (path === 'database/cherry.db') return new File(root, 'database', 'cherry.db');
+  if (path === 'database/cherry.db') return new File(root, ...path.split('/'));
   if (path.startsWith('skills/'))
     return new File(root, 'Data', 'Skills', ...path.slice(7).split('/'));
   const slash = path.lastIndexOf('/');

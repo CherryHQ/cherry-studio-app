@@ -1,6 +1,7 @@
 import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
+import '@/bootstrap/preboot/promise';
 import '@/bootstrap/preboot/webCrypto';
 import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';

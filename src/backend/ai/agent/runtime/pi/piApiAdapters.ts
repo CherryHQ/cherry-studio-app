@@ -1,9 +1,9 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core';
 import type { CacheRetention, FetchFunction } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import type { PiStreamFn } from './piModelTypes';
 import { applyPiRequestParameters, type PiRequestParameters } from './piRequestParameters';
 
 export type SupportedPiApi =
@@ -13,8 +13,6 @@ export type SupportedPiApi =
   | 'openai-responses'
   | 'openai-codex-responses'
   | 'azure-openai-responses';
-
-type PiStreamFn = AgentOptions['streamFn'];
 
 type PiApiAdapter = {
   api: SupportedPiApi;

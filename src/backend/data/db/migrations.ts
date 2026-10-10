@@ -2,7 +2,9 @@ import m0000 from '../../../../migrations/sqlite-drizzle/0000_initial.sql';
 import m0001 from '../../../../migrations/sqlite-drizzle/0001_hot_cammi.sql';
 import m0002 from '../../../../migrations/sqlite-drizzle/0002_orange_thunderbolt_ross.sql';
 import m0003 from '../../../../migrations/sqlite-drizzle/0003_align_agent_fields.sql';
-import m0004 from '../../../../migrations/sqlite-drizzle/0004_agent_skills.sql';
+import m0004 from '../../../../migrations/sqlite-drizzle/0004_agent_message_replay.sql';
+import m0005 from '../../../../migrations/sqlite-drizzle/0005_drop_agent_message_replay.sql';
+import m0006 from '../../../../migrations/sqlite-drizzle/0006_agent_skills.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -18,5 +20,7 @@ export const migrations = {
     m0002,
     m0003,
     m0004,
+    m0005,
+    m0006,
   },
 };

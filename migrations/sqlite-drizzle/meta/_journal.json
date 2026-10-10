@@ -33,8 +33,22 @@
     {
       "idx": 4,
       "version": "6",
-      "when": 1791533456758,
-      "tag": "0004_agent_skills",
+      "when": 1791522027135,
+      "tag": "0004_agent_message_replay",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1791604278384,
+      "tag": "0005_drop_agent_message_replay",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791612026855,
+      "tag": "0006_agent_skills",
       "breakpoints": true
     }
   ]

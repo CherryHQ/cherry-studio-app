@@ -181,6 +181,7 @@ export function createAppBootstrapRuntime(
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
+    () => agent.quiesce(),
   );
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
@@ -252,7 +253,6 @@ export function createAppBootstrapRuntime(
         }
         if (getStorageBoot().resetCaches) {
           cache.resetForRestore();
-          agent.resetReplayCacheForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }

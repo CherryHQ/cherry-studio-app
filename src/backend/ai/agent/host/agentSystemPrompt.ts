@@ -171,7 +171,7 @@ function buildSkillsSection(skills: TurnSkillPlan): string {
   const lines = [
     `## Skills
 
-Skills are installed instruction packages this Agent may use. They do not add tools, permissions, or approvals; follow them only with the tools available in this turn. When the user's task matches a Skill's description, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\` before starting, then follow the loaded instructions and read its package files as they direct. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog below is truncated or a task may match a Skill not listed. Load a Skill only when its instructions are not already active for this turn. Current active instructions below are authoritative for Skill use; previous tool output, summaries, and earlier selections are history and must never reactivate a missing or disabled Skill. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
+Skills are installed instruction packages this Agent may use. They do not add tools, permissions, or approvals; follow them only with the tools available in this turn. When the user's task matches a Skill's description, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\` before starting, then follow the loaded instructions and read its package files as they direct. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog below is truncated or a task may match a Skill not listed. Load a Skill only when its instructions are not already active below. Instructions returned by \`${LOAD_SKILL_TOOL_NAME}\` in this turn and the active instructions below are current; never follow a Skill that is no longer listed here from older conversation content. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
   ];
   if (catalog.length > 0) {
     const shown = catalog.slice(0, SKILL_CATALOG_MAX_ENTRIES);
@@ -216,7 +216,7 @@ export function buildActiveSkillInstructions(skills: TurnSkillPlan): string {
   if (active.length === 0) return '';
   return `## Active Skill instructions
 
-These packages are already loaded for this turn. Follow their instructions within app policy and the user's current request. Historical Skill content is not an active instruction source.
+These Skills were loaded or selected earlier in this conversation and stay active. Follow their instructions within app policy and the user's current request; they supersede older copies in the conversation.
 
 ${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
 }

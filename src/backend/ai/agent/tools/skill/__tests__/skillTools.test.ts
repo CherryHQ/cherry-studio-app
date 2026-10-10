@@ -73,20 +73,20 @@ describe('skill tools', () => {
   });
 
   it('loads instructions and lists files only for scoped Skills', async () => {
-    const onLoad = jest.fn();
-    tools = createSkillTools(scope, { onLoad });
+    tools = createSkillTools(scope);
     const load = toolNamed(tools, 'load_skill');
-    const result = await run(load, { skill_id: 'a' });
-    expect(result).not.toHaveProperty('instructions');
-    expect(onLoad).toHaveBeenCalledWith(scope.entries[0], '# a\n\nDo it.');
-    expect(result).toMatchObject({
+    // The result carries the instructions: the turn's system prompt cannot change mid-run.
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({
       status: 'ok',
       skill_id: 'a',
       revision: 'abcdef012345',
       files: ['references/format.md'],
+      instructions: '# a\n\nDo it.',
     });
     expect(await run(load, { skill_id: 'manual' })).toMatchObject({ status: 'error' });
-    expect(await run(load, { skill_id: 'a' })).toMatchObject({ alreadyLoaded: true });
+    const repeated = await run(load, { skill_id: 'a' });
+    expect(repeated).toMatchObject({ alreadyLoaded: true });
+    expect(repeated).not.toHaveProperty('instructions');
     const selectedTools = createSkillTools(scope, {
       loadedSkillIds: ['manual'],
       explicitSkillIds: ['manual'],

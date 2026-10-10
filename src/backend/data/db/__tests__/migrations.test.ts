@@ -6,6 +6,36 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds the runtime revision and drops interim replay without rewriting transcript data', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      for (const sql of files.slice(0, 4)) database.exec(sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('answer', 'session', 'assistant', '{"parts":[]}', 'success', 1, 1);
+      `);
+      // 0004 shipped in test builds with a replay column; 0005 removes it again.
+      database.exec(files[4]!);
+      database.exec(`UPDATE agent_session_message SET replay = '{"version":1}'`);
+      for (const sql of files.slice(5)) database.exec(sql);
+      expect(database.prepare('SELECT runtime_revision FROM agent_session').get()).toEqual({
+        runtime_revision: 0,
+      });
+      expect(database.prepare('SELECT data, status FROM agent_session_message').get()).toEqual({
+        data: '{"parts":[]}',
+        status: 'success',
+      });
+      expect(columnNames(database, 'agent_session_message')).not.toContain('replay');
+    } finally {
+      database.close();
+    }
+  });
+
   test('consolidates usage and changes only new Agent approval defaults with foreign keys enabled', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -537,6 +567,7 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'forked_from_session_id',
         'fork_boundary_message_id',
+        'runtime_revision',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -648,15 +679,11 @@ describe('bundled SQLite migrations', () => {
       expect(getSchemaSql(database, 'index', 'agent_global_skill_folder_name_unique')).toContain(
         '(`folder_name`)',
       );
-      // Invariant 1 (agent-protocol.md) is a database constraint: at most one
-      // unsettled assistant message per session.
-      expect(indexList(database, 'agent_session_message')).toEqual(
+      // Pending rows include queued inputs; native Pi work serializes execution.
+      expect(indexList(database, 'agent_session_message')).not.toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ name: 'agent_session_message_active_turn_uniq', unique: 1 }),
+          expect.objectContaining({ name: 'agent_session_message_active_turn_uniq' }),
         ]),
-      );
-      expect(getSchemaSql(database, 'index', 'agent_session_message_active_turn_uniq')).toContain(
-        "'pending', 'streaming'",
       );
 
       database.exec(`
@@ -727,19 +754,10 @@ describe('bundled SQLite migrations', () => {
           ) VALUES ('binding-unsafe', 'agent-1', 'mcp', 'server-2', 1, 'always', 1, 1);
         `),
       ).toThrow(/agent_tool_binding_approval_check/);
-      // A second unsettled assistant row in the same session is the reservation
-      // race the partial unique index exists to reject.
-      expect(() =>
-        database.exec(`
-          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"parts":[]}', 'pending', 2, 2);
-        `),
-      ).toThrow(/UNIQUE/);
-      // Settling the first frees the slot for the next reservation.
+      // Queued inputs have their own durable pending rows; Pi owns execution serialization.
       database.exec(`
-        UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
         INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
-        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"parts":[]}', 'streaming', 2, 2);
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"parts":[]}', 'pending', 2, 2);
       `);
       expect(() =>
         database.exec(

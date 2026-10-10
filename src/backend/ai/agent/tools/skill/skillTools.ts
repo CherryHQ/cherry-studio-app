@@ -78,10 +78,10 @@ const readFileInputSchema = z.strictObject({
 export function createSkillTools(
   scope: SkillTurnScope,
   options: {
+    /** Skills whose instructions the system prompt already carries this turn. */
     loadedSkillIds?: readonly string[];
     explicitSkillIds?: readonly string[];
     instructionCharacters?: number;
-    onLoad?: (entry: SkillTurnEntry, instructions: string) => void;
   } = {},
 ): RuntimeTool[] {
   const loaded = new Set(options.loadedSkillIds);
@@ -136,7 +136,7 @@ export function createSkillTools(
       providerName: LOAD_SKILL_TOOL_NAME,
       displayName: 'Load Skill',
       description:
-        'Load the full instructions of one available Skill. Do this once per Skill when the task matches its description, then follow the instructions with the tools available in this conversation. Loading grants no tools or permissions.',
+        'Load the full instructions of one available Skill; the result contains them. Do this once per Skill when the task matches its description, then follow the instructions with the tools available in this conversation. Loading grants no tools or permissions.',
       inputSchema: toRuntimeInputSchema(loadInputSchema),
       approval: 'auto',
       async execute({ input, signal }) {
@@ -174,12 +174,12 @@ export function createSkillTools(
             );
           instructionCharacters += length;
           loaded.add(entry.id);
-          options.onLoad?.(entry, instructions);
           return {
             value: {
               ...receipt,
               alreadyLoaded: false,
               files: entry.files.filter((path) => path !== 'SKILL.md'),
+              instructions,
             },
             artifacts: [],
           };

@@ -14,12 +14,14 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
+import type { StoredSkillActivation } from '../../sessionStore/skillActivations';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
 import type { SkillTurnScope } from '../skillScope';
 import {
+  prepareDurableTurn,
   prepareInitialTurn,
   prepareTurn,
   type TurnPreparationDependencies,
@@ -555,8 +557,10 @@ describe('Skill turn preparation', () => {
         ...EMPTY_CONTEXT,
         hasMessages: true,
         sessionTurnIds: ['old-turn'],
-        skillActivations: [{ messageId: 'old-answer', activation: { ...activation, origin } }],
       });
+      harness.loadSkillActivations.mockResolvedValue([
+        { messageId: 'old-answer', activation: { ...activation, origin } },
+      ]);
       const plan = await prepareTurn(
         harness.dependencies,
         textInput(),
@@ -569,6 +573,21 @@ describe('Skill turn preparation', () => {
       expect(plan.runtimeContextCheckpoint).toEqual(checkpoint);
     },
   );
+
+  test('a native Pi turn restores activations from the Cherry transcript', async () => {
+    const harness = createHarness();
+    harness.dependencies.skills = { resolve: async () => scope };
+    harness.loadSkillActivations.mockResolvedValue([{ messageId: 'old-answer', activation }]);
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    // Pi holds the model history, so no transcript is loaded; receipts still are.
+    expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
+    expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
+  });
 });
 
 function createHarness() {
@@ -583,6 +602,9 @@ function createHarness() {
   const loadRuntimeTurnContext = jest.fn(
     async (_sessionId: string, _anchorTurnId: string | null): Promise<StoredRuntimeTurnContext> =>
       EMPTY_CONTEXT,
+  );
+  const loadSkillActivations = jest.fn(
+    async (_sessionId: string): Promise<StoredSkillActivation[]> => [],
   );
   const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
     fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
@@ -635,7 +657,7 @@ function createHarness() {
     inferenceModel: resolveInferenceModel,
     runtime,
     runtimeTools: { resolve: resolveRuntimeTools },
-    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
+    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext, loadSkillActivations },
     systemCapabilities: { getTools: getSystemTools },
   };
 
@@ -649,6 +671,7 @@ function createHarness() {
     getSession,
     getSystemTools,
     loadRuntimeTurnContext,
+    loadSkillActivations,
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,

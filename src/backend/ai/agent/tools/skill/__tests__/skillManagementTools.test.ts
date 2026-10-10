@@ -83,10 +83,9 @@ function fixture(installIntent = true, candidates: SkillCandidate[] = [candidate
   };
   const source: SkillScopeSource = { resolve: async () => checked };
   const expanding = createExpandingSkillScope(EMPTY_SKILL_SCOPE);
-  const loaded = jest.fn();
   // Readers are created before installation; later installation must become visible to them.
   const tools = [
-    ...createSkillTools(expanding.scope, { onLoad: loaded }),
+    ...createSkillTools(expanding.scope),
     ...createSkillManagementTools({
       workflow,
       source,
@@ -100,7 +99,7 @@ function fixture(installIntent = true, candidates: SkillCandidate[] = [candidate
       },
     }),
   ];
-  return { tools, workflow, loaded };
+  return { tools, workflow };
 }
 
 describe('conversation Skill installation', () => {
@@ -127,8 +126,8 @@ describe('conversation Skill installation', () => {
     );
     expect(await run(f.tools, 'load_skill', { skill_id: installed.id })).toMatchObject({
       status: 'ok',
+      instructions: 'Write notes.',
     });
-    expect(f.loaded).toHaveBeenCalledWith(checked.entries[0], 'Write notes.');
   });
 
   it('asks the model to choose when a URL holds several Skills', async () => {
