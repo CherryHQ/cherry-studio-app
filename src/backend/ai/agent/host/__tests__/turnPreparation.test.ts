@@ -19,6 +19,7 @@ import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
 import {
+  prepareDurableTurn,
   prepareInitialTurn,
   prepareTurn,
   type TurnPreparationDependencies,
@@ -48,6 +49,7 @@ const AGENT: AgentDefinition = {
   id: AGENT_ID,
   name: 'Planner Agent',
   instructions: 'Plan carefully.',
+  mode: 'standard',
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
@@ -67,6 +69,116 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 }));
 
 describe('turn preparation', () => {
+  test.each(['existing', 'initial', 'durable'] as const)(
+    'minimal %s turns skip tools and plugin discovery even for a model without tool calling',
+    async (kind) => {
+      const harness = createHarness();
+      harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+      harness.getSystemTools.mockRejectedValue(new Error('Tools unavailable'));
+      harness.resolveRuntimeTools.mockRejectedValue(new Error('Plugin connection unavailable'));
+      harness.preflightModel.mockResolvedValue({
+        contextWindow: 128_000,
+        inputModalities: ['text', 'image'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: false,
+      });
+      const signal = new AbortController().signal;
+      const input = textInput();
+      const plan =
+        kind === 'initial'
+          ? await prepareInitialTurn(harness.dependencies, { ...input, agentId: AGENT_ID }, signal)
+          : kind === 'durable'
+            ? await prepareDurableTurn(harness.dependencies, input, [], signal)
+            : await prepareTurn(harness.dependencies, input, signal);
+
+      expect(plan.tools).toEqual([]);
+      expect(plan.pluginGuides).toEqual([]);
+      expect(plan.toolDiscoveryWarnings).toEqual([]);
+      expect(plan.inferenceSnapshot.tools).toEqual([]);
+      expect(harness.getSystemTools).not.toHaveBeenCalled();
+      expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
+    },
+  );
+
+  test('minimal mode accepts direct images and still rejects a model without vision', async () => {
+    const harness = createHarness();
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+    harness.files.resolveAvailable = async () =>
+      new Map([[FILE_ENTRY_ID, fact(FILE_ENTRY_ID, 'photo.png', 'image/png', 3)]]);
+    const input = {
+      ...textInput(),
+      parts: [{ type: 'file' as const, fileEntryId: FILE_ENTRY_ID, mediaType: 'image/png' }],
+    };
+    const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
+    expect(plan.userParts).toEqual([
+      expect.objectContaining({
+        type: 'file',
+        attachmentReport: { mode: 'image', sourceTruncated: false, requestTruncated: false },
+      }),
+    ]);
+    expect(plan.tools).toEqual([]);
+
+    harness.preflightModel.mockResolvedValue({
+      contextWindow: 128_000,
+      inputModalities: ['text'],
+      maxInputTokens: 120_000,
+      maxOutputTokens: 8_000,
+      supportsTools: false,
+    });
+    await expect(
+      prepareTurn(harness.dependencies, input, new AbortController().signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
+
+  test('minimal mode rejects documents before parsing or tool discovery', async () => {
+    const harness = createHarness();
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+    await expect(
+      prepareTurn(
+        harness.dependencies,
+        {
+          ...textInput(),
+          parts: [{ type: 'file', fileEntryId: FILE_ENTRY_ID, mediaType: 'text/plain' }],
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({
+      view: { code: 'CAPABILITY_UNSUPPORTED', attachmentIssue: { name: 'notes.txt' } },
+    });
+    expect(harness.files.readAsBytes).not.toHaveBeenCalled();
+    expect(harness.getSystemTools).not.toHaveBeenCalled();
+    expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
+  });
+
+  test('minimal mode rejects explicit image generation before preparing it', async () => {
+    const harness = createHarness();
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+    const prepare = jest.fn(async () => null);
+    harness.dependencies.imageGeneration = { prepare };
+    await expect(
+      prepareTurn(
+        harness.dependencies,
+        { ...textInput(), imageGeneration: { mode: 'generate', paramValues: {} } },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  test('minimal mode rejects implicit image generation from a selected image model', async () => {
+    const harness = createHarness();
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
+    const execute = jest.fn(async () => []);
+    harness.dependencies.imageGeneration = {
+      prepare: async () => ({ settings: { mode: 'generate', paramValues: {} }, execute }),
+    };
+    await expect(
+      prepareTurn(harness.dependencies, textInput(), new AbortController().signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   test.each(['existing', 'initial'] as const)(
     'freezes the parser before %s preparation yields and shares it with read_file',
     async (kind) => {

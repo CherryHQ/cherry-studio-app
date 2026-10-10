@@ -43,6 +43,13 @@
       "when": 1791604278384,
       "tag": "0005_drop_agent_message_replay",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1791630575230,
+      "tag": "0006_agent_mode",
+      "breakpoints": true
     }
   ]
 }

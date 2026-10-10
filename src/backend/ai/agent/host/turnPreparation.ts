@@ -296,6 +296,9 @@ export async function prepareResolvedTurn(
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
+  if (agent.mode === 'minimal' && parsed.imageGeneration) {
+    fail('CAPABILITY_UNSUPPORTED', 'Minimal mode does not support image generation.');
+  }
   const usageAttribution = createTurnUsageAttribution({
     type: 'agent',
     id: agent.id,
@@ -315,6 +318,16 @@ export async function prepareResolvedTurn(
     storedTurnContext.history,
     signal,
   );
+  if (agent.mode === 'minimal') {
+    const document = [...inputFiles.values()].find((file) => !file.mediaType.startsWith('image/'));
+    if (document) {
+      fail('CAPABILITY_UNSUPPORTED', 'Minimal mode accepts only text and images.', {
+        code: 'runtime-unsupported',
+        fileEntryId: document.fileEntryId,
+        name: document.name,
+      });
+    }
+  }
   const resources = createTurnResourceLedger(
     inputFiles,
     storedTurnContext.referencedFileEntryIds,
@@ -338,6 +351,9 @@ export async function prepareResolvedTurn(
     signal,
   });
   if (imageGeneration) {
+    if (agent.mode === 'minimal') {
+      fail('CAPABILITY_UNSUPPORTED', 'Minimal mode requires a chat model.');
+    }
     return {
       agent,
       documentParserMode,
@@ -389,7 +405,7 @@ export async function prepareResolvedTurn(
   let configuredTools: readonly RuntimeTool[] = [];
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   const toolDiscoveryWarnings: string[] = [];
-  if (runtime.descriptor.capabilities.tools) {
+  if (agent.mode === 'standard' && runtime.descriptor.capabilities.tools) {
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({

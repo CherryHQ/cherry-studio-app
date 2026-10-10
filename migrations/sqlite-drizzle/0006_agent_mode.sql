@@ -1,0 +1,1 @@
+ALTER TABLE `agent` ADD `mode` text DEFAULT 'standard' NOT NULL;

@@ -21,6 +21,41 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
+  test('minimal mode keeps chat context and custom instructions without capability guidance', () => {
+    const prompt = buildAgentSystemPrompt({
+      mode: 'minimal',
+      agentInstructions: 'Explain simply.',
+      appLanguage: 'zh-CN',
+      currentDate: '2026-10-10',
+      tools: [tool('web_search'), tool('read_file'), tool('run_js'), mcpTool()],
+      pluginGuides: [
+        { pluginId: 'example', serverId: 'server-1', revision: 1, content: 'Plugin guide body.' },
+      ],
+      toolDiscoveryWarnings: ['Discovery failed.'],
+      retry: 'resumed',
+    });
+    expect(prompt).toContain('minimal mode');
+    expect(prompt).toContain('images supplied by the user');
+    expect(prompt).toContain('Application tools and plugins are unavailable');
+    expect(prompt).toContain('`2026-10-10`');
+    expect(prompt).toContain('`zh-CN`');
+    expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
+    for (const heading of [
+      'Web Research',
+      'Web Citations',
+      'Managed Files',
+      'Reading Attachments',
+      'JavaScript Sandbox',
+      'Plugin Guides',
+      'Tool Availability',
+      'Answer Recovery',
+    ]) {
+      expect(prompt).not.toContain(`## ${heading}`);
+    }
+    expect(prompt).not.toContain('Plugin guide body.');
+    expect(prompt).not.toContain('Discovery failed.');
+  });
+
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

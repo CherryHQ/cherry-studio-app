@@ -520,6 +520,7 @@ export class DurableAgentHost implements AgentProtocol {
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
+        mode: plan.agent.mode,
         appLanguage: this.ports.appLanguage(),
         tools: plan.tools,
         pluginGuides: plan.pluginGuides,

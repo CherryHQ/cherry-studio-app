@@ -11,6 +11,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
+      mode: 'minimal',
       model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
@@ -23,6 +24,7 @@ describe('createAgentFormState', () => {
       avatarUri: 'file:///documents/agent-avatars/a.b.webp',
       disabledCapabilities: ['calendar'],
       instructions: 'sys',
+      mode: 'minimal',
       model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'default',
@@ -33,6 +35,7 @@ describe('createAgentFormState', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
       disabledCapabilities: ['agents', 'calendar', 'location', 'reminders'],
+      mode: 'standard',
       toolApprovalMode: 'auto',
     });
   });
@@ -91,9 +94,24 @@ describe('buildAgentDto', () => {
     expect(dto.value).toEqual({
       disabledCapabilities: ['web'],
       instructions: 'system prompt',
+      mode: 'standard',
       model: 'openai::gpt-5',
       name: 'Researcher',
       toolApprovalMode: 'auto',
+    });
+  });
+
+  it('keeps standard capability and approval preferences when saving minimal mode', () => {
+    const result = buildAgentDto({
+      ...baseForm,
+      name: 'Chat',
+      mode: 'minimal',
+      disabledCapabilities: ['web'],
+      toolApprovalMode: 'default',
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { mode: 'minimal', disabledCapabilities: ['web'], toolApprovalMode: 'default' },
     });
   });
 });
