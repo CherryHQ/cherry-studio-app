@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Thêm tác nhân",
   "agent.actions.create": "Tác nhân mới",
+  "agent.actions.delete": "Xóa tác nhân",
   "agent.actions.retry": "Thử lại",
   "agent.capabilities.agents.label": "Quản lý tác nhân",
   "agent.capabilities.calendar.label": "Lịch",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Hướng dẫn hệ thống tác nhân",
   "agent.form.loadFailed": "Không thể tải tác nhân.",
   "agent.form.loading": "Đang tải tác nhân...",
+  "agent.form.model": "Mô hình",
   "agent.form.modelSelect": "Lựa chọn mô hình",
   "agent.form.name": "Tên",
   "agent.form.namePlaceholder": "Tên tác nhân",

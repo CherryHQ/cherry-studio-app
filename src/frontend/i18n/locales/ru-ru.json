@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "Добавить агента",
   "agent.actions.create": "Новый агент",
+  "agent.actions.delete": "Удалить агента",
   "agent.actions.retry": "Повторить",
   "agent.capabilities.agents.label": "Управление агентами",
   "agent.capabilities.calendar.label": "Календарь",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "Системные инструкции агента",
   "agent.form.loadFailed": "Не удалось загрузить агента.",
   "agent.form.loading": "Загрузка агента...",
+  "agent.form.model": "Модель",
   "agent.form.modelSelect": "Выбор модели",
   "agent.form.name": "Имя",
   "agent.form.namePlaceholder": "Имя агента",

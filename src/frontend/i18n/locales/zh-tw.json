@@ -1,6 +1,7 @@
 {
   "agent.actions.add": "添加智能體",
   "agent.actions.create": "新建智能體",
+  "agent.actions.delete": "刪除智能體",
   "agent.actions.retry": "重試",
   "agent.capabilities.agents.label": "智能體管理",
   "agent.capabilities.calendar.label": "日曆",
@@ -24,6 +25,7 @@
   "agent.form.instructionsPlaceholder": "智能體系統指令",
   "agent.form.loadFailed": "無法加載智能體。",
   "agent.form.loading": "正在加載智能體...",
+  "agent.form.model": "模型",
   "agent.form.modelSelect": "模型選擇",
   "agent.form.name": "名稱",
   "agent.form.namePlaceholder": "Agent 名稱",

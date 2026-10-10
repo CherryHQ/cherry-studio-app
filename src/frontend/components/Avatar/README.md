@@ -18,13 +18,11 @@ Cherry product data and presentation rules before composing that primitive.
   creation and detail forms use it as the fallback beneath a pending upload.
 - `ModelAvatar` resolves a model icon from its model and provider records. When neither the model
   nor its maker has an icon, the hosting provider's uploaded avatar outranks its built-in logo.
-- `AgentAvatar` renders an Agent's image, then explicit desktop emoji or the built-in Cherry emoji, then the robot emoji
-  default (including unnamed drafts). It stays round across these presentations.
+- `AgentAvatar` renders an Agent's image, then explicit desktop emoji or the built-in Cherry emoji,
+  then the name's initial on the neutral fallback fill, which stays empty for an unnamed draft. It
+  stays round across these presentations.
 - `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
   persistence to its caller.
-- `AvatarPickerField` is the block an editing form opens with — a centred avatar over its caption,
-  both inside one `AvatarImagePicker` trigger. It takes the avatar as `children` because what an
-  unset one falls back to is domain knowledge: an Agent's robot emoji, a provider's built-in logo.
 - `ProfileAvatarImage` resolves the persisted user avatar for display-only surfaces.
 - `ProfileEditableAvatar` adds a camera or pencil badge for avatar-editing surfaces.
 
