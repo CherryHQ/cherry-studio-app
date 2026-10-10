@@ -44,8 +44,13 @@ jobs:
           distribution: zulu
           java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # The runner image already ships the Android SDK. The setup-android
+      # action's license step is interactive and aborts here, so licenses are
+      # accepted directly against the preinstalled sdkmanager instead.
+      - name: Accept Android SDK licenses
+        run: |
+          echo "ANDROID_HOME=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
