@@ -38,7 +38,7 @@ export function PluginCatalogGroup() {
         const entry = entries.find((item) => item.id === id);
         const connection = connections.data?.find((item) => item.pluginId === id);
         const status = connection?.authorization?.status ?? 'connected';
-        const title = entry ? t(`plugins.catalog.${id}.name`) : id;
+        const title = entry ? (entry.name ?? t(`plugins.catalog.${id}.name`)) : id;
         return (
           <PluginRow
             addAction={
@@ -53,7 +53,11 @@ export function PluginCatalogGroup() {
                   }
                 : undefined
             }
-            description={entry ? t(`plugins.catalog.${id}.summary`) : t('plugins.unavailable')}
+            description={
+              entry
+                ? (entry.summary ?? t(`plugins.catalog.${id}.summary`))
+                : t('plugins.unavailable')
+            }
             icon={<PluginIcon icon={entry?.icon} />}
             key={id}
             onPress={() =>
