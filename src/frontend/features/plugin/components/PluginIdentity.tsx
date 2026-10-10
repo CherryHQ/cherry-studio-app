@@ -11,10 +11,10 @@ export function PluginIdentity({ entry }: { entry: PluginCatalogEntry }) {
       <PluginIcon icon={entry.icon} size="large" />
       <View className="min-w-0 flex-1 gap-1">
         <Text accessibilityRole="header" className="text-2xl font-semibold text-foreground">
-          {t(`plugins.catalog.${entry.id}.name`)}
+          {t(`plugins.catalog.${entry.id}.name`, { defaultValue: entry.name ?? entry.id })}
         </Text>
         <Text className="text-sm text-muted-foreground">
-          {t(`plugins.catalog.${entry.id}.summary`)}
+          {t(`plugins.catalog.${entry.id}.summary`, { defaultValue: entry.summary ?? '' })}
         </Text>
       </View>
     </View>
