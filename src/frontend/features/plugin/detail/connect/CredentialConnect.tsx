@@ -47,7 +47,7 @@ export function CredentialConnect({
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [invalidFields, setInvalidFields] = useState<Set<string>>(() => new Set());
-  const name = t(`plugins.catalog.${entry.id}.name`);
+  const name = t(`plugins.catalog.${entry.id}.name`, { defaultValue: entry.name ?? entry.id });
   const needsConnectionCheck = method.requiresDisconnect === true && !isConnecting && !isConnected;
   const requiresDisconnect =
     needsConnectionCheck &&
@@ -158,7 +158,9 @@ export function CredentialConnect({
         ) : (
           <View className="gap-6">
             <Text className="text-sm text-muted-foreground">
-              {t(`plugins.catalog.${entry.id}.authMethods.${method.id}.setup`)}
+              {t(`plugins.catalog.${entry.id}.authMethods.${method.id}.setup`, {
+                defaultValue: method.setup ?? '',
+              })}
             </Text>
             <View className="gap-4">
               <CredentialFields
@@ -184,7 +186,9 @@ export function CredentialConnect({
                   disabled={isConnecting}
                   onPress={() => void openExternalUrl(entry.links.credentials)}
                 >
-                  {t(`plugins.catalog.${entry.id}.credentialLink`)}
+                  {t(`plugins.catalog.${entry.id}.credentialLink`, {
+                    defaultValue: entry.credentialLink ?? 'Get a credential',
+                  })}
                 </Button>
               </View>
             </View>
