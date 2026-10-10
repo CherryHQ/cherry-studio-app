@@ -110,12 +110,13 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 
-/** Providers exposed by the mobile UI. `fetch` and SearXNG remain data-compatible only. */
+/** Providers exposed by the mobile UI. SearXNG remains data-compatible only. */
 export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [
   'zhipu',
   'tavily',
   'exa',
   'exa-mcp',
+  'fetch',
   'bocha',
   'querit',
   'jina',

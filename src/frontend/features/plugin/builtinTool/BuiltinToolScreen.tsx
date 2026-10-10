@@ -54,7 +54,11 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
           <Section.SelectItem
             label={t(tool.providerLabelKey)}
             onPress={() => setIsProviderPickerOpen(true)}
-            value={provider.name}
+            value={
+              provider.id === 'fetch'
+                ? t('settings.websearch.provider.localExtraction')
+                : provider.name
+            }
             valueLeading={<WebSearchProviderIcon providerId={provider.id} />}
           />
         </WebSearchApiManagementSection>

@@ -1876,6 +1876,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configurați cheia API Zhipu",
   "settings.websearch.provider.copyApiKey": "Copiază cheia API",
   "settings.websearch.provider.hideApiKeys": "Ascunde cheia API",
+  "settings.websearch.provider.localExtraction": "Extragere locală",
+  "settings.websearch.provider.localExtractionDescription": "Extrage conținutul paginilor pe dispozitivul dvs. Acceptă pagini al căror conținut este deja prezent în HTML.",
   "settings.websearch.provider.removeApiKey": "Eliminați cheia API",
   "settings.websearch.provider.removeApiKeyMessage": "Eliminați această cheie API de la acest furnizor?",
   "settings.websearch.provider.removeApiKeyTitle": "Eliminați cheia API?",

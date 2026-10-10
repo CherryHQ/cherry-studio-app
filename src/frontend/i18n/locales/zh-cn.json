@@ -1858,6 +1858,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "点击前往配置智谱API KEY",
   "settings.websearch.provider.copyApiKey": "复制 API Key",
   "settings.websearch.provider.hideApiKeys": "隐藏 API Key",
+  "settings.websearch.provider.localExtraction": "本地提取",
+  "settings.websearch.provider.localExtractionDescription": "在设备上提取网页正文，支持 HTML 中已经包含正文的网页。",
   "settings.websearch.provider.removeApiKey": "移除 API Key",
   "settings.websearch.provider.removeApiKeyMessage": "从当前服务商移除这个 API Key？",
   "settings.websearch.provider.removeApiKeyTitle": "移除 API Key？",

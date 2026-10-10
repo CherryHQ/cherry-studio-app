@@ -1858,6 +1858,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Định cấu hình khóa API Zhipu",
   "settings.websearch.provider.copyApiKey": "Sao chép Khóa API",
   "settings.websearch.provider.hideApiKeys": "Ẩn khóa API",
+  "settings.websearch.provider.localExtraction": "Trích xuất cục bộ",
+  "settings.websearch.provider.localExtractionDescription": "Trích xuất nội dung trang ngay trên thiết bị của bạn. Hỗ trợ các trang đã có nội dung trong HTML.",
   "settings.websearch.provider.removeApiKey": "Xóa khóa API",
   "settings.websearch.provider.removeApiKeyMessage": "Xóa khóa API này khỏi nhà cung cấp này?",
   "settings.websearch.provider.removeApiKeyTitle": "Xóa khóa API?",

@@ -1867,6 +1867,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Zhipu API anahtarını yapılandır",
   "settings.websearch.provider.copyApiKey": "API Anahtarını Kopyala",
   "settings.websearch.provider.hideApiKeys": "API Anahtarını Gizle",
+  "settings.websearch.provider.localExtraction": "Yerel çıkarma",
+  "settings.websearch.provider.localExtractionDescription": "Sayfa içeriğini cihazınızda çıkarır. İçeriği HTML içinde zaten bulunan sayfaları destekler.",
   "settings.websearch.provider.removeApiKey": "API Anahtarını Kaldır",
   "settings.websearch.provider.removeApiKeyMessage": "Bu API anahtarı bu sağlayıcıdan kaldırılsın mı?",
   "settings.websearch.provider.removeApiKeyTitle": "API anahtarı kaldırılsın mı?",
