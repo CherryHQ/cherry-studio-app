@@ -99,7 +99,14 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
-  if (request.redirect !== undefined && request.redirect !== 'error') {
+  if (request.credentials !== undefined && request.credentials !== 'omit') {
+    throw new HttpError('HTTP credentials policy is invalid.', {
+      code: 'INVALID_CREDENTIALS_POLICY',
+      kind: 'internal',
+    });
+  }
+
+  if (request.redirect !== undefined && !['error', 'manual'].includes(request.redirect)) {
     throw new HttpError('HTTP redirect policy is invalid.', {
       code: 'INVALID_REDIRECT_POLICY',
       kind: 'internal',
@@ -243,6 +250,7 @@ const dispatchRequestInterceptors = async (
     config.responseType = request.responseType;
     config.signal = request.signal;
     config.fetchOptions = { redirect: request.redirect };
+    if (request.credentials) config.withCredentials = false;
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
     config.validateStatus =

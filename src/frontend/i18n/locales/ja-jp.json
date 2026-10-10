@@ -1858,6 +1858,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Zhipu API キーを構成する",
   "settings.websearch.provider.copyApiKey": "API キーをコピー",
   "settings.websearch.provider.hideApiKeys": "APIキーを隠す",
+  "settings.websearch.provider.localExtraction": "ローカル抽出",
+  "settings.websearch.provider.localExtractionDescription": "端末上でウェブページの本文を抽出します。HTML に本文が含まれているページに対応しています。",
   "settings.websearch.provider.removeApiKey": "API キーを削除します",
   "settings.websearch.provider.removeApiKeyMessage": "この API キーをこのプロバイダーから削除しますか?",
   "settings.websearch.provider.removeApiKeyTitle": "API キーを削除しますか?",

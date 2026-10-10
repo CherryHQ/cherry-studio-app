@@ -4,11 +4,13 @@ import { WebSearchService } from '@/backend/services/webSearch/WebSearchService'
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
+import { downloadWebPage } from '../http/downloadWebPage';
 import { requestWebSearchJson, type WebSearchJsonRequester } from '../http/requestWebSearchJson';
 
 jest.mock('../http/requestWebSearchJson', () => ({
   requestWebSearchJson: jest.fn(),
 }));
+jest.mock('../http/downloadWebPage', () => ({ downloadWebPage: jest.fn() }));
 
 const requestWebSearchJsonMock =
   requestWebSearchJson as jest.MockedFunction<WebSearchJsonRequester>;
@@ -17,6 +19,7 @@ describe('WebSearchService', () => {
   const originalFetch = global.fetch;
   beforeEach(() => {
     requestWebSearchJsonMock.mockReset();
+    jest.mocked(downloadWebPage).mockReset();
     global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
   });
   afterEach(() => {
@@ -241,26 +244,24 @@ describe('WebSearchService', () => {
     ]);
   });
 
-  test('reports the fetch provider as unsupported during checks', async () => {
+  test('reads local text with the final source URL and original input', async () => {
     const service = new WebSearchService(createPreferenceService());
-
+    jest.mocked(downloadWebPage).mockResolvedValue({
+      content: 'Local page content',
+      isHtml: false,
+      url: 'https://example.com/article',
+    });
     await expect(
-      service.checkProvider({
-        provider: {
-          id: 'fetch',
-          name: 'fetch',
-          type: 'api',
-          apiKeys: [],
-          capabilities: [{ feature: 'fetchUrls' }],
-          engines: [],
-          basicAuthUsername: '',
-          basicAuthPassword: '',
+      service.fetchUrls({ providerId: 'fetch', urls: ['https://example.com/start'] }),
+    ).resolves.toMatchObject({
+      providerId: 'fetch',
+      results: [
+        {
+          content: 'Local page content',
+          url: 'https://example.com/article',
+          sourceInput: 'https://example.com/start',
         },
-        capability: 'fetchUrls',
-      }),
-    ).resolves.toEqual({
-      valid: false,
-      error: 'Web search provider fetch is not supported on mobile',
+      ],
     });
   });
 });

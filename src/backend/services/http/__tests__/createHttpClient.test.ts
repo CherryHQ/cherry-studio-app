@@ -136,6 +136,24 @@ describe('createHttpClient', () => {
     });
   });
 
+  it('lets public downloads inspect redirects without sending native cookies', async () => {
+    const adapter = mockAdapter(async (config) => {
+      expect(config.fetchOptions?.redirect).toBe('manual');
+      expect(config.withCredentials).toBe(false);
+      return response(config, 302, '', new AxiosHeaders({ Location: '/article' }));
+    });
+    const createClient = __testing.createHttpClientFactoryWithAdapter(adapter);
+    await expect(
+      createClient({ baseUrl: 'https://example.com', statusPolicy: 'all' }).request({
+        method: 'GET',
+        path: '/',
+        credentials: 'omit',
+        redirect: 'manual',
+        responseType: 'text',
+      }),
+    ).resolves.toMatchObject({ status: 302, headers: { location: '/article' } });
+  });
+
   it('keeps Axios behind the app-owned client contract', () => {
     const createClient = __testing.createHttpClientFactoryWithAdapter(
       mockAdapter(async (config) => response(config, 200, {})),

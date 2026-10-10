@@ -1867,6 +1867,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Διαμόρφωση κλειδιού API Zhipu",
   "settings.websearch.provider.copyApiKey": "Αντιγραφή Κλειδιού API",
   "settings.websearch.provider.hideApiKeys": "Απόκρυψη κλειδιού API",
+  "settings.websearch.provider.localExtraction": "Τοπική εξαγωγή",
+  "settings.websearch.provider.localExtractionDescription": "Εξάγει το περιεχόμενο σελίδων στη συσκευή σας. Υποστηρίζει σελίδες με περιεχόμενο ήδη ενσωματωμένο στο HTML.",
   "settings.websearch.provider.removeApiKey": "Κατάργηση κλειδιού API",
   "settings.websearch.provider.removeApiKeyMessage": "Κατάργηση αυτού του κλειδιού API από αυτόν τον πάροχο;",
   "settings.websearch.provider.removeApiKeyTitle": "Κατάργηση κλειδιού API;",

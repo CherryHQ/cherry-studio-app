@@ -71,7 +71,13 @@ export function WebSearchApiManagementSection({
 
   return (
     <WebSearchApiManagementContext value={contextValue}>
-      <Section>
+      <Section
+        footer={
+          provider.id === 'fetch'
+            ? t('settings.websearch.provider.localExtractionDescription')
+            : undefined
+        }
+      >
         {children}
         {sections.map((section) => (
           <WebSearchApiServiceFieldGroup key={section.type} section={section} />

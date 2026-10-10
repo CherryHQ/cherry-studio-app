@@ -1876,6 +1876,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configurar la clave API de Zhipu",
   "settings.websearch.provider.copyApiKey": "Copiar Clave API",
   "settings.websearch.provider.hideApiKeys": "Ocultar clave API",
+  "settings.websearch.provider.localExtraction": "Extracción local",
+  "settings.websearch.provider.localExtractionDescription": "Extrae el contenido de las páginas en tu dispositivo. Admite páginas cuyo contenido ya está presente en el HTML.",
   "settings.websearch.provider.removeApiKey": "Eliminar clave API",
   "settings.websearch.provider.removeApiKeyMessage": "¿Eliminar esta clave API de este proveedor?",
   "settings.websearch.provider.removeApiKeyTitle": "¿Eliminar la clave API?",

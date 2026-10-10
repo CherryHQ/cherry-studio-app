@@ -28,7 +28,7 @@ const preferenceMapping = {
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
   getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
 );
-const fetchUrlsProviderOptions = createWebSearchProviderOptions(
+const fetchUrlsOptions = createWebSearchProviderOptions(
   getMobileSupportedWebSearchProvidersByCapability('fetchUrls'),
 );
 
@@ -44,6 +44,16 @@ function createWebSearchProviderOptions(
 export function useWebSearchProviderPreferences() {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
+
+  const fetchUrlsProviderOptions = useMemo(
+    () =>
+      fetchUrlsOptions.map((option) =>
+        option.value === 'fetch'
+          ? { ...option, label: t('settings.websearch.provider.localExtraction') }
+          : option,
+      ),
+    [t],
+  );
 
   const compressionMethodOptions = useMemo<SettingOption<WebSearchCompressionMethod>[]>(
     () => [

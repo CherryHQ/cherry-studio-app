@@ -1885,6 +1885,8 @@
   "settings.websearch.provider.configureZhipuApiKey": "Настройка ключа API Zhipu",
   "settings.websearch.provider.copyApiKey": "Копировать API ключ",
   "settings.websearch.provider.hideApiKeys": "Скрыть ключ API",
+  "settings.websearch.provider.localExtraction": "Локальное извлечение",
+  "settings.websearch.provider.localExtractionDescription": "Извлекает содержимое страниц на вашем устройстве. Поддерживает страницы, текст которых уже присутствует в HTML.",
   "settings.websearch.provider.removeApiKey": "Удаление ключа API",
   "settings.websearch.provider.removeApiKeyMessage": "Удалить этот ключ API у этого провайдера?",
   "settings.websearch.provider.removeApiKeyTitle": "Удалить ключ API?",
