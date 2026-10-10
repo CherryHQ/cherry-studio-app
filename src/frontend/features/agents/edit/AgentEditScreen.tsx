@@ -34,18 +34,23 @@ import {
   useAgentToolBindingsApi,
 } from '@/frontend/hooks/agent';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
+import { useAgentSkillsApi } from '@/frontend/hooks/skill';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
+import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { Agent } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import type { SkillListItem } from '@/shared/data/types/skill';
 
 import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
+import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
+import { AgentSkillsSection } from './components/AgentSkillsSection';
 import { AgentToolsSection } from './components/AgentToolsSection';
 import { useAgentAutoSave } from './useAgentAutoSave';
 
@@ -73,9 +78,15 @@ export default function AgentEditScreen() {
     refetch: refetchServers,
     servers,
   } = useMcpServersApi();
+  const {
+    error: skillsError,
+    isLoading: areSkillsLoading,
+    refetch: refetchSkills,
+    skills,
+  } = useAgentSkillsApi(agentId);
   const isLoadingEditData =
-    Boolean(agentId) && (isLoading || areBindingsLoading || areServersLoading);
-  const hasEditDataError = Boolean(agentId) && (bindingsError || serversError);
+    Boolean(agentId) && (isLoading || areBindingsLoading || areServersLoading || areSkillsLoading);
+  const hasEditDataError = Boolean(agentId) && (bindingsError || serversError || skillsError);
 
   // The form seeds its fields from the record when it mounts, so it must not mount
   // before the record is there — an empty form that reseeds a commit later would throw
@@ -100,7 +111,7 @@ export default function AgentEditScreen() {
             primaryAction={{
               children: t('agent.actions.retry'),
               onPress: () => {
-                void Promise.all([refetch(), refetchBindings(), refetchServers()]);
+                void Promise.all([refetch(), refetchBindings(), refetchServers(), refetchSkills()]);
               },
             }}
             title={t('agent.form.loadFailed')}
@@ -118,6 +129,7 @@ export default function AgentEditScreen() {
       originalToolBindings={bindings}
       servers={servers}
       shouldStartChat={!agentId && getSingleRouteParam(params.startChat) === 'true'}
+      skills={skills}
     />
   );
 }
@@ -128,12 +140,14 @@ function AgentEditForm({
   originalToolBindings,
   servers,
   shouldStartChat,
+  skills,
 }: {
   agent: Agent | undefined;
   agentId?: string;
   originalToolBindings: readonly AgentToolBinding[];
   servers: readonly McpServer[];
   shouldStartChat: boolean;
+  skills: readonly SkillListItem[];
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -143,7 +157,8 @@ function AgentEditForm({
   const { createAgent, deleteAgents, isCreating, isSettingAvatar, setAgentAvatar } =
     useAgentMutations();
   const { replaceAgentToolBindings } = useAgentToolBindingMutations();
-  const { flush, hasFailedSave, retry, saveField, saveToolBindings } = useAgentAutoSave(agentId);
+  const { flush, hasFailedSave, retry, saveField, saveSkillBindings, saveToolBindings } =
+    useAgentAutoSave(agentId);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
@@ -154,6 +169,9 @@ function AgentEditForm({
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
   const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
     createAgentToolBindingDraft(originalToolBindings),
+  );
+  const [skillBindings, setSkillBindings] = useState<Map<string, boolean>>(() =>
+    createAgentSkillBindingDraft(skills),
   );
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
@@ -212,6 +230,20 @@ function AgentEditForm({
       saveToolBindings(bindings);
     },
     [saveToolBindings],
+  );
+  const handleSkillBindingsChange = useCallback(
+    (updates: AgentSkillUpdate[]) => {
+      setSkillBindings((current) => {
+        const next = new Map(current);
+        for (const update of updates) {
+          if (update.isEnabled === null) next.delete(update.skillId);
+          else next.set(update.skillId, update.isEnabled);
+        }
+        return next;
+      });
+      saveSkillBindings(updates);
+    },
+    [saveSkillBindings],
   );
   const openToolApprovalModePicker = useCallback(() => {
     Keyboard.dismiss();
@@ -478,6 +510,14 @@ function AgentEditForm({
             onChange={handleToolBindingsChange}
             originalBindings={originalToolBindings}
             servers={servers}
+          />
+        ) : null}
+        {isEditing ? (
+          <AgentSkillsSection
+            agentId={agentId}
+            bindings={skillBindings}
+            onChange={handleSkillBindingsChange}
+            skills={skills}
           />
         ) : null}
         {hasFailedSave ? (

@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { Composer } from '@cherrystudio/ui/components';
-import { useFocusEffect } from 'expo-router';
+import { Button, Composer } from '@cherrystudio/ui/components';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -32,6 +32,7 @@ export function ChatInputPluginPopover({
   returnFocusRef,
 }: ChatInputPluginPopoverProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const { inputRef } = useComposerMeta();
   const { draft } = useComposerState();
   const initialFocusRef = useRef<View>(null);
@@ -81,6 +82,22 @@ export function ChatInputPluginPopover({
       keyboardDismissMode="none"
       keyboardShouldPersistTaps="always"
     >
+      {plugins.length === 0 ? (
+        <View className="gap-2 px-3 py-2">
+          <Text className="text-sm text-muted-foreground">{t('plugins.composer.empty')}</Text>
+          <Button
+            onPress={() => {
+              setShouldRestoreFocus(false);
+              onClose();
+              router.push('/plugins');
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t('plugins.connect')}
+          </Button>
+        </View>
+      ) : null}
       {plugins.map((plugin, index) => {
         const isSelected = selectedIds.has(plugin.serverId);
         const name = t(`plugins.catalog.${plugin.id}.name`);

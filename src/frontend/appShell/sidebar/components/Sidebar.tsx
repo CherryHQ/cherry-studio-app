@@ -1,9 +1,14 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { useChatSource, useStartNewChat } from '@/frontend/appShell/navigation/chat';
+import {
+  useStartNewChat,
+  useChatSource,
+  parseChatRoute,
+  type ChatRouteParamsInput,
+} from '@/frontend/appShell/navigation/chat';
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
@@ -18,6 +23,15 @@ type SidebarProps = {
 /** Drawer sidebar whose root owns the drawer-scoped actions. */
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
+  const chatRoute = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
+  const agentId =
+    chatRoute.status === 'ready' && chatRoute.target.kind === 'draft'
+      ? chatRoute.target.agentId
+      : undefined;
+  const sessionId =
+    chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
+      ? chatRoute.target.sessionId
+      : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
   const { source, startRemoteChat } = useChatSource();
@@ -46,7 +60,14 @@ export function Sidebar({ navigation }: SidebarProps) {
       },
       openPlugins: () => {
         navigation.closeDrawer();
-        router.push('/plugins');
+        router.push({
+          pathname: '/plugins',
+          params: { agentId, sessionId },
+        });
+      },
+      openSkills: () => {
+        navigation.closeDrawer();
+        router.push({ pathname: '/skills', params: { agentId, sessionId } });
       },
       openSettings: () => {
         navigation.closeDrawer();
@@ -58,7 +79,16 @@ export function Sidebar({ navigation }: SidebarProps) {
         else void startNewChat();
       },
     }),
-    [navigation, openSessionSearch, router, source, startRemoteChat, startNewChat],
+    [
+      agentId,
+      sessionId,
+      navigation,
+      openSessionSearch,
+      router,
+      source,
+      startRemoteChat,
+      startNewChat,
+    ],
   );
 
   return (

@@ -7,7 +7,8 @@ Tracks [issue #1060](https://github.com/CherryHQ/cherry-studio-app/issues/1060).
 ## Portable format v1
 
 A streaming ZIP contains `manifest.json`, `database/cherry.db`, `files/<id>.<ext>` and
-`avatars/{user,agents,providers}/<name>`. The manifest records product/version, migration SQL hashes,
+`avatars/{user,agents,providers}/<name>`, plus
+`skills/<folder>/<digest>/<package path>` for every live Skill package. The manifest records product/version, migration SQL hashes,
 counts, relative paths, byte sizes and SHA-256 hashes. Every referenced resource is present. The whole database preserves
 chats, agents, settings, provider keys, tool bindings, paintings and file metadata.
 
@@ -27,7 +28,8 @@ While a backup or restore runs, an app-wide progress dialog blocks every route; 
 wait or cancel. Capture refuses active chat/job execution, and a freeze keeps new Agent turns and
 background jobs from starting while the SQLite backup API snapshots the database (including WAL
 data) and managed resources are copied. Jobs resume before compression. Missing original files fail
-export rather than silently producing an incomplete full backup.
+export rather than silently producing an incomplete full backup. Skill installation/update writes
+participate in the same capture exclusion and restored Skill packages follow the new generation.
 A finished export stays in the `exported` phase, carrying the archive URI and content counts,
 until `cancel()` dismisses it. Dismissing deletes the archive, as does starting the next export;
 the user keeps only copies saved or shared from it.

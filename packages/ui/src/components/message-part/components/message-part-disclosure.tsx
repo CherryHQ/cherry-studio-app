@@ -212,6 +212,7 @@ export function MessagePartTool({
   children,
   detailTitle,
   detailVariant = 'default',
+  icon,
   state,
   statusText,
   statusTone = 'default',
@@ -224,6 +225,7 @@ export function MessagePartTool({
   return (
     <View className="gap-1.5">
       <MessagePartSummary
+        icon={icon}
         onPress={() => setIsOpen(true)}
         state={state}
         statusText={statusText}

@@ -3,6 +3,8 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 import { MemoryStorage } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
+import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
+import { createSkillTools } from '../../../tools/skill/skillTools';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
@@ -149,10 +151,36 @@ async function submitAndWait(runtime: PiDurableAgentRuntime, submission: Runtime
 
 describe('Persistent Agent facade', () => {
   test.each(['openai-completions', 'openai-responses'] as const)(
-    'retains mobile instructions, MCP discovery and the first user input in the serialized %s request',
+    'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {
       const state = fixture();
       const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
+      const selectedSkill: SkillTurnEntry = {
+        id: '12345678-1234-4234-8234-123456789abc',
+        name: 'grill-me',
+        description: 'Interview the user about a plan.',
+        invocation: { modelInvocable: true, userInvocable: true },
+        contentHash: 'abcdef0123456789',
+        folderName: 'grill-me',
+        files: ['SKILL.md'],
+        admission: { status: 'ready', reasons: [] },
+      };
+      const selectedInstructions =
+        'Ask one question at a time. Recommend an answer for each question.';
+      const availableInstructions = 'Write a detailed launch checklist before answering.';
+      const scope: SkillTurnScope = {
+        entries: [
+          selectedSkill,
+          {
+            ...selectedSkill,
+            id: '23456789-2345-4345-8345-23456789abcd',
+            name: 'launch-checklist',
+          },
+        ],
+        readInstructions: async (id) =>
+          id === selectedSkill.id ? selectedInstructions : availableInstructions,
+        readFile: async () => null,
+      };
       const tools: RuntimeTool[] = [
         {
           ref: { source: 'builtin', capabilityId: 'run_js' },
@@ -163,6 +191,7 @@ describe('Persistent Agent facade', () => {
           approval: 'auto',
           execute,
         },
+        ...createSkillTools(scope, { loadedSkillIds: [selectedSkill.id] }),
         {
           ref: { source: 'mcp', serverId: 'github', rawToolName: 'get_me' },
           providerName: 'mcp_github_get_me',
@@ -178,6 +207,10 @@ describe('Persistent Agent facade', () => {
         appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
+        skills: {
+          scope,
+          selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
+        },
         pluginGuides: [
           {
             pluginId: 'github',
@@ -242,6 +275,10 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain('## JavaScript Sandbox');
         expect(serialized).toContain('# GitHub');
         expect(serialized).toContain('## MCP Tool Discovery');
+        expect(serialized).toContain('grill-me');
+        expect(serialized).toContain(selectedInstructions);
+        expect(serialized).toContain('launch-checklist');
+        expect(serialized).not.toContain(availableInstructions);
         const request = payload as {
           tools: { name?: string; function?: { name: string } }[];
           messages?: { role: string }[];
@@ -249,6 +286,10 @@ describe('Persistent Agent facade', () => {
         };
         expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
           'run_js',
+          'search_local_skills',
+          'load_skill',
+          'list_skill_files',
+          'read_skill_file',
           'tool_search',
           'tool_describe',
           'tool_call',

@@ -3,6 +3,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
 import { BackupError } from '@/shared/contracts/backup';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
+import { SkillManifestEntrySchema, skillContentHashHex } from '@/shared/data/types/skill';
 
 import { archiveFile } from './backupArchive';
 import { assertBackupPath, BACKUP_LIMITS, type BackupManifest } from './backupFormat';
@@ -17,6 +18,8 @@ const RESOURCE_DIRECTORIES = {
 export function restoredFile(root: Directory, path: string): File {
   assertBackupPath(path);
   if (path === 'database/cherry.db') return new File(root, ...path.split('/'));
+  if (path.startsWith('skills/'))
+    return new File(root, 'Data', 'Skills', ...path.slice(7).split('/'));
   const slash = path.lastIndexOf('/');
   const prefix = path.slice(0, slash) as keyof typeof RESOURCE_DIRECTORIES;
   const directory = RESOURCE_DIRECTORIES[prefix];
@@ -64,6 +67,29 @@ export async function describeDatabase(database: File): Promise<{
     const avatar: unknown = userAvatar ? JSON.parse(userAvatar.value) : null;
     if (typeof avatar === 'string' && avatar.startsWith('avatar-file:'))
       requiredPaths.push(`avatars/user/${avatar.slice('avatar-file:'.length)}`);
+    // Backups from before the Skill migration remain valid and have no package resources.
+    const skillTable = await db.getFirstAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_global_skill'",
+    );
+    if (skillTable) {
+      const skills = await db.getAllAsync<{
+        folderName: string;
+        contentHash: string;
+        manifest: string;
+      }>(
+        'SELECT folder_name AS folderName, content_hash AS contentHash, manifest FROM agent_global_skill LIMIT ?',
+        BACKUP_LIMITS.entries + 1,
+      );
+      if (skills.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
+      for (const skill of skills) {
+        const files = SkillManifestEntrySchema.array().parse(JSON.parse(skill.manifest));
+        for (const file of files)
+          requiredPaths.push(
+            `skills/${skill.folderName}/${skillContentHashHex(skill.contentHash)}/${file.path}`,
+          );
+        if (requiredPaths.length + 1 > BACKUP_LIMITS.entries) throw new BackupError('too-large');
+      }
+    }
     for (const path of requiredPaths) assertBackupPath(path);
     return { requiredPaths: [...new Set(requiredPaths)], counts };
   });
@@ -124,7 +150,10 @@ export async function validateResourceReferences(
   const required = new Set(requiredPaths);
   for (const path of required) if (!available.has(path)) throw new BackupError('invalid');
   for (const entry of manifest.entries) {
-    if (entry.path.startsWith('files/') && !required.has(entry.path))
+    if (
+      (entry.path.startsWith('files/') || entry.path.startsWith('skills/')) &&
+      !required.has(entry.path)
+    )
       throw new BackupError('invalid');
   }
 }

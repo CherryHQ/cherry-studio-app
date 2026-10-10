@@ -12,6 +12,7 @@ import type {
 } from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
+import type { StoredSkillActivation } from './skillActivations';
 
 export type StoredRuntimeContextCheckpoint = {
   assistantMessageId: string;
@@ -202,6 +203,9 @@ export interface AgentSessionStore {
     sessionId: string,
     afterTurnId: string | null,
   ): Promise<StoredRuntimeTurnContext>;
+
+  /** Skill load receipts and explicit selections across the complete transcript, oldest first. */
+  loadSkillActivations(sessionId: string): Promise<StoredSkillActivation[]>;
 
   /**
    * Returns the newest assistant row carrying an opaque checkpoint candidate.

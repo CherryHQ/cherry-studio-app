@@ -4,6 +4,26 @@ import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 import { toRuntimeHistory } from '../turnRuntimeInput';
 
 describe('Runtime output projection', () => {
+  test('persists full Skill activity instructions and a compact replay receipt without Runtime control metadata', () => {
+    const output = {
+      value: { status: 'ok', instructions: 'Ask one question at a time.' },
+      modelValue: { status: 'ok', instructionsInSystem: true },
+      artifacts: [],
+    };
+    const part = toAgentMessagePart({
+      type: 'tool',
+      id: 'load',
+      toolCallId: 'load',
+      providerName: 'load_skill',
+      displayName: 'Read Skill',
+      state: 'output-available',
+      input: { skill_id: 'skill' },
+      toolRef: { source: 'builtin', capabilityId: 'load_skill' },
+      output: { ...output, instructions: { key: 'skill', text: 'Ask one question at a time.' } },
+    });
+    expect(part).toMatchObject({ output });
+    expect(part).not.toHaveProperty('output.instructions');
+  });
   test('persists callback failure details and replays partial sources without runtime stop policy', () => {
     const details = {
       status: 'partial',

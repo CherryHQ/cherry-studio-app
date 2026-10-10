@@ -56,9 +56,32 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   Models without selectable reasoning, including image models, reset it to `default`; loading model
   metadata does not clear it. `auto` retains its existing provider-controlled meaning and shared
   fallback ordering.
-- The composer menu offers media and connected plugins. Selecting a plugin inserts an inline
+- The composer menu offers media, Plugins, and a separate Skills row. The Plugins row remains visible
+  when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
+- Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
+  reference, using the same rich editor presentation as plugin references. Deleting it cancels the
+  installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or
+  supported source URL and sends explicitly. The structured `find-and-install` intent travels with
+  that message and its retries; it supplies installation
+  intent to the conversation workflow. Rejected sends retain it, successful sends clear the
+  submitted selection, and switching Agents clears it. The Host owns discovery,
+  admission, installation and enabling for the current Agent.
+- The plus menu does not add or discover Skills; it only selects installed Skills for use.
+- The menu's Skills row opens the same anchored small-menu presentation as Plugins, listing eligible
+  installed bindings for the current Agent. A row inserts an inline Skill reference and closes the
+  menu without dismissing the composer keyboard. Selected rows show a checkmark and do not insert
+  duplicates; deleting a reference in the editor removes its selection.
+  Skill references use desktop's ToolCase icon beside their name at the editor's font size. The plus
+  menu, picker rows and sidebar use the same Lucide vector. Native inline icons are tagged separately
+  from pasted media so the iOS paste wrapper keeps them inside the editor instead of uploading them.
+  Submitted messages preserve the inline icon, name and link color through stored text ranges;
+  they do not add a selected-Skill or revision caption below the message.
+  Up to eight explicit selections are submitted as Skill IDs; the Host revalidates
+  them and records name/revision receipts on the user message. Rejected sends retain selections,
+  successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
+  remain selectable when user invocation is allowed. Selection never creates an Agent binding.
 - The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
   and batched previews with the library screen. Selection stays local until Add is pressed; the
   action appears only for newly selected, available attachments. Already attached files are marked

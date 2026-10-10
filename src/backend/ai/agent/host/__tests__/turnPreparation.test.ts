@@ -14,11 +14,14 @@ import type {
   StoredRuntimeContextCheckpoint,
   StoredRuntimeTurnContext,
 } from '../../sessionStore/AgentSessionStore';
+import type { StoredSkillActivation } from '../../sessionStore/skillActivations';
 import type { SystemCapabilitySource } from '../../tools/builtInToolSource';
 import { createReadFileTool } from '../../tools/readFileTool';
 import type { AgentDefinition } from '../agentDefinitions';
 import type { AgentInferenceModelSnapshot } from '../inferenceSnapshot';
+import type { SkillTurnScope } from '../skillScope';
 import {
+  prepareDurableTurn,
   prepareInitialTurn,
   prepareTurn,
   type TurnPreparationDependencies,
@@ -478,6 +481,170 @@ describe('turn preparation', () => {
   });
 });
 
+describe('Skill turn preparation', () => {
+  const skillId = '00000000-0000-4000-8000-000000000123';
+  const activation = {
+    skillId,
+    name: 'notes',
+    contentHash: 'accepted',
+    origin: 'automatic' as const,
+  };
+  const scope: SkillTurnScope = {
+    entries: [
+      {
+        id: skillId,
+        name: 'notes',
+        description: 'Take notes',
+        contentHash: 'accepted',
+        folderName: 'notes',
+        files: ['SKILL.md'],
+        invocation: { modelInvocable: true, userInvocable: true },
+        admission: { status: 'ready', reasons: [] },
+      },
+    ],
+    readInstructions: async () => 'Use a concise outline.',
+    readFile: async () => null,
+  };
+
+  test('enabled Skills expose metadata without eagerly reading entry instructions', async () => {
+    const harness = createHarness();
+    const readInstructions = jest.fn(scope.readInstructions);
+    harness.dependencies.skills = { resolve: async () => ({ ...scope, readInstructions }) };
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    expect(plan.skills.scope.entries).toHaveLength(1);
+    expect(plan.skills.selected).toHaveLength(0);
+    expect(plan.skills.active?.size).toBe(0);
+    expect(readInstructions).not.toHaveBeenCalled();
+  });
+
+  test('repeated activation receipts consume the restoration budget only once per Skill', async () => {
+    const harness = createHarness();
+    const otherId = '00000000-0000-4000-8000-000000000124';
+    const other = {
+      ...scope.entries[0]!,
+      id: otherId,
+      name: 'other-notes',
+      folderName: 'other-notes',
+    };
+    const readInstructions = jest.fn(async (id: string) =>
+      (id === skillId ? 'a' : 'b').repeat(24_000),
+    );
+    harness.dependencies.skills = {
+      resolve: async () => ({ ...scope, entries: [...scope.entries, other], readInstructions }),
+    };
+    harness.loadSkillActivations.mockResolvedValue([
+      {
+        messageId: 'older-other',
+        activation: { ...activation, skillId: otherId, name: other.name },
+      },
+      { messageId: 'first-read', activation },
+      { messageId: 'repeat-read', activation },
+    ]);
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    expect(plan.skills.active?.get(skillId)?.instructions).toBe('a'.repeat(24_000));
+    expect(plan.skills.active?.get(otherId)?.instructions).toBe('b'.repeat(24_000));
+    expect(readInstructions).toHaveBeenCalledTimes(2);
+  });
+
+  test('persists explicit selection receipts and rejects out-of-scope selection', async () => {
+    const harness = createHarness();
+    harness.dependencies.skills = { resolve: async () => scope };
+    const plan = await prepareTurn(
+      harness.dependencies,
+      {
+        ...textInput(),
+        skillIds: [skillId],
+        parts: [
+          {
+            type: 'text',
+            text: 'notes',
+            skillReferences: [{ type: 'skill', skillId, label: 'notes', offset: 0 }],
+          },
+        ],
+      },
+      new AbortController().signal,
+    );
+    expect(plan.userParts[0]).toMatchObject({
+      skillSelections: [{ ...activation, origin: 'explicit' }],
+      skillReferences: [{ type: 'skill', skillId, label: 'notes', offset: 0 }],
+    });
+    expect(plan.skills.selected[0]?.instructions).toBe('Use a concise outline.');
+    await expect(
+      prepareTurn(
+        harness.dependencies,
+        { ...textInput(), skillIds: ['00000000-0000-4000-8000-000000000124'] },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow('The selected Skill is not usable by this Agent');
+  });
+
+  test.each([
+    { isCurrent: true, origin: 'automatic' as const },
+    { isCurrent: true, origin: 'explicit' as const },
+    { isCurrent: false, origin: 'automatic' as const },
+  ])(
+    'restores compacted activations only while their scope is valid: %j',
+    async ({ isCurrent, origin }) => {
+      const harness = createHarness();
+      const checkpoint = {
+        version: 1 as const,
+        anchorTurnId: 'old-turn',
+        payload: { summary: 'Prior summary.' },
+      };
+      harness.getLatestContextCheckpoint.mockResolvedValue({
+        assistantMessageId: 'old-answer',
+        checkpoint,
+      });
+      harness.dependencies.skills = {
+        resolve: async () => (isCurrent ? scope : { ...scope, entries: [] }),
+      };
+      harness.loadRuntimeTurnContext.mockResolvedValue({
+        ...EMPTY_CONTEXT,
+        hasMessages: true,
+        sessionTurnIds: ['old-turn'],
+      });
+      harness.loadSkillActivations.mockResolvedValue([
+        { messageId: 'old-answer', activation: { ...activation, origin } },
+      ]);
+      const plan = await prepareTurn(
+        harness.dependencies,
+        textInput(),
+        new AbortController().signal,
+      );
+      // A Skill that is no longer usable simply stops contributing; compaction is kept.
+      expect(plan.skills.active?.get(skillId)?.instructions).toBe(
+        isCurrent ? 'Use a concise outline.' : undefined,
+      );
+      expect(plan.runtimeContextCheckpoint).toEqual(checkpoint);
+    },
+  );
+
+  test('a native Pi turn restores activations from the Cherry transcript', async () => {
+    const harness = createHarness();
+    harness.dependencies.skills = { resolve: async () => scope };
+    harness.loadSkillActivations.mockResolvedValue([{ messageId: 'old-answer', activation }]);
+    const plan = await prepareDurableTurn(
+      harness.dependencies,
+      textInput(),
+      [],
+      new AbortController().signal,
+    );
+    // Pi holds the model history, so no transcript is loaded; receipts still are.
+    expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
+    expect(plan.skills.active?.get(skillId)?.instructions).toBe('Use a concise outline.');
+  });
+});
+
 function createHarness() {
   const textFact = fact(FILE_ENTRY_ID, 'notes.txt', 'text/plain', 26);
   const getSession = jest.fn(
@@ -490,6 +657,9 @@ function createHarness() {
   const loadRuntimeTurnContext = jest.fn(
     async (_sessionId: string, _anchorTurnId: string | null): Promise<StoredRuntimeTurnContext> =>
       EMPTY_CONTEXT,
+  );
+  const loadSkillActivations = jest.fn(
+    async (_sessionId: string): Promise<StoredSkillActivation[]> => [],
   );
   const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
     fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
@@ -542,7 +712,7 @@ function createHarness() {
     inferenceModel: resolveInferenceModel,
     runtime,
     runtimeTools: { resolve: resolveRuntimeTools },
-    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
+    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext, loadSkillActivations },
     systemCapabilities: { getTools: getSystemTools },
   };
 
@@ -556,6 +726,7 @@ function createHarness() {
     getSession,
     getSystemTools,
     loadRuntimeTurnContext,
+    loadSkillActivations,
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,

@@ -6,6 +6,7 @@ import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk
 import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
+import { SkillIdSchema } from '@/shared/data/types/skill';
 
 import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
@@ -28,6 +29,14 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
+  /**
+   * Skills the user selected explicitly in the composer. Each must be bound,
+   * enabled, and user-invocable for this Agent; the Host loads their
+   * instructions for this turn only and never persists the selection.
+   */
+  skillIds: z.array(SkillIdSchema).max(8).optional(),
+  /** App-owned composer action; no installation occurs until the user sends the request. */
+  skillAction: z.literal('find-and-install').optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
@@ -41,6 +50,14 @@ export const AgentStartSessionInputSchema = z.strictObject({
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
+  /**
+   * Skills the user selected explicitly in the composer. Each must be bound,
+   * enabled, and user-invocable for this Agent; the Host loads their
+   * instructions for this turn only and never persists the selection.
+   */
+  skillIds: z.array(SkillIdSchema).max(8).optional(),
+  /** App-owned composer action; no installation occurs until the user sends the request. */
+  skillAction: z.literal('find-and-install').optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({

@@ -16,8 +16,8 @@ import {
   type ChatTarget,
   conversationShareHref,
   parseChatRoute,
+  getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
-import { getShareComposerHandoff } from '@/frontend/appShell/systemEntry';
 import {
   ComposerDismissArea,
   ComposerDock,
@@ -29,6 +29,7 @@ import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
+import { createFindSkillsMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
@@ -96,9 +97,12 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !sessionId && Boolean(agentId) && !agent.error && (agent.isLoading || Boolean(agent.agent));
   const hasComposer =
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
-  // A system share arrives as composer content, not as a message: its text and attachments wait
-  // in the input for the user to edit, retarget, and send.
-  const shareHandoff = getShareComposerHandoff(composerSession.seedHandoff);
+  // Entry actions seed the rich draft; only the user's send creates a message.
+  const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
+  const initialDraft =
+    composerHandoff?.skillAction === 'find-and-install'
+      ? `${createFindSkillsMention(t('skills.find.name'))} ${composerHandoff.draft}`
+      : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
@@ -110,8 +114,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   return (
     <ComposerSessionProvider
       key={composerSession.key}
-      initialAttachments={shareHandoff?.attachments}
-      initialDraft={shareHandoff?.draft}
+      initialAttachments={composerHandoff?.attachments}
+      initialDraft={initialDraft}
     >
       {/* A drop without a composer could import files with nothing to attach
           them to, so the area refuses sessions in preview and error states. */}

@@ -8,9 +8,12 @@ Mobile Drizzle schemas migrated from the desktop `src/main/data/db/schemas` dire
   unless mobile has a documented runtime compatibility reason to diverge.
 - `_columnHelpers.ts` mirrors desktop `_columnHelpers.ts` but keeps Expo-compatible UUID generation
   for drizzle-kit and React Native runtime loading.
-- Agent, Agent tool binding, Agent Session, MCP, file, job, painting, provider/model, preference,
+- Agent, Agent tool binding, Agent Session, Skill, MCP, file, job, painting, provider/model, preference,
   and AI usage tables are the active mobile subset. Knowledge, translate, miniapp, and Agent
   workspace domains are not migrated yet.
+- Skill tables match desktop except that `agent_global_skill` omits `namespace` and appends the
+  mobile `manifest`, `profile`, and `invocation` columns; see
+  [Agent Skills](../../../../../docs/references/agent/agent-skills.md#persistence-and-lifecycle).
 - Mobile adds `agent_session_message_created_id_idx` to support bounded global history scans for
   short search terms that cannot use the trigram index. It changes no persisted message fields.
 

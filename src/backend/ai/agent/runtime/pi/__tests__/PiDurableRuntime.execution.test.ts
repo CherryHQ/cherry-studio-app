@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { getCurrentSystemPrompt } from '@earendil-works/pi-ai/utils/transcript';
 import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
 
 import type { RuntimeEvent, RuntimeTool } from '../../types';
@@ -159,7 +160,13 @@ describe('Pi durable execution integration', () => {
     );
     await bridge.registerModel(reference);
 
-    const execute = jest.fn(async () => ({ value: 'Tool value', artifacts: [] }));
+    const instructionBody = 'Ask exactly one question, then wait for the user.';
+    const execute = jest.fn(async () => ({
+      value: { instructions: instructionBody },
+      modelValue: 'Tool value',
+      artifacts: [],
+      instructions: { key: 'guide', text: instructionBody },
+    }));
     const template: RuntimeTool = {
       ref: { source: 'builtin', capabilityId: 'lookup' },
       providerName: 'lookup',
@@ -220,6 +227,10 @@ describe('Pi durable execution integration', () => {
         expect.objectContaining({ role: 'toolResult', toolCallId: 'lookup-call' }),
       );
       expect(JSON.stringify(requests[1]?.messages)).toContain('Tool value');
+      expect(getCurrentSystemPrompt(requests[1]!.messages)).toContain(instructionBody);
+      expect(
+        JSON.stringify(requests[1]?.messages.filter((message) => message.role === 'toolResult')),
+      ).not.toContain(instructionBody);
 
       const second = await runtime.submit(
         'business-session',
@@ -253,6 +264,36 @@ describe('Pi durable execution integration', () => {
           .map((message) => message.content),
       ).toEqual(['First input', 'Second input', 'Third input']);
       expect(execute).toHaveBeenCalledTimes(1);
+      expect(getCurrentSystemPrompt(requests[3]!.messages)).toContain(instructionBody);
+
+      // Discarding all tool history must not discard this execution's committed instructions.
+      await runtime.reset('business-session');
+      const recoveredBody = await runtime.submit(
+        'business-session',
+        { type: 'input', requestId: 'after-reset', content: 'Continue' },
+        {},
+      );
+      expect((await recoveredBody.wait(BACKGROUND_CONTEXT)).status).toBe('done');
+      expect(requests[4]!.messages.some((message) => message.role === 'toolResult')).toBe(false);
+      expect(getCurrentSystemPrompt(requests[4]!.messages)).toContain(instructionBody);
+
+      // The next Host configuration replaces the scope; disabled guides cannot leak through the doc.
+      await runtime.configure(
+        'business-session',
+        {
+          model: { provider: reference.providerId, modelId: reference.modelId },
+          instructions: 'Help the user.',
+          extensions: [recovered.extension],
+        },
+        { maxOutputTokens: 512 },
+      );
+      const next = await runtime.submit(
+        'business-session',
+        { type: 'input', requestId: 'new-scope', content: 'A new task' },
+        {},
+      );
+      expect((await next.wait(BACKGROUND_CONTEXT)).status).toBe('done');
+      expect(getCurrentSystemPrompt(requests[5]!.messages)).not.toContain(instructionBody);
     } finally {
       await runtime.close();
     }

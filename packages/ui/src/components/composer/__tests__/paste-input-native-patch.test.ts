@@ -9,6 +9,41 @@ const source = readFileSync(
 // Installed-source upgrade guards. Jest cannot replay UIKit clipboard-service
 // stalls; these protect the native loading policy, not device responsiveness.
 describe('expo-paste-input iOS clipboard patch', () => {
+  test('preserves composer inline icons instead of extracting and uploading them as pasted images', () => {
+    const linkStyle = readFileSync(
+      join(
+        dirname(require.resolve('react-native-enriched-markdown/package.json')),
+        'ios/input/styles/ENRMLinkStyleHandler.mm',
+      ),
+      'utf8',
+    );
+    // UIKit clears fileType when an image is assigned. The marker must belong
+    // to the attributed text, where image updates cannot invalidate it.
+    expect(linkStyle).toContain(
+      '[storage addAttribute:@"com.cherryai.composer-mention-icon" value:@YES range:NSMakeRange(iconIndex, 1)]',
+    );
+    expect(linkStyle).not.toContain('ofType:@"com.cherryai.composer-mention-icon"');
+    const formatter = readFileSync(
+      join(
+        dirname(require.resolve('react-native-enriched-markdown/package.json')),
+        'ios/input/ENRMInputFormatter.mm',
+      ),
+      'utf8',
+    );
+    expect(formatter).toContain(
+      '[textStorage removeAttribute:@"com.cherryai.composer-mention-icon" range:scopeRange]',
+    );
+    const extraction = source
+      .split('attributedText.enumerateAttribute(.attachment,')[1]
+      ?.split('if #available(iOS 18.0, *)')[0];
+    expect(extraction).toMatch(
+      /attributedText\.attribute\(NSAttributedString\.Key\("com\.cherryai\.composer-mention-icon"\), at: range\.location, effectiveRange: nil\) as\? Bool\s*guard isMentionIcon != true else \{\s*return\s*\}[\s\S]*extractMediaPayload/,
+    );
+    expect(extraction).not.toContain('attachment.fileType');
+    expect(extraction).toContain('attachmentRanges.append(range)');
+    expect(extraction).toContain('mediaPayloads.append(payload)');
+  });
+
   test('selects representations without synchronous clipboard payload reads', () => {
     expect(source).toContain('let itemProviders = UIPasteboard.general.itemProviders');
     expect(source).toContain('let registeredTypes = provider.registeredTypeIdentifiers');
