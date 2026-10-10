@@ -1,5 +1,5 @@
 import { Image } from '@cherrystudio/ui/components';
-import { useState } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -18,6 +18,7 @@ export function ZoomableImage({
   accessibilityLabel,
   height,
   onError,
+  onLoad,
   onZoomChange,
   uri,
   width,
@@ -26,6 +27,7 @@ export function ZoomableImage({
   accessibilityLabel: string;
   height: number;
   onError?: () => void;
+  onLoad?: ComponentProps<typeof Image>['onLoad'];
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
   width: number;
@@ -142,6 +144,7 @@ export function ZoomableImage({
           cachePolicy={sourceResolution === 'original' ? 'disk' : 'memory-disk'}
           contentFit="contain"
           onError={onError}
+          onLoad={onLoad}
           source={uri}
           style={styles.image}
           transition={120}

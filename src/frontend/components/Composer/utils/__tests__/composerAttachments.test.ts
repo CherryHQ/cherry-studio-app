@@ -17,6 +17,7 @@ import {
   isComposerImageMediaType,
   isDroppedImagePayload,
   removeComposerAttachment,
+  replaceComposerAttachment,
 } from '../composerAttachments';
 
 const transientFileAttachment: ComposerAttachmentSource = {
@@ -34,6 +35,51 @@ const readyFileAttachment: ComposerAttachmentReady = {
 };
 
 describe('composer attachments', () => {
+  test('replaces only the matching draft image and sends the replacement managed reference', () => {
+    const replacement: ComposerAttachmentReady = {
+      ...readyFileAttachment,
+      id: 'replacement',
+      fileEntryId: '00000000-0000-7000-8000-000000000002',
+      kind: 'image',
+      name: 'photo v2.png',
+      mediaType: 'image/png',
+      uri: 'file:///managed/edited.png',
+    };
+    const other = { ...transientFileAttachment, id: 'other' };
+    const original = [other, readyFileAttachment];
+    const result = replaceComposerAttachment(
+      original,
+      readyFileAttachment.id,
+      readyFileAttachment.fileEntryId,
+      replacement,
+    )!;
+    expect(result[0]).toBe(other);
+    expect(result[1]).toEqual({ ...replacement, id: readyFileAttachment.id });
+    expect(original[1]).toBe(readyFileAttachment);
+    const parts = createComposerMessageParts('keep this text', [result[1]!]);
+    expect(parts[0]).toEqual({ type: 'text', text: 'keep this text' });
+    expect(readCherryMeta(parts[1]!)?.fileEntryId).toBe(replacement.fileEntryId);
+  });
+
+  test('rejects a save after the attachment was removed or replaced by another edit', () => {
+    expect(
+      replaceComposerAttachment(
+        [],
+        readyFileAttachment.id,
+        readyFileAttachment.fileEntryId,
+        readyFileAttachment,
+      ),
+    ).toBeUndefined();
+    expect(
+      replaceComposerAttachment(
+        [readyFileAttachment],
+        readyFileAttachment.id,
+        '00000000-0000-7000-8000-000000000099',
+        readyFileAttachment,
+      ),
+    ).toBeUndefined();
+  });
+
   test('appends attachments while preserving existing items and dropping duplicates', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 

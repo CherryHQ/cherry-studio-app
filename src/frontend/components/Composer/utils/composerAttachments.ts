@@ -95,6 +95,25 @@ export function removeComposerAttachment(
   return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
+/** Preserve position and draft identity, and reject an edit whose source was removed/replaced. */
+export function replaceComposerAttachment(
+  attachments: readonly ComposerAttachmentDraft[],
+  attachmentId: string,
+  sourceId: FileEntryId,
+  replacement: ComposerAttachmentReady,
+): ComposerAttachmentDraft[] | undefined {
+  const index = attachments.findIndex(
+    (attachment) =>
+      attachment.id === attachmentId &&
+      isComposerAttachmentReady(attachment) &&
+      attachment.fileEntryId === sourceId,
+  );
+  if (index < 0) return undefined;
+  return attachments.map((attachment, position) =>
+    position === index ? { ...replacement, id: attachment.id } : attachment,
+  );
+}
+
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentSource {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 

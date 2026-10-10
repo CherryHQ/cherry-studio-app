@@ -2,7 +2,7 @@ import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
+import { useShareFile } from '@/frontend/appShell/fileExport';
 import { HeaderChrome, useRouteHeaderLeadingAction } from '@/frontend/appShell/header';
 import { fileEntryPreviewKind, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
@@ -19,27 +19,18 @@ export function FileViewerHeader({
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
   const { openFileEntryWithSystem } = useOpenFileEntry();
-  const saveToPhotos = useSaveImageToPhotos({
-    uri: file.uri,
-    provenance: file.entry.provenance,
-  });
   const { isSharing, share } = useShareFile(file);
   const isImage = fileEntryPreviewKind(file.entry) === 'image';
 
   const menuItems: MenuItem[] = [
     ...items,
-    {
-      disabled: isSharing,
-      id: 'share',
-      label: t('fileViewer.share'),
-      onPress: () => void share(),
-    },
-    ...(isImage
+    ...(!isImage
       ? [
           {
-            id: 'save-to-photos',
-            label: t('fileViewer.saveToPhotos'),
-            onPress: () => void saveToPhotos(),
+            disabled: isSharing,
+            id: 'share',
+            label: t('fileViewer.share'),
+            onPress: () => void share(),
           },
         ]
       : []),

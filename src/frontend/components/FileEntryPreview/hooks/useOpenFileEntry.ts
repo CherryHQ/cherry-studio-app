@@ -3,8 +3,14 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { prepareFileExport, useExportWatermark } from '@/frontend/appShell/fileExport';
+import {
+  finishImagePreviewEditRequest,
+  useImagePreviewEditRequest,
+  type ReplacePreviewImage,
+} from '@/frontend/appShell/imagePreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
+import { canEditFileImage } from '@/shared/contracts/fileImageEdit';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -21,6 +27,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const createWatermark = useExportWatermark(options.watermark);
+  const requestImageEdit = useImagePreviewEditRequest();
 
   const openFileEntryWithSystem = async ({ entry, uri }: ResolvedFile) => {
     try {
@@ -45,11 +52,26 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
     }
   };
 
-  const openFileEntry = (file: ResolvedFile) => {
+  const openFileEntry = (file: ResolvedFile, replaceImage?: ReplacePreviewImage) => {
     if (fileEntryPreviewKind(file.entry) === 'document' && !canPreviewDocument(file.entry)) {
       void openFileEntryWithSystem(file);
     } else {
-      router.push({ pathname: '/files/[fileEntryId]', params: { fileEntryId: file.entry.id } });
+      const imageEditRequestId =
+        replaceImage && canEditFileImage(file.entry.mediaType)
+          ? requestImageEdit(file.entry.id, replaceImage)
+          : undefined;
+      try {
+        router.push({
+          pathname: '/files/[fileEntryId]',
+          params: {
+            fileEntryId: file.entry.id,
+            ...(imageEditRequestId ? { imageEditRequestId } : {}),
+          },
+        });
+      } catch (error) {
+        if (imageEditRequestId) finishImagePreviewEditRequest(imageEditRequestId);
+        throw error;
+      }
     }
   };
 
