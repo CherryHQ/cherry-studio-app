@@ -62,7 +62,9 @@ const mockUseKeyboardAnimation = jest.mocked(useReanimatedKeyboardAnimation);
 let mockKeyboardHandlers: Parameters<typeof useGenericKeyboardHandler>[0];
 let mockKeyboardHeight: SharedValue<number>;
 let mockKeyboardProgress: SharedValue<number>;
-const mockListScrollToEnd = jest.fn(async () => undefined);
+const mockListScrollToEnd = jest.fn(
+  async (_options?: { animated?: boolean }): Promise<void> => undefined,
+);
 const mockListScrollToIndex = jest.fn(async () => undefined);
 let mockListState = {
   contentLength: 900,
@@ -362,6 +364,52 @@ describe('MessageList scroll-controller ownership', () => {
     act(flushAnimationFrames);
 
     expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
+  });
+
+  test('reveals regenerated history when the entering turn arrives before layout is ready', async () => {
+    const messages = [createMessage('history', 'assistant')];
+    const onReady = jest.fn();
+    // Android emits no completion event for an animated scroll whose target
+    // is already reached. Initial placement behind the cover must still finish.
+    mockListScrollToEnd.mockImplementation((options?: { animated?: boolean }) =>
+      options?.animated ? new Promise<void>(() => undefined) : Promise.resolve(),
+    );
+    try {
+      act(() => {
+        renderer = create(
+          <MessageList {...listProps(messages, { initialLayoutReady: false, onReady })} />,
+        );
+      });
+      await loadList();
+      const regenerated = [...messages, createMessage('regenerated-user', 'user')];
+      act(() => {
+        renderer?.update(
+          <MessageList
+            {...listProps(regenerated, {
+              enteringMessageId: 'regenerated-user',
+              initialLayoutReady: false,
+              onReady,
+            })}
+          />,
+        );
+      });
+      await act(async () => {
+        renderer?.update(
+          <MessageList
+            {...listProps(regenerated, {
+              enteringMessageId: 'regenerated-user',
+              initialLayoutReady: true,
+              onReady,
+            })}
+          />,
+        );
+      });
+      act(flushAnimationFrames);
+      expect(onReady).toHaveBeenCalledTimes(1);
+      expect(mockListScrollToEnd).toHaveBeenCalledWith({ animated: false });
+    } finally {
+      mockListScrollToEnd.mockImplementation(async () => undefined);
+    }
   });
 
   test('lets a committed drag cancel mount-time restoration', async () => {

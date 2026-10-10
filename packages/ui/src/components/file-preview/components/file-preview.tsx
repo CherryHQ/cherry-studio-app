@@ -11,6 +11,7 @@ const defaultSize = 112;
 
 export function FilePreview({
   badge,
+  disabled,
   metadata,
   transfer,
   file,
@@ -23,7 +24,7 @@ export function FilePreview({
   const resolvedSize = Math.max(1, size);
   const { resolve } = useFilePreviewPlugins();
   const handlePress = () => {
-    if (!file && !metadata) {
+    if (disabled || (!file && !metadata)) {
       return;
     }
     onPress();
@@ -33,7 +34,7 @@ export function FilePreview({
   return (
     <FilePreviewFrame
       accessibilityLabel={file?.displayName ?? metadata?.displayName ?? labels.unavailable}
-      disabled={!file && !metadata}
+      disabled={disabled || (!file && !metadata)}
       transfer={transfer}
       onPress={handlePress}
       size={resolvedSize}

@@ -16,7 +16,7 @@ export async function restoreRemoteInput(
         id: fileEntryId,
         fileEntryId,
         uri,
-        name: part.name ?? fileEntryId,
+        name: part.filename ?? fileEntryId,
         mediaType: part.mediaType,
         kind: part.mediaType.startsWith('image/') ? 'image' : 'file',
         status: 'ready',
@@ -29,7 +29,7 @@ export async function restoreRemoteInput(
       result.status === 'fulfilled' ? [result.value] : [],
     ),
     missing: resolved.flatMap((result, index) =>
-      result.status === 'rejected' ? [files[index].name ?? files[index].fileEntryId] : [],
+      result.status === 'rejected' ? [files[index].filename ?? files[index].fileEntryId] : [],
     ),
   };
 }

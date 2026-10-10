@@ -3,6 +3,7 @@ import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/typ
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
+import { imageThumbnailCacheKey } from '../filePreviewCache';
 import {
   createInternalEntry,
   createMessageParts,
@@ -30,7 +31,7 @@ jest.mock('expo-file-system', () => {
   const failures = new Set<string>();
   const writeFailures = new Set<string>();
   const writes: { content: string; options?: unknown; uri: string }[] = [];
-  const paths = { document: { uri: 'file:///documents/' } };
+  const paths = { cache: { uri: 'file:///cache/' }, document: { uri: 'file:///documents/' } };
   const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
     const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
     let uri = first?.replace(/\/+$/, '') ?? '';
@@ -131,7 +132,7 @@ type FileSystemTestState = {
   directories: Set<string>;
   failures: Set<string>;
   files: Map<string, number>;
-  paths: { document: { uri: string } };
+  paths: { cache: { uri: string }; document: { uri: string } };
   writeFailures: Set<string>;
   writes: { content: string; options?: unknown; uri: string }[];
 };
@@ -547,10 +548,12 @@ describe('fileStorage', () => {
     expect(onFileChange).not.toHaveBeenCalled();
   });
 
-  test('hard-deletes an entry row and its file', async () => {
+  test('hard-deletes an entry row, its file and its preview', async () => {
     const entry = internalEntry();
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    const previewUri = `file:///cache/FilePreviewImages/${imageThumbnailCacheKey(entry)}`;
     testState.files.set(uri, entry.size);
+    testState.files.set(previewUri, 1);
     const tx = {};
     const entries = {
       deleteTx: jest.fn(async () => undefined),
@@ -566,7 +569,21 @@ describe('fileStorage', () => {
 
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
+    expect(testState.files.has(previewUri)).toBe(false);
     expect(onFileChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('discarding an entry also removes its preview', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    const previewUri = `file:///cache/FilePreviewImages/${imageThumbnailCacheKey(entry)}`;
+    testState.files.set(uri, entry.size);
+    testState.files.set(previewUri, 1);
+
+    await discardInternalEntries(createEntryStore(), [entry]);
+
+    expect(testState.files.has(uri)).toBe(false);
+    expect(testState.files.has(previewUri)).toBe(false);
   });
 
   test('does not allow a writer to alter an imported upload source', async () => {

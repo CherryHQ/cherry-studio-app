@@ -18,8 +18,8 @@ import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
+import type { PiRuntimeDependencies } from '../piModelTypes';
 import * as piOAuthModels from '../piOAuthModels';
-import type { PiRuntimeDependencies } from '../PiRuntime';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 

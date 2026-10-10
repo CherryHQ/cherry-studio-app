@@ -53,6 +53,15 @@ export type AgentSessionMessagePage = CursorPaginationResponse<AgentMessageView>
   previousCursor?: string;
 };
 
+/** Data routes consume a portable reader; composition selects the history authority. */
+export interface AgentSessionMessageReader {
+  listByCursor(
+    sessionId: string,
+    params?: ListAgentSessionMessagesQueryParams,
+  ): Promise<AgentSessionMessagePage>;
+  readSelection(sessionId: string, ids: string[]): Promise<AgentTranscriptSelection>;
+}
+
 export const AgentTranscriptSelectionSchema = z.strictObject({
   ids: z.array(z.string().min(1)).min(1).max(128),
 });

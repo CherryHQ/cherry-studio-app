@@ -36,7 +36,7 @@ export function AgentManagementToolPart({ part }: { part: ToolMessagePart }) {
           {t(status === 'created' ? 'chat.agentTool.created' : 'chat.agentTool.updated')}
         </Text>
       </View>
-      {agent.modelId ? (
+      {agent.model ? (
         <Button
           accessibilityLabel={t('chat.agentTool.chatWithAgent', { name: agent.name })}
           hitSlop={10}

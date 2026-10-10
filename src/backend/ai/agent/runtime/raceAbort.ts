@@ -24,29 +24,6 @@ export function raceAbort<T>(operation: Promise<T> | T, signal: AbortSignal): Pr
   });
 }
 
-/**
- * Wait for an operation to settle, but never longer than the grace window.
- * Used where the caller itself initiated the abort and only wants to give the
- * underlying loop a bounded chance to unwind before it settles the outcome.
- */
-export async function settleWithin(
-  operation: Promise<unknown> | undefined,
-  graceMs: number,
-): Promise<void> {
-  if (!operation) return;
-  let handle: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      operation.catch(() => undefined),
-      new Promise<void>((resolve) => {
-        handle = setTimeout(resolve, graceMs);
-      }),
-    ]);
-  } finally {
-    if (handle !== undefined) clearTimeout(handle);
-  }
-}
-
 function abortReason(signal: AbortSignal): Error {
   return signal.reason instanceof Error ? signal.reason : new Error('The operation was aborted.');
 }

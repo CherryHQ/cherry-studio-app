@@ -25,6 +25,7 @@ import {
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
   RemoteSessionSnapshot,
@@ -35,6 +36,7 @@ import type {
 import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
 import {
+  createMessageViewCache,
   projectMessage,
   projectSession,
   projectSnapshot,
@@ -113,7 +115,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     string,
     { sessionId: string; value: RemoteResourceDescriptor }
   >();
-  private readonly messageViews: MessageViewCache = new WeakMap();
+  private readonly messageViews: MessageViewCache = createMessageViewCache();
   private readonly partResources = new WeakMap<AgentPart, { sessionId: string; id: string }>();
   private readonly work = new Set<Promise<unknown>>();
   private readonly actions: RemoteAgentActions;
@@ -180,8 +182,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
         if (!this.files) throw new RemoteAgentError('UPGRADE_REQUIRED');
         const abort = new AbortController();
         this.uploadAbort = { id: owner.id, controller: abort };
+        const linked = linkAbortSignals([abort.signal, this.lease.signal]);
         try {
-          const signal = AbortSignal.any([abort.signal, this.lease.signal]);
+          const signal = linked.signal;
           return await uploadAttachments(
             attachments,
             this.files,
@@ -200,6 +203,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           if (error instanceof RemoteAgentError) throw error;
           throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
         } finally {
+          linked.dispose();
           this.uploadAbort = undefined;
           this.publishUpload();
         }
@@ -303,9 +307,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.backgroundBlocked = true;
     this.pendingCommandLease?.release();
     this.pendingCommandLease = undefined;
-    // The desktop still owns execution. Retire only the phone's surfaces.
+    // The desktop still owns execution. Retire only the phone's surfaces, without a terminal card.
     for (const observation of this.observations.values()) {
-      observation.reply?.finish('cancelled');
+      observation.reply?.retire();
       observation.reply = undefined;
     }
     this.publishExecution();
@@ -461,17 +465,22 @@ export class RemoteAgentScope implements RemoteAgentSource {
   }
   private request: AgentRequest = async (method, params, caller) => {
     this.assertActive();
-    const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
-    const session = await this.ready(signal);
-    if (this.state.attachments !== (session.agentAttachmentDraftsVersion === 1)) {
-      this.state = {
-        ...this.state,
-        attachments: session.agentAttachmentDraftsVersion === 1,
-        preupload: session.agentAttachmentDraftsVersion === 1,
-      };
-      for (const listener of this.stateListeners) listener();
+    const linked = caller ? linkAbortSignals([caller, this.lease.signal]) : undefined;
+    const signal = linked?.signal ?? this.lease.signal;
+    try {
+      const session = await this.ready(signal);
+      if (this.state.attachments !== (session.agentAttachmentDraftsVersion === 1)) {
+        this.state = {
+          ...this.state,
+          attachments: session.agentAttachmentDraftsVersion === 1,
+          preupload: session.agentAttachmentDraftsVersion === 1,
+        };
+        for (const listener of this.stateListeners) listener();
+      }
+      return await this.call(session, method, params, signal);
+    } finally {
+      linked?.dispose();
     }
-    return this.call(session, method, params, signal);
   };
   private async call<M extends AgentMethod>(
     session: DesktopSession,
@@ -763,21 +772,27 @@ export class RemoteAgentScope implements RemoteAgentSource {
         .parse(JSON.parse(text));
       return { kind: 'metadata', name: metadata.filename || 'file', mediaType: metadata.mediaType };
     }
-    if (part.kind === 'file')
-      return {
-        kind: 'file',
-        uri: await this.downloadAttachment(
-          this.lease.scope,
-          this.historyRequest,
-          sessionId,
-          part.ref,
-          part.name,
-          AbortSignal.any([signal, this.lease.signal]),
-        ),
-        name: part.name,
-        mediaType: part.ref.mediaType,
-        byteLength: part.ref.byteLength,
-      };
+    if (part.kind === 'file') {
+      const linked = linkAbortSignals([signal, this.lease.signal]);
+      try {
+        return {
+          kind: 'file',
+          uri: await this.downloadAttachment(
+            this.lease.scope,
+            this.historyRequest,
+            sessionId,
+            part.ref,
+            part.name,
+            linked.signal,
+          ),
+          name: part.name,
+          mediaType: part.ref.mediaType,
+          byteLength: part.ref.byteLength,
+        };
+      } finally {
+        linked.dispose();
+      }
+    }
     return {
       kind: 'text',
       text:
@@ -824,8 +839,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
         sessionTitle: observation.snapshot?.session.title ?? '',
         onInterrupt: () => {
           this.backgroundBlocked = true;
-          // The desktop still owns execution. Retire only the phone's surface.
-          observation!.reply?.finish('cancelled');
+          // The desktop still owns execution. Retire only the phone's surface, without a terminal card.
+          observation!.reply?.retire();
           observation!.reply = undefined;
           this.publishExecution();
         },

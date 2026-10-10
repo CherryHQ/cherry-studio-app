@@ -13,7 +13,6 @@ import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import {
   AgentProtocolError,
   type AgentErrorView,
-  type AgentExecutionTarget,
   type AgentInputPart,
   type AgentMessagePart,
   type AgentMessageView,
@@ -73,8 +72,8 @@ export type TurnPreparationDependencies = {
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
   imageGeneration?: AgentImageGenerationPort;
-  /** The Host keeps the engine binding; preparation only consumes the routed Runtime. */
-  routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime;
+  /** The Host keeps the engine binding; preparation consumes that local Runtime. */
+  runtime: AgentRuntime;
   runtimeTools: AgentRuntimeToolResolver;
   store: Pick<
     AgentSessionStore,
@@ -102,11 +101,9 @@ export type TurnPlan = {
   modelPreflight: RuntimeModelPreflight | null;
   imageGeneration?: AgentImageGenerationPlan;
   resources: TurnResourceLedger;
-  runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
   runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
-  sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
   pluginGuides: readonly PluginGuideSnapshot[];
   toolDiscoveryWarnings: readonly string[];
@@ -148,6 +145,7 @@ export async function prepareTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput,
   signal: AbortSignal,
+  excludeCheckpointMessageId?: string,
 ): Promise<TurnPlan> {
   const documentParserMode = dependencies.documentParserMode();
   const { sessionId } = parsed;
@@ -164,6 +162,7 @@ export async function prepareTurn(
     dependencies,
     sessionId,
     signal,
+    excludeCheckpointMessageId,
   );
 
   return prepareResolvedTurn(
@@ -180,8 +179,9 @@ export async function prepareTurn(
 
 /**
  * Resolve the stored compaction checkpoint and the history it anchors. Every
- * turn — submission or retry — reads history through this path, so no caller
- * replays a full transcript the Runtime has already summarized.
+ * working-copy rebuild — a submission without a current copy, or a retry —
+ * reads history through this path, so no caller imports a full transcript the
+ * Runtime has already summarized.
  */
 export async function loadTurnContext(
   dependencies: Pick<TurnPreparationDependencies, 'store'>,
@@ -236,15 +236,13 @@ export async function prepareInitialTurn(
   }
   const session = {
     agentId: parsed.agentId,
-    executionTarget: parsed.executionTarget,
-    title: '',
+    name: '',
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
     hasMessages: false,
     history: [],
     referencedFileEntryIds: [],
-    sessionTurnIds: [],
   };
 
   return prepareResolvedTurn(
@@ -259,10 +257,38 @@ export async function prepareInitialTurn(
   );
 }
 
+/** Native conversations prepare capabilities and new input without reconstructing model history. */
+export async function prepareDurableTurn(
+  dependencies: TurnPreparationDependencies,
+  parsed: AgentSubmitMessageInput,
+  referencedFileEntryIds: readonly string[],
+  signal: AbortSignal,
+): Promise<TurnPlan> {
+  const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
+  if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
+  const agent = await raceAbort(dependencies.agents.getAgent(session.agentId), signal);
+  if (!agent) fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
+  return prepareResolvedTurn(
+    dependencies,
+    parsed,
+    session,
+    agent,
+    {
+      anchorFound: true,
+      hasMessages: true,
+      history: [],
+      referencedFileEntryIds: [...referencedFileEntryIds],
+    },
+    null,
+    dependencies.documentParserMode(),
+    signal,
+  );
+}
+
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'executionTarget' | 'title'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -276,7 +302,7 @@ export async function prepareResolvedTurn(
     name: agent.name,
     icon: null,
   });
-  const runtime = dependencies.routeExecutionTarget(session.executionTarget);
+  const runtime = dependencies.runtime;
   if (
     !runtime.descriptor.capabilities.attachments &&
     parsed.parts.some((part) => part.type === 'file')
@@ -327,11 +353,9 @@ export async function prepareResolvedTurn(
       inputParts: parts,
       modelPreflight: null,
       resources,
-      runtime,
       runtimeContextCheckpoint: null,
       runtimeContentAttachments: new Map(),
-      sessionTitle: session.title,
-      sessionTurnIds: storedTurnContext.sessionTurnIds,
+      sessionTitle: session.name,
       tools: [],
       pluginGuides: [],
       toolDiscoveryWarnings: [],
@@ -452,7 +476,7 @@ export async function prepareResolvedTurn(
       type: 'file',
       fileEntryId: part.fileEntryId,
       mediaType: part.mediaType,
-      ...(part.name !== undefined ? { name: part.name } : {}),
+      ...(part.filename !== undefined ? { filename: part.filename } : {}),
       purpose: 'input-attachment',
       attachmentReport:
         content?.type === 'text-attachment' || content?.type === 'document-attachment'
@@ -470,11 +494,9 @@ export async function prepareResolvedTurn(
     inputParts: parts,
     modelPreflight,
     resources,
-    runtime,
     runtimeContextCheckpoint,
     runtimeContentAttachments,
-    sessionTitle: session.title,
-    sessionTurnIds: storedTurnContext.sessionTurnIds,
+    sessionTitle: session.name,
     tools,
     toolDiscoveryWarnings,
     userParts,

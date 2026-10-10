@@ -1,4 +1,5 @@
 import { fileContent } from '@/backend/services/file/fileContent';
+import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import { FileEntrySchema } from '@/shared/data/types/file';
@@ -53,6 +54,15 @@ describe('createSystemCapabilitySource', () => {
       'read_file',
       'write_file',
     ]);
+  });
+
+  test('offers run_js without approval only when the client has the native sandbox', async () => {
+    const withoutSandbox = await resolve({});
+    expect(capabilityIds(withoutSandbox)).not.toContain('run_js');
+
+    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    expect(capabilityIds(tools)).toContain('run_js');
+    expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
   test('adds a device tool once every scope it needs is grantable', async () => {
@@ -510,6 +520,7 @@ describe('createSystemCapabilitySource', () => {
 
 type Scenario = {
   deviceAccess?: Partial<Record<DevicePermissionScope, SystemPermissionState>>;
+  jsSandbox?: JsSandbox;
   disabledCapabilities?: AgentCapability[];
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
@@ -583,6 +594,7 @@ function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDepende
         return null;
       }),
     } as unknown as SystemCapabilitySourceDependencies['preference'],
+    jsSandbox: scenario.jsSandbox ?? null,
     supportsToolCalling: async () => scenario.supportsToolCalling ?? true,
     webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
   };

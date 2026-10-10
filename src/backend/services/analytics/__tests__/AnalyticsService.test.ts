@@ -2,6 +2,11 @@ import { AnalyticsClient } from '@cherrystudio/analytics-client';
 import { AppState } from 'react-native';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { Emitter } from '@/backend/core/lifecycle/event';
+import {
+  aiUsageRecordService,
+  type CommittedAiInvocationUsage,
+} from '@/backend/data/services/AiUsageRecordService';
 import type { PreferenceKeyType, PreferenceSchema } from '@/shared/data/preference';
 import { LATEST_PRIVACY_POLICY_VERSION } from '@/shared/utils/privacyConsent';
 
@@ -16,6 +21,15 @@ jest.mock('@cherrystudio/analytics-client', () => ({
 }));
 
 const analyticsClientMock = AnalyticsClient as unknown as jest.Mock;
+const startedServices: AnalyticsService[] = [];
+let committedUsage: Emitter<readonly CommittedAiInvocationUsage[]>;
+
+beforeEach(() => {
+  committedUsage = new Emitter();
+  jest
+    .spyOn(aiUsageRecordService, 'onInvocationsCommitted')
+    .mockImplementation(committedUsage.event);
+});
 
 /** Lets each assertion run after the service's queued activation work settles. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -102,12 +116,15 @@ async function startService(
   });
   await installTestHost({ CacheService: cache, PreferenceService: preference });
   const service = new AnalyticsService();
+  startedServices.push(service);
   await service._doInit();
   await settle();
   return { cache, changeAppState: (status) => changeAppState(status), client, preference, service };
 }
 
 afterEach(async () => {
+  for (const service of startedServices.splice(0)) await service._doStop();
+  committedUsage.dispose();
   analyticsClientMock.mockReset();
   jest.restoreAllMocks();
   await uninstallTestHost();
@@ -216,4 +233,47 @@ it('reports the day once when foreground events overlap an unanswered ping', asy
   await settle();
 
   expect(client.trackAppUpdate).toHaveBeenCalledTimes(1);
+});
+
+it('maps committed usage facts under consent and releases the subscription on stop', async () => {
+  const preference = createPreference({ 'app.privacy.data_collection.enabled': false });
+  const { client, service } = await startService({ preference });
+  const facts: readonly CommittedAiInvocationUsage[] = [
+    {
+      requestId: 'agent',
+      providerId: 'openai',
+      modelId: 'gpt-4',
+      sourceType: 'agent',
+      inputTokens: 10,
+      outputTokens: 2,
+    },
+    {
+      requestId: 'assistant',
+      providerId: 'openai',
+      modelId: 'gpt-4',
+      sourceType: 'assistant',
+      inputTokens: null,
+      outputTokens: null,
+    },
+    { requestId: 'unknown', providerId: null, modelId: 'gpt-4', sourceType: 'agent' },
+  ];
+  committedUsage.fire(facts);
+  expect(client.trackTokenUsage).not.toHaveBeenCalled();
+  await preference.set('app.privacy.data_collection.enabled', true as never);
+  await settle();
+  expect(client.trackTokenUsage).not.toHaveBeenCalled();
+
+  committedUsage.fire(facts);
+  expect(client.trackTokenUsage.mock.calls).toEqual([
+    [{ input_tokens: 10, output_tokens: 2, provider: 'openai', model: 'gpt-4', source: 'agent' }],
+    [{ input_tokens: 0, output_tokens: 0, provider: 'openai', model: 'gpt-4', source: 'chat' }],
+  ]);
+
+  await preference.set('app.privacy.data_collection.enabled', false as never);
+  committedUsage.fire(facts);
+  expect(client.trackTokenUsage).toHaveBeenCalledTimes(2);
+  await service._doStop();
+  expect(committedUsage.listenerCount).toBe(0);
+  committedUsage.fire(facts);
+  expect(client.trackTokenUsage).toHaveBeenCalledTimes(2);
 });

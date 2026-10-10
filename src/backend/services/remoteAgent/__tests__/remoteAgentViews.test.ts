@@ -1,6 +1,6 @@
 import type { AgentProjection } from '@cherrystudio/remote-protocol/agent';
 
-import { projectMessage, projectSnapshot, type MessageViewCache } from '../remoteAgentViews';
+import { createMessageViewCache, projectMessage, projectSnapshot } from '../remoteAgentViews';
 
 const issueResource = () => 'opaque-resource';
 const message = {
@@ -116,7 +116,7 @@ it('reuses message views until the message or one of its parts is replaced', () 
     tombstones: [],
   };
   const issue = jest.fn(issueResource);
-  const views: MessageViewCache = new WeakMap();
+  const views = createMessageViewCache();
   const first = projectSnapshot('scope', projection, true, issue, views).messages;
   const next = projectSnapshot(
     'scope',
@@ -128,4 +128,55 @@ it('reuses message views until the message or one of its parts is replaced', () 
   expect(next[0]).toBe(first[0]);
   expect(next[1]).not.toBe(first[1]);
   expect(next[1].parts[0]).toMatchObject({ text: 'growing' });
+});
+
+it('reuses unchanged part views and reports each text part state while its message streams', () => {
+  const answer = {
+    partId: 'answer',
+    revision: '1',
+    kind: 'text' as const,
+    content: { text: 'Reading the file.' },
+    state: 'completed' as const,
+  };
+  const input = {
+    partId: 'input',
+    revision: '1',
+    kind: 'tool-input' as const,
+    toolName: 'read',
+    toolCallId: 'call',
+    content: { text: '{}' },
+    state: 'completed' as const,
+  };
+  const tail = (text: string) => ({
+    partId: 'tail',
+    revision: '1',
+    kind: 'text' as const,
+    content: { text },
+    state: 'streaming' as const,
+  });
+  const streaming = { ...message, status: 'pending' as const };
+  const cache = createMessageViewCache().parts;
+  const first = projectMessage('s', streaming, [answer, input, tail('Fo')], issueResource, cache);
+  const output = { ...input, partId: 'output', kind: 'tool-output' as const };
+  const next = projectMessage(
+    's',
+    streaming,
+    [answer, input, output, tail('Found')],
+    issueResource,
+    cache,
+  );
+
+  expect(first.parts[0]).toMatchObject({ state: 'completed' });
+  expect(first.parts[2]).toMatchObject({ state: 'streaming' });
+  expect(next.parts[0]).toBe(first.parts[0]);
+  expect(next.parts[1]).not.toBe(first.parts[1]);
+  expect(next.parts[1]).toMatchObject({
+    kind: 'tool',
+    state: 'completed',
+    output: expect.any(String),
+  });
+  expect(next.parts[2]).toMatchObject({ text: 'Found' });
+  expect(
+    projectMessage('s', streaming, [answer, input, output], issueResource, cache).parts[1],
+  ).toBe(next.parts[1]);
 });

@@ -92,9 +92,9 @@ function insertSession(
   database
     .prepare(
       `INSERT INTO agent_session (
-        id, agent_id, name, is_name_manually_edited, execution_target,
+        id, agent_id, name, is_name_manually_edited,
         last_activity_at, created_at, updated_at
-      ) VALUES (?, ?, ?, 0, '{"kind":"local"}', ?, ?, ?)`,
+      ) VALUES (?, ?, ?, 0, ?, ?, ?)`,
     )
     .run(
       values.id,

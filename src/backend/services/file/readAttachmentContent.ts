@@ -6,7 +6,7 @@ import {
 } from '@/shared/contracts/fileAttachment';
 import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
 import {
-  MAX_DOCUMENT_ATTACHMENT_BYTES,
+  documentAttachmentByteLimit,
   MAX_TEXT_ATTACHMENT_BYTES,
 } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -33,7 +33,7 @@ export async function readAttachmentContent(
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
 ): Promise<ReadAttachmentContent> {
   const isDocument = !!documentFileTypeFromMediaType(file.mediaType);
-  const limit = isDocument ? MAX_DOCUMENT_ATTACHMENT_BYTES : maxTextBytes;
+  const limit = isDocument ? documentAttachmentByteLimit(file.mediaType) : maxTextBytes;
   const fail = (code: ConstructorParameters<typeof FileAttachmentError>[0]['code']): never => {
     throw new FileAttachmentError({
       code,

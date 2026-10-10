@@ -6,7 +6,7 @@ import i18n, { initI18n } from '@/frontend/i18n';
 import { ChatForkOriginDivider } from '../ChatForkOriginDivider';
 
 const mockSetParams = jest.fn();
-let mockSource: { agentId: string; title: string } | undefined;
+let mockSource: { agentId: string; name: string } | undefined;
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ setParams: mockSetParams }),
@@ -25,7 +25,7 @@ describe('ChatForkOriginDivider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSource = { agentId: 'agent-1', title: 'Arithmetic drills' };
+    mockSource = { agentId: 'agent-1', name: 'Arithmetic drills' };
   });
 
   afterEach(async () => {

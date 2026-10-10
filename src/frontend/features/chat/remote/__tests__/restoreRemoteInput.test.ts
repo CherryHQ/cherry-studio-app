@@ -14,7 +14,7 @@ it('restores text and valid attachments while identifying deleted and unreadable
           type: 'file' as const,
           fileEntryId,
           mediaType: 'application/pdf',
-          name: `${index}.pdf`,
+          filename: `${index}.pdf`,
         })),
       ],
     },
@@ -26,7 +26,12 @@ it('restores text and valid attachments while identifying deleted and unreadable
   );
   expect(result.text).toBe('Keep my message');
   expect(result.attachments).toEqual([
-    expect.objectContaining({ fileEntryId: ids[0], status: 'ready', uri: 'file:///valid.pdf' }),
+    expect.objectContaining({
+      fileEntryId: ids[0],
+      status: 'ready',
+      name: '0.pdf',
+      uri: 'file:///valid.pdf',
+    }),
   ]);
   expect(result.missing).toEqual(['1.pdf', '2.pdf']);
 });

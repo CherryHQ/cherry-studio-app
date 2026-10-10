@@ -2,9 +2,11 @@
 
 Use `pnpm build:local` to create an Android or iOS installation package on your machine. It runs
 `eas build --local`, defaults to the `development` profile, and forwards EAS build arguments.
-The existing `eas-build-post-install` hook builds the workspace packages during the build.
+`pnpm install` also generates the document preview page through the `postinstall` script of
+[`@cherrystudio/file-preview-webview`](../../packages/file-preview-webview/README.md); EAS installs
+dependencies the same way, so no separate build hook is needed.
 
-| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map and debug-symbol uploads |
+| Build profile | Outbound reporting (Sentry / Observe / Insights) | Sentry source-map, R8 mapping, source-context, and debug-symbol uploads |
 | --- | --- | --- |
 | `development` / `development-simulator` | Disabled | Disabled |
 | `preview` | Disabled | Disabled |
@@ -162,15 +164,74 @@ Google Play requires an AAB for a new app; renaming an APK does not convert its 
 and iOS upload workflows and their signing requirements. Google Play AABs are uploaded manually
 in Play Console; no Google service account is needed.
 
-For production monitoring, provide a valid upload token and keep automatic uploads enabled.
-`SENTRY_DISABLE_AUTO_UPLOAD=true` skips uploads but does not disable runtime reporting. Without
-matching source maps and debug symbols, reported error stacks may not resolve back to source.
-Missing or invalid upload credentials can fail the build.
+For production monitoring, provide a valid upload token and keep automatic uploads enabled. Do not
+set `SENTRY_DISABLE_AUTO_UPLOAD` or `SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD` for a distributable
+production build. Either one skips the Android R8 mapping, JVM source bundle, and native symbol
+uploads; the first also skips JavaScript source maps. Missing or invalid upload credentials fail
+the upload tasks.
 
-Android preview and production APKs use arm64 Release builds without R8 code shrinking, so the
-Java and Kotlin stack traces Sentry receives stay readable without a mapping upload. The APK
-profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads. Android
-extracts those libraries during installation, so a smaller APK does not mean less installed storage
+EAS deletes a build's working directory when the build ends, so artifacts that were not uploaded
+cannot be recovered later. Large uploads can be interrupted by the network. For a local production
+build, keep the working directory and let failed uploads warn instead of failing the build, so a
+retry does not use another build number:
+
+```bash
+EAS_LOCAL_BUILD_SKIP_CLEANUP=1 EAS_LOCAL_BUILD_WORKINGDIR=/absolute/path/to/workdir \
+SENTRY_ALLOW_FAILURE=true pnpm build:local --platform android --profile production --output /absolute/path/to/app.apk
+```
+
+Before distributing that package, check the build log for upload warnings. An allowed failure exits
+successfully, so Gradle can mark the mapping and source-bundle upload tasks `UP-TO-DATE` even when
+the upload failed. Removing `SENTRY_ALLOW_FAILURE` and rerunning `assembleRelease` or `bundleRelease`
+alone does not force those uploads to retry.
+
+Keep the original sources, dependencies, and generated artifacts in the retained working directory.
+Restore the original build environment, including local credentials and the selected profile's
+`eas.json` environment overrides (`APK_UPDATES_ENABLED=true` for the APK;
+`APK_UPDATES_ENABLED=false` and `ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). From
+`<workdir>/build/android`, force the upload tasks to run with task-specific `--rerun` options:
+
+```bash
+eas env:exec production --non-interactive \
+  "env PROFILE=production NODE_ENV=production EAS_BUILD=true EAS_BUILD_WORKINGDIR=/absolute/path/to/workdir/build \
+  SENTRY_ALLOW_FAILURE=false SENTRY_DISABLE_AUTO_UPLOAD=false SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD=false \
+  ./gradlew :app:uploadSentryProguardMappingsRelease --rerun \
+  :app:sentryUploadSourceBundleRelease --rerun \
+  :app:uploadSentryNativeSymbolsForRelease --rerun \
+  -PreactNativeArchitectures=arm64-v8a -Dorg.gradle.jvmargs=-Xmx4096m"
+```
+
+These native upload task names apply to both APK and AAB Release builds. If the JavaScript upload
+failed, also append its exact task path from the original build log,
+`:app:createBundleReleaseJsAndAssets_SentryUpload_<release>_<dist>`, followed by `--rerun`, to the
+same invocation. Replace placeholders with that build's values; do not use another build's version
+or distribution number.
+
+Use the task-specific [`--rerun` option](https://docs.gradle.org/current/userguide/command_line_interface.html#sec:builtin_task_options),
+not the global `--rerun-tasks`, and do not clean or regenerate the native project. Dependencies must
+reuse the retained build outputs. If those outputs are missing or must be regenerated, recover the
+original artifacts before claiming the existing package's uploads are complete. Confirm that the
+upload tasks actually execute without warnings, then match the original package's debug IDs to the
+mapping, source bundle, native symbols, and JavaScript source map on Sentry. A successful Gradle exit
+alone is not upload confirmation. Cloud builds keep no working directory: do not set
+`SENTRY_ALLOW_FAILURE` for them.
+
+Android production APKs and Google Play AABs enable R8 code optimization, obfuscation, and resource
+shrinking. Development and preview keep R8 disabled. The production-only
+`scripts/withAndroidReleaseOptimization.js` plugin selects `proguard-android-optimize.txt`;
+`extraProguardRules` preserves source filenames and line information, and keeps Expo's `@Field`
+and `@Required` record annotations: Expo converts records without introspection data by
+reflection, and renamed annotations make those native calls reject their arguments. A local Expo
+module that adds a dependency missing optional classes ships its own `consumerProguardFiles`
+rules. R8 failures appear only when the affected native call runs, so a Release build must exercise
+record-typed calls such as attaching a PDF to a chat, not just start. Sentry's Android Gradle
+plugin uploads each build's `mapping.txt`, JVM source bundle (including local Expo modules), and
+available native debug symbols/sources. Its embedded debug identifiers associate reports with
+that build's artifacts; JavaScript source maps continue through the existing Sentry Metro/Gradle
+integration. Keep the SDK's native release/dist values instead of overriding them in JavaScript.
+
+The APK profiles set `useLegacyPackaging` to compress native `.so` libraries for direct downloads.
+Android extracts those libraries during installation, so a smaller APK does not mean less installed storage
 or a faster startup. The `production-google-play` profile sets `ANDROID_COMPRESS_NATIVE_LIBS=false`
 so the AAB keeps uncompressed libraries: Google Play compresses the download itself, and compressed
 libraries in an AAB only slow installation and double on-device storage. Development builds keep
@@ -197,6 +258,45 @@ matching; those require a separate runtime check.
 phones use portrait, while `values-sw600dp` lets the system choose; the activity remains resizable.
 Rebuild the development client to receive these native changes. They cannot be delivered by a
 JavaScript update alone.
+
+### Android Barcode Scanning
+
+Desktop pairing uses `expo-camera`'s embedded `CameraView` and its bundled ML Kit barcode analyzer.
+`scripts/withEmbeddedBarcodeScanner.js` removes the unused
+`com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity` registration with
+an Android manifest merger rule. `expo-camera` includes this portrait-only activity through
+`play-services-code-scanner:16.1.0`; Google Play specifically flags it in
+[#1192](https://github.com/CherryHQ/cherry-studio-app/issues/1192).
+
+Keep `barcodeScannerEnabled: true`, which also controls the embedded analyzer. This exclusion does
+not change the main activity's phone/tablet orientation policy or remove the scanner dependency's
+classes. Do not use `CameraView.launchScanner()` on Android without restoring and adapting its
+delegate activity. A new native build is required; inspect the merged manifest, check embedded QR
+pairing on phones and rotated/resized tablets, and recheck Play Console before claiming the warning
+is resolved.
+
+### Android Edge-To-Edge Compatibility
+
+The Screens 4.26.2 patch raises its Material dependency to
+[1.14.0](https://github.com/material-components/material-components-android/releases/tag/1.14.0).
+That release routes `BottomSheetDialog`, `SheetDialog`, and `EdgeToEdgeUtils` through helpers which
+only read/write legacy system-bar colors below Android 15. Its minimum SDK 23 and AGP 8.11.1 baseline
+fit this project's minimum SDK 26 and React Native's AGP 8.12.0. Existing screen-transition and iOS
+patches remain required. This native dependency change requires a new installation package.
+
+Android continues to use the precompiled React Native artifact. The reported React Native
+`StatusBarModule` and `WindowUtilKt` calls remain unresolved in
+[#1192](https://github.com/CherryHQ/cherry-studio-app/issues/1192). A local Kotlin patch would require
+compiling React Native and Hermes from source; evaluate that cost against evidence from a new Play
+report before adopting it. The existing iOS source-build configuration and patches remain required.
+
+`scripts/__tests__/androidWindowCompatibility.test.ts` guards the Screens patch hash and installed
+Material version declaration in PR CI. These checks do not establish runtime compatibility or
+removal of the Play warning. Before release, inspect the merged manifest and resolved Material
+version, check native sheets/date pickers and Android 14/15/16 system bars with gesture and
+three-button navigation, and exercise embedded QR pairing on rotated/resized tablets. Record the
+new AAB's version code and expanded Play findings. The original report is for 0.1.0, before R8 was
+enabled; use comparable build settings when attributing changes to the dependency update.
 
 ## Expo 57 Dependency Baseline
 
@@ -226,6 +326,44 @@ Android builds compile `expo-image-picker`, `expo-notifications`, `expo-app-metr
 instead of using Expo's precompiled binaries. Observe's source build requires App Metrics to be
 available as a Gradle project, so both must build from source. The App Metrics patch retains the main session's
 JavaScript wrapper; its transitive dependency version is pinned in `pnpm-workspace.yaml`.
+
+### iOS Text Measurement Cache Patch
+
+Expo SwiftUI content-size updates can synchronously enter React Native layout on the main thread,
+including text-input measurement. A concurrent JS-thread measurement may wait for notification
+delivery while creating `NSTextStorage`. Holding the measurement-cache mutex across that native
+work can block the main thread and create a circular wait if delivery needs it.
+
+React Native 0.86.3's iOS text and line measurement caches use
+`SimpleThreadSafeCache::getWithGeneratorOutsideLock` to compute misses outside the mutex, so native
+text notifications cannot hold the measurement cache lock while waiting for another thread
+([#1182](https://github.com/CherryHQ/cherry-studio-app/issues/1182)). Lookup, insertion, LRU
+updates, and the returned-value copy remain locked. Concurrent misses may compute the same key more
+than once; the later insert reuses the first stored result. The default `get` and pointer-returning
+`getWithKey` keep their serialized generators, including Android measurements and iOS
+attributed-string conversion. Each iOS measurement creates its own text storage, layout manager, and
+text container.
+
+When upgrading React Native, inspect the generator's lock scope before dropping this patch. iOS
+enables `buildReactNativeFromSource`; delivering the patch requires a new native build. An OTA
+update cannot replace this code. The patch removes the cache-lock dependency, not notification
+delivery itself; the reported event does not identify the notification observer or its queue.
+
+`scripts/__tests__/reactNativeTextCache.test.ts` guards the patch wiring in PR CI. The patch also
+adds cache regressions to React Native's `SimpleThreadSafeCacheTest.cpp`, which no app build or CI
+job compiles. These include a generator waiting for another thread to access the same cache,
+concurrent misses for the same key, eviction, and returned-value lifetime. They cover the cache
+contract, not recovery from the production hang. Run them separately with a googletest source tree
+such as the Android NDK's `sources/third_party/googletest`:
+
+```bash
+RN=$(node -p "require('path').dirname(require.resolve('react-native/package.json'))")
+GTEST=$ANDROID_NDK_HOME/sources/third_party/googletest
+clang++ -std=c++20 -fsanitize=thread -I"$GTEST/include" -I"$GTEST" -I"$RN/ReactCommon" \
+  "$GTEST/src/gtest-all.cc" "$GTEST/src/gtest_main.cc" \
+  "$RN/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp" -o /tmp/simple-cache-test
+/tmp/simple-cache-test
+```
 
 ### iOS Build 26 Crash Patches
 

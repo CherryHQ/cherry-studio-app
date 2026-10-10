@@ -1,9 +1,9 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
+import type { PiStreamFn as StreamFn } from '../piModelTypes';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
 const IDLE_MS = 120_000;

@@ -20,7 +20,6 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
     status: 'streaming',
     turnId: 'turn-1',
     updatedAt: '2026-08-25T00:00:00.000Z',
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -29,6 +28,36 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
+    const parts: AgentMessageView['parts'] = [
+      { id: 'text', type: 'text', text: 'Partial answer', state: 'done' },
+      {
+        id: 'legacy-abort',
+        type: 'data-error',
+        data: {
+          code: 'EXECUTION_FAILED',
+          message: 'The Agent run ended without an answer.',
+          retryable: false,
+          failure: {
+            version: 1,
+            reasonCode: 'unknown',
+            source: { layer: 'runtime', code: 'aborted' },
+          },
+        },
+      },
+      {
+        id: 'failure',
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', message: 'Request failed', retryable: true },
+      },
+    ];
+    const item = toAgentMessageListItem(message('cancelled', { status: 'cancelled', parts }));
+    expect(item?.status).toBe('paused');
+    expect(item?.data.partKeys).toEqual(['text', 'failure']);
+    expect(
+      toAgentMessageListItem(message('failed', { status: 'error', parts }))?.data.partKeys,
+    ).toEqual(['text', 'legacy-abort', 'failure']);
+  });
   test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
     const question = message('user-1', { role: 'user', status: 'success' });
     const answer = message('assistant-1', {
@@ -134,11 +163,11 @@ describe('agentMessageProjection', () => {
         parts: [
           {
             id: 'correction',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: { source: 'meta', name: 'tool_call' },
-            providerName: 'tool_call',
-            displayName: 'Call tool',
+            toolName: 'tool_call',
+            title: 'Call tool',
             state: 'error',
             error: {
               code: 'EXECUTION_FAILED',
@@ -164,11 +193,10 @@ describe('agentMessageProjection', () => {
     ]);
   });
 
-  test('prefers materialized statistics over the basic usage projection', () => {
+  test('preserves materialized statistics without inventing missing token counts', () => {
     const stats = { requestCount: 2, inputTokens: 200, totalTokens: 220 };
     const item = toAgentMessageListItem(
       message('materialized', {
-        usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
         stats,
       }),
     );
@@ -185,11 +213,11 @@ describe('agentMessageProjection', () => {
         parts: [
           {
             id: 'web-call',
-            type: 'tool',
+            type: 'dynamic-tool',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'web_fetch' },
-            providerName: 'web_fetch',
-            displayName: 'Fetch web page',
+            toolName: 'web_fetch',
+            title: 'Fetch web page',
             state: 'error',
             error: { code: 'EXECUTION_FAILED', message: error.message, retryable: false },
             output: {
@@ -234,7 +262,7 @@ describe('agentMessageProjection', () => {
       type: 'file' as const,
       fileEntryId: '00000000-0000-7000-8000-000000000001',
       mediaType: 'application/pdf',
-      name: 'report.pdf',
+      filename: 'report.pdf',
       purpose: 'input-attachment' as const,
     };
     const projected = toAgentMessageListItem(
@@ -293,7 +321,7 @@ describe('agentMessageProjection', () => {
       message('assistant-error', {
         parts: [
           {
-            error: {
+            data: {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (403): access denied',
               retryable: false,
@@ -305,7 +333,7 @@ describe('agentMessageProjection', () => {
               },
             },
             id: 'error-1',
-            type: 'error',
+            type: 'data-error',
           },
         ],
         status: 'error',
@@ -338,13 +366,13 @@ describe('agentMessageProjection', () => {
       message('assistant-legacy-error', {
         parts: [
           {
-            error: {
+            data: {
               code: 'EXECUTION_FAILED',
               message: 'OpenAI API error (429): too many requests',
               retryable: true,
             },
             id: 'error-legacy',
-            type: 'error',
+            type: 'data-error',
           },
         ],
         status: 'error',
@@ -370,14 +398,14 @@ describe('agentMessageProjection', () => {
           { id: 'reasoning-1', state: 'streaming', text: 'Thinking', type: 'reasoning' },
           {
             approvalId: 'approval-1',
-            displayName: 'Read file',
+            title: 'Read file',
             id: 'tool-1',
             input: { fileEntryId: 'file-1' },
-            providerName: 'builtin_read_file_a1b2',
+            toolName: 'builtin_read_file_a1b2',
             state: 'awaiting-approval',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'read_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
       }),
@@ -409,13 +437,13 @@ describe('agentMessageProjection', () => {
       message('assistant-tool-input-streaming', {
         parts: [
           {
-            displayName: 'Write file',
+            title: 'Write file',
             id: 'tool-streaming',
-            providerName: 'write_file',
+            toolName: 'write_file',
             state: 'input-streaming',
             toolCallId: 'call-streaming',
             toolRef: { source: 'builtin', capabilityId: 'write_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
       }),
@@ -437,7 +465,7 @@ describe('agentMessageProjection', () => {
       message('assistant-tool-result', {
         parts: [
           {
-            displayName: 'Write file',
+            title: 'Write file',
             id: 'tool-1',
             input: { filename: 'report.md' },
             output: {
@@ -451,11 +479,11 @@ describe('agentMessageProjection', () => {
                 },
               ],
             },
-            providerName: 'write_file',
+            toolName: 'write_file',
             state: 'output-available',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'write_file' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
         ],
         status: 'success',
@@ -480,7 +508,7 @@ describe('agentMessageProjection', () => {
       message('assistant-web-sources', {
         parts: [
           {
-            displayName: 'Web search',
+            title: 'Web search',
             id: 'tool-1',
             input: { query: 'Cherry Studio' },
             output: {
@@ -494,11 +522,11 @@ describe('agentMessageProjection', () => {
               ],
               artifacts: [],
             },
-            providerName: 'web_search',
+            toolName: 'web_search',
             state: 'output-available',
             toolCallId: 'call-1',
             toolRef: { source: 'builtin', capabilityId: 'web_search' },
-            type: 'tool',
+            type: 'dynamic-tool',
           },
           { id: 'text-1', state: 'done', text: 'Answer [cite:aaaa1111-1].', type: 'text' },
         ],
@@ -527,7 +555,7 @@ describe('agentMessageProjection', () => {
             fileEntryId,
             id: 'input-0',
             mediaType: 'image/png',
-            name: 'managed.png',
+            filename: 'managed.png',
             purpose: 'input-attachment',
             type: 'file',
           },

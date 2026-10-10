@@ -59,6 +59,7 @@ export type FilePreviewTransfer = {
 };
 
 export type FilePreviewProps = {
+  disabled?: boolean;
   metadata?: Pick<FilePreviewFile, 'displayName' | 'extensionLabel' | 'kind'>;
   transfer?: FilePreviewTransfer;
   badge?: ReactNode;

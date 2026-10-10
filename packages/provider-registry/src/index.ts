@@ -131,3 +131,16 @@ export { buildParamsSchema } from './utils/buildParamsSchema';
 export { normalizeModelId } from './utils/normalize';
 export type { DerivedReasoningFields } from './utils/reasoningControls';
 export { deriveLegacyReasoningFields } from './utils/reasoningControls';
+
+// Pure provider address rules shared by settings and request adapters.
+export type { ProviderBaseUrlIssue } from './utils/provider-connection';
+export {
+  formatApiHost,
+  formatOllamaApiHost,
+  getBaseUrl,
+  getProviderBaseUrlIssue,
+  isWithTrailingSharp,
+  routeToEndpoint,
+  shouldAppendProviderApiVersion,
+  withoutTrailingApiVersion,
+} from './utils/provider-connection';

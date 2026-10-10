@@ -1,4 +1,4 @@
-import { getProviderBaseUrlIssue } from '@cherrystudio/ai-runtime/provider';
+import { getProviderBaseUrlIssue } from '@cherrystudio/provider-registry';
 import { Chip, Section } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

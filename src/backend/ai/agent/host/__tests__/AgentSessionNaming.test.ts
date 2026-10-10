@@ -63,8 +63,8 @@ describe('AgentSessionNaming', () => {
 
     expect(renamed).toMatchObject({
       id: session.id,
-      title: 'A useful first message',
-      titleIsManual: false,
+      name: 'A useful first message',
+      isNameManuallyEdited: false,
     });
     expect(generateText).not.toHaveBeenCalled();
   });
@@ -83,7 +83,7 @@ describe('AgentSessionNaming', () => {
       userParts,
     });
 
-    expect(renamed).toMatchObject({ title: 'Generated summary', titleIsManual: false });
+    expect(renamed).toMatchObject({ name: 'Generated summary', isNameManuallyEdited: false });
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
         uniqueModelId: DEFAULT_NAMING_MODEL_ID,
@@ -131,8 +131,8 @@ describe('AgentSessionNaming', () => {
 
     expect(generateText).not.toHaveBeenCalled();
     await expect(store.getSession(session.id)).resolves.toMatchObject({
-      title: 'Explain lunar eclipses',
-      titleIsManual: false,
+      name: 'Explain lunar eclipses',
+      isNameManuallyEdited: false,
     });
   });
 
@@ -178,8 +178,8 @@ describe('AgentSessionNaming', () => {
 
     await expect(summary).resolves.toBeNull();
     await expect(store.getSession(session.id)).resolves.toMatchObject({
-      title: 'My title',
-      titleIsManual: true,
+      name: 'My title',
+      isNameManuallyEdited: true,
     });
   });
 
@@ -198,8 +198,8 @@ describe('AgentSessionNaming', () => {
     ).resolves.toBeNull();
     expect(generateText).not.toHaveBeenCalled();
     await expect(store.getSession(session.id)).resolves.toMatchObject({
-      title: 'First question',
-      titleIsManual: false,
+      name: 'First question',
+      isNameManuallyEdited: false,
     });
   });
 });

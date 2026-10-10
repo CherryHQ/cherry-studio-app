@@ -128,7 +128,11 @@ export function AssistantMessageActionsProvider({
         if (!mounted.current) return;
         const { t: translate, toast: currentToast } = latest.current;
         if (outcome.state === 'applied') applied?.(outcome.value);
-        else if (outcome.state === 'rejected' || outcome.state === 'interrupted')
+        // A retry the user stopped before its turn was reserved did not fail.
+        else if (
+          (outcome.state === 'rejected' && outcome.failure.detail?.code !== 'CANCELLED') ||
+          outcome.state === 'interrupted'
+        )
           currentToast.show({
             label: translate(
               (outcome.state === 'rejected' &&
@@ -162,7 +166,9 @@ export function AssistantMessageActionsProvider({
       const current = latest.current;
       if (messageId !== current.retryableMessageId || current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions.retry;
-      void run(`retry:${messageId}`, action, undefined, 'retryFailed');
+      void run(`retry:${messageId}`, action, undefined, 'retryFailed', (ref) => {
+        if (ref) router.replace(conversationHref(ref));
+      });
     },
     [run],
   );

@@ -1,12 +1,5 @@
 import type { RuntimeError, RuntimeToolResult } from './types';
 
-export const TOOL_EXECUTION_ERROR: RuntimeError = {
-  code: 'tool_execution_error',
-  message: 'The tool failed to execute.',
-  retryable: false,
-  origin: 'tool',
-};
-
 export function createDeniedToolResult(reason: string): RuntimeToolResult {
   return { value: { status: 'denied', reason }, artifacts: [] };
 }

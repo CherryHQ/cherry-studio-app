@@ -7,7 +7,7 @@ export const AgentToolRecordSchema = AgentSchema.pick({
   id: true,
   name: true,
   instructions: true,
-  modelId: true,
+  model: true,
   modelName: true,
   disabledCapabilities: true,
   toolApprovalMode: true,
@@ -16,5 +16,11 @@ export const AgentToolRecordSchema = AgentSchema.pick({
 
 export const AgentMutationToolResultSchema = z.strictObject({
   status: z.enum(['created', 'updated']),
-  agent: AgentToolRecordSchema,
+  // Historical tool outputs remain immutable when the Agent record fields change.
+  agent: z.union([
+    AgentToolRecordSchema,
+    AgentToolRecordSchema.omit({ model: true })
+      .extend({ modelId: AgentSchema.shape.model })
+      .transform(({ modelId, ...agent }) => ({ ...agent, model: modelId })),
+  ]),
 });

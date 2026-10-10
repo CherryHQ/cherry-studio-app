@@ -1,3 +1,4 @@
+import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 jest.mock('uniwind', () => ({
@@ -34,4 +35,46 @@ it('announces acknowledged upload progress and removes the busy state when the f
     renderer!.root.findAllByProps({ accessibilityRole: 'button' })[0].props.accessibilityState.busy,
   ).toBe(false);
   act(() => renderer!.unmount());
+});
+
+describe('FilePreviewFrame', () => {
+  test.each([
+    ['default', undefined, 112, 'rounded-2xl'],
+    ['library card', 'card', 160, 'rounded-4xl'],
+  ] as const)(
+    'clips %s preview content at the shared corner boundary',
+    (_, variant, size, cornerClassName) => {
+      let renderer: ReactTestRenderer | undefined;
+
+      act(() => {
+        renderer = create(
+          <FilePreviewFrame
+            accessibilityLabel="Attachment"
+            onPress={jest.fn()}
+            size={size}
+            variant={variant}
+          >
+            <></>
+          </FilePreviewFrame>,
+        );
+      });
+
+      expect(renderer?.toJSON()).toMatchObject({
+        props: {
+          style: {
+            height: size,
+            width: size,
+          },
+        },
+      });
+
+      const clippingView = renderer?.root
+        .findAllByType(View)
+        .find((node) => node.props.className?.includes('overflow-hidden'));
+      expect(clippingView?.props).toMatchObject({
+        className: `size-full overflow-hidden ${cornerClassName}`,
+        style: { borderCurve: 'continuous' },
+      });
+    },
+  );
 });

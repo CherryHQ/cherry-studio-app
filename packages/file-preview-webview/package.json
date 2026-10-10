@@ -1,0 +1,37 @@
+{
+  "name": "@cherrystudio/file-preview-webview",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Inline WebView page that hosts @cherrystudio/file-preview inside Cherry Mobile",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./protocol": {
+      "types": "./src/protocol.ts",
+      "react-native": "./src/protocol.ts",
+      "import": "./src/protocol.ts",
+      "default": "./src/protocol.ts"
+    },
+    "./file-preview.html": "./dist/file-preview.html",
+    "./pdf-resources.bin": "./dist/pdf-resources.bin",
+    "./pdf-resources.json": "./dist/pdf-resources.json"
+  },
+  "scripts": {
+    "build": "vite build",
+    "postinstall": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cherrystudio/file-preview": "0.1.0",
+    "@types/node": "^25.7.0",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "typescript": "~6.0.3",
+    "vite": "7.3.3"
+  }
+}

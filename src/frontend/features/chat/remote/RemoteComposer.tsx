@@ -31,13 +31,14 @@ import {
   useComposerState,
   useComposerActions,
 } from '@/frontend/components/Composer';
-import { usePersistCache, useBackendModule } from '@/frontend/data';
+import { useBackendModule } from '@/frontend/data';
 
 import { ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
+import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
 
 export function RemoteComposer({
   agent,
@@ -62,7 +63,6 @@ export function RemoteComposer({
   const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
     useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
-  const [, setDrafts] = usePersistCache('remote_agent.drafts');
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
   const [choosingExecution, setChoosingExecution] = useState(false);
@@ -106,7 +106,7 @@ export function RemoteComposer({
         parts: preparation.draft.items.map((file) => ({
           type: 'file',
           fileEntryId: file.fileEntryId,
-          name: file.name,
+          filename: file.name,
           mediaType: file.mediaType,
         })),
       },
@@ -170,11 +170,7 @@ export function RemoteComposer({
   const canStop = cancellations.some(
     (execution) => execution.cancel?.availability.state === 'enabled',
   );
-  useEffect(() => {
-    setDrafts((current) =>
-      current[draftKey] === text ? current : { ...current, [draftKey]: text },
-    );
-  }, [text, draftKey, setDrafts]);
+  useRemoteDraftPersistence(draftKey, text);
   const stop = async (index: number) => {
     setChoosingExecution(false);
     const result = await cancellations[index]?.cancel?.execute(undefined);

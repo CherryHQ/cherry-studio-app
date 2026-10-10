@@ -176,6 +176,7 @@ function backgroundFixture() {
     update: jest.fn(),
     awaitApproval: jest.fn(),
     finish: jest.fn(),
+    retire: jest.fn(),
   };
   const startTurn = jest.fn(
     (_input: Parameters<RemoteBackgroundExecution['replies']['startTurn']>[0]) => turn,
@@ -240,7 +241,8 @@ it('revocation of phone protection does not cancel or resubmit the desktop execu
       ['agent.messages.send', 'agent.executions.cancel'].includes(method),
     ),
   ).toBe(false);
-  expect(test.turn.finish).toHaveBeenCalledWith('cancelled');
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
   test.source.dispose();
   await test.source.drain();
 });
@@ -306,7 +308,8 @@ it('releases phone protection when background demand is suspended and resumes wh
   unobserve();
   await settle();
   test.setState({ status: 'suspended' });
-  expect(test.turn.finish).toHaveBeenCalledWith('cancelled');
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
   expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
   expect(
     test.request.mock.calls.some(([method]) =>
@@ -320,6 +323,34 @@ it('releases phone protection when background demand is suspended and resumes wh
   expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
   test.source.dispose();
   await test.source.drain();
+});
+
+it('leaves no card when the desktop finishes while suspended protection was retired', async () => {
+  const test = backgroundFixture();
+  test.projection.executions.e = { executionId: 'e', status: 'running', durable: false };
+  const unobserve = test.source.observe('s', () => {});
+  await settle();
+  unobserve();
+  await settle();
+  test.setState({ status: 'suspended' });
+  expect(test.turn.retire).toHaveBeenCalledTimes(1);
+  test.projection.executions.e = {
+    executionId: 'e',
+    status: 'completed',
+    durable: true,
+    messageId: 'm',
+    history: { historyRevision: '1', messageRevision: '1' },
+  };
+  test.setState({ status: 'ready' });
+  await settle();
+  await settle();
+  expect(test.startTurn).toHaveBeenCalledTimes(1);
+  expect(test.turn.finish).not.toHaveBeenCalled();
+  expect(test.source.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  test.source.dispose();
+  await test.source.drain();
+  expect(test.turn.finish).not.toHaveBeenCalled();
 });
 
 it('hands a recovered first send to execution observation before releasing command protection', async () => {

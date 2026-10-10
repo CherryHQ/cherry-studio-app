@@ -7,6 +7,8 @@ const { withUniwindConfig } = require('uniwind/metro');
 let config = getSentryExpoConfig(__dirname);
 
 config.resolver.sourceExts.push('sql');
+// The document preview page ships pdf.js CMaps and fonts as one byte-range asset.
+config.resolver.assetExts.push('bin');
 config.watchFolders.push(path.resolve(__dirname, 'packages'));
 
 // libp2p packages pick their Node or browser entry through the legacy package.json `browser`
@@ -34,6 +36,16 @@ const browserRedirect = (context, moduleName) => {
 };
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // pnpm peer variants can give @expo/ui a second Expo runtime. Its Expo.fx
+  // replaces __loadBundleAsync, but native startup initialized only the root
+  // copy's HMR client. Keep Expo and its subpaths on that same runtime.
+  if (moduleName === 'expo' || moduleName.startsWith('expo/')) {
+    return context.resolveRequest(
+      { ...context, originModulePath: path.join(__dirname, 'package.json') },
+      moduleName,
+      platform,
+    );
+  }
   if (platform === 'android' || platform === 'ios') {
     const redirected = browserRedirect(context, moduleName);
     if (redirected) return { type: 'sourceFile', filePath: redirected };

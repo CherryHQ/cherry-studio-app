@@ -27,7 +27,7 @@ jest.mock('react-i18next', () => ({
 }));
 jest.mock('expo-router', () => ({ Redirect: () => null }));
 
-const existingSession = { id: 'session-1', title: 'Existing chat' } as AgentSessionEntity;
+const existingSession = { id: 'session-1', name: 'Existing chat' } as AgentSessionEntity;
 const dataApi = {
   delete: jest.fn(),
   get: jest.fn(),

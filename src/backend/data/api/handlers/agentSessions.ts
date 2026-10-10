@@ -10,7 +10,7 @@ import type { HandlersFor } from '@/shared/data/api/types';
 
 export type AgentSessionMutations = {
   deleteSession(input: { sessionId: string }): Promise<void>;
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>;
 };
 
 async function runSessionMutation<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
@@ -41,9 +41,9 @@ export function createAgentSessionHandlers(
       },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => {
-        const { title } = UpdateAgentSessionSchema.parse(body);
+        const { name } = UpdateAgentSessionSchema.parse(body);
         await runSessionMutation(params.id, () =>
-          mutations.renameSession({ sessionId: params.id, title }),
+          mutations.renameSession({ sessionId: params.id, name }),
         );
         return service.getById(params.id);
       },

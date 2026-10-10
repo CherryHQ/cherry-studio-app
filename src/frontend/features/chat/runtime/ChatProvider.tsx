@@ -18,7 +18,7 @@ import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import { AgentProtocolError, type AgentSubmitMessageInput } from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
@@ -123,7 +123,6 @@ export function ChatProvider({ children }: PropsWithChildren) {
         const session = await client.startSession({
           ...submission,
           agentId,
-          executionTarget: { kind: 'local' },
         });
         if (isCurrent()) {
           draftHandoff.handoffToSession({ agentId, sessionId: session.id }, navigation.openSession);
@@ -245,6 +244,7 @@ export function useAgentChatControls(input: {
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
+  const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
   const [submission, setSubmission] = useState<{
     composerKey: number;
     userMessageId: string;
@@ -262,9 +262,10 @@ export function useAgentChatControls(input: {
     };
   }, [composerKey]);
 
+  const cancellationSessionId = sessionId ?? pendingSend?.sessionId;
   const cancel = useCallback(() => {
-    return sessionId ? client.cancelTurn(sessionId) : Promise.resolve();
-  }, [client, sessionId]);
+    return cancellationSessionId ? client.cancelTurn(cancellationSessionId) : Promise.resolve();
+  }, [client, cancellationSessionId]);
   const send = useCallback(
     async (
       message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
@@ -297,7 +298,10 @@ export function useAgentChatControls(input: {
           setSubmission((current) =>
             current?.send === pending ? { ...current, send: undefined } : current,
           );
-        throw error;
+        // Stop during admission: the composer takes the draft back without a failure.
+        throw error instanceof AgentProtocolError && error.view.code === 'CANCELLED'
+          ? Object.assign(new Error(error.message), { name: 'AbortError' })
+          : error;
       }
     },
     [agentId, composerKey, sendMessage, sessionId],
@@ -322,13 +326,13 @@ export function useAgentChatControls(input: {
     pendingSend,
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
-      isSessionBusy ||
+      isAdmitting ||
       (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
-    isBusy: isSessionBusy,
+    isBusy: isSessionBusy || Boolean(pendingSend?.isSubmitting),
     sendMessage: send,
   };
 }
@@ -353,6 +357,9 @@ function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
 }
 const selectSessionBusy = isAgentSessionBusy;
+function selectIsAdmitting(state: AgentSessionChatState) {
+  return Boolean(state.isSubmitting);
+}
 function selectImageResult(state: AgentSessionChatState) {
   return latestAgentImageResult(state.liveMessages);
 }

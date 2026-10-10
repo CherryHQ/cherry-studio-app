@@ -68,6 +68,11 @@ export function createLocalConversationProjector(input: {
   const { client, sessionId } = input;
   const cache = createAgentMessageListProjectionCache();
   const messages = new WeakMap<AgentMessageView, { busy: boolean; message: ConversationMessage }>();
+  let history:
+    | { source: readonly AgentMessageView[]; busy: boolean; messages: ConversationMessage[] }
+    | undefined;
+  const isBusy = (state: AgentSessionChatState) =>
+    isAgentSessionBusy(state) || state.status === 'error';
   const outcome = async <T>(run: () => Promise<T>): Promise<OperationOutcome<T>> => {
     try {
       return { state: 'applied', value: await run() };
@@ -101,7 +106,7 @@ export function createLocalConversationProjector(input: {
   }
   return {
     message(message: AgentMessageView, state: AgentSessionChatState): ConversationMessage {
-      const busy = isAgentSessionBusy(state) || state.status === 'error';
+      const busy = isBusy(state);
       const cached = messages.get(message);
       if (cached && cached.busy === busy) return cached.message;
       const isSettled = message.status !== 'pending' && message.status !== 'streaming';
@@ -118,9 +123,13 @@ export function createLocalConversationProjector(input: {
             : {}),
           ...(canModify && message.role === 'assistant'
             ? {
-                retry: action<void, void>(state, true, () =>
-                  client.retryMessage({ sessionId, messageId: message.id }),
-                ),
+                retry: action<void, ConversationRef | void>(state, true, async () => {
+                  const next = await client.retryMessage({ sessionId, messageId: message.id });
+                  if (next) {
+                    input.onSessionChanged?.(next.id);
+                    return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
+                  }
+                }),
                 fork: action<{ title?: string }, ConversationRef>(
                   state,
                   true,
@@ -136,6 +145,16 @@ export function createLocalConversationProjector(input: {
       };
       messages.set(message, { busy, message: projected });
       return projected;
+    },
+    /** Rows keep their array while only live state streams, so history consumers stay put. */
+    history(
+      source: readonly AgentMessageView[],
+      state: AgentSessionChatState,
+    ): readonly ConversationMessage[] {
+      const busy = isBusy(state);
+      if (history?.source !== source || history.busy !== busy)
+        history = { source, busy, messages: source.map((message) => this.message(message, state)) };
+      return history.messages;
     },
     snapshot(state: AgentSessionChatState, title: string | undefined): ConversationSnapshot {
       const turn = state.activeTurn;
@@ -189,7 +208,7 @@ export function createLocalConversationProjector(input: {
       }
       return {
         agentId: state.snapshot?.agent.id,
-        title: state.snapshot?.session.title ?? title ?? '',
+        title: state.snapshot?.session.name ?? title ?? '',
         freshness:
           state.status === 'error'
             ? { state: 'unavailable', failure: localConversationFailure(state.error) }

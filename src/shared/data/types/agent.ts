@@ -27,8 +27,8 @@ export const AgentSchema = z.strictObject({
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),
-  modelId: UniqueModelIdSchema.nullable(),
-  /** Read-time projection of the model's display name; edits go through `modelId` */
+  model: UniqueModelIdSchema.nullable(),
+  /** Read-time projection of the model's display name; edits go through `model` */
   modelName: z.string().nullable(),
   name: z.string().min(1),
   orderKey: z.string(),

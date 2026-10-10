@@ -31,7 +31,7 @@ export interface AgentProtocol {
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
 
-  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
+  renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 
   /** Creates the durable Session only when its first submission is admitted. */
@@ -51,14 +51,21 @@ export interface AgentProtocol {
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 
-  /** Replaces a settled answer in place using context up to its original user input. */
-  retryMessage(input: AgentRetryMessageInput): Promise<void>;
+  /** Local persistent regeneration opens a new branch and preserves the original answer. */
+  retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
 
   submitMessage(
     input: AgentSubmitMessageInput,
   ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
+
+  /**
+   * Abandons a submission, retry, or Draft start that has not reserved its turn
+   * yet; the pending call rejects with `CANCELLED`. A reserved turn is
+   * cancelled through `cancelTurn`. Idempotent.
+   */
+  cancelSubmission(input: { sessionId: string }): Promise<void>;
 
   respondQuestion(input: AgentRespondQuestionInput): Promise<void>;
 

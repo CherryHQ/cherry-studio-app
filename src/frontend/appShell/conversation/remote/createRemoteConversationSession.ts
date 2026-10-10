@@ -32,6 +32,7 @@ import type {
   Submission,
 } from './remoteContracts';
 import {
+  createRemoteMessageProjectionCache,
   remoteAvailability,
   remoteConversationFailure,
   remoteMessage,
@@ -66,7 +67,7 @@ export function remoteInput(input: ConversationInput): {
     const id = FileEntryIdSchema.safeParse(part.fileEntryId);
     if (!id.success)
       throw new ConversationReadError({ code: 'unsupported', retry: 'revise-input' });
-    return [{ fileEntryId: id.data, name: part.name || 'file', mediaType: part.mediaType }];
+    return [{ fileEntryId: id.data, name: part.filename || 'file', mediaType: part.mediaType }];
   });
   if ((!text.trim() && !attachments.length) || text.length > 32768 || attachments.length > 8)
     throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
@@ -139,10 +140,11 @@ export function createRemoteConversationSession(
   // their identity until an event changes them; a history message is immutable per revision.
   const liveRows = new WeakMap<RemoteMessageView, ConversationMessage>();
   const historyRows = new Map<string, { version: string; row: ConversationMessage }>();
+  const projection = createRemoteMessageProjectionCache();
   const project = (message: RemoteMessageView) => {
     let row = liveRows.get(message);
     if (!row) {
-      row = remoteMessage(message, resource);
+      row = remoteMessage(message, resource, projection);
       liveRows.set(message, row);
     }
     return row;
@@ -152,6 +154,38 @@ export function createRemoteConversationSession(
     if (cached?.version === message.version) return cached.row;
     const row = remoteMessage(message, resource);
     historyRows.set(message.id, { version: message.version, row });
+    return row;
+  };
+  // A failed execution stays in every later snapshot; its row changes only with the execution.
+  const terminalRows = new Map<string, { view: RemoteMessageView; row: ConversationMessage }>();
+  const projectTerminal = (
+    execution: RemoteSessionSnapshot['executions'][number] & { messageId: string },
+  ) => {
+    const view: RemoteMessageView = {
+      id: execution.messageId,
+      version: execution.history?.messageRevision ?? execution.id,
+      role: 'assistant',
+      parts: [],
+      state:
+        execution.state === 'failed'
+          ? 'error'
+          : execution.state === 'cancelled' || execution.state === 'interrupted'
+            ? 'cancelled'
+            : 'success',
+      failure: execution.failure,
+      persistenceFailure: execution.persistenceFailure,
+    };
+    const cached = terminalRows.get(execution.id);
+    if (
+      cached?.view.id === view.id &&
+      cached.view.version === view.version &&
+      cached.view.state === view.state &&
+      cached.view.failure === view.failure &&
+      cached.view.persistenceFailure === view.persistenceFailure
+    )
+      return cached.row;
+    const row = remoteMessage(view, resource);
+    terminalRows.set(execution.id, { view, row });
     return row;
   };
   const operationId = (id: string) => refs.issue<OperationId>('operation', id);
@@ -244,23 +278,7 @@ export function createRemoteConversationSession(
           ...(execution.messageId && (execution.failure || execution.persistenceFailure)
             ? {
                 terminal: {
-                  message: remoteMessage(
-                    {
-                      id: execution.messageId,
-                      version: execution.history?.messageRevision ?? execution.id,
-                      role: 'assistant',
-                      parts: [],
-                      state:
-                        execution.state === 'failed'
-                          ? 'error'
-                          : execution.state === 'cancelled' || execution.state === 'interrupted'
-                            ? 'cancelled'
-                            : 'success',
-                      failure: execution.failure,
-                      persistenceFailure: execution.persistenceFailure,
-                    },
-                    resource,
-                  ),
+                  message: projectTerminal({ ...execution, messageId: execution.messageId }),
                   durable: execution.durable === true,
                   historyReady:
                     !!execution.history &&

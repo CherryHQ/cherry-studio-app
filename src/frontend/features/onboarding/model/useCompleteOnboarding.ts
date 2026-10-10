@@ -105,10 +105,10 @@ export function useCompleteOnboarding() {
       if (currentAgents.error) throw currentAgents.error;
       signal.throwIfAborted();
       const items = currentAgents.data?.items ?? [];
-      let agent = createdAgentRef.current ?? items.find((item) => item.modelId === modelId);
-      if (!agent && items.length === 1 && !items[0].modelId) agent = items[0];
+      let agent = createdAgentRef.current ?? items.find((item) => item.model === modelId);
+      if (!agent && items.length === 1 && !items[0].model) agent = items[0];
       if (agent) {
-        if (agent.modelId !== modelId) agent = await updateAgent(agent.id, { modelId });
+        if (agent.model !== modelId) agent = await updateAgent(agent.id, { model: modelId });
       } else {
         agent = await createAgent({
           avatar: CHERRY_AGENT_AVATAR,
@@ -116,7 +116,7 @@ export function useCompleteOnboarding() {
           disabledCapabilities: DEFAULT_DISABLED_AGENT_CAPABILITIES.filter(
             (capability) => capability !== 'agents',
           ),
-          modelId,
+          model: modelId,
           name: t('agent.default.name'),
         });
         createdAgentRef.current = agent;

@@ -102,7 +102,7 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
     return this.serialize(async () => this.project());
   }
   get attemptSignal() {
-    return AbortSignal.any([this.lifetime.signal, this.attempt.signal]);
+    return this.attempt.signal;
   }
 
   begin() {
@@ -308,7 +308,7 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
     if (callerSignal?.aborted) return Promise.reject(cancelled());
     let operation = this.resolutions.get(id);
     if (!operation) {
-      const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+      const signal = this.renewal.signal;
       operation = this.serialize(async () => {
         signal.throwIfAborted();
         const failure = this.failures.get(id);
@@ -380,7 +380,7 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
   }
 
   async rejectCredential(id: string, rejected: PluginCredential) {
-    const signal = AbortSignal.any([this.lifetime.signal, this.renewal.signal]);
+    const signal = this.renewal.signal;
     await this.serialize(async () => {
       signal.throwIfAborted();
       const current = GithubUserCredentialSchema.safeParse(
@@ -430,13 +430,19 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
       return this.project();
     });
   }
+  /** stop() aborts the current attempt and renewal; generations replaced afterwards start aborted. */
+  private nextGeneration() {
+    const controller = new AbortController();
+    if (this.lifetime.signal.aborted) controller.abort(this.lifetime.signal.reason);
+    return controller;
+  }
   interrupt() {
     this.attempt.abort();
-    this.attempt = new AbortController();
+    this.attempt = this.nextGeneration();
   }
   invalidateGrant() {
     this.renewal.abort();
-    this.renewal = new AbortController();
+    this.renewal = this.nextGeneration();
     this.resolutions.clear();
     this.failures.clear();
     this.store.notifyChanged();

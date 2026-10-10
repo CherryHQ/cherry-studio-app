@@ -1,6 +1,9 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
-import type { AgentToolApprovalMode } from '@/shared/data/types/agent';
+import {
+  DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+  type AgentToolApprovalMode,
+} from '@/shared/data/types/agent';
 
 import {
   createUpdateDeleteTimestamps,
@@ -33,12 +36,12 @@ export const agentTable = sqliteTable(
     avatar: text(),
     // Default model: FK to user_model(id) — UniqueModelId "providerId::modelId"
     // Legitimately nullable: NULL = "no model selected yet"
-    modelId: text('model').references(() => userModelTable.id, { onDelete: 'set null' }),
+    model: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // Per-Agent interactive approval preference. This does not enable tools.
     toolApprovalMode: text({ enum: ['default', 'auto'] })
       .$type<AgentToolApprovalMode>()
       .notNull()
-      .default('default'),
+      .default(DEFAULT_AGENT_TOOL_APPROVAL_MODE),
     // Capability-group deny-list (aligned with desktop's disabled_tools JSON
     // pattern): a group id absent from the list is enabled. Stores group ids,
     // never tool names; reads sanitize unknown ids instead of failing.

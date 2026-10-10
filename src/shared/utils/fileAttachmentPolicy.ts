@@ -8,10 +8,11 @@ import { documentFileTypeFromMediaType } from './documentFileTypes';
 import { isAiSupportedImageMediaType } from './imageFileTypes';
 import { isSupportedTextAttachment } from './textFileTypes';
 
-export const MAX_TEXT_ATTACHMENT_BYTES = 1024 * 1024;
+export const MAX_TEXT_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_TEXT_ATTACHMENT_CHARACTERS = 200_000;
 export const MAX_TEXT_ATTACHMENT_TOTAL_CHARACTERS = 400_000;
 export const MAX_DOCUMENT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_PDF_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_PDF_ATTACHMENT_PAGES = 100;
 export const MAX_IMAGE_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // Attached images have no request-level count or byte ceiling: the Runtime prices them into the
@@ -26,6 +27,13 @@ export function fileAttachmentMode(file: Pick<FileAttachmentFact, 'mediaType' | 
   if (documentFileTypeFromMediaType(file.mediaType)) return 'document';
   if (isSupportedTextAttachment(file)) return 'text';
   return undefined;
+}
+
+/** PDF uses native file access; other documents retain the bounded whole-byte parser path. */
+export function documentAttachmentByteLimit(mediaType: string): number {
+  return documentFileTypeFromMediaType(mediaType) === 'pdf'
+    ? MAX_PDF_ATTACHMENT_BYTES
+    : MAX_DOCUMENT_ATTACHMENT_BYTES;
 }
 
 /** Metadata admission only. Content reads happen after the whole request passes. */
@@ -53,7 +61,7 @@ export function validateFileAttachments(
       mode === 'image'
         ? MAX_IMAGE_ATTACHMENT_BYTES
         : mode === 'document'
-          ? MAX_DOCUMENT_ATTACHMENT_BYTES
+          ? documentAttachmentByteLimit(file.mediaType)
           : MAX_TEXT_ATTACHMENT_BYTES;
     if (file.size > limit) throw new FileAttachmentError({ ...issue, code: 'file-bytes', limit });
   }

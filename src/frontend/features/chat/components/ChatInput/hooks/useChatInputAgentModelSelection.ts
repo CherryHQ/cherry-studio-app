@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import type { Agent } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
-type AgentModelSnapshot = Pick<Agent, 'modelId' | 'updatedAt'>;
+type AgentModelSnapshot = Pick<Agent, 'model' | 'updatedAt'>;
 
 type ModelSelectionOverride = {
   agentId: string;
@@ -97,7 +97,7 @@ export function useChatInputAgentModelSelection(
                 next.set(targetAgentId, {
                   ...latest,
                   confirmedUpdatedAt: confirmedModel.updatedAt,
-                  modelId: confirmedModel.modelId,
+                  modelId: confirmedModel.model,
                 });
                 return next;
               });
@@ -124,7 +124,7 @@ export function useChatInputAgentModelSelection(
                     agentId: targetAgentId,
                     confirmedUpdatedAt: target.fallback.updatedAt,
                     fallback: target.fallback,
-                    modelId: target.fallback.modelId,
+                    modelId: target.fallback.model,
                     selectionId: target.selectionId,
                   });
                 } else {
@@ -156,7 +156,7 @@ export function useChatInputAgentModelSelection(
         fallback:
           pendingSelection?.fallback ??
           (activeOverride?.confirmedUpdatedAt
-            ? { modelId: activeOverride.modelId, updatedAt: activeOverride.confirmedUpdatedAt }
+            ? { model: activeOverride.modelId, updatedAt: activeOverride.confirmedUpdatedAt }
             : persistedModel),
         modelId,
         selectionId: ++nextSelectionIdRef.current,
@@ -177,6 +177,6 @@ export function useChatInputAgentModelSelection(
 
   return {
     selectModel,
-    selectedModelId: activeOverride ? activeOverride.modelId : (persistedModel?.modelId ?? null),
+    selectedModelId: activeOverride ? activeOverride.modelId : (persistedModel?.model ?? null),
   };
 }

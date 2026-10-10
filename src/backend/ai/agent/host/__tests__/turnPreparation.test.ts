@@ -36,9 +36,8 @@ const OVERRIDE_MODEL: RuntimeModel = { providerId: 'provider-2', modelId: 'model
 const SESSION: AgentSessionView = {
   id: SESSION_ID,
   agentId: AGENT_ID,
-  executionTarget: { kind: 'local' },
-  title: '',
-  titleIsManual: false,
+  name: '',
+  isNameManuallyEdited: false,
   forkBoundaryMessageId: null,
   forkedFromSessionId: null,
   createdAt: NOW,
@@ -60,7 +59,6 @@ const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
   hasMessages: false,
   history: [],
   referencedFileEntryIds: [],
-  sessionTurnIds: [],
 };
 
 jest.mock('@/backend/services/file/anydocParser', () => ({
@@ -97,7 +95,6 @@ describe('turn preparation', () => {
               harness.dependencies,
               {
                 agentId: AGENT_ID,
-                executionTarget: { kind: 'local' },
                 sessionId: SESSION_ID,
                 userMessageId: 'user-1',
                 assistantMessageId: 'assistant-1',
@@ -144,7 +141,6 @@ describe('turn preparation', () => {
         hasMessages: true,
         history,
         referencedFileEntryIds: [FILE_ENTRY_ID],
-        sessionTurnIds: ['old-turn'],
       });
       const next = await prepareTurn(
         harness.dependencies,
@@ -189,7 +185,6 @@ describe('turn preparation', () => {
         sessionId: SESSION_ID,
         userMessageId: 'user-1',
         assistantMessageId: 'assistant-1',
-        executionTarget: { kind: 'local' },
         parts: [{ text: 'Hello.', type: 'text' }],
       },
       new AbortController().signal,
@@ -197,7 +192,6 @@ describe('turn preparation', () => {
 
     expect(plan.hasMessages).toBe(false);
     expect(plan.history).toEqual([]);
-    expect(plan.sessionTurnIds).toEqual([]);
     expect(harness.getSession).not.toHaveBeenCalled();
     expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
     expect(harness.loadRuntimeTurnContext).not.toHaveBeenCalled();
@@ -240,7 +234,6 @@ describe('turn preparation', () => {
 
     const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
 
-    expect(harness.routeExecutionTarget).toHaveBeenCalledWith(SESSION.executionTarget);
     expect(harness.getSystemTools).toHaveBeenCalledWith({
       agentId: AGENT.id,
       askUser: harness.askUser,
@@ -292,7 +285,7 @@ describe('turn preparation', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/plain',
-        name: 'notes.txt',
+        filename: 'notes.txt',
       },
     ]);
     expect(plan.userParts).toEqual([
@@ -302,7 +295,7 @@ describe('turn preparation', () => {
         type: 'file',
         fileEntryId: FILE_ENTRY_ID,
         mediaType: 'text/plain',
-        name: 'notes.txt',
+        filename: 'notes.txt',
         purpose: 'input-attachment',
         attachmentReport: {
           mode: 'text',
@@ -340,7 +333,6 @@ describe('turn preparation', () => {
     });
     expect(plan.hasMessages).toBe(false);
     expect(plan.runtimeContextCheckpoint).toBeNull();
-    expect(plan.sessionTurnIds).toEqual([]);
   });
 
   test('keeps an auto-ineligible ask unchanged under the auto approval mode', async () => {
@@ -390,7 +382,6 @@ describe('turn preparation', () => {
               {
                 ...input,
                 agentId: AGENT_ID,
-                executionTarget: { kind: 'local' },
               },
               new AbortController().signal,
             )
@@ -424,7 +415,6 @@ describe('turn preparation', () => {
     ).rejects.toMatchObject({ view: { code: 'SESSION_NOT_FOUND' } });
 
     expect(harness.getAgent).not.toHaveBeenCalled();
-    expect(harness.routeExecutionTarget).not.toHaveBeenCalled();
     expect(harness.getLatestContextCheckpoint).not.toHaveBeenCalled();
   });
 
@@ -477,7 +467,6 @@ describe('turn preparation', () => {
       hasMessages: true,
       history,
       referencedFileEntryIds: [],
-      sessionTurnIds: ['turn-later'],
     });
 
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
@@ -486,7 +475,6 @@ describe('turn preparation', () => {
     expect(plan.runtimeContextCheckpoint).toBeNull();
     expect(plan.history).toEqual(history);
     expect(plan.hasMessages).toBe(true);
-    expect(plan.sessionTurnIds).toEqual(['turn-later']);
   });
 });
 
@@ -543,7 +531,6 @@ function createHarness() {
     },
   });
   const preflightModel = jest.spyOn(runtime, 'preflightModel');
-  const routeExecutionTarget = jest.fn(() => runtime);
   const askUser = jest.fn(async () => {
     throw new Error('Preparation never asks the user.');
   });
@@ -553,7 +540,7 @@ function createHarness() {
     documentParserMode: () => 'anydoc',
     files,
     inferenceModel: resolveInferenceModel,
-    routeExecutionTarget,
+    runtime,
     runtimeTools: { resolve: resolveRuntimeTools },
     store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext },
     systemCapabilities: { getTools: getSystemTools },
@@ -572,7 +559,7 @@ function createHarness() {
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,
-    routeExecutionTarget,
+    runtime,
     systemTool,
   };
 }
@@ -615,7 +602,6 @@ function textMessage(id: string, turnId: string): AgentMessageView {
     role: 'user',
     status: 'success',
     parts: [{ id: `${id}-part`, type: 'text', text: 'Later message.', state: 'done' }],
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,

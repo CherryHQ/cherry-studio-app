@@ -1,5 +1,6 @@
 import type {
   RemoteCommand,
+  RemoteMessagePart,
   RemoteMessageView,
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
@@ -88,7 +89,7 @@ export function undeliveredMessage(
       ...(text ? [{ type: 'text' as const, text }] : []),
       ...(attachments ?? []).map((file) => ({
         type: 'file' as const,
-        name: file.name,
+        filename: file.name,
         mediaType: file.mediaType,
         fileEntryId: file.fileEntryId,
       })),
@@ -142,56 +143,95 @@ export function remoteAvailability(source: RemoteSourceState, disposed: boolean)
         reason: source.status === 'connecting' ? 'synchronizing' : source.status,
       };
 }
+type ConversationTool = NonNullable<ConversationMessage['tools']>[number];
+/**
+ * Projections keyed by remote part view. A streamed update replaces only the parts it changes, so
+ * unchanged parts, and the tool list while no tool changes, keep their identity and skip rendering.
+ */
+export type RemoteMessageProjectionCache = {
+  parts: WeakMap<
+    RemoteMessagePart,
+    { streaming: boolean; part: CherryMessagePart; tool?: ConversationTool }
+  >;
+  tools: Map<string, readonly ConversationTool[]>;
+};
+export const createRemoteMessageProjectionCache = (): RemoteMessageProjectionCache => ({
+  parts: new WeakMap(),
+  tools: new Map(),
+});
+function projectRemotePart(
+  part: Extract<RemoteMessagePart, { kind: 'text' | 'reasoning' | 'tool' }>,
+  streaming: boolean,
+  resource: (value: string) => ResourceRead,
+): { part: CherryMessagePart; tool?: ConversationTool } {
+  if (part.kind !== 'tool')
+    return { part: { type: part.kind, text: part.text, state: streaming ? 'streaming' : 'done' } };
+  const base = {
+    type: 'dynamic-tool' as const,
+    toolCallId: part.callId,
+    toolName: part.name,
+    input: undefined,
+  };
+  return {
+    part:
+      part.state === 'failed'
+        ? { ...base, state: 'output-error', errorText: '' }
+        : part.output
+          ? { ...base, state: 'output-available', output: undefined }
+          : {
+              ...base,
+              state: part.state === 'streaming' ? 'input-streaming' : 'input-available',
+            },
+    tool: {
+      key: part.callId,
+      title: part.name,
+      state: part.state,
+      ...(part.input ? { input: resource(part.input) } : {}),
+      ...(part.output ? { output: resource(part.output) } : {}),
+    },
+  };
+}
 export function remoteMessage(
   message: RemoteMessageView,
   resource: (value: string) => ResourceRead,
+  cache?: RemoteMessageProjectionCache,
 ): ConversationMessage {
   const parts: CherryMessagePart[] = [];
   const keys: string[] = [];
-  const tools: NonNullable<ConversationMessage['tools']>[number][] = [];
+  const tools: ConversationTool[] = [];
   const attachments: NonNullable<ConversationMessage['attachments']>[number][] = [];
   for (const part of message.parts) {
-    if (part.kind === 'text' || part.kind === 'reasoning') {
-      // The desktop renames text parts when history commits; position keeps the rendered part.
-      keys.push(`${message.id}:${part.kind}:${parts.length}`);
-      parts.push({
-        type: part.kind,
-        text: part.text,
-        state: message.state === 'streaming' ? 'streaming' : 'done',
-      });
-    } else if (part.kind === 'tool') {
-      const base = {
-        type: 'dynamic-tool' as const,
-        toolCallId: part.callId,
-        toolName: part.name,
-        input: undefined,
-      };
-      parts.push(
-        part.state === 'failed'
-          ? { ...base, state: 'output-error', errorText: '' }
-          : part.output
-            ? { ...base, state: 'output-available', output: undefined }
-            : {
-                ...base,
-                state: part.state === 'streaming' ? 'input-streaming' : 'input-available',
-              },
-      );
-      keys.push(part.id);
-      tools.push({
-        key: part.callId,
-        title: part.name,
-        state: part.state,
-        ...(part.input ? { input: resource(part.input) } : {}),
-        ...(part.output ? { output: resource(part.output) } : {}),
-      });
-    } else if (part.kind === 'file')
+    if (part.kind === 'file') {
       attachments.push({
         key: part.id,
         name: part.name,
         mediaType: part.mediaType,
         resource: resource(part.resource),
       });
+      continue;
+    }
+    if (part.kind === 'data') continue;
+    // A text part leaves streaming mode once it completes, even while its message continues.
+    const streaming =
+      part.kind !== 'tool' && message.state === 'streaming' && part.state === 'streaming';
+    let projected = cache?.parts.get(part);
+    if (projected?.streaming !== streaming) {
+      projected = { streaming, ...projectRemotePart(part, streaming, resource) };
+      cache?.parts.set(part, projected);
+    }
+    // The desktop renames text parts when history commits; position keeps the rendered part.
+    keys.push(part.kind === 'tool' ? part.id : `${message.id}:${part.kind}:${parts.length}`);
+    parts.push(projected.part);
+    if (projected.tool) tools.push(projected.tool);
   }
+  let toolList: readonly ConversationTool[] = tools;
+  const previousTools = cache?.tools.get(message.id);
+  if (
+    previousTools?.length === tools.length &&
+    previousTools.every((tool, index) => tool === tools[index])
+  )
+    toolList = previousTools;
+  else cache?.tools.set(message.id, tools);
   if (message.failure) {
     parts.push({
       type: 'data-error',
@@ -245,7 +285,7 @@ export function remoteMessage(
       data: { parts, partKeys: keys },
     },
     actions: {},
-    tools,
+    tools: toolList,
     attachments,
   };
 }
@@ -263,8 +303,8 @@ export function remoteTranscriptMessage(message: RemoteMessageView): TranscriptM
   if (message.failure)
     parts.push({
       id: `${message.id}:failure`,
-      type: 'error',
-      error: { code: 'EXECUTION_FAILED', ...message.failure },
+      type: 'data-error',
+      data: { code: 'EXECUTION_FAILED', ...message.failure },
     });
   return {
     id: message.id,

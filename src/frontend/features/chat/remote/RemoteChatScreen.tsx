@@ -38,13 +38,13 @@ import {
 } from '@/frontend/components/Composer';
 import { ConversationStatus } from '@/frontend/components/ConversationStatus';
 import type { MessageListItem } from '@/frontend/components/Message';
-import { usePersistCache } from '@/frontend/data/hooks';
 
 import { ChatScreenFrame } from '../components/ChatScreenFrame';
 import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWorkspace';
 import { ConversationPresenter } from './ConversationPresenter';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+import { readRemoteDraft } from './useRemoteDraftPersistence';
 
 const renderRemoteUsage = (message: MessageListItem) => (
   <RemoteAssistantMessageUsage message={message} />
@@ -185,13 +185,12 @@ function RemoteChatSession() {
       void agents.fetchNextPage();
   }, [agentId, agent, agents]);
   const draftKey = `${source.draftScope}:${target.connectionId}:${target.sessionId ? `session:${target.sessionId}` : identity}`;
-  const [drafts] = usePersistCache('remote_agent.drafts');
   return (
     <HeaderContext value={{ agent, selectAgent, startNewChat }}>
       <ChatScreenFrame header={RemoteHeader}>
         <ComposerSessionProvider
           key={`${source.scope}:${identity}`}
-          initialDraft={drafts[draftKey] ?? ''}
+          initialDraft={() => readRemoteDraft(draftKey)}
         >
           {/* Native background taps yield to scrolling and excluded message content. */}
           <ComposerDismissArea testID="chat-background">

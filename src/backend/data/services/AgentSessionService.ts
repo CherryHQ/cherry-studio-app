@@ -17,9 +17,8 @@ import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './
 
 const DEFAULT_LIMIT = 50;
 
-type SessionListRow = Omit<AgentSessionRow, 'executionTarget' | 'titleIsManual'> & {
-  executionTarget: string;
-  titleIsManual: number;
+type SessionListRow = Omit<AgentSessionRow, 'isNameManuallyEdited'> & {
+  isNameManuallyEdited: number;
 };
 
 /** SQL-only static reads for Agent Sessions. Live turn state stays in MobileAgentHost. */
@@ -54,16 +53,17 @@ export class AgentSessionService {
     const condition = and(
       query.agentId ? eq(agentSessionTable.agentId, query.agentId) : undefined,
       query.q
-        ? sql`${agentSessionTable.title} LIKE ${`%${query.q.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`
+        ? sql`${agentSessionTable.name} LIKE ${`%${query.q.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`
         : undefined,
       cursor ? ordering.where(cursor) : undefined,
     );
     const rows = await readSqliteRows<SessionListRow>(
       application.get('DbService').getSqlite(),
       sql`
-        SELECT id, agent_id AS "agentId", name AS "title",
-          is_name_manually_edited AS "titleIsManual", execution_target AS "executionTarget",
+        SELECT id, agent_id AS "agentId", name,
+          is_name_manually_edited AS "isNameManuallyEdited",
           last_activity_at AS "lastActivityAt", created_at AS "createdAt", updated_at AS "updatedAt",
+          runtime_revision AS "runtimeRevision",
           forked_from_session_id AS "forkedFromSessionId", fork_boundary_message_id AS "forkBoundaryMessageId"
         FROM ${agentSessionTable}
         WHERE ${condition ?? sql`1 = 1`}
@@ -77,8 +77,7 @@ export class AgentSessionService {
     const items = pageRows.map((row) =>
       toAgentSessionEntity({
         ...row,
-        executionTarget: JSON.parse(row.executionTarget),
-        titleIsManual: Boolean(row.titleIsManual),
+        isNameManuallyEdited: Boolean(row.isNameManuallyEdited),
       }),
     );
     const tail = pageRows.at(-1);

@@ -50,8 +50,7 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
-  '@earendil-works/pi-agent-core@0.99.1': patches/@earendil-works__pi-agent-core@0.99.1.patch
-  '@earendil-works/pi-ai@0.99.1': patches/@earendil-works__pi-ai@0.99.1.patch
+  '@earendil-works/pi-ai@1.1.0': patches/@earendil-works__pi-ai@1.1.0.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.5: patches/metro@0.84.5.patch
@@ -81,8 +80,11 @@ patchedDependencies:
   expo-observe@57.0.20: patches/expo-observe@57.0.20.patch
   react-native-anydoc@0.4.1: patches/react-native-anydoc@0.4.1.patch
   drizzle-orm@0.45.2: patches/drizzle-orm@0.45.2.patch
+  expo-paste-input@0.2.2: patches/expo-paste-input@0.2.2.patch
+  '@earendil-works/chord@1.1.0': patches/@earendil-works__chord@1.1.0.patch
 
 minimumReleaseAgeExclude:
+  - '@cherrystudio/file-preview@0.1.0'
   - '@cherrystudio/ai-core@2.1.0'
   - '@cherrystudio/ai-sdk-provider@0.1.7'
   - '@cherrystudio/remote-protocol@0.3.0'
@@ -115,7 +117,3 @@ minimumReleaseAgeExclude:
   - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
   - '@cherrystudio/analytics-client@1.4.0'
-  - '@earendil-works/chord@0.99.1'
-  - '@earendil-works/pi-agent-core@0.99.1'
-  - '@earendil-works/pi-ai@0.99.1'
-  - '@earendil-works/pi-telemetry@0.99.1'

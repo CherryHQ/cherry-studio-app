@@ -1,6 +1,7 @@
 import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
+import '@/bootstrap/preboot/promise';
 import '@/bootstrap/preboot/webCrypto';
 import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
@@ -8,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
@@ -24,6 +26,7 @@ import {
   NavigationThemeProvider,
   paintingRouteId,
   paintingViewerHeaderShown,
+  paintingViewerRouteId,
 } from '@/frontend/appShell/navigation';
 import { configureReporting, wrapReportingRoot } from '@/frontend/appShell/observability';
 import { PrivacyConsentGate } from '@/frontend/appShell/privacy';
@@ -39,6 +42,7 @@ import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { LanguagePreferenceObserver } from '@/frontend/i18n';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 // Hold the native surface until the matching React Native startup cover has
 // committed its first layout.
@@ -53,7 +57,8 @@ const RootGestureView = withUniwind(GestureHandlerRootView);
 function RootLayout() {
   return (
     <RootGestureView className="flex-1">
-      <KeyboardProvider>
+      {/* iOS warmup focuses and removes a hidden input on the startup main thread. */}
+      <KeyboardProvider preload={Platform.OS !== 'ios'}>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
           <Portal.AccessibilityBoundary>
             <Toast.Provider>
@@ -156,7 +161,12 @@ function RootStack() {
           headerShown: false,
         }}
       />
-      <Stack.Screen name="files/[fileEntryId]" options={{ headerTransparent: false }} />
+      <Stack.Screen
+        // Reopening the file already on top reuses it, so a repeated tap cannot stack a copy.
+        getId={({ params }) => getSingleRouteParam(params?.fileEntryId)}
+        name="files/[fileEntryId]"
+        options={{ headerTransparent: false }}
+      />
       <Stack.Screen name="chat-share" options={{ headerShown: false }} />
       <Stack.Screen
         name="document-export"
@@ -180,6 +190,7 @@ function RootStack() {
         }}
       />
       <Stack.Screen
+        getId={({ params }) => paintingViewerRouteId(params)}
         name="paintings/[paintingId]"
         options={{
           // The viewer runs the image full-bleed, so its chrome sits on the

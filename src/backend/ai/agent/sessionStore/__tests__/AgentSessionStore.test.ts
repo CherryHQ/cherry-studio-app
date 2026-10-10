@@ -59,7 +59,7 @@ function terminalTiming(completedAt = Date.now()) {
 type StoreHarness = {
   store: AgentSessionStore;
   /** Seeds an empty legacy Session without exposing that operation on the production port. */
-  createEmptySession: (input: { agentId: string; title?: string }) => Promise<AgentSessionView>;
+  createEmptySession: (input: { agentId: string; name?: string }) => Promise<AgentSessionView>;
   /** Returns an agent id valid for Session creation under this adapter. */
   makeAgentId: () => Promise<string>;
   /** SQLite-only escape hatch for raw assertions; undefined for in-memory. */
@@ -136,13 +136,13 @@ function makeSqliteHarness(): StoreHarness {
       const id = randomUUID();
       sqlite
         .prepare(
-          `INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+          `INSERT OR IGNORE INTO user_provider (provider_id, name, order_key, created_at, updated_at)
            VALUES ('mock-provider', 'Mock Provider', 'a0', 1, 1)`,
         )
         .run();
       sqlite
         .prepare(
-          `INSERT INTO user_model (
+          `INSERT OR IGNORE INTO user_model (
             id, provider_id, model_id, name, preset_model_id, order_key, created_at, updated_at
           ) VALUES (?, 'mock-provider', 'mock-model', 'Mock Model', 'mock-model', 'a0', 1, 1)`,
         )
@@ -213,11 +213,6 @@ describe.each([
       },
       { id: 'text-2', type: 'text' as const, state: 'done' as const, text: 'Answer' },
     ];
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      parts,
-    });
-    expect((await store.listMessages(session.id))[1].parts).toEqual(parts);
     await store.finalizeAssistantMessage({
       assistantMessageId: reserved.assistantMessage.id,
       status: 'success',
@@ -233,21 +228,20 @@ describe.each([
   test('legacy empty Session lifecycle: seed, get, rename, delete', async () => {
     const created = await harness.createEmptySession({ agentId });
     expect(created.agentId).toBe(agentId);
-    expect(created.executionTarget).toEqual({ kind: 'local' });
-    expect(created.title).toBe('');
-    expect(created.titleIsManual).toBe(false);
+    expect(created.name).toBe('');
+    expect(created.isNameManuallyEdited).toBe(false);
     expect(Date.parse(created.createdAt)).not.toBeNaN();
 
     expect(await store.getSession(created.id)).toEqual(created);
     expect(await store.getSession('missing')).toBeNull();
 
-    const titled = await harness.createEmptySession({ agentId, title: 'Named' });
-    expect(titled.title).toBe('Named');
-    expect(titled.titleIsManual).toBe(true);
+    const titled = await harness.createEmptySession({ agentId, name: 'Named' });
+    expect(titled.name).toBe('Named');
+    expect(titled.isNameManuallyEdited).toBe(true);
 
     const renamed = await store.renameSession(created.id, 'My Chat');
-    expect(renamed?.title).toBe('My Chat');
-    expect(renamed?.titleIsManual).toBe(true);
+    expect(renamed?.name).toBe('My Chat');
+    expect(renamed?.isNameManuallyEdited).toBe(true);
     expect(await store.renameSession('missing', 'x')).toBeNull();
 
     const autoNamed = await store.autoRenameSession(titled.id, 'Named', 'Summary');
@@ -255,8 +249,8 @@ describe.each([
 
     const autoTitle = await harness.createEmptySession({ agentId });
     const firstTitle = await store.autoRenameSession(autoTitle.id, '', 'First message');
-    expect(firstTitle?.title).toBe('First message');
-    expect(firstTitle?.titleIsManual).toBe(false);
+    expect(firstTitle?.name).toBe('First message');
+    expect(firstTitle?.isNameManuallyEdited).toBe(false);
     expect(await store.autoRenameSession(autoTitle.id, '', 'Stale write')).toBeNull();
 
     expect(await store.deleteSession(created.id)).toBe(true);
@@ -383,6 +377,14 @@ describe.each([
       reserved.userMessage,
       reserved.assistantMessage,
     ]);
+    if (harness.raw) {
+      for (const message of [reserved.userMessage, reserved.assistantMessage]) {
+        const row = harness.raw
+          .prepare('SELECT data FROM agent_session_message WHERE id = ?')
+          .get(message.id)!;
+        expect(JSON.parse(row.data as string)).toEqual({ parts: message.parts });
+      }
+    }
     await expect(
       store.reserveSubmission({
         ...messageIds(),
@@ -401,7 +403,6 @@ describe.each([
         sessionId: uuidv7(),
         ...messageIds(),
         agentId,
-        executionTarget: { kind: 'local' },
         userParts: [],
       });
       const ids = { sessionId: uuidv7(), ...messageIds() };
@@ -413,7 +414,6 @@ describe.each([
           ...RESERVATION_FACTS,
           ...ids,
           agentId,
-          executionTarget: { kind: 'local' },
           userParts: [],
         }),
       ).rejects.toThrow();
@@ -433,7 +433,6 @@ describe.each([
       ...ids,
       ...RESERVATION_FACTS,
       agentId,
-      executionTarget: { kind: 'local' },
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
 
@@ -499,7 +498,7 @@ describe.each([
       status: 'error',
       parts: [
         { id: 'text-1', type: 'text', text: 'Partial', state: 'done' },
-        { id: 'error-1', type: 'error', error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' } },
+        { id: 'error-1', type: 'data-error', data: { ...INTERRUPTED, code: 'EXECUTION_FAILED' } },
       ],
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' },
@@ -513,7 +512,7 @@ describe.each([
 
     expect(finalized.status).toBe('error');
     expect(finalized.parts).toHaveLength(2);
-    expect(finalized.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(finalized.stats).toMatchObject({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
     expect(finalized.modelId).toBe(MODEL_ID);
     expect(finalized.inferenceSnapshot).toEqual(reserved.assistantMessage.inferenceSnapshot);
 
@@ -573,7 +572,7 @@ describe.each([
   });
 
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     for (const text of ['one', 'two', 'three']) {
       const reserved = await store.reserveSubmission({
         ...messageIds(),
@@ -604,11 +603,10 @@ describe.each([
     const fork = result.session;
     expect(fork.id).not.toBe(source.id);
     expect(fork.agentId).toBe(source.agentId);
-    expect(fork.executionTarget).toEqual(source.executionTarget);
     // Without an override the fork inherits the conversation's name; any
     // derived wording is the client's to compose, not the store's.
-    expect(fork.title).toBe('Maths');
-    expect(fork.titleIsManual).toBe(true);
+    expect(fork.name).toBe('Maths');
+    expect(fork.isNameManuallyEdited).toBe(true);
     expect(fork.forkedFromSessionId).toBe(source.id);
     expect(await store.getSession(fork.id)).toEqual(fork);
 
@@ -637,7 +635,7 @@ describe.each([
       original.slice(0, 4).map((message) => message.parts),
     );
     // Historical facts travel with the copy.
-    expect(copied[1]?.usage).toEqual({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
+    expect(copied[1]?.stats).toMatchObject({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
     expect(copied[1]?.modelId).toBe(MODEL_ID);
     expect(copied[1]?.inferenceSnapshot).toEqual({
       status: 'supported',
@@ -663,6 +661,36 @@ describe.each([
     // The source is untouched.
     expect(await store.listMessages(source.id)).toEqual(original);
   });
+
+  test.each([null, { inputTokens: 0 }])(
+    'retry replaces fallback token counts with %p',
+    async (usage) => {
+      const session = await harness.createEmptySession({ agentId });
+      const input = {
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'input', type: 'text' as const, text: 'Hello', state: 'done' as const }],
+      };
+      await store.reserveSubmission(input);
+      const finalization = {
+        assistantMessageId: input.assistantMessageId,
+        status: 'success' as const,
+        parts: [],
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      };
+      await store.finalizeAssistantMessage(finalization);
+      await store.reserveRetry({ ...input, assistantParts: [] });
+      const retried = await store.finalizeAssistantMessage({ ...finalization, usage });
+      expect(retried.stats).toEqual({
+        ...usage,
+        runtimeTiming: finalization.runtimeStats.runtimeTiming,
+      });
+    },
+  );
 
   test('forkSession preserves runtime timing without preserving row update time', async () => {
     const reservationTime = 2_000_000_000_000;
@@ -710,7 +738,7 @@ describe.each([
   });
 
   test('nested forks record the direct source and their own copied boundary', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Source' });
+    const source = await harness.createEmptySession({ agentId, name: 'Source' });
     const sourceTurn = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
@@ -767,7 +795,7 @@ describe.each([
   });
 
   test('forkSession names the copy from the caller when one is supplied', async () => {
-    const source = await harness.createEmptySession({ agentId, title: 'Maths' });
+    const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     const reserved = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
@@ -778,21 +806,21 @@ describe.each([
     const result = await store.forkSession({
       sessionId: source.id,
       fromMessageId: reserved.userMessage.id,
-      title: 'Branch - Maths',
+      name: 'Branch - Maths',
     });
 
     expect(result.status).toBe('forked');
     if (result.status !== 'forked') return;
-    expect(result.session.title).toBe('Branch - Maths');
+    expect(result.session.name).toBe('Branch - Maths');
     // Renaming the copy must not touch the Session it was copied from.
-    expect((await store.getSession(source.id))?.title).toBe('Maths');
+    expect((await store.getSession(source.id))?.name).toBe('Maths');
   });
 
   test('deleting a fork source advances the surviving Session row timestamp', async () => {
     const deletionTime = 2_000_000_001_000;
     jest.useFakeTimers({ now: 2_000_000_000_000 });
     try {
-      const source = await harness.createEmptySession({ agentId, title: 'Source' });
+      const source = await harness.createEmptySession({ agentId, name: 'Source' });
       const reserved = await store.reserveSubmission({
         ...messageIds(),
         ...RESERVATION_FACTS,
@@ -1032,7 +1060,7 @@ describe.each([
           fileEntryId: INPUT_FILE_ID,
           id: 'input-0',
           mediaType: 'image/png',
-          name: 'input.png',
+          filename: 'input.png',
           purpose: 'input-attachment',
           type: 'file',
         },
@@ -1046,7 +1074,7 @@ describe.each([
           fileEntryId: ARTIFACT_FILE_ID,
           id: 'artifact-0',
           mediaType: 'text/plain',
-          name: 'result.txt',
+          filename: 'result.txt',
           purpose: 'artifact',
           type: 'file',
         },
@@ -1078,7 +1106,6 @@ describe.each([
       anchorFound: true,
       hasMessages: true,
       referencedFileEntryIds: expect.arrayContaining([INPUT_FILE_ID, ARTIFACT_FILE_ID]),
-      sessionTurnIds: expect.arrayContaining([first.turnId, second.turnId]),
     });
     expect(tail.history.map((message) => message.turnId)).toEqual([second.turnId, second.turnId]);
 
@@ -1117,149 +1144,100 @@ describe.each([
     expect(await store.getLatestContextCheckpoint('missing')).toBeNull();
   });
 
-  test('reconcileInterrupted settles unsettled assistant placeholders once', async () => {
-    const session = await harness.createEmptySession({ agentId });
-    await store.reserveSubmission({
-      ...messageIds(),
-      ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
-    });
-
-    const reconciled = await store.reconcileInterrupted(INTERRUPTED);
-    expect(reconciled.map((message) => [message.sessionId, message.role, message.status])).toEqual([
-      [session.id, 'assistant', 'interrupted'],
-    ]);
-    const transcript = await store.listMessages(session.id);
-    expect(transcript.map((message) => message.status)).toEqual(['success', 'interrupted']);
-    expect(transcript[1]?.modelId).toBe(MODEL_ID);
-    expect(transcript[1]?.inferenceSnapshot).toEqual({
-      status: 'supported',
-      snapshot: INFERENCE_SNAPSHOT,
-    });
-    expect(transcript[1]?.parts).toEqual([
-      {
-        id: expect.stringMatching(/^error-/),
-        type: 'error',
-        error: INTERRUPTED,
-      },
-    ]);
-
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toEqual([]);
-  });
-
-  test('updateStreamingAssistantMessage records produced parts until the row settles', async () => {
+  test('a retry reissues the turn, bumps only its own revision and rejects the replaced execution', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Write a note.', state: 'done' }],
+      userParts: [{ id: 'input-0', type: 'text', text: 'Hi', state: 'done' }],
     });
-    const filePart = {
-      id: 'file-1',
-      type: 'file',
-      fileEntryId: '11111111-1111-7111-8111-111111111111',
-      purpose: 'artifact',
-      name: 'note.md',
-      mediaType: 'text/markdown',
-    } as const;
-
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      parts: [{ id: 'text-1', type: 'text', text: 'Draft', state: 'streaming' }],
-    });
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      parts: [{ id: 'text-1', type: 'text', text: 'Drafting', state: 'streaming' }, filePart],
-    });
-
-    const streaming = (await store.listMessages(session.id))[1];
-    expect(streaming).toMatchObject({
-      status: 'streaming',
-      parts: [{ id: 'text-1', text: 'Drafting', state: 'streaming' }, filePart],
-    });
-    const context = await store.loadRuntimeTurnContext(session.id, null);
-    expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
-
-    await store.finalizeAssistantMessage({
+    const finalized = await store.finalizeAssistantMessage({
       assistantMessageId: reserved.assistantMessage.id,
       status: 'success',
-      parts: [{ id: 'text-1', type: 'text', text: 'Drafting done.', state: 'done' }, filePart],
+      parts: [{ id: 'text-1', type: 'text', text: 'Hello', state: 'done' }],
       usage: null,
       error: null,
       contextCheckpoint: null,
       runtimeStats: { runtimeTiming: terminalTiming() },
     });
-    // A late streaming write cannot reopen a settled row.
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      parts: [{ id: 'text-1', type: 'text', text: 'stale', state: 'streaming' }],
-    });
-    await store.updateStreamingAssistantMessage({ assistantMessageId: 'missing', parts: [] });
+    const fork = await store.forkSession({ sessionId: session.id, fromMessageId: finalized.id });
+    if (fork.status !== 'forked') throw new Error(fork.status);
+    expect(
+      (await store.listMessages(fork.session.id)).find((message) => message.role === 'assistant'),
+    ).toMatchObject({ status: 'success', parts: finalized.parts });
 
-    const settled = (await store.listMessages(session.id))[1];
-    expect(settled).toMatchObject({
-      status: 'success',
-      parts: [{ id: 'text-1', text: 'Drafting done.', state: 'done' }, filePart],
+    const retried = await store.reserveRetry({
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userMessageId: reserved.userMessage.id,
+      assistantMessageId: reserved.assistantMessage.id,
+      userParts: reserved.userMessage.parts,
+      assistantParts: [],
+    });
+    expect(await store.getRuntimeRevision(session.id)).toBe(1);
+    expect(await store.getRuntimeRevision(fork.session.id)).toBe(0);
+    await expect(
+      store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        turnId: reserved.turnId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      }),
+    ).rejects.toThrow('replaced execution');
+    expect((await store.listMessages(session.id)).at(-1)).toMatchObject({
+      turnId: retried.turnId,
+      status: 'pending',
     });
   });
 
-  test('reconcileInterrupted keeps streamed parts and closes open text', async () => {
-    const session = await harness.createEmptySession({ agentId });
-    const reserved = await store.reserveSubmission({
+  test('unsettled answers are listed until they settle', async () => {
+    const running = await harness.createEmptySession({ agentId });
+    const orphaned = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Search.', state: 'done' }],
+      sessionId: running.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Still running', state: 'done' }],
     });
-    const filePart = {
-      id: 'file-1',
-      type: 'file',
-      fileEntryId: '11111111-1111-7111-8111-111111111111',
-      purpose: 'artifact',
-      name: 'note.md',
-      mediaType: 'text/markdown',
-    } as const;
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      parts: [
-        { id: 'reasoning-1', type: 'reasoning', text: 'Thinking', state: 'streaming' },
-        filePart,
-        {
-          id: 'tool-1',
-          type: 'tool',
-          toolCallId: 'call-1',
-          toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-          providerName: 'mcp_server_1_search_a1b2',
-          displayName: 'Search',
-          state: 'running',
-          input: { query: 'Cherry Studio' },
-        },
-      ],
+    const second = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: orphaned.id,
+      userParts: [{ id: 'input-0', type: 'text', text: 'Lost', state: 'done' }],
     });
-
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toHaveLength(1);
-
-    const assistant = (await store.listMessages(session.id))[1];
-    expect(assistant).toMatchObject({
+    expect(await store.listUnsettledAssistantMessages()).toEqual([
+      {
+        sessionId: running.id,
+        assistantMessageId: first.assistantMessage.id,
+        turnId: first.turnId,
+      },
+      {
+        sessionId: orphaned.id,
+        assistantMessageId: second.assistantMessage.id,
+        turnId: second.turnId,
+      },
+    ]);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: second.assistantMessage.id,
       status: 'interrupted',
-      parts: [
-        { id: 'reasoning-1', text: 'Thinking', state: 'done' },
-        filePart,
-        {
-          id: 'tool-1',
-          state: 'interrupted',
-          output: {
-            value: { status: 'interrupted', reason: INTERRUPTED.message },
-            artifacts: [],
-          },
-        },
-        { id: expect.stringMatching(/^error-/), type: 'error', error: INTERRUPTED },
-      ],
+      parts: [],
+      usage: null,
+      error: INTERRUPTED,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
     });
-    const context = await store.loadRuntimeTurnContext(session.id, null);
-    expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
+    expect(await store.listUnsettledAssistantMessages()).toEqual([
+      {
+        sessionId: running.id,
+        assistantMessageId: first.assistantMessage.id,
+        turnId: first.turnId,
+      },
+    ]);
   });
 
   test('deleteSession removes the transcript with the session', async () => {
@@ -1287,6 +1265,52 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('keeps Runtime replay strict when a stored part is unsupported', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text', text: 'Hello', state: 'done' }],
+    });
+    raw
+      .prepare('UPDATE agent_session_message SET data = ? WHERE id = ?')
+      .run(JSON.stringify({ parts: [{ id: 'future', type: 'future' }] }), reserved.userMessage.id);
+    await expect(store.loadRuntimeTurnContext(session.id, null)).rejects.toThrow();
+  });
+
+  test('finalization preserves ledger counts even when Runtime usage includes extra tokens', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const reserved = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text', text: 'Hello', state: 'done' }],
+    });
+    const stats = { inputTokens: 0, totalTokens: 5, requestCount: 1 };
+    raw
+      .prepare('UPDATE agent_session_message SET stats = ? WHERE id = ?')
+      .run(JSON.stringify(stats), reserved.assistantMessage.id);
+    const finalized = await store.finalizeAssistantMessage({
+      assistantMessageId: reserved.assistantMessage.id,
+      status: 'cancelled',
+      parts: [],
+      usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+      error: { code: 'CANCELLED', message: 'Stopped', retryable: false },
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    expect(finalized.stats).toMatchObject(stats);
+    expect(finalized.stats).not.toHaveProperty('outputTokens');
+    expect(finalized).not.toHaveProperty('usage');
+  });
+
   test('publishes a committed automatic title without an active session observer', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1297,7 +1321,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       notices.push({
         paths,
         inTransaction: raw.isTransaction,
-        row: raw.prepare('SELECT name AS title FROM agent_session WHERE id = ?').get(session.id),
+        row: raw.prepare('SELECT name FROM agent_session WHERE id = ?').get(session.id),
       });
     });
     try {
@@ -1306,7 +1330,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         {
           paths: ['/agent-sessions', `/agent-sessions/${session.id}`],
           inTransaction: false,
-          row: { title: 'Background title' },
+          row: { name: 'Background title' },
         },
       ]);
       await store.autoRenameSession(session.id, '', 'Stale title');
@@ -1381,7 +1405,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
         ...messageIds(),
         ...RESERVATION_FACTS,
         agentId,
-        executionTarget: { kind: 'local' },
         modelId: 'missing-provider::missing-model',
         userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
       }),
@@ -1392,50 +1415,26 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     ).toEqual({ count: 0 });
   });
 
-  test('the invariant-1 index rejects a second reservation while one is unsettled', async () => {
+  test('persists queued follow-ups beside the current pending answer', async () => {
     const { store } = harness;
     const agentId = await harness.makeAgentId();
     const session = await harness.createEmptySession({ agentId });
-    const first = await store.reserveSubmission({
-      ...messageIds(),
-      ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'one', state: 'done' }],
-    });
-
-    // The proxy driver wraps the SQLITE_CONSTRAINT_UNIQUE error; the rollback
-    // and post-settle assertions below pin that the unique index caused it.
-    await expect(
-      store.reserveSubmission({
+    for (const text of ['one', 'two'])
+      await store.reserveSubmission({
         ...messageIds(),
         ...RESERVATION_FACTS,
         sessionId: session.id,
-        userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
-      }),
-    ).rejects.toThrow();
-    // The failed reservation rolled back whole: no orphan user message.
-    expect((await store.listMessages(session.id)).map((message) => message.role)).toEqual([
-      'user',
-      'assistant',
+        userParts: [{ id: 'input', type: 'text', text, state: 'done' }],
+      });
+    expect(
+      (await store.listMessages(session.id)).map(({ role, status }) => [role, status]),
+    ).toEqual([
+      ['user', 'success'],
+      ['assistant', 'pending'],
+      ['user', 'success'],
+      ['assistant', 'pending'],
     ]);
-
-    await store.finalizeAssistantMessage({
-      assistantMessageId: first.assistantMessage.id,
-      status: 'success',
-      parts: [],
-      usage: null,
-      error: null,
-      contextCheckpoint: null,
-      runtimeStats: { runtimeTiming: terminalTiming() },
-    });
-    await expect(
-      store.reserveSubmission({
-        ...messageIds(),
-        ...RESERVATION_FACTS,
-        sessionId: session.id,
-        userParts: [{ id: 'input-0', type: 'text', text: 'two', state: 'done' }],
-      }),
-    ).resolves.toBeDefined();
+    expect(await store.listUnsettledAssistantMessages()).toHaveLength(2);
   });
 
   test('FTS triggers index text parts on insert and settle', async () => {
@@ -1500,11 +1499,11 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'first', state: 'done' }],
     });
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: finalized.assistantMessage.id,
-      parts: [...streamingParts],
-    });
-    // A mid-stream snapshot is skipped by the update trigger.
+    const writeStreamingRow = raw.prepare(
+      "UPDATE agent_session_message SET data = ?, status = 'streaming' WHERE id = ?",
+    );
+    writeStreamingRow.run(JSON.stringify({ parts: streamingParts }), finalized.assistantMessage.id);
+    // An unsettled snapshot is skipped by the update trigger.
     expect(search('harbor')).toEqual([]);
     await store.finalizeAssistantMessage({
       assistantMessageId: finalized.assistantMessage.id,
@@ -1517,19 +1516,29 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     });
     expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
 
-    // Boot reconciliation is the other settling write and indexes the same way.
+    // An interrupted settlement indexes the same way.
     const interrupted = await store.reserveSubmission({
       ...messageIds(),
       ...RESERVATION_FACTS,
       sessionId: session.id,
       userParts: [{ id: 'input-1', type: 'text', text: 'second', state: 'done' }],
     });
-    await store.updateStreamingAssistantMessage({
-      assistantMessageId: interrupted.assistantMessage.id,
-      parts: [{ id: 't-2', type: 'text', text: 'violet lantern', state: 'streaming' }],
-    });
+    writeStreamingRow.run(
+      JSON.stringify({
+        parts: [{ id: 't-2', type: 'text', text: 'violet lantern', state: 'streaming' }],
+      }),
+      interrupted.assistantMessage.id,
+    );
     expect(search('lantern')).toEqual([]);
-    await store.reconcileInterrupted(INTERRUPTED);
+    await store.finalizeAssistantMessage({
+      assistantMessageId: interrupted.assistantMessage.id,
+      status: 'interrupted',
+      parts: [{ id: 't-2', type: 'text', text: 'violet lantern', state: 'done' }],
+      usage: null,
+      error: INTERRUPTED,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
     expect(search('lantern').map((row) => row.id)).toEqual([interrupted.assistantMessage.id]);
     // The earlier settled row keeps a single index entry.
     expect(search('harbor').map((row) => row.id)).toEqual([finalized.assistantMessage.id]);
@@ -1668,56 +1677,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(await store.listMessages(result.session.id)).toHaveLength(2);
   });
 
-  test('reservation activity and recovery settlement remain distinct', async () => {
-    const { store, raw } = harness;
-    if (!raw) throw new Error('sqlite harness provides raw access');
-    const agentId = await harness.makeAgentId();
-    const session = await harness.createEmptySession({ agentId });
-    const reserved = await store.reserveSubmission({
-      ...messageIds(),
-      ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
-    });
-    const beforeReconciliation = raw
-      .prepare(
-        `SELECT session.last_activity_at AS lastActivityAt,
-                message.created_at AS messageCreatedAt, message.stats
-         FROM agent_session AS session
-         JOIN agent_session_message AS message ON message.session_id = session.id
-         WHERE session.id = ? AND message.id = ?`,
-      )
-      .get(session.id, reserved.assistantMessage.id) as {
-      lastActivityAt: number;
-      messageCreatedAt: number;
-      stats: string | null;
-    };
-    const reservationActivityAt = beforeReconciliation.messageCreatedAt;
-    expect(beforeReconciliation.lastActivityAt).toBe(reservationActivityAt);
-    expect(beforeReconciliation.stats).toBeNull();
-
-    await store.reconcileInterrupted(INTERRUPTED);
-
-    const row = raw
-      .prepare('SELECT error FROM agent_session_message WHERE id = ?')
-      .get(reserved.assistantMessage.id) as { error: string };
-    expect(JSON.parse(row.error)).toEqual(INTERRUPTED);
-
-    const afterReconciliation = raw
-      .prepare(
-        `SELECT session.last_activity_at AS lastActivityAt, message.stats
-         FROM agent_session AS session
-         JOIN agent_session_message AS message ON message.session_id = session.id
-         WHERE session.id = ? AND message.id = ?`,
-      )
-      .get(session.id, reserved.assistantMessage.id) as {
-      lastActivityAt: number;
-      stats: string | null;
-    };
-    expect(afterReconciliation.lastActivityAt).toBe(reservationActivityAt);
-    expect(afterReconciliation.stats).toBeNull();
-  });
-
   test('normal finalization advances message and Session activity together', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -1759,7 +1718,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(activity.messageUpdatedAt).toBe(Date.parse(finalized.updatedAt));
   });
 
-  test('a recovery-interrupted fork keeps the original reservation activity', async () => {
+  test('forking an interrupted answer without timing keeps its reservation activity', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
     const agentId = await harness.makeAgentId();
@@ -1770,7 +1729,10 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'x', state: 'done' }],
     });
-    await store.reconcileInterrupted(INTERRUPTED);
+    // Releases before Pi Durable interrupted rows at startup without recording timing.
+    raw
+      .prepare("UPDATE agent_session_message SET status = 'interrupted', error = ? WHERE id = ?")
+      .run(JSON.stringify(INTERRUPTED), reserved.assistantMessage.id);
 
     const result = await store.forkSession({
       sessionId: session.id,
@@ -1794,7 +1756,7 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     };
     expect(forkRow.lastActivityAt).toBe(forkRow.sourceCreatedAt);
     expect(forkRow.stats).toBeNull();
-    // Still the reservation stamp: recovery settlement would have advanced it
+    // Still the reservation stamp: a timed settlement would have advanced it
     // past the row's own insert time.
     expect(forkRow.sourceCreatedAt).toBe(Date.parse(reserved.assistantMessage.createdAt));
   });
@@ -1854,62 +1816,6 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     const assistant = (await store.listMessages(session.id))[1];
     expect(assistant?.modelId).toBeNull();
     expect(assistant?.inferenceSnapshot).toEqual(reserved.assistantMessage.inferenceSnapshot);
-  });
-
-  test('reconciliation atomically terminalizes persisted non-terminal tool parts', async () => {
-    const { store, raw } = harness;
-    if (!raw) throw new Error('sqlite harness provides raw access');
-    const agentId = await harness.makeAgentId();
-    const session = await harness.createEmptySession({ agentId });
-    const reserved = await store.reserveSubmission({
-      ...messageIds(),
-      ...RESERVATION_FACTS,
-      sessionId: session.id,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Use the tool.', state: 'done' }],
-    });
-    raw.prepare('UPDATE agent_session_message SET data = ?, status = ? WHERE id = ?').run(
-      JSON.stringify({
-        version: 1,
-        parts: [
-          {
-            id: 'tool-1',
-            type: 'tool',
-            toolCallId: 'call-1',
-            toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'search' },
-            providerName: 'mcp_server_1_search_a1b2',
-            displayName: 'Search',
-            state: 'awaiting-approval',
-            input: { query: 'Cherry Studio' },
-            approvalId: 'approval-1',
-          },
-        ],
-      }),
-      'streaming',
-      reserved.assistantMessage.id,
-    );
-
-    expect(await store.reconcileInterrupted(INTERRUPTED)).toHaveLength(1);
-
-    const assistant = (await store.listMessages(session.id))[1];
-    expect(assistant).toMatchObject({
-      status: 'interrupted',
-      parts: [
-        {
-          id: 'tool-1',
-          state: 'interrupted',
-          output: {
-            value: { status: 'interrupted', reason: INTERRUPTED.message },
-            artifacts: [],
-          },
-        },
-        {
-          id: expect.stringMatching(/^error-/),
-          type: 'error',
-          error: INTERRUPTED,
-        },
-      ],
-    });
-    expect(assistant?.parts[0]).not.toHaveProperty('approvalId');
   });
 });
 

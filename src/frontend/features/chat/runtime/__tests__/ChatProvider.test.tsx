@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import { AgentProtocolError, type AgentMessageView } from '@/shared/contracts/agent';
 
+import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import {
   ChatProvider,
   useAgentChatControls,
@@ -11,6 +12,7 @@ import {
 } from '../ChatProvider';
 import { localImageResult } from '../localImageResult';
 
+const mockCancelTurn = jest.fn(async () => undefined);
 const mockDispose = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockPauseObservedSessions = jest.fn();
@@ -19,7 +21,14 @@ const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
 const mockSubmitMessage = jest.fn();
-const mockChatState = { status: 'ready', activeTurn: null, liveMessages: [] as AgentMessageView[] };
+const mockChatState: AgentSessionChatState = {
+  status: 'ready',
+  sessionId: 'session-1',
+  activeTurn: null,
+  liveMessages: [],
+  pendingApprovals: [],
+  pendingQuestion: null,
+};
 const mockSubscribe = jest.fn(() => () => undefined);
 
 jest.mock('@tanstack/react-query', () => ({
@@ -52,6 +61,7 @@ jest.mock('../AgentSessionChatClient', () => ({
     '../AgentSessionChatClient',
   ).isAgentSessionBusy,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
+    cancelTurn: mockCancelTurn,
     dispose: mockDispose,
     pauseObservedSessions: mockPauseObservedSessions,
     resumeObservedSessions: mockResumeObservedSessions,
@@ -109,6 +119,8 @@ describe('ChatProvider Draft handoff', () => {
     draftHandoff = undefined;
     imageResult = undefined;
     mockChatState.liveMessages = [];
+    mockChatState.activeTurn = null;
+    mockChatState.isSubmitting = false;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
   });
@@ -117,6 +129,27 @@ describe('ChatProvider Draft handoff', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     jest.restoreAllMocks();
+  });
+
+  it('allows a drafted follow-up while retaining the active stop control', () => {
+    mockChatState.activeTurn = {
+      id: 'active-turn',
+      sessionId: 'session-1',
+      assistantMessageId: 'active-answer',
+      status: 'running',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBeUndefined();
+    act(() => {
+      void currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {
@@ -173,7 +206,7 @@ describe('ChatProvider Draft handoff', () => {
               type: 'file',
               fileEntryId: 'file-1',
               mediaType: 'application/pdf',
-              name: 'notes.pdf',
+              filename: 'notes.pdf',
             },
           ],
         });
@@ -181,6 +214,7 @@ describe('ChatProvider Draft handoff', () => {
       const pending = currentControls().pendingSend!;
       const request = (sessionId ? mockSubmitMessage : mockStartSession).mock.calls[0][0];
       expect(pending.isSubmitting).toBe(true);
+      expect(currentControls().isBusy).toBe(true);
       expect(currentControls().canSend).toBe(false);
       expect(pending.sessionId).toBe(request.sessionId);
       expect(pending.messages.map((message) => message.id)).toEqual([
@@ -207,11 +241,41 @@ describe('ChatProvider Draft handoff', () => {
         isSubmitting: false,
         messages: pending.messages,
       });
+      expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();
       expect(currentControls().enteringUserMessageId).toBe(request.userMessageId);
     },
   );
+
+  it('stops first-message preparation by the pending session ID and restores the draft without navigation', async () => {
+    const admission = deferred<void>();
+    mockStartSession.mockImplementationOnce(() => admission.promise);
+    act(() => {
+      renderer = create(<Harness />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Hello' }] });
+    });
+    const pendingSessionId = currentControls().pendingSend!.sessionId;
+    await act(async () => {
+      await currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith(pendingSessionId);
+    await act(async () => {
+      const cancelled = expect(sending).rejects.toMatchObject({ name: 'AbortError' });
+      admission.reject(
+        new AgentProtocolError({ code: 'CANCELLED', message: 'Stopped', retryable: false }),
+      );
+      await cancelled;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockSetParams).not.toHaveBeenCalled();
+  });
 
   it('withdraws a rejected send, keeps its scroll intent stable, and allows the next send', async () => {
     const admission = deferred<void>();
@@ -371,7 +435,6 @@ function imageMessage(id: string): AgentMessageView {
     status: 'success',
     turnId: `turn-${id}`,
     updatedAt: '2026-09-01T00:00:00.000Z',
-    usage: null,
   };
 }
 

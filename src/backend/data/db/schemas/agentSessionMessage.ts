@@ -5,7 +5,6 @@ import type {
   AgentErrorView,
   AgentInferenceSnapshotV1,
   AgentMessagePart,
-  AgentUsageView,
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { MessageStats } from '@/shared/data/types/message';
@@ -14,13 +13,8 @@ import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers'
 import { agentSessionTable } from './agentSession';
 import { userModelTable } from './userModel';
 
-/**
- * Versioned message content envelope. The parts are exactly the protocol's
- * `AgentMessagePart` union; the version field guards future part-shape
- * migrations (docs/references/agent/agent-persistence.md).
- */
+/** Persisted protocol parts. The database migration journal owns format upgrades. */
 export type AgentMessageData = {
-  version: 1;
   parts: AgentMessagePart[];
 };
 
@@ -46,16 +40,14 @@ export const agentSessionMessageTable = sqliteTable(
     turnId: text(),
     // Message role: user, assistant, system — no 'root', the transcript is linear
     role: text().notNull(),
-    // Main content - versioned protocol parts (inline JSON)
+    // Main content - protocol parts (inline JSON)
     data: text({ mode: 'json' }).$type<AgentMessageData>().notNull(),
     // Protocol message lifecycle status
     status: text().notNull(),
-    // Token usage; assistant messages only, committed at settle time
-    usage: text({ mode: 'json' }).$type<AgentUsageView>(),
     // Message-owned runtime timing and desktop-aligned materialized statistics.
     stats: text({ mode: 'json' }).$type<MessageStats>(),
-    // Turn-level error persisted beside the message for the Host's Turn
-    // projection; it is not part of the protocol message view.
+    // Terminal turn diagnostics, including cancellation reasons that have no
+    // inline data-error part. Historical Turn views are not reconstructed today.
     error: text({ mode: 'json' }).$type<AgentErrorView>(),
     // Runtime-owned opaque context artifact. The Host validates its version,
     // anchor, and byte size before saving or replaying it.
@@ -64,7 +56,7 @@ export const agentSessionMessageTable = sqliteTable(
     modelId: text().references(() => userModelTable.id, { onDelete: 'set null' }),
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future
     // versions can be projected as unsupported without losing the message.
-    messageSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
+    inferenceSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
     // Visible plain text of data.parts' text parts, written by the store and
     // mirrored into FTS5 by triggers; mid-stream snapshots leave it unchanged.
     searchableText: text().notNull().default(''),
@@ -81,11 +73,7 @@ export const agentSessionMessageTable = sqliteTable(
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.
     index('agent_session_message_status_idx').on(t.status),
-    // Invariant 1 (agent-protocol.md): at most one active turn per Session is
-    // a database constraint — a concurrent second reservation fails to insert.
-    uniqueIndex('agent_session_message_active_turn_uniq')
-      .on(t.sessionId)
-      .where(sql`${t.role} = 'assistant' and ${t.status} in ('pending', 'streaming')`),
+    // Pending rows include queued follow-ups; Pi serializes execution within each working copy.
     // FTS5 content_rowid key — UNIQUE so its index keeps the per-row
     // MAX(fts_rowid)+1 assignment O(log N) (see ftsRowid and FTS SQL below).
     uniqueIndex('agent_session_message_fts_rowid_uniq').on(t.ftsRowid),

@@ -44,14 +44,14 @@ describe('agent session handlers', () => {
     );
 
     await handlers['/agent-sessions/:id'].PATCH({
-      body: { title: '  Renamed  ' },
+      body: { name: '  Renamed  ' },
       params: { id: 'session-1' },
     });
     await handlers['/agent-sessions/:id'].DELETE({ params: { id: 'session-1' } });
 
     expect(mutations.renameSession).toHaveBeenCalledWith({
       sessionId: 'session-1',
-      title: 'Renamed',
+      name: 'Renamed',
     });
     expect(service.getById).toHaveBeenCalledWith('session-1');
     expect(mutations.deleteSession).toHaveBeenCalledWith({ sessionId: 'session-1' });

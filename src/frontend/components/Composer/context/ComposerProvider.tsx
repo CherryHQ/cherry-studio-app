@@ -82,7 +82,7 @@ const ComposerPresentationActionsContext =
 type ComposerProviderProps = PropsWithChildren<{
   attachmentStore?: ComposerAttachmentStore;
   initialAttachments?: readonly ComposerAttachmentDraft[];
-  initialDraft?: string;
+  initialDraft?: string | (() => string);
 }>;
 
 /**

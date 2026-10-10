@@ -9,6 +9,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -21,12 +22,8 @@ import type {
   ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
-  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import {
-  interruptNonTerminalToolParts,
-  settleInterruptedAssistantParts,
-} from './messageSettlement';
+import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -49,18 +46,16 @@ type StoredMessage = {
 function createSessionView(input: {
   id?: string;
   agentId: string;
-  executionTarget?: AgentSessionView['executionTarget'];
   forkedFromSessionId?: string;
-  title?: string;
-  titleIsManual?: boolean;
+  name?: string;
+  isNameManuallyEdited?: boolean;
 }): AgentSessionView {
   const timestamp = nowIso();
   return {
     id: input.id ?? uuidv7(),
     agentId: input.agentId,
-    executionTarget: input.executionTarget ?? { kind: 'local' },
-    title: input.title ?? '',
-    titleIsManual: input.titleIsManual ?? input.title !== undefined,
+    name: input.name ?? '',
+    isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
     createdAt: timestamp,
@@ -110,7 +105,6 @@ function reserveInTranscript(
     role: 'user',
     status: 'success',
     parts: cloneJson(input.userParts),
-    usage: null,
     stats: null,
     modelId: null,
     inferenceSnapshot: null,
@@ -124,7 +118,6 @@ function reserveInTranscript(
     role: 'assistant',
     status: 'pending',
     parts: [],
-    usage: null,
     stats: null,
     modelId: input.modelId,
     inferenceSnapshot: {
@@ -156,16 +149,27 @@ function reserveInTranscript(
 @AppStatePolicy('not-applicable')
 export class InMemoryAgentSessionStore extends BaseService implements AgentSessionStore {
   private readonly sessions = new Map<string, AgentSessionView>();
+  private readonly runtimeRevisions = new Map<string, number>();
   /** Insertion-ordered per Session, which is the transcript order. */
   private readonly messages = new Map<string, StoredMessage[]>();
 
+  async listUnsettledAssistantMessages() {
+    const rows: { sessionId: string; assistantMessageId: string; turnId: string | null }[] = [];
+    for (const [sessionId, list] of this.messages)
+      for (const { view } of list)
+        if (view.role === 'assistant' && UNSETTLED_MESSAGE_STATUSES.has(view.status))
+          rows.push({ sessionId, assistantMessageId: view.id, turnId: view.turnId });
+    return rows;
+  }
+
   protected override onDestroy(): void {
     this.sessions.clear();
+    this.runtimeRevisions.clear();
     this.messages.clear();
   }
 
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
-  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  async createEmptySession(input: { agentId: string; name?: string }): Promise<AgentSessionView> {
     const session = createSessionView(input);
     this.sessions.set(session.id, session);
     this.messages.set(session.id, []);
@@ -177,15 +181,19 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return session ? cloneJson(session) : null;
   }
 
-  async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    return this.sessions.has(sessionId) ? (this.runtimeRevisions.get(sessionId) ?? 0) : null;
+  }
+
+  async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: true,
+      name,
+      isNameManuallyEdited: true,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -194,17 +202,17 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
   async autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
-    if (!session || session.titleIsManual || session.title !== expectedTitle) {
+    if (!session || session.isNameManuallyEdited || session.name !== expectedName) {
       return null;
     }
     const renamed: AgentSessionView = {
       ...session,
-      title,
-      titleIsManual: false,
+      name,
+      isNameManuallyEdited: false,
       updatedAt: nowIso(),
     };
     this.sessions.set(sessionId, renamed);
@@ -216,6 +224,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
+    this.runtimeRevisions.delete(sessionId);
     // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
     // source and only loses the lineage claim.
     for (const [forkId, session] of this.sessions) {
@@ -250,10 +259,9 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     // together or not at all.
     const session = createSessionView({
       agentId: source.agentId,
-      executionTarget: source.executionTarget,
       forkedFromSessionId: source.id,
-      title: input.title ?? source.title,
-      titleIsManual: source.titleIsManual,
+      name: input.name ?? source.name,
+      isNameManuallyEdited: source.isNameManuallyEdited,
     });
     const reissuedTurnIds = new Map<string, string>();
     const copied = transcript
@@ -328,6 +336,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
 
     const deletedMessageIds = deleted.map((stored) => stored.view.id);
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     this.messages.set(
       input.sessionId,
       transcript.filter((stored) => stored.view.turnId !== input.turnId),
@@ -355,7 +367,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const session = createSessionView({
       id: input.sessionId,
       agentId: input.agentId,
-      executionTarget: input.executionTarget,
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
@@ -407,6 +418,10 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       throw new Error('The retry source is not the settled latest answer of this session.');
     }
     const session = this.sessions.get(input.sessionId)!;
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
     const turnId = uuidv7();
     const updatedAt = nowIso();
     user.view = { ...user.view, turnId, parts: cloneJson(input.userParts), updatedAt };
@@ -473,16 +488,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         ),
       ),
     ].sort();
-    const sessionTurnIds = [
-      ...new Set(transcript.flatMap(({ view }) => (view.turnId === null ? [] : [view.turnId]))),
-    ].sort();
 
     return cloneJson({
       anchorFound,
       hasMessages: transcript.length > 0,
       history,
       referencedFileEntryIds,
-      sessionTurnIds,
     });
   }
 
@@ -501,24 +512,20 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return null;
   }
 
-  async updateStreamingAssistantMessage(
-    input: UpdateStreamingAssistantMessageInput,
-  ): Promise<void> {
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
     for (const transcript of this.messages.values()) {
-      const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
-      if (!stored) {
-        continue;
-      }
-      if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
+      const stored = transcript.find(
+        ({ view }) =>
+          view.id === assistantMessageId && view.turnId === turnId && view.status === 'success',
+      );
+      if (stored) {
+        stored.contextCheckpoint = cloneJson(checkpoint);
         return;
       }
-      stored.view = {
-        ...stored.view,
-        status: 'streaming',
-        parts: cloneJson(input.parts),
-        updatedAt: nowIso(),
-      };
-      return;
     }
   }
 
@@ -530,13 +537,14 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       }
       // Synchronous section: message terminal state settles atomically
       // (invariant 5).
+      if (input.turnId !== undefined && stored.view.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const updatedAt = nowIso();
       stored.view = {
         ...stored.view,
         status: input.status,
         parts: cloneJson(input.parts),
-        usage: input.usage === null ? null : cloneJson(input.usage),
-        stats: { ...stored.view.stats, ...cloneJson(input.runtimeStats) },
+        stats: cloneJson(finalizeMessageStats(stored.view.stats, input)),
         updatedAt,
       };
       stored.error = input.error === null ? null : cloneJson(input.error);
@@ -551,35 +559,5 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return cloneJson(stored.view);
     }
     throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
-  }
-
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
-    const reconciled: AgentMessageView[] = [];
-    for (const transcript of this.messages.values()) {
-      for (const stored of transcript) {
-        if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
-          continue;
-        }
-        const interruptedParts =
-          stored.view.role === 'assistant'
-            ? settleInterruptedAssistantParts(
-                stored.view.parts,
-                error,
-                `error-${stored.view.turnId ?? stored.view.id}`,
-              )
-            : interruptNonTerminalToolParts(stored.view.parts, error.message);
-        stored.view = {
-          ...stored.view,
-          status: 'interrupted',
-          parts: interruptedParts,
-          updatedAt: nowIso(),
-        };
-        if (stored.view.role === 'assistant') {
-          stored.error = cloneJson(error);
-          reconciled.push(cloneJson(stored.view));
-        }
-      }
-    }
-    return reconciled;
   }
 }

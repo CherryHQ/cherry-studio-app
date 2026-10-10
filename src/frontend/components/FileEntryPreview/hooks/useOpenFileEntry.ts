@@ -7,7 +7,11 @@ import type { ResolvedFile } from '@/shared/contracts/file';
 import type { FileExportOptions } from '@/shared/contracts/fileExport';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { fileEntryPreviewKind, toFilePreviewFile } from '../utils/fileEntryPresentation';
+import {
+  canPreviewDocument,
+  fileEntryPreviewKind,
+  toFilePreviewFile,
+} from '../utils/fileEntryPresentation';
 
 const logger = loggerService.withContext('FileEntryPreview');
 
@@ -42,7 +46,7 @@ export function useOpenFileEntry(options: FileExportOptions = {}) {
   };
 
   const openFileEntry = (file: ResolvedFile) => {
-    if (fileEntryPreviewKind(file.entry) === 'document') {
+    if (fileEntryPreviewKind(file.entry) === 'document' && !canPreviewDocument(file.entry)) {
       void openFileEntryWithSystem(file);
     } else {
       router.push({ pathname: '/files/[fileEntryId]', params: { fileEntryId: file.entry.id } });

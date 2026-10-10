@@ -1,32 +1,9 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
-import { toAgentErrorView, toAgentMessagePart, toCompactionAnchorPart } from '../runtimeProjection';
+import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 import { toRuntimeHistory } from '../turnRuntimeInput';
 
 describe('Runtime output projection', () => {
-  test('keeps compaction ids distinct across turns and omits success metrics for failed folds', () => {
-    const failed = {
-      id: 'compaction-1',
-      phase: 'preflight' as const,
-      status: 'failed' as const,
-      startedAt: 1_000,
-      completedAt: 2_000,
-      inputTokensBefore: 112_000,
-      reason: 'summary-failed' as const,
-    };
-    const first = toCompactionAnchorPart(failed, 'turn-1');
-    const second = toCompactionAnchorPart(failed, 'turn-2');
-    expect(first.id).not.toBe(second.id);
-    expect(first.data).toEqual({
-      status: 'skipped',
-      phase: 'turn-start',
-      trigger: 'auto',
-      startedAt: '1970-01-01T00:00:01.000Z',
-      completedAt: '1970-01-01T00:00:02.000Z',
-      durationMs: 1_000,
-    });
-  });
-
   test('persists callback failure details and replays partial sources without runtime stop policy', () => {
     const details = {
       status: 'partial',
@@ -56,7 +33,7 @@ describe('Runtime output projection', () => {
     });
     const output = { value: { status: 'error', error, details }, artifacts: [] };
     expect(part).toMatchObject({ state: 'error', output });
-    if (part.type !== 'tool') throw new Error('Expected a tool part');
+    if (part.type !== 'dynamic-tool') throw new Error('Expected a tool part');
     expect(part.output).not.toHaveProperty('failure');
 
     const message: AgentMessageView = {
@@ -66,7 +43,6 @@ describe('Runtime output projection', () => {
       role: 'assistant',
       status: 'success',
       parts: [part],
-      usage: null,
       stats: null,
       modelId: null,
       inferenceSnapshot: null,
@@ -94,7 +70,12 @@ describe('Runtime output projection', () => {
         toolRef: { source: 'builtin', capabilityId: 'write_file' },
         type: 'tool',
       }),
-    ).toMatchObject({ state: 'input-streaming', type: 'tool' });
+    ).toMatchObject({
+      state: 'input-streaming',
+      type: 'dynamic-tool',
+      toolName: 'write_file',
+      title: 'Write file',
+    });
   });
 
   test('preserves provider identity behind the closed protocol error code', () => {

@@ -2,13 +2,14 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, location, web search and fetch,
-image generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, and `read_file`, all using the settled `ToolRef` and
-`{ value, artifacts }` contracts. For each turn the Host resolves that catalog against model tool support, platform, OS
-permission, app configuration, and the Agent's capability-group deny-list, then combines it with
+The system catalog ships device calendar and reminders, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+`run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
+Host resolves that catalog against model tool support, platform, OS permission, app
+configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-location, agents) are enabled per Agent in the editor; the three file tools belong to every
-turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
+location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -228,7 +229,8 @@ Configuration changes therefore still affect the next turn only.
 
 Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
 extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed.
+are never compiled or executed. `run_js` is not a substitute for `tool_exec`: its sandbox cannot
+call tools, MCP, or any application capability.
 
 ## Controlled File Ledger
 
@@ -293,7 +295,7 @@ read it through a controlled tool; otherwise the reference remains visible as un
 under `artifacts`. `edit_file` additionally returns the source id, replacement count, and a
 bounded snippet of the edited region; when it saves a new version it marks that entry as `derived`,
 and when it rewrites this turn's draft it returns no artifact because the draft's file part already
-exists. `read_file` returns a text-line or AnyDoc JSON-character window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
+exists. `read_file` returns a line or code-point window under `value` and never an artifact. `generate_image` returns `{ id, name }` refs under `value` and
 each imported image under `artifacts`; each image is named after its prompt (`readableFilename`),
 never after an id. Pi projects those artifacts as `purpose: 'artifact'` file parts, and the Host
 persists both the result envelope and the file parts. Device and web capabilities return portable
@@ -399,14 +401,18 @@ Restoring health access requires a separate native feature and App Store submiss
 ### Managed File Write And Edit
 
 `write_file` accepts a display name rather than a path, writes
-bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. The
+bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. It
+refuses content holding NUL, the one character `read_file` treats as binary, so nothing it writes is
+unreadable later. The
 model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
 `{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
 opaque failure.
 
 `edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
 It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
-larger than 1 MiB. Matching is exact and case-sensitive: a single edit requires exactly one
+larger than 1 MiB; a `replace_all` result is bounded before it is built, so a short match with a long
+replacement cannot allocate far past the limit. Like `write_file`, it refuses a `new_string` holding
+NUL. Matching is exact and case-sensitive: a single edit requires exactly one
 non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
 BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
 tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
@@ -452,28 +458,78 @@ lines, at most 2,000) and returns
 `{ status, fileEntryId, filename, size, startLine, lineCount, totalLines, truncated, text }`. The
 window is cut on a line boundary at 100,000 characters, so `startLine + lineCount` is always the
 next line to request. A single line larger than the whole budget is the one case that cannot be cut
-on a boundary: the head is returned with `lineTruncated: true` and the read reports itself
-truncated, because the rest of that line is unreachable by asking for a later line and silence would
-present a fraction of a minified file as the whole of it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
-`edit_file`. Documents use the selected local parser and 20 MiB
-source ceiling described in [File Model](../data/file-model.md). `sourceTruncated: true` means the
-document extractor reached its own page/row/text limit; it is independent of the pageable window's
-`truncated` flag. This lets a model continue reading an attached document or revisit a file it wrote
+on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
+and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
+later line cannot reach it. Text sources share attachment preparation's 5 MiB source ceiling and
+strict UTF-8 decoding; NUL is the only control character refused as binary. `edit_file` retains
+its separate 1 MiB editing ceiling. Documents use the selected local parser, with a 50 MiB PDF
+source ceiling and 20 MiB for other documents, described in [File Model](../data/file-model.md).
+`sourceTruncated: true` means the document extractor reached its own page/row/text limit; it is
+independent of the pageable window's `truncated` flag. This lets a model continue reading an
+attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
-For AnyDoc output, use zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode
-code points), never line parameters. The result is explicitly `format: 'json-fragment'`, with
-`text`, `offset`, `characterCount`, `totalCharacters`, `nextOffset`, and `complete`. Concatenating
+Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the
+full text as a raw code-point window instead of lines, returning `text`, `offset`,
+`characterCount`, `totalCharacters`, `nextOffset`, and `complete`. They are how a cut line
+continues, and the only paging AnyDoc output accepts: its result is explicitly
+`format: 'json-fragment'`. Concatenating
 successive `text` windows until `nextOffset` is null recovers the complete original IR JSON, even
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
 Parser/version, original warnings, and asset descriptors accompany each window. Assets are
 `reference-only`: no pixel bytes, image artifacts, or multimodal tool-result extension is added.
-Mixed line/JSON parameters fail explicitly. The original community `fallback` result remains an
+Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
+
+The tool keeps the last document it parsed in the turn, so paging a document parses it once rather
+than once per window. A document entry is never rewritten in place — only this turn's UTF-8 drafts
+are — so the cache needs no invalidation. Ordinary text is read fresh on every call.
 
 Both tools run without approval because they have no destructive form, and the Host offers them only
 to models that support function calling. Handing tools to a model that cannot call them fails the
 whole turn. Implementation: `src/backend/ai/agent/tools/`.
+
+### JavaScript Sandbox
+
+`run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
+counting, sorting, parsing, and data transformation. It takes a `code` string, run as the body of an
+async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
+`{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
+`syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
+the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
+budget follows Pi's codemode tool; mobile execution has a bounded deadline and shared concurrency
+limit.
+
+Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
+creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
+script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
+`queueMicrotask`, `performance.now()`, and a captured `console`; there is no `Intl`,
+so locale arguments are ignored. Timers, modules, network, files, and every application binding are
+absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
+`auto` without an Agent capability group and requires only that the model supports function calling
+and the client includes the native module; older clients omit the tool. Every call starts fresh;
+inputs must be included in the code and results are retained through tool-result messages.
+
+- **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
+  token) keeps the structured form above. Longer output becomes one `output` text that keeps its
+  start and end around a count of the removed tokens, and the full text — the returned value's JSON,
+  then the console output — is saved as a generated `run_js-output.txt` managed file. The result
+  carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
+  through it. The native side captures at most 500 KiB of each, which keeps a saved output within
+  `read_file`'s source limit.
+- **Limits.** Execution defaults to 5 seconds; `timeout_ms` can request at most 30 seconds.
+  Across all turns, the sandbox service runs at most two scripts concurrently and queues the rest
+  in arrival order. Queue waiting does not consume the execution deadline. Cancelling a queued call
+  removes it; cancelling a running call releases the caller immediately but holds its slot until
+  native cleanup finishes. QuickJS interrupts bytecode and regular expressions, and JavaScript
+  cannot catch the interruption. Each runtime's heap is limited to 64 MiB; an allocation past it
+  fails inside the script. Native stacks and output copies consume additional memory, and the
+  sandbox shares the app process, so these limits do not provide process-level crash isolation.
+  Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+
+The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
+data it needs into the code because the sandbox cannot read files or tool results itself, and to page
+through a saved output instead of rerunning the script.
 
 ### Skill Boundary
 
@@ -507,9 +563,9 @@ limits are application constants rather than user settings in Version 1.
 Cherry Desktop proves the useful semantics: Pi owns its tool loop, MCP tools are adapted into Pi,
 tools are disabled and approved by application policy, and skills are injected explicitly. Mobile
 ports those semantics but not the Electron/Node execution surface. Desktop workspaces, shell tools,
-JavaScript tool execution, arbitrary filesystem paths, local MCP processes, and executable Skill
-trees are explicit mobile exclusions. Streamable HTTP MCP and device/application capability
-adapters are semantic ports.
+tool-calling JavaScript execution, arbitrary filesystem paths, local MCP processes, and executable
+Skill trees are explicit mobile exclusions; `run_js` computes in isolation and calls nothing.
+Streamable HTTP MCP and device/application capability adapters are semantic ports.
 
 The PC Agent Controller reuses the normalized application presentation of a tool or
 approval, but PC tools remain owned and executed by the PC Agent Runtime. The mobile adapter maps
@@ -589,7 +645,7 @@ fresh installation can create Agents from conversation. Reads use automatic appr
 preference, without a second confirmation flow. These tools do not delete Agents, modify avatars,
 or change MCP bindings.
 
-Creation accepts a name, instructions, and optional definition fields. Omitting `modelId` lets
+Creation accepts a name, instructions, and optional definition fields. Omitting `model` lets
 `AgentService` resolve the global default Agent model; omitted capability settings use the same
 disabled groups as the manual create form. A saved Agent without a model remains editable
 but cannot start chatting. The model derives instructions from the conversation and may use

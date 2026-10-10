@@ -21,12 +21,9 @@ import {
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
-import {
-  type AgentErrorView,
-  type AgentMessageView,
-  type AgentSessionView,
-} from '@/shared/contracts/agent';
+import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
 
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -40,12 +37,8 @@ import type {
   ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
-  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import {
-  interruptNonTerminalToolParts,
-  settleInterruptedAssistantParts,
-} from './messageSettlement';
+import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 // 50 rows bind fewer parameters than SQLite's historical 999-variable ceiling.
@@ -55,10 +48,8 @@ const FORK_INSERT_CHUNK_SIZE = 50;
  * Durable SQLite adapter for {@link AgentSessionStore}
  * (docs/references/agent/agent-persistence.md).
  *
- * Multi-record operations run inside `DbService.withWriteTx()`. The
- * invariant-1 partial unique index turns a concurrent second reservation into
- * a constraint violation, which the Host's admission guard normally prevents
- * from ever reaching the database.
+ * Multi-record operations run inside `DbService.withWriteTx()`. Pending rows include queued
+ * follow-ups; the Host serializes admission and Pi owns one-at-a-time execution.
  */
 @Injectable('AgentSessionStore')
 @ServicePhase(Phase.PostReady)
@@ -69,15 +60,33 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     super();
   }
 
+  async listUnsettledAssistantMessages() {
+    return this.dbService
+      .getDb()
+      .select({
+        sessionId: agentSessionMessageTable.sessionId,
+        assistantMessageId: agentSessionMessageTable.id,
+        turnId: agentSessionMessageTable.turnId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.role, 'assistant'),
+          inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+        ),
+      )
+      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+  }
+
   /** @internal Test and legacy-state fixture; product creation uses reserveInitialSubmission. */
-  async createEmptySession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
+  async createEmptySession(input: { agentId: string; name?: string }): Promise<AgentSessionView> {
     return this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .insert(agentSessionTable)
         .values({
           agentId: input.agentId,
-          title: input.title ?? '',
-          titleIsManual: input.title !== undefined,
+          name: input.name ?? '',
+          isNameManuallyEdited: input.name !== undefined,
         })
         .returning();
       return toAgentSessionView(row);
@@ -94,12 +103,22 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return row ? toAgentSessionView(row) : null;
   }
 
-  async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
+  async getRuntimeRevision(sessionId: string): Promise<number | null> {
+    const [row] = await this.dbService
+      .getDb()
+      .select({ revision: agentSessionTable.runtimeRevision })
+      .from(agentSessionTable)
+      .where(eq(agentSessionTable.id, sessionId))
+      .limit(1);
+    return row?.revision ?? null;
+  }
+
+  async renameSession(sessionId: string, name: string): Promise<AgentSessionView | null> {
     return this.dbService.withWriteTx(async (tx) => {
       // Renames deliberately do not touch lastActivityAt.
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ title, titleIsManual: true })
+        .set({ name, isNameManuallyEdited: true })
         .where(eq(agentSessionTable.id, sessionId))
         .returning();
       return row ? toAgentSessionView(row) : null;
@@ -108,18 +127,18 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   async autoRenameSession(
     sessionId: string,
-    expectedTitle: string,
-    title: string,
+    expectedName: string,
+    name: string,
   ): Promise<AgentSessionView | null> {
     const session = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentSessionTable)
-        .set({ title, titleIsManual: false })
+        .set({ name, isNameManuallyEdited: false })
         .where(
           and(
             eq(agentSessionTable.id, sessionId),
-            eq(agentSessionTable.title, expectedTitle),
-            eq(agentSessionTable.titleIsManual, false),
+            eq(agentSessionTable.name, expectedName),
+            eq(agentSessionTable.isNameManuallyEdited, false),
           ),
         )
         .returning();
@@ -157,7 +176,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .values({
           id: input.sessionId,
           agentId: input.agentId,
-          executionTarget: input.executionTarget,
         })
         .returning();
       const { reservedAt, ...reserved } = await insertSubmission(tx, {
@@ -234,7 +252,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .insert(agentSessionTable)
         .values({
           agentId: source.agentId,
-          executionTarget: source.executionTarget,
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its
           // own. Keep the last included message's original activity time.
@@ -244,9 +261,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
               : anchor.createdAt,
           // Falls back to the source's name. Auto-naming will not rewrite
           // either form later, because neither is empty nor matches the
-          // first-user-message title the naming policy expects to overwrite.
-          title: input.title ?? source.title,
-          titleIsManual: source.titleIsManual,
+          // first-user-message name the naming policy expects to overwrite.
+          name: input.name ?? source.name,
+          isNameManuallyEdited: source.isNameManuallyEdited,
         })
         .returning();
 
@@ -258,14 +275,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           data: agentSessionMessageTable.data,
           error: agentSessionMessageTable.error,
           id: agentSessionMessageTable.id,
-          messageSnapshot: agentSessionMessageTable.messageSnapshot,
+          inferenceSnapshot: agentSessionMessageTable.inferenceSnapshot,
           modelId: agentSessionMessageTable.modelId,
           role: agentSessionMessageTable.role,
           searchableText: agentSessionMessageTable.searchableText,
           stats: agentSessionMessageTable.stats,
           status: agentSessionMessageTable.status,
           turnId: agentSessionMessageTable.turnId,
-          usage: agentSessionMessageTable.usage,
         })
         .from(agentSessionMessageTable)
         .where(
@@ -311,7 +327,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           data: row.data,
           error: row.error,
           id: copiedMessageId,
-          messageSnapshot: row.messageSnapshot,
+          inferenceSnapshot: row.inferenceSnapshot,
           modelId: row.modelId,
           role: row.role,
           searchableText: row.searchableText,
@@ -322,7 +338,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // artifact anchored to a turn id that this copy no longer carries, so
           // the fork's first execution replays full history instead.
           turnId: copiedTurnId,
-          usage: row.usage,
         };
       });
       for (let index = 0; index < copiedRows.length; index += FORK_INSERT_CHUNK_SIZE) {
@@ -403,6 +418,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         );
 
       const deletedMessageIds = turnRows.map((row) => row.id);
+      await tx
+        .update(agentSessionTable)
+        .set({ runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1` })
+        .where(eq(agentSessionTable.id, input.sessionId));
       // The boundary column is application-owned, so the delete below would
       // otherwise leave this Session pointing at a row that no longer exists.
       await tx
@@ -484,7 +503,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionMessageTable)
         .set({
           turnId,
-          data: { version: 1, parts: input.userParts },
+          data: { parts: input.userParts },
           searchableText: toSearchableText(input.userParts),
         })
         .where(eq(agentSessionMessageTable.id, user.id))
@@ -498,14 +517,14 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const values = {
         turnId,
         status: 'pending',
-        data: { version: 1 as const, parts: retainedParts },
+        data: { parts: retainedParts },
         searchableText: toSearchableText(retainedParts),
         error: null,
         // The only summary that could cover the replaced answer is its own:
         // it is the last message, so earlier checkpoints stay valid.
         contextCheckpoint: null,
         modelId: input.modelId,
-        messageSnapshot: input.inferenceSnapshot,
+        inferenceSnapshot: input.inferenceSnapshot,
         // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
         stats: source.stats
           ? { ...source.stats, runtimeTiming: undefined, contextTokens: undefined }
@@ -518,7 +537,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning(agentMessageViewColumns);
       await tx
         .update(agentSessionTable)
-        .set({ lastActivityAt: Date.now() })
+        .set({
+          lastActivityAt: Date.now(),
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+        })
         .where(eq(agentSessionTable.id, input.sessionId));
       return {
         turnId,
@@ -539,7 +561,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   /**
-   * Both per-turn reads go through Expo's async reader: Drizzle's Expo driver
+   * Both rebuild reads go through Expo's async reader: Drizzle's Expo driver
    * reads synchronously, and these scan every message of the Session.
    */
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
@@ -575,13 +597,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       sqlite,
       sql`SELECT id FROM agent_session_message WHERE session_id = ${sessionId} LIMIT 1`,
     );
-    const turnRows = await readSqliteRows<{ turnId: string }>(
-      sqlite,
-      sql`
-        SELECT DISTINCT turn_id AS "turnId" FROM agent_session_message
-        WHERE session_id = ${sessionId} AND turn_id IS NOT NULL
-      `,
-    );
     const fileRows = await readSqliteRows<{ fileEntryId: unknown }>(
       sqlite,
       sql`
@@ -600,7 +615,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       referencedFileEntryIds: fileRows
         .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
         .sort(),
-      sessionTurnIds: turnRows.map(({ turnId }) => turnId).sort(),
     };
   }
 
@@ -632,22 +646,23 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return { assistantMessageId: row.assistantMessageId, checkpoint };
   }
 
-  async updateStreamingAssistantMessage(
-    input: UpdateStreamingAssistantMessageInput,
-  ): Promise<void> {
-    await this.dbService.withWriteTx(async (tx) => {
-      // Guarded by status so a late streaming write can never reopen a row the
-      // terminal write has already settled.
-      await tx
+  async saveContextCheckpoint(
+    assistantMessageId: string,
+    turnId: string,
+    checkpoint: RuntimeContextCheckpoint,
+  ) {
+    await this.dbService.withWriteTx((tx) =>
+      tx
         .update(agentSessionMessageTable)
-        .set({ status: 'streaming', data: { version: 1, parts: input.parts } })
+        .set({ contextCheckpoint: checkpoint })
         .where(
           and(
-            eq(agentSessionMessageTable.id, input.assistantMessageId),
-            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
+            eq(agentSessionMessageTable.id, assistantMessageId),
+            eq(agentSessionMessageTable.turnId, turnId),
+            eq(agentSessionMessageTable.status, 'success'),
           ),
-        );
-    });
+        ),
+    );
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
@@ -656,7 +671,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .select({
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
-          usage: agentSessionMessageTable.usage,
+          turnId: agentSessionMessageTable.turnId,
         })
         .from(agentSessionMessageTable)
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
@@ -664,14 +679,15 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (!existing) {
         throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
       }
+      if (input.turnId !== undefined && existing.turnId !== input.turnId)
+        throw new Error('Cannot finalize a replaced execution.');
       const [row] = await tx
         .update(agentSessionMessageTable)
         .set({
           status: input.status,
-          data: { version: 1, parts: input.parts },
+          data: { parts: input.parts },
           searchableText: toSearchableText(input.parts),
-          usage: existing.stats?.requestCount !== undefined ? existing.usage : input.usage,
-          stats: { ...existing.stats, ...input.runtimeStats },
+          stats: finalizeMessageStats(existing.stats, input),
           error: input.error,
           contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
         })
@@ -693,53 +709,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
     publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
     return message;
-  }
-
-  async reconcileInterrupted(error: AgentErrorView): Promise<AgentMessageView[]> {
-    return this.dbService.withWriteTx(async (tx) => {
-      const rows = await tx
-        .select(agentMessageViewColumns)
-        .from(agentSessionMessageTable)
-        .where(inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]));
-      const assistantIds: string[] = [];
-
-      for (const row of rows) {
-        const message = toAgentMessageView(row);
-        const interruptedParts =
-          message.role === 'assistant'
-            ? settleInterruptedAssistantParts(
-                message.parts,
-                error,
-                `error-${message.turnId ?? message.id}`,
-              )
-            : interruptNonTerminalToolParts(message.parts, error.message);
-        await tx
-          .update(agentSessionMessageTable)
-          .set({
-            status: 'interrupted',
-            data: {
-              version: 1,
-              parts: interruptedParts,
-            },
-            searchableText: toSearchableText(interruptedParts),
-            ...(message.role === 'assistant' ? { error } : {}),
-          })
-          .where(eq(agentSessionMessageTable.id, message.id));
-        if (message.role === 'assistant') {
-          assistantIds.push(message.id);
-        }
-      }
-
-      if (assistantIds.length === 0) {
-        return [];
-      }
-      const reconciledRows = await tx
-        .select(agentMessageViewColumns)
-        .from(agentSessionMessageTable)
-        .where(inArray(agentSessionMessageTable.id, assistantIds))
-        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
-      return reconciledRows.map(toAgentMessageView);
-    });
   }
 }
 
@@ -775,7 +744,7 @@ async function insertSubmission(
       turnId,
       role: 'user',
       status: 'success',
-      data: { version: 1, parts: input.userParts },
+      data: { parts: input.userParts },
       searchableText: toSearchableText(input.userParts),
     })
     .returning(agentMessageViewColumns);
@@ -787,9 +756,9 @@ async function insertSubmission(
       turnId,
       role: 'assistant',
       status: 'pending',
-      data: { version: 1, parts: [] },
+      data: { parts: [] },
       modelId: input.modelId,
-      messageSnapshot: input.inferenceSnapshot,
+      inferenceSnapshot: input.inferenceSnapshot,
     })
     .returning(agentMessageViewColumns);
   return {

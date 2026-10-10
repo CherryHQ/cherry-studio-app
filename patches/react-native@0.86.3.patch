@@ -13,3 +13,203 @@ index fdabd7bab1f03966dc04ba9a462465daeccf8ae3..ef70011ee5c270fb2cac52f3a7408d1e
    bool useTurboModules() override
    {
      return true;
+diff --git a/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm b/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
+--- a/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
++++ b/ReactCommon/react/renderer/textlayoutmanager/platform/ios/react/renderer/textlayoutmanager/TextLayoutManager.mm
+@@ -40,7 +40,7 @@
+       auto originalAtributedString = attributedStringBox.getValue();
+       auto attributedString = ensurePlaceholderIfEmpty_DO_NOT_USE(originalAtributedString);
+
+-      measurement = textMeasureCache_.get(
++      measurement = textMeasureCache_.getWithGeneratorOutsideLock(
+           {.attributedString = attributedString,
+            .paragraphAttributes = paragraphAttributes,
+            .layoutConstraints = layoutConstraints},
+@@ -109,7 +109,7 @@
+
+   RCTTextLayoutManager *textLayoutManager = (RCTTextLayoutManager *)unwrapManagedObject(nativeTextLayoutManager_);
+
+-  auto measurement = lineMeasureCache_.get(
++  auto measurement = lineMeasureCache_.getWithGeneratorOutsideLock(
+       {.attributedString = attributedString, .paragraphAttributes = paragraphAttributes, .size = size}, [&]() {
+         auto measurement = [textLayoutManager getLinesForAttributedString:attributedString
+                                                       paragraphAttributes:paragraphAttributes
+diff --git a/ReactCommon/react/utils/SimpleThreadSafeCache.h b/ReactCommon/react/utils/SimpleThreadSafeCache.h
+--- a/ReactCommon/react/utils/SimpleThreadSafeCache.h
++++ b/ReactCommon/react/utils/SimpleThreadSafeCache.h
+@@ -37,7 +37,34 @@
+    */
+   ValueT get(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator) const
+   {
++    std::lock_guard<std::mutex> lock(mutex_);
+     return getMapIterator(key, std::move(generator))->second->second;
++  }
++
++  /*
++   * Returns a cached value or computes a miss without holding the cache lock.
++   * The generator must allow concurrent execution, including for the same key.
++   * Concurrent misses reuse the first value stored in the cache.
++   * Can be called from any thread.
++   */
++  ValueT getWithGeneratorOutsideLock(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator) const
++  {
++    {
++      std::lock_guard<std::mutex> lock(mutex_);
++      if (auto it = map_.find(key); it != map_.end()) {
++        list_.splice(list_.begin(), list_, it->second);
++        return it->second->second;
++      }
++    }
++
++    // Native text measurement can synchronously deliver notifications that wait
++    // on another thread. Never hold the cache mutex across that work.
++    auto value = generator();
++
++    std::lock_guard<std::mutex> lock(mutex_);
++    // Recheck after generation and copy the result before unlocking, so another
++    // thread cannot evict the entry while it is being read.
++    return getMapIterator(key, [&value]() { return std::move(value); })->second->second;
+   }
+
+   /*
+@@ -49,6 +76,7 @@
+   std::pair<const KeyT *, const ValueT *> getWithKey(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator)
+       const
+   {
++    std::lock_guard<std::mutex> lock(mutex_);
+     auto it = getMapIterator(key, std::move(generator));
+     return std::make_pair(&it->first, &it->second->second);
+   }
+@@ -75,10 +103,9 @@
+   using EntryT = std::pair<KeyT, ValueT>;
+   using iterator = typename std::list<EntryT>::iterator;
+
++  // The caller must hold mutex_ through lookup and use of the returned iterator.
+   auto getMapIterator(const KeyT &key, CacheGeneratorFunction<ValueT> auto generator) const
+   {
+-    std::lock_guard<std::mutex> lock(mutex_);
+-
+     if (auto it = map_.find(key); it != map_.end()) {
+       // Move accessed item to front of list
+       list_.splice(list_.begin(), list_, it->second);
+diff --git a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp b/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
+--- a/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
++++ b/ReactCommon/react/utils/tests/SimpleThreadSafeCacheTest.cpp
+@@ -6,6 +6,9 @@
+  */
+
+ #include <gtest/gtest.h>
++#include <chrono>
++#include <future>
++#include <memory>
+ #include <react/utils/SimpleThreadSafeCache.h>
+
+ namespace facebook::react {
+@@ -37,4 +40,107 @@
+   EXPECT_EQ(cache.get(3), "three");
+ }
+
++TEST(EvictingCacheMapTest, GeneratorCanWaitForAnotherThreadUsingTheCache) {
++  SimpleThreadSafeCache<int, std::string, 3> cache;
++  cache.getWithGeneratorOutsideLock(0, []() { return std::string("zero"); });
++
++  std::promise<void> generating;
++  auto generatingFuture = generating.get_future();
++  std::promise<void> callbackFinished;
++  auto callbackFinishedFuture = callbackFinished.get_future();
++  // Model native measurement waiting for a notification callback whose thread
++  // must also measure text. A timeout lets a regressed cache fail without hanging.
++  auto blocked = std::async(std::launch::async, [&]() {
++    return cache.getWithGeneratorOutsideLock(1, [&]() {
++      generating.set_value();
++      auto status = callbackFinishedFuture.wait_for(std::chrono::seconds(5));
++      return status == std::future_status::ready ? std::string("one") : std::string("callback timed out");
++    });
++  });
++
++  EXPECT_EQ(
++      generatingFuture.wait_for(std::chrono::seconds(5)),
++      std::future_status::ready);
++  auto hit = cache.getWithGeneratorOutsideLock(0, []() { return std::string("unexpected"); });
++  auto miss = cache.getWithGeneratorOutsideLock(2, []() { return std::string("two"); });
++  callbackFinished.set_value();
++
++  EXPECT_EQ(blocked.get(), "one");
++  EXPECT_EQ(hit, "zero");
++  EXPECT_EQ(miss, "two");
++}
++
++TEST(EvictingCacheMapTest, ConcurrentMissReusesStoredValueAndUpdatesRecency) {
++  SimpleThreadSafeCache<int, std::string, 2> cache;
++  std::promise<void> generating;
++  auto generatingFuture = generating.get_future();
++  std::promise<void> resume;
++  auto resumeFuture = resume.get_future();
++  auto slow = std::async(std::launch::async, [&]() {
++    return cache.getWithGeneratorOutsideLock(1, [&]() {
++      generating.set_value();
++      resumeFuture.wait();
++      return std::string("slow");
++    });
++  });
++
++  EXPECT_EQ(
++      generatingFuture.wait_for(std::chrono::seconds(5)),
++      std::future_status::ready);
++  auto first = std::async(std::launch::async, [&]() {
++    auto value = cache.getWithGeneratorOutsideLock(1, []() { return std::string("first"); });
++    cache.getWithGeneratorOutsideLock(2, []() { return std::string("two"); });
++    return value;
++  });
++  auto status = first.wait_for(std::chrono::seconds(5));
++  resume.set_value();
++
++  EXPECT_EQ(status, std::future_status::ready);
++  EXPECT_EQ(first.get(), "first");
++  EXPECT_EQ(slow.get(), "first");
++  cache.getWithGeneratorOutsideLock(3, []() { return std::string("three"); });
++  EXPECT_EQ(cache.get(1), "first");
++  EXPECT_EQ(cache.get(2), "");
++  EXPECT_EQ(cache.get(3), "three");
++}
++
++TEST(EvictingCacheMapTest, CacheHitSkipsGeneratorAndUpdatesRecency) {
++  SimpleThreadSafeCache<int, std::string, 2> cache;
++  cache.getWithGeneratorOutsideLock(1, []() { return std::string("one"); });
++  cache.getWithGeneratorOutsideLock(2, []() { return std::string("two"); });
++  auto generated = false;
++  auto hit = cache.getWithGeneratorOutsideLock(1, [&]() {
++    generated = true;
++    return std::string("unexpected");
++  });
++  EXPECT_EQ(hit, "one");
++  EXPECT_FALSE(generated);
++  cache.getWithGeneratorOutsideLock(3, []() { return std::string("three"); });
++  EXPECT_EQ(cache.get(1), "one");
++  EXPECT_EQ(cache.get(2), "");
++}
++
++TEST(EvictingCacheMapTest, ReturnedValueSurvivesEviction) {
++  SimpleThreadSafeCache<int, std::shared_ptr<int>, 1> cache;
++  auto one = cache.getWithGeneratorOutsideLock(1, []() { return std::make_shared<int>(1); });
++  cache.getWithGeneratorOutsideLock(2, []() { return std::make_shared<int>(2); });
++  EXPECT_EQ(*one, 1);
++  EXPECT_EQ(one.use_count(), 1);
++}
++
++TEST(EvictingCacheMapTest, PointerLookupStillReusesStoredEntry) {
++  SimpleThreadSafeCache<int, std::string, 2> cache;
++  const auto [key, value] = cache.getWithKey(1, []() { return std::string("one"); });
++  EXPECT_EQ(*key, 1);
++  EXPECT_EQ(*value, "one");
++  auto generated = false;
++  const auto [cachedKey, cachedValue] = cache.getWithKey(1, [&]() {
++    generated = true;
++    return std::string("unexpected");
++  });
++  EXPECT_FALSE(generated);
++  EXPECT_EQ(cachedKey, key);
++  EXPECT_EQ(cachedValue, value);
++}
++
+ } // namespace facebook::react

@@ -29,6 +29,7 @@ export {
   type AgentSessionSnapshot,
 } from './events';
 export {
+  AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
   AgentDeleteSessionInputSchema,
   AgentDeleteTurnInputSchema,
@@ -49,7 +50,6 @@ export {
   AgentApprovalViewSchema,
   AgentCapabilitiesSchema,
   AgentErrorViewSchema,
-  AgentExecutionTargetSchema,
   AgentFailureReasonSchema,
   AgentFailureSnapshotSchema,
   AgentImageGenerationSchema,
@@ -67,14 +67,12 @@ export {
   AgentToolInputPreviewSchema,
   AgentToolResultSchema,
   AgentTurnViewSchema,
-  AgentUsageViewSchema,
   AgentViewSchema,
   JsonValueSchema,
   readAgentInferenceSnapshot,
   type AgentApprovalView,
   type AgentCapabilities,
   type AgentErrorView,
-  type AgentExecutionTarget,
   type AgentFailureReason,
   type AgentFailureSnapshot,
   type AgentInferenceSnapshot,
@@ -89,7 +87,6 @@ export {
   type AgentToolRef,
   type AgentToolInputPreview,
   type AgentTurnView,
-  type AgentUsageView,
   type AgentView,
   type JsonValue,
 } from './views';

@@ -1,7 +1,21 @@
 export type {
+  DurableAgentRuntime,
+  RuntimeConversationConfiguration,
+  RuntimeConversationEvent,
+  RuntimeConversationSeed,
+  RuntimeConversationSnapshot,
+  RuntimeDurableSubmission,
+  RuntimeDurableTurn,
+  RuntimeTurnTiming,
+  RuntimeExecutionIdentity,
+  RuntimeExecutionPorts,
+  RuntimeSqlDatabase,
+  RuntimeUsageOwner,
+} from './durableTypes';
+
+export type {
   AgentRuntime,
   AgentRuntimeSession,
-  MessageRuntimeTimingSink,
   RuntimeApproval,
   RuntimeArtifact,
   RuntimeCapabilities,
@@ -14,7 +28,6 @@ export type {
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeHistoryTurn,
-  RuntimeTurnReplay,
   RuntimeInputPart,
   RuntimeInputModality,
   RuntimeJsonValue,
@@ -38,12 +51,6 @@ export type {
 } from './types';
 
 export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
-export {
-  MAX_RUNTIME_TURN_REPLAY_BYTES,
-  parseRuntimeTurnReplay,
-  type SerializedRuntimeTurnReplay,
-  serializeRuntimeTurnReplay,
-} from './runtimeTurnReplay';
 
 export type {
   FakeExecutionController,
@@ -51,11 +58,10 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export { FakeRuntime } from './FakeRuntime';
-export { raceAbort, settleWithin } from './raceAbort';
+export { raceAbort } from './raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';
 export {
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,
-  TOOL_EXECUTION_ERROR,
 } from './toolResults';

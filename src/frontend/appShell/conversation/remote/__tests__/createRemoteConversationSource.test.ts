@@ -21,7 +21,15 @@ const message = (id: string) => ({
   version: '1',
   role: 'assistant' as const,
   state: 'success' as const,
-  parts: [{ id: `${id}:text`, kind: 'text' as const, text: id, complete: true }],
+  parts: [
+    {
+      id: `${id}:text`,
+      kind: 'text' as const,
+      text: id,
+      complete: true,
+      state: 'completed' as const,
+    },
+  ],
 });
 function fixture(scope = 'scope', binding = 'binding') {
   let state: RemoteSourceState = { status: 'ready' };
@@ -199,6 +207,32 @@ it('keeps rows for unchanged live views and history revisions so only changed me
   const revised = await session.history.openLatest(signal());
   expect(revised.initial.items[0]).toBe(before.initial.items[0]);
   expect(revised.initial.items[1]).not.toBe(before.initial.items[1]);
+  test.source.dispose();
+});
+
+it('keeps an unsettled failure row while later snapshots repeat its execution', async () => {
+  const test = fixture();
+  const session = await test.source.openSession(address, signal());
+  session.activate();
+  const execution = {
+    id: 'e',
+    state: 'failed' as const,
+    messageId: 'answer',
+    failure: {
+      message: 'Subscription required',
+      retryable: false,
+      failure: {
+        version: 1 as const,
+        reasonCode: 'permission' as const,
+        source: { layer: 'provider' as const },
+      },
+    },
+  };
+  test.publish({ ...test.snapshot, executions: [execution] });
+  const first = session.state.getSnapshot().executions[0].terminal?.message;
+  expect(first).toMatchObject({ key: 'answer', state: 'error' });
+  test.publish({ ...test.snapshot, messages: [message('other')], executions: [{ ...execution }] });
+  expect(session.state.getSnapshot().executions[0].terminal?.message).toBe(first);
   test.source.dispose();
 });
 

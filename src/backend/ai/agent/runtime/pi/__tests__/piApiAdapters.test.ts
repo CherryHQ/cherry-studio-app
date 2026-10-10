@@ -3,7 +3,6 @@ import {
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
-import type { AgentOptions } from '@earendil-works/pi-agent-core';
 import type { FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
@@ -15,6 +14,7 @@ import {
   type PiLanguageEndpointType,
   type SupportedPiApi,
 } from '../piApiAdapters';
+import type { PiStreamFn } from '../piModelTypes';
 
 const mockAnthropicStreamSimple = jest.fn();
 const mockGoogleStreamSimple = jest.fn();
@@ -91,7 +91,7 @@ describe('Pi API adapters', () => {
     expect(adapter.formatBaseUrl(testCase.baseUrl)).toBe(testCase.expectedBaseUrl);
     jest
       .spyOn(adapter, 'loadStreamSimple')
-      .mockResolvedValue(testCase.streamSimple as unknown as AgentOptions['streamFn']);
+      .mockResolvedValue(testCase.streamSimple as unknown as PiStreamFn);
 
     const streamFn = await bindPiStream(adapter, {
       apiKey: 'secret-key',

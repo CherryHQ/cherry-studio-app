@@ -80,7 +80,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const agent = useAgentApiById(resolvedAgentId);
   const { snapshot, messages, messageWindow } = useLocalConversation({
     sessionId,
-    title: session.data?.title,
+    title: session.data?.name,
     navigation: target.kind === 'session' ? target : undefined,
   });
   const shareMessage = useCallback(

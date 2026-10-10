@@ -4,7 +4,6 @@ import {
   type DeepseekDsmlCall,
   type DeepseekDsmlPart,
 } from '@cherrystudio/ai-runtime/provider';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type {
   AssistantMessage,
   JsonObject,
@@ -15,6 +14,7 @@ import type {
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { getCurrentTools, normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import type { PiStreamFn as StreamFn } from './piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from './piStreamEvents';
 
 type ContentState = {

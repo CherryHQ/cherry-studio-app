@@ -10,7 +10,6 @@ import {
   ComposerAttachments,
   ComposerModelPill,
   type ComposerSendPayload,
-  ComposerSurface,
 } from '@/frontend/components/Composer';
 import {
   ModelPickerDrawer,
@@ -30,7 +29,7 @@ import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { ChatInputSurface } from './ChatInputSurface';
+import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -73,7 +72,7 @@ export function ChatInput({
       : '/';
   const persistModel = useCallback(
     (targetAgentId: string, modelId: ModelPickerModelItem['modelId']) =>
-      updateAgent(targetAgentId, { modelId }),
+      updateAgent(targetAgentId, { model: modelId }),
     [updateAgent],
   );
   const handleModelPersistenceError = useCallback(
@@ -254,7 +253,7 @@ function TextChatInput({
             reasoningEfforts={reasoningEfforts}
           >
             {(effortGauge) => (
-              <ComposerSurface
+              <ChatInputComposer
                 canSend={selectedModelItem ? canSend : false}
                 dismissKeyboardOnSend={dismissKeyboardOnSend}
                 getSendErrorLabel={getSendErrorLabel}
@@ -273,6 +272,7 @@ function TextChatInput({
                 </View>
                 <ChatInputSurface
                   streaming={isBusy}
+                  onStop={() => void cancel()}
                   fieldStyle={isPluginPickerVisible ? compactInputStyle : undefined}
                   leadingAction={
                     <ChatInputMenu
@@ -299,7 +299,7 @@ function TextChatInput({
                   }
                   trailingAction={effortGauge}
                 />
-              </ComposerSurface>
+              </ChatInputComposer>
             )}
           </ChatInputEffortOverlay>
         </View>

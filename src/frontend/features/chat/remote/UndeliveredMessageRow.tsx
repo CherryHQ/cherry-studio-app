@@ -59,7 +59,7 @@ function messageText(message: UndeliveredMessage) {
       part.type === 'text'
         ? [part.text]
         : part.type === 'file'
-          ? [part.name ?? part.fileEntryId]
+          ? [part.filename ?? part.fileEntryId]
           : [],
     )
     .join('\n');

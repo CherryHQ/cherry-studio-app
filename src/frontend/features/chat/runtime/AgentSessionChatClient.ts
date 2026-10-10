@@ -50,6 +50,8 @@ type SessionEntry = {
   observationPromise?: Promise<void>;
   pendingTextDeltas: Map<string, { chunks: string[]; messageId: string; partId: string }>;
   state: AgentSessionChatState;
+  /** The submission or retry awaiting admission; stopping it has no turn id to name. */
+  submission?: { isCancelled: boolean };
 };
 
 // Like Desktop's streaming overlay, space out full-message render commits as
@@ -121,6 +123,16 @@ function applyMessageDelta(message: AgentMessageView, delta: AgentMessageDelta):
     }
     case 'tool.input.preview':
       return message;
+  }
+}
+
+function throwIfSubmissionCancelled(submission: { isCancelled: boolean }): void {
+  if (submission.isCancelled) {
+    throw new AgentProtocolError({
+      code: 'CANCELLED',
+      message: 'The submission was cancelled.',
+      retryable: false,
+    });
   }
 }
 
@@ -256,10 +268,21 @@ export class AgentSessionChatClient {
   }
 
   async startSession(input: AgentStartSessionInput): Promise<AgentSessionView> {
-    const session = await this.protocol.startSession(input);
-    // The destination route observes after navigation. Its atomic Host snapshot
-    // reconstructs any live turn state without leaving an ownerless listener here.
-    return session;
+    const entry = this.getEntry(input.sessionId);
+    const submission = this.beginSubmission(entry);
+    try {
+      // A draft already has its reserved session ID, but there is no durable
+      // session to observe yet. Stop targets the pending admission by that ID.
+      return await this.protocol.startSession(input);
+    } finally {
+      this.endSubmission(entry, submission);
+      this.updateState(entry, { ...entry.state, isSubmitting: false });
+      // The destination route owns observation after navigation.
+      if (entry.listeners.size === 0 && this.sessions.get(input.sessionId) === entry) {
+        this.stopObservation(entry);
+        this.sessions.delete(input.sessionId);
+      }
+    }
   }
 
   async forkSession(
@@ -270,7 +293,7 @@ export class AgentSessionChatClient {
     const session = await this.protocol.forkSession({
       fromMessageId,
       sessionId,
-      ...(title ? { title } : {}),
+      ...(title ? { name: title } : {}),
     });
     // As with a new Session, the destination route owns observation.
     return session;
@@ -287,11 +310,13 @@ export class AgentSessionChatClient {
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    this.beginSubmission(entry);
+    const submission = this.beginSubmission(entry, true);
     try {
       await this.observe(sessionId);
+      throwIfSubmissionCancelled(submission);
       return await this.protocol.submitMessage(input);
     } finally {
+      this.endSubmission(entry, submission);
       this.updateState(entry, { ...entry.state, isSubmitting: false });
       // Non-React callers may submit without ever installing a subscriber. The
       // Host snapshot makes a later observation lossless, so do not retain an
@@ -303,21 +328,24 @@ export class AgentSessionChatClient {
     }
   }
 
-  async retryMessage(input: AgentRetryMessageInput): Promise<void> {
+  async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
     const entry = this.getEntry(input.sessionId);
-    // Admission is as slow as a submission's, and unlike a submission it has no
-    // new rows to show for it. The answer reads as pending from the press until
-    // the Host publishes the reserved one, so the wait looks like a wait.
-    this.beginSubmission(entry, input.messageId);
+    // The original answer stays visible while the engine prepares its new branch.
+    const submission = this.beginSubmission(entry);
     try {
       await this.observe(input.sessionId);
-      await this.protocol.retryMessage(input);
+      throwIfSubmissionCancelled(submission);
+      const session = await this.protocol.retryMessage(input);
       this.options.onSessionChanged?.(input.sessionId);
       this.options.onTranscriptChanged?.(input.sessionId);
+      if (session) {
+        this.options.onSessionChanged?.(session.id);
+        this.options.onTranscriptChanged?.(session.id);
+      }
+      return session;
     } finally {
-      // The Host published the reserved answer before resolving, so dropping
-      // the projection here reveals that view rather than the replaced one.
-      // A rejected admission has published nothing and restores the old answer.
+      // Admission never replaces the source answer, whether a branch was created or rejected.
+      this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
         isSubmitting: false,
@@ -330,10 +358,15 @@ export class AgentSessionChatClient {
     }
   }
 
-  private beginSubmission(entry: SessionEntry, retryingMessageId?: string): void {
+  private beginSubmission(
+    entry: SessionEntry,
+    allowQueue = false,
+  ): NonNullable<SessionEntry['submission']> {
     if (
       entry.state.isSubmitting ||
-      (entry.state.activeTurn && !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
+      (!allowQueue &&
+        entry.state.activeTurn &&
+        !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
     ) {
       throw new AgentProtocolError({
         code: 'SESSION_BUSY',
@@ -341,7 +374,15 @@ export class AgentSessionChatClient {
         retryable: false,
       });
     }
-    this.updateState(entry, { ...entry.state, isSubmitting: true, retryingMessageId });
+    this.updateState(entry, { ...entry.state, isSubmitting: true });
+    entry.submission = { isCancelled: false };
+    return entry.submission;
+  }
+
+  private endSubmission(entry: SessionEntry, submission: SessionEntry['submission']): void {
+    if (entry.submission === submission) {
+      entry.submission = undefined;
+    }
   }
 
   reconcilePersistedMessages(
@@ -377,12 +418,18 @@ export class AgentSessionChatClient {
   }
 
   async cancelTurn(sessionId: string): Promise<void> {
-    const turn = this.getEntry(sessionId).state.activeTurn;
-    if (!turn || TERMINAL_TURN_STATUSES.has(turn.status)) {
+    const entry = this.getEntry(sessionId);
+    const turn = entry.state.activeTurn;
+    if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
+      await this.protocol.cancelTurn({ sessionId, turnId: turn.id });
       return;
     }
-
-    await this.protocol.cancelTurn({ sessionId, turnId: turn.id });
+    // Stop before the Host reserves the turn: the pending call rejects with
+    // CANCELLED, whether it is still observing here or preparing in the Host.
+    if (entry.submission && !entry.submission.isCancelled) {
+      entry.submission.isCancelled = true;
+      await this.protocol.cancelSubmission({ sessionId });
+    }
   }
 
   async respondQuestion(
@@ -532,7 +579,7 @@ export class AgentSessionChatClient {
           const part = entry.liveMessages
             .get(event.messageId)
             ?.parts.find((part) => part.id === partId);
-          if (part?.type === 'tool' && part.state === 'input-streaming') {
+          if (part?.type === 'dynamic-tool' && part.state === 'input-streaming') {
             this.toolInputPreviews.set(event.messageId, part.toolCallId, event.delta.preview);
           }
           return;
@@ -555,7 +602,7 @@ export class AgentSessionChatClient {
           return;
         }
         entry.liveMessages.set(event.messageId, nextMessage);
-        if (event.delta.op === 'part.replace' && event.delta.part.type === 'tool') {
+        if (event.delta.op === 'part.replace' && event.delta.part.type === 'dynamic-tool') {
           this.toolInputPreviews.set(
             event.messageId,
             event.delta.part.toolCallId,
@@ -622,7 +669,7 @@ export class AgentSessionChatClient {
 
   private installToolInputPreviews(message: AgentMessageView): void {
     for (const part of message.parts) {
-      if (part.type === 'tool' && part.inputPreview) {
+      if (part.type === 'dynamic-tool' && part.inputPreview) {
         this.toolInputPreviews.set(message.id, part.toolCallId, part.inputPreview);
       }
     }

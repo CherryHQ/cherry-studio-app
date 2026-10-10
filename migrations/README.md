@@ -1,14 +1,15 @@
 # Database Migrations
 
-Cherry Mobile is unreleased. `sqlite-drizzle/0000_initial.sql` creates the current
-15-table schema from an empty database. Earlier development migrations and data
-backfills have been replaced by this baseline. Existing development databases
-must be recreated before using it; there is no upgrade path from the old history.
+Released databases upgrade in place. `sqlite-drizzle/0000_initial.sql` creates the
+15-table baseline shipped since v0.1.0; later journal entries upgrade it to the current schema, so
+a schema or serialized-format change must migrate existing user data rather than require a reset.
+Databases from development builds before that baseline are unsupported and must be recreated.
 The app does not automatically delete the local `cherry.db`.
 
 - Table definitions live in `src/backend/data/db/schemas`.
 - `sqlite-drizzle` contains generated SQL, the migration journal, and schema snapshots.
-  Keep them generated unless intentionally reconciling the migration history.
+  Generate schema changes with Drizzle; add data transformations to the new migration when
+  serialized formats change. Keep already-applied migrations intact.
 - Expo cannot read this directory at runtime. `src/backend/data/db/migrations.ts`
   bundles SQL and the journal for `drizzle-orm/expo-sqlite/migrator`.
 - After changing table definitions, run `pnpm db:generate` and register the new SQL

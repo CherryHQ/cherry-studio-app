@@ -20,6 +20,7 @@ export function disablePiToolCalls(payload: unknown, api: PiApi): unknown {
       };
     }
     default:
-      throw new Error(`Pi cannot disable tool calls for API: ${api}`);
+      // The final-response instruction still applies; a later tool step ends the turn.
+      return payload;
   }
 }

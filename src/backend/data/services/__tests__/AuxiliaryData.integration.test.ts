@@ -121,7 +121,6 @@ describe('auxiliary Data API integration', () => {
         'user',
         JSON.stringify({
           parts: [{ id: 'question-0', text: 'first question', type: 'text', state: 'done' }],
-          version: 1,
         }),
         'success',
         'first question',
@@ -139,7 +138,6 @@ describe('auxiliary Data API integration', () => {
         'assistant',
         JSON.stringify({
           parts: [{ id: 'answer-0', text: '**needle** answer', type: 'text', state: 'done' }],
-          version: 1,
         }),
         'success',
         'needle answer',
@@ -264,7 +262,7 @@ function insertSearchMessages(
     statement.run(
       message.id,
       message.role ?? 'assistant',
-      JSON.stringify({ version: 1, parts }),
+      JSON.stringify({ parts }),
       toSearchableText(parts),
       message.createdAt,
       message.createdAt,

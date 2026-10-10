@@ -1,6 +1,12 @@
 # Cherry Agent Runtime
 
-> Status: as-built. Mobile Agent execution is device-local only.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.1.0.
+
+The experimental branch has replaced this per-turn production contract with upstream-owned durable
+history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
+persistent contract, storage, tools, presentation, and backup. The baseline below explains the
+legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
+Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -22,7 +28,7 @@ It does not know Cherry Agent or Session entities, application commands or snaps
 Data API, React, Expo, navigation, or UI state.
 
 The Host is the only adapter between the [Agent Protocol](./agent-protocol.md) and the Runtime. It
-loads application data, validates the local execution target, constructs the request, maps events,
+loads application data, constructs the local Runtime request, maps events,
 and persists the result.
 
 Runtime independence is enforced by imports and conformance, not by checking the directory name.
@@ -30,8 +36,7 @@ Promotion to a workspace package happens only when a real independent consumer e
 
 ## Local execution binding
 
-Mobile Agent accepts only the `local` execution target. Application composition injects one Pi
-Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
+Mobile Agent runs locally. Application composition injects one Pi Runtime directly into the Host. There is no Runtime registry, no implementation-selection Router,
 and no persisted Runtime binding. Agent configuration, Session configuration, model selection, and
 tool availability never select another engine or execution device. The PC Agent Controller
 does not change this local Runtime seam.
@@ -298,15 +303,17 @@ discarded. Current image read failure settles the reserved turn; missing histori
 omitted while its persisted reference remains.
 
 For text, the Host accepts `text/*` and an explicit application/source-code allowlist cross-checked
-by filename extension. It reads at most 1 MiB per current file before reservation, accepts and strips
-a leading UTF-8 BOM, rejects invalid UTF-8, NUL, and binary controls, then emits at most 200,000
+by filename extension. It admits text sources up to 5 MiB per current file before reservation,
+accepts and strips a leading UTF-8 BOM, rejects invalid UTF-8 and NUL, then emits at most 200,000
 Unicode code points per file and 400,000 across all model-visible text attachment occurrences. The
 temporary Runtime part keeps body, authoritative metadata, truncation, and the
 `untrusted-user-content` trust label structurally separate. Pi JSON-escapes that part only while
 adapting it to ordinary user message text, so attachment data cannot become system instructions or
 forge its boundary metadata. Pi's current-input/history estimator counts the resulting text
 alongside images, tool schemas, the output reserve, and the safety margin. Exact attachment bodies
-are redacted if a compaction model reproduces them in a persisted checkpoint.
+are redacted if a compaction model reproduces them in a persisted checkpoint. Redaction matches
+serialized bodies and document strings of at least 32 characters; shorter values such as IR node
+types, style names, or chart labels would rewrite unrelated summary and error text.
 
 Document attachments use the file module's shared reader with the parser preference frozen before
 turn preparation first yields. That same setting enters the turn's `read_file` callback. The Host
@@ -332,12 +339,6 @@ logs. Tool-side access follows the stricter managed-id ledger in
 type RuntimeHistoryTurn = {
   turnId: string | null
   messages: RuntimeMessage[]
-  replay?: RuntimeTurnReplay
-}
-
-type RuntimeTurnReplay = {
-  version: 1
-  payload: RuntimeJsonValue
 }
 
 type RuntimeMessage = {
@@ -380,27 +381,15 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
-Successful turns may additionally carry a bounded, versioned `RuntimeTurnReplay`. The Runtime
-decodes this private artifact to recover its original assistant/tool-result sequence, including
-thinking signatures, concurrent tool-call grouping, and model-visible discovery results. It contains
-only the turn's assistant and tool messages, never user attachments, connection credentials, or
-Host session/turn ids. Pi types and decoding stay inside `runtime/pi`; public message views, search,
-and traces do not expose the artifact. Missing, oversized, or unsupported artifacts use normalized
-history, and the Runtime logs why an artifact was dropped or ignored. Original provider/model provenance is retained for cross-model conversion. Usage is rebuilt
-from the Host's current context anchor rather than stale per-request measurements.
-After live tool-loop compaction, the final request's context measurement is not persisted as an
-anchor: the next execution restores the full turn and estimates it before deciding to compact again.
-The optional `replay` field on `completed` carries the artifact to the Host's private MMKV cache,
-written only after the terminal message commits. It survives app restarts without adding a database
-column or entering backups. Each record is limited to 4 MiB; the cache evicts least recently used
-records above 128 entries or 32 MiB of payloads. Only its small index is retained in memory; payloads
-are read on demand for successful assistant rows matching Session, message, and Turn ids. Storage
-failures and eviction fall back to normalized history. Failed, cancelled, and interrupted executions
-do not cache replay. A resumed retry includes its retained prefix.
-Retries and deletions remove obsolete entries. Forks copy available artifacts to the new message/Turn
-ids using the store's committed identity mapping; restored application storage clears the cache.
-Compaction offsets record the replay representation; a mismatched representation retains the summary
-but replays the entire retained turn rather than slicing at an incompatible offset.
+Stored parts carry no provider signature, so the adapter omits historical `reasoning` parts instead
+of resending them as plain text; text, tool calls and tool results are paired as model messages.
+There is no stored model replay: the Pi working copy keeps signed content between launches, and
+normalized history is used only when that copy has to be rebuilt.
+
+Current compaction/reset context is exported to a bounded Cherry checkpoint at a completed-turn
+anchor; a missing working copy imports that context and the following normalized tail without a
+model call. See [Pi Durable Migration](./pi-durable-migration.md) for the active
+execution/recovery contract; the older per-turn interface below is historical.
 
 The Pi transport honors the provider's `cacheControl.enabled` setting (`none` when disabled,
 otherwise `short`) and receives the stable Host session id. Pi owns cache breakpoint placement;
@@ -432,7 +421,7 @@ reported its input, the Host stores that request's total as the message's `stats
 everything sent plus the answer. The newest replayed assistant message carries it when the turn uses
 the same model, and `pi-agent-core`'s estimator counts only the content replayed after it. A failed,
 cancelled, or retried answer, a model switch, or a provider that omits input counts leaves no
-anchor, and the whole history is estimated by content. Persisted assistant `usage` sums every
+anchor, and the whole history is estimated by content. Persisted assistant token counts in `stats` sum every
 request of a turn for analytics and is never a context-size measurement. The adapter adds system
 instructions, current input, tool schemas, per-image dialect estimates (replacing Pi's flat image
 charge), and a fixed safety margin before calling Pi's `shouldCompact`; content already covered by
@@ -618,7 +607,7 @@ type RuntimeEvent =
       context: RuntimeUsageContext
       completedAt: number
     }
-  | { type: 'completed'; contextTokens?: number; replay?: RuntimeTurnReplay }
+  | { type: 'completed'; contextTokens?: number }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
 
@@ -751,7 +740,7 @@ The Host adds the admitted Agent source and reserved Session message reference, 
 and starts an analytical write per invocation. Like snapshot writes, that write never blocks the
 event loop; the terminal write waits for the Host's tracked Runtime usage writes, so the finalized
 row carries those persisted calls. `AiUsageRecordService` inserts the fact and rebuilds message
-`stats` and protocol `usage` in the same transaction. The Host retains an aggregate for its in-memory
+`stats` in the same transaction. The Host retains an aggregate for its in-memory
 message view and uses it at finalization only when no analytical projection was persisted. If some writes fail,
 an existing projection continues to reflect only persisted records. Tools that call providers on
 the Host's behalf (image generation) read the attribution when they run, because the tool catalog
