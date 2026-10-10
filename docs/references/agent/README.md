@@ -25,7 +25,7 @@ Application capability adapters
   commands, snapshots, events, approvals, and errors.
 - **Mobile Agent Host** owns Agent lookup, Cherry reservation/settlement, admission policy, attachment
   resolution, current tool authorization, and live projection. Missing or invalidated Pi copies
-  rebuild from Cherry checkpoint/replay history before admission.
+  rebuild from Cherry checkpoint/transcript history before admission.
 - **Durable Agent Runtime** owns upstream admission, observation, execution history, configuration,
   abort, working-copy retirement and recovery. Portable SQL capabilities are injected; it does not import application
   rows, Data API, React, Expo, or navigation. Pi types stay private to its implementation.
@@ -97,7 +97,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
   managed-file, and approval authority.
 - Managed image and bounded text input are resolved by the Host before execution. Arbitrary paths
   and tool JSON cannot expand the turn's controlled resource ledger.
-- Pi manages context, compaction, and durable task recovery. Cherry checkpoint/replay readers are
+- Pi manages context, compaction, and durable task recovery. Cherry checkpoint/transcript readers are
   used whenever a disposable working copy needs rebuilding.
 - Route unmount removes frontend observation. Ordinary close and OS expiry preserve native work;
   startup/foreground reconstruct current dependencies before resume. Explicit stop is terminal.
@@ -120,7 +120,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 | [Pi Durable Migration](./pi-durable-migration.md) | Active experimental runtime, history authority, lifecycle, rebuilding, operations, and backup |
 | [Agent Protocol](./agent-protocol.md) | Application values, operations, events, snapshots, errors, and invariants |
 | [Agent Runtime](./agent-runtime.md) | Historical per-turn contract |
-| [Agent Persistence](./agent-persistence.md) | Authoritative Cherry transcript schema, settlement, replay and deletion |
+| [Agent Persistence](./agent-persistence.md) | Authoritative Cherry transcript schema, settlement and deletion |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |

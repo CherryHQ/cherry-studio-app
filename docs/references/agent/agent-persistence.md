@@ -1,10 +1,10 @@
 # Agent Persistence
 
-Cherry owns the complete durable transcript in `cherry.db`: message parts, replay, checkpoints,
-usage and lifecycle metadata. The [Pi Durable integration](./pi-durable-migration.md) uses
-`pi-agent.db` for resumable execution working copies. Reads and search use Cherry directly; backup
-format v1 includes Cherry and managed resources. Pi copies are rebuilt on demand and reclaimed only
-after unfinished execution and settlement have been reconciled.
+Cherry owns the complete durable transcript in `cherry.db`: message parts, checkpoints, usage and
+lifecycle metadata. The [Pi Durable integration](./pi-durable-migration.md) uses `pi-agent.db` for
+resumable execution working copies. Reads and search use Cherry directly; backup format v1 includes
+Cherry and managed resources. Pi copies persist across launches, are rebuilt from Cherry when
+missing, and are never a backup input.
 
 This document defines the durable SQLite schema and production adapter behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It
@@ -69,11 +69,10 @@ artifact anchored to a durable turn, not an engine id, resumable Runtime instanc
 or routing choice. The Host treats its payload as opaque. Pi owns resumable task state outside
 these business tables; `runtimeRevision` only invalidates stale execution copies.
 
-**Native model replay is durable message data.** Successful turns preserve signed thinking blocks
-and the original assistant/tool-result content in the nullable `replay` column, committed with the
-complete answer. Forks copy it; retry clears the replaced replay; deleting messages removes it.
-It is included in Cherry backups. Old or unsupported artifacts use normalized parts on rebuild.
-There is no separate MMKV replay cache. Runtime-private decoding stays inside the Pi adapter.
+**Cherry stores no model-side replay.** Signed thinking and raw provider content live only in the
+Pi working copy, which persists between launches. A missing copy is rebuilt from normalized parts;
+historical reasoning is omitted because stored parts carry no signature. Migration `0005` drops the
+interim `replay` column, and the pre-Pi MMKV replay cache is cleared once at startup.
 
 **No workspace; controlled resources come from managed references.** A desktop workspace encodes a
 working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
@@ -244,7 +243,6 @@ recency; no `orderKey`).
 | `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
 | `error` | text (json) | NULL | Terminal `AgentErrorView` diagnostics, including cancellation reasons with no inline error part; historical Turn views are not reconstructed from this column |
 | `contextCheckpoint` | text (json) | NULL | Versioned opaque Runtime context artifact; successful assistant terminal rows only |
-| `replay` | text (json) | NULL | Successful assistant/tool model content with original signatures; included in backups |
 | `modelId` | text | NULL, FK → `user_model.id` ON DELETE SET NULL | Model selected when the assistant placeholder was reserved |
 | `inferenceSnapshot` | text (json) | NULL | Versioned Agent inference snapshot; raw JSON retained for unknown versions |
 | `searchableText` | text | NOT NULL DEFAULT `''` | Visible plain text of `text` parts, written by the store |
@@ -289,7 +287,7 @@ Manual retry adds `reserveRetry`: the Session's last answer and its user row rec
 shared turn id in one transaction, with the same message ids and transcript position. The
 transaction re-reads the two trailing rows and rejects anything else, so a message that stopped
 being the last one between preparation and reservation cannot be replaced. The assistant is reset
-to `pending`, its error, replay and context checkpoint cleared, runtime timing reset, and any retained
+to `pending`, its error and context checkpoint cleared, runtime timing reset, and any retained
 tool results saved immediately. Retained part ids are reissued so new Runtime output cannot
 collide with them. The transaction increments `runtimeRevision` to invalidate the old Pi copy. Only the replaced answer's own checkpoint is dropped — it is the last message,
 so no earlier summary can describe it, and earlier compaction work stays reusable. Invocation
@@ -302,7 +300,7 @@ projection:
 
 - *Reserve* inserts the user message and assistant placeholder (shared fresh `turnId`) in one
   `DbService.withWriteTx()` transaction (invariant 2). *Finalize* settles the assistant message —
-  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error, replay and an optional validated context
+  status, parts, token counts in `stats`, `stats.runtimeTiming`, turn-level error and an optional validated context
   checkpoint — in one write (invariant 5). Failed, cancelled, and interrupted terminal rows force
   the checkpoint to `NULL`. Failed turns write the same `AgentErrorView` to the inline part and
   diagnostic column. Cancellation retains its reason only in the column; historical rows without
@@ -329,7 +327,7 @@ projection:
   activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
   the original reservation activity because it is not new conversation activity. Copied rows keep
   `createdAt`, `role`, `data`, `status`, `stats`, `error`,
-  `modelId`, `inferenceSnapshot`, and `replay` verbatim; `turnId` is reissued through a per-fork map so pairing
+  `modelId`, and `inferenceSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already

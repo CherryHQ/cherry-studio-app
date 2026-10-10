@@ -339,12 +339,6 @@ logs. Tool-side access follows the stricter managed-id ledger in
 type RuntimeHistoryTurn = {
   turnId: string | null
   messages: RuntimeMessage[]
-  replay?: RuntimeTurnReplay
-}
-
-type RuntimeTurnReplay = {
-  version: 1
-  payload: RuntimeJsonValue
 }
 
 type RuntimeMessage = {
@@ -387,18 +381,15 @@ type RuntimeContextCheckpoint = {
 ```
 
 The Host converts persisted Cherry messages into normalized history grouped by their durable Turn.
-Successful turns carry a versioned `RuntimeTurnReplay` when their assistant/tool sequence is
-supported by the Pi adapter. It preserves signed thinking and tool grouping while excluding user
-attachments, transport diagnostics and billing. Pi types and decoding stay private to `runtime/pi`;
-public message views, search and traces do not expose the artifact. Old or unsupported artifacts
-fall back to normalized parts.
+Stored parts carry no provider signature, so the adapter omits historical `reasoning` parts instead
+of resending them as plain text; text, tool calls and tool results are paired as model messages.
+There is no stored model replay: the Pi working copy keeps signed content between launches, and
+normalized history is used only when that copy has to be rebuilt.
 
-The durable integration commits replay in the Cherry assistant row with the terminal result. It is
-included in backups, copied with forked messages and cleared on replacement/deletion. It has no
-MMKV cache eviction or former 4 MiB cache ceiling. Current compaction/reset context is exported to
-a bounded Cherry checkpoint at a completed-turn anchor; missing working copies import that context
-and the following replay tail without a model call. See [Pi Durable Migration](./pi-durable-migration.md)
-for the active execution/recovery contract; the older per-turn interface below is historical.
+Current compaction/reset context is exported to a bounded Cherry checkpoint at a completed-turn
+anchor; a missing working copy imports that context and the following normalized tail without a
+model call. See [Pi Durable Migration](./pi-durable-migration.md) for the active
+execution/recovery contract; the older per-turn interface below is historical.
 
 The Pi transport honors the provider's `cacheControl.enabled` setting (`none` when disabled,
 otherwise `short`) and receives the stable Host session id. Pi owns cache breakpoint placement;
@@ -616,7 +607,7 @@ type RuntimeEvent =
       context: RuntimeUsageContext
       completedAt: number
     }
-  | { type: 'completed'; contextTokens?: number; replay?: RuntimeTurnReplay }
+  | { type: 'completed'; contextTokens?: number }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
 
