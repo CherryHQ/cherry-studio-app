@@ -19,6 +19,7 @@ import type {
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
 import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
+import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
@@ -272,8 +273,13 @@ function appendAssistantHistory(
           role: 'toolResult',
           toolCallId: part.toolCallId,
           toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',
-          content: [{ type: 'text', text: JSON.stringify(part.output) }],
-          details: part.output,
+          content: piToolModelContent(
+            part.output,
+            (providerNamesByCallId.get(part.toolCallId) ?? '').startsWith('mcp_') ||
+              providerNamesByCallId.get(part.toolCallId) === PI_TOOL_CALL_TOOL_NAME,
+            model.input.includes('image'),
+          ),
+          details: persistentToolResult(part.output),
           isError: part.isError,
           timestamp: Date.now(),
         };

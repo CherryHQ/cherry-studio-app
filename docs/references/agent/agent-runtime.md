@@ -194,6 +194,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  modelContent?: McpModelContent // text or managed image references; canonical and model-visible
+  modelImages?: { fileEntryId: string; mimeType: string; data: string }[] // process-local only
+  mcpApp?: McpAppReference // host-issued UI linkage; never model context
+  mcpSource?: McpResultSource // original connection fingerprint for returned resource links
   failure?: {
     error: RuntimeError
     scope: 'call' | 'tool'
@@ -563,7 +567,9 @@ keys or receiving stream-start or empty text/thinking events does not reset it; 
 reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
 request settles on cancellation, source failure, or premature stream closure, even when the source
 ignores abort. Tool execution is outside this timer, and the next model request starts a fresh
-budget. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+budget. Streamable HTTP MCP callbacks add a 60-second active invocation budget. It pauses during
+explicit MCP elicitation, whose native consent queue has a separate ten-minute limit and the same
+initiating cancellation owner.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -578,12 +584,15 @@ conversation or tool loop. The current inventory lives in
 Every callback returns `RuntimeToolResult`. A non-artifact tool returns `artifacts: []`; an MCP
 adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.
 A file-producing application capability creates and validates each managed entry before returning
-its artifact ref. The Pi adapter gives the model the typed outer envelope, including bounded managed
-refs but never artifact bytes, and also emits the artifacts as Runtime file parts for Host
-projection. This preserves same-turn follow-up access without treating assistant artifact parts as
+its artifact ref. The Pi adapter gives ordinary tools the typed outer envelope, including bounded managed
+refs, and emits artifacts as Runtime file parts for Host projection. MCP has a separate model
+channel: `modelContent` carries bounded text and managed image references; `modelImages` carries
+temporary image bytes for the current provider request. Canonical persistence strips those bytes
+and retains `mcpApp` only as UI linkage. Remote `_meta` is excluded from model content, including
+legacy history. This preserves same-turn follow-up access without treating assistant artifact parts as
 later model attachments. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
-Absolute paths and large base64 payloads are never tool results.
+Absolute paths and inline image bytes never enter canonical tool results.
 
 Mobile Skills are not resolved by the current Host. Their target contract keeps them as instruction
 context that cannot change the tool snapshot, approval policy, OS permission, or turn resource

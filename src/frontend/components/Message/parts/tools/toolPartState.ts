@@ -6,6 +6,9 @@ export type ToolMessagePart = Extract<
   { type: 'dynamic-tool' | `tool-${string}` }
 > & {
   inputPreview?: AgentToolInputPreview;
+  /** Host-issued Apps linkage from the canonical tool result, never remote result JSON. */
+  mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
+  mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
   /** Original failure code retained by the chat's presentation projection. */
   errorCode?: string;
 };

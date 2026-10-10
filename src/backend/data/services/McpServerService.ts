@@ -19,7 +19,12 @@ import {
   UpdateMcpServerSchema,
 } from '@/shared/data/api/schemas/mcpServers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
-import { McpServerSchema, type McpServer } from '@/shared/data/types/mcpServer';
+import {
+  McpOAuthReferenceSchema,
+  McpServerSchema,
+  type McpServer,
+  type RemoteMcpServer,
+} from '@/shared/data/types/mcpServer';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -39,6 +44,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     disabledTools: row.disabledTools,
     endpointUrl: row.endpointUrl,
     headers: row.headers ?? undefined,
+    ...(row.origin === 'remote' && row.oauth && { oauth: row.oauth }),
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -142,6 +148,8 @@ export class McpServerService {
     }
 
     const updates: Partial<InsertMcpServerRow> = {
+      ...(parsed.endpointUrl !== undefined &&
+        parsed.endpointUrl !== existing.endpointUrl && { oauth: null }),
       ...(parsed.disabledTools !== undefined && {
         disabledTools: [...new Set(parsed.disabledTools)],
       }),
@@ -155,6 +163,14 @@ export class McpServerService {
     }
 
     const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (parsed.headers !== undefined && updates.oauth !== null) {
+        // Read inside the write transaction so a newly attached grant cannot be bypassed.
+        const [current] = await tx
+          .select({ oauth: mcpServerTable.oauth })
+          .from(mcpServerTable)
+          .where(eq(mcpServerTable.id, id));
+        if (current?.oauth) this.validateOAuthHeaders(parsed.headers);
+      }
       if (name !== undefined) {
         await this.assertNameAvailable(tx, name, id);
       }
@@ -165,6 +181,65 @@ export class McpServerService {
       throw DataApiErrorFactory.notFound('McpServer', id);
     }
 
+    return rowToMcpServer(row);
+  }
+
+  /** Only the OAuth workflow can attach a native grant; ordinary DTOs cannot mint one. */
+  async saveOAuthConnection(
+    input: CreateMcpServerDto,
+    oauth: NonNullable<RemoteMcpServer['oauth']>,
+    previous?: McpServer,
+  ): Promise<McpServer> {
+    const parsed = CreateMcpServerSchema.parse(input);
+    const reference = McpOAuthReferenceSchema.parse(oauth);
+    const name = parsed.name.trim();
+    this.validateName(name);
+    this.validateOAuthHeaders(parsed.headers);
+    const [row] = await this.dbService.withWriteTx(async (tx) => {
+      if (previous) {
+        const [current] = await tx
+          .select()
+          .from(mcpServerTable)
+          .where(eq(mcpServerTable.id, previous.id));
+        if (
+          !current ||
+          current.origin !== 'remote' ||
+          timestampToISO(current.updatedAt) !== previous.updatedAt
+        ) {
+          throw DataApiErrorFactory.conflict(
+            'The MCP connection changed during authorization',
+            'McpServer',
+          );
+        }
+      }
+      await this.assertNameAvailable(tx, name, previous?.id);
+      const values = {
+        name,
+        endpointUrl: parsed.endpointUrl,
+        headers: parsed.headers,
+        oauth: reference,
+        isEnabled: true,
+      };
+      return previous
+        ? tx
+            .update(mcpServerTable)
+            .set(values)
+            .where(eq(mcpServerTable.id, previous.id))
+            .returning()
+        : tx.insert(mcpServerTable).values(values).returning();
+    });
+    return rowToMcpServer(row);
+  }
+
+  async disconnectOAuth(id: string): Promise<McpServer> {
+    const [row] = await this.dbService.withWriteTx((tx) =>
+      tx
+        .update(mcpServerTable)
+        .set({ oauth: null, isEnabled: false })
+        .where(and(eq(mcpServerTable.id, id), eq(mcpServerTable.origin, 'remote')))
+        .returning(),
+    );
+    if (!row) throw DataApiErrorFactory.notFound('McpServer', id);
     return rowToMcpServer(row);
   }
 
@@ -213,6 +288,14 @@ export class McpServerService {
   private validateName(name: string): void {
     if (!name) {
       throw DataApiErrorFactory.validation({ name: ['Name is required'] });
+    }
+  }
+
+  private validateOAuthHeaders(headers: Record<string, string> | undefined): void {
+    if (Object.keys(headers ?? {}).some((key) => key.toLowerCase() === 'authorization')) {
+      throw DataApiErrorFactory.validation({
+        headers: ['OAuth cannot be combined with a manual Authorization header'],
+      });
     }
   }
 }

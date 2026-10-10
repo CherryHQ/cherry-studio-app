@@ -8,12 +8,14 @@ import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpT
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { McpAppLauncher } from '@/frontend/components/McpApp';
 import {
   type CherryToolMeta,
   readCherryMeta,
   readCherryToolMetadata,
 } from '@/shared/data/types/uiParts';
 
+import { McpResourceLink } from './McpResourceLink';
 import {
   getToolDisplayState,
   getToolName,
@@ -50,7 +52,12 @@ export function McpToolPart({ part }: McpToolPartProps) {
       testID="mcp-tool-part"
       title={title}
     >
-      {normalizedOutput ? <McpOutputSection normalized={normalizedOutput} /> : null}
+      {normalizedOutput ? (
+        <McpOutputSection normalized={normalizedOutput} source={part.mcpSource} />
+      ) : null}
+      {part.state === 'output-available' && part.mcpApp ? (
+        <McpAppLauncher reference={part.mcpApp} input={part.input} result={part.output} />
+      ) : null}
       {readCherryMeta(part)?.settledByApp ? (
         <MessagePart.TextSection
           tone="danger"
@@ -73,7 +80,13 @@ export function McpToolPart({ part }: McpToolPartProps) {
   );
 }
 
-function McpOutputSection({ normalized }: { normalized: NormalizedMcpResult }) {
+function McpOutputSection({
+  normalized,
+  source,
+}: {
+  normalized: NormalizedMcpResult;
+  source?: ToolMessagePart['mcpSource'];
+}) {
   const { t } = useTranslation();
   const visibleContent = normalized.content.flatMap((content) => toToolResultContent(content, t));
 
@@ -91,6 +104,13 @@ function McpOutputSection({ normalized }: { normalized: NormalizedMcpResult }) {
       <ToolResultContentRenderer
         contents={visibleContent}
         imageAccessibilityLabel={t('chat.attachments.image')}
+        renderResourceLink={
+          source
+            ? (content) => (
+                <McpResourceLink source={source} uri={content.uri} label={content.label} />
+              )
+            : undefined
+        }
       />
     </View>
   );

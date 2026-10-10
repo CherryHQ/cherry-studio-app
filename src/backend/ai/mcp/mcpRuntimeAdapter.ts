@@ -7,8 +7,10 @@ import type {
   RuntimeTool,
   RuntimeToolCall,
   RuntimeToolRef,
+  RuntimeToolResult,
 } from '@/backend/ai/agent';
 import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
+import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
 
 import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
@@ -24,6 +26,8 @@ const MCP_RESULT_PREVIEW_MAX_STRING_BYTES = 512;
 const UTF8_ENCODER = new TextEncoder();
 
 export type McpExecutableToolDescriptor = {
+  connectionKey?: string;
+  app?: import('@/shared/contracts/mcpApp').McpAppReference;
   serverId: string;
   /** Bundled identity from the server record, never inferred from remote descriptions or names. */
   pluginId?: string;
@@ -54,12 +58,21 @@ export type McpRuntimeToolSelection = {
 
 export type McpToolInvocationCapability = {
   traces?: TraceRecorder;
+  storeResult?(
+    result: unknown,
+    signal: AbortSignal,
+  ): Promise<{
+    value: unknown;
+    artifacts: import('../agent/runtime/types').RuntimeArtifact[];
+    images?: NonNullable<RuntimeToolResult['modelImages']>;
+  }>;
   invoke(
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
     discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
+    waiting?: (active: boolean) => void,
   ): Promise<unknown>;
 };
 
@@ -177,7 +190,7 @@ export function createMcpRuntimeTools(
     providerNames.add(providerName);
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
-    const effect = descriptor.effect;
+    const effect = descriptor.effect ?? 'write';
     const endpointUrl = descriptor.endpointUrl;
     const generation = descriptor.generation;
 
@@ -188,11 +201,14 @@ export function createMcpRuntimeTools(
       execute: (call) =>
         executeMcpRuntimeTool({
           call,
+          app: descriptor.app,
+          connectionKey: descriptor.connectionKey,
           effect,
           endpointUrl,
           generation,
           inputValidator,
           invoke,
+          storeResult: capability.storeResult,
           ref,
           traces: capability.traces,
         }),
@@ -204,12 +220,15 @@ export function createMcpRuntimeTools(
 }
 
 async function executeMcpRuntimeTool(input: {
+  connectionKey?: string;
   call: RuntimeToolCall;
+  app?: McpExecutableToolDescriptor['app'];
   effect: McpExecutableToolDescriptor['effect'];
   endpointUrl: string | null;
   generation: number;
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];
+  storeResult?: McpToolInvocationCapability['storeResult'];
   ref: Extract<RuntimeToolRef, { source: 'mcp' }>;
   traces?: TraceRecorder;
 }) {
@@ -232,7 +251,14 @@ async function executeMcpRuntimeTool(input: {
     }
     bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
     const remoteResult = await raceAbort(
-      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation),
+      input.invoke(
+        input.ref,
+        call.input,
+        bound.signal,
+        input.endpointUrl,
+        input.generation,
+        (active) => bound?.setPaused(active),
+      ),
       bound.signal,
     );
     if (bound.didTimeout()) {
@@ -242,7 +268,15 @@ async function executeMcpRuntimeTool(input: {
       throw input.effect === 'write' ? unknownWriteError() : cancelledError();
     }
 
-    const value = projectMcpResult(remoteResult);
+    const stored: {
+      value: unknown;
+      artifacts: RuntimeToolResult['artifacts'];
+      images?: RuntimeToolResult['modelImages'];
+    } = (await input.storeResult?.(remoteResult, call.signal)) ?? {
+      value: remoteResult,
+      artifacts: [],
+    };
+    const value = projectMcpResult(stored.value);
     const isToolError =
       remoteResult !== null &&
       typeof remoteResult === 'object' &&
@@ -252,7 +286,26 @@ async function executeMcpRuntimeTool(input: {
       isToolError ? 'error' : 'ok',
       isToolError ? { 'error.category': 'tool_result' } : undefined,
     );
-    return { artifacts: [], value };
+    return {
+      artifacts: stored.artifacts,
+      value,
+      modelContent: projectMcpModelContent(remoteResult).flatMap(
+        (block): NonNullable<RuntimeToolResult['modelContent']> => {
+          if (block.type === 'text') return [block];
+          const image = stored.images?.find(
+            (item) => item.data === block.data && item.mimeType === block.mimeType,
+          );
+          return image
+            ? [{ type: 'image', fileEntryId: image.fileEntryId, mimeType: block.mimeType }]
+            : [{ type: 'text', text: '[MCP image could not be retained as a managed attachment]' }];
+        },
+      ),
+      ...(stored.images?.length ? { modelImages: stored.images } : {}),
+      ...(input.app ? { mcpApp: input.app } : {}),
+      ...(input.connectionKey
+        ? { mcpSource: { serverId: input.ref.serverId, connectionKey: input.connectionKey } }
+        : {}),
+    };
   } catch (error) {
     endMcpTrace(trace, error, call.signal, bound?.didTimeout());
     // Preserve classified failures, including rejections before transmission.
@@ -414,6 +467,7 @@ function unknownWriteError(): McpRuntimeToolError {
 }
 
 export type BoundedSignal = {
+  setPaused: (active: boolean) => void;
   didTimeout: () => boolean;
   done: () => void;
   signal: AbortSignal;
@@ -426,14 +480,36 @@ export function createBoundedSignal(
 ): BoundedSignal {
   const timeoutController = new AbortController();
   let timedOut = false;
-  const handle = setTimeout(() => {
-    timedOut = true;
-    timeoutController.abort();
-  }, timeoutMs);
+  let remaining = timeoutMs;
+  let started = Date.now();
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  let pauseDepth = 0;
+  const start = () => {
+    started = Date.now();
+    handle = setTimeout(() => {
+      timedOut = true;
+      timeoutController.abort();
+    }, remaining);
+  };
+  start();
 
   return {
     didTimeout: () => timedOut,
-    done: () => clearTimeout(handle),
+    setPaused(active) {
+      if (finished || timedOut) return;
+      // A modern input-required round can ask several questions concurrently.
+      pauseDepth = active ? pauseDepth + 1 : Math.max(0, pauseDepth - 1);
+      if (pauseDepth > 0 && handle !== undefined) {
+        clearTimeout(handle);
+        handle = undefined;
+        remaining = Math.max(0, remaining - (Date.now() - started));
+      } else if (pauseDepth === 0 && handle === undefined) start();
+    },
+    done: () => {
+      finished = true;
+      clearTimeout(handle);
+    },
     signal:
       upstream.length === 0
         ? timeoutController.signal

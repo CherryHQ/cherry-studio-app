@@ -3,6 +3,7 @@ import * as z from 'zod';
 
 import { createErrorToolResult } from '../toolResults';
 import type { RuntimeError, RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
+import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 export const PI_TOOL_SEARCH_TOOL_NAME = 'tool_search';
 export const PI_TOOL_DESCRIBE_TOOL_NAME = 'tool_describe';
@@ -265,8 +266,8 @@ export function createPiDeferredToolDiscoveryTools(
 
 function toPiToolResult(output: RuntimeToolResult) {
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(output) }],
-    details: output,
+    content: piToolModelContent(output),
+    details: persistentToolResult(output),
   };
 }
 

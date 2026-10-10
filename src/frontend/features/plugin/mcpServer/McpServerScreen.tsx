@@ -3,12 +3,16 @@ import {
   Button,
   ContentState,
   Input,
+  Tabs,
   TextField,
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { clearInitialURL } from 'expo-linking';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -16,13 +20,14 @@ import { useUniwind } from 'uniwind';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
-import { useBackendModule } from '@/frontend/data';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
   useMcpServerApiById,
   useMcpServerMutations,
   useMcpServerRuntimeSummaries,
 } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import { McpAuthorizationError } from '@/shared/contracts/mcp';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -36,6 +41,8 @@ const logger = loggerService.withContext('McpServerScreen');
 const NEW_SERVER_SENTINEL = 'new';
 
 type McpServerFormState = {
+  authorization: 'headers' | 'oauth';
+  clientId: string;
   endpointUrl: string;
   headers: string;
   name: string;
@@ -114,6 +121,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   const router = useRouter();
   const { toast } = useToast();
   const mcp = useBackendModule('mcp');
+  const queryClient = useQueryClient();
   const { alert } = useAlert();
   const { theme } = useUniwind();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
@@ -148,7 +156,9 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     isCreating ||
     form.name !== savedForm.name ||
     form.endpointUrl !== savedForm.endpointUrl ||
-    form.headers !== savedForm.headers;
+    form.headers !== savedForm.headers ||
+    form.authorization !== savedForm.authorization ||
+    form.clientId !== savedForm.clientId;
 
   const updateField = useCallback(
     <TKey extends keyof McpServerFormState>(key: TKey, value: McpServerFormState[TKey]) => {
@@ -157,36 +167,118 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     [],
   );
 
-  const handleSave = useCallback(async () => {
-    const dto = buildDto(form, t('settings.mcp.defaultName'));
-    if (!dto.ok) {
-      alert.show({ title: t(dto.errorKey) });
-      return;
-    }
-
-    try {
-      setIsSaving(true);
-      if (serverId) {
-        await updateServer(serverId, dto.value);
-        // Show the stored values, including a name filled in from the endpoint.
-        setForm({ ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
-      } else {
-        const serverInfo = await mcp.getServerInfo({
-          endpointUrl: dto.value.endpointUrl,
-          headers: dto.value.headers,
-        });
-        const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
-        await createServer({ ...dto.value, isEnabled: true, name });
-        // The new server joins the Plugins page's MCP group; opening it from there edits it.
-        if (isFocused.current) router.back();
+  const handleSave = useCallback(
+    async (reauthorize = false) => {
+      const dto = buildDto(form, t('settings.mcp.defaultName'));
+      if (!dto.ok) {
+        alert.show({ title: t(dto.errorKey) });
+        return;
       }
-    } catch (error) {
-      logger.error('Failed to save MCP server', error as Error);
+
+      try {
+        setIsSaving(true);
+        const needsOAuth =
+          form.authorization === 'oauth' &&
+          (reauthorize ||
+            savedForm.authorization !== 'oauth' ||
+            form.endpointUrl !== savedForm.endpointUrl ||
+            form.headers !== savedForm.headers ||
+            form.clientId !== savedForm.clientId);
+        if (needsOAuth) {
+          const attempt = await mcp.beginOAuth({
+            ...dto.value,
+            serverId,
+            clientId: form.clientId.trim() || undefined,
+          });
+          if (!isFocused.current) {
+            mcp.cancelOAuth(attempt.attemptId);
+            return;
+          }
+          try {
+            const result = await WebBrowser.openAuthSessionAsync(
+              attempt.authorizationUrl,
+              attempt.redirectUrl,
+            );
+            if (result.type !== 'success') {
+              mcp.cancelOAuth(attempt.attemptId);
+              return;
+            }
+            clearInitialURL();
+            const connected = await mcp.completeOAuth(attempt.attemptId, result.url);
+            queryClient.setQueryData(queryKeys.mcpServers.detail(connected.id), connected);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
+            await queryClient.invalidateQueries({
+              queryKey: queryKeys.mcpServers.tools(connected.id),
+            });
+            if (isFocused.current) {
+              if (isCreating) router.back();
+              else setForm(createFormState(connected));
+            }
+          } finally {
+            mcp.cancelOAuth(attempt.attemptId);
+          }
+          return;
+        }
+        if (serverId) {
+          if (server?.origin !== 'builtin' && server?.oauth && form.authorization === 'headers')
+            await mcp.disconnectOAuth(serverId);
+          await updateServer(serverId, { ...dto.value, isEnabled: server?.isEnabled });
+          // Show the stored values, including a name filled in from the endpoint.
+          setForm({ ...form, ...dto.value, headers: serializeMcpHeaders(dto.value.headers) });
+        } else {
+          const serverInfo = await mcp.getServerInfo({
+            endpointUrl: dto.value.endpointUrl,
+            headers: dto.value.headers,
+          });
+          const name = serverInfo.title?.trim() || serverInfo.name.trim() || dto.value.name;
+          await createServer({ ...dto.value, isEnabled: true, name });
+          // The new server joins the Plugins page's MCP group; opening it from there edits it.
+          if (isFocused.current) router.back();
+        }
+      } catch (error) {
+        if (error instanceof McpAuthorizationError) {
+          if (error.code !== 'cancelled')
+            toast.show({ label: t(`settings.mcp.oauth.errors.${error.code}`), variant: 'danger' });
+          return;
+        }
+        logger.error('Failed to save MCP server', error as Error);
+        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [
+      alert,
+      createServer,
+      form,
+      isCreating,
+      mcp,
+      queryClient,
+      router,
+      savedForm,
+      server,
+      serverId,
+      t,
+      toast,
+      updateServer,
+    ],
+  );
+
+  const handleDisconnectOAuth = async () => {
+    if (!serverId) return;
+    setIsSaving(true);
+    try {
+      const disconnected = await mcp.disconnectOAuth(serverId);
+      queryClient.setQueryData(queryKeys.mcpServers.detail(serverId), disconnected);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.all() });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.tools(serverId) });
+      setForm(createFormState(disconnected));
+    } catch {
       toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
     } finally {
       setIsSaving(false);
     }
-  }, [alert, createServer, form, mcp, router, serverId, t, toast, updateServer]);
+  };
 
   const handleToggleServer = useCallback(async () => {
     if (!serverId || !server) {
@@ -337,6 +429,47 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           </View>
         </View>
         <View className="gap-4">
+          <FormField label={t('settings.mcp.oauth.authentication')}>
+            <Tabs
+              items={[
+                { value: 'headers', label: t('settings.mcp.fields.headers') },
+                { value: 'oauth', label: 'OAuth' },
+              ]}
+              onValueChange={(value) => {
+                if (!isBusy) updateField('authorization', value as 'headers' | 'oauth');
+              }}
+              value={form.authorization}
+            />
+          </FormField>
+          {form.authorization === 'oauth' ? (
+            <FormField label={t('settings.mcp.oauth.clientId')}>
+              <Input
+                accessibilityLabel={t('settings.mcp.oauth.clientId')}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={(value) => updateField('clientId', value)}
+                value={form.clientId}
+                placeholder={t('settings.mcp.oauth.optional')}
+              />
+              <Text className="text-xs text-muted-foreground">
+                {t('settings.mcp.oauth.clientIdHint')}
+              </Text>
+              {server?.origin !== 'builtin' && server?.oauth ? (
+                <View className="flex-row gap-3">
+                  <Button disabled={isBusy} onPress={() => void handleSave(true)}>
+                    {t('settings.mcp.oauth.reconnect')}
+                  </Button>
+                  <Button
+                    disabled={isBusy}
+                    variant="outline"
+                    onPress={() => void handleDisconnectOAuth()}
+                  >
+                    {t('settings.mcp.oauth.disconnect')}
+                  </Button>
+                </View>
+              ) : null}
+            </FormField>
+          ) : null}
           {!isCreating ? (
             <FormField label={t('settings.mcp.fields.name')}>
               <Input
@@ -407,7 +540,10 @@ function getServerStatus(
 }
 
 function createFormState(server?: McpServer): McpServerFormState {
+  const oauth = server?.origin !== 'builtin' ? server?.oauth : undefined;
   return {
+    authorization: oauth ? 'oauth' : 'headers',
+    clientId: oauth?.clientId ?? '',
     endpointUrl: server?.endpointUrl ?? '',
     headers: serializeMcpHeaders(server?.headers),
     name: server?.name ?? '',

@@ -3,6 +3,7 @@ import type { RuntimeJsonValue } from '@/backend/ai/agent';
 import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import {
   createMcpProviderName,
+  createBoundedSignal,
   createMcpRuntimeTools,
   MCP_TOOL_CALL_TIMEOUT_MS,
   MCP_TOOL_RESULT_MAX_BYTES,
@@ -24,6 +25,7 @@ function descriptor(overrides: Partial<McpExecutableToolDescriptor> = {}) {
     displayName: 'Search',
     endpointUrl: 'https://mcp.example/mcp',
     generation: 7,
+    effect: 'read' as const,
     inputSchema: VALID_INPUT_SCHEMA,
     rawToolName: 'search',
     serverId: '00000000-0000-4000-8000-000000000001',
@@ -42,6 +44,23 @@ function createTool(
 }
 
 describe('MCP Runtime adapter', () => {
+  it('pins returned resource links to host-issued source metadata, never a source forged in remote JSON', async () => {
+    const connectionKey = `remote:${'a'.repeat(64)}`;
+    const remote = {
+      content: [{ type: 'resource_link', uri: 'https://resource.example/report', name: 'Report' }],
+      mcpSource: { serverId: 'forged' },
+    };
+    const tool = createTool({ invoke: async () => remote }, { connectionKey });
+    const result = await tool.execute({
+      input: { query: 'report' },
+      signal: new AbortController().signal,
+      toolCallId: 'call',
+      turnId: 'turn',
+    });
+    expect(result.mcpSource).toEqual({ serverId: descriptor().serverId, connectionKey });
+    expect(result.value).toEqual(remote);
+    expect(result.artifacts).toEqual([]);
+  });
   it('creates stable, provider-safe aliases from stable refs', () => {
     const firstRef = {
       source: 'mcp',
@@ -123,6 +142,7 @@ describe('MCP Runtime adapter', () => {
       expect.any(AbortSignal),
       'https://mcp.example/mcp',
       7,
+      expect.any(Function),
     );
   });
 
@@ -191,8 +211,8 @@ describe('MCP Runtime adapter', () => {
 
         jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
         await expect(execution).rejects.toMatchObject({
-          code: effect === 'write' ? 'mcp_tool_write_outcome_unknown' : 'mcp_tool_timeout',
-          retryable: effect !== 'write',
+          code: effect !== 'read' ? 'mcp_tool_write_outcome_unknown' : 'mcp_tool_timeout',
+          retryable: effect === 'read',
         });
         expect(records.at(-1)).toMatchObject({
           status: 'error',
@@ -326,7 +346,7 @@ describe('MCP Runtime adapter', () => {
   ];
 
   it.each(remotePayloads)(
-    'keeps JSON payloads inside value and never creates artifacts',
+    'keeps the UI value separate from the model channel',
     async (remotePayload) => {
       const tool = createTool({ invoke: jest.fn(async () => remotePayload) });
 
@@ -337,7 +357,11 @@ describe('MCP Runtime adapter', () => {
           toolCallId: 'call-1',
           turnId: 'turn-1',
         }),
-      ).resolves.toEqual({ artifacts: [], value: remotePayload });
+      ).resolves.toMatchObject({
+        artifacts: [],
+        value: remotePayload,
+        modelContent: expect.any(Array),
+      });
     },
   );
 
@@ -365,5 +389,28 @@ describe('MCP Runtime adapter', () => {
     expect(serialized).toContain('binary string omitted');
     expect(serialized).not.toContain('A'.repeat(1024));
     expect(() => JSON.parse(serialized)).not.toThrow();
+  });
+});
+
+describe('MCP active request timeout', () => {
+  it('excludes human wait while retaining the remaining network budget', () => {
+    jest.useFakeTimers();
+    try {
+      const bound = createBoundedSignal(60_000);
+      jest.advanceTimersByTime(20_000);
+      bound.setPaused(true);
+      bound.setPaused(true);
+      bound.setPaused(false);
+      jest.advanceTimersByTime(120_000);
+      expect(bound.signal.aborted).toBe(false);
+      bound.setPaused(false);
+      jest.advanceTimersByTime(39_999);
+      expect(bound.signal.aborted).toBe(false);
+      jest.advanceTimersByTime(1);
+      expect(bound.didTimeout()).toBe(true);
+      bound.done();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

@@ -128,7 +128,17 @@ export function createAgentRuntimeToolResolver(input: {
       );
 
       return {
-        tools: mcpRuntime.createRuntimeTools(selections),
+        tools: mcpRuntime.createRuntimeTools(
+          selections.map((selection) => ({
+            ...selection,
+            descriptor: {
+              ...selection.descriptor,
+              ...(selection.descriptor.app
+                ? { app: { ...selection.descriptor.app, agentId } }
+                : {}),
+            },
+          })),
+        ),
         pluginGuides: resolveBuiltInPluginGuides(selections.map(({ descriptor }) => descriptor)),
       };
     },

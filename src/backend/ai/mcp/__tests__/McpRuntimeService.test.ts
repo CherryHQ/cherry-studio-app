@@ -1,4 +1,5 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
+import { AppState } from 'react-native';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { PluginError } from '@/shared/contracts/plugins';
@@ -24,11 +25,28 @@ jest.mock('@/backend/services/builtInMcp', () => ({
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
+jest.mock('../mcpProtocolClient', () => ({
+  createRemoteMcpClient: ({
+    config,
+    signal,
+  }: {
+    config: { endpointUrl: string; headers?: Record<string, string> };
+    signal: AbortSignal;
+  }) =>
+    mockSdkInitContract({
+      initializationOptions: { signal },
+      transport: { type: 'http', url: config.endpointUrl, headers: config.headers },
+    }),
+}));
+
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
   // Deterministic and, like a real digest, free of the input text.
   digestStringAsync: async (_algorithm: string, data: string) =>
-    [...data].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7).toString(16),
+    [...data]
+      .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7)
+      .toString(16)
+      .padStart(64, '0'),
 }));
 
 jest.mock('expo-file-system', () => {
@@ -208,6 +226,7 @@ function makeService(servers: McpServer[], traces?: TraceRecorder) {
 }
 
 beforeEach(() => {
+  jest.replaceProperty(AppState, 'currentState', 'active');
   mockCreateMCPClient.mockReset();
   storedFiles.clear();
 });
@@ -387,7 +406,10 @@ describe('listTools', () => {
       Object.assign(new Error('session expired'), { statusCode: 503 }),
     );
     const fresh = makeClient(makeRawTools(['search']));
-    mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(fresh);
+    mockCreateMCPClient
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValue(fresh);
     const server = makeServer();
     const { service } = makeService([server], traces);
 
@@ -500,6 +522,7 @@ describe('Runtime tool adapter', () => {
     const descriptors = await service.listExecutableToolDescriptors(server.id);
     expect(descriptors).toEqual([
       {
+        connectionKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
         description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
@@ -555,8 +578,16 @@ describe('Runtime tool adapter', () => {
         toolCallId: 'call-1',
         turnId: 'turn-1',
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       artifacts: [],
+      modelContent: [
+        { type: 'text', text: 'result' },
+        { type: 'text', text: '{"count":1}' },
+      ],
+      mcpSource: {
+        serverId: server.id,
+        connectionKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
+      },
       value: {
         content: [{ text: 'result', type: 'text' }],
         structuredContent: { count: 1 },
@@ -931,7 +962,7 @@ describe('catalog reuse', () => {
     expect(JSON.parse(storedFiles.get(catalogPath(server.id))!)).toMatchObject({
       serverId: server.id,
       tools: [expect.objectContaining({ name: 'search' })],
-      version: 1,
+      version: 2,
     });
   });
 
@@ -992,7 +1023,7 @@ describe('catalog reuse', () => {
     await expect(executeFrozenTool(service, search)).resolves.toMatchObject({
       value: expect.objectContaining({ name: 'search' }),
     });
-    expect(reconnected.listTools).toHaveBeenCalledTimes(1);
+    expect(reconnected.listTools).toHaveBeenCalledTimes(2);
     expect(reconnected.listTools.mock.invocationCallOrder[0]).toBeLessThan(
       reconnected.callTool.mock.invocationCallOrder[0]!,
     );
@@ -1020,7 +1051,7 @@ describe('catalog reuse', () => {
     await expect(executeFrozenTool(service, descriptor!)).resolves.toMatchObject({
       value: { content: [{ text: 'ok', type: 'text' }] },
     });
-    expect(fresh.listTools).toHaveBeenCalledTimes(1);
+    expect(fresh.listTools).toHaveBeenCalledTimes(2);
     expect(fresh.callTool).toHaveBeenCalledTimes(1);
   });
 

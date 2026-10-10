@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { View } from 'react-native';
 
 import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/Composer';
+import { McpContentPicker } from '@/frontend/components/McpContent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
@@ -21,6 +22,7 @@ export function ChatInputMenu({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const [isMcpContentOpen, setIsMcpContentOpen] = useState(false);
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const openDocumentPicker = useComposerDocumentPicker();
 
@@ -37,6 +39,12 @@ export function ChatInputMenu({
   return (
     <>
       <ComposerMenu onPickFiles={() => setIsFilePickerOpen(true)} triggerRef={triggerRef}>
+        <Composer.Menu.Item
+          icon={<BoxesIcon className="size-5 text-foreground" />}
+          label={t('mcp.content.title')}
+          onPress={() => setIsMcpContentOpen(true)}
+          testID="chat-composer-mcp-content"
+        />
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}
@@ -46,6 +54,7 @@ export function ChatInputMenu({
           />
         )}
       </ComposerMenu>
+      {isMcpContentOpen ? <McpContentPicker onClose={() => setIsMcpContentOpen(false)} /> : null}
       {isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />
       ) : null}
