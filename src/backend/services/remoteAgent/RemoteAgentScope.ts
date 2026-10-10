@@ -469,11 +469,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
     const signal = linked?.signal ?? this.lease.signal;
     try {
       const session = await this.ready(signal);
-      if (this.state.attachments !== (session.agentAttachmentDraftsVersion === 1)) {
+      if (this.state.attachments !== (session.agentAttachmentSelections === true)) {
         this.state = {
           ...this.state,
-          attachments: session.agentAttachmentDraftsVersion === 1,
-          preupload: session.agentAttachmentDraftsVersion === 1,
+          attachments: session.agentAttachmentSelections === true,
+          preupload: session.agentAttachmentSelections === true,
         };
         for (const listener of this.stateListeners) listener();
       }
@@ -1084,7 +1084,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
               )
             : undefined;
         const result = await this.actions.start(input, prepared);
-        if (prepared) this.attachmentDrafts!.submitted(prepared.attachmentDraft.draftId);
+        if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
         return result;
       }),
     );
@@ -1116,12 +1116,18 @@ export class RemoteAgentScope implements RemoteAgentSource {
           const command = await this.actions.create(
             'send',
             'agent.messages.send',
-            { ...params, text, ...(prepared ? { attachmentDraft: prepared.attachmentDraft } : {}) },
+            {
+              ...params,
+              text,
+              ...(prepared
+                ? { attachments: prepared.uploaded, selectionId: prepared.selectionId }
+                : {}),
+            },
             text,
             commandId,
             attachments,
           );
-          if (prepared) this.attachmentDrafts!.submitted(prepared.attachmentDraft.draftId);
+          if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
           if (command.status === 'pending') observation.pendingCommandId = command.id;
           else observation.pendingSubmission = false;
           if (command.status === 'applied') this.refreshExecutionCheckpoint(params.sessionId);

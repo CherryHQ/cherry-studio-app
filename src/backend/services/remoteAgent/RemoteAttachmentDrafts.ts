@@ -1,9 +1,6 @@
 import {
-  attachmentDraftSubmissionSchema,
-  attachmentDraftSchema,
   attachmentDraftManifestSchema,
   agentUploadLimits,
-  type AgentAttachmentDraftItem,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
@@ -53,15 +50,8 @@ const recordSchema = z.object({
   sessionId: z.string().optional(),
   files: z.array(fileSchema),
   generation: z.number(),
-  initial: attachmentDraftManifestSchema.optional(),
-  remote: attachmentDraftSchema.optional(),
-  mutation: z
-    .object({
-      mutationId: z.string(),
-      expectedManifestRevision: z.string(),
-      items: attachmentDraftManifestSchema,
-    })
-    .optional(),
+  removed: z.array(fileSchema).default([]),
+  sequence: z.number().default(0),
   blocked: z.boolean().optional(),
   error: z.string().optional(),
   cancelId: z.string().optional(),
@@ -69,25 +59,6 @@ const recordSchema = z.object({
   cancelled: z.boolean().optional(),
 });
 type RecordEntry = z.infer<typeof recordSchema>;
-
-function sameManifest(
-  left: readonly AgentAttachmentDraftItem[],
-  right: readonly AgentAttachmentDraftItem[],
-) {
-  return (
-    left.length === right.length &&
-    left.every((item, index) => {
-      const other = right[index];
-      return (
-        item.attachmentId === other.attachmentId &&
-        item.uploadId === other.uploadId &&
-        item.filename === other.filename &&
-        item.mediaType === other.mediaType &&
-        item.byteLength === other.byteLength
-      );
-    })
-  );
-}
 
 /** Owns pre-send uploads independently of composer mounts and durable send commands. */
 export class RemoteAttachmentDrafts {
@@ -124,7 +95,7 @@ export class RemoteAttachmentDrafts {
         !row.submitted &&
         !row.cancelled &&
         !row.blocked &&
-        (!row.remote || row.files.some((file) => !file.ready) || !row.files.length),
+        (row.files.some((file) => !file.ready) || row.removed.length > 0 || !row.files.length),
     );
   private persist() {
     this.records = this.records.filter((row) => !row.submitted && !row.cancelled);
@@ -165,7 +136,16 @@ export class RemoteAttachmentDrafts {
     if (!row) {
       if (!attachments.length) return;
       if (this.records.length >= 32) throw new RemoteAgentError('ACTION_LIMIT');
-      row = { key, id: randomUUID(), createId: randomUUID(), target, files: [], generation: 0 };
+      row = {
+        key,
+        id: randomUUID(),
+        createId: randomUUID(),
+        target,
+        files: [],
+        removed: [],
+        sequence: 0,
+        generation: 0,
+      };
       this.records.push(row);
     }
     if (
@@ -174,15 +154,7 @@ export class RemoteAttachmentDrafts {
       ) === JSON.stringify(attachments)
     ) {
       if (row.blocked) {
-        if (
-          row.error === 'NOT_FOUND' ||
-          (row.remote && Date.parse(row.remote.expiresAt) <= Date.now())
-        ) {
-          row.id = randomUUID();
-          row.initial = undefined;
-          row.remote = undefined;
-          row.mutation = undefined;
-          row.cancelId = undefined;
+        if (row.error === 'NOT_FOUND') {
           row.files = row.files.map((file) => ({
             ...file,
             attachmentId: randomUUID(),
@@ -208,6 +180,11 @@ export class RemoteAttachmentDrafts {
           saved: [],
           ready: false,
         },
+    );
+    row.removed.push(
+      ...previous.filter(
+        (file) => !row.files.some((current) => current.uploadId === file.uploadId),
+      ),
     );
     row.blocked = false;
     row.generation++;
@@ -292,66 +269,31 @@ export class RemoteAttachmentDrafts {
       byteLength: file.size!,
     }));
     attachmentDraftManifestSchema.parse(items);
-    if (!row.initial) {
-      row.initial = items;
-      this.persist();
-    }
-    if (row.remote) {
-      row.remote = await this.request('agent.attachmentDrafts.get', { draftId: row.id }, signal);
-      if (row.remote.state === 'submitted' || row.remote.state === 'cancelled') {
-        row.submitted = true;
-        this.persist();
-        return;
-      }
-    }
-    if (!row.remote) {
-      row.remote = await this.request(
-        'agent.attachmentDrafts.open',
-        { draftId: row.id, sessionId: row.sessionId, items: row.initial },
-        signal,
-      );
-      this.persist();
-    }
-    if (row.mutation || !sameManifest(row.remote.items, items)) {
-      if (!row.mutation) {
-        row.mutation = {
-          mutationId: randomUUID(),
-          expectedManifestRevision: row.remote.manifestRevision,
-          items,
-        };
-        this.persist();
-      }
-      row.remote = await this.request(
-        'agent.attachmentDrafts.update',
-        { draftId: row.id, ...row.mutation },
-        signal,
-      );
-      row.mutation = undefined;
-      this.persist();
+    row.sequence++;
+    this.persist();
+    await this.request(
+      'agent.attachments.present',
+      {
+        selectionId: row.id,
+        sessionId: row.sessionId,
+        sequence: String(row.sequence),
+        items,
+      },
+      signal,
+    );
+    for (const file of [...row.removed]) {
+      await this.request('agent.uploads.cancel', { uploadId: file.uploadId }, signal);
       signal.throwIfAborted();
-      if (!sameManifest(row.remote.items, items)) return this.advance(row, signal);
+      row.removed = row.removed.filter((item) => item.uploadId !== file.uploadId);
+      this.persist();
     }
     if (!items.length) {
-      const mutationId = (row.cancelId ??= randomUUID());
-      this.persist();
-      row.remote = await this.request(
-        'agent.attachmentDrafts.cancel',
-        { draftId: row.id, mutationId, expectedManifestRevision: row.remote.manifestRevision },
-        signal,
-      );
       row.cancelled = true;
       this.persist();
       return;
     }
     for (const file of row.files) {
       signal.throwIfAborted();
-      if (
-        file.ready &&
-        row.remote.items.some(
-          (item) => item.uploadId === file.uploadId && item.upload?.state === 'ready',
-        )
-      )
-        continue;
       file.ready = false;
       await uploadAttachments(
         [file],
@@ -372,13 +314,12 @@ export class RemoteAttachmentDrafts {
           this.persist();
         },
         this.getTransport,
-        { draftId: row.id, attachmentId: file.attachmentId, uploadId: file.uploadId },
+        file.uploadId,
       );
       signal.throwIfAborted();
       file.ready = true;
       this.persist();
     }
-    row.remote = await this.request('agent.attachmentDrafts.get', { draftId: row.id }, signal);
     this.persist();
   }
   async prepare(key: string, target: RemoteAttachmentDraftTarget, attachments: RemoteAttachment[]) {
@@ -391,7 +332,7 @@ export class RemoteAttachmentDrafts {
   ready(key: string, attachments: RemoteAttachment[]) {
     const row = this.records.find((row) => row.key === key && !row.submitted && !row.cancelled);
     if (
-      !row?.remote ||
+      !row ||
       !row.sessionId ||
       this.running.has(row.id) ||
       row.files.length !== attachments.length ||
@@ -402,10 +343,8 @@ export class RemoteAttachmentDrafts {
       throw new RemoteAgentError('CONFLICT');
     return {
       sessionId: row.sessionId,
-      attachmentDraft: attachmentDraftSubmissionSchema.parse({
-        draftId: row.id,
-        manifestRevision: row.remote.manifestRevision,
-      }),
+      selectionId: row.id,
+      uploaded: row.files.map((file) => ({ uploadId: file.uploadId })),
     };
   }
   reconcile(draftIds: ReadonlySet<string>) {

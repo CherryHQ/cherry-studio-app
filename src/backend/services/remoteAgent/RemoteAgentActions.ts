@@ -60,6 +60,7 @@ const StartSchema = z
     sendId: z.string(),
     uploads: z.array(uploadProgressSchema).optional(),
     uploaded: uploadReferencesSchema.optional(),
+    selectionId: z.string().optional(),
     attachmentDraft: attachmentDraftSubmissionSchema.optional(),
     status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
     sessionId: z.string().optional(),
@@ -170,9 +171,14 @@ export class RemoteAgentActions {
   admittedAttachmentDrafts(): ReadonlySet<string> {
     return new Set([
       ...this.starts.flatMap((entry) =>
-        entry.attachmentDraft ? [entry.attachmentDraft.draftId] : [],
+        entry.selectionId
+          ? [entry.selectionId]
+          : entry.attachmentDraft
+            ? [entry.attachmentDraft.draftId]
+            : [],
       ),
       ...this.records.flatMap((entry) => {
+        if (typeof entry.params.selectionId === 'string') return [entry.params.selectionId];
         const parsed = attachmentDraftSubmissionSchema.safeParse(entry.params.attachmentDraft);
         return parsed.success ? [parsed.data.draftId] : [];
       }),
@@ -330,7 +336,8 @@ export class RemoteAgentActions {
     input: RemoteStartInput,
     prepared?: {
       sessionId: string;
-      attachmentDraft: z.infer<typeof attachmentDraftSubmissionSchema>;
+      selectionId: string;
+      uploaded: z.infer<typeof uploadReferencesSchema>;
     },
   ): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
@@ -479,6 +486,7 @@ export class RemoteAgentActions {
             sessionId: entry.sessionId!,
             text: entry.text,
             expectedIdleRevision: result.session.idleRevision,
+            ...(entry.selectionId ? { selectionId: entry.selectionId } : {}),
             ...(entry.attachmentDraft
               ? { attachmentDraft: entry.attachmentDraft }
               : entry.uploaded

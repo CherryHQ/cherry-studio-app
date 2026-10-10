@@ -241,11 +241,11 @@ importers:
         specifier: workspace:*
         version: link:packages/provider-registry
       '@cherrystudio/remote-protocol':
-        specifier: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz
-        version: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz(zod@4.4.3)
+        specifier: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz
+        version: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.3.tgz
-        version: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.3.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz(zod@4.4.3))
+        specifier: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz
+        version: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3))
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -1772,17 +1772,17 @@ packages:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz':
-    resolution: {integrity: sha512-7lxI0K+X1BGK+pUSVmr3+l18TxdjohXlRAQZqpoAkMeQSAJ3yZ2xe2S5ev7pbEMfptgIHV73Zv+otKgnY+0vhg==, tarball: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz}
-    version: 0.4.0-attachments.6
+  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz':
+    resolution: {integrity: sha512-KtiOiAzrx1KAQLzWMktkvnLZhlLnBHUYHFHTc/q3U8NfXMNMdTJUOHqN4295cViPugDGFm7TNC3Q1PTB4kOl/Q==, tarball: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz}
+    version: 0.4.0-attachments.9
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.3.tgz':
-    resolution: {integrity: sha512-Hd5wBZotWTZJAXNFYcwDLuuszahJqAISagYs2VZqchDiQcgY7nHKDpS9KEX82nnq+L35HgvJpJUrRq+5uWAKjw==, tarball: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.3.tgz}
-    version: 0.2.0-attachments.3
+  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz':
+    resolution: {integrity: sha512-rZxaNVRcOFZGhzxxVKEVuB2qlb93X9A9AWAxq0mZ5OlAoLeVB6yu17TjQ6gSjK8Mb7P9Rjz4yDIpkeGkLAqoqw==, tarball: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz}
+    version: 0.2.0-attachments.6
     peerDependencies:
-      '@cherrystudio/remote-protocol': 0.4.0-attachments.6
+      '@cherrystudio/remote-protocol': 0.4.0-attachments.9
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -11362,14 +11362,14 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.3.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz(zod@4.4.3))':
+  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3))':
     dependencies:
-      '@cherrystudio/remote-protocol': file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.6.tgz(zod@4.4.3)
+      '@cherrystudio/remote-protocol': file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2

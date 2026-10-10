@@ -49,7 +49,7 @@ export async function uploadAttachments(
   saved: SavedUpload[],
   save: (value: SavedUpload[]) => void,
   getTransport: GetUploadTransport,
-  draft?: { draftId: string; attachmentId: string; uploadId: string },
+  uploadId?: string,
 ): Promise<AgentUploadReference[]> {
   const startedAt = Date.now();
   let acknowledgedBytes = 0;
@@ -89,7 +89,7 @@ export async function uploadAttachments(
         throw new RemoteAgentError('INVALID_ATTACHMENT');
       if (!entry) {
         const metadata = uploadMetadataSchema.safeParse({
-          uploadId: draft?.uploadId ?? randomUUID(),
+          uploadId: uploadId ?? randomUUID(),
           filename: attachment.name,
           mediaType: attachment.mediaType,
           byteLength: size,
@@ -106,7 +106,7 @@ export async function uploadAttachments(
         // This helper runs only before the immutable send parameters are recorded.
         entry = {
           ...entry,
-          metadata: { ...entry.metadata, uploadId: draft?.uploadId ?? randomUUID() },
+          metadata: { ...entry.metadata, uploadId: uploadId ?? randomUUID() },
           resume: undefined,
         };
         remember(entry);
@@ -114,7 +114,6 @@ export async function uploadAttachments(
           'agent.uploads.prepare',
           {
             ...entry.metadata,
-            ...(draft ? { draftId: draft.draftId, attachmentId: draft.attachmentId } : {}),
           },
           signal,
         );

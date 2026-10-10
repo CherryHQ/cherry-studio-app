@@ -1,175 +1,213 @@
-# Managed attachment drafts — mobile integration plan
+# Managed attachments — checkpoint-based desktop integration
 
-Status: **implementation integrated; acceptance in progress**, 2026-10-10. Design baseline `cb439748a`.
-The earlier upload-on-Send implementation is documented in [File Transfer](./file-transfer.md).
+Status: **simplification integrated; acceptance in progress**, 2026-10-10.
+Desktop attachment-draft/intake tables, DB services and their unpublished development migrations
+have been removed. New sends use direct references and desktop presence is disposable.
+[File Transfer](./file-transfer.md) records the implemented transport and historical decisions.
 
-The cross-client design is owned by the desktop repository at
-`docs/references/file/managed-attachments-design.md`, tracked with
+The authoritative cross-client design is in the desktop repository at
+`docs/references/file/managed-attachments-design.md`, tracked by
 [desktop PR #21399](https://github.com/CherryHQ/cherry-studio/pull/21399).
-It covers FileIntakeService, FileManager publication, draft/message reference ownership,
-native harness file access, crash recovery, wire methods and acceptance. This companion records
-mobile-specific integration; it does not define a second protocol or copy the desktop state machine.
-The design documents are local until their documentation changes are published.
+Mobile work is tracked by [PR #1190](https://github.com/CherryHQ/cherry-studio-app/pull/1190).
+Consume its shared protocol package; do not introduce mobile-private wire schemas.
 
-## Target interaction
+## One owner for each fact
+
+| Fact | Authority |
+|---|---|
+| Unsent text and selected attachments | Persistent mobile draft |
+| Received bytes, durable offset, publication and temporary retention | Desktop file module and filesystem checkpoint |
+| Submitted message and execution association | Desktop message/command system in its existing SQLite database |
+| Desktop pending user-message block | Disposable projection of mobile selection and desktop upload progress |
+
+Desktop does not edit the phone's draft. It does not need a durable draft revision, claim, consume
+or release state machine. After desktop restart while the phone is offline, pending presentation
+may disappear until reconnection. Upload bytes and checkpoints remain recoverable independently.
+
+Both desktop `attachment_draft` and `file_intake`, including their dedicated reference tables,
+have been removed. Normal FileEntry, message references and command records remain.
+Desktop checkpoints now own publication identity and retention, with a recovery barrier before
+automatic cleanup. Source-copy reduction on mobile remains separate pending work.
+
+## Selection, upload and send
 
 ```mermaid
 sequenceDiagram
     participant UI as Composer
-    participant Tasks as RemoteAgentScope draft tasks
-    participant PC as Desktop intake and drafts
-    UI->>Tasks: Select attachment with stable identity
-    Tasks->>Tasks: Persist local intent
-    Tasks->>PC: Ensure session, open attachment draft
-    PC-->>PC: Display pending user-message block
-    Tasks->>Tasks: Resolve source and compute digest
-    Tasks->>PC: Resume, send bounded chunks, complete
-    PC-->>Tasks: Durable progress, then managed file ready
-    Tasks-->>UI: All attachments ready; Send may be enabled
-    UI->>Tasks: Explicit Send
-    Tasks->>PC: Send immutable command with draft revision
-    PC-->>Tasks: Receipt and committed message association
+    participant Task as Mobile draft/task owner
+    participant Files as Desktop file module
+    participant Chat as Desktop messages
+    UI->>Task: Select attachment
+    Task->>Task: Persist selection and source ownership
+    Task->>Files: Prepare upload; publish disposable selection metadata
+    Files-->>UI: Desktop can show pending progress
+    Task->>Task: Prepare stable source if needed
+    Task->>Files: Resume, binary DATA, complete
+    Files-->>Task: Durable offsets, then ready
+    Task-->>UI: All selected files ready; enable Send
+    UI->>Task: Explicit Send
+    Task->>Task: Persist immutable command and transfer source retention
+    Task->>Chat: commandId + text + explicit upload refs
+    Chat->>Files: Validate and protect ready files
+    Chat->>Chat: Transaction: message, file refs, command/execution association
+    Chat-->>Task: Existing command result
 ```
 
-The tile starts loading immediately after selection. Desktop visibility begins when draft metadata
-arrives, before the full-file digest pass. Offline selection cannot appear on an unreachable PC.
-Uploading does not submit text or start the Agent. A ready draft waits for explicit Send.
+The diagram groups desktop presentation with the file endpoint for brevity; authentication and
+selection projection remain Remote adapter responsibilities. File intake does not own chat UI.
+Loading starts when selection is accepted, including local preparation. An offline phone cannot
+make its selection appear on an unreachable desktop. Upload completion never starts the Agent.
 
-## Ownership and dependencies
+Send freezes this intent rather than a pointer to a desktop draft revision:
 
-| Owner | Planned responsibility |
-| --- | --- |
-| `RemoteAgentRuntime` | Retain scopes with unfinished draft work independently of routes |
-| `RemoteAgentScope` | Draft task lifecycle, cancel intent, progress, upload/receipt recovery |
-| Draft journal within `remoteAgent` | Local file refs, stable owner binding, task identities, manifest and cancel state |
-| `RemoteAgentActions` | Immutable admitted command params and receipts; no longer owns starting uploads on Send |
-| `DesktopConnectionManager` | Existing connection demand, AppState, endpoint choice and reconnect |
-| `remoteUploads.ts` | Bounded byte transfer through injected file/request ports; per-file progress |
-| `appShell/conversation/remote` | Credential-free snapshots, bound commands, resource and pending-row projection |
-| Composer and message adapters | Map local/remote resources to the same attachment presentation |
-| CherryUI file-preview | Pure preview frame, border progress, metadata-only state, accessibility |
+```ts
+agent.messages.send({
+  commandId,
+  sessionId,
+  expectedIdleRevision,
+  text,
+  attachments: [{ uploadId }]
+})
+```
 
-Bootstrap injects dependencies through the existing backend composition. Do not resolve a new
-service host from a late callback. Stop owners before releasing their connection/file dependencies;
-await tracked tasks. A route release unsubscribes, while explicit removal/cancel persists intent
-before aborting or scheduling best-effort remote cleanup.
+Receipt recovery precedes upload lookup. Once a command might have reached the desktop, retry
+with the same ID and body, even after upload expiry. Clearing the composer or removing a newer
+attachment is not message recall. A definitive rejection permits an explicit new attempt.
 
-Local source file refs require durable retention for the draft lifetime, including across process
-restart. Audit the file module's existing retention contract before changing automatic deletion;
-do not assume a component-held URI keeps a file alive. Missing/deleted files are reported per item.
-The phone stores draft intents and command recovery, not a second SQLite copy of remote history.
+Handoff persists the frozen command before retiring its preparation task. Startup reconciles
+both journals so a crash between these steps neither loses source ownership nor starts another
+send. Desktop establishes normal message references before releasing temporary protection.
+The final Agent result still follows the existing execution journal; external tools are not replayed
+merely to repair bookkeeping.
 
-## Contracts and race handling
+## Local source retention and large files
 
-- Consume the new draft capability and schemas from the desktop-owned shared package. Existing
-  `agentUploadsVersion: 1` is not sufficient to enable the new flow. Published package integration
-  is a release dependency; do not introduce copied schemas or absolute workspace dependencies.
-- Draft identity is scoped by paired desktop identity, device, grant and session. Local attachment
-  identity is independent of the filename and upload attempt. Target changes create a new draft;
-  late callbacks check binding, task generation and attachment membership before saving.
-- Separate manifest revision from progress sequence. Progress cannot invalidate an otherwise
-  unchanged send manifest. Stream epoch changes install a fresh snapshot using the existing
-  subscription/checkpoint activation protocol, avoiding a get-then-listen race.
-- Resume with stable upload/resume identities and the desktop's durable offset. Keep SHA-256
-  source validation and writer fencing; do not load a large file wholly into JS memory.
-- Treat connection failures as retryable, including readiness failures before a chunk request.
-  OS suspension is a pause, not guaranteed background execution. Recovery is runtime-owned.
-- Cancel is journaled before abort/cleanup. A late successful complete cannot reattach a removed
-  item. Once a send is admitted/uncertain, cancellation is no longer upload cancellation.
-- On Send, atomically hand the selected manifest to the command journal, then clear that composer
-  generation. Never interpret the normal Composer clear-on-Send as user removal. A newer draft
-  must not be overwritten when an earlier operation fails.
-- Receipt recovery precedes draft/upload lookup and never changes a frozen command body. A true
-  rejection may return content to an undelivered action; edit restores available files and text,
-  reporting missing items. A submitted draft is associated with its actual message identity.
-- First attachment in a new conversation is proposed to create an empty desktop session using the
-  existing idempotent create command. This changes when an empty session appears; the desktop
-  design records it as a product decision. Cancelling a draft does not silently delete the session.
+The uploader needs stable, reopenable bytes, not necessarily a full copy in app data.
+Current document selection can copy into picker cache and then into `Data/Files`; imported files
+use My Files' manual retention. Current uploads reuse imported originals and create a persisted
+snapshot for mutable/generated content. Reducing these copies is **pending work**.
 
-## React and component changes
+- Prefer direct reading only when durable permissions, restart reopening and unchanged content
+  are guaranteed. A URI or unchanged size alone does not establish those properties.
+- Otherwise keep one necessary stable snapshot. An app-owned picker cache file may be moved or
+  adopted when ownership and filesystem boundaries permit. Cross-filesystem adoption may require
+  copying first and removing the app-owned temporary source after successful publication.
+- Never move or delete a user's external original. Do not simply disable picker cache copying
+  before the native reader and persisted URI permission contract support it.
+- Drafts/tasks retain temporary sources. Admitted or uncertain commands retain them after the
+  composer clears, until terminal resolution no longer needs them. User-saved files keep their
+  existing retention policy; draft disposal is not permission to delete them.
+- Missing or changed source bytes fail explicitly; do not resume an old upload using a replacement.
+  Source preparation time and storage costs must be measured separately from network transfer.
 
-Selection/paste/camera completion invokes an explicit Composer action that registers a draft task.
-Do not watch the attachment array in an effect to start or cancel transfers. Task recovery belongs
-to backend startup/reconnect, and component cleanup only releases observation.
+The implemented transport uses 1 MiB binary blocks, a window of two, and bounded encrypted frames.
+There is no mobile whole-file SHA-256 pre-scan or per-block business digest. Desktop computes the
+final hash before publication. This is not an independent checksum comparison against the phone's
+original; stable source ownership is still required. Keep byte buffers outside React/query caches.
 
-Use the existing source subscription adapter; if adapting an external store, keep immutable cached
-snapshots and stable subscriptions as required by
-[useSyncExternalStore](https://react.dev/reference/react/useSyncExternalStore).
-Derive `canSend` from content, target availability, submission state and all files being ready;
-do not synchronize another boolean through an effect. User-triggered mutations stay in actions,
-following [React's effect guidance](https://react.dev/learn/you-might-not-need-an-effect).
-[StrictMode](https://react.dev/reference/react/StrictMode) remounts must not duplicate transfers.
+Limits remain 1 GiB/file, 2 GiB/message, eight files, 24-hour idle retention, seven-day lifetime,
+and 4/8 GiB per-device/global desktop staging reservations. Ready unsent uploads still count.
+Selection presence does not renew retention indefinitely. Native OS background upload is a separate
+capability; this work supports pause and foreground/relaunch recovery, not continuous JS execution.
 
-Each attachment tile observes only its transfer state; the Send control observes readiness.
-Coalesce progress updates at the task boundary, emit terminal states immediately, and keep byte
-buffers outside React and query caches. Stable attachment keys preserve previews while progress
-changes. Use existing native motion primitives for border animation, not frame-by-frame setState.
+## Disposable desktop selection
 
-The common visual is CherryUI `FilePreview` with `variant="attachment"`, currently used by
-`FileEntryPreview` in the composer. Extend its neutral frame with progress and metadata-only
-support, then use it for remote message attachments too. Do not fake a URI or FileEntry to reuse it.
-Do not automatically download gigabyte attachments for thumbnails. Sender-local verified files
-can supply the preview; other devices show the same metadata tile until bytes are requested.
-Opening/downloading/sharing remain business-adapter operations; the UI package receives props.
+Send full selection snapshots on change and reconnect, with a display identity, session, sequence,
+attachment identities, names/sizes and upload IDs when available. The desktop binds them to the
+current authenticated connection generation and owner; old generations/sequences cannot replace
+newer state. These are presentation updates, not durable mutation commands or draft CAS.
 
-Loading states distinguish import/hash preparation, acknowledged transfer, verification/publication,
-paused and failed. At 100% bytes the file may still be verifying, so Send stays disabled. Per-item
-failure blocks the full message until retry or explicit removal. All new strings follow i18n rules;
-the progress border also exposes accessible state and respects reduced motion.
+Upload progress/readiness comes from the desktop file module. Empty selection removes the view.
+A command ID associates the pending block with the eventual formal message; committed commands
+suppress delayed selection updates. History-first and ACK-first delivery must both show one user
+message. No desktop physical path or arbitrary FileEntry ID becomes a client authority.
 
-## Implementation and acceptance
+The shared method is `agent.attachments.present`; `selectionId` in send is presentation correlation,
+not a content lookup. Keep the existing
+connection/IPC notification infrastructure rather than introducing a second subscription protocol.
+First attachment currently creates an empty desktop session through the idempotent create command;
+retain that behavior for this refactor. Cancellation does not delete the session or run the Agent.
+Target changes cannot silently carry tasks to another grant/session.
 
-1. Desktop file intake and durable managed publication; validate bytes, checkpoints and cleanup races.
-2. Desktop draft protocol and source package publication; add mobile consumed-contract tests.
-3. Move mobile pre-send uploads into durable draft tasks; test cancel/restart/target change and handoff.
-4. Unify tiles and add per-file progress; test selectors/actions and perform actual device acceptance.
-5. Verify first-session creation, desktop pending projection and history association together.
+## Runtime, functions and interfaces
 
-Keep the existing upload-on-Send decoder only for persisted commands/older supported peers during
-migration. Define retirement against the desktop release and journal retention; never reinterpret
-an old uncertain command with new references. Keep one active task owner rather than two upload
-loops behind separate UI states.
+| Existing module | Target change |
+|---|---|
+| `RemoteAgentRuntime` | Retain scopes with unfinished tasks independently of routes |
+| `RemoteAgentScope` | Coordinate selection actions, connection demand, task/receipt recovery and presence |
+| `RemoteAttachmentDrafts` | Keep mobile selection and source ownership; remove desktop manifest CAS/claim synchronization |
+| `RemoteAgentActions` | Freeze explicit upload refs; preserve immutable admitted bodies and terminal/uncertain semantics |
+| `remoteUploads.ts` | Preserve bounded native binary upload, persisted resume identity and writer fencing |
+| `DesktopConnectionManager` | Keep existing endpoint choice, AppState and reconnect ownership |
+| `shared/contracts/remoteAgent` | Expose credential-free stable task/progress snapshots and explicit actions |
+| `appShell/conversation/remote` | Adapt readiness, send handoff, undelivered restoration and local preview resources |
+| Composer / file-preview adapters | Use the same attachment visual and alignment for composer and messages |
 
-Meaningful acceptance includes bytes after a mid-file restart, no second message after a lost
-receipt, durable cancellation with cleanup pending, source deletion, hash mismatch, first file-only
-message, simultaneous same-name files, UI detach/reattach, StrictMode, history/event arrival in either
-order, and Android/iOS background/foreground plus VPN transitions. Measure memory, throughput and
-main-thread responsiveness for 1 GiB; unit tests alone cannot establish native acceptance.
+Bootstrap injects dependencies; late callbacks do not discover a new service host. Shutdown stops
+owners and awaits tracked work before closing file/connection dependencies. Avoid introducing a
+generic lease framework or duplicating the desktop history database on the phone.
 
-Agents continue using the harness's native read/edit/write/bash against ordinary file paths.
-No dedicated attachment read/patch tools are introduced. The desktop host owns path allocation,
-change observation, metadata reconciliation and publishing stable result snapshots. The mobile
-preview/resource path consumes published files, not in-progress mutable bytes with a stale digest.
-It never receives the desktop's physical storage path or writes desktop FileEntry rows directly.
+Removal persists local intent before abort/remote cleanup. Callbacks check attachment ID, binding
+and generation; a late complete cannot reattach a removed item. Cancellation and send are distinct:
+a desktop send that already protected the files may complete, while an earlier cancellation causes
+send validation to reject. Uncertain commands remain owned by command recovery.
 
-Preserving original message attachments while allowing native editing requires separate content
-states. The host chooses snapshot/clone/copy mechanics; the Agent does not perform a mandatory
-export-edit-import tool sequence. FileManager API locks do not constrain native bash writes, so
-watcher notifications are invalidation hints and publication must verify a stable snapshot.
+## React and presentation
 
-## Implemented mapping
+Network mutations start in explicit selection/remove/cancel/send actions, not effects observing the
+attachment array. Component unmount only unsubscribes. Normal clear-on-Send is an explicit handoff,
+not removal. Late failure restoration cannot overwrite a newer draft.
 
-`RemoteAttachmentDrafts` owns persisted intents, bounded upload/recovery, manifest CAS and cancellation.
-Composer attachment actions register changes; silent clear-on-Send does not remove a server draft.
-The action journal is authoritative after admission, including across the crash gap between journaling
-and retiring the preparation task. An explicit resend may prepare a fresh draft; recovery of an
-uncertain command always preserves its recorded body. Reopening a conversation restores unsent
-managed references, while missing local sources are reported.
+Use cached immutable snapshots and stable subscriptions through the existing external-store
+adapter. Derive `canSend` from content, target availability, submission state and all files ready.
+Each tile observes its own progress; coalesce updates around 100 ms and emit terminal states
+immediately. Stable attachment keys and task ownership prevent StrictMode remount duplication.
 
-The first attachment creates an empty desktop session. Workspace selection is disabled while files
-are attached; remove them before changing the target. Imports belong to My Files and retain their
-existing manual retention policy. Draft disposal never deletes those source files.
+Composer and messages share CherryUI `FilePreview` attachment presentation. User attachments align
+right and wrap; business adapters supply local resources or remote metadata without fake URIs.
+Border loading covers source preparation, transfer and final desktop verification. 100% bytes does
+not enable Send until ready. Source images can supply thumbnails when tied to the sent content;
+opening history must not eagerly download gigabyte files for previews. Other devices use metadata
+until content is requested. New copy follows i18n and accessible progress conventions.
 
-Progress is coalesced at 100ms with immediate terminal updates. The current implementation uses
-upload responses and draft get for recovery, without introducing another remote event stream.
-Desktop renderer subscribes to invalidation before reading snapshots. It keeps a dirty flag during
-an in-flight read. Manifest revisions remain independent of progress.
+## Errors and acceptance
 
-The shared `FilePreview` frame draws the transfer border; importing tiles and remote message metadata
-use the same attachment variant. Ready requires desktop verification/publication, not 100% bytes.
-The existing progress/cancel row remains only for recovery of older persisted send-time uploads.
+| Case | Required result |
+|---|---|
+| Disconnect or lost ACK | Resume from desktop durable offset; fence old writers |
+| Source lost or changed | Fail the item; do not splice replacement bytes into the upload |
+| Cancel while offline | Persist cancellation, then retry cleanup; late callbacks cannot restore selection |
+| Desktop restarted with phone offline | Upload survives; pending presentation may be absent |
+| Old presence after reconnect or history | Ignore stale generation/sequence or committed command association |
+| Send response lost after staging expiry | Return original command result without reupload or another execution |
+| One selected file fails | Block send until explicit retry/removal; never silently omit that file |
+| Auth revoked or target deleted | Stop new operations; do not move tasks to a different grant |
+| Storage/quota failure | Preserve valid recovery state and surface actionable failure |
 
-The portable `vendor/cherrystudio-remote-protocol-0.4.0-attachments.3.tgz` is built from the desktop
-protocol source. It is unpublished. Replace it through the normal shared-package release workflow.
-Automated checks and Android/iOS native acceptance are reported separately; no 1 GiB performance
-or background-execution guarantee follows from unit tests.
+Desktop acceptance must prove fixed-ID publication through crashes, checkpoint recovery before
+cleanup, unreadable-checkpoint safety, and protection during message transactions. Mobile tests
+must prove persistent source retention, immutable command handoff, cancellation races and restart
+recovery with actual bytes. UI checks cover pending/history order, consistent previews, right
+alignment, remounts and route changes.
+
+Android small-file transfer has been exercised: one 2,145,653-byte upload function took about
+1.20 seconds, including roughly 171 ms preparation inside that function. This excludes the picker
+and initial managed import. It does not establish 1 GiB memory/disk/throughput, iOS behavior or
+OS-background acceptance. Measure preparation, transfer and publication independently on devices.
+
+## Migration and native Agent boundary
+
+Coordinate the desktop file protection change before removing mobile draft protocol dependencies.
+Inspect persisted commands and real release status first: never rewrite an uncertain old command
+into a different request body. A bounded recovery decoder or one-time migration is justified only
+by actual persisted work, not by a desire to version every unpublished iteration.
+
+Use one shared source and portable development artifacts; no absolute workspace dependencies or
+copied schemas. Normal shared-package publication remains a release step. The removed tables belonged to unpublished development migrations; those SQL/snapshot files were
+removed outright. The local desktop development DB was backed up and cleaned separately. Other
+released migrations and normal message/file/command data remain unchanged.
+
+Agent tools remain native read/edit/write/bash against ordinary authorized paths. Historical bytes
+and mutable working bytes stay separate through host-managed snapshots/clone/copy. The current
+workspace copy is not a second permanent upload store. This simplification introduces no dedicated
+attachment editor, general VFS, automatic bash replay or arbitrary-script artifact watcher.

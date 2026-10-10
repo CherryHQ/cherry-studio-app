@@ -1,10 +1,9 @@
 # Shared remote development artifacts
 
-- `cherrystudio-remote-protocol-0.4.0-attachments.6.tgz`
-- `cherrystudio-remote-transport-0.2.0-attachments.3.tgz`
+- `cherrystudio-remote-protocol-0.4.0-attachments.9.tgz`
+- `cherrystudio-remote-transport-0.2.0-attachments.6.tgz`
 
-These unpublished artifacts package the matching desktop packages, including binary
-the single binary upload protocol. Mobile owns no duplicate wire schemas. The transport artifact has
+These unpublished artifacts package the matching desktop packages, including the single binary upload protocol and disposable attachment selection. Mobile owns no duplicate wire schemas. The transport artifact has
 a peer dependency on the exact protocol artifact version, resolved by this app.
 
 Build desktop `packages/remote-protocol` then `packages/remote-transport`. Package each

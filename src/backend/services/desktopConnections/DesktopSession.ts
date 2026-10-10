@@ -75,7 +75,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 export class DesktopSession {
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
-  agentAttachmentDraftsVersion?: number;
+  agentAttachmentSelections?: boolean;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
@@ -98,7 +98,7 @@ export class DesktopSession {
       );
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
-      session.agentAttachmentDraftsVersion = hello.agentAttachmentDraftsVersion;
+      session.agentAttachmentSelections = hello.agentAttachmentSelections;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
@@ -200,9 +200,9 @@ export class DesktopSession {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
     if (
-      (method.startsWith('agent.attachmentDrafts.') ||
+      (method === 'agent.attachments.present' ||
         (method === 'agent.messages.send' && 'attachmentDraft' in params)) &&
-      this.agentAttachmentDraftsVersion !== 1
+      this.agentAttachmentSelections !== true
     )
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',

@@ -1,8 +1,10 @@
 # Send mobile files to desktop
 
-[Managed Attachment Drafts](./managed-attachments-design.md) describes the implemented
-selection-time uploads, unified managed originals and desktop pending-message progress.
-The binary transport below supersedes the older upload-on-Send notes.
+[Managed Attachments](./managed-attachments-design.md) defines the integrated simplification:
+mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable pending
+presentation. Desktop intake/draft tables are removed; reducing mobile source copies remains pending.
+This document records the current transport and historical implementation decisions; the binary
+transport below supersedes the older upload-on-Send notes.
 
 ## Binary transport update (2026-10-10)
 
@@ -15,7 +17,7 @@ The binary transport below supersedes the older upload-on-Send notes.
 - Imported mobile originals are immutable and reused directly. Mutable/generated entries get a
   managed snapshot; its ID is persisted before network preparation and reopened on resume.
   Missing snapshots fail instead of silently switching back to a changed source.
-- `agent.uploads.prepare` validates any supplied draft attachment. Binary DATA carries request ID, upload ID,
+- `agent.uploads.prepare` is independent of selection; `agent.attachments.present` provides disposable desktop presentation. Binary DATA carries request ID, upload ID,
   writer epoch and offset. ACK carries the durable offset or a typed failure. Old epochs, changed
   duplicate bytes, cross-owner references and oversized records are rejected.
 - Draft uploads queue outside React. Cancellation stops new reads; bounded in-flight writes may
@@ -26,12 +28,16 @@ The binary transport below supersedes the older upload-on-Send notes.
 - Limits remain 1 GiB/file, 2 GiB/message, eight files, 24-hour idle retention, seven-day lifetime,
   and 4/8 GiB device/desktop staging reservations. No continuous background transfer is promised.
 
-Status: implemented locally in the paired desktop and mobile workspaces; native acceptance and
-shared-package publication are pending. The design below
-records the original baseline; the implementation decisions in this section supersede its open
-questions and small-file assumptions.
+Status: binary selection-time uploads are implemented in the paired workspaces. Android small-file
+transfer has been exercised; one 2,145,653-byte upload function took about 1.20 seconds, excluding
+the picker and initial managed import. Full 1 GiB, iOS and interruption/background acceptance, plus
+shared-package publication, remain separate pending checks. The design below records the original
+baseline; this section supersedes its upload-on-Send, small-chunk and client hash assumptions.
 
-## Implementation decisions (2026-10-08)
+## Historical implementation decisions (2026-10-08)
+
+This section is historical. Selection-time uploads and the binary transport above supersede its
+send-time upload, 24 KiB blocks, pre-scan and publication timing; it is not the target contract.
 
 - Remote Agent composer supports camera, photos and managed files, including a file-only first
   message. Older desktops retain text-only input. Upload starts on Send, with progress and cancel.

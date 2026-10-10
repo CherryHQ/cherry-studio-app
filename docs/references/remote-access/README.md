@@ -71,12 +71,12 @@ native module ownership and the network-independent pairing migration.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 
-## File transfer and next design
+## File transfer and target design
 
-[Send mobile files to desktop](./file-transfer.md) records the current upload-on-Send implementation,
-shared protocol, receiver and remaining acceptance/release checks.
-[Managed Attachment Drafts](./managed-attachments-design.md) records the next, unimplemented design:
-selection-time uploads, unified file ownership, shared previews and desktop pending-message progress.
+[Send mobile files to desktop](./file-transfer.md) records current selection-time binary uploads,
+shared protocol, receiver, historical decisions and remaining acceptance/release checks.
+[Managed Attachments](./managed-attachments-design.md) records the integrated simplification: mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable
+pending-message presentation. Desktop intake and attachment-draft tables are removed; mobile source-copy reduction remains pending.
 
 ## Session read cache
 

@@ -243,38 +243,28 @@ it.each([false, true])(
     let upload: AgentUploadState | undefined;
     const received: Buffer[] = [];
     const request = (async (method: string, params: any) => {
-      if (method === 'agent.attachmentDrafts.open') {
-        draft = {
-          ...params,
-          items: params.items.map((item: object) =>
-            reorder ? Object.fromEntries(Object.entries(item).toReversed()) : item,
-          ),
-          state: 'open',
-          manifestRevision: '0',
-          expiresAt: new Date(Date.now() + 60000).toISOString(),
-        };
-        return draft;
+      if (method === 'agent.attachments.present') {
+        draft = params;
+        return { accepted: true };
       }
-      if (method === 'agent.attachmentDrafts.get')
-        return { ...draft, items: draft.items.map((item: any) => ({ ...item, upload })) };
       if (method === 'agent.uploads.get') {
         if (!upload) throw new RemoteAgentError('NOT_FOUND');
         return upload;
       }
       if (method === 'agent.uploads.prepare') {
         expect(draft.items[0].uploadId).toBe(params.uploadId);
-        expect(params.draftId).toBe(draft.draftId);
+        expect(params.draftId).toBeUndefined();
         upload = {
           uploadId: params.uploadId,
           state: 'receiving',
           committedOffset: '0',
           writerEpoch: '0',
-          expiresAt: draft.expiresAt,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
         };
       } else if (method === 'agent.uploads.resume') upload = { ...upload!, writerEpoch: '1' };
       else if (method === 'agent.uploads.complete') upload = { ...upload!, state: 'ready' };
       else throw new Error(`Selection must not send a message: ${method}`);
-      return upload;
+      return reorder ? Object.fromEntries(Object.entries(upload!).toReversed()) : upload;
     }) as AgentRequest;
     const transport = async () => ({
       write: async (input: any) => {
@@ -316,7 +306,7 @@ it.each([false, true])(
     await tasks.drain();
     expect(tasks.ready('session:session', [attachment])).toEqual(ready);
     expect(Buffer.concat(received).equals(bytes)).toBe(true);
-    tasks.reconcile(new Set([ready.attachmentDraft.draftId]));
+    tasks.reconcile(new Set([ready.selectionId]));
     tasks.stop();
     const admitted = new RemoteAttachmentDrafts(
       'phone:grant:attachments',
@@ -360,22 +350,11 @@ it('persists removal before abort and cannot revive the attachment from a late w
   let upload: AgentUploadState;
   const request = (async (method: string, params: any) => {
     switch (method) {
-      case 'agent.attachmentDrafts.open':
-        draft = {
-          ...params,
-          state: 'open',
-          manifestRevision: '0',
-          expiresAt: new Date(Date.now() + 60000).toISOString(),
-        };
-        return draft;
-      case 'agent.attachmentDrafts.get':
-        return draft;
-      case 'agent.attachmentDrafts.update':
-        draft = { ...draft, items: params.items, manifestRevision: '1' };
-        return draft;
-      case 'agent.attachmentDrafts.cancel':
-        draft = { ...draft, state: 'cancelled', manifestRevision: '2' };
-        return draft;
+      case 'agent.attachments.present':
+        draft = params;
+        return { accepted: true };
+      case 'agent.uploads.cancel':
+        return { cancelled: true };
       case 'agent.uploads.get':
         throw new RemoteAgentError('NOT_FOUND');
       case 'agent.uploads.prepare':
@@ -384,7 +363,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
           state: 'receiving',
           committedOffset: '0',
           writerEpoch: '0',
-          expiresAt: draft.expiresAt,
+          expiresAt: new Date(Date.now() + 60000).toISOString(),
         };
         return upload;
       case 'agent.uploads.resume':
@@ -436,7 +415,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
   );
   tasks.recover();
   await tasks.drain();
-  expect(draft.state).toBe('cancelled');
+  expect(draft.items).toEqual([]);
   expect(draft.items).toEqual([]);
   expect(tasks.get()).toEqual([]);
   tasks.stop();
@@ -507,7 +486,7 @@ it('uploads MiB binary blocks without a pre-scan and resumes the persisted snaps
           };
         },
       }),
-      { draftId: 'draft', attachmentId: 'attachment', uploadId: 'upload' },
+      'upload',
     );
   await expect(run()).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
   expect(saved[0].sourceFileEntryId).toBe(snapshotId);
