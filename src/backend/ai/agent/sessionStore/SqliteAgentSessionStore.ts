@@ -21,11 +21,7 @@ import {
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
-import {
-  type AgentErrorView,
-  type AgentMessageView,
-  type AgentSessionView,
-} from '@/shared/contracts/agent';
+import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
@@ -42,13 +38,8 @@ import type {
   ReserveRetryInput,
   ReserveSubmissionInput,
   ReserveSubmissionResult,
-  UpdateStreamingAssistantMessageInput,
 } from './AgentSessionStore';
-import {
-  finalizeMessageStats,
-  interruptNonTerminalToolParts,
-  settleInterruptedAssistantParts,
-} from './messageSettlement';
+import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
 // 50 rows bind fewer parameters than SQLite's historical 999-variable ceiling.
@@ -68,16 +59,6 @@ const FORK_INSERT_CHUNK_SIZE = 50;
 export class SqliteAgentSessionStore extends BaseService implements AgentSessionStore {
   constructor(private readonly dbService: DbService) {
     super();
-  }
-
-  async existingMessageIds(messageIds: readonly string[]): Promise<Set<string>> {
-    if (!messageIds.length) return new Set();
-    const rows = await this.dbService
-      .getDb()
-      .select({ id: agentSessionMessageTable.id })
-      .from(agentSessionMessageTable)
-      .where(inArray(agentSessionMessageTable.id, [...messageIds]));
-    return new Set(rows.map((row) => row.id));
   }
 
   async listUnsettledAssistantMessages() {
@@ -581,7 +562,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   /**
-   * Both per-turn reads go through Expo's async reader: Drizzle's Expo driver
+   * Both rebuild reads go through Expo's async reader: Drizzle's Expo driver
    * reads synchronously, and these scan every message of the Session.
    */
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
@@ -617,13 +598,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       sqlite,
       sql`SELECT id FROM agent_session_message WHERE session_id = ${sessionId} LIMIT 1`,
     );
-    const turnRows = await readSqliteRows<{ turnId: string }>(
-      sqlite,
-      sql`
-        SELECT DISTINCT turn_id AS "turnId" FROM agent_session_message
-        WHERE session_id = ${sessionId} AND turn_id IS NOT NULL
-      `,
-    );
     const fileRows = await readSqliteRows<{ fileEntryId: unknown }>(
       sqlite,
       sql`
@@ -641,7 +615,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       referencedFileEntryIds: fileRows
         .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
         .sort(),
-      sessionTurnIds: turnRows.map(({ turnId }) => turnId).sort(),
     };
   }
 
@@ -708,24 +681,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return { assistantMessageId: row.assistantMessageId, checkpoint };
   }
 
-  async updateStreamingAssistantMessage(
-    input: UpdateStreamingAssistantMessageInput,
-  ): Promise<void> {
-    await this.dbService.withWriteTx(async (tx) => {
-      // Guarded by status so a late streaming write can never reopen a row the
-      // terminal write has already settled.
-      await tx
-        .update(agentSessionMessageTable)
-        .set({ status: 'streaming', data: { parts: input.parts } })
-        .where(
-          and(
-            eq(agentSessionMessageTable.id, input.assistantMessageId),
-            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
-          ),
-        );
-    });
-  }
-
   async saveContextCheckpoint(
     assistantMessageId: string,
     turnId: string,
@@ -789,61 +744,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
     publishDataApiChanges(['/agent-sessions', `/agent-sessions/${message.sessionId}`]);
     return message;
-  }
-
-  async reconcileInterrupted(
-    error: AgentErrorView,
-    options: { excludeSessionIds?: readonly string[] } = {},
-  ): Promise<AgentMessageView[]> {
-    const excluded = options.excludeSessionIds ?? [];
-    return this.dbService.withWriteTx(async (tx) => {
-      const rows = await tx
-        .select(agentMessageViewColumns)
-        .from(agentSessionMessageTable)
-        .where(
-          and(
-            inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
-            ...(excluded.length
-              ? [notInArray(agentSessionMessageTable.sessionId, [...excluded])]
-              : []),
-          ),
-        );
-      const assistantIds: string[] = [];
-
-      for (const row of rows) {
-        const message = toAgentMessageView(row);
-        const interruptedParts =
-          message.role === 'assistant'
-            ? settleInterruptedAssistantParts(
-                message.parts,
-                error,
-                `error-${message.turnId ?? message.id}`,
-              )
-            : interruptNonTerminalToolParts(message.parts, error.message);
-        await tx
-          .update(agentSessionMessageTable)
-          .set({
-            status: 'interrupted',
-            data: { parts: interruptedParts },
-            searchableText: toSearchableText(interruptedParts),
-            ...(message.role === 'assistant' ? { error } : {}),
-          })
-          .where(eq(agentSessionMessageTable.id, message.id));
-        if (message.role === 'assistant') {
-          assistantIds.push(message.id);
-        }
-      }
-
-      if (assistantIds.length === 0) {
-        return [];
-      }
-      const reconciledRows = await tx
-        .select(agentMessageViewColumns)
-        .from(agentSessionMessageTable)
-        .where(inArray(agentSessionMessageTable.id, assistantIds))
-        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
-      return reconciledRows.map(toAgentMessageView);
-    });
   }
 }
 
