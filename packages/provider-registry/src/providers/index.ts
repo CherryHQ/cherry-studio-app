@@ -3,6 +3,7 @@ import p_aihubmix from './aihubmix';
 import p_aionly from './aionly';
 import p_alayanew from './alayanew';
 import p_anthropic from './anthropic';
+import p_atlascloud from './atlascloud';
 import p_aws_bedrock from './aws-bedrock';
 import p_azure_openai from './azure-openai';
 import p_baichuan from './baichuan';
@@ -132,4 +133,5 @@ export const PROVIDERS: Provider[] = [
   p_mimo,
   p_zai,
   p_minimax_global,
+  p_atlascloud,
 ];
