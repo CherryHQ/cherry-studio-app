@@ -241,11 +241,11 @@ importers:
         specifier: workspace:*
         version: link:packages/provider-registry
       '@cherrystudio/remote-protocol':
-        specifier: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz
-        version: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)
+        specifier: 0.4.0
+        version: 0.4.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz
-        version: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3))
+        specifier: 0.2.0
+        version: 0.2.0(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -1772,17 +1772,13 @@ packages:
       react: ^19.0.0
       react-dom: ^19.0.0
 
-  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz':
-    resolution: {integrity: sha512-KtiOiAzrx1KAQLzWMktkvnLZhlLnBHUYHFHTc/q3U8NfXMNMdTJUOHqN4295cViPugDGFm7TNC3Q1PTB4kOl/Q==, tarball: file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz}
-    version: 0.4.0-attachments.9
+  '@cherrystudio/remote-protocol@0.4.0':
+    resolution: {integrity: sha512-Eg/75/iboKTbt8zLta+gUZjdWdbjUpx0k7t3vzXn10RIOQCgwjyGdf44Puzri3hEJecI+IvGbLeXY0DeawhciQ==}
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz':
-    resolution: {integrity: sha512-rZxaNVRcOFZGhzxxVKEVuB2qlb93X9A9AWAxq0mZ5OlAoLeVB6yu17TjQ6gSjK8Mb7P9Rjz4yDIpkeGkLAqoqw==, tarball: file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz}
-    version: 0.2.0-attachments.6
-    peerDependencies:
-      '@cherrystudio/remote-protocol': 0.4.0-attachments.9
+  '@cherrystudio/remote-transport@0.2.0':
+    resolution: {integrity: sha512-xP4i9x1Wc386NqNRq38Apfhr4BhJIyz+ZuTxmeht6RGtbwADu9bz34Vuuwe7UNWuFDcwR9+0UjrLLKsacSYSeg==}
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -11362,20 +11358,22 @@ snapshots:
       react-dom: 19.2.3(react@19.2.3)
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@0.4.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@file:vendor/cherrystudio-remote-transport-0.2.0-attachments.6.tgz(@cherrystudio/remote-protocol@file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3))':
+  '@cherrystudio/remote-transport@0.2.0(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': file:vendor/cherrystudio-remote-protocol-0.4.0-attachments.9.tgz(zod@4.4.3)
+      '@cherrystudio/remote-protocol': 0.4.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2
       '@libp2p/peer-id': 6.0.15
       '@libp2p/utils': 7.4.1
       json-rpc-2.0: 1.8.1
+    transitivePeerDependencies:
+      - zod
 
   '@craftzdog/react-native-buffer@6.1.2(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)':
     dependencies:

@@ -202,8 +202,8 @@ Inspect persisted commands and real release status first: never rewrite an uncer
 into a different request body. A bounded recovery decoder or one-time migration is justified only
 by actual persisted work, not by a desire to version every unpublished iteration.
 
-Use one shared source and portable development artifacts; no absolute workspace dependencies or
-copied schemas. Normal shared-package publication remains a release step. The removed tables belonged to unpublished development migrations; those SQL/snapshot files were
+Use the published `@cherrystudio/remote-protocol@0.4.0` and
+`@cherrystudio/remote-transport@0.2.0` packages; no absolute workspace dependencies or copied schemas. The removed tables belonged to unpublished development migrations; those SQL/snapshot files were
 removed outright. The local desktop development DB was backed up and cleaned separately. Other
 released migrations and normal message/file/command data remain unchanged.
 

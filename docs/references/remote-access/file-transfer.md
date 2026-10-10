@@ -71,8 +71,8 @@ send-time upload, 24 KiB blocks, pre-scan and publication timing; it is not the 
 - iOS suspension can pause JavaScript transfer. Foreground/relaunch recovery resumes uploaded
   bytes; continuous background transfer is not promised. Network changes must reach the paired PC
   directly (LAN/company/VPN); there is no cloud relay or offline desktop inbox.
-- The portable tarball under `vendor/` is generated from the desktop shared package for this
-  unpublished cross-repository change. Replace it with the Changesets npm release before release.
+- Mobile consumes the published `@cherrystudio/remote-protocol@0.4.0` and
+  `@cherrystudio/remote-transport@0.2.0` packages from npm.
 
 Validation is recorded by the implementing change. Filesystem/Jest tests do not establish native
 picker behavior, real network throughput or OS background survival.
