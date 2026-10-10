@@ -7,6 +7,7 @@ import {
 } from '@/shared/data/types/plugin';
 import { createPluginCredentialsSchema } from '@/shared/utils/pluginCredentials';
 
+import { catalogPlugins } from './catalog';
 import { getPluginToolEffect, type PluginDefinition } from './pluginDefinition';
 import { validatePluginGuide, type PluginGuideSnapshot } from './pluginGuide';
 import { amapPlugin } from './plugins/amap';
@@ -117,6 +118,8 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
                       kind: method.kind,
                       fields: method.fields,
                       requiresDisconnect: method.requiresDisconnect,
+                      ...(method.label ? { label: method.label } : {}),
+                      ...(method.setup ? { setup: method.setup } : {}),
                     }
                   : {
                       id: method.id,
@@ -124,6 +127,9 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
                       stages: method.stages,
                       interaction: method.interaction,
                       applicationFields: method.applicationFields,
+                      ...(method.label ? { label: method.label } : {}),
+                      ...(method.setup ? { setup: method.setup } : {}),
+                      ...(method.permissions ? { permissions: method.permissions } : {}),
                     },
               ),
             }),
@@ -133,7 +139,9 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
 }
 
 function validateFields(id: string, fields: readonly PluginCredentialField[]) {
-  if (!fields.length || new Set(fields.map((field) => field.id)).size !== fields.length)
+  // An empty field list is a valid credential-free method (public remote MCP
+  // servers such as DeepWiki need no credential); the schema then admits `{}`.
+  if (new Set(fields.map((field) => field.id)).size !== fields.length)
     throw new Error(`Invalid plugin credential fields: ${id}`);
   for (const field of fields) {
     if (
@@ -155,6 +163,7 @@ const registry = createPluginRegistry([
   dingtalkPlugin,
   notionPlugin,
   wecomPlugin,
+  ...catalogPlugins,
 ]);
 
 export const getPluginDefinition = registry.get;
