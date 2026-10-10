@@ -1,5 +1,31 @@
 # Send mobile files to desktop
 
+[Managed Attachment Drafts](./managed-attachments-design.md) describes the implemented
+selection-time uploads, unified managed originals and desktop pending-message progress.
+The binary transport below supersedes the older upload-on-Send notes.
+
+## Binary transport update (2026-10-10)
+
+- A single upload protocol uses 1 MiB DATA blocks, two outstanding blocks and durable acknowledgements
+  independent of JSON-RPC limits. Control messages remain bounded at 64 KiB. No compatibility branch is retained for
+  earlier unpublished upload implementations.
+- Uploads skip the mobile whole-file SHA-256 pre-scan and per-block business digest.
+  Noise AEAD authenticates every encrypted frame. Desktop computes the final SHA-256 before
+  managed publication; this hash is not an independent source-side end-to-end checksum.
+- Imported mobile originals are immutable and reused directly. Mutable/generated entries get a
+  managed snapshot; its ID is persisted before network preparation and reopened on resume.
+  Missing snapshots fail instead of silently switching back to a changed source.
+- `agent.uploads.prepare` validates any supplied draft attachment. Binary DATA carries request ID, upload ID,
+  writer epoch and offset. ACK carries the durable offset or a typed failure. Old epochs, changed
+  duplicate bytes, cross-owner references and oversized records are rejected.
+- Draft uploads queue outside React. Cancellation stops new reads; bounded in-flight writes may
+  settle, while durable cancellation and cleanup retain their existing ownership.
+- Quick Crypto provides native bulk encryption on mobile. Electron uses Noise's built-in cipher,
+  since its Node crypto does not expose ChaCha20-Poly1305. Desktop uses Node crypto for final
+  file hashing. Noise owns keys, nonces and segmentation. Rebuild the native development client after updating dependencies.
+- Limits remain 1 GiB/file, 2 GiB/message, eight files, 24-hour idle retention, seven-day lifetime,
+  and 4/8 GiB device/desktop staging reservations. No continuous background transfer is promised.
+
 Status: implemented locally in the paired desktop and mobile workspaces; native acceptance and
 shared-package publication are pending. The design below
 records the original baseline; the implementation decisions in this section supersede its open

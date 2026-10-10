@@ -9,7 +9,14 @@ import { ConversationMessageContent, ConversationAttachments } from '../Conversa
 const mockModule = { open: jest.fn() };
 let mockSheetContent: ReactNode;
 
-jest.mock('@/frontend/components/ArtifactPreview', () => ({ ArtifactImageViewer: () => null }));
+jest.mock('@/frontend/components/ArtifactPreview', () => {
+  const { Image } = jest.requireActual('react-native');
+  return {
+    ArtifactImageViewer: ({ uri }: { uri: string }) => (
+      <Image testID="image-viewer" source={{ uri }} />
+    ),
+  };
+});
 jest.mock('@/frontend/data', () => ({ useBackendModule: () => mockModule }));
 jest.mock('@/frontend/components/Message', () => ({
   getBuiltInToolDisplay: () => undefined,
@@ -28,12 +35,16 @@ jest.mock('@/frontend/components/Message', () => ({
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('@cherrystudio/ui/components', () => {
-  const { Text } = jest.requireActual('react-native');
+  const { Image, Text } = jest.requireActual('react-native');
   return {
     useToast: () => ({ toast: { show: jest.fn() } }),
-    FileAttachmentPreview: ({ onPress }: { onPress(): void }) => (
+    FilePreview: ({ onPress, file }: { onPress(): void; file?: { kind: string; uri: string } }) => (
       <Text testID="attachment" onPress={onPress}>
-        Attachment
+        {file?.kind === 'image' ? (
+          <Image testID="image-thumbnail" source={{ uri: file.uri }} />
+        ) : (
+          'Attachment'
+        )}
       </Text>
     ),
     BottomSheet: ({ children, onClose }: { children: ReactNode; onClose(): void }) => (
@@ -205,4 +216,44 @@ it('does not fetch a large attachment for history and cancels its download when 
   expect(signal?.aborted).toBe(true);
   await act(async () => row.unmount());
   client.clear();
+});
+
+it('shows a remote image thumbnail and opens the same downloaded image', async () => {
+  const client = new QueryClient();
+  const uri = 'file:///cache/RemoteAttachments/photo.png';
+  const read = jest.fn<Promise<ResourceValue>, [AbortSignal]>().mockResolvedValue({
+    kind: 'file',
+    uri,
+    name: 'photo.png',
+    mediaType: 'image/png',
+    byteLength: '42',
+  });
+  let row!: ReactTestRenderer;
+  try {
+    await act(async () => {
+      row = create(
+        <QueryClientProvider client={client}>
+          <ConversationAttachments
+            attachments={[
+              {
+                key: 'photo',
+                name: 'photo.png',
+                mediaType: 'image/png',
+                resource: { kind: 'deferred', key: 'photo-ref', read },
+              },
+            ]}
+          />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(row.root.findByProps({ testID: 'image-thumbnail' }).props.source).toEqual({ uri });
+    await act(async () => row.root.findByProps({ testID: 'attachment' }).props.onPress());
+    expect(row.root.findByProps({ testID: 'image-viewer' }).props.source).toEqual({ uri });
+  } finally {
+    await act(async () => row?.unmount());
+    client.clear();
+  }
 });

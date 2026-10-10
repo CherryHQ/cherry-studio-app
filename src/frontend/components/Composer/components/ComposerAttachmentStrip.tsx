@@ -1,5 +1,5 @@
 import XIcon from '@cherrystudio/app-icons/icons/x';
-import { Spinner } from '@cherrystudio/ui/components';
+import { FilePreview, Spinner, type FilePreviewTransfer } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -11,6 +11,7 @@ import {
 } from '../utils/composerAttachments';
 
 type ComposerAttachmentStripProps = {
+  transfer?: (file: ComposerAttachmentDraft) => FilePreviewTransfer | undefined;
   attachments: readonly ComposerAttachmentDraft[];
   onAttachmentRemove: (attachmentId: string) => void;
 };
@@ -22,6 +23,7 @@ type ComposerAttachmentStripProps = {
  */
 export function ComposerAttachmentStrip({
   attachments,
+  transfer,
   onAttachmentRemove,
 }: ComposerAttachmentStripProps) {
   return (
@@ -36,11 +38,13 @@ export function ComposerAttachmentStrip({
         attachment.status === 'ready' ? (
           <ManagedAttachmentTile
             attachment={attachment}
+            transfer={transfer?.(attachment)}
             key={attachment.id}
             onRemove={() => onAttachmentRemove(attachment.id)}
           />
         ) : (
           <ImportingAttachmentTile
+            transfer={transfer?.(attachment)}
             attachment={attachment}
             key={attachment.id}
             onRemove={() => onAttachmentRemove(attachment.id)}
@@ -53,14 +57,16 @@ export function ComposerAttachmentStrip({
 
 function ManagedAttachmentTile({
   attachment,
+  transfer,
   onRemove,
 }: {
+  transfer?: FilePreviewTransfer;
   attachment: ComposerAttachmentReady;
   onRemove: () => void;
 }) {
   return (
     <View accessibilityLabel={attachment.name}>
-      <FileEntryPreview entryId={attachment.fileEntryId} variant="attachment" />
+      <FileEntryPreview entryId={attachment.fileEntryId} variant="attachment" transfer={transfer} />
       <RemoveBadge onPress={onRemove} />
     </View>
   );
@@ -68,11 +74,38 @@ function ManagedAttachmentTile({
 
 function ImportingAttachmentTile({
   attachment,
+  transfer,
   onRemove,
 }: {
   attachment: ComposerAttachmentDraft;
+  transfer?: FilePreviewTransfer;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation();
+  if (transfer)
+    return (
+      <View>
+        <FilePreview
+          file={null}
+          metadata={{
+            displayName: attachment.name,
+            kind: attachment.kind,
+            extensionLabel: attachment.name.includes('.')
+              ? (attachment.name.split('.').at(-1)?.toUpperCase() ?? '')
+              : '',
+          }}
+          variant="attachment"
+          transfer={transfer}
+          labels={{
+            openWith: t('filePreview.openWith'),
+            unavailable: t('filePreview.unavailable'),
+          }}
+          onPress={() => {}}
+          onError={() => {}}
+        />
+        <RemoveBadge onPress={onRemove} />
+      </View>
+    );
   return (
     <View>
       <View

@@ -71,11 +71,12 @@ native module ownership and the network-independent pairing migration.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
 
-## Planned file transfer
+## File transfer and next design
 
-[Send mobile files to desktop](./file-transfer.md) records the proposed shared protocol, desktop
-receiver, mobile attachment workflow, delivery dependencies, and acceptance checks. This is design
-only; file uploads and remote attachment sending are not implemented.
+[Send mobile files to desktop](./file-transfer.md) records the current upload-on-Send implementation,
+shared protocol, receiver and remaining acceptance/release checks.
+[Managed Attachment Drafts](./managed-attachments-design.md) records the next, unimplemented design:
+selection-time uploads, unified file ownership, shared previews and desktop pending-message progress.
 
 ## Session read cache
 
@@ -239,7 +240,7 @@ These additions require the matching desktop implementation. Device acceptance i
 
 ## Out of scope
 
-Relay service, file bytes for `file` parts (desktop exposes metadata only), approval cards that the
+Relay service, approval cards that the
 desktop persists after a turn (listed and answerable, not streamed), and any write to desktop
 Agents or registered workspaces. Creating a session-owned system workspace is supported.
 

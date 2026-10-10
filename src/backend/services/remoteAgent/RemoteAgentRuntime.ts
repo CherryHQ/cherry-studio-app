@@ -180,6 +180,10 @@ export class RemoteAgentRuntime extends BaseService implements RemoteAgentModule
         assertActive();
         return scope.send(...args);
       },
+      stageAttachments: (...args) => {
+        assertActive();
+        scope.stageAttachments(...args);
+      },
       cancelUpload: (id) => {
         assertActive();
         scope.cancelUpload(id);

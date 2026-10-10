@@ -6,6 +6,22 @@ import type { InteractionQuestion } from '../interaction';
 
 export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { kind: 'system' };
 export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
+export type RemoteAttachmentDraftTarget =
+  | { sessionId: string }
+  | { agentId: string; workspace: RemoteWorkspaceSelection };
+export type RemoteAttachmentDraftView = {
+  key: string;
+  id: string;
+  sessionId?: string;
+  busy?: boolean;
+  items: (RemoteAttachment & {
+    attachmentId: string;
+    sent: number;
+    total: number;
+    state: 'uploading' | 'ready' | 'failed';
+    error?: string;
+  })[];
+};
 export type RemoteStartInput = {
   draftId: string;
   agentId: string;
@@ -49,6 +65,8 @@ export type RemoteSourceState = Readonly<{
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
   reason?: string;
   attachments?: boolean;
+  preupload?: boolean;
+  attachmentDrafts?: readonly RemoteAttachmentDraftView[];
   upload?: { id: string; sent: number; total: number; sessionId?: string; draftId?: string };
 }>;
 export type RemoteSessionView = {

@@ -3,6 +3,7 @@ import {
   commandReceiptSchema,
   workspaceSelectionSchema,
   uploadReferencesSchema,
+  attachmentDraftSubmissionSchema,
   type AgentUploadReference,
 } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
@@ -59,6 +60,7 @@ const StartSchema = z
     sendId: z.string(),
     uploads: z.array(uploadProgressSchema).optional(),
     uploaded: uploadReferencesSchema.optional(),
+    attachmentDraft: attachmentDraftSubmissionSchema.optional(),
     status: z.enum(['pending', 'applied', 'rejected', 'interrupted']),
     sessionId: z.string().optional(),
     error: z.string().optional(),
@@ -165,6 +167,17 @@ export class RemoteAgentActions {
   }
   get = () => this.snapshot;
   getStarts = () => this.startSnapshot;
+  admittedAttachmentDrafts(): ReadonlySet<string> {
+    return new Set([
+      ...this.starts.flatMap((entry) =>
+        entry.attachmentDraft ? [entry.attachmentDraft.draftId] : [],
+      ),
+      ...this.records.flatMap((entry) => {
+        const parsed = attachmentDraftSubmissionSchema.safeParse(entry.params.attachmentDraft);
+        return parsed.success ? [parsed.data.draftId] : [];
+      }),
+    ]);
+  }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -242,6 +255,7 @@ export class RemoteAgentActions {
             entry.status === 'pending' &&
             entry.attachments?.length &&
             !entry.uploaded &&
+            !entry.attachmentDraft &&
             !this.records.some((record) => record.action.id === entry.createId),
         )
         .map((entry) => ({
@@ -253,7 +267,10 @@ export class RemoteAgentActions {
       ...this.records
         .filter(
           (entry) =>
-            isUncertain(entry) && entry.action.attachments?.length && !entry.params.attachments,
+            isUncertain(entry) &&
+            entry.action.attachments?.length &&
+            !entry.params.attachments &&
+            !entry.params.attachmentDraft,
         )
         .map((entry) => ({
           id: entry.action.id,
@@ -309,7 +326,13 @@ export class RemoteAgentActions {
       this.starts.filter((entry) => entry !== start),
     );
   }
-  async start(input: RemoteStartInput): Promise<RemoteStartOperation> {
+  async start(
+    input: RemoteStartInput,
+    prepared?: {
+      sessionId: string;
+      attachmentDraft: z.infer<typeof attachmentDraftSubmissionSchema>;
+    },
+  ): Promise<RemoteStartOperation> {
     if (this.stopped) throw new RemoteAgentError('CLOSED');
     let entry = this.starts.find((item) => item.draftId === input.draftId);
     // A draft keeps one start: submitting again replaces one that failed before creating a Session.
@@ -354,6 +377,7 @@ export class RemoteAgentActions {
       });
       entry = {
         ...input,
+        ...prepared,
         id: randomUUID(),
         createId: randomUUID(),
         sendId: randomUUID(),
@@ -404,6 +428,7 @@ export class RemoteAgentActions {
       if (
         entry.attachments?.length &&
         !entry.uploaded &&
+        !entry.attachmentDraft &&
         !this.records.some((record) => record.action.id === entry.sendId)
       ) {
         if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
@@ -422,17 +447,19 @@ export class RemoteAgentActions {
         entry = { ...entry, uploaded };
         this.updateStart(entry);
       }
-      const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
-        agentId: entry.agentId,
-        ...(entry.workspace?.kind === 'system'
-          ? { workspace: entry.workspace }
-          : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
-      });
-      if (this.stopped) return settled;
-      if (created.status !== 'applied') return this.finishStart(entry, created);
-      if (!created.sessionId) throw new RemoteAgentError('PROTOCOL_ERROR');
-      entry = { ...entry, sessionId: created.sessionId };
-      settled = this.updateStart(entry);
+      if (!entry.sessionId) {
+        const created = await this.startCommand(entry.createId, 'create', 'agent.sessions.create', {
+          agentId: entry.agentId,
+          ...(entry.workspace?.kind === 'system'
+            ? { workspace: entry.workspace }
+            : { workspaceId: entry.workspace?.id ?? entry.workspaceId! }),
+        });
+        if (this.stopped) return settled;
+        if (created.status !== 'applied') return this.finishStart(entry, created);
+        if (!created.sessionId) throw new RemoteAgentError('PROTOCOL_ERROR');
+        entry = { ...entry, sessionId: created.sessionId };
+        settled = this.updateStart(entry);
+      }
       const storedSend = this.records.find((record) => record.action.id === entry.sendId);
       let sent: RemoteCommand;
       if (storedSend) {
@@ -449,10 +476,14 @@ export class RemoteAgentActions {
           'send',
           'agent.messages.send',
           {
-            sessionId: created.sessionId,
+            sessionId: entry.sessionId!,
             text: entry.text,
             expectedIdleRevision: result.session.idleRevision,
-            ...(entry.uploaded ? { attachments: entry.uploaded } : {}),
+            ...(entry.attachmentDraft
+              ? { attachmentDraft: entry.attachmentDraft }
+              : entry.uploaded
+                ? { attachments: entry.uploaded }
+                : {}),
           },
           entry.text,
           entry.attachments,
@@ -545,7 +576,11 @@ export class RemoteAgentActions {
         }
       }
       if (receipt === undefined) {
-        if (entry.action.attachments?.length && !entry.params.attachments) {
+        if (
+          entry.action.attachments?.length &&
+          !entry.params.attachments &&
+          !entry.params.attachmentDraft
+        ) {
           if (!this.upload) throw new RemoteAgentError('UPGRADE_REQUIRED');
           this.assertUploading(action.id);
           const attachments = uploadReferencesSchema.parse(

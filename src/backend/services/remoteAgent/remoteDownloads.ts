@@ -8,6 +8,9 @@ import { RemoteAgentError } from './RemoteAgentError';
 import { integrity, type AgentRequest } from './remoteContent';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 
+const downloadChunkBytes = 24_576;
+const downloadWindow = 8;
+
 /** The scope owns in-flight work; completed, verified bytes survive in the OS cache. */
 export function createAttachmentDownloader() {
   const reads = new RemoteReadCoordinator();
@@ -77,11 +80,11 @@ export async function downloadAttachment(
       const offsets = Array.from(
         {
           length: Math.min(
-            agentUploadLimits.window,
-            Math.max(1, Math.ceil((size - offset) / agentUploadLimits.chunkBytes)),
+            downloadWindow,
+            Math.max(1, Math.ceil((size - offset) / downloadChunkBytes)),
           ),
         },
-        (_, index) => offset + index * agentUploadLimits.chunkBytes,
+        (_, index) => offset + index * downloadChunkBytes,
       );
       const pages = await Promise.allSettled(
         offsets.map((start) =>
@@ -92,7 +95,7 @@ export async function downloadAttachment(
               contentId: ref.contentId,
               revision: ref.revision,
               offset: String(start),
-              maxBytes: agentUploadLimits.chunkBytes,
+              maxBytes: downloadChunkBytes,
             },
             signal,
           ),
@@ -107,7 +110,7 @@ export async function downloadAttachment(
           page.revision !== ref.revision ||
           page.offset !== String(offset) ||
           page.sha256 !== ref.sha256 ||
-          chunk.length !== Math.min(agentUploadLimits.chunkBytes, size - offset) ||
+          chunk.length !== Math.min(downloadChunkBytes, size - offset) ||
           page.nextOffset !== String(offset + chunk.length) ||
           page.eof !== (offset + chunk.length === size)
         )

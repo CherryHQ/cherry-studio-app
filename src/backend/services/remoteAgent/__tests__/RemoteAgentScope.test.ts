@@ -925,7 +925,10 @@ it('keeps a command whose reply was lost in transit uncertain rather than failed
 it.each(['offline', 'suspended'] as const)(
   'keeps an upload recoverable when the lease becomes %s between requests',
   async (status) => {
-    const test = fixture(undefined, undefined, { resolve: jest.fn() });
+    const test = fixture(undefined, undefined, {
+      resolve: jest.fn(),
+      prepareUploadSource: jest.fn(),
+    });
     let snapshot: RemoteSessionSnapshot | undefined;
     const unobserve = test.source.observe('s', (value) => {
       snapshot = value;
@@ -938,12 +941,12 @@ it.each(['offline', 'suspended'] as const)(
     };
     const saved = {
       fileEntryId: attachment.fileEntryId,
+      sourceFileEntryId: attachment.fileEntryId,
       metadata: {
         uploadId: 'durable-id',
         filename: 'report.pdf',
         mediaType: 'application/pdf',
         byteLength: 100,
-        sha256: 'a'.repeat(64),
       },
     };
     const upload = jest
@@ -997,7 +1000,10 @@ it.each(['offline', 'suspended'] as const)(
 );
 
 it('persists upload cancellation synchronously while remote cleanup is still pending', async () => {
-  const test = fixture(undefined, undefined, { resolve: jest.fn() });
+  const test = fixture(undefined, undefined, {
+    resolve: jest.fn(),
+    prepareUploadSource: jest.fn(),
+  });
   let snapshot: RemoteSessionSnapshot | undefined;
   const unobserve = test.source.observe('s', (value) => {
     snapshot = value;
@@ -1024,12 +1030,12 @@ it('persists upload cancellation synchronously while remote cleanup is still pen
       save([
         {
           fileEntryId: attachments[0].fileEntryId,
+          sourceFileEntryId: attachments[0].fileEntryId,
           metadata: {
             uploadId: 'staged-id',
             filename: 'report.pdf',
             mediaType: 'application/pdf',
             byteLength: 10,
-            sha256: 'a'.repeat(64),
           },
         },
       ]);

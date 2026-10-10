@@ -2,6 +2,8 @@ export type { RemoteCommand, RemoteStartOperation } from './views';
 export type { RemoteAgentModule, RemoteAgentSource } from './module';
 export type {
   RemoteAttachment,
+  RemoteAttachmentDraftTarget,
+  RemoteAttachmentDraftView,
   RemoteWorkspaceSelection,
   RemoteStartInput,
   RemoteSourceState,

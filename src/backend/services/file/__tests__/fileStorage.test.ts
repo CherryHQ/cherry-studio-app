@@ -569,8 +569,22 @@ describe('fileStorage', () => {
     expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
-  test('rewrites a draft text blob in place and records the new size', async () => {
+  test('does not allow a writer to alter an imported upload source', async () => {
     const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    await expect(
+      rewriteInternalTextEntry({ findById: async () => entry } as never, {
+        id: entry.id,
+        data: 'changed',
+      }),
+    ).rejects.toThrow('immutable');
+    expect(testState.writes).toEqual([]);
+    expect(testState.files.get(uri)).toBe(entry.size);
+  });
+
+  test('rewrites a draft text blob in place and records the new size', async () => {
+    const entry = { ...internalEntry(), provenance: 'generated' as const };
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
     const tx = {};
@@ -601,7 +615,7 @@ describe('fileStorage', () => {
   });
 
   test('refuses to rewrite a draft whose bytes are missing', async () => {
-    const entry = internalEntry();
+    const entry = { ...internalEntry(), provenance: 'generated' as const };
     const entries = {
       findById: jest.fn(async () => entry),
       updateSizeTx: jest.fn(),
@@ -617,7 +631,7 @@ describe('fileStorage', () => {
   });
 
   test('does not rewrite a draft when cancelled while its entry lookup is pending', async () => {
-    const entry = internalEntry();
+    const entry = { ...internalEntry(), provenance: 'generated' as const };
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
     let finishLookup!: (value: FileEntry) => void;
@@ -649,7 +663,7 @@ describe('fileStorage', () => {
   });
 
   test('finishes recording a draft size when cancelled after its bytes were written', async () => {
-    const entry = internalEntry();
+    const entry = { ...internalEntry(), provenance: 'generated' as const };
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
     const controller = new AbortController();
@@ -736,7 +750,7 @@ describe('fileStorage', () => {
   });
 
   test('does not notify when a delete or rewrite transaction rolls back', async () => {
-    const entry = internalEntry();
+    const entry = { ...internalEntry(), provenance: 'generated' as const };
     testState.files.set(`file:///documents/Data/Files/${entry.id}.txt`, entry.size);
     const entries = {
       findById: jest.fn(async () => entry),

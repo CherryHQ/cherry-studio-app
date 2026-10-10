@@ -321,6 +321,20 @@ export function createRemoteConversationSource(
               ...REMOTE_INPUT_POLICY,
               attachments: remote.getState().attachments === true,
             },
+            attachmentPreparation:
+              workspace && remote.getState().preupload && remote.stageAttachments
+                ? {
+                    draft: remote
+                      .getState()
+                      .attachmentDrafts?.find((draft) => draft.key === `draft:${input.draftId}`),
+                    stage: (files) =>
+                      remote.stageAttachments!(
+                        `draft:${input.draftId}`,
+                        { agentId, workspace },
+                        files,
+                      ),
+                  }
+                : undefined,
             upload:
               upload?.draftId === input.draftId
                 ? {

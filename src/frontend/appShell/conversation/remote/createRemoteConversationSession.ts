@@ -306,6 +306,20 @@ export function createRemoteConversationSession(
         inputPolicy: { ...REMOTE_INPUT_POLICY, attachments: sourceState.attachments === true },
         send,
       },
+      attachmentPreparation:
+        sourceState.preupload && source.stageAttachments
+          ? {
+              draft: sourceState.attachmentDrafts?.find(
+                (draft) => draft.key === `session:${ref.sessionId}`,
+              ),
+              stage: (files) =>
+                source.stageAttachments!(
+                  `session:${ref.sessionId}`,
+                  { sessionId: ref.sessionId },
+                  files,
+                ),
+            }
+          : undefined,
       upload:
         sourceState.upload?.sessionId === ref.sessionId
           ? {

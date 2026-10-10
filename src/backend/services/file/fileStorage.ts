@@ -286,6 +286,7 @@ export async function rewriteInternalTextEntry(
   if (!entry) {
     throw new Error(`Draft file entry does not exist: ${input.id}`);
   }
+  if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
   const file = managedFileForEntry(entry);
   if (!file.exists) {
     throw new Error(`Draft file bytes are missing: ${input.id}`);

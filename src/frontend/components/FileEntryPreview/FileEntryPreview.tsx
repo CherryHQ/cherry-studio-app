@@ -3,6 +3,7 @@ import {
   FilePreview,
   type FilePreviewOperation,
   type FilePreviewVariant,
+  type FilePreviewTransfer,
 } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,10 +24,12 @@ export function FileEntryPreview({
   entryId,
   size,
   variant,
+  transfer,
 }: {
   entryId: FileEntryId;
   size?: number;
   variant?: FilePreviewVariant;
+  transfer?: FilePreviewTransfer;
 }) {
   const { data, isLoading } = useResolvedFile(entryId);
 
@@ -41,6 +44,7 @@ export function FileEntryPreview({
       size={size}
       uri={data?.uri}
       variant={variant}
+      transfer={transfer}
     />
   );
 }
@@ -112,6 +116,7 @@ function EntryPreview({
   size,
   uri,
   variant,
+  transfer,
 }: {
   badge?: ReactNode;
   entry: FileEntry | undefined;
@@ -120,6 +125,7 @@ function EntryPreview({
   size?: number;
   uri: string | undefined;
   variant?: FilePreviewVariant;
+  transfer?: FilePreviewTransfer;
 }) {
   const { handleError, t } = useFileEntryPreviewError(entryId);
   const { openFileEntry } = useOpenFileEntry();
@@ -139,6 +145,7 @@ function EntryPreview({
       }}
       size={size}
       variant={variant}
+      transfer={transfer}
     />
   );
 }

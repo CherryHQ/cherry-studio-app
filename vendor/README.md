@@ -1,14 +1,18 @@
-# Shared protocol development artifact
+# Shared remote development artifacts
 
-`cherrystudio-remote-protocol-0.4.0-attachments.1.tgz` packages the built `dist/` and `fixtures/`
-from Cherry Desktop `packages/remote-protocol` in the matching attachment change. It contains
-no private mobile protocol definitions. The prerelease label identifies an unpublished artifact;
-it has not been published to npm.
+- `cherrystudio-remote-protocol-0.4.0-attachments.6.tgz`
+- `cherrystudio-remote-transport-0.2.0-attachments.3.tgz`
 
-Build the desktop package with `pnpm --filter @cherrystudio/remote-protocol build`. Package its
-`dist/`, `fixtures/`, README and package manifest (version `0.4.0-attachments.1`, omit development
-scripts/dependencies) under the archive's `package/` directory. After replacing the archive,
-refresh the mobile lockfile and install. Do not use a machine-specific path or a node_modules symlink.
+These unpublished artifacts package the matching desktop packages, including binary
+the single binary upload protocol. Mobile owns no duplicate wire schemas. The transport artifact has
+a peer dependency on the exact protocol artifact version, resolved by this app.
 
-For release, publish the desktop Changesets minor release through its normal authorized workflow,
-then replace this file dependency with that npm version and remove the development artifact.
+Build desktop `packages/remote-protocol` then `packages/remote-transport`. Package each
+built `dist/`, `fixtures/` if present, README and manifest under `package/`. Set the
+prerelease versions above; omit development scripts/dependencies. In the transport
+artifact only, replace the workspace protocol dependency with the matching peer
+dependency. Refresh the mobile lockfile and install after replacing artifacts.
+
+For release, use the authorized desktop Changesets workflow, replace both file
+dependencies with matching published versions, and remove development artifacts.
+The native crypto dependency requires rebuilding the development client APK.

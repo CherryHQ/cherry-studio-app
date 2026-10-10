@@ -2,7 +2,7 @@ import {
   BottomSheet,
   Button,
   ContentState,
-  FileAttachmentPreview,
+  FilePreview,
   MessagePart,
   useToast,
 } from '@cherrystudio/ui/components';
@@ -13,6 +13,7 @@ import { Text, View } from 'react-native';
 
 import type { ConversationMessage, ResourceRead } from '@/frontend/appShell/conversation';
 import { ArtifactImageViewer } from '@/frontend/components/ArtifactPreview';
+import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { ToolRendererProvider } from '@/frontend/components/Message';
 import { filenameExtension } from '@/shared/data/types/file';
 
@@ -100,11 +101,11 @@ export function ConversationAttachments({
   attachments: NonNullable<ConversationMessage['attachments']>;
 }) {
   return (
-    <View className="w-full gap-2">
+    <>
       {attachments.map((item) => (
         <ConversationAttachment key={item.key} item={item} />
       ))}
-    </View>
+    </>
   );
 }
 function ConversationAttachment({
@@ -115,7 +116,10 @@ function ConversationAttachment({
   const { t } = useTranslation();
   const { toast } = useToast();
   const [opened, setOpened] = useState(false);
-  const result = useConversationResourceValue(opened ? item.resource : undefined);
+  const kind = fileEntryPreviewKind({ mediaType: item.mediaType ?? 'application/octet-stream' });
+  const result = useConversationResourceValue(
+    opened || kind === 'image' ? item.resource : undefined,
+  );
   const file = result.data?.kind === 'file' ? result.data : undefined;
   const share = async () => {
     if (!file) return;
@@ -128,13 +132,27 @@ function ConversationAttachment({
   };
   return (
     <>
-      <FileAttachmentPreview
-        categoryLabel={t('filePreview.document')}
-        disabled={!item.resource}
-        file={{
+      <FilePreview
+        variant="attachment"
+        metadata={{
+          kind,
           displayName: item.name,
           extensionLabel: filenameExtension(item.name)?.slice(0, 5).toUpperCase() ?? '',
         }}
+        file={
+          file
+            ? {
+                id: item.key,
+                revision: file.uri,
+                uri: file.uri,
+                kind: fileEntryPreviewKind({
+                  mediaType: file.mediaType ?? 'application/octet-stream',
+                }),
+                displayName: file.name,
+                extensionLabel: filenameExtension(file.name)?.slice(0, 5).toUpperCase() ?? '',
+              }
+            : undefined
+        }
         labels={{ openWith: t('filePreview.openWith'), unavailable: t('filePreview.unavailable') }}
         onPress={() => setOpened(true)}
       />

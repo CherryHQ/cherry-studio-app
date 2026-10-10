@@ -7,7 +7,7 @@ import {
   Section,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -59,7 +59,8 @@ export function RemoteComposer({
   const existing = draftId === undefined;
   const { draft: text, attachments } = useComposerState();
   const files = useBackendModule('file');
-  const { setDraft, addAttachments } = useComposerActions();
+  const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
+    useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const [, setDrafts] = usePersistCache('remote_agent.drafts');
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
@@ -91,9 +92,80 @@ export function RemoteComposer({
   const startAvailability = draft.state?.start.availability;
   const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
   const action = existing ? snapshot.actions.send : draft.state?.start;
-  const supportsAttachments =
+  const inputAllowsAttachments =
     (existing ? snapshot.actions.inputPolicy : draft.state?.inputPolicy)?.attachments === true;
   const upload = existing ? snapshot.upload : draft.state?.upload;
+  const preparation = existing
+    ? snapshot.attachmentPreparation
+    : draft.state?.attachmentPreparation;
+  const supportsAttachments = inputAllowsAttachments && Boolean(preparation);
+  const restoreDraft = useEffectEvent(async (isCurrent: () => boolean) => {
+    if (attachments.length || !preparation?.draft?.items.length) return;
+    const restored = await restoreRemoteInput(
+      {
+        parts: preparation.draft.items.map((file) => ({
+          type: 'file',
+          fileEntryId: file.fileEntryId,
+          name: file.name,
+          mediaType: file.mediaType,
+        })),
+      },
+      (id) => files.getUri(id),
+    );
+    if (!isCurrent() || !canRestore()) return;
+    setAttachments(restored.attachments);
+    if (restored.missing.length) {
+      toast.show({
+        label: t('remoteAgent.missingAttachments', { names: restored.missing.join(', ') }),
+        variant: 'danger',
+      });
+      stageAttachments(restored.attachments);
+    }
+  });
+  const canRestore = useEffectEvent(() => attachments.length === 0);
+  const restoredKey = useRef<string | undefined>(undefined);
+  const hasPreparation = Boolean(preparation);
+  useEffect(() => {
+    if (!hasPreparation || restoredKey.current === draftKey) return;
+    let current = true;
+    void restoreDraft(() => current).then(() => {
+      if (current) restoredKey.current = draftKey;
+    });
+    return () => {
+      current = false;
+    };
+  }, [hasPreparation, draftKey]);
+  const stageAttachments = (items: typeof attachments) => {
+    try {
+      preparation?.stage(
+        items.flatMap((file) =>
+          file.status === 'ready'
+            ? [{ fileEntryId: file.fileEntryId, name: file.name, mediaType: file.mediaType }]
+            : [],
+        ),
+      );
+    } catch {
+      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+    }
+  };
+  const stage = useEffectEvent(stageAttachments);
+  useEffect(
+    () => subscribeAttachmentChanges?.((items) => stage(items)),
+    [subscribeAttachmentChanges],
+  );
+  const uploadsReady =
+    !attachments.length ||
+    Boolean(
+      preparation &&
+      !preparation.draft?.busy &&
+      attachments.every(
+        (file) =>
+          file.status === 'ready' &&
+          preparation.draft?.items.some(
+            (item) => item.fileEntryId === file.fileEntryId && item.state === 'ready',
+          ),
+      ),
+    );
   const cancellations = snapshot.executions.filter((execution) => execution.cancel);
   const canStop = cancellations.some(
     (execution) => execution.cancel?.availability.state === 'enabled',
@@ -133,6 +205,7 @@ export function RemoteComposer({
         canSend={
           action?.availability.state === 'enabled' &&
           !upload &&
+          uploadsReady &&
           Boolean(text.trim() || attachments.length) &&
           (!attachments.length || supportsAttachments)
         }
@@ -152,7 +225,29 @@ export function RemoteComposer({
         }}
         testID="chat-composer"
       >
-        <ComposerAttachments />
+        <ComposerAttachments
+          transfer={(file) => {
+            if (!preparation) return undefined;
+            const item = preparation.draft?.items.find(
+              (item) => item.fileEntryId === file.fileEntryId,
+            );
+            if (item?.state === 'ready') return undefined;
+            const progress = item ? item.sent / Math.max(1, item.total) : undefined;
+            return {
+              progress,
+              state: item?.state === 'failed' ? 'failed' : 'uploading',
+              label:
+                item?.state === 'failed'
+                  ? t('remoteAgent.loadFailed')
+                  : t('remoteAgent.uploadProgress', { percent: Math.floor((progress ?? 0) * 100) }),
+            };
+          }}
+        />
+        {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
+          <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
+            {t('common.retry')}
+          </Button>
+        ) : null}
         {upload ? (
           <View className="flex-row items-center gap-2 px-4">
             <Text className="flex-1 text-sm text-muted-foreground">
@@ -172,7 +267,7 @@ export function RemoteComposer({
           secondaryAction={
             <Composer.Pill
               accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || starting}
+              disabled={existing || starting || attachments.length > 0}
               onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
               icon={<FolderIcon className="size-5 text-foreground" />}
               testID="composer-workspace-button"

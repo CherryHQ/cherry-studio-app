@@ -66,7 +66,7 @@ function renderChatAssistantMessage(
         </View>
       </View>
       <AssistantMessage message={message}>
-        {attachments}
+        {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
         {accessories}
         {message.status !== 'pending' ? (
           <BackgroundPressExclusion>

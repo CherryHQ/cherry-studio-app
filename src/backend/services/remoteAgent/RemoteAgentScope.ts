@@ -41,11 +41,16 @@ import {
   type MessageViewCache,
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
+import { RemoteAttachmentDrafts } from './RemoteAttachmentDrafts';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
 import { createAttachmentDownloader } from './remoteDownloads';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
-import { uploadAttachments, type RemoteUploadFiles } from './remoteUploads';
+import {
+  uploadAttachments,
+  type RemoteUploadFiles,
+  type GetUploadTransport,
+} from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
 export type RemoteBackgroundExecution = {
@@ -112,6 +117,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly partResources = new WeakMap<AgentPart, { sessionId: string; id: string }>();
   private readonly work = new Set<Promise<unknown>>();
   private readonly actions: RemoteAgentActions;
+  private readonly attachmentDrafts?: RemoteAttachmentDrafts;
   private readonly unsubscribe: () => void;
   private stopped = false;
   private preparing = 0;
@@ -124,6 +130,31 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private readonly unoperations: () => void;
   private readonly executionListeners = new Set<() => void>();
   private recoveryTimer?: ReturnType<typeof setTimeout>;
+  private getUploadTransport: GetUploadTransport = async (signal) => {
+    const session = await this.ready(signal);
+    if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
+    return {
+      write: async (input, caller) => {
+        try {
+          return await session.sendUploadChunk(input, caller);
+        } catch (error) {
+          if (error instanceof RemoteFailureError) {
+            if (error.reason === 'FORBIDDEN' || error.reason === 'GRANT_REVOKED')
+              await this.connections.revoke(this.lease.connectionId, 'agent', this.lease.grantId);
+            throw new RemoteAgentError(
+              error.reason,
+              ['TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
+              error.message,
+            );
+          }
+          if (error instanceof RemoteTransportError || error instanceof DesktopUnreachableError)
+            throw new RemoteAgentError('CONNECTION_LOST', true);
+          throw error;
+        }
+      },
+    };
+  };
+
   constructor(
     private readonly lease: DesktopDomainLease,
     private readonly connections: DesktopConnections,
@@ -151,9 +182,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.uploadAbort = { id: owner.id, controller: abort };
         try {
           const signal = AbortSignal.any([abort.signal, this.lease.signal]);
-          const session = await this.ready(signal);
-          signal.throwIfAborted();
-          if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
           return await uploadAttachments(
             attachments,
             this.files,
@@ -165,6 +193,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
             },
             saved,
             save,
+            this.getUploadTransport,
           );
         } catch (error) {
           if (abort.signal.aborted) throw new RemoteAgentError('UPLOAD_CANCELLED');
@@ -177,6 +206,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
     );
     this.unoperations = this.actions.subscribe(() => {
+      this.attachmentDrafts?.reconcile(this.actions.admittedAttachmentDrafts());
       this.publishUpload();
       for (const [id, observation] of this.observations) {
         if (!observation.pendingCommandId) continue;
@@ -191,13 +221,34 @@ export class RemoteAgentScope implements RemoteAgentSource {
       }
       this.reconcileCommandProtection();
     });
+    if (files)
+      this.attachmentDrafts = new RemoteAttachmentDrafts(
+        `${lease.connectionId}:${lease.scope}:attachment-drafts`,
+        journal,
+        files,
+        this.request,
+        lease.signal,
+        () => {
+          this.state = { ...this.state, attachmentDrafts: this.attachmentDrafts?.get() };
+          for (const listener of this.stateListeners) listener();
+          this.reconcileCommandProtection();
+          this.scheduleRecovery();
+        },
+        this.getUploadTransport,
+      );
+    this.attachmentDrafts?.reconcile(this.actions.admittedAttachmentDrafts());
+    this.state = { ...this.state, attachmentDrafts: this.attachmentDrafts?.get() };
     this.publishUpload();
     this.reconcileCommandProtection();
     this.unsubscribe = lease.subscribe(() => this.onConnectionChanged());
-    if (this.state.status === 'ready') void this.actions.recover();
+    if (this.state.status === 'ready') {
+      void this.actions.recover();
+      this.attachmentDrafts?.recover();
+    }
   }
   hasPendingExecution = () =>
     this.preparing > 0 ||
+    Boolean(this.attachmentDrafts?.hasPending()) ||
     this.hasPendingCommands() ||
     [...this.observations.values()].some((observation) => observation.tracking);
   subscribeExecution = (listener: () => void) => {
@@ -208,6 +259,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
   };
   private hasPendingCommands(): boolean {
     return (
+      Boolean(this.attachmentDrafts?.hasPending()) ||
       this.actions.get().some((command) => command.status === 'pending') ||
       this.actions.getStarts().some((start) => start.status === 'pending')
     );
@@ -316,7 +368,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     if (this.stopped || this.lease.signal.aborted) throw new RemoteAgentError('CLOSED');
   }
   private onConnectionChanged() {
-    this.state = { ...this.lease.getSnapshot(), upload: this.state.upload };
+    this.state = { ...this.state, ...this.lease.getSnapshot() };
     for (const observation of this.observations.values()) {
       this.stopObservation(observation);
       this.withdrawTargets(observation);
@@ -333,6 +385,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       this.reconcileCommandProtection();
       for (const [id, observation] of this.observations) this.startObservation(id, observation);
       void this.actions.recover();
+      this.attachmentDrafts?.recover();
     }
   }
   private withdrawTargets(observation: Observation) {
@@ -410,8 +463,12 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.assertActive();
     const signal = caller ? AbortSignal.any([caller, this.lease.signal]) : this.lease.signal;
     const session = await this.ready(signal);
-    if (this.state.attachments !== (session.agentUploadsVersion === 1)) {
-      this.state = { ...this.state, attachments: session.agentUploadsVersion === 1 };
+    if (this.state.attachments !== (session.agentAttachmentDraftsVersion === 1)) {
+      this.state = {
+        ...this.state,
+        attachments: session.agentAttachmentDraftsVersion === 1,
+        preupload: session.agentAttachmentDraftsVersion === 1,
+      };
       for (const listener of this.stateListeners) listener();
     }
     return this.call(session, method, params, signal);
@@ -990,9 +1047,32 @@ export class RemoteAgentScope implements RemoteAgentSource {
       throw new RemoteAgentError('CONFLICT');
     return target.params;
   }
+  stageAttachments: NonNullable<RemoteAgentSource['stageAttachments']> = (key, target, files) => {
+    this.assertActive();
+    if (!this.state.preupload || !this.attachmentDrafts)
+      throw new RemoteAgentError('UPGRADE_REQUIRED');
+    this.attachmentDrafts.stage(key, target, files);
+  };
   start(input: Parameters<RemoteAgentSource['start']>[0]) {
     this.assertActive();
-    return this.track(this.withPreparation(() => this.actions.start(input)));
+    return this.track(
+      this.withPreparation(async () => {
+        const prepared =
+          input.attachments?.length && this.state.preupload
+            ? await this.attachmentDrafts!.prepare(
+                `draft:${input.draftId}`,
+                {
+                  agentId: input.agentId,
+                  workspace: input.workspace ?? { kind: 'registered', id: input.workspaceId! },
+                },
+                input.attachments,
+              )
+            : undefined;
+        const result = await this.actions.start(input, prepared);
+        if (prepared) this.attachmentDrafts!.submitted(prepared.attachmentDraft.draftId);
+        return result;
+      }),
+    );
   }
   send(target: string, text: string, attachments?: Parameters<RemoteAgentSource['send']>[2]) {
     const params = this.target(target, 'send');
@@ -1009,14 +1089,24 @@ export class RemoteAgentScope implements RemoteAgentSource {
     return this.track(
       this.withPreparation(async () => {
         try {
+          const prepared =
+            attachments?.length && this.state.preupload
+              ? await this.attachmentDrafts!.prepare(
+                  `session:${params.sessionId}`,
+                  { sessionId: params.sessionId },
+                  attachments,
+                )
+              : undefined;
+          const commandId = randomUUID();
           const command = await this.actions.create(
             'send',
             'agent.messages.send',
-            { ...params, text },
+            { ...params, text, ...(prepared ? { attachmentDraft: prepared.attachmentDraft } : {}) },
             text,
-            undefined,
+            commandId,
             attachments,
           );
+          if (prepared) this.attachmentDrafts!.submitted(prepared.attachmentDraft.draftId);
           if (command.status === 'pending') observation.pendingCommandId = command.id;
           else observation.pendingSubmission = false;
           if (command.status === 'applied') this.refreshExecutionCheckpoint(params.sessionId);
@@ -1065,9 +1155,13 @@ export class RemoteAgentScope implements RemoteAgentSource {
       !this.stopped &&
       this.state.status === 'ready' &&
       (this.actions.get().some((action) => action.status === 'pending') ||
-        this.actions.getStarts().some((start) => start.status === 'pending'))
+        this.actions.getStarts().some((start) => start.status === 'pending') ||
+        this.attachmentDrafts?.hasPending())
     )
-      this.recoveryTimer = setTimeout(() => void this.actions.recover(), 5000);
+      this.recoveryTimer = setTimeout(() => {
+        void this.actions.recover();
+        this.attachmentDrafts?.recover();
+      }, 5000);
   }
   dispose() {
     if (this.stopped) return;
@@ -1078,6 +1172,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     this.pendingCommandLease?.release();
     this.pendingCommandLease = undefined;
     this.actions.stop();
+    this.attachmentDrafts?.stop();
     for (const observation of this.observations.values()) {
       observation.reply?.finish('cancelled');
       this.stopObservation(observation);
@@ -1090,5 +1185,6 @@ export class RemoteAgentScope implements RemoteAgentSource {
   async drain() {
     while (this.work.size) await Promise.allSettled([...this.work]);
     await this.actions.drain();
+    await this.attachmentDrafts?.drain();
   }
 }

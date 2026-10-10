@@ -11,6 +11,8 @@ const defaultSize = 112;
 
 export function FilePreview({
   badge,
+  metadata,
+  transfer,
   file,
   labels,
   onError,
@@ -21,7 +23,7 @@ export function FilePreview({
   const resolvedSize = Math.max(1, size);
   const { resolve } = useFilePreviewPlugins();
   const handlePress = () => {
-    if (!file) {
+    if (!file && !metadata) {
       return;
     }
     onPress();
@@ -30,13 +32,20 @@ export function FilePreview({
 
   return (
     <FilePreviewFrame
-      accessibilityLabel={file?.displayName ?? labels.unavailable}
-      disabled={!file}
+      accessibilityLabel={file?.displayName ?? metadata?.displayName ?? labels.unavailable}
+      disabled={!file && !metadata}
+      transfer={transfer}
       onPress={handlePress}
       size={resolvedSize}
       variant={variant}
     >
-      {file && Preview ? (
+      {!file && metadata ? (
+        <FileCardPreview
+          badge={badge}
+          file={metadata}
+          variant={variant === 'thumbnail' ? 'attachment' : variant}
+        />
+      ) : file && Preview ? (
         variant !== 'thumbnail' && file.kind !== 'image' ? (
           <FileCardPreview badge={badge} file={file} variant={variant} />
         ) : (
