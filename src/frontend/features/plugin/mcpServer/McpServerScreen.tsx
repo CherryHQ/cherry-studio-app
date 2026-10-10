@@ -29,6 +29,7 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { PluginPage } from '../components/PluginPage';
 import { McpToolsSection } from './components/McpToolsSection';
+import { runCustomMcpOAuth, isValidServerUrl } from './customOAuth';
 import { parseMcpHeaders, serializeMcpHeaders } from './mcpHeaders';
 
 const logger = loggerService.withContext('McpServerScreen');
@@ -224,6 +225,33 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     [server, serverId, t, toast, updateServer],
   );
 
+  /**
+   * OAuth 2.0 PKCE auto-connect: discover the server's authorization metadata,
+   * run the browser flow and store the token in the device keystore, then fold
+   * the resulting Authorization header into the form so the normal save path
+   * persists the connection.
+   */
+  const handleOAuthConnect = useCallback(async () => {
+    const endpointUrl = form.endpointUrl.trim();
+    if (!isValidServerUrl(endpointUrl)) {
+      toast.show({ label: t('settings.mcp.oauth.requiresUrl'), variant: 'danger' });
+      return;
+    }
+    try {
+      setIsSaving(true);
+      const { headers } = await runCustomMcpOAuth(endpointUrl);
+      const existing = parseMcpHeaders(form.headers);
+      const merged = { ...(existing.ok ? existing.value : {}), ...headers };
+      setForm((current) => ({ ...current, headers: serializeMcpHeaders(merged) }));
+      toast.show({ label: t('settings.mcp.oauth.success'), variant: 'success' });
+    } catch (error) {
+      logger.error('Failed to authorize custom MCP server', error as Error);
+      toast.show({ label: t('settings.mcp.oauth.failed'), variant: 'danger' });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [form.endpointUrl, form.headers, t, toast]);
+
   const handleDelete = useCallback(() => {
     if (!serverId) {
       return;
@@ -242,44 +270,46 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   }, [deleteServer, router, serverId, t, toast]);
 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
-  const serverActions = useMemo<HeaderToolbarAction[] | undefined>(
-    () =>
-      server
-        ? [
-            {
-              accessibilityLabel: t('common.more'),
-              disabled: isBusy || isDeleting,
-              icon: EllipsisIcon,
-              items: [
-                {
-                  id: 'mcp-server-toggle',
-                  label: t(
-                    server.isEnabled ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer',
-                  ),
-                  onPress: () => void handleToggleServer(),
-                },
-                {
-                  destructive: true,
-                  id: 'mcp-server-delete',
-                  label: t('settings.mcp.deleteServer'),
-                  onPress: () =>
-                    alert.confirm({
-                      confirmLabel: t('common.delete'),
-                      description: t('settings.mcp.delete.message', { name: server.name }),
-                      onConfirm: handleDelete,
-                      role: 'destructive',
-                      title: t('settings.mcp.delete.title'),
-                    }),
-                },
-              ],
-              key: 'mcp-server-actions',
-              testID: 'mcp-server-actions',
-              type: 'menu',
-            },
-          ]
-        : undefined,
-    [alert, handleDelete, handleToggleServer, isBusy, isDeleting, server, t],
-  );
+  const serverActions = useMemo<HeaderToolbarAction[] | undefined>(() => {
+    const oauthAction = {
+      id: 'mcp-server-oauth',
+      label: t('settings.mcp.oauth.connect'),
+      onPress: () => void handleOAuthConnect(),
+    };
+    const serverItems = server
+      ? [
+          {
+            id: 'mcp-server-toggle',
+            label: t(server.isEnabled ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer'),
+            onPress: () => void handleToggleServer(),
+          },
+          {
+            destructive: true,
+            id: 'mcp-server-delete',
+            label: t('settings.mcp.deleteServer'),
+            onPress: () =>
+              alert.confirm({
+                confirmLabel: t('common.delete'),
+                description: t('settings.mcp.delete.message', { name: server.name }),
+                onConfirm: handleDelete,
+                role: 'destructive',
+                title: t('settings.mcp.delete.title'),
+              }),
+          },
+        ]
+      : [];
+    return [
+      {
+        accessibilityLabel: t('common.more'),
+        disabled: isBusy || isDeleting,
+        icon: EllipsisIcon,
+        items: [oauthAction, ...serverItems],
+        key: 'mcp-server-actions',
+        testID: 'mcp-server-actions',
+        type: 'menu',
+      },
+    ];
+  }, [alert, handleDelete, handleOAuthConnect, handleToggleServer, isBusy, isDeleting, server, t]);
 
   const status = server ? getServerStatus(server, summary) : undefined;
   const showHttpWarning = form.endpointUrl.trim().toLowerCase().startsWith('http://');
@@ -376,6 +406,9 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
             />
             <Text className="text-muted-foreground text-xs">
               {t('settings.mcp.fields.headersHint')}
+            </Text>
+            <Text className="text-muted-foreground text-xs">
+              {t('settings.mcp.oauth.localOnly')}
             </Text>
           </FormField>
         </View>
