@@ -11,7 +11,7 @@ import type {
   MessageStats,
 } from '@/shared/data/types/message';
 
-import type { RuntimeContextCheckpoint, RuntimeTurnReplay } from '../runtime';
+import type { RuntimeContextCheckpoint } from '../runtime';
 
 export type StoredRuntimeContextCheckpoint = {
   assistantMessageId: string;
@@ -125,8 +125,6 @@ export type FinalizeAssistantMessageInput = {
   error: AgentErrorView | null;
   /** Saved only on a successfully completed assistant row. */
   contextCheckpoint: RuntimeContextCheckpoint | null;
-  /** Model-side messages of the turn; saved only on a successfully completed assistant row. */
-  replay?: RuntimeTurnReplay | null;
   /** Runtime-owned message statistics; terminal timing is required at this persistence boundary. */
   runtimeStats: MessageRuntimeStatsInput & {
     runtimeTiming: MessageRuntimeTiming & { completedAt: number };
@@ -157,11 +155,6 @@ export interface AgentSessionStore {
   deleteSession(sessionId: string): Promise<boolean>;
   /** Which of these message ids have a row; lets the Host reserve a turn exactly once. */
   existingMessageIds(messageIds: readonly string[]): Promise<Set<string>>;
-  /** Stored replays of successful assistant rows, keyed by assistant message id. */
-  readReplays(
-    sessionId: string,
-    assistantMessageIds: readonly string[],
-  ): Promise<Record<string, RuntimeTurnReplay>>;
   /** Assistant rows still `pending`/`streaming`; the Host matches them against engine state. */
   listUnsettledAssistantMessages(): Promise<
     { sessionId: string; assistantMessageId: string; turnId: string | null }[]

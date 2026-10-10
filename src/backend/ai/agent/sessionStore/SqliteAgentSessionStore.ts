@@ -27,11 +27,7 @@ import {
   type AgentSessionView,
 } from '@/shared/contracts/agent';
 
-import {
-  parseRuntimeTurnReplay,
-  type RuntimeContextCheckpoint,
-  type RuntimeTurnReplay,
-} from '../runtime';
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -81,28 +77,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .from(agentSessionMessageTable)
       .where(inArray(agentSessionMessageTable.id, [...messageIds]));
     return new Set(rows.map((row) => row.id));
-  }
-
-  async readReplays(sessionId: string, assistantMessageIds: readonly string[]) {
-    const replays: Record<string, RuntimeTurnReplay> = {};
-    if (!assistantMessageIds.length) return replays;
-    const rows = await this.dbService
-      .getDb()
-      .select({ id: agentSessionMessageTable.id, replay: agentSessionMessageTable.replay })
-      .from(agentSessionMessageTable)
-      .where(
-        and(
-          eq(agentSessionMessageTable.sessionId, sessionId),
-          eq(agentSessionMessageTable.role, 'assistant'),
-          eq(agentSessionMessageTable.status, 'success'),
-          inArray(agentSessionMessageTable.id, [...assistantMessageIds]),
-        ),
-      );
-    for (const row of rows) {
-      const replay = parseRuntimeTurnReplay(row.replay);
-      if (replay) replays[row.id] = replay;
-    }
-    return replays;
   }
 
   async listUnsettledAssistantMessages() {
@@ -322,7 +296,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           id: agentSessionMessageTable.id,
           inferenceSnapshot: agentSessionMessageTable.inferenceSnapshot,
           modelId: agentSessionMessageTable.modelId,
-          replay: agentSessionMessageTable.replay,
           role: agentSessionMessageTable.role,
           searchableText: agentSessionMessageTable.searchableText,
           stats: agentSessionMessageTable.stats,
@@ -375,7 +348,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           id: copiedMessageId,
           inferenceSnapshot: row.inferenceSnapshot,
           modelId: row.modelId,
-          replay: row.replay,
           role: row.role,
           searchableText: row.searchableText,
           sessionId: forked.id,
@@ -570,7 +542,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         // The only summary that could cover the replaced answer is its own:
         // it is the last message, so earlier checkpoints stay valid.
         contextCheckpoint: null,
-        replay: null,
         modelId: input.modelId,
         inferenceSnapshot: input.inferenceSnapshot,
         // Provider totals belong to the immutable invocation ledger. Only runtime timing resets.
@@ -764,7 +735,6 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           stats: finalizeMessageStats(existing.stats, input),
           error: input.error,
           contextCheckpoint: input.status === 'success' ? input.contextCheckpoint : null,
-          replay: input.status === 'success' ? (input.replay ?? null) : null,
         })
         .where(eq(agentSessionMessageTable.id, input.assistantMessageId))
         .returning(agentMessageViewColumns);

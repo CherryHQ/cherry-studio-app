@@ -31,7 +31,6 @@ const configuration = {
   options: {},
   tools: [],
 };
-const replay = { version: 1 as const, payload: { kind: 'test-replay', signature: 'keep-exactly' } };
 
 function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const store = new InMemoryAgentSessionStore();
@@ -138,7 +137,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
         ? { turn, role: turn.assistantMessageId === messageId ? 'assistant' : 'user' }
         : undefined;
     },
-    exportTurn: async () => ({ replay, contextCheckpoint: null }),
+    exportTurn: async () => ({ contextCheckpoint: null }),
     drainUsage: async () => {
       steps.push('usage');
     },
@@ -191,11 +190,6 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     }),
     durableStorage: {
       open: async () => ({}) as never,
-      reset: async () => {
-        steps.push('reset');
-        copies.clear();
-        return {} as never;
-      },
       notifyTranscript: () => {
         steps.push('persisted');
       },
@@ -290,12 +284,11 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('background native work prevents file reclamation and backup even without an active answer', async () => {
+  test('background native work prevents backup even without an active answer', async () => {
     const state = fixture();
     jest.spyOn(state.conversations, 'hasUnfinishedWork').mockResolvedValue(true);
     await state.host.initialize();
     try {
-      expect(state.steps).not.toContain('reset');
       await expect(state.host.quiesce()).rejects.toMatchObject({ code: 'busy' });
     } finally {
       await state.host.close();
@@ -395,7 +388,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('recovers complete parts and replay before reclaiming an idle Pi file', async () => {
+  test('settles completed native results at startup and keeps the idle working copy', async () => {
     const state = fixture();
     const turn = await state.reserve();
     await state.store.renameSession(state.sessionId, 'My title');
@@ -405,17 +398,16 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         status: 'success',
         parts: turn.parts,
       });
-      expect(await state.store.readReplays(state.sessionId, [turn.assistantMessageId])).toEqual({
-        [turn.assistantMessageId]: replay,
-      });
-      expect(state.steps.indexOf('persisted')).toBeLessThan(state.steps.indexOf('reset'));
+      expect(state.steps).toContain('persisted');
+      expect(state.conversations.discardConversation).not.toHaveBeenCalled();
+      expect(state.copies.has(state.sessionId)).toBe(true);
       expect(await state.store.getSession(state.sessionId)).toMatchObject({ name: 'My title' });
     } finally {
       await state.host.close();
     }
   });
 
-  test('drains observers activated during stale-copy retirement before rebuilding the idle engine', async () => {
+  test('settles results emitted during stale-copy retirement before accepting new input', async () => {
     const state = fixture();
     const running = await state.reserve('running');
     state.copies.set('deleted-owner', { revision: 0, turns: [] });
@@ -425,7 +417,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     });
     await state.host.initialize();
     try {
-      expect(state.steps).toContain('reset');
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith('deleted-owner');
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('success');
       const submitted = await state.host.submitMessage({
         sessionId: state.sessionId,
@@ -446,7 +438,6 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const state = fixture();
     await state.reserve('running');
     await state.host.initialize();
-    expect(state.steps).not.toContain('reset');
     expect(await state.store.listUnsettledAssistantMessages()).toHaveLength(1);
     await Promise.all([state.host.close(), state.host.close()]);
     expect(state.conversations.close).toHaveBeenCalledTimes(1);

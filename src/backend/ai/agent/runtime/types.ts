@@ -194,13 +194,6 @@ export type RuntimeMessage = {
 export type RuntimeHistoryTurn = {
   turnId: string | null;
   messages: RuntimeMessage[];
-  replay?: RuntimeTurnReplay;
-};
-
-/** Private per-turn model history; never a public message or an execution binding. */
-export type RuntimeTurnReplay = {
-  version: 1;
-  payload: RuntimeJsonValue;
 };
 
 /** Versioned, opaque Runtime context artifact persisted and replayed by the Host. */
@@ -406,7 +399,6 @@ export type RuntimeEvent =
       type: 'completed';
       /** Context size of the final request, when the provider reported its input. */
       contextTokens?: number;
-      replay?: RuntimeTurnReplay;
     }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' };

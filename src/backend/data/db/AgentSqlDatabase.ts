@@ -1,10 +1,5 @@
 import { File } from 'expo-file-system';
-import {
-  deleteDatabaseAsync,
-  openDatabaseAsync,
-  type SQLiteBindValue,
-  type SQLiteDatabase,
-} from 'expo-sqlite';
+import { openDatabaseAsync, type SQLiteBindValue, type SQLiteDatabase } from 'expo-sqlite';
 
 import { databaseDirectory } from '@/backend/data/storage/storagePaths';
 
@@ -29,12 +24,6 @@ export class AgentSqlDatabase implements AgentSqlExecutor {
   private failure: Error | undefined;
 
   constructor(private readonly sqlite: SQLiteDatabase) {}
-
-  /** The caller closed the idle runtime and persisted every result before discarding its cache. */
-  static async reset(): Promise<AgentSqlDatabase> {
-    await deleteDatabaseAsync(AGENT_DATABASE_NAME, databaseDirectory());
-    return AgentSqlDatabase.open();
-  }
 
   static async open(
     options: { directory?: string; name?: string; journal?: 'wal' | 'preserve' } = {},

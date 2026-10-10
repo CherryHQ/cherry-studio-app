@@ -1295,7 +1295,7 @@ describe.each([
     expect(context.referencedFileEntryIds).toContain(filePart.fileEntryId);
   });
 
-  test('a successful answer keeps its replay; forks copy it, retries and failures drop it', async () => {
+  test('a retry reissues the turn, bumps only its own revision and rejects the replaced execution', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
       ...messageIds(),
@@ -1303,7 +1303,6 @@ describe.each([
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hi', state: 'done' }],
     });
-    const replay = { version: 1 as const, payload: { kind: 'pi-turn-replay-v1', messages: [] } };
     const finalized = await store.finalizeAssistantMessage({
       assistantMessageId: reserved.assistantMessage.id,
       status: 'success',
@@ -1311,11 +1310,7 @@ describe.each([
       usage: null,
       error: null,
       contextCheckpoint: null,
-      replay,
       runtimeStats: { runtimeTiming: terminalTiming() },
-    });
-    expect(await store.readReplays(session.id, [finalized.id, 'absent'])).toEqual({
-      [finalized.id]: replay,
     });
     expect(
       await store.existingMessageIds([finalized.id, reserved.userMessage.id, 'absent']),
@@ -1323,10 +1318,9 @@ describe.each([
 
     const fork = await store.forkSession({ sessionId: session.id, fromMessageId: finalized.id });
     if (fork.status !== 'forked') throw new Error(fork.status);
-    const copied = (await store.listMessages(fork.session.id)).find(
-      (message) => message.role === 'assistant',
-    )!;
-    expect(await store.readReplays(fork.session.id, [copied.id])).toEqual({ [copied.id]: replay });
+    expect(
+      (await store.listMessages(fork.session.id)).find((message) => message.role === 'assistant'),
+    ).toMatchObject({ status: 'success', parts: finalized.parts });
 
     const retried = await store.reserveRetry({
       ...RESERVATION_FACTS,
@@ -1354,18 +1348,6 @@ describe.each([
       turnId: retried.turnId,
       status: 'pending',
     });
-    expect(await store.readReplays(session.id, [finalized.id])).toEqual({});
-    await store.finalizeAssistantMessage({
-      assistantMessageId: reserved.assistantMessage.id,
-      status: 'error',
-      parts: [],
-      usage: null,
-      error: { ...INTERRUPTED, code: 'EXECUTION_FAILED' },
-      contextCheckpoint: null,
-      replay,
-      runtimeStats: { runtimeTiming: terminalTiming() },
-    });
-    expect(await store.readReplays(session.id, [finalized.id])).toEqual({});
   });
 
   test('unsettled answers are listed and recovery can leave engine-owned sessions alone', async () => {

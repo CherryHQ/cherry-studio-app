@@ -64,7 +64,6 @@ const PiSubmissionSchema = z.object({
   assistantMessageId: z.string().min(1),
   createdAt: z.number().finite().nonnegative(),
   metadata: z.record(z.string(), RuntimeJsonValueSchema),
-  replayPrefix: z.array(RuntimeJsonValueSchema).optional(),
   tools: z.array(PiToolBlueprintSchema),
 });
 export type PiStoredSubmission = z.infer<typeof PiSubmissionSchema>;

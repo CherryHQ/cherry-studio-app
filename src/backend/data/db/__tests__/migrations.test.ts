@@ -6,7 +6,7 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
-  test('adds durable replay and revision without rewriting existing transcript data', () => {
+  test('adds the runtime revision and drops interim replay without rewriting transcript data', () => {
     const database = new DatabaseSync(':memory:');
     try {
       const files = readMigrationSqlFiles();
@@ -19,17 +19,18 @@ describe('bundled SQLite migrations', () => {
         INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
         VALUES ('answer', 'session', 'assistant', '{"parts":[]}', 'success', 1, 1);
       `);
-      for (const sql of files.slice(4)) database.exec(sql);
+      // 0004 shipped in test builds with a replay column; 0005 removes it again.
+      database.exec(files[4]!);
+      database.exec(`UPDATE agent_session_message SET replay = '{"version":1}'`);
+      for (const sql of files.slice(5)) database.exec(sql);
       expect(database.prepare('SELECT runtime_revision FROM agent_session').get()).toEqual({
         runtime_revision: 0,
       });
-      expect(
-        database.prepare('SELECT data, status, replay FROM agent_session_message').get(),
-      ).toEqual({
+      expect(database.prepare('SELECT data, status FROM agent_session_message').get()).toEqual({
         data: '{"parts":[]}',
         status: 'success',
-        replay: null,
       });
+      expect(columnNames(database, 'agent_session_message')).not.toContain('replay');
     } finally {
       database.close();
     }
@@ -582,7 +583,6 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
-        'replay',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',

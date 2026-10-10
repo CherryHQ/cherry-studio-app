@@ -57,11 +57,6 @@ export const agentSessionMessageTable = sqliteTable(
     // Versioned Agent inference snapshot. Keep raw JSON so unknown future
     // versions can be projected as unsupported without losing the message.
     inferenceSnapshot: text({ mode: 'json' }).$type<AgentInferenceSnapshotV1 | JsonValue>(),
-    /**
-     * Runtime-private model-side messages of a successful turn (signed thinking, raw tool
-     * calls/results). Lets the Host rebuild the engine's working copy exactly; never displayed.
-     */
-    replay: text({ mode: 'json' }).$type<JsonValue>(),
     // Visible plain text of data.parts' text parts, written by the store and
     // mirrored into FTS5 by triggers; mid-stream snapshots leave it unchanged.
     searchableText: text().notNull().default(''),

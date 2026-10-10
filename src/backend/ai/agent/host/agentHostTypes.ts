@@ -27,8 +27,6 @@ export type MobileAgentHostPorts = {
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;
-    /** Called only after closing an idle, fully reconciled runtime. */
-    reset(): Promise<RuntimeSqlDatabase>;
     notifyTranscript(sessionId: string): void;
   };
   /** Throwing, idempotent delivery. Pi retains a receipt until this writer succeeds. */

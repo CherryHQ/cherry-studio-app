@@ -255,26 +255,9 @@ export class DurableAgentHost implements AgentProtocol {
       for (const { sessionId } of copies)
         if (!(await this.isCurrentConversation(sessionId)))
           await this.conversations.discardConversation(sessionId);
-      // Recover committed results before considering the execution file disposable.
+      // Working copies outlive the process: continuing a conversation reuses its native context.
       await this.reconcileUnsettled();
       await this.conversations.drainUsage();
-      if (!(await this.conversations.hasUnfinishedWork())) {
-        // Stopping observation drains its event callbacks; their terminal writes must also finish
-        // before the underlying execution file can disappear.
-        await Promise.all([...this.live.values()].map((state) => state.unsubscribe()));
-        await Promise.all([...this.pendingWrites]);
-        await this.reconcileUnsettled();
-        await this.conversations.drainUsage();
-        await this.captureCheckpoints();
-        await this.conversations.close();
-        for (const state of this.live.values()) state.background?.retire();
-        this.live.clear();
-        this.prepared.clear();
-        this.preparing.clear();
-        await this.conversations.initialize(await this.ports.durableStorage.reset(), execution);
-      }
-      for (const sessionId of await this.conversations.unfinishedSessions())
-        await this.attach(sessionId);
       const work = await this.conversations.watchWork((active) => this.protectWork(active));
       this.workWatch = work;
       this.protectWork(work.active);
@@ -438,12 +421,6 @@ export class DurableAgentHost implements AgentProtocol {
                     plan.history,
                     attachments,
                     plan.inferenceSnapshot.model.uniqueModelId,
-                    await this.store.readReplays(
-                      input.sessionId,
-                      plan.history
-                        .filter((message) => message.role === 'assistant')
-                        .map((message) => message.id),
-                    ),
                   ),
                   contextCheckpoint: plan.runtimeContextCheckpoint,
                   referencedFileEntryIds: [...plan.resources.fileEntryIds],

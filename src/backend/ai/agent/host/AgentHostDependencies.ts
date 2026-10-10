@@ -10,6 +10,7 @@
  */
 
 import { getLocales } from 'expo-localization';
+import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -46,6 +47,8 @@ import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentHost';
 
+const LEGACY_REPLAY_CACHE_ID = 'cherry-agent-replay-cache';
+
 @Injectable('AgentHostDependencies')
 @ServicePhase(Phase.PostReady)
 @DependsOn([
@@ -66,14 +69,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
     this.keepAlive.acquire('agent.durable', onInterrupt);
   readonly durableStorage = {
-    open: async () => {
-      const database = await AgentSqlDatabase.open();
-      return database;
-    },
-    reset: async () => {
-      const database = await AgentSqlDatabase.reset();
-      return database;
-    },
+    open: () => AgentSqlDatabase.open(),
     notifyTranscript: (sessionId: string) =>
       publishDataApiChanges([
         '/agent-sessions',
@@ -125,6 +121,11 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       servers: mcpServerService,
       getMcpRuntime: () => mcpRuntime,
     });
+  }
+
+  /** Releases before Pi Durable cached per-turn model replay in MMKV; nothing reads it now. */
+  protected override onReady() {
+    createMMKV({ id: LEGACY_REPLAY_CACHE_ID }).clearAll();
   }
 
   // Resolved on first use: both sources read the database, which is not a

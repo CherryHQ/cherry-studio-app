@@ -9,7 +9,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 
-import type { RuntimeContextCheckpoint, RuntimeTurnReplay } from '../runtime';
+import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
   AgentSessionStore,
   DeleteTurnInput,
@@ -46,7 +46,6 @@ type StoredMessage = {
   view: AgentMessageView;
   error: AgentErrorView | null;
   contextCheckpoint: unknown | null;
-  replay?: RuntimeTurnReplay | null;
 };
 
 function createSessionView(input: {
@@ -167,20 +166,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return existing;
   }
 
-  async readReplays(sessionId: string, assistantMessageIds: readonly string[]) {
-    const ids = new Set(assistantMessageIds);
-    const replays: Record<string, RuntimeTurnReplay> = {};
-    for (const stored of this.messages.get(sessionId) ?? [])
-      if (
-        ids.has(stored.view.id) &&
-        stored.view.role === 'assistant' &&
-        stored.view.status === 'success' &&
-        stored.replay
-      )
-        replays[stored.view.id] = cloneJson(stored.replay);
-    return replays;
-  }
-
   async listUnsettledAssistantMessages() {
     const rows: { sessionId: string; assistantMessageId: string; turnId: string | null }[] = [];
     for (const [sessionId, list] of this.messages)
@@ -299,7 +284,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       // Runtime-private and anchored to a turn id this copy no longer
       // carries, so the fork replays full history instead.
       contextCheckpoint: null,
-      replay: stored.replay ? cloneJson(stored.replay) : null,
       error: stored.error === null ? null : cloneJson(stored.error),
       view: cloneJson({
         ...stored.view,
@@ -473,7 +457,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     };
     assistant.error = null;
     assistant.contextCheckpoint = null;
-    assistant.replay = null;
     this.sessions.set(session.id, { ...session, updatedAt });
     return cloneJson({
       turnId,
@@ -607,7 +590,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         input.status === 'success' && input.contextCheckpoint !== null
           ? cloneJson(input.contextCheckpoint)
           : null;
-      stored.replay = input.status === 'success' && input.replay ? cloneJson(input.replay) : null;
       const session = this.sessions.get(sessionId);
       if (session) {
         this.sessions.set(sessionId, { ...session, updatedAt });

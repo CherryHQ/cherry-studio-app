@@ -29,7 +29,6 @@ export type {
   RuntimeEvent,
   RuntimeExecutionRequest,
   RuntimeHistoryTurn,
-  RuntimeTurnReplay,
   RuntimeInputPart,
   RuntimeInputModality,
   RuntimeJsonValue,
@@ -53,7 +52,6 @@ export type {
 } from './types';
 
 export { RuntimeContextCheckpointSchema, RuntimeJsonValueSchema } from './runtimeSchemas';
-export { parseRuntimeTurnReplay } from './runtimeTurnReplay';
 
 export type {
   FakeExecutionController,

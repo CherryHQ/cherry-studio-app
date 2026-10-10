@@ -16,7 +16,6 @@ import type {
   RuntimeToolRef,
   RuntimeUsage,
   RuntimeUsageReport,
-  RuntimeTurnReplay,
   RuntimeMessagePart,
 } from './types';
 
@@ -192,10 +191,7 @@ export interface DurableAgentRuntime {
     sessionId: string,
     requestId: string,
     options?: { currentContext?: boolean },
-  ): Promise<{
-    replay: RuntimeTurnReplay | null;
-    contextCheckpoint: RuntimeContextCheckpoint | null;
-  }>;
+  ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
   abort(sessionId: string): Promise<void>;
   /** Abort and retire the application binding through public APIs. File reclamation is separate. */
   discardConversation(sessionId: string): Promise<void>;

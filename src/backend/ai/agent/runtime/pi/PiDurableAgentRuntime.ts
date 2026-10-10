@@ -1,6 +1,6 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { Api, Model, Message } from '@earendil-works/pi-ai';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import {
   createRegistry,
   GenerationTask,
@@ -52,7 +52,6 @@ import {
   PiToolBudgetExceededError,
   piToolBudgetState,
 } from './piToolBudget';
-import { createPiTurnReplay } from './piTurnReplay';
 import { createPiContextCheckpoint, createWorkingPiEntries } from './piWorkingHistory';
 
 const DESCRIPTOR: RuntimeDescriptor = {
@@ -332,12 +331,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const submission = await runtime.submit(
       sessionId,
       { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'followUp' },
-      {
-        ...piSubmissionMetadata(input, tools),
-        ...(assembled.resume?.length
-          ? { replayPrefix: detachedJson({ messages: assembled.resume }).messages! }
-          : {}),
-      },
+      piSubmissionMetadata(input, tools),
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     const record = await submission.status(BACKGROUND_CONTEXT);
@@ -415,15 +409,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const runtime = this.requireRuntime();
     const record = await runtime.inputRecord(sessionId, requestId);
     if (!record || record.type !== 'input' || record.status !== 'done')
-      return { replay: null, contextCheckpoint: null };
+      return { contextCheckpoint: null };
     const stored = readPiSubmission(await runtime.submissionMetadata(record));
-    const entries = await runtime.turnEntries(sessionId, record);
-    const messages = entries
-      .flatMap((entry) => entry.model ?? [])
-      .filter((message) => message.role === 'assistant' || message.role === 'toolResult');
-    const replay =
-      createPiTurnReplay([...((stored.replayPrefix as unknown as Message[]) ?? []), ...messages]) ??
-      null;
     const conversation = await runtime.conversation(sessionId);
     if (!conversation) throw new Error('The working copy is missing.');
     const view = await conversation.context(
@@ -434,7 +421,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       view.head && (CompactionEntry.is(view.head) || ResetEntry.is(view.head))
         ? createPiContextCheckpoint(stored.turnId, view.messages)
         : null;
-    return { replay, contextCheckpoint };
+    return { contextCheckpoint };
   }
 
   async abort(sessionId: string) {

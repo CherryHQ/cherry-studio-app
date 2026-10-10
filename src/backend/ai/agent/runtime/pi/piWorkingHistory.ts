@@ -42,10 +42,10 @@ export function createWorkingPiEntries(
       throw new Error('The legacy summary split point is missing from the retained history.');
     turns = turns.slice(index);
     const first = turns[0]!;
-    // A native replay offset cannot address a reconstructed display projection. Retain that whole
-    // turn in that case; repeating a summarized prefix is preferable to silently losing its tail.
+    // An offset measured against a native replay cannot address the normalized projection. Retain
+    // that whole turn; repeating a summarized prefix is preferable to silently losing its tail.
     const offset =
-      first.replayKind === resume.replayKind && resume.messageOffset <= first.messages.length
+      resume.replayKind === undefined && resume.messageOffset <= first.messages.length
         ? resume.messageOffset
         : 0;
     turns = [{ ...first, messages: first.messages.slice(offset) }, ...turns.slice(1)];

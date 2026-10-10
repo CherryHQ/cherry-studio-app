@@ -175,7 +175,7 @@ describe('Persistent Agent facade', () => {
       ];
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
-        appLanguage: 'zh-cn',
+        appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
         pluginGuides: [
@@ -237,7 +237,7 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain(text);
         expect(serialized).toContain('# Cherry Studio Mobile Runtime');
         expect(serialized).toContain('2026-10-09');
-        expect(serialized).toContain('zh-cn');
+        expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
         expect(serialized).toContain('## JavaScript Sandbox');
         expect(serialized).toContain('# GitHub');
@@ -398,25 +398,14 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('exports exact replay, then rebuilds independent history without model requests', async () => {
+  test('rebuilds independent history from Cherry parts without model requests', async () => {
     const state = fixture();
     const runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {
       await runtime.ensureConversation(seed);
       await submitAndWait(runtime, input('first'));
-      const { replay } = await runtime.exportTurn('session', 'first');
-      expect(replay).toMatchObject({
-        version: 1,
-        payload: {
-          messages: [
-            expect.objectContaining({
-              role: 'assistant',
-              content: [{ type: 'text', text: 'Response 1' }],
-            }),
-          ],
-        },
-      });
+      expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
       await runtime.discardConversation('session');
       expect(await runtime.hasConversation('session')).toBe(false);
       await runtime.ensureConversation({
@@ -426,8 +415,16 @@ describe('Persistent Agent facade', () => {
           history: [
             {
               turnId: 'first',
-              messages: [{ role: 'user', parts: [{ type: 'text', text: 'Question first' }] }],
-              replay: replay!,
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
+                {
+                  role: 'assistant',
+                  parts: [
+                    { type: 'reasoning', text: 'Unsigned thought, never resent.' },
+                    { type: 'text', text: 'Response 1' },
+                  ],
+                },
+              ],
             },
           ],
           contextCheckpoint: null,
@@ -443,6 +440,7 @@ describe('Persistent Agent facade', () => {
           content: [{ type: 'text', text: 'Response 1' }],
         }),
       );
+      expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
     } finally {
       await runtime.close();
     }
