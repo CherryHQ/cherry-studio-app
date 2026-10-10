@@ -55,6 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     },
     android: { ...config.android, package: `${config.android!.package}${suffix}` },
     plugins: [
+      ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       './modules/crash-reporting/app.plugin.js',
       './scripts/withReportingAutolinking.js',
@@ -77,6 +78,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
               ...plugin[1],
               android: {
                 ...plugin[1].android,
+                enableMinifyInReleaseBuilds: profile === 'production',
+                enableShrinkResourcesInReleaseBuilds: profile === 'production',
                 // Compressed native libraries only help direct APK downloads; the Google Play profile opts out.
                 useLegacyPackaging:
                   profile !== 'development' && process.env.ANDROID_COMPRESS_NATIVE_LIBS !== 'false',
