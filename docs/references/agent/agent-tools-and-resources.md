@@ -367,6 +367,13 @@ an operation. Servers may use a pre-registered public client ID or hosted Client
 Document URL; dynamic registration is used only when the server offers it. The app does not publish
 a Client ID Metadata Document for every server or replace provider-specific plugin authorization.
 
+OAuth metadata, registration, token exchange, and refresh use origin-scoped `HttpClient` routes
+through `mcpOAuthFetch`. The shared transport owns query serialization, response bounds, HTTP
+timeouts, redirect rejection, and safe transport errors. The native authorization owner retains
+the overall operation deadline and grant policy. The initial MCP challenge probe reads only
+response headers through streaming fetch, because that endpoint can return a long-lived event
+stream; it cancels the body immediately.
+
 The composer lists resources, URI templates, and prompts for enabled custom servers. Selecting an
 entry reads it through its own server, previews it, and adds it to the user draft only after Add.
 Prompt roles remain quoted user content. Bounded binary content becomes managed attachments;

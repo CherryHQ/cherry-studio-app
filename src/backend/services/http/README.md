@@ -66,6 +66,11 @@ Provider account OAuth uses origin-scoped routes through `providerAccountFetch`,
 responses and rejected redirects. Pi retains account protocol polling and refresh; credentials
 remain on individual requests and never become shared route defaults.
 
+Remote MCP OAuth metadata, registration, token exchange, and refresh use the same transport through
+`mcpOAuthFetch`, with origin-scoped routes, bounded text responses, and rejected redirects. The MCP
+runtime owns refresh and cancellation. Only the initial challenge probe against the MCP endpoint
+uses streaming fetch: it reads the response headers and cancels a potentially open event stream.
+
 ## Interceptors
 
 Interceptors use the app-owned contract and are installed when a client is created. The global

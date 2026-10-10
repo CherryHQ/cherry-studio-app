@@ -2,8 +2,12 @@ import {
   discoverOAuthServerInfo,
   exchangeAuthorization,
   refreshAuthorization,
+  registerClient,
 } from '@modelcontextprotocol/client';
 import * as SecureStore from 'expo-secure-store';
+import { fetch as expoFetch } from 'expo/fetch';
+
+import { createHttpClient, HttpError } from '@/backend/services/http';
 
 import { McpOAuthRuntime } from '../McpOAuthRuntime';
 
@@ -19,6 +23,12 @@ jest.mock('@modelcontextprotocol/client', () => ({
   discoverOAuthServerInfo: jest.fn(),
   exchangeAuthorization: jest.fn(),
   refreshAuthorization: jest.fn(),
+  registerClient: jest.fn(),
+}));
+const mockRequest = jest.fn();
+jest.mock('@/backend/services/http', () => ({
+  ...jest.requireActual('@/backend/services/http'),
+  createHttpClient: jest.fn(() => ({ request: mockRequest })),
 }));
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
@@ -41,6 +51,7 @@ const storage = new Map<string, string>();
 beforeEach(() => {
   jest.clearAllMocks();
   storage.clear();
+  mockRequest.mockResolvedValue({ data: '{}', headers: {}, status: 200 });
   jest.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => storage.get(key) ?? null);
   jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => {
     storage.set(key, value);
@@ -72,6 +83,106 @@ async function begin(runtime: McpOAuthRuntime) {
 }
 
 describe('native remote MCP authorization', () => {
+  it('routes SDK discovery, registration, exchange and refresh through the shared HTTP transport', async () => {
+    const discovery =
+      await jest.mocked(discoverOAuthServerInfo).getMockImplementation()!(endpointUrl);
+    jest.mocked(discoverOAuthServerInfo).mockImplementationOnce(async (_url, options) => {
+      await options!.fetchFn!(`${endpointUrl}/metadata`);
+      await options!.fetchFn!(`${issuer}/.well-known/oauth-authorization-server`);
+      return {
+        ...discovery,
+        authorizationServerMetadata: {
+          ...discovery.authorizationServerMetadata!,
+          registration_endpoint: `${issuer}/register`,
+        },
+      };
+    });
+    jest.mocked(registerClient).mockImplementationOnce(async (_url, options) => {
+      await options.fetchFn!(`${issuer}/register`, {
+        method: 'POST',
+        body: JSON.stringify(options.clientMetadata),
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return { ...options.clientMetadata, client_id: 'registered-client' };
+    });
+    jest.mocked(exchangeAuthorization).mockImplementationOnce(async (_url, options) => {
+      await options.fetchFn!(`${issuer}/token`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: options.authorizationCode,
+        }),
+      });
+      return { ...token, expires_in: 0 };
+    });
+    jest.mocked(refreshAuthorization).mockImplementationOnce(async (_url, options) => {
+      await options.fetchFn!(`${issuer}/token`, {
+        method: 'POST',
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: options.refreshToken,
+        }),
+      });
+      return token;
+    });
+    const runtime = new McpOAuthRuntime();
+    const attempt = await runtime.begin({ name: 'Server', endpointUrl });
+    const callback = new URL(attempt.redirectUrl);
+    callback.searchParams.set(
+      'state',
+      new URL(attempt.authorizationUrl).searchParams.get('state')!,
+    );
+    callback.searchParams.set('code', 'test-code');
+    callback.searchParams.set('iss', issuer);
+    const grant = await runtime.complete(attempt.attemptId, callback.href);
+    await expect(
+      runtime.token({ endpointUrl, oauth: grant }, new AbortController().signal),
+    ).resolves.toBe('test-access');
+    expect(jest.mocked(createHttpClient).mock.calls).toEqual([
+      [{ baseUrl: 'https://mcp.example', statusPolicy: 'all' }],
+      [{ baseUrl: issuer, statusPolicy: 'all' }],
+    ]);
+    expect(mockRequest.mock.calls.map(([request]) => request.path)).toEqual([
+      '/mcp/metadata',
+      '/.well-known/oauth-authorization-server',
+      '/register',
+      '/token',
+      '/token',
+    ]);
+    // Only the MCP challenge probe can open a stream and uses the specialized fetch path.
+    expect(expoFetch).toHaveBeenCalledTimes(1);
+    expect(expoFetch).toHaveBeenCalledWith(endpointUrl, expect.objectContaining({ method: 'GET' }));
+    await runtime.stop();
+  });
+
+  it('maps the shared response-size failure to the safe authorization error', async () => {
+    jest.mocked(discoverOAuthServerInfo).mockImplementationOnce(async (_url, options) => {
+      await options!.fetchFn!(`${issuer}/metadata`);
+      throw new Error('Unreachable');
+    });
+    mockRequest.mockRejectedValueOnce(
+      new HttpError('Oversized response.', { kind: 'invalid_response' }),
+    );
+    const runtime = new McpOAuthRuntime();
+    await expect(begin(runtime)).rejects.toMatchObject({ code: 'invalid_response' });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    await runtime.stop();
+  });
+
+  it('closes the MCP challenge stream without waiting for its body to finish', async () => {
+    const cancel = jest.fn();
+    jest.mocked(expoFetch).mockResolvedValueOnce(
+      new Response(new ReadableStream({ cancel }), {
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+    const runtime = new McpOAuthRuntime();
+    const { attempt } = await begin(runtime);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    runtime.cancel(attempt.attemptId);
+    await runtime.stop();
+  });
+
   it.each(['state', 'iss'] as const)(
     'rejects a mismatched %s before exchanging a code',
     async (parameter) => {

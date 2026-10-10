@@ -26,12 +26,15 @@ import * as SecureStore from 'expo-secure-store';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as z from 'zod';
 
+import { isHttpError } from '@/backend/services/http';
 import {
   McpAuthorizationError,
   type McpConnectionConfig,
   type McpOAuthStartInput,
 } from '@/shared/contracts/mcp';
 import type { McpServer } from '@/shared/data/types/mcpServer';
+
+import { assertMcpOAuthUrl, createMcpOAuthFetch } from './mcpOAuthFetch';
 
 const STORAGE_OPTIONS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const ATTEMPT_LIFETIME_MS = 10 * 60 * 1000;
@@ -82,20 +85,6 @@ const base64Url = (value: string) =>
   value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
 
-function assertSecureUrl(value: string | URL): URL {
-  const url = new URL(value);
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if (
-    (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
-    url.username ||
-    url.password ||
-    url.hash
-  ) {
-    throw new McpAuthorizationError('configuration');
-  }
-  return url;
-}
-
 function callbackUrl(): string {
   const configured = Constants.expoConfig?.scheme;
   const scheme = Array.isArray(configured) ? configured[0] : configured;
@@ -108,6 +97,7 @@ function callbackUrl(): string {
 /** Native credentials and interactive attempts, owned and disposed by the MCP runtime. */
 export class McpOAuthRuntime {
   private readonly lifetime = new AbortController();
+  private readonly fetchOAuth = createMcpOAuthFetch();
   private readonly attempts = new Map<string, Attempt>();
   private readonly revoked = new Set<string>();
   private readonly refreshes = new Map<string, Promise<Grant>>();
@@ -148,39 +138,10 @@ export class McpOAuthRuntime {
     const timer = setTimeout(() => abort.abort(), 30_000);
     const combined = AbortSignal.any([signal, abort.signal, this.lifetime.signal]);
     const fetchFn: FetchLike = async (input, init) => {
-      const url = assertSecureUrl(input instanceof Request ? input.url : String(input));
-      const response = await expoFetch(url.href, { ...init, redirect: 'error', signal: combined });
-      // OAuth discovery and token bodies are small; do not let remote metadata exhaust native memory.
-      if (Number(response.headers.get('content-length')) > 512 * 1024) {
-        await response.body?.cancel();
-        throw new McpAuthorizationError('invalid_response');
-      }
-      const reader = response.body?.getReader();
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      if (reader) {
-        try {
-          while (true) {
-            const part = await reader.read();
-            if (part.done) break;
-            size += part.value.byteLength;
-            if (size > 512 * 1024) throw new McpAuthorizationError('invalid_response');
-            chunks.push(part.value);
-          }
-        } finally {
-          await reader.cancel().catch(() => undefined);
-        }
-      }
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
-      return new Response(size ? bytes : null, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
+      const requestSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      return this.fetchOAuth(input, {
+        ...init,
+        signal: requestSignal ? AbortSignal.any([combined, requestSignal]) : combined,
       });
     };
     try {
@@ -190,6 +151,8 @@ export class McpOAuthRuntime {
       if (signal.aborted || this.lifetime.signal.aborted)
         throw new McpAuthorizationError('cancelled');
       if (error instanceof McpAuthorizationError) throw error;
+      if (isHttpError(error) && error.kind === 'invalid_response')
+        throw new McpAuthorizationError('invalid_response');
       if (
         error instanceof OAuthError &&
         ['invalid_grant', 'invalid_client', 'unauthorized_client'].includes(error.code)
@@ -204,7 +167,7 @@ export class McpOAuthRuntime {
   }
 
   async begin(input: McpOAuthStartInput, previous?: McpServer) {
-    assertSecureUrl(input.endpointUrl);
+    assertMcpOAuthUrl(input.endpointUrl);
     if (
       !input.name.trim() ||
       Object.keys(input.headers ?? {}).some((key) => key.toLowerCase() === 'authorization')
@@ -235,6 +198,8 @@ export class McpOAuthRuntime {
       const probeTimer = setTimeout(() => probeAbort.abort(), 15_000);
       let challengeParams: ReturnType<typeof extractWWWAuthenticateParams> = {};
       try {
+        // The MCP endpoint can return an open SSE stream. Read only challenge headers here;
+        // metadata, registration, and token requests below use the shared HTTP transport.
         const response = await expoFetch(input.endpointUrl, {
           method: 'GET',
           redirect: 'error',
@@ -263,9 +228,9 @@ export class McpOAuthRuntime {
       ) {
         throw new McpAuthorizationError('configuration');
       }
-      assertSecureUrl(metadata.issuer);
-      assertSecureUrl(metadata.authorization_endpoint);
-      assertSecureUrl(metadata.token_endpoint);
+      assertMcpOAuthUrl(metadata.issuer);
+      assertMcpOAuthUrl(metadata.authorization_endpoint);
+      assertMcpOAuthUrl(metadata.token_endpoint);
       if (
         !metadata.response_types_supported.includes('code') ||
         !metadata.code_challenge_methods_supported?.includes('S256')
