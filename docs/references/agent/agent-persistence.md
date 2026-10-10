@@ -349,7 +349,7 @@ projection:
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full
   history instead. The store resolves anchor membership and loads rows after the anchor directly;
-  it also returns lightweight full-transcript Turn-id and file-reference indexes, so the Host does
+  it also returns a lightweight full-transcript file-reference index, so the Host does
   not materialize the complete transcript merely to discard its checkpoint-covered prefix.
 - Turn reads and live-status transitions leave the store: the Host holds the active turn's live
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`
