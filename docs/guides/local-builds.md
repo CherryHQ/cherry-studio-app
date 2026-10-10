@@ -277,32 +277,26 @@ is resolved.
 
 ### Android Edge-To-Edge Compatibility
 
-The React Native 0.86.3 patch handles the system-bar calls reported in #1192. On Android 15+,
-`StatusBarModule` returns a transparent background without reading the deprecated window color and
-ignores legacy color/translucency changes even before React Native's edge-to-edge flag initializes.
-`WindowUtil.kt` uses inset controllers for status-bar visibility and no longer sets system-bar colors
-on these releases. Older Android retains its color/cutout paths; navigation contrast enforcement and
-icon appearance remain in place for three-button navigation.
-
-Android enables `buildReactNativeFromSource` so these Kotlin changes reach the installation package
-instead of using the precompiled React Native artifact. This increases native build time and also
-compiles the existing shared React Native patches on Android. Keep this setting while the Android
-patch is needed. JavaScript updates cannot deliver it.
-
 The Screens 4.26.2 patch raises its Material dependency to
 [1.14.0](https://github.com/material-components/material-components-android/releases/tag/1.14.0).
 That release routes `BottomSheetDialog`, `SheetDialog`, and `EdgeToEdgeUtils` through helpers which
 only read/write legacy system-bar colors below Android 15. Its minimum SDK 23 and AGP 8.11.1 baseline
 fit this project's minimum SDK 26 and React Native's AGP 8.12.0. Existing screen-transition and iOS
-patches remain required.
+patches remain required. This native dependency change requires a new installation package.
 
-The native patch guards in `scripts/__tests__/androidWindowCompatibility.test.ts` check installed
-sources, patch hashes, and source-build configuration in PR CI. They do not establish runtime
-compatibility or removal of the Play warning. Before release, inspect the generated manifest and
-resolved native dependencies, check Android 14/15/16 system bars in light/dark themes, gesture and
-three-button navigation, keyboard/modal insets, rotation/resizing, and embedded QR pairing. Recheck
-the new AAB in Play Console: legacy API references remain in Android 14-and-earlier branches, so
-source changes alone cannot guarantee that Play's warning disappears.
+Android continues to use the precompiled React Native artifact. The reported React Native
+`StatusBarModule` and `WindowUtilKt` calls remain unresolved in
+[#1192](https://github.com/CherryHQ/cherry-studio-app/issues/1192). A local Kotlin patch would require
+compiling React Native and Hermes from source; evaluate that cost against evidence from a new Play
+report before adopting it. The existing iOS source-build configuration and patches remain required.
+
+`scripts/__tests__/androidWindowCompatibility.test.ts` guards the Screens patch hash and installed
+Material version declaration in PR CI. These checks do not establish runtime compatibility or
+removal of the Play warning. Before release, inspect the merged manifest and resolved Material
+version, check native sheets/date pickers and Android 14/15/16 system bars with gesture and
+three-button navigation, and exercise embedded QR pairing on rotated/resized tablets. Record the
+new AAB's version code and expanded Play findings. The original report is for 0.1.0, before R8 was
+enabled; use comparable build settings when attributing changes to the dependency update.
 
 ## Expo 57 Dependency Baseline
 

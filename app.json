@@ -226,7 +226,6 @@
             "compileSdkVersion": 36,
             "targetSdkVersion": 36,
             "buildToolsVersion": "36.0.0",
-            "buildReactNativeFromSource": true,
             "usesCleartextTraffic": true,
             "extraProguardRules": "-keepattributes SourceFile,LineNumberTable\n-keep @interface expo.modules.kotlin.records.Field { *; }\n-keep @interface expo.modules.kotlin.records.Required"
           },
