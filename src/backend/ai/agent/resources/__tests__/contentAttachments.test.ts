@@ -2,7 +2,7 @@ import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import { DocumentTextError } from '@/backend/services/file/documentText';
 import type { TextAttachmentLimits } from '@/backend/services/file/prepareFileAttachments';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
-import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+import { MAX_PDF_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 import { isSupportedTextAttachment } from '@/shared/utils/textFileTypes';
 
 import { resolveManagedContentAttachments } from '../contentAttachments';
@@ -207,7 +207,7 @@ describe('managed text attachments', () => {
   });
 
   test('shares the text budget with extracted documents and retains native truncation', async () => {
-    const document = fact(FIRST_ID, 'report.pdf', 'application/pdf', 2 * 1024 * 1024);
+    const document = fact(FIRST_ID, 'report.pdf', 'application/pdf', MAX_PDF_ATTACHMENT_BYTES);
     const text = fact(SECOND_ID, 'notes.txt', 'text/plain');
     const contents = await resolveManagedContentAttachments({
       availableFiles: new Map([
@@ -267,12 +267,7 @@ describe('managed text attachments', () => {
   );
 
   test('rejects oversized documents before extraction', async () => {
-    const document = fact(
-      FIRST_ID,
-      'report.pdf',
-      'application/pdf',
-      MAX_DOCUMENT_ATTACHMENT_BYTES + 1,
-    );
+    const document = fact(FIRST_ID, 'report.pdf', 'application/pdf', MAX_PDF_ATTACHMENT_BYTES + 1);
     const readDocumentText = jest.fn(async () => ({ text: 'body', truncated: false }));
     await expect(
       resolveManagedContentAttachments({
