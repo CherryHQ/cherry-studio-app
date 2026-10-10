@@ -40,7 +40,7 @@ export function InteractiveConnect({
     resetApplication,
     confirm,
   } = useInteractiveConnect(entry, method);
-  const name = t(`plugins.catalog.${entry.id}.name`);
+  const name = t(`plugins.catalog.${entry.id}.name`, { defaultValue: entry.name ?? entry.id });
   const textKey = `plugins.catalog.${entry.id}.authMethods.${method.id}`;
   const applicationFields = method.applicationFields;
   const waiting = state?.status === 'waiting' || state?.status === 'callback' ? state : null;
@@ -101,7 +101,9 @@ export function InteractiveConnect({
     };
   } else {
     primaryAction = {
-      label: t(state?.status === 'application-ready' ? `${textKey}.continue` : `${textKey}.start`),
+      label: t(state?.status === 'application-ready' ? `${textKey}.continue` : `${textKey}.start`, {
+        defaultValue: state?.status === 'application-ready' ? 'Continue' : 'Authorize',
+      }),
       onPress: () => void begin(),
       testID: 'plugin-authorize',
     };
@@ -204,7 +206,7 @@ export function InteractiveConnect({
               <ContentState.Error
                 layout="leading"
                 title={t(`plugins.errors.${error}`)}
-                description={t(`${textKey}.recovery`)}
+                description={t(`${textKey}.recovery`, { defaultValue: '' })}
               />
               {__DEV__ && diagnostic ? (
                 <Button
@@ -228,6 +230,7 @@ export function InteractiveConnect({
                 finalStatus === 'unsupported-account'
                   ? `${textKey}.unsupported-account`
                   : `plugins.authorization.${finalStatus}`,
+                { defaultValue: '' },
               )}
             />
           ) : review ? (
@@ -246,7 +249,7 @@ export function InteractiveConnect({
           ) : waiting ? (
             <View className="gap-3">
               <Text className="text-lg font-semibold text-foreground">
-                {t(`${textKey}.stages.${waiting.stage}.waiting`)}
+                {t(`${textKey}.stages.${waiting.stage}.waiting`, { defaultValue: '' })}
               </Text>
               <Text className="text-sm text-muted-foreground">
                 {t(
@@ -274,7 +277,9 @@ export function InteractiveConnect({
             />
           ) : (
             <Text className="text-base text-foreground">
-              {t(isEditingApplication ? `${textKey}.useExistingSetup` : `${textKey}.setup`)}
+              {t(isEditingApplication ? `${textKey}.useExistingSetup` : `${textKey}.setup`, {
+                defaultValue: method.setup ?? '',
+              })}
             </Text>
           )}
           {isEditingApplication && existingApplication && applicationFields ? (
@@ -300,7 +305,9 @@ export function InteractiveConnect({
           <Text accessibilityRole="header" className="text-base font-semibold text-foreground">
             {t('plugins.privacy')}
           </Text>
-          <Text className="text-sm text-muted-foreground">{t(`${textKey}.permissions`)}</Text>
+          <Text className="text-sm text-muted-foreground">
+            {t(`${textKey}.permissions`, { defaultValue: method.permissions ?? '' })}
+          </Text>
           <Text className="text-sm text-muted-foreground">{t('plugins.credentialPrivacy')}</Text>
         </View>
       </PluginPage>
