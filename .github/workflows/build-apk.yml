@@ -60,9 +60,15 @@ jobs:
           PROFILE: production
         run: npx expo prebuild --platform android --no-install
 
+      # Release lint (lintVital) is skipped: it OOMs the Gradle daemon
+      # (Metaspace) on this dependency graph and is not needed to produce the
+      # APK. Metaspace is raised as a belt-and-braces measure.
       - name: Build standalone release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon
+        run: >-
+          ./gradlew assembleRelease --no-daemon
+          -x lintVitalRelease -x lintVitalAnalyzeRelease
+          -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1536m"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
