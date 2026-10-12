@@ -4,6 +4,7 @@ import {
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
 } from '@cherrystudio/provider-registry';
+import { MobileRegistryLoader } from '@cherrystudio/provider-registry/mobile';
 
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
@@ -17,6 +18,50 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test('projects downloaded GPT-6.1 Sol efforts for GGAPI without changing its API model id', () => {
+    const loader = new MobileRegistryLoader();
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: {
+          version: 'v3',
+          models: [
+            {
+              id: 'gpt-6-1-sol',
+              name: 'GPT-6.1 Sol',
+              capabilities: ['reasoning'],
+              reasoning: {
+                controls: [
+                  {
+                    kind: 'effort',
+                    values: ['low', 'medium', 'high', 'xhigh', 'max'],
+                    default: 'medium',
+                  },
+                ],
+                supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+                defaultEffort: 'medium',
+              },
+            },
+          ],
+        },
+        providerModels: { version: 'v3', overrides: [] },
+      }),
+    );
+    const service = new ProviderRegistryService(loader);
+    const [model] = service.resolveModels('ggapi', ['gpt-6.1-sol'], {
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      presetProviderId: null,
+    });
+    expect(model).toMatchObject({
+      id: 'ggapi::gpt-6.1-sol',
+      apiModelId: 'gpt-6.1-sol',
+      presetModelId: 'gpt-6-1-sol',
+      reasoning: {
+        selectableEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'medium',
+      },
+    });
+  });
+
   test('merges preset model and provider override into runtime model', () => {
     const model = mergePresetModel(
       {

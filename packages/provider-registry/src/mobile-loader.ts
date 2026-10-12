@@ -20,17 +20,17 @@ export type ProviderModelsBundle = RegistryBundle['providerModels'];
 type ProvidersBundle = RegistryBundle['providers'];
 
 /** Schema lane shared with the desktop-published remote registry. */
-export const REGISTRY_SCHEMA_VERSION = 1;
+export const REGISTRY_SCHEMA_VERSION = 3;
 
 /**
- * Latest Desktop registry semantic line this Mobile runtime fully interprets.
+ * Desktop registry semantic baseline supported by Mobile's consumed fields.
  *
  * This is deliberately not the Mobile application version. The remote manifest
  * is published by Desktop, so its minimum reader version is compared with the
- * Desktop registry behavior implemented here. Older snapshots remain readable
- * within the same schema lane.
+ * Desktop registry behavior implemented here. Older cached schemas remain
+ * readable while the updater migrates them to the current download lane.
  */
-export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.0.14';
+export const REGISTRY_DESKTOP_COMPATIBILITY_VERSION = '2.1.4';
 
 /** Unsigned remote data may describe models, never provider routing or credentials. */
 export const REMOTE_REGISTRY_FILES = ['models.json', 'provider-models.json'] as const;
@@ -72,7 +72,7 @@ export function isCatalogManifestCompatible(
   manifest: CatalogManifest,
   runtimeVersion = REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
 ): boolean {
-  if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+  if (manifest.schemaVersion < 1 || manifest.schemaVersion > REGISTRY_SCHEMA_VERSION) {
     return false;
   }
 
