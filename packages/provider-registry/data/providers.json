@@ -666,6 +666,26 @@
       "name": "Requesty"
     },
     {
+      "defaultChatEndpoint": "openai-chat-completions",
+      "description": "Cheaper Inference - AI model provider",
+      "endpointConfigs": {
+        "openai-chat-completions": {
+          "adapterFamily": "openai-compatible",
+          "baseUrl": "https://api.cheaperinference.com/v1"
+        }
+      },
+      "id": "cheaperinference",
+      "metadata": {
+        "website": {
+          "apiKey": "https://cheaperinference.com/signup",
+          "docs": "https://cheaperinference.com",
+          "models": "https://cheaperinference.com/#models",
+          "official": "https://cheaperinference.com"
+        }
+      },
+      "name": "Cheaper Inference"
+    },
+    {
       "description": "New API - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -2274,5 +2294,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "985f3aecd45a85af"
+  "version": "2356114fddf996b6"
 }
