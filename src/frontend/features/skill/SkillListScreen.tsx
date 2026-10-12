@@ -125,9 +125,9 @@ export function SkillListScreen() {
           <ContentState.Empty
             description={t('skills.installedEmptyHint')}
             primaryAction={{
+              accessibilityState: { busy: isOpening },
               children: t('skills.add'),
               disabled: isOpening,
-              loading: isOpening,
               onPress: () => void open(),
               testID: 'skills-empty-add',
             }}
