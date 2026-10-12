@@ -4,15 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import { formatCompactNumber } from '@/frontend/utils/compactNumber';
 
 import { getMessageDurationMs, getMessageTokenUsage } from '../utils/messageUsage';
 import { LocalMessageUsageDetail, MessageUsageDetail } from './MessageUsageDetail';
-
-// Keep the compact unit consistent across UI languages (27k instead of 2.7万).
-const TOKEN_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
 
 export function AssistantMessageUsage({ message }: { message: MessageListItem }) {
   const { totalTokens } = getMessageTokenUsage(message.stats);
@@ -71,7 +66,7 @@ function MessageUsageButton({
     totalTokens === undefined
       ? undefined
       : t('chat.messageUsage.tokensValue', {
-          value: TOKEN_NUMBER_FORMATTER.format(totalTokens).replace('K', 'k'),
+          value: formatCompactNumber(totalTokens).replace('K', 'k'),
         });
   const duration =
     durationMs === undefined

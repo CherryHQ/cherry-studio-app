@@ -6,6 +6,11 @@ a schema or serialized-format change must migrate existing user data rather than
 Databases from development builds before that baseline are unsupported and must be recreated.
 The app does not automatically delete the local `cherry.db`.
 
+`0007_agent_mode` retains the timestamp and SQL of the earlier minimal-mode development
+migration. `0008_restore_agent_skills` restores the Skills tables for those builds: their recorded
+timestamp is newer than main's `0006_agent_skills`, so Drizzle skips that older entry. The repair
+is idempotent and preserves Skills already installed on main.
+
 - Table definitions live in `src/backend/data/db/schemas`.
 - `sqlite-drizzle` contains generated SQL, the migration journal, and schema snapshots.
   Generate schema changes with Drizzle; add data transformations to the new migration when

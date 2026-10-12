@@ -121,6 +121,14 @@ export type RuntimeArtifact = {
 export type RuntimeToolResult = {
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
+  /** Compact built-in model value when the full display value is already supplied in instructions. */
+  modelValue?: RuntimeJsonValue;
+  /**
+   * Trusted built-in callback instructions for subsequent requests in this execution.
+   * Kept outside compactable messages; the Host replaces them when configuring the next turn.
+   * Never inferred from value, accepted from MCP, or duplicated in model-facing result JSON.
+   */
+  instructions?: { key: string; text: string };
   /** Trusted callback metadata; never inferred from the JSON inside value. */
   failure?: {
     error: RuntimeError;

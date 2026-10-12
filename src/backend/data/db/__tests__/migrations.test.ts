@@ -2,17 +2,57 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { idx: number; tag: string }[];
+  entries: { idx: number; tag: string; when: number }[];
 };
 
 describe('bundled SQLite migrations', () => {
+  test('restores Skills after the earlier minimal-mode development migration without resetting data', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const journal = readMigrationJournal();
+      const files = readMigrationSqlFiles();
+      for (const sql of files.slice(0, 6)) applyMigrationSql(database, sql);
+      const modeIndex = journal.entries.findIndex(({ tag }) => tag === '0007_agent_mode');
+      applyMigrationSql(database, files[modeIndex]!);
+      database.exec(`
+        INSERT INTO agent (id, name, mode, order_key, created_at, updated_at)
+        VALUES ('existing', 'Chat', 'minimal', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'existing', 'History', 1, 1, 1);
+      `);
+      // Expo's migrator compares timestamps, not the renamed journal tag.
+      const previousTimestamp = journal.entries[modeIndex]!.when;
+      for (const [index, entry] of journal.entries.entries()) {
+        if (entry.when > previousTimestamp) applyMigrationSql(database, files[index]!);
+      }
+      expect(columnNames(database, 'agent_global_skill')).toContain('content_hash');
+      expect(columnNames(database, 'agent_skill')).toContain('skill_id');
+      expect(database.prepare('SELECT name, mode FROM agent').get()).toEqual({
+        name: 'Chat',
+        mode: 'minimal',
+      });
+      expect(database.prepare('SELECT agent_id, name FROM agent_session').get()).toEqual({
+        agent_id: 'existing',
+        name: 'History',
+      });
+      const repairIndex = journal.entries.findIndex(
+        ({ tag }) => tag === '0008_restore_agent_skills',
+      );
+      applyMigrationSql(database, files[repairIndex]!);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('defaults existing and new Agents to standard mode without changing configuration or sessions', () => {
     const database = new DatabaseSync(':memory:');
     try {
       database.exec('PRAGMA foreign_keys = ON');
       const files = readMigrationSqlFiles();
       const index = readMigrationJournal().entries.findIndex(
-        ({ tag }) => tag === '0006_agent_mode',
+        ({ tag }) => tag === '0007_agent_mode',
       );
       expect(index).toBeGreaterThan(0);
       for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
@@ -502,8 +542,10 @@ describe('bundled SQLite migrations', () => {
         ).map((table) => table.name),
       ).toEqual([
         'agent',
+        'agent_global_skill',
         'agent_session',
         'agent_session_message',
+        'agent_skill',
         'agent_tool_binding',
         'ai_usage_record',
         'app_state',
@@ -710,6 +752,22 @@ describe('bundled SQLite migrations', () => {
       const agentToolBindingTableSql = getSchemaSql(database, 'table', 'agent_tool_binding');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_identity_check');
       expect(agentToolBindingTableSql).toContain('agent_tool_binding_approval_check');
+      // One installation is shared by every bound Agent: the join cascades from
+      // both sides and never copies the package (agent-skills.md).
+      expect(getForeignKeys(database, 'agent_skill')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ from: 'agent_id', on_delete: 'CASCADE', table: 'agent' }),
+          expect.objectContaining({
+            from: 'skill_id',
+            on_delete: 'CASCADE',
+            table: 'agent_global_skill',
+          }),
+        ]),
+      );
+      expect(getForeignKeys(database, 'agent_global_skill')).toEqual([]);
+      expect(getSchemaSql(database, 'index', 'agent_global_skill_folder_name_unique')).toContain(
+        '(`folder_name`)',
+      );
       // Pending rows include queued inputs; native Pi work serializes execution.
       expect(indexList(database, 'agent_session_message')).not.toEqual(
         expect.arrayContaining([
@@ -945,3 +1003,52 @@ function readMigrationJournal(): MigrationJournal {
     readFileSync(`${migrationDirectory}/meta/_journal.json`, 'utf8'),
   ) as MigrationJournal;
 }
+
+describe('Skill tables', () => {
+  test('match desktop defaults, keep one installation per folder, and drop bindings with either side', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      applyMigrations(database);
+      const insertSkill = (id: string, folder: string) =>
+        database.exec(`
+          INSERT INTO agent_global_skill (
+            id, name, folder_name, source, content_hash, manifest, profile, created_at, updated_at
+          ) VALUES ('${id}', 'brief', '${folder}', 'marketplace', 'directory-sha256:a', '[]', '{}', 1, 1);
+        `);
+      insertSkill('skill-a', 'brief');
+      insertSkill('skill-new', 'notes');
+      expect(() => insertSkill('skill-dup', 'brief')).toThrow(/UNIQUE/);
+      // Desktop defaults: new rows and bindings start disabled unless the writer enables them.
+      expect(
+        database.prepare('SELECT DISTINCT is_enabled, tags FROM agent_global_skill').all(),
+      ).toEqual([{ is_enabled: 0, tags: '[]' }]);
+
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at)
+        VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_skill (agent_id, skill_id, created_at, updated_at)
+        VALUES ('agent', 'skill-a', 1, 1), ('agent', 'skill-new', 1, 1);
+      `);
+      expect(database.prepare('SELECT is_enabled FROM agent_skill').all()).toEqual([
+        { is_enabled: 0 },
+        { is_enabled: 0 },
+      ]);
+      expect(() =>
+        database.exec(
+          "INSERT INTO agent_skill (agent_id, skill_id, created_at, updated_at) VALUES ('agent', 'missing', 1, 1)",
+        ),
+      ).toThrow(/FOREIGN KEY/);
+      database.exec("DELETE FROM agent_global_skill WHERE id = 'skill-a'");
+      expect(database.prepare('SELECT skill_id FROM agent_skill').all()).toEqual([
+        { skill_id: 'skill-new' },
+      ]);
+      database.exec("DELETE FROM agent WHERE id = 'agent'");
+      expect(database.prepare('SELECT count(*) AS count FROM agent_skill').get()).toEqual({
+        count: 0,
+      });
+    } finally {
+      database.close();
+    }
+  });
+});

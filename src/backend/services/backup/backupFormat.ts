@@ -40,8 +40,17 @@ export function assertBackupPath(path: string): void {
   const allowed =
     path === 'manifest.json' ||
     path === 'database/cherry.db' ||
+    /^skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/[0-9a-f]{64}\/(?:[^/\\\x00-\x1f]+\/)*[^/\\\x00-\x1f]+$/.test(
+      path,
+    ) ||
     /^(?:files|avatars\/(?:user|agents|providers))\/[^/\\\x00-\x1f]+$/.test(path);
-  if (!allowed || path.includes('..') || path.includes(':') || path.length > 512) {
+  if (
+    !allowed ||
+    path.split('/').some((part) => part === '.') ||
+    path.includes('..') ||
+    path.includes(':') ||
+    path.length > 512
+  ) {
     throw new BackupError('invalid', 'Unsafe archive path.');
   }
 }

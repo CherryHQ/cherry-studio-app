@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b10eb537-15d4-401a-9949-d70f2aa4061c",
+  "id": "aecc0f9f-8fc8-4484-8c7b-4f4124673e38",
   "prevId": "35751444-285a-4bf3-921d-57d5247d1d46",
   "tables": {
     "app_state": {
@@ -198,14 +198,6 @@
           "autoincrement": false,
           "default": "''"
         },
-        "mode": {
-          "name": "mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'standard'"
-        },
         "avatar": {
           "name": "avatar",
           "type": "text",
@@ -289,6 +281,228 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "agent_global_skill": {
+      "name": "agent_global_skill",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "folder_name": {
+          "name": "folder_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_url": {
+          "name": "source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tags": {
+          "name": "tags",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'[]'"
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "manifest": {
+          "name": "manifest",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "profile": {
+          "name": "profile",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "invocation": {
+          "name": "invocation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{\"modelInvocable\":true,\"userInvocable\":true}'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "agent_global_skill_folder_name_unique": {
+          "name": "agent_global_skill_folder_name_unique",
+          "columns": ["folder_name"],
+          "isUnique": true
+        },
+        "agent_global_skill_source_idx": {
+          "name": "agent_global_skill_source_idx",
+          "columns": ["source"],
+          "isUnique": false
+        },
+        "agent_global_skill_is_enabled_idx": {
+          "name": "agent_global_skill_is_enabled_idx",
+          "columns": ["is_enabled"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "agent_skill": {
+      "name": "agent_skill",
+      "columns": {
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "skill_id": {
+          "name": "skill_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "is_enabled": {
+          "name": "is_enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "agent_skill_agent_id_idx": {
+          "name": "agent_skill_agent_id_idx",
+          "columns": ["agent_id"],
+          "isUnique": false
+        },
+        "agent_skill_skill_id_idx": {
+          "name": "agent_skill_skill_id_idx",
+          "columns": ["skill_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "agent_skill_agent_id_agent_id_fk": {
+          "name": "agent_skill_agent_id_agent_id_fk",
+          "tableFrom": "agent_skill",
+          "tableTo": "agent",
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_skill_skill_id_agent_global_skill_id_fk": {
+          "name": "agent_skill_skill_id_agent_global_skill_id_fk",
+          "tableFrom": "agent_skill",
+          "tableTo": "agent_global_skill",
+          "columnsFrom": ["skill_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "agent_skill_agent_id_skill_id_pk": {
+          "columns": ["agent_id", "skill_id"],
+          "name": "agent_skill_agent_id_skill_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
