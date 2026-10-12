@@ -33,6 +33,7 @@ import { flushLogWriter, loggerService } from '@/shared/core/logger/LoggerServic
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 import { CherryDiagnosticUploadClient } from './CherryDiagnosticUploadClient';
 import { createDiagnosticTemporaryDirectory } from './diagnosticFiles';
+import { getDiagnosticReportStatus } from './diagnosticReportStatus';
 import {
   collectDiagnosticSources,
   SourceChangedError,
@@ -79,6 +80,11 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
   private readonly uploader = new CherryDiagnosticUploadClient();
   private disposed = false;
   private readonly abort = new AbortController();
+
+  getReportStatus(reportId: string, signal?: AbortSignal) {
+    this.abort.signal.throwIfAborted();
+    return getDiagnosticReportStatus(reportId, signal ?? this.abort.signal);
+  }
 
   constructor(
     private readonly database: DbService,

@@ -8,6 +8,8 @@ import {
 } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { rememberFeedback } from './feedbackHistory';
+
 const logger = loggerService.withContext('DiagnosticBundle');
 const FAILURE_KEYS = {
   not_configured: 'settings.about.diagnostics.failures.not_configured',
@@ -54,6 +56,14 @@ export function useDiagnosticBundle() {
         includeLogs: true,
         includeTraces: true,
       });
+      if (result.status === 'uploaded') {
+        try {
+          rememberFeedback(result.reportId, description);
+        } catch {
+          // Local history cannot turn an accepted submission into an upload failure.
+          logger.warn('Failed to save feedback history');
+        }
+      }
       if (!mounted.current) return;
       if (result.status === 'busy') {
         setState({ status: 'failed', messageKey: 'settings.about.diagnostics.errors.busy' });

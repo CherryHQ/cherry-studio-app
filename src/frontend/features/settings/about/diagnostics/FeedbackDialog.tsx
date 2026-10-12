@@ -10,16 +10,24 @@ import {
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
 } from '@/shared/contracts/diagnostics';
 
+import { useCopyReportId } from './useCopyReportId';
 import { useDiagnosticBundle } from './useDiagnosticBundle';
 
 /** One dialog owns the draft, submission, and result; the service owns temporary files. */
-export function FeedbackDialog({ onClose }: { onClose: () => void }) {
+export function FeedbackDialog({
+  onClose,
+  onViewReport,
+}: {
+  onClose: () => void;
+  onViewReport: (reportId: string) => void;
+}) {
   // Resolve business hooks here: the shared dialog renders its content through a portal.
   const { t } = useTranslation();
   const [description, setDescription] = useState('');
   const [attempted, setAttempted] = useState(false);
   const workflow = useDiagnosticBundle();
   const { state } = workflow;
+  const copyReportId = useCopyReportId(state.status === 'uploaded' ? state.reportId : '');
   const normalized = description.trim();
   const bytes = diagnosticDescriptionByteLength(normalized);
   const isTooLong = bytes > DIAGNOSTIC_DESCRIPTION_MAX_BYTES;
@@ -127,9 +135,20 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
             </Text>
             {state.status === 'uploaded' && (
               <View className="w-full gap-1 rounded-lg bg-secondary px-4 py-3">
-                <Text className="text-xs text-muted-foreground">
-                  {t('settings.about.diagnostics.reportId')}
-                </Text>
+                <View className="flex-row items-center justify-between gap-3">
+                  <Text className="text-xs text-muted-foreground">
+                    {t('settings.about.diagnostics.reportId')}
+                  </Text>
+                  <Button
+                    size="inline"
+                    variant="link"
+                    accessibilityLabel={t('settings.about.feedback.copyId')}
+                    onPress={() => void copyReportId()}
+                    testID="feedback-report-copy"
+                  >
+                    {t('common.copy')}
+                  </Button>
+                </View>
                 <Text className="text-sm text-foreground" selectable>
                   {state.reportId}
                 </Text>
@@ -138,7 +157,14 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
           </View>
           <View className="gap-2">
             {state.status === 'uploaded' ? (
-              <Button onPress={close}>{t('common.done')}</Button>
+              <>
+                <Button onPress={() => onViewReport(state.reportId)} testID="feedback-view-status">
+                  {t('settings.about.feedback.status.view')}
+                </Button>
+                <Button onPress={close} variant="ghost">
+                  {t('common.done')}
+                </Button>
+              </>
             ) : (
               <>
                 <Button onPress={workflow.edit}>

@@ -184,6 +184,7 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
   let mappedError = mapAxiosError(
     error,
     context?.request.errorDecoder ?? context?.route.errorDecoder,
+    context?.request.logPath,
   );
 
   if (!context) {
@@ -204,7 +205,7 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
             kind: 'internal',
           });
     } catch (interceptorError) {
-      mappedError = mapAxiosError(interceptorError);
+      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath);
     }
   }
 
@@ -375,7 +376,11 @@ function createHttpClientWithTransport(
           status: response.status,
         });
       } catch (error) {
-        throw mapAxiosError(error, routedRequest.errorDecoder ?? route.errorDecoder);
+        throw mapAxiosError(
+          error,
+          routedRequest.errorDecoder ?? route.errorDecoder,
+          routedRequest.logPath,
+        );
       }
     },
   });

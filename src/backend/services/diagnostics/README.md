@@ -10,7 +10,7 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 Settings → About → Feedback opens a compact dialog. The user writes a required description
 (at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
 confirms submission. The same dialog shows indeterminate progress, then success or a failure.
-There is no separate diagnostic page, range selector, or file-save step. Desktop's current report
+There is no range selector or file-save step. Desktop's current report
 form and IPC schema accept only a description, so Mobile does not invent issue categories.
 
 Submission uses the last 24 hours with logs and traces included. The description draft survives
@@ -24,10 +24,36 @@ the same input for saving and uploading. Description text stays separate from te
 
 Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
 also has a report URL, server processing status, and local submission history. Mobile implements
-the feedback-and-bundle flow and displays the cloud acknowledgement's tracking ID; status lookup
-and local submission history are separate product capabilities. Desktop reference:
+the feedback-and-bundle flow, shows the acknowledgement's tracking ID, and provides status lookup
+and local submission history through About → Feedback history. Desktop reference:
 `CherryHQ/cherry-studio` main commit `0ca0ebaffc`, `src/renderer/components/doctor/DoctorDialog.tsx` and
 `src/renderer/components/feedback/DiagnosticUploadPanel.tsx`.
+
+## Feedback history and status
+
+The frontend's existing MMKV-backed `CacheService` persist tier owns
+`diagnostics.feedback_history`; no SQLite table or migration is added. Only accepted submissions
+create records, containing the report ID, user description, local submission time and last known
+processing status. Status checks also retain the server update time and local check time. History
+is device-local, starts with submissions made by this flow, and is cleared with the app's persisted
+UI cache. It does not retain diagnostic ZIPs. A history-write exception cannot change an accepted
+upload into a failed submission.
+
+About → Feedback history lists receipts newest first, 20 per page. Its visible records use
+`GET /diagnostics/:id/status` on entry and manual refresh, with a one-minute query freshness window,
+no retries and no background polling. The public lookup needs no signing credential. The adapter
+validates the matching UUID, documented processing states and timestamps; reads are cancellable,
+reject redirects and cap the body at 64 KiB. Transport logs use a redacted path because a tracking
+ID is a status-view capability. Network/service errors preserve cached status. A 404 marks the
+receipt unavailable without deleting it; a later successful lookup can recover that receipt.
+
+Selecting a record, or View progress after upload, opens an app-owned WebView of the public status
+page. The app language is sent in `Accept-Language`; the server owns its Chinese/English page,
+processing reply and associated Issue/PR links. The report page and anchors remain embedded;
+associated HTTPS GitHub links use the existing in-app browser. Unsupported destinations are
+blocked. Page loading/failure/retry and native report-ID copy actions remain usable independently
+of the cached status. Completing a web load refreshes that report's cached state. Route identity
+and a stable WebView source prevent status writes from reloading the page.
 
 ## Collected data
 

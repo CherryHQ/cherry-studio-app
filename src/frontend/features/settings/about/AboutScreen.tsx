@@ -1,11 +1,13 @@
 import GithubIcon from '@cherrystudio/app-icons/icons/github';
 import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import HistoryIcon from '@cherrystudio/app-icons/icons/history';
 import MailIcon from '@cherrystudio/app-icons/icons/mail';
 import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Chip, Image, Section, useToast } from '@cherrystudio/ui/components';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
+import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
@@ -33,6 +35,7 @@ const ABOUT_LINKS = {
 
 export default function AboutSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [isFeedbackOpen, setFeedbackOpen] = useState(false);
   const { toast } = useToast();
   const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateCheck();
@@ -122,6 +125,12 @@ export default function AboutSettingsScreen() {
             showChevron={false}
           />
           <Section.Item
+            label={t('settings.about.feedback.history.title')}
+            leading={<HistoryIcon className="size-4 text-foreground" />}
+            onPress={() => router.push('/settings/about/feedback')}
+            testID="feedback-history-entry"
+          />
+          <Section.Item
             label={t('settings.about.contact.title')}
             leading={<MailIcon className="size-4 text-foreground" />}
             onPress={openEmail}
@@ -134,7 +143,15 @@ export default function AboutSettingsScreen() {
           />
         </Section>
       </SettingsScrollPage>
-      {isFeedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}
+      {isFeedbackOpen && (
+        <FeedbackDialog
+          onClose={() => setFeedbackOpen(false)}
+          onViewReport={(reportId) => {
+            setFeedbackOpen(false);
+            router.push({ pathname: '/settings/about/feedback/[reportId]', params: { reportId } });
+          }}
+        />
+      )}
     </>
   );
 }

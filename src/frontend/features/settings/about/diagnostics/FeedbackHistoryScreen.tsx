@@ -1,0 +1,185 @@
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import { Button, Chip, ContentState, Section, useToast } from '@cherrystudio/ui/components';
+import { useQueries } from '@tanstack/react-query';
+import { useIsFocused, useRouter } from 'expo-router';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
+
+import { useBackendModule, usePersistCache } from '@/frontend/data';
+import type { DiagnosticProcessingStatus } from '@/shared/contracts/diagnostics';
+
+import { SettingsScrollPage } from '../../components/SettingsScrollPage';
+import { FeedbackDialog } from './FeedbackDialog';
+import { feedbackHistoryRecords, FEEDBACK_HISTORY_KEY } from './feedbackHistory';
+import { feedbackStatusQueryOptions } from './feedbackStatusQuery';
+
+const PAGE_SIZE = 20;
+const STATUS_KEYS = {
+  pending: 'settings.about.feedback.status.pending',
+  unprocessed: 'settings.about.feedback.status.pending',
+  investigating: 'settings.about.feedback.status.investigating',
+  resolved: 'settings.about.feedback.status.resolved',
+  closed: 'settings.about.feedback.status.closed',
+} satisfies Record<DiagnosticProcessingStatus, string>;
+
+export function FeedbackHistoryScreen() {
+  const { t, i18n } = useTranslation();
+  const { toast } = useToast();
+  const router = useRouter();
+  const isFocused = useIsFocused();
+  const diagnostics = useBackendModule('diagnostics');
+  const [stored] = usePersistCache(FEEDBACK_HISTORY_KEY);
+  const records = feedbackHistoryRecords(stored);
+  const [page, setPage] = useState(0);
+  const [isFeedbackOpen, setFeedbackOpen] = useState(false);
+  const pageCount = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const visible = records.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const queries = useQueries({
+    queries: visible.map((record) => ({
+      ...feedbackStatusQueryOptions(diagnostics, record.reportId),
+      enabled: isFocused,
+    })),
+  });
+  const isFetching = queries.some((query) => query.isFetching);
+  const hasRefreshFailure = queries.some(
+    (query) => query.isError || query.data?.status === 'failed',
+  );
+  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  function openReport(reportId: string) {
+    setFeedbackOpen(false);
+    router.push({ pathname: '/settings/about/feedback/[reportId]', params: { reportId } });
+  }
+
+  async function refresh() {
+    const results = await Promise.all(queries.map((query) => query.refetch()));
+    if (
+      results.some(
+        (result) => result.data?.status === 'failed' && result.data.reason === 'rate_limited',
+      )
+    ) {
+      toast.show({ label: t('settings.about.feedback.history.rateLimited'), variant: 'danger' });
+    } else if (results.some((result) => result.isError || result.data?.status === 'failed')) {
+      toast.show({ label: t('settings.about.feedback.history.refreshFailed'), variant: 'danger' });
+    }
+  }
+
+  return (
+    <>
+      <SettingsScrollPage
+        contentClassName="gap-4"
+        headerProps={{
+          title: t('settings.about.feedback.history.title'),
+          rightActions: [
+            {
+              key: 'refresh',
+              type: 'icon',
+              icon: RefreshCwIcon,
+              accessibilityLabel: t('settings.about.feedback.history.refresh'),
+              disabled: isFetching || visible.length === 0,
+              onPress: () => void refresh(),
+              testID: 'feedback-history-refresh',
+            },
+          ],
+        }}
+      >
+        {records.length ? (
+          <>
+            {hasRefreshFailure && (
+              <Text className="text-sm text-muted-foreground">
+                {t('settings.about.feedback.history.refreshFailed')}
+              </Text>
+            )}
+            <Section>
+              {visible.map((record) => (
+                <Section.Item
+                  key={record.reportId}
+                  onPress={() => openReport(record.reportId)}
+                  testID={`feedback-record-${record.reportId}`}
+                  label={
+                    <Text className="text-base text-foreground" numberOfLines={2}>
+                      {record.description}
+                    </Text>
+                  }
+                  description={
+                    <View className="gap-1">
+                      <Text className="text-xs text-muted-foreground">
+                        {dateFormatter.format(new Date(record.submittedAt))}
+                      </Text>
+                      {record.lastCheckedAt && (
+                        <Text className="text-xs text-muted-foreground">
+                          {t('settings.about.feedback.history.checkedAt', {
+                            time: dateFormatter.format(new Date(record.lastCheckedAt)),
+                          })}
+                        </Text>
+                      )}
+                    </View>
+                  }
+                  trailing={
+                    <Chip.Tag className="px-2 py-1">
+                      <Chip.Label className="text-xs">
+                        {t(
+                          record.isUnavailable
+                            ? 'settings.about.feedback.status.unavailable'
+                            : STATUS_KEYS[record.processingStatus],
+                        )}
+                      </Chip.Label>
+                    </Chip.Tag>
+                  }
+                />
+              ))}
+            </Section>
+            {pageCount > 1 && (
+              <View className="flex-row items-center justify-between gap-3">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isFetching || currentPage === 0}
+                  onPress={() => setPage(currentPage - 1)}
+                >
+                  {t('settings.about.feedback.history.previous')}
+                </Button>
+                <Text className="text-sm text-muted-foreground">
+                  {t('settings.about.feedback.history.page', {
+                    page: currentPage + 1,
+                    pages: pageCount,
+                  })}
+                </Text>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isFetching || currentPage === pageCount - 1}
+                  onPress={() => setPage(currentPage + 1)}
+                >
+                  {t('settings.about.feedback.history.next')}
+                </Button>
+              </View>
+            )}
+          </>
+        ) : (
+          <View className="py-12">
+            <ContentState.Empty
+              title={t('settings.about.feedback.history.emptyTitle')}
+              description={t('settings.about.feedback.history.emptyDescription')}
+              primaryAction={{
+                children: t('settings.about.feedback.title'),
+                onPress: () => setFeedbackOpen(true),
+              }}
+            />
+          </View>
+        )}
+        <Text className="text-xs text-muted-foreground">
+          {t('settings.about.feedback.history.localNotice')}
+        </Text>
+      </SettingsScrollPage>
+      {isFeedbackOpen && (
+        <FeedbackDialog onClose={() => setFeedbackOpen(false)} onViewReport={openReport} />
+      )}
+    </>
+  );
+}

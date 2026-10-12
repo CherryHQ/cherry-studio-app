@@ -42,6 +42,8 @@ interface HttpRequestBase {
   readonly maxResponseBytes?: number;
   /** Relative API path beginning with `/`. Absolute URLs are rejected. */
   readonly path: string;
+  /** Redacted route for logs when the real path contains a capability or other secret. */
+  readonly logPath?: string;
   readonly query?: HttpQuery;
   /** Omit for the default JSON-compatible Axios response handling. */
   readonly responseType?: HttpResponseType;
