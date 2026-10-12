@@ -67,6 +67,7 @@ describe('ImageGenerationSupportSchema', () => {
       min: 1,
       max: 1,
       default: 1,
+      step: 1,
     });
   });
 
@@ -87,7 +88,41 @@ describe('ImageGenerationSupportSchema', () => {
       min: 0,
       max: 6,
       default: 6,
+      step: 1,
     });
+  });
+
+  it.each([
+    'numImages',
+    'maxImages',
+    'numInferenceSteps',
+    'safetyTolerance',
+    'outputCompression',
+  ] as const)('requires integer bounds, defaults, and positive steps for %s', (parameter) => {
+    const range = { type: 'range', min: 0, max: 8, default: 2 };
+    const support = (spec: typeof range & { step?: number }) => ({
+      modes: { generate: { supports: { [parameter]: spec } } },
+    });
+    expect(
+      ImageGenerationSupportSchema.parse(support(range)).modes.generate?.supports[parameter],
+    ).toEqual({ ...range, step: 1 });
+    expect(
+      ImageGenerationSupportSchema.parse(support({ ...range, step: 2 })).modes.generate?.supports[
+        parameter
+      ],
+    ).toEqual({ ...range, step: 2 });
+    for (const invalid of [
+      { min: 0.5 },
+      { max: 8.5 },
+      { default: 2.5 },
+      { step: 0.5 },
+      { step: 0 },
+      { step: -1 },
+    ]) {
+      expect(
+        ImageGenerationSupportSchema.safeParse(support({ ...range, ...invalid })).success,
+      ).toBe(false);
+    }
   });
 
   it('Ideogram V_3: per-mode supports — remix gains imageWeight; upscale gains resemblance + detail', () => {

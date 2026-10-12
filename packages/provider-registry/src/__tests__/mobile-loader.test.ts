@@ -46,8 +46,8 @@ describe('remote catalog compatibility', () => {
     expect(
       isCatalogManifestCompatible({
         ...compatibleManifest,
-        minAppVersion: '2.0.15',
-        sourceAppVersion: '2.0.15',
+        minAppVersion: '2.1.5',
+        sourceAppVersion: '2.1.5',
       }),
     ).toBe(false);
     expect(isCatalogManifestCompatible({ ...compatibleManifest, sourceAppVersion: '2.0.7' })).toBe(
@@ -65,6 +65,21 @@ describe('remote catalog compatibility', () => {
     expect(isCatalogManifestCompatible({ ...compatibleManifest, minAppVersion: 'next' })).toBe(
       false,
     );
+    expect(isCatalogManifestCompatible({ ...compatibleManifest, schemaVersion: 0 })).toBe(false);
+  });
+
+  it('admits v3 while keeping older cached schemas readable', () => {
+    expect(REGISTRY_SCHEMA_VERSION).toBe(3);
+    for (const schemaVersion of [1, 2, 3]) {
+      expect(
+        isCatalogManifestCompatible({
+          ...compatibleManifest,
+          minAppVersion: '2.1.4',
+          sourceAppVersion: '2.1.6',
+          schemaVersion,
+        }),
+      ).toBe(true);
+    }
   });
 });
 
@@ -109,7 +124,94 @@ describe('MobileRegistryLoader', () => {
     loader.installRemoteSnapshot(loader.parseRemoteSnapshot(snapshot));
     expect(loader.findModel('tiered')?.pricing?.inputTokenTiers).toEqual([tier]);
     tier.minInputTokens = -1;
-    expect(() => loader.parseRemoteSnapshot(snapshot)).toThrow();
+    loader.installRemoteSnapshot(loader.parseRemoteSnapshot(snapshot));
+    expect(loader.findModel('tiered')).toBeNull();
+  });
+
+  it('reads GPT-6.1 Sol from v3 despite unknown vocabulary and incompatible sibling entries', () => {
+    const loader = new MobileRegistryLoader();
+    const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: {
+          version: 'v3-models',
+          models: [
+            {
+              id: 'gpt-6-1-sol',
+              name: 'GPT-6.1 Sol',
+              capabilities: ['reasoning', 'future-capability'],
+              reasoning: {
+                controls: [
+                  { kind: 'effort', values: [...efforts, 'future-effort'], default: 'medium' },
+                ],
+                supportedEfforts: [...efforts, 'future-effort'],
+                defaultEffort: 'medium',
+              },
+            },
+            { id: 'incompatible' },
+            {
+              id: 'unsupported-dialect',
+              name: 'Unsupported',
+              reasoning: { wireDialect: 'adaptive-between-tools' },
+            },
+          ],
+        },
+        providerModels: {
+          version: 'v3-overrides',
+          overrides: [
+            {
+              providerId: 'custom',
+              modelId: 'gpt-6-1-sol',
+              capabilities: { add: ['future-capability', 'function-call'] },
+            },
+            { providerId: 'broken' },
+          ],
+        },
+      }),
+    );
+    expect(loader.loadModels()).toHaveLength(1);
+    expect(loader.findModel('gpt-6.1-sol')).toMatchObject({
+      capabilities: ['reasoning'],
+      reasoning: {
+        controls: [{ kind: 'effort', values: efforts, default: 'medium' }],
+        supportedEfforts: efforts,
+      },
+    });
+    expect(loader.loadProviderModels()).toHaveLength(1);
+    expect(loader.findOverride('custom', 'gpt-6.1-sol')?.capabilities?.add).toEqual([
+      'function-call',
+    ]);
+  });
+
+  it('omits models with unordered or mixed-currency pricing tiers without losing valid siblings', () => {
+    const loader = new MobileRegistryLoader();
+    const tier = {
+      minInputTokens: 100,
+      input: { perMillionTokens: 2, currency: 'USD' },
+      output: { perMillionTokens: 4, currency: 'USD' },
+    };
+    for (const inputTokenTiers of [
+      [tier, { ...tier, minInputTokens: 50 }],
+      [{ ...tier, input: { perMillionTokens: 2, currency: 'CNY' } }],
+    ]) {
+      loader.installRemoteSnapshot(
+        loader.parseRemoteSnapshot({
+          models: {
+            version: 'v3',
+            models: [
+              { id: 'valid', name: 'Valid' },
+              {
+                id: 'invalid-pricing',
+                name: 'Invalid',
+                pricing: { input: tier.input, output: tier.output, inputTokenTiers },
+              },
+            ],
+          },
+          providerModels: { version: 'v3', overrides: [] },
+        }),
+      );
+      expect(loader.loadModels().map(({ id }) => id)).toEqual(['valid']);
+    }
   });
 
   it('parses an explicitly downloaded desktop registry snapshot', () => {

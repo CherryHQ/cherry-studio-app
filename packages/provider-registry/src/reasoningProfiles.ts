@@ -129,6 +129,23 @@ const anthropicBudgetWire: ReasoningWireProfile = {
   effort: anthropicEnabledBudget,
 };
 
+const anthropicAdaptiveWire = {
+  auto: mode([literal('thinking.type', 'adaptive'), literal('thinking.display', 'summarized')]),
+  effort: mode(
+    [
+      literal('thinking.type', 'adaptive'),
+      literal('thinking.display', 'summarized'),
+      effort('effort'),
+    ],
+    { effortMap: { minimal: 'low' } },
+  ),
+};
+
+const anthropicAlwaysOnWire = {
+  ...anthropicAdaptiveWire,
+  default: anthropicAdaptiveWire.auto,
+};
+
 const formatProfiles = {
   'openai-chat': {
     wire: genericEffort(),
@@ -138,18 +155,11 @@ const formatProfiles = {
   },
   anthropic: {
     wire: {
+      ...anthropicAdaptiveWire,
       off: mode([literal('thinking.type', 'disabled')]),
-      auto: mode([literal('thinking.type', 'adaptive'), literal('thinking.display', 'summarized')]),
-      effort: mode(
-        [
-          literal('thinking.type', 'adaptive'),
-          literal('thinking.display', 'summarized'),
-          effort('effort'),
-        ],
-        { effortMap: { minimal: 'low' } },
-      ),
     },
     budgetWire: anthropicBudgetWire,
+    alwaysOnWire: anthropicAlwaysOnWire,
   },
   gemini: {
     wire: {
@@ -185,5 +195,7 @@ export function selectFormatWire(
   profile: ReasoningFormatWireProfile,
   dialect: ReasoningWireDialect | undefined,
 ): ReasoningWireProfile {
-  return dialect === 'budget' && profile.budgetWire ? profile.budgetWire : profile.wire;
+  if (dialect === 'budget' && profile.budgetWire) return profile.budgetWire;
+  if (dialect === 'adaptive-always' && profile.alwaysOnWire) return profile.alwaysOnWire;
+  return profile.wire;
 }

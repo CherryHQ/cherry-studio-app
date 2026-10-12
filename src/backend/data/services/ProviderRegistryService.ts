@@ -737,7 +737,7 @@ export class ProviderRegistryService {
         reasoningProfile.support,
         serviceTierControl ? projectServiceTierControl(serviceTierControl) : undefined,
       );
-      const apiModelId = model.apiModelId ?? registryOverride?.apiModelId ?? modelId;
+      const apiModelId = registryOverride?.apiModelId ?? modelId;
       results.push({
         ...model,
         apiModelId,
