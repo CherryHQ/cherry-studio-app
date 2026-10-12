@@ -1853,6 +1853,7 @@
   "settings.update.unknownVersion": "Impossible de lire la version actuelle de l’application.",
   "settings.update.unsupported": "La recherche de mises à jour est indisponible pour cette installation.",
   "settings.update.upToDate": "Aucune mise à jour disponible pour la version {{version}}.",
+  "settings.websearch.advanced.externalOnly": "Ces paramètres s’appliquent uniquement aux services externes configurés.",
   "settings.websearch.advanced.title": "Paramètres avancés",
   "settings.websearch.compression.method.cutoff": "Troncature",
   "settings.websearch.compression.method.none": "Aucun",
@@ -1885,5 +1886,9 @@
   "settings.websearch.provider.selection": "Fournisseur de recherche",
   "settings.websearch.provider.showApiKeys": "Afficher la clé API",
   "settings.websearch.provider.title": "Fournisseur de recherche",
+  "settings.websearch.source.configured": "Privilégier les services configurés",
+  "settings.websearch.source.description": "S’applique à la recherche web et à la lecture de pages dans toutes les conversations. Si le service préféré est indisponible, l’autre service disponible est utilisé. Le fournisseur du modèle peut facturer l’utilisation de ses outils.",
+  "settings.websearch.source.model": "Privilégier les outils du modèle",
+  "settings.websearch.source.title": "Préférence de service web",
   "systemEntry.failed": "Impossible d’ouvrir ce partage. Partagez à nouveau le contenu."
 }

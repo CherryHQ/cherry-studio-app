@@ -1853,6 +1853,7 @@
   "settings.update.unknownVersion": "Não foi possível ler a versão atual da aplicação.",
   "settings.update.unsupported": "A procura de atualizações não está disponível nesta instalação.",
   "settings.update.upToDate": "Não há atualizações disponíveis para a versão {{version}}.",
+  "settings.websearch.advanced.externalOnly": "Estas definições aplicam-se apenas aos serviços externos configurados.",
   "settings.websearch.advanced.title": "Definições avançadas",
   "settings.websearch.compression.method.cutoff": "Cortar",
   "settings.websearch.compression.method.none": "Nenhum",
@@ -1885,5 +1886,9 @@
   "settings.websearch.provider.selection": "Fornecedor de pesquisa",
   "settings.websearch.provider.showApiKeys": "Mostrar chave API",
   "settings.websearch.provider.title": "Fornecedor de pesquisa",
+  "settings.websearch.source.configured": "Preferir serviços configurados",
+  "settings.websearch.source.description": "Aplica-se à pesquisa na web e à leitura de páginas em todas as conversas. Se o serviço preferido estiver indisponível, é utilizado o outro serviço disponível. O fornecedor do modelo pode cobrar pela utilização das suas ferramentas.",
+  "settings.websearch.source.model": "Preferir ferramentas do modelo",
+  "settings.websearch.source.title": "Preferência de serviço web",
   "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente."
 }

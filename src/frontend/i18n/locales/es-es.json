@@ -1853,6 +1853,7 @@
   "settings.update.unknownVersion": "No se ha podido leer la versión actual de la aplicación.",
   "settings.update.unsupported": "La búsqueda de actualizaciones no está disponible en esta instalación.",
   "settings.update.upToDate": "No hay actualizaciones disponibles para la versión {{version}}.",
+  "settings.websearch.advanced.externalOnly": "Estos ajustes solo se aplican a los servicios externos configurados.",
   "settings.websearch.advanced.title": "Configuraciones avanzadas",
   "settings.websearch.compression.method.cutoff": "Corte",
   "settings.websearch.compression.method.none": "Ninguno",
@@ -1885,5 +1886,9 @@
   "settings.websearch.provider.selection": "Proveedor de búsqueda",
   "settings.websearch.provider.showApiKeys": "Mostrar clave API",
   "settings.websearch.provider.title": "Proveedor de búsqueda",
+  "settings.websearch.source.configured": "Preferir servicios configurados",
+  "settings.websearch.source.description": "Se aplica a la búsqueda web y la lectura de páginas en todos los chats. Si el servicio preferido no está disponible, se usa el otro servicio disponible. El proveedor del modelo puede cobrar por sus herramientas.",
+  "settings.websearch.source.model": "Preferir herramientas del modelo",
+  "settings.websearch.source.title": "Preferencia de servicio web",
   "systemEntry.failed": "No se pudo abrir este contenido compartido. Vuelve a compartirlo."
 }

@@ -1835,6 +1835,7 @@
   "settings.update.unknownVersion": "現在のアプリのバージョンを取得できませんでした。",
   "settings.update.unsupported": "現在インストールされているアプリではアップデートを確認できません。",
   "settings.update.upToDate": "バージョン {{version}} に利用可能なアップデートはありません。",
+  "settings.websearch.advanced.externalOnly": "これらの設定は、設定済みの外部サービスにのみ適用されます。",
   "settings.websearch.advanced.title": "詳細設定",
   "settings.websearch.compression.method.cutoff": "切り捨て",
   "settings.websearch.compression.method.none": "なし",
@@ -1867,5 +1868,9 @@
   "settings.websearch.provider.selection": "検索プロバイダー",
   "settings.websearch.provider.showApiKeys": "API キーを表示",
   "settings.websearch.provider.title": "検索プロバイダー",
+  "settings.websearch.source.configured": "設定済みサービスを優先",
+  "settings.websearch.source.description": "すべてのチャットのウェブ検索とページ読み取りに適用されます。優先サービスが利用できない場合は、もう一方の利用可能なサービスを使用します。モデル内蔵ツールは、モデルのプロバイダーから料金が請求される場合があります。",
+  "settings.websearch.source.model": "モデル内蔵サービスを優先",
+  "settings.websearch.source.title": "ウェブサービスの優先設定",
   "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。"
 }

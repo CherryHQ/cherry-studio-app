@@ -1844,6 +1844,7 @@
   "settings.update.unknownVersion": "Could not read the current app version.",
   "settings.update.unsupported": "Update checks are unavailable in this installation.",
   "settings.update.upToDate": "Version {{version}} has no available updates.",
+  "settings.websearch.advanced.externalOnly": "These settings apply only to configured external services.",
   "settings.websearch.advanced.title": "Advanced settings",
   "settings.websearch.compression.method.cutoff": "Cutoff",
   "settings.websearch.compression.method.none": "None",
@@ -1876,5 +1877,9 @@
   "settings.websearch.provider.selection": "Search provider",
   "settings.websearch.provider.showApiKeys": "Show API Key",
   "settings.websearch.provider.title": "Search provider",
+  "settings.websearch.source.configured": "Prefer configured services",
+  "settings.websearch.source.description": "Applies to web search and page reading in all chats. If the preferred service is unavailable, the other available service is used. Model tools may incur charges from your model provider.",
+  "settings.websearch.source.model": "Prefer model tools",
+  "settings.websearch.source.title": "Web service preference",
   "systemEntry.failed": "Could not open this share. Share the content again."
 }

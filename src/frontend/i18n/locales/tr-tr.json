@@ -1844,6 +1844,7 @@
   "settings.update.unknownVersion": "Geçerli uygulama sürümü okunamadı.",
   "settings.update.unsupported": "Bu kurulumda güncelleme denetimi kullanılamıyor.",
   "settings.update.upToDate": "{{version}} sürümü için kullanılabilir güncelleme yok.",
+  "settings.websearch.advanced.externalOnly": "Bu ayarlar yalnızca yapılandırılmış harici hizmetler için geçerlidir.",
   "settings.websearch.advanced.title": "Gelişmiş ayarlar",
   "settings.websearch.compression.method.cutoff": "Kesme",
   "settings.websearch.compression.method.none": "Yok",
@@ -1876,5 +1877,9 @@
   "settings.websearch.provider.selection": "Arama sağlayıcısı",
   "settings.websearch.provider.showApiKeys": "API Anahtarını Göster",
   "settings.websearch.provider.title": "Arama sağlayıcısı",
+  "settings.websearch.source.configured": "Yapılandırılmış hizmetleri tercih et",
+  "settings.websearch.source.description": "Tüm sohbetlerde web araması ve sayfa okuma için geçerlidir. Tercih edilen hizmet kullanılamıyorsa diğer kullanılabilir hizmet kullanılır. Model sağlayıcısı, model araçları için ücret talep edebilir.",
+  "settings.websearch.source.model": "Model araçlarını tercih et",
+  "settings.websearch.source.title": "Web hizmeti tercihi",
   "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın."
 }

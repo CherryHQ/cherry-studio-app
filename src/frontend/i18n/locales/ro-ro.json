@@ -1853,6 +1853,7 @@
   "settings.update.unknownVersion": "Nu s-a putut citi versiunea curentă a aplicației.",
   "settings.update.unsupported": "Căutarea actualizărilor nu este disponibilă pentru această instalare.",
   "settings.update.upToDate": "Nu există actualizări disponibile pentru versiunea {{version}}.",
+  "settings.websearch.advanced.externalOnly": "Aceste setări se aplică doar serviciilor externe configurate.",
   "settings.websearch.advanced.title": "Setări avansate",
   "settings.websearch.compression.method.cutoff": "Trunchiere",
   "settings.websearch.compression.method.none": "Niciuna",
@@ -1885,5 +1886,9 @@
   "settings.websearch.provider.selection": "Furnizor de căutare",
   "settings.websearch.provider.showApiKeys": "Afișează cheia API",
   "settings.websearch.provider.title": "Furnizor de căutare",
+  "settings.websearch.source.configured": "Preferă serviciile configurate",
+  "settings.websearch.source.description": "Se aplică căutării pe web și citirii paginilor în toate conversațiile. Dacă serviciul preferat nu este disponibil, se utilizează celălalt serviciu disponibil. Furnizorul modelului poate percepe taxe pentru instrumentele sale.",
+  "settings.websearch.source.model": "Preferă instrumentele modelului",
+  "settings.websearch.source.title": "Preferință pentru serviciul web",
   "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul."
 }

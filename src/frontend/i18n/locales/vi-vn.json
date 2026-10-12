@@ -1835,6 +1835,7 @@
   "settings.update.unknownVersion": "Không thể đọc phiên bản ứng dụng hiện tại.",
   "settings.update.unsupported": "Bản cài đặt này không hỗ trợ kiểm tra cập nhật.",
   "settings.update.upToDate": "Không có bản cập nhật nào cho phiên bản {{version}}.",
+  "settings.websearch.advanced.externalOnly": "Các cài đặt này chỉ áp dụng cho dịch vụ bên ngoài đã cấu hình.",
   "settings.websearch.advanced.title": "Cài đặt nâng cao",
   "settings.websearch.compression.method.cutoff": "Ngưỡng cắt",
   "settings.websearch.compression.method.none": "Không có",
@@ -1867,5 +1868,9 @@
   "settings.websearch.provider.selection": "Nhà cung cấp dịch vụ tìm kiếm",
   "settings.websearch.provider.showApiKeys": "Hiển thị khóa API",
   "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm",
+  "settings.websearch.source.configured": "Ưu tiên dịch vụ đã cấu hình",
+  "settings.websearch.source.description": "Áp dụng cho tìm kiếm web và đọc trang trong mọi cuộc trò chuyện. Nếu dịch vụ ưu tiên không khả dụng, dịch vụ khả dụng còn lại sẽ được sử dụng. Nhà cung cấp mô hình có thể tính phí sử dụng công cụ của mô hình.",
+  "settings.websearch.source.model": "Ưu tiên công cụ của mô hình",
+  "settings.websearch.source.title": "Ưu tiên dịch vụ web",
   "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại."
 }

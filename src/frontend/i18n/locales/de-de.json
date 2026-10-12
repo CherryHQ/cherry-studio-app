@@ -1844,6 +1844,7 @@
   "settings.update.unknownVersion": "Die aktuelle App-Version konnte nicht gelesen werden.",
   "settings.update.unsupported": "Diese Installation unterstützt keine Updateprüfung.",
   "settings.update.upToDate": "Für Version {{version}} sind keine Updates verfügbar.",
+  "settings.websearch.advanced.externalOnly": "Diese Einstellungen gelten nur für konfigurierte externe Dienste.",
   "settings.websearch.advanced.title": "Erweiterte Einstellungen",
   "settings.websearch.compression.method.cutoff": "Abschneiden",
   "settings.websearch.compression.method.none": "Keine",
@@ -1876,5 +1877,9 @@
   "settings.websearch.provider.selection": "Suchanbieter",
   "settings.websearch.provider.showApiKeys": "API-Schlüssel anzeigen",
   "settings.websearch.provider.title": "Suchanbieter",
+  "settings.websearch.source.configured": "Konfigurierte Dienste bevorzugen",
+  "settings.websearch.source.description": "Gilt für Websuche und das Lesen von Webseiten in allen Chats. Ist der bevorzugte Dienst nicht verfügbar, wird der andere verfügbare Dienst verwendet. Für Modellwerkzeuge kann Ihr Modellanbieter Gebühren berechnen.",
+  "settings.websearch.source.model": "Modellwerkzeuge bevorzugen",
+  "settings.websearch.source.title": "Bevorzugter Webdienst",
   "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut."
 }
