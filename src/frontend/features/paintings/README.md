@@ -37,7 +37,10 @@ the ordinary workspace so none of the participating images are hidden.
 
 The editor displays the original reference inside the requested output frame. Its hit target fits
 the original image, so normalized annotation positions exclude letterboxing and remain stable when
-the keyboard or aspect ratio changes. Tap and native scrolling cancel normally; selecting an
+the keyboard or aspect ratio changes. The canvas reserves the measured dock height and follows the
+same keyboard displacement as the dock, keeping the entire reference above the input. Deferred
+annotation focus reads the committed input handle and is cancelled when the editor unmounts.
+Tap and native scrolling cancel normally; selecting an
 existing marker stops propagation instead of adding another. Native text selection in the timeline
 is excluded from background keyboard dismissal. Viewing/zooming remains owned by the existing image
 viewer; annotation mode uses taps rather than competing with its zoom gesture.
