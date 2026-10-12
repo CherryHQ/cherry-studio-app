@@ -1859,6 +1859,9 @@
   "settings.websearch.fetchUrlsProvider": "Furnizor de preluare URL",
   "settings.websearch.maxResults": "Rezultatele căutării (TopK)",
   "settings.websearch.provider.addApiKey": "Adăugați cheia API",
+  "settings.websearch.provider.apiHost": "Adresa API",
+  "settings.websearch.provider.apiHostInvalid": "Introduceți o adresă http(s) validă.",
+  "settings.websearch.provider.apiHostPlaceholder": "Introduceți adresa instanței dvs.",
   "settings.websearch.provider.apiKey": "Cheie API",
   "settings.websearch.provider.apiKeyDuplicate": "Cheia API există deja.",
   "settings.websearch.provider.apiKeyPlaceholder": "Introduceți cheia API",
@@ -1876,6 +1879,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configurați cheia API Zhipu",
   "settings.websearch.provider.copyApiKey": "Copiază cheia API",
   "settings.websearch.provider.hideApiKeys": "Ascunde cheia API",
+  "settings.websearch.provider.hidePassword": "Ascunde parola",
   "settings.websearch.provider.localExtraction": "Extragere locală",
   "settings.websearch.provider.localExtractionDescription": "Extrage conținutul paginilor pe dispozitivul dvs. Acceptă pagini al căror conținut este deja prezent în HTML.",
   "settings.websearch.provider.removeApiKey": "Eliminați cheia API",
@@ -1883,7 +1887,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Eliminați cheia API?",
   "settings.websearch.provider.saveFailed": "Salvare eșuată",
   "settings.websearch.provider.selection": "Furnizor de căutare",
+  "settings.websearch.provider.selfHostedDescription": "Rulează pe propriul dvs. server. Introduceți adresa instanței dvs. pentru a-l folosi.",
   "settings.websearch.provider.showApiKeys": "Afișează cheia API",
+  "settings.websearch.provider.showPassword": "Afișează parola",
   "settings.websearch.provider.title": "Furnizor de căutare",
   "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul."
 }

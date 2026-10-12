@@ -1850,6 +1850,9 @@
   "settings.websearch.fetchUrlsProvider": "URL fetch provider",
   "settings.websearch.maxResults": "Search results (TopK)",
   "settings.websearch.provider.addApiKey": "Add API Key",
+  "settings.websearch.provider.apiHost": "API address",
+  "settings.websearch.provider.apiHostInvalid": "Enter a valid http(s) address.",
+  "settings.websearch.provider.apiHostPlaceholder": "Enter your instance address",
   "settings.websearch.provider.apiKey": "API Key",
   "settings.websearch.provider.apiKeyDuplicate": "API Key already exists.",
   "settings.websearch.provider.apiKeyPlaceholder": "Enter API Key",
@@ -1867,6 +1870,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configure Zhipu API key",
   "settings.websearch.provider.copyApiKey": "Copy API Key",
   "settings.websearch.provider.hideApiKeys": "Hide API Key",
+  "settings.websearch.provider.hidePassword": "Hide password",
   "settings.websearch.provider.localExtraction": "Local extraction",
   "settings.websearch.provider.localExtractionDescription": "Extract page content on your device. Supports pages with content already present in their HTML.",
   "settings.websearch.provider.removeApiKey": "Remove API Key",
@@ -1874,7 +1878,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Remove API key?",
   "settings.websearch.provider.saveFailed": "Failed to save",
   "settings.websearch.provider.selection": "Search provider",
+  "settings.websearch.provider.selfHostedDescription": "Runs on your own server. Enter your instance address to use it.",
   "settings.websearch.provider.showApiKeys": "Show API Key",
+  "settings.websearch.provider.showPassword": "Show password",
   "settings.websearch.provider.title": "Search provider",
   "systemEntry.failed": "Could not open this share. Share the content again."
 }

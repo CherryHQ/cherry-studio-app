@@ -1859,6 +1859,9 @@
   "settings.websearch.fetchUrlsProvider": "Fournisseur de récupération d'URL",
   "settings.websearch.maxResults": "Résultats de recherche (TopK)",
   "settings.websearch.provider.addApiKey": "Ajouter une clé API",
+  "settings.websearch.provider.apiHost": "Adresse de l’API",
+  "settings.websearch.provider.apiHostInvalid": "Saisissez une adresse http(s) valide.",
+  "settings.websearch.provider.apiHostPlaceholder": "Saisissez l’adresse de votre instance",
   "settings.websearch.provider.apiKey": "Clé API",
   "settings.websearch.provider.apiKeyDuplicate": "La clé API existe déjà.",
   "settings.websearch.provider.apiKeyPlaceholder": "Entrez la clé API",
@@ -1876,6 +1879,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configurer la clé API Zhipu",
   "settings.websearch.provider.copyApiKey": "Copier la Clé API",
   "settings.websearch.provider.hideApiKeys": "Masquer la clé API",
+  "settings.websearch.provider.hidePassword": "Masquer le mot de passe",
   "settings.websearch.provider.localExtraction": "Extraction locale",
   "settings.websearch.provider.localExtractionDescription": "Extrait le contenu des pages sur votre appareil. Prend en charge les pages dont le contenu est déjà présent dans le HTML.",
   "settings.websearch.provider.removeApiKey": "Supprimer la clé API",
@@ -1883,7 +1887,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Supprimer la clé API ?",
   "settings.websearch.provider.saveFailed": "Échec de l'enregistrement",
   "settings.websearch.provider.selection": "Fournisseur de recherche",
+  "settings.websearch.provider.selfHostedDescription": "Fonctionne sur votre propre serveur. Saisissez l’adresse de votre instance pour l’utiliser.",
   "settings.websearch.provider.showApiKeys": "Afficher la clé API",
+  "settings.websearch.provider.showPassword": "Afficher le mot de passe",
   "settings.websearch.provider.title": "Fournisseur de recherche",
   "systemEntry.failed": "Impossible d’ouvrir ce partage. Partagez à nouveau le contenu."
 }

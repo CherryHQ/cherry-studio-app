@@ -1841,6 +1841,9 @@
   "settings.websearch.fetchUrlsProvider": "URL取得プロバイダー",
   "settings.websearch.maxResults": "の検索結果 (TopK)",
   "settings.websearch.provider.addApiKey": "APIキーを追加",
+  "settings.websearch.provider.apiHost": "API アドレス",
+  "settings.websearch.provider.apiHostInvalid": "有効な http(s) アドレスを入力してください。",
+  "settings.websearch.provider.apiHostPlaceholder": "インスタンスのアドレスを入力",
   "settings.websearch.provider.apiKey": "API キー",
   "settings.websearch.provider.apiKeyDuplicate": "API キーはすでに存在します。",
   "settings.websearch.provider.apiKeyPlaceholder": "API キーを入力してください",
@@ -1858,6 +1861,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Zhipu API キーを構成する",
   "settings.websearch.provider.copyApiKey": "API キーをコピー",
   "settings.websearch.provider.hideApiKeys": "APIキーを隠す",
+  "settings.websearch.provider.hidePassword": "パスワードを隠す",
   "settings.websearch.provider.localExtraction": "ローカル抽出",
   "settings.websearch.provider.localExtractionDescription": "端末上でウェブページの本文を抽出します。HTML に本文が含まれているページに対応しています。",
   "settings.websearch.provider.removeApiKey": "API キーを削除します",
@@ -1865,7 +1869,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "API キーを削除しますか?",
   "settings.websearch.provider.saveFailed": "保存に失敗しました",
   "settings.websearch.provider.selection": "検索プロバイダー",
+  "settings.websearch.provider.selfHostedDescription": "自分のサーバーで運用するサービスです。利用するにはインスタンスのアドレスを入力してください。",
   "settings.websearch.provider.showApiKeys": "API キーを表示",
+  "settings.websearch.provider.showPassword": "パスワードを表示",
   "settings.websearch.provider.title": "検索プロバイダー",
   "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。"
 }

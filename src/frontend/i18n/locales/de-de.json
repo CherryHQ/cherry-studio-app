@@ -1850,6 +1850,9 @@
   "settings.websearch.fetchUrlsProvider": "URL-Abrufanbieter",
   "settings.websearch.maxResults": "Suchergebnisse (TopK)",
   "settings.websearch.provider.addApiKey": "API-Schlüssel hinzufügen",
+  "settings.websearch.provider.apiHost": "API-Adresse",
+  "settings.websearch.provider.apiHostInvalid": "Geben Sie eine gültige http(s)-Adresse ein.",
+  "settings.websearch.provider.apiHostPlaceholder": "Adresse Ihrer Instanz eingeben",
   "settings.websearch.provider.apiKey": "API-Schlüssel",
   "settings.websearch.provider.apiKeyDuplicate": "API-Schlüssel existiert bereits.",
   "settings.websearch.provider.apiKeyPlaceholder": "Geben Sie den API-Schlüssel ein",
@@ -1867,6 +1870,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Konfigurieren Sie den Zhipu-API-Schlüssel",
   "settings.websearch.provider.copyApiKey": "API-Schlüssel kopieren",
   "settings.websearch.provider.hideApiKeys": "API-Schlüssel ausblenden",
+  "settings.websearch.provider.hidePassword": "Passwort ausblenden",
   "settings.websearch.provider.localExtraction": "Lokale Extraktion",
   "settings.websearch.provider.localExtractionDescription": "Extrahiert Seiteninhalte auf Ihrem Gerät. Unterstützt Seiten, deren Inhalt bereits im HTML enthalten ist.",
   "settings.websearch.provider.removeApiKey": "API-Schlüssel entfernen",
@@ -1874,7 +1878,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "API-Schlüssel entfernen?",
   "settings.websearch.provider.saveFailed": "Speichern fehlgeschlagen",
   "settings.websearch.provider.selection": "Suchanbieter",
+  "settings.websearch.provider.selfHostedDescription": "Läuft auf Ihrem eigenen Server. Geben Sie die Adresse Ihrer Instanz ein, um den Dienst zu nutzen.",
   "settings.websearch.provider.showApiKeys": "API-Schlüssel anzeigen",
+  "settings.websearch.provider.showPassword": "Passwort anzeigen",
   "settings.websearch.provider.title": "Suchanbieter",
   "systemEntry.failed": "Diese Freigabe konnte nicht geöffnet werden. Teilen Sie den Inhalt erneut."
 }

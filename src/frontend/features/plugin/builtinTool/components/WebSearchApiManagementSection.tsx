@@ -1,6 +1,6 @@
 import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
@@ -12,11 +12,18 @@ import type {
 } from '@/shared/data/types/webSearch';
 
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
+import { useWebSearchProviderCheck } from '../apiService/hooks/useWebSearchProviderCheck';
 import {
   WebSearchApiManagementContext,
   type WebSearchApiManagementContextValue,
 } from '../context/WebSearchApiManagementContext';
-import { getWebSearchProviderDetailSections } from '../utils/providerSettings';
+import {
+  getWebSearchProviderCapability,
+  getWebSearchProviderCheckPlacement,
+  getWebSearchProviderDetailSections,
+  isSelfHostedWebSearchProvider,
+  mergeWebSearchProviderOverride,
+} from '../utils/providerSettings';
 
 type WebSearchApiManagementSectionProps = {
   capability: WebSearchCapability;
@@ -39,7 +46,8 @@ export function WebSearchApiManagementSection({
   const { t } = useTranslation();
   const router = useRouter();
   const providerOverride = providerOverrides[provider.id];
-  const sections = getWebSearchProviderDetailSections(provider.id);
+  const providerCapability = getWebSearchProviderCapability(provider, capability);
+  const { isChecking, startCheck } = useWebSearchProviderCheck(provider.id, capability);
 
   const openZhipuApiKeySettings = useCallback(() => {
     router.push({
@@ -51,23 +59,39 @@ export function WebSearchApiManagementSection({
     });
   }, [router]);
 
-  const contextValue = useMemo<WebSearchApiManagementContextValue>(
-    () => ({
-      actions: {
-        onProviderOverrideChange,
-        openZhipuApiKeySettings,
-      },
-      meta: {
-        t,
-      },
-      state: {
-        capability,
-        provider,
-        providerOverride,
-      },
-    }),
-    [onProviderOverrideChange, openZhipuApiKeySettings, capability, provider, providerOverride, t],
-  );
+  if (!providerCapability) {
+    // A stored selection the provider no longer serves; the picker is all there is to show.
+    return <Section>{children}</Section>;
+  }
+
+  const check = (patch: WebSearchProviderOverride) => {
+    const override = mergeWebSearchProviderOverride(
+      { [provider.id]: providerOverride },
+      provider.id,
+      patch,
+    )[provider.id];
+    // Several keys rotate; a check answers for the first one.
+    void startCheck({ ...override, apiKeys: override?.apiKeys?.slice(0, 1) });
+  };
+
+  const contextValue: WebSearchApiManagementContextValue = {
+    actions: {
+      check,
+      onProviderOverrideChange,
+      openZhipuApiKeySettings,
+    },
+    meta: {
+      t,
+    },
+    state: {
+      capability,
+      checkPlacement: getWebSearchProviderCheckPlacement(provider, capability),
+      isChecking,
+      provider,
+      providerCapability,
+      providerOverride,
+    },
+  };
 
   return (
     <WebSearchApiManagementContext value={contextValue}>
@@ -75,11 +99,13 @@ export function WebSearchApiManagementSection({
         footer={
           provider.id === 'fetch'
             ? t('settings.websearch.provider.localExtractionDescription')
-            : undefined
+            : isSelfHostedWebSearchProvider(provider, capability)
+              ? t('settings.websearch.provider.selfHostedDescription')
+              : undefined
         }
       >
         {children}
-        {sections.map((section) => (
+        {getWebSearchProviderDetailSections(provider, capability).map((section) => (
           <WebSearchApiServiceFieldGroup key={section.type} section={section} />
         ))}
       </Section>

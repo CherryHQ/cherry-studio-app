@@ -1,3 +1,4 @@
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import { Image } from '@cherrystudio/ui/components';
 import { useUniwind } from 'uniwind';
 
@@ -18,5 +19,8 @@ export function WebSearchProviderIcon({ providerId }: { providerId: WebSearchPro
       recyclingKey={providerId}
       source={providerIcon}
     />
-  ) : null;
+  ) : (
+    // Keeps provider rows aligned when a provider ships no logo.
+    <GlobeIcon className="size-5 shrink-0 text-muted-foreground" />
+  );
 }

@@ -4,6 +4,7 @@ import type {
   WebSearchCapability,
   WebSearchProviderCapabilityOverride,
   WebSearchProviderCapabilityOverrides,
+  WebSearchProviderFeatureCapability,
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
@@ -31,13 +32,8 @@ export const WebSearchProviderOverrideSchema: z.ZodType<WebSearchProviderOverrid
 export const WebSearchProviderOverridesSchema: z.ZodType<WebSearchProviderOverrides> =
   z.partialRecord(WebSearchProviderIdSchema, WebSearchProviderOverrideSchema);
 
-type WebSearchProviderPresetCapability = {
-  apiHost?: string;
-  feature: WebSearchCapability;
-};
-
 type WebSearchProviderPresetConfig = {
-  capabilities: readonly WebSearchProviderPresetCapability[];
+  capabilities: readonly WebSearchProviderFeatureCapability[];
   name: string;
   type: WebSearchProviderType;
 };
@@ -51,86 +47,174 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
     name: 'Zhipu',
     type: 'api',
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://open.bigmodel.cn/api/paas/v4/web_search' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://open.bigmodel.cn/api/paas/v4/web_search',
+      },
     ],
   },
   tavily: {
     name: 'Tavily',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.tavily.com' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.tavily.com',
+      },
+    ],
   },
   searxng: {
     name: 'Searxng',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'http://localhost:8080' }],
+    // Desktop defaults to a local instance; a phone has none to reach, so the user supplies it.
+    capabilities: [
+      { feature: 'searchKeywords', requiresApiHost: true, requiresApiKey: false, apiHost: '' },
+    ],
   },
   exa: {
     name: 'Exa',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.exa.ai' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.exa.ai',
+      },
+    ],
   },
   'exa-mcp': {
     name: 'ExaMCP',
     type: 'mcp',
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' },
-      { feature: 'fetchUrls', apiHost: 'https://mcp.exa.ai/mcp' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://mcp.exa.ai/mcp',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://mcp.exa.ai/mcp',
+      },
     ],
   },
   bocha: {
     name: 'Bocha',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.bochaai.com' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.bochaai.com',
+      },
+    ],
   },
   querit: {
     name: 'Querit',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.querit.ai' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.querit.ai',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.querit.ai',
+      },
+    ],
   },
   fetch: {
     name: 'fetch',
     type: 'api',
-    capabilities: [{ feature: 'fetchUrls' }],
+    capabilities: [{ feature: 'fetchUrls', requiresApiHost: false, requiresApiKey: false }],
   },
   jina: {
     name: 'Jina',
     type: 'api',
+    // Both endpoints answer anonymous requests, so search works before any key is configured.
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://s.jina.ai' },
-      { feature: 'fetchUrls', apiHost: 'https://r.jina.ai' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://s.jina.ai',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://r.jina.ai',
+      },
     ],
   },
   firecrawl: {
     name: 'Firecrawl',
     type: 'api',
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://api.firecrawl.dev' },
-      { feature: 'fetchUrls', apiHost: 'https://api.firecrawl.dev' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.firecrawl.dev',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.firecrawl.dev',
+      },
+    ],
+  },
+  crawl4ai: {
+    name: 'Crawl4AI',
+    type: 'api',
+    capabilities: [
+      { feature: 'fetchUrls', requiresApiHost: true, requiresApiKey: false, apiHost: '' },
+    ],
+  },
+  parallel: {
+    name: 'Parallel',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.parallel.ai',
+      },
+    ],
+  },
+  serply: {
+    name: 'Serply',
+    type: 'api',
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.serply.io',
+      },
     ],
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 
-/** Providers exposed by the mobile UI. SearXNG remains data-compatible only. */
-export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [
-  'zhipu',
-  'tavily',
-  'exa',
-  'exa-mcp',
-  'fetch',
-  'bocha',
-  'querit',
-  'jina',
-  'firecrawl',
-] as const satisfies readonly WebSearchProviderId[];
+export const PRESETS_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
+  WEB_SEARCH_PROVIDER_IDS.map((id) => ({ id, ...WEB_SEARCH_PROVIDER_PRESET_MAP[id] }));
 
-export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
-  MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS.map((id) => ({
-    id,
-    ...WEB_SEARCH_PROVIDER_PRESET_MAP[id],
-  }));
-
-export function getMobileSupportedWebSearchProvidersByCapability(capability: WebSearchCapability) {
-  return MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.filter((provider) =>
+export function getWebSearchProviderPresetsByCapability(capability: WebSearchCapability) {
+  return PRESETS_WEB_SEARCH_PROVIDERS.filter((provider) =>
     provider.capabilities.some((item) => item.feature === capability),
   );
 }

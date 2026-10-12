@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import {
-  getMobileSupportedWebSearchProvidersByCapability,
+  getWebSearchProviderPresetsByCapability,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
 import type {
@@ -26,10 +26,10 @@ const preferenceMapping = {
 } as const;
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
+  getWebSearchProviderPresetsByCapability('searchKeywords'),
 );
 const fetchUrlsOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('fetchUrls'),
+  getWebSearchProviderPresetsByCapability('fetchUrls'),
 );
 
 function createWebSearchProviderOptions(

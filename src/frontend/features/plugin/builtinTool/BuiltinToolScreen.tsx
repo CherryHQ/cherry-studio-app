@@ -47,6 +47,8 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
         </View>
         <WebSearchApiManagementSection
           capability={tool.capability}
+          // Unsaved text in a field belongs to the provider it was typed for.
+          key={provider.id}
           provider={provider}
           providerOverrides={webSearchProviders.providerOverrides.value}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
@@ -73,7 +75,7 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
           leading: <WebSearchProviderIcon providerId={option.value} />,
         }))}
         selectedValue={providerPreference.value}
-        size={tool.capability === 'searchKeywords' ? 'medium' : 'compact'}
+        size="medium"
         testID={`${toolId}-provider-picker`}
         title={t(tool.providerLabelKey)}
       />

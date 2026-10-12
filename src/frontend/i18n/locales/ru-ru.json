@@ -1868,6 +1868,9 @@
   "settings.websearch.fetchUrlsProvider": "Провайдер загрузки URL",
   "settings.websearch.maxResults": "Результаты поиска (TopK)",
   "settings.websearch.provider.addApiKey": "Добавить ключ API",
+  "settings.websearch.provider.apiHost": "Адрес API",
+  "settings.websearch.provider.apiHostInvalid": "Введите корректный адрес http(s).",
+  "settings.websearch.provider.apiHostPlaceholder": "Введите адрес вашего экземпляра",
   "settings.websearch.provider.apiKey": "Ключ API",
   "settings.websearch.provider.apiKeyDuplicate": "Ключ API уже существует.",
   "settings.websearch.provider.apiKeyPlaceholder": "Введите ключ API",
@@ -1885,6 +1888,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Настройка ключа API Zhipu",
   "settings.websearch.provider.copyApiKey": "Копировать API ключ",
   "settings.websearch.provider.hideApiKeys": "Скрыть ключ API",
+  "settings.websearch.provider.hidePassword": "Скрыть пароль",
   "settings.websearch.provider.localExtraction": "Локальное извлечение",
   "settings.websearch.provider.localExtractionDescription": "Извлекает содержимое страниц на вашем устройстве. Поддерживает страницы, текст которых уже присутствует в HTML.",
   "settings.websearch.provider.removeApiKey": "Удаление ключа API",
@@ -1892,7 +1896,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Удалить ключ API?",
   "settings.websearch.provider.saveFailed": "Не удалось сохранить",
   "settings.websearch.provider.selection": "Поставщик поиска",
+  "settings.websearch.provider.selfHostedDescription": "Работает на вашем собственном сервере. Чтобы пользоваться сервисом, введите адрес вашего экземпляра.",
   "settings.websearch.provider.showApiKeys": "Показать ключ API",
+  "settings.websearch.provider.showPassword": "Показать пароль",
   "settings.websearch.provider.title": "Поставщик поиска",
   "systemEntry.failed": "Не удалось открыть этот материал. Поделитесь содержимым ещё раз."
 }

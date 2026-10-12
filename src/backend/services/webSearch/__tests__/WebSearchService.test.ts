@@ -155,16 +155,9 @@ describe('WebSearchService', () => {
 
     await expect(
       service.checkProvider({
-        provider: {
-          id: 'tavily',
-          name: 'Tavily',
-          type: 'api',
-          apiKeys: ['selected-key'],
-          capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.tavily.com' }],
-          engines: [],
-          basicAuthUsername: '',
-          basicAuthPassword: '',
-        },
+        providerId: 'tavily',
+        capability: 'searchKeywords',
+        override: { apiKeys: ['selected-key'] },
       }),
     ).resolves.toEqual({ valid: true });
 
@@ -176,6 +169,29 @@ describe('WebSearchService', () => {
         url: 'https://api.tavily.com/search',
       }),
     );
+  });
+
+  test('fails a check before any request when a required key is missing', async () => {
+    const service = new WebSearchService(createPreferenceService());
+
+    await expect(
+      service.checkProvider({ providerId: 'parallel', capability: 'searchKeywords' }),
+    ).resolves.toEqual({ valid: false, error: 'API key is required for provider parallel' });
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+  });
+
+  test('reports a self-hosted provider without an address as a configuration failure', async () => {
+    const service = new WebSearchService(
+      createPreferenceService({ 'chat.web_search.default_fetch_urls_provider': 'crawl4ai' }),
+    );
+
+    const response = await service.fetchUrls({ urls: ['https://example.com'] });
+
+    expect(response.results).toEqual([]);
+    expect(response.failures).toEqual([
+      expect.objectContaining({ kind: 'configuration', code: 'api_host_missing' }),
+    ]);
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
   });
 
   test('returns the results it did get when one keyword request fails', async () => {

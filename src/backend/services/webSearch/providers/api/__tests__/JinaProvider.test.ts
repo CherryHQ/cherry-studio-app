@@ -57,8 +57,18 @@ function createProvider(apiKeys: string[], requester: MockWebSearchJsonRequester
     basicAuthPassword: '',
     basicAuthUsername: '',
     capabilities: [
-      { apiHost: 'https://s.jina.ai', feature: 'searchKeywords' },
-      { apiHost: 'https://r.jina.ai', feature: 'fetchUrls' },
+      {
+        apiHost: 'https://s.jina.ai',
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+      },
+      {
+        apiHost: 'https://r.jina.ai',
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: false,
+      },
     ],
     engines: [],
     id: 'jina',

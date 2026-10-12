@@ -1850,6 +1850,9 @@
   "settings.websearch.fetchUrlsProvider": "URL getirme sağlayıcısı",
   "settings.websearch.maxResults": "Arama sonuçları (TopK)",
   "settings.websearch.provider.addApiKey": "API Anahtarı Ekle",
+  "settings.websearch.provider.apiHost": "API adresi",
+  "settings.websearch.provider.apiHostInvalid": "Geçerli bir http(s) adresi girin.",
+  "settings.websearch.provider.apiHostPlaceholder": "Örneğinizin adresini girin",
   "settings.websearch.provider.apiKey": "API Anahtarı",
   "settings.websearch.provider.apiKeyDuplicate": "API Anahtarı zaten mevcut.",
   "settings.websearch.provider.apiKeyPlaceholder": "API Anahtarını Girin",
@@ -1867,6 +1870,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Zhipu API anahtarını yapılandır",
   "settings.websearch.provider.copyApiKey": "API Anahtarını Kopyala",
   "settings.websearch.provider.hideApiKeys": "API Anahtarını Gizle",
+  "settings.websearch.provider.hidePassword": "Parolayı gizle",
   "settings.websearch.provider.localExtraction": "Yerel çıkarma",
   "settings.websearch.provider.localExtractionDescription": "Sayfa içeriğini cihazınızda çıkarır. İçeriği HTML içinde zaten bulunan sayfaları destekler.",
   "settings.websearch.provider.removeApiKey": "API Anahtarını Kaldır",
@@ -1874,7 +1878,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "API anahtarı kaldırılsın mı?",
   "settings.websearch.provider.saveFailed": "Kaydedilemedi",
   "settings.websearch.provider.selection": "Arama sağlayıcısı",
+  "settings.websearch.provider.selfHostedDescription": "Kendi sunucunuzda çalışır. Kullanmak için örneğinizin adresini girin.",
   "settings.websearch.provider.showApiKeys": "API Anahtarını Göster",
+  "settings.websearch.provider.showPassword": "Parolayı göster",
   "settings.websearch.provider.title": "Arama sağlayıcısı",
   "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın."
 }

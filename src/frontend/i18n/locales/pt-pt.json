@@ -1859,6 +1859,9 @@
   "settings.websearch.fetchUrlsProvider": "Fornecedor de busca de URL",
   "settings.websearch.maxResults": "Resultados da pesquisa (TopK)",
   "settings.websearch.provider.addApiKey": "Adicionar chave API",
+  "settings.websearch.provider.apiHost": "Endereço da API",
+  "settings.websearch.provider.apiHostInvalid": "Introduza um endereço http(s) válido.",
+  "settings.websearch.provider.apiHostPlaceholder": "Introduza o endereço da sua instância",
   "settings.websearch.provider.apiKey": "Chave API",
   "settings.websearch.provider.apiKeyDuplicate": "A chave API já existe.",
   "settings.websearch.provider.apiKeyPlaceholder": "Introduza a chave API",
@@ -1876,6 +1879,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Configurar chave API Zhipu",
   "settings.websearch.provider.copyApiKey": "Copiar Chave API",
   "settings.websearch.provider.hideApiKeys": "Ocultar chave API",
+  "settings.websearch.provider.hidePassword": "Ocultar palavra-passe",
   "settings.websearch.provider.localExtraction": "Extração local",
   "settings.websearch.provider.localExtractionDescription": "Extrai o conteúdo das páginas no seu dispositivo. Suporta páginas cujo conteúdo já está presente no HTML.",
   "settings.websearch.provider.removeApiKey": "Remover chave API",
@@ -1883,7 +1887,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Remover chave API?",
   "settings.websearch.provider.saveFailed": "Falha ao guardar",
   "settings.websearch.provider.selection": "Fornecedor de pesquisa",
+  "settings.websearch.provider.selfHostedDescription": "Funciona no seu próprio servidor. Introduza o endereço da sua instância para o utilizar.",
   "settings.websearch.provider.showApiKeys": "Mostrar chave API",
+  "settings.websearch.provider.showPassword": "Mostrar palavra-passe",
   "settings.websearch.provider.title": "Fornecedor de pesquisa",
   "systemEntry.failed": "Não foi possível abrir esta partilha. Partilhe o conteúdo novamente."
 }

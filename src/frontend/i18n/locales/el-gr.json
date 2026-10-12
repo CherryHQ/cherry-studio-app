@@ -1850,6 +1850,9 @@
   "settings.websearch.fetchUrlsProvider": "Πάροχος λήψης διευθύνσεων URL",
   "settings.websearch.maxResults": "Αποτελέσματα αναζήτησης (TopK)",
   "settings.websearch.provider.addApiKey": "Προσθήκη κλειδιού API",
+  "settings.websearch.provider.apiHost": "Διεύθυνση API",
+  "settings.websearch.provider.apiHostInvalid": "Εισαγάγετε μια έγκυρη διεύθυνση http(s).",
+  "settings.websearch.provider.apiHostPlaceholder": "Εισαγάγετε τη διεύθυνση της εγκατάστασής σας",
   "settings.websearch.provider.apiKey": "Κλειδί API",
   "settings.websearch.provider.apiKeyDuplicate": "Το κλειδί API υπάρχει ήδη.",
   "settings.websearch.provider.apiKeyPlaceholder": "Εισαγάγετε το κλειδί API",
@@ -1867,6 +1870,7 @@
   "settings.websearch.provider.configureZhipuApiKey": "Διαμόρφωση κλειδιού API Zhipu",
   "settings.websearch.provider.copyApiKey": "Αντιγραφή Κλειδιού API",
   "settings.websearch.provider.hideApiKeys": "Απόκρυψη κλειδιού API",
+  "settings.websearch.provider.hidePassword": "Απόκρυψη κωδικού πρόσβασης",
   "settings.websearch.provider.localExtraction": "Τοπική εξαγωγή",
   "settings.websearch.provider.localExtractionDescription": "Εξάγει το περιεχόμενο σελίδων στη συσκευή σας. Υποστηρίζει σελίδες με περιεχόμενο ήδη ενσωματωμένο στο HTML.",
   "settings.websearch.provider.removeApiKey": "Κατάργηση κλειδιού API",
@@ -1874,7 +1878,9 @@
   "settings.websearch.provider.removeApiKeyTitle": "Κατάργηση κλειδιού API;",
   "settings.websearch.provider.saveFailed": "Αποτυχία αποθήκευσης",
   "settings.websearch.provider.selection": "Πάροχος αναζήτησης",
+  "settings.websearch.provider.selfHostedDescription": "Εκτελείται στον δικό σας διακομιστή. Εισαγάγετε τη διεύθυνση της εγκατάστασής σας για να τη χρησιμοποιήσετε.",
   "settings.websearch.provider.showApiKeys": "Εμφάνιση κλειδιού API",
+  "settings.websearch.provider.showPassword": "Εμφάνιση κωδικού πρόσβασης",
   "settings.websearch.provider.title": "Πάροχος αναζήτησης",
   "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο."
 }
