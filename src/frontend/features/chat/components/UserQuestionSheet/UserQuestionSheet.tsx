@@ -1,12 +1,6 @@
 import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import {
-  BottomSheet,
-  Button,
-  Input,
-  MessagePart,
-  SelectionIndicator,
-} from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -35,6 +29,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
     return () => void KeyboardController.dismiss();
   }, [dismissInput, open]);
   const total = form.questions.length;
+  const hasTextChanges = Boolean(form.question.textChanges?.length);
   const actionLabel = t(
     form.action === 'submit'
       ? 'chat.question.submit'
@@ -109,7 +104,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       }
       onClose={ignoreClose}
       open={open}
-      size="medium"
+      size={hasTextChanges ? 'large' : 'medium'}
       testID="user-question-sheet"
       // The question is the sheet's subject, so it titles the sheet and is never truncated.
       title={form.question.question}
@@ -124,20 +119,44 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         showsVerticalScrollIndicator={false}
       >
         {form.question.description ? (
-          <Text className="text-sm text-foreground-secondary" selectable>
+          <Text className="text-sm text-muted-foreground" selectable>
             {form.question.description}
           </Text>
         ) : null}
         {form.question.textChanges?.map((change) => (
-          <View key={change.before} className="gap-2">
-            <Text className="text-sm text-foreground" selectable>
+          <View key={change.before} className="gap-3">
+            <Text className="font-medium text-sm text-foreground" selectable>
               {change.reason}
             </Text>
-            <MessagePart.TextSection title={t('chat.question.before')} value={change.before} />
-            <MessagePart.TextSection
-              title={t('chat.question.after')}
-              value={change.after || t('chat.question.removed')}
-            />
+            <View className="overflow-hidden rounded-xl border border-border-subtle">
+              <View className="gap-1.5 bg-secondary p-3">
+                <Text className="font-medium text-xs text-muted-foreground" selectable>
+                  {t('chat.question.before')}
+                </Text>
+                <Text className="text-sm text-foreground" selectable>
+                  {change.before}
+                </Text>
+              </View>
+              {change.after ? (
+                <View className="gap-1.5 border-t border-border-subtle bg-success-subtle p-3">
+                  <Text className="font-medium text-xs text-success-subtle-foreground" selectable>
+                    {t('chat.question.after')}
+                  </Text>
+                  <Text className="text-sm text-success-subtle-foreground" selectable>
+                    {change.after}
+                  </Text>
+                </View>
+              ) : (
+                <View className="flex-row flex-wrap items-center justify-between gap-2 border-t border-border-subtle px-3 py-2.5">
+                  <Text className="font-medium text-xs text-muted-foreground" selectable>
+                    {t('chat.question.after')}
+                  </Text>
+                  <Text className="font-medium text-sm text-foreground" selectable>
+                    {t('chat.question.removed')}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         ))}
         {form.question.options.length ? (
@@ -151,7 +170,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
                   accessibilityHint={option.description}
                   accessibilityRole={form.question.selection === 'multiple' ? 'checkbox' : 'radio'}
                   accessibilityState={{ checked: selected, disabled: form.locked }}
-                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border bg-field px-4 py-3 active:opacity-70 ${selected ? 'border-foreground' : 'border-border'}`}
+                  className={`min-h-13 flex-row items-center gap-3 rounded-xl border px-4 py-3 active:opacity-70 ${selected ? 'border-border-selected bg-secondary' : 'border-border bg-field'}`}
                   disabled={form.locked}
                   onPress={() => form.select(option.id)}
                 >
