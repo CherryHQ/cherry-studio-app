@@ -12,6 +12,9 @@ configuration, not in repository rules.
 
 - Before using a project skill, read [Project Skills](.agents/skills/README.md) for repository usage
   rules and required dependencies. Keep upstream skill files unchanged.
+- Before installing, adding, patching, or rebuilding dependencies, read
+  [Dependencies](docs/guides/development.md#dependencies). Run one `pnpm install` at a time per
+  checkout and never run `pnpm rebuild`.
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read
@@ -37,16 +40,3 @@ configuration, not in repository rules.
   [Parallel Device Testing](docs/guides/parallel-device-testing.md) for the self-test preparation
   standard and iOS/Android device workflow. Preparation marked as design is not implemented tooling
   and does not expand the active task's authorization.
-
-## Dependency Operations
-
-- Serialize `pnpm install` and other dependency mutations within the same checkout, including
-  checkout/merge hooks. If `pnpm run` or `pnpm exec` reports stale dependencies, finish any running
-  install, then run `pnpm install` explicitly.
-- Do not run a full `pnpm rebuild` or rebuild packages listed in `patchedDependencies`: pnpm 12.2.1
-  can reapply patches to installed files and cache the duplicated output.
-
-The side-effects cache is read-only to prevent patch/build results from contaminating other
-checkouts. Existing cached output remains reusable; cache misses require each checkout to rerun
-dependency build scripts on a clean install. This does not clean existing cache entries or make
-concurrent installs safe.

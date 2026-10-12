@@ -49,7 +49,7 @@ jobs:
           packager: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.side-effects-cache-readonly=false
 
       - name: Build Android on EAS and wait for completion
         run: |
