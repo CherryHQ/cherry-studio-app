@@ -75,15 +75,18 @@ async function request(
 function safeFeishuError(error: unknown, signal: AbortSignal): PluginError {
   if (signal.aborted) return new PluginError('cancelled', 'Feishu authorization cancelled.');
   if (error instanceof PluginError) return error;
+  const metadata = isHttpError(error) ? { statusCode: error.status } : undefined;
   if (isHttpError(error)) {
-    if (error.status === 429) return new PluginError('quota', 'Feishu authorization rate limited.');
+    if (error.status === 429)
+      return new PluginError('quota', 'Feishu authorization rate limited.', metadata);
     if (error.status === 401)
-      return new PluginError('authorization', 'Feishu authorization rejected.');
-    if (error.status === 403) return new PluginError('access', 'Feishu application access denied.');
+      return new PluginError('authorization', 'Feishu authorization rejected.', metadata);
+    if (error.status === 403)
+      return new PluginError('access', 'Feishu application access denied.', metadata);
     if (error.status && error.status < 500)
-      return new PluginError('request', 'Feishu authorization request rejected.');
+      return new PluginError('request', 'Feishu authorization request rejected.', metadata);
   }
-  return new PluginError('network', 'Could not reach Feishu authorization.');
+  return new PluginError('network', 'Could not reach Feishu authorization.', metadata);
 }
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {

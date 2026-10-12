@@ -322,6 +322,18 @@ const AgentToolMessagePartSchema = z
 export const AgentMessagePartSchema = z.union([
   z.strictObject({
     id: z.string().min(1),
+    type: z.literal('data-search-suggestions'),
+    data: z.strictObject({ html: z.string().max(100_000) }),
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('source-url'),
+    sourceId: z.string().min(1),
+    url: z.url({ protocol: /^https?$/ }),
+    title: z.string().optional(),
+  }),
+  z.strictObject({
+    id: z.string().min(1),
     type: z.literal('data-compaction-anchor'),
     data: CompactionAnchorDataSchema,
   }),

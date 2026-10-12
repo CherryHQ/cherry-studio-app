@@ -48,16 +48,21 @@ async function request(input: HttpRequest) {
     if (input.signal?.aborted)
       throw new PluginError('cancelled', 'Notion authorization cancelled.');
     if (error instanceof PluginError) throw error;
+    const metadata = isHttpError(error) ? { statusCode: error.status } : undefined;
     if (isHttpError(error)) {
       if (error.status === 401 || error.code === 'invalid_grant' || error.code === 'invalid_client')
-        throw new PluginError('authorization', 'Reconnect Notion to authorize this client again.');
-      if (error.status === 403) throw new PluginError('access', 'Notion denied access.');
+        throw new PluginError(
+          'authorization',
+          'Reconnect Notion to authorize this client again.',
+          metadata,
+        );
+      if (error.status === 403) throw new PluginError('access', 'Notion denied access.', metadata);
       if (error.status === 429)
-        throw new PluginError('quota', 'Notion authorization rate limited.');
+        throw new PluginError('quota', 'Notion authorization rate limited.', metadata);
       if (error.status && error.status < 500)
-        throw new PluginError('request', 'Notion rejected the authorization request.');
+        throw new PluginError('request', 'Notion rejected the authorization request.', metadata);
     }
-    throw new PluginError('network', 'Could not reach Notion authorization.');
+    throw new PluginError('network', 'Could not reach Notion authorization.', metadata);
   }
 }
 

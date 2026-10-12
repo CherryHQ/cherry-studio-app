@@ -28,6 +28,8 @@ pairing and configuration import.
   bytes and impose a positive
   `maxResponseBytes` cap. The fetch adapter rejects an oversized declared `Content-Length` before
   reading and also counts streamed bytes when the server omits or misreports that header.
+- Requests whose path contains a capability can provide `logPath` with a redacted route. It changes
+  only transport logging, suppresses the raw transport message, and never changes the wire path.
 - Responses expose app-owned `data`, `status`, and lowercase `headers`. Cancellation, timeout,
   network, HTTP status, unreadable response, and invalid input leave the module as `HttpError`.
   Raw Axios errors, configs, credentials, and unvalidated error bodies do not escape through

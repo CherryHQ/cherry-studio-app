@@ -63,6 +63,12 @@ export function toRuntimeHistory(
     const parts: RuntimeMessagePart[] = [];
     for (const part of message.parts) {
       switch (part.type) {
+        case 'source-url':
+          parts.push({
+            type: 'text',
+            text: `Source [cite:${part.sourceId}]: ${JSON.stringify({ title: part.title, url: part.url })}`,
+          });
+          break;
         case 'text':
           parts.push({
             type: 'text',

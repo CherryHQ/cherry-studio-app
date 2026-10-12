@@ -14,7 +14,16 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 
 function fixture() {
   const records: TraceSpanRecord[] = [];
-  const snapshot = { directoryUri: 'cache://snapshot', files: [], dispose: jest.fn() };
+  const snapshot = {
+    directoryUri: 'cache://snapshot',
+    files: [],
+    dispose: jest.fn(),
+    metadata: {
+      capture: 'metadata' as const,
+      retention: { maxAgeMs: 1, maxBytes: 1, maxFiles: 1 },
+      diagnostics: { droppedRecords: 0, writeFailures: 0 },
+    },
+  };
   const storage = {
     writeBatch: jest.fn(async (lines: readonly string[]) => {
       records.push(...lines.map((line) => JSON.parse(line)));

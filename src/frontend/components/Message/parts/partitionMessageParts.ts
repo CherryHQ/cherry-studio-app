@@ -93,7 +93,7 @@ export function partitionMessageParts(
   const resultTextIndex = findResultTextIndex(parts);
 
   parts.forEach((part, index) => {
-    if (part.type === 'source-url') {
+    if (part.type === 'source-url' || part.type === 'data-search-suggestions') {
       return;
     }
 
@@ -150,6 +150,7 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
     if (!part) continue;
     if (
       part.type === 'source-url' ||
+      part.type === 'data-search-suggestions' ||
       part.type === 'file' ||
       part.type === 'data-error' ||
       part.type === 'data-compaction-anchor' ||

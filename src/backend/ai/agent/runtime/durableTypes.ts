@@ -17,6 +17,7 @@ import type {
   RuntimeUsage,
   RuntimeUsageReport,
   RuntimeMessagePart,
+  RuntimeWebTools,
 } from './types';
 
 /** Portable storage capability supplied by composition; no Expo, data service, or Pi types. */
@@ -69,6 +70,8 @@ export type RuntimeConversationConfiguration = {
   options: RuntimeOptions;
   /** The current offered schema/catalog; execution resolves the owning durable run through ports. */
   tools: readonly RuntimeTool[];
+  /** Absent when the Agent may not use the web; the Runtime then never adds a native web tool. */
+  webTools?: RuntimeWebTools;
 };
 
 export type RuntimeConversationSeed = {

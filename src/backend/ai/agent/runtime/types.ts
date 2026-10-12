@@ -102,6 +102,13 @@ export type RuntimeOptions = {
   temperature?: number;
 };
 
+/** Host-authorized web access and local configuration, frozen for one turn. */
+export type RuntimeWebTools = {
+  modelToolsPreferred: boolean;
+  clientSearchAvailable: boolean;
+  clientFetchAvailable: boolean;
+};
+
 export type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string };
@@ -286,6 +293,15 @@ export type RuntimeExecutionRequest = {
 };
 
 export type RuntimeOutputPart =
+  | { id: string; type: 'error'; error: RuntimeError }
+  | { id: string; type: 'data-search-suggestions'; data: { html: string } }
+  | {
+      id: string;
+      type: 'source-url';
+      sourceId: string;
+      url: string;
+      title?: string;
+    }
   | {
       id: string;
       type: 'text' | 'reasoning';
