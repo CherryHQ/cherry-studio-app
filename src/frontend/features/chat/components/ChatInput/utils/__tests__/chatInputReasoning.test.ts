@@ -1,4 +1,5 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk';
 
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
@@ -104,3 +105,12 @@ function createModel(patch: Partial<Model> = {}): Model {
     ...patch,
   };
 }
+
+test('does not admit an unsupported effort from newer registry or saved data', () => {
+  expect(
+    getChatInputReasoningEffortsForModel(
+      createModel({ reasoning: { selectableEfforts: ['high', 'ultra'] } }),
+    ),
+  ).toEqual(['default', 'high']);
+  expect(ReasoningEffortOptionSchema.safeParse('ultra').success).toBe(false);
+});

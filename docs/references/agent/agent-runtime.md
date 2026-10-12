@@ -52,10 +52,11 @@ resolved afresh for every turn. After freezing the tool snapshot, the Host combi
 Runtime rules, guidance for application capabilities that are actually present, and the
 user-configured Agent instructions into the prepared application prompt. Runtime adapters consume
 that policy without appending another application policy fragment; Pi appends only the
-binding-specific instructions for its deferred MCP catalog when that catalog is present. Mobile
-Skill persistence and prompt projection are not implemented; their target boundary is documented
-separately and does not change the current Runtime input. The injected Pi Runtime remains stable for
-the Host lifetime.
+binding-specific instructions for its deferred MCP catalog when that catalog is present and retains
+trusted built-in callback instruction contributions through native documents and prompt sections. The Host
+also supplies selected and previously loaded Skill instructions through the existing Runtime input;
+Skill loading adds no executable capabilities. The injected Pi Runtime remains stable for the Host
+lifetime.
 
 ## Production Pi binding
 
@@ -194,6 +195,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  // Optional compact built-in model value; full value remains available for activity inspection.
+  modelValue?: RuntimeJsonValue
+  // Trusted built-in callback contribution, consumed by the Runtime outside compactable results.
+  instructions?: { key: string; text: string }
   failure?: {
     error: RuntimeError
     scope: 'call' | 'tool'
@@ -575,7 +580,17 @@ importing application or provider SDK modules. Image generation may use `AiServi
 conversation or tool loop. The current inventory lives in
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 
-Every callback returns `RuntimeToolResult`. A non-artifact tool returns `artifacts: []`; an MCP
+Every callback returns `RuntimeToolResult`. Optional `instructions` are trusted built-in callback
+metadata, never inferred from `value` or accepted from MCP. Pi commits keyed contributions to a
+native conversation document and renders them before every request, independently of compactable
+tool messages. The adapter removes this metadata from model-facing result JSON and transcript tool
+details. A built-in may also supply `modelValue`: the Runtime persists the complete display `value`
+but uses the compact alternative for live and reconstructed model messages, so retained instructions
+do not appear twice in the request. MCP cannot supply either control field.
+The next Host configuration atomically clears contributions as it supplies the new scope's
+prepared instructions; reopening an existing working copy preserves them without reconfiguration.
+
+A non-artifact tool returns `artifacts: []`; an MCP
 adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.
 A file-producing application capability creates and validates each managed entry before returning
 its artifact ref. The Pi adapter gives the model the typed outer envelope, including bounded managed
@@ -585,9 +600,9 @@ later model attachments. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 Absolute paths and large base64 payloads are never tool results.
 
-Mobile Skills are not resolved by the current Host. Their target contract keeps them as instruction
-context that cannot change the tool snapshot, approval policy, OS permission, or turn resource
-ledger. See [Agent Skills](./agent-skills.md).
+The Host resolves installed and enabled Skills within the Agent's bindings. Their instruction
+context cannot change the tool snapshot, approval policy, OS permission, or turn resource ledger.
+Package-local reads remain within the accepted manifest. See [Agent Skills](./agent-skills.md).
 
 ## Execution output
 

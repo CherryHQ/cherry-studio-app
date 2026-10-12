@@ -1,10 +1,12 @@
 # Cloud Releases
 
-Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger the
+Push a version tag such as `v0.1.0` or `v0.1.0-beta.1` to trigger
+[Release](../../.github/workflows/release.yml). It validates the version and runs
+[PR CI](../../.github/workflows/pr-ci.yml) on the tagged commit, then starts the
 [Android release](../../.github/workflows/android-release.yml) and
-[iOS TestFlight](../../.github/workflows/ios-release.yml) workflows. Branch pushes do not publish.
-Stable tags such as `v0.1.0` also trigger the independent
-[Google Play AAB](../../.github/workflows/google-play-release.yml) workflow; prerelease tags do not.
+[iOS TestFlight](../../.github/workflows/ios-release.yml) workflows in parallel. Stable tags such as
+`v0.1.0` also start the [Google Play AAB](../../.github/workflows/google-play-release.yml) workflow;
+prerelease tags do not. Branch pushes do not publish.
 The tag's base version must match `expo.version` in `app.json`; update and commit the version before
 tagging. Public APK and iOS builds use the existing EAS `production` profile.
 Google Play builds use `production-google-play`, which inherits the production identity, environment, signing credentials,
@@ -53,7 +55,8 @@ build numbers even when they share a release tag.
 
 ## Android GitHub Downloads
 
-1. Wait for the exact EAS build started by this run to finish successfully.
+1. Wait for the exact EAS build started by this run to finish successfully. The build starts only
+   after CI passes on the tagged commit.
 2. Download its signed ARM64 APK, check the archive, and generate `SHA256SUMS`.
 3. Save the APK, checksums, and generated release notes as the `android-release` Actions artifact
    for 30 days. The filename is `cherry-studio-<release-version>-android.apk`.
@@ -103,7 +106,7 @@ APK; the AAB is only saved with the workflow run.
 
 ### Manual Upload For Each Release
 
-1. In GitHub, open **Actions → Google Play AAB** and select the successful run for the release tag.
+1. In GitHub, open **Actions → Release** and select the successful run for the release tag.
 2. Download the `google-play-release` artifact and extract the ZIP. It contains
    `cherry-studio-<release-version>-android.aab` and `SHA256SUMS`.
 3. From the extracted directory, verify the checksum with `shasum -a 256 -c SHA256SUMS` on macOS

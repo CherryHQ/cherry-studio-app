@@ -8,6 +8,7 @@ import {
 } from '@/backend/core/lifecycle';
 import type { BackgroundReplyLifecycle } from '@/backend/services/backgroundReply';
 import type { AgentEvent, AgentProtocol } from '@/shared/contracts/agent';
+import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { AgentRuntime } from '../runtime';
@@ -52,6 +53,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   protected override async onStop() {
     await this.host.close();
+  }
+
+  /** Bootstrap supplies the same workflow used by the library UI before accepting turns. */
+  configureSkills(workflow: SkillsModule): void {
+    this.host.configureSkills(workflow);
   }
 
   hasPendingStorageWork() {

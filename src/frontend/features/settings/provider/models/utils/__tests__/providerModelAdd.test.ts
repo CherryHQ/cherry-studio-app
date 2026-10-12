@@ -1,5 +1,6 @@
-import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODALITY } from '@cherrystudio/provider-registry';
 
+import { MODEL_CAPABILITY } from '@/shared/data/types/model';
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';

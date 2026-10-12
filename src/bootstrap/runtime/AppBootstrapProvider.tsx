@@ -11,6 +11,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
+import { SkillQueryBridge } from '@/frontend/data/SkillQueryBridge';
 import i18n, { initI18n } from '@/frontend/i18n';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
@@ -77,6 +78,7 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
         <FileQueryBridge />
+        <SkillQueryBridge />
         <ProviderRegistryQueryBridge />
         <PreferenceProvider preference={runtime.preference}>
           <AppBootstrapContext value={state}>{children}</AppBootstrapContext>

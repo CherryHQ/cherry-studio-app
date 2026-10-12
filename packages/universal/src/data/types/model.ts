@@ -18,7 +18,7 @@ import type {
   ImageGenerationSupport,
   ImageModeDef,
   Modality,
-  ModelCapability,
+  ModelCapability as RegistryModelCapability,
   ReasoningEffort,
   ServiceTierSelection,
   SupportSpec,
@@ -31,13 +31,17 @@ import {
   ImageGenerationModeSchema,
   ImageGenerationSupportSchema,
   MODALITY,
-  MODEL_CAPABILITY,
+  MODEL_CAPABILITY as REGISTRY_MODEL_CAPABILITY,
   objectValues,
   REASONING_EFFORT,
   ReasoningControlSchema,
   ServiceTierSelectionSchema,
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
+// Keep existing saved Mobile rows readable after the registry moved native search to serverTools.
+const MODEL_CAPABILITY = { ...REGISTRY_MODEL_CAPABILITY, WEB_SEARCH: 'web-search' } as const;
+type ModelCapability = RegistryModelCapability | 'web-search';
 
 // Re-export const objects for consumers
 export {

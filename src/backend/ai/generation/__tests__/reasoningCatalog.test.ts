@@ -4,14 +4,14 @@ import {
 } from '@cherrystudio/ai-runtime/utils';
 import {
   type EndpointType,
-  type ProtoReasoningSupport,
+  type ReasoningSupport,
   REASONING_FORMAT_PROFILES,
   REASONING_WIRE_TARGETS,
   type ReasoningWireProfile,
 } from '@cherrystudio/provider-registry';
-import { MobileRegistryLoader } from '@cherrystudio/provider-registry/mobile';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
+import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
 import {
   projectRuntimeReasoning,
   providerRegistryService,
@@ -86,8 +86,8 @@ const matrix: MatrixSample[] = [
     providerId: 'openai',
     modelId: 'gpt-5.4',
     expected: {
-      default: {},
-      none: { reasoningEffort: 'none', reasoningSummary: 'detailed' },
+      default: { reasoningSummary: 'detailed' },
+      none: { reasoningEffort: 'none' },
       low: { reasoningEffort: 'low', reasoningSummary: 'detailed' },
       medium: { reasoningEffort: 'medium', reasoningSummary: 'detailed' },
       high: { reasoningEffort: 'high', reasoningSummary: 'detailed' },
@@ -182,7 +182,6 @@ const matrix: MatrixSample[] = [
     modelId: 'grok-4.3',
     expected: {
       default: {},
-      none: { reasoningEffort: 'none' },
       low: { reasoningEffort: 'low' },
       medium: { reasoningEffort: 'medium' },
       high: { reasoningEffort: 'high' },
@@ -302,12 +301,13 @@ const matrix: MatrixSample[] = [
     group: '9 DeepSeek thinking object',
     providerId: 'deepseek',
     modelId: 'deepseek-v4-pro',
+    endpointType: 'openai-chat-completions',
     expected: {
       default: {},
       none: { 'thinking.type': 'disabled' },
-      high: { 'thinking.type': 'enabled', reasoning_effort: 'high' },
-      max: { 'thinking.type': 'enabled', reasoning_effort: 'max' },
-      xhigh: { 'thinking.type': 'enabled', reasoning_effort: 'max' },
+      low: { 'thinking.type': 'enabled', reasoningEffort: 'low' },
+      high: { 'thinking.type': 'enabled', reasoningEffort: 'high' },
+      max: { 'thinking.type': 'enabled', reasoningEffort: 'max' },
     },
   },
   {
@@ -382,7 +382,7 @@ const matrix: MatrixSample[] = [
   {
     group: '11 CherryIn DeepSeek extra body',
     providerId: 'cherryin',
-    modelId: 'deepseek-chat',
+    modelId: 'deepseek/deepseek-v3.2',
     expected: {
       default: {},
       none: { 'extra_body.thinking.type': 'disabled' },
@@ -437,7 +437,7 @@ const completeReasoning = {
     { kind: 'toggle' },
   ],
   thinkingTokenLimits: { min: 0, max: 128_000 },
-} satisfies ProtoReasoningSupport;
+} satisfies ReasoningSupport;
 
 function createCatalogModel(id: string, profile: ReasoningWireProfile): Model {
   return {
@@ -521,8 +521,11 @@ describe('reasoning profile catalog', () => {
       expect(invocation.emissions.length).toBeGreaterThan(0);
       for (const emission of invocation.emissions) {
         expect(REASONING_WIRE_TARGETS).toContain(emission.target);
-        expect(flattenWireObject(encoded)[emission.target]).toBe(emission.value);
       }
+      // Later operations intentionally override defaults, e.g. the assistant's summary choice.
+      expect(flattenWireObject(encoded)).toEqual(
+        Object.fromEntries(invocation.emissions.map(({ target, value }) => [target, value])),
+      );
     }
   });
 

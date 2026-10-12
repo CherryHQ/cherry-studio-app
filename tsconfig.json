@@ -5,11 +5,6 @@
     "experimentalDecorators": true,
     "types": ["jest"],
     "paths": {
-      "@cherrystudio/provider-registry": ["./packages/provider-registry/src/index.ts"],
-      "@cherrystudio/provider-registry/mobile": [
-        "./packages/provider-registry/src/mobile-loader.ts"
-      ],
-      "@cherrystudio/provider-registry/*": ["./packages/provider-registry/src/*"],
       "@cherrystudio/design-tokens/contract": [
         "./packages/design-tokens/scripts/theme-contract.ts"
       ],

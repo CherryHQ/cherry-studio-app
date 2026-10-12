@@ -362,6 +362,22 @@ describe('ModelService', () => {
   });
 
   test('creates standalone registry override models through synthesized presets', async () => {
+    providerRegistryService.installRemoteSnapshot(
+      providerRegistryService.parseRemoteSnapshot({
+        models: { version: 'standalone', models: [] },
+        providerModels: {
+          version: 'standalone',
+          overrides: [
+            {
+              providerId: '302ai',
+              modelId: 'chatgpt-4o-latest',
+              apiModelId: 'chatgpt-4o-latest',
+              name: 'chatgpt-4o-latest',
+            },
+          ],
+        },
+      }),
+    );
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback({})),
     } as unknown as DbService;

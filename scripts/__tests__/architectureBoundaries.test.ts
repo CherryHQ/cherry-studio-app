@@ -76,7 +76,7 @@ describe('resolved architecture boundaries', () => {
   it.each([
     [
       'src/frontend/utils/probe.ts',
-      "import { formatApiHost } from '@cherrystudio/provider-registry';",
+      "import { formatApiHost } from '@cherrystudio/universal/utils/url';",
     ],
     ['src/frontend/utils/probe.ts', "import '@cherrystudio/universal/ai/builtinTools';"],
     ['src/frontend/features/chat/probe.ts', "import './components/ChatInput/ChatInput';"],
