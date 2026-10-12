@@ -4,6 +4,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaintingAssistantMessage } from '../PaintingAssistantMessage';
 
+jest.mock('../PaintingResultActions', () => ({ PaintingResultActions: () => null }));
+
 jest.mock('@cherrystudio/app-icons/icons/circle-alert', () => {
   const { View } = jest.requireActual('react-native');
   return function MockCircleAlertIcon(props: object) {

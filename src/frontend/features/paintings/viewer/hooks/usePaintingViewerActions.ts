@@ -82,8 +82,8 @@ export function usePaintingViewerActions({
   const edit = useCallback(() => openComposer(''), [openComposer]);
 
   const resize = useCallback(
-    (ratio: string) =>
-      openComposer(t('painting.viewer.resizePrompt', { ratio }), { aspectRatio: ratio }),
+    (ratio: string, paramValues: ImageParamDraft = { aspectRatio: ratio }) =>
+      openComposer(t('painting.viewer.resizePrompt', { ratio }), paramValues),
     [openComposer, t],
   );
 

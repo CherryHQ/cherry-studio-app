@@ -85,8 +85,9 @@ type HarnessProps = {
   outputs?: string[];
   status?: 'idle' | 'generating';
   showText?: boolean;
+  preparePrompt?: (text: string) => string;
 };
-function Probe({ canSend, status = 'idle', showText }: HarnessProps) {
+function Probe({ canSend, status = 'idle', showText, preparePrompt }: HarnessProps) {
   const session = usePaintingInputSession();
   useEffect(() => {
     mockSession = session;
@@ -96,6 +97,7 @@ function Probe({ canSend, status = 'idle', showText }: HarnessProps) {
       canSend={canSend}
       onCancel={() => undefined}
       onGenerate={mockGenerate}
+      preparePrompt={preparePrompt}
       status={status}
     />
   );
@@ -144,6 +146,29 @@ describe('capability-aware painting input', () => {
     });
   });
   afterEach(() => act(() => renderer.unmount()));
+
+  it('freezes image-local instructions before prompt validation and asynchronous preparation', async () => {
+    const preparePrompt = jest.fn(
+      (text: string) => `Location instruction: ${text || 'soften the marked edge'}`,
+    );
+    const preparation = deferred<ReturnType<typeof mockFile>[]>();
+    mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
+    update({ preparePrompt });
+    let pending: Promise<void> | undefined;
+    await act(async () => {
+      pending = mockSurfaceProps.onSend({ attachments: [], text: '' });
+      await Promise.resolve();
+    });
+    preparePrompt.mockImplementation(() => 'new instructions');
+    await act(async () => {
+      preparation.resolve([mockFile('first')]);
+      await pending;
+    });
+    expect(preparePrompt).toHaveBeenCalledTimes(1);
+    expect(mockGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'Location instruction: soften the marked edge' }),
+    );
+  });
 
   it('hides the old reference immediately and submits the frozen image before adopting the next success', async () => {
     const preparation = deferred<ReturnType<typeof mockFile>[]>();

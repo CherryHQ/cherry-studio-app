@@ -1,6 +1,7 @@
 import { createContext, type PropsWithChildren, use, useCallback, useMemo, useState } from 'react';
 
 import { useComposerState } from '@/frontend/components/Composer';
+import type { UniqueModelId } from '@/shared/data/types/model';
 import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import { usePaintingReference, type PaintingInputResult } from './usePaintingReference';
@@ -11,6 +12,8 @@ type PaintingInputContextValue = {
   parameterDrafts: Readonly<Record<string, ParameterDraft>>;
   lastParameterDraft: ParameterDraft | undefined;
   setParameterDraft(key: string, draft: ParameterDraft): void;
+  localModelId: UniqueModelId | undefined;
+  selectLocalModel: (modelId: UniqueModelId) => void;
 };
 const PaintingInputContext = createContext<PaintingInputContextValue | null>(null);
 
@@ -21,6 +24,7 @@ export function PaintingInputProvider({
 }: PropsWithChildren<{ result?: PaintingInputResult }>) {
   const { attachments, draft } = useComposerState();
   const reference = usePaintingReference(result, draft, attachments);
+  const [localModelId, selectLocalModel] = useState<UniqueModelId>();
   const [parameters, setParameters] = useState<{
     drafts: Record<string, ParameterDraft>;
     last: ParameterDraft | undefined;
@@ -38,8 +42,10 @@ export function PaintingInputProvider({
       parameterDrafts: parameters.drafts,
       lastParameterDraft: parameters.last,
       setParameterDraft,
+      localModelId,
+      selectLocalModel,
     }),
-    [parameters, reference, setParameterDraft],
+    [parameters, reference, setParameterDraft, localModelId],
   );
   return <PaintingInputContext value={value}>{children}</PaintingInputContext>;
 }
@@ -48,4 +54,12 @@ export function usePaintingInputSession() {
   const context = use(PaintingInputContext);
   if (!context) throw new Error('PaintingInput requires PaintingInputProvider');
   return context;
+}
+
+export function usePaintingReferenceSelection() {
+  return usePaintingInputSession().reference;
+}
+
+export function usePaintingParameterDraft() {
+  return usePaintingInputSession().lastParameterDraft?.values;
 }

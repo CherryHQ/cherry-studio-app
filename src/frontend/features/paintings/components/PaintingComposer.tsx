@@ -1,9 +1,10 @@
 import { composerContentGap, getComposerKeyboardStickyOffset } from '@cherrystudio/ui/components';
 import * as Crypto from 'expo-crypto';
+import { Stack } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
@@ -15,7 +16,7 @@ import {
 } from '@/frontend/components/Composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/Message';
-import { PaintingInput, PaintingInputProvider } from '@/frontend/components/PaintingInput';
+import { PaintingWorkspaceInput, PaintingInputProvider } from '@/frontend/components/PaintingInput';
 import { paintingJobParamValues, usePaintingJobs } from '@/frontend/data/paintings/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '@/frontend/data/paintings/usePaintings';
 import type { Painting } from '@/shared/data/types/painting';
@@ -28,8 +29,10 @@ import {
   type PaintingGenerationInput,
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
+import type { PaintingAnnotation } from '../utils/paintingAnnotations';
 import { createPaintingMessages } from '../utils/paintingMessages';
-import { PaintingAssistantMessage } from './PaintingAssistantMessage';
+import { PaintingComparison, type PaintingComparisonImage } from './PaintingComparison';
+import { PaintingImageEditor } from './PaintingImageEditor';
 import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
 
 type ActivePaintingTurn = {
@@ -37,6 +40,11 @@ type ActivePaintingTurn = {
   input: PaintingGenerationInput;
   paintingId?: string;
   userMessageId: string;
+};
+
+type ArchivedPaintingTurn = {
+  messages: readonly MessageListItem[];
+  state: PaintingMessageState;
 };
 
 export function PaintingComposer({
@@ -69,12 +77,34 @@ export function PaintingComposer({
   const { bottom: bottomInset } = useSafeAreaInsets();
   const keyboardOffset = getComposerKeyboardStickyOffset(bottomInset);
   const isSubmittingRef = useRef(false);
+  const firstAttachment = initialAttachments[0];
+  const [editorOutput, setEditorOutput] = useState<{ fileEntryId?: string; uri: string } | null>(
+    () =>
+      isHandoff && initialAttachments.length === 1 && firstAttachment?.kind === 'image'
+        ? firstAttachment
+        : null,
+  );
+  const [isEditorOpen, setIsEditorOpen] = useState(Boolean(editorOutput));
+  const annotationDrafts = useRef(new Map<string, readonly PaintingAnnotation[]>());
+  const [editorAnnotations, setEditorAnnotations] = useState<readonly PaintingAnnotation[]>([]);
+  const openEditor = useCallback((output: { fileEntryId: string; uri: string }) => {
+    setEditorAnnotations(annotationDrafts.current.get(output.fileEntryId) ?? []);
+    setEditorOutput(output);
+    setIsEditorOpen(true);
+  }, []);
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
+  const [archivedTurns, setArchivedTurns] = useState<readonly ArchivedPaintingTurn[]>([]);
+  const [comparison, setComparison] = useState<{
+    images: readonly PaintingComparisonImage[];
+    initialOutput: string;
+  } | null>(null);
+  const isImmersive = isEditorOpen || comparison !== null;
   const [previousResult, setPreviousResult] = useState<{
     activeTurn: ActivePaintingTurn | null;
     showPersistedTurn: boolean;
     state: PaintingMessageState;
+    archivedTurns: readonly ArchivedPaintingTurn[];
   } | null>(null);
   const receiptId = painting && painting.files.output.length === 0 ? painting.id : undefined;
   const generation = usePaintingGeneration({
@@ -105,13 +135,13 @@ export function PaintingComposer({
         ? 'error'
         : 'success';
 
-  const messages = useMemo(() => {
+  const activeMessages = useMemo(() => {
     if (activeTurn) {
       return createPaintingMessages({
         assistantMessageId: activeTurn.assistantMessageId,
         assistantStatus,
         attachments: activeTurn.input.attachments,
-        prompt: activeTurn.input.prompt,
+        prompt: activeTurn.input.displayPrompt ?? activeTurn.input.prompt,
         userMessageId: activeTurn.userMessageId,
       });
     }
@@ -128,14 +158,20 @@ export function PaintingComposer({
       userMessageId: painting.id,
     });
   }, [activeTurn, assistantStatus, firstOutput, initialFiles.inputs, painting, showPersistedTurn]);
+  const messages = useMemo(
+    () => [...archivedTurns.flatMap((turn) => turn.messages), ...activeMessages],
+    [activeMessages, archivedTurns],
+  );
 
   const handleGenerate = useCallback(
     async (input: PaintingGenerationInput) => {
       if (isSubmittingRef.current || generation.status === 'generating') return null;
       isSubmittingRef.current = true;
-      const restoreTurn = failure ? previousResult : { activeTurn, showPersistedTurn };
-      if (!failure && outputs.length > 0 && messages.length > 0) {
-        setPreviousResult({
+      const restoreTurn = failure
+        ? previousResult
+        : { activeTurn, showPersistedTurn, archivedTurns };
+      if (!failure && outputs.length > 0 && activeMessages.length > 0) {
+        const snapshot = {
           activeTurn,
           showPersistedTurn,
           state: {
@@ -144,11 +180,16 @@ export function PaintingComposer({
             interruption: null,
             outputs,
             paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
-            prompt: activeTurn?.input.prompt ?? painting?.prompt ?? '',
+            prompt:
+              activeTurn?.input.displayPrompt ?? activeTurn?.input.prompt ?? painting?.prompt ?? '',
             resolution: generationResolution,
+            modelName: activeTurn?.input.modelName ?? painting?.modelId?.split('::').at(-1),
             status: 'idle',
-          },
-        });
+          } satisfies PaintingMessageState,
+          archivedTurns,
+        };
+        setPreviousResult(snapshot);
+        setArchivedTurns([...archivedTurns, { messages: activeMessages, state: snapshot.state }]);
       }
       setShowPersistedTurn(false);
       setActiveTurn({
@@ -162,6 +203,7 @@ export function PaintingComposer({
         if (!result) {
           setActiveTurn(restoreTurn?.activeTurn ?? null);
           setShowPersistedTurn(restoreTurn?.showPersistedTurn ?? false);
+          setArchivedTurns(restoreTurn?.archivedTurns ?? []);
           return null;
         }
         setActiveTurn((current) =>
@@ -171,6 +213,7 @@ export function PaintingComposer({
       } catch (error) {
         setActiveTurn(activeTurn);
         setShowPersistedTurn(showPersistedTurn);
+        setArchivedTurns(archivedTurns);
         throw error;
       } finally {
         isSubmittingRef.current = false;
@@ -178,12 +221,13 @@ export function PaintingComposer({
     },
     [
       activeTurn,
+      activeMessages,
+      archivedTurns,
       failure,
       generatePainting,
       generation.aspectRatio,
       generation.status,
       generationResolution,
-      messages.length,
       outputs,
       painting,
       previousResult,
@@ -192,7 +236,7 @@ export function PaintingComposer({
   );
   const retryInput = activeTurn?.input;
   const canRetry = Boolean(failure && retryInput);
-  const messagePrompt = retryInput?.prompt ?? painting?.prompt ?? '';
+  const messagePrompt = retryInput?.displayPrompt ?? retryInput?.prompt ?? painting?.prompt ?? '';
   const handleRetry = useCallback(() => {
     if (!retryInput) {
       return;
@@ -205,9 +249,37 @@ export function PaintingComposer({
       if (cancelled) {
         setActiveTurn(previousResult?.activeTurn ?? null);
         setShowPersistedTurn(previousResult?.showPersistedTurn ?? false);
+        setArchivedTurns(previousResult?.archivedTurns ?? []);
       }
     });
   };
+  const comparisonImages = useMemo(
+    () => [
+      ...archivedTurns.flatMap((turn, index) =>
+        turn.state.outputs.map((output, candidateIndex) => ({
+          output,
+          versionNumber: index + 1,
+          candidateNumber: candidateIndex + 1,
+        })),
+      ),
+      ...outputs.map((output, candidateIndex) => ({
+        output,
+        versionNumber: archivedTurns.length + 1,
+        candidateNumber: candidateIndex + 1,
+      })),
+    ],
+    [archivedTurns, outputs],
+  );
+  const openComparison = useCallback(
+    (output: { fileEntryId: string; uri: string }) => {
+      const images = [
+        ...new Map(comparisonImages.map((image) => [image.output.fileEntryId, image])).values(),
+      ];
+      if (images.length > 1) setComparison({ images, initialOutput: output.fileEntryId });
+    },
+    [comparisonImages],
+  );
+  const currentModelName = activeTurn?.input.modelName ?? painting?.modelId?.split('::').at(-1);
   const messageRenderState = useMemo<PaintingMessageState>(
     () => ({
       animateOutput:
@@ -216,22 +288,21 @@ export function PaintingComposer({
       aspectRatio: generation.aspectRatio,
       error: generation.error,
       interruption: generation.interruption,
-      onRetry: canRetry ? handleRetry : undefined,
       outputs,
       paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
       prompt: messagePrompt,
       resolution: generationResolution,
+      modelName: currentModelName,
       status: generation.status,
     }),
     [
       activeTurn?.paintingId,
-      canRetry,
+      currentModelName,
       generation.aspectRatio,
       generation.error,
       generation.interruption,
       generation.status,
       generationResolution,
-      handleRetry,
       initialFiles.outputs,
       firstOutput,
       messagePrompt,
@@ -240,16 +311,46 @@ export function PaintingComposer({
       showPersistedTurn,
     ],
   );
+  const archivedMessages = useMemo(
+    () =>
+      new Map(
+        archivedTurns.flatMap((turn, index) =>
+          turn.messages.map(
+            (message) => [message.id, { state: turn.state, versionNumber: index + 1 }] as const,
+          ),
+        ),
+      ),
+    [archivedTurns],
+  );
+  const renderState = useMemo(
+    () => ({ ...messageRenderState, archivedTurns }),
+    [archivedTurns, messageRenderState],
+  );
   const renderMessage = useCallback(
-    (message: MessageListItem) => (
-      <View className="gap-3">
-        {message.role === 'assistant' && failure && previousResult ? (
-          <PaintingAssistantMessage {...previousResult.state} animateOutput={false} />
-        ) : null}
-        <PaintingMessage message={message} state={messageRenderState} />
-      </View>
-    ),
-    [failure, messageRenderState, previousResult],
+    (message: MessageListItem) => {
+      const archived = archivedMessages.get(message.id);
+      return (
+        <PaintingMessage
+          archived={Boolean(archived)}
+          message={message}
+          state={archived?.state ?? messageRenderState}
+          onRetry={!archived && canRetry ? handleRetry : undefined}
+          onEditOutput={openEditor}
+          onCompareOutput={comparisonImages.length > 1 ? openComparison : undefined}
+          versionNumber={archived?.versionNumber ?? archivedTurns.length + 1}
+        />
+      );
+    },
+    [
+      archivedMessages,
+      archivedTurns.length,
+      messageRenderState,
+      canRetry,
+      handleRetry,
+      openEditor,
+      openComparison,
+      comparisonImages.length,
+    ],
   );
   // Results belong to the message list. Only an explicit handoff or an
   // unfinished receipt seeds the draft; finishing a job must not remount it.
@@ -272,27 +373,80 @@ export function PaintingComposer({
             : undefined
         }
       >
-        <ComposerDismissArea>
-          <MessageList
-            contentBottomInset={composerContentGap}
-            contentTopInset={resolveHeaderContentInset(headerHeight)}
-            enteringMessageId={activeTurn?.userMessageId}
-            extraData={messageRenderState}
-            keyboardOffset={keyboardOffset}
-            keyboardShouldPersistTaps="always"
-            messages={messages}
-            renderMessage={renderMessage}
+        <Stack.Screen options={{ headerShown: !isImmersive, gestureEnabled: !isImmersive }} />
+        <View
+          className="flex-1"
+          accessibilityElementsHidden={isImmersive}
+          importantForAccessibility={isImmersive ? 'no-hide-descendants' : 'auto'}
+          pointerEvents={isImmersive ? 'none' : 'auto'}
+        >
+          {messages.length === 0 ? (
+            <View
+              className="absolute inset-0 items-center justify-center gap-3 px-8"
+              pointerEvents="none"
+            >
+              <Text className="font-semibold text-foreground text-2xl">
+                {t('painting.workspace.emptyTitle')}
+              </Text>
+              <Text className="text-center text-muted-foreground text-sm">
+                {t('painting.workspace.emptyDescription')}
+              </Text>
+            </View>
+          ) : null}
+          <ComposerDismissArea>
+            <MessageList
+              contentBottomInset={composerContentGap}
+              contentTopInset={resolveHeaderContentInset(headerHeight)}
+              enteringMessageId={activeTurn?.userMessageId}
+              extraData={renderState}
+              keyboardOffset={keyboardOffset}
+              keyboardShouldPersistTaps="always"
+              messages={messages}
+              renderMessage={renderMessage}
+            />
+          </ComposerDismissArea>
+        </View>
+        {!isImmersive ? (
+          <ComposerDock layoutMode="flow">
+            <PaintingWorkspaceInput
+              initialParamValues={seededParamValues}
+              onCancel={handleCancel}
+              onGenerate={handleGenerate}
+              painting={painting}
+              status={generation.status}
+            />
+          </ComposerDock>
+        ) : null}
+        {comparison ? (
+          <PaintingComparison
+            images={comparison.images}
+            initialOutput={comparison.initialOutput}
+            onClose={() => setComparison(null)}
+            onEdit={(output) => {
+              setComparison(null);
+              openEditor(output);
+            }}
           />
-        </ComposerDismissArea>
-        <ComposerDock layoutMode="flow">
-          <PaintingInput
+        ) : null}
+        {editorOutput && isEditorOpen ? (
+          <PaintingImageEditor
+            initialAnnotations={editorAnnotations}
             initialParamValues={seededParamValues}
+            key={editorOutput.fileEntryId ?? editorOutput.uri}
+            onAnnotationsChange={(annotations) =>
+              annotationDrafts.current.set(
+                editorOutput.fileEntryId ?? editorOutput.uri,
+                annotations,
+              )
+            }
             onCancel={handleCancel}
+            onClose={() => setIsEditorOpen(false)}
             onGenerate={handleGenerate}
+            output={editorOutput}
             painting={painting}
             status={generation.status}
           />
-        </ComposerDock>
+        ) : null}
       </PaintingInputProvider>
     </ComposerSessionProvider>
   );
