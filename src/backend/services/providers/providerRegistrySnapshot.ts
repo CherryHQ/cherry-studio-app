@@ -1,11 +1,12 @@
+import { loggerService } from '@logger';
+import { File, Paths } from 'expo-file-system';
+import * as z from 'zod';
+
 import {
   type CatalogManifest,
   CatalogManifestSchema,
   type RemoteRegistryFileName,
-} from '@cherrystudio/provider-registry/mobile';
-import { loggerService } from '@logger';
-import { File, Paths } from 'expo-file-system';
-import * as z from 'zod';
+} from '@/backend/data/services/MobileRegistryLoader';
 
 const logger = loggerService.withContext('ProviderRegistrySnapshot');
 const SnapshotSchema = z.object({

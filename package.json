@@ -84,7 +84,7 @@
     "@cherrystudio/app-icons": "workspace:*",
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
-    "@cherrystudio/provider-registry": "workspace:*",
+    "@cherrystudio/provider-registry": "0.1.0",
     "@cherrystudio/remote-protocol": "0.4.0",
     "@cherrystudio/remote-transport": "0.2.0",
     "@cherrystudio/ui": "workspace:*",

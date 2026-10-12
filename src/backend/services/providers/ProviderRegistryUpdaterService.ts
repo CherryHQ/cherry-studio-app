@@ -1,12 +1,3 @@
-import {
-  type CatalogManifest,
-  CatalogManifestSchema,
-  isCatalogManifestCompatible,
-  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
-  REGISTRY_SCHEMA_VERSION,
-  REMOTE_REGISTRY_FILES,
-  type RemoteRegistryFileName,
-} from '@cherrystudio/provider-registry/mobile';
 import { loggerService } from '@logger';
 import { getCalendars, getLocales } from 'expo-localization';
 import { Platform } from 'react-native';
@@ -18,6 +9,15 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import {
+  type CatalogManifest,
+  CatalogManifestSchema,
+  isCatalogManifestCompatible,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+  REGISTRY_SCHEMA_VERSION,
+  REMOTE_REGISTRY_FILES,
+  type RemoteRegistryFileName,
+} from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';

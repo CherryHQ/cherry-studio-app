@@ -1,5 +1,4 @@
 import {
-  buildRuntimeEndpointConfigs,
   ENDPOINT_TYPE,
   MODEL_CAPABILITY,
   type EndpointType,
@@ -11,6 +10,7 @@ import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { buildRuntimeEndpointConfigs } from '@/backend/data/services/providerRegistryProjection';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
