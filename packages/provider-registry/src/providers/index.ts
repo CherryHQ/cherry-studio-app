@@ -45,6 +45,7 @@ import p_openai from './openai';
 import p_openai_codex from './openai-codex';
 import p_opencode from './opencode';
 import p_openrouter from './openrouter';
+import p_opper from './opper';
 import p_ovms from './ovms';
 import p_perplexity from './perplexity';
 import p_ph8 from './ph8';
@@ -88,6 +89,7 @@ export const PROVIDERS: Provider[] = [
   p_openrouter,
   p_ollama,
   p_requesty,
+  p_opper,
   p_new_api,
   p_lmstudio,
   p_anthropic,

@@ -666,6 +666,26 @@
       "name": "Requesty"
     },
     {
+      "defaultChatEndpoint": "openai-chat-completions",
+      "description": "Opper - AI model provider",
+      "endpointConfigs": {
+        "openai-chat-completions": {
+          "adapterFamily": "openai-compatible",
+          "baseUrl": "https://api.opper.ai/v3/compat"
+        }
+      },
+      "id": "opper",
+      "metadata": {
+        "website": {
+          "apiKey": "https://platform.opper.ai",
+          "docs": "https://docs.opper.ai",
+          "models": "https://opper.ai/models",
+          "official": "https://opper.ai/"
+        }
+      },
+      "name": "Opper"
+    },
+    {
       "description": "New API - AI model provider",
       "endpointConfigs": {
         "anthropic-messages": {
@@ -2274,5 +2294,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "985f3aecd45a85af"
+  "version": "e5c63f8dd16e97e3"
 }
