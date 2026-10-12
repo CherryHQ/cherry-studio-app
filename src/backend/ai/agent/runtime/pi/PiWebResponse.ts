@@ -6,6 +6,7 @@ import type { PiWebDialect } from './piWebTools';
 
 const PI_WEB_DIAGNOSTIC = 'cherry.web';
 const RuntimeJsonObjectSchema = z.record(z.string(), RuntimeJsonValueSchema);
+type RuntimeJsonObject = z.infer<typeof RuntimeJsonObjectSchema>;
 
 /** Stored on the terminal assistant message, so sources share its durability, order and recovery. */
 const PiWebResultSchema = z.object({
@@ -27,6 +28,8 @@ const PiWebResultSchema = z.object({
   failed: z.boolean(),
   /** Search calls Pi does not model, keyed by the output item each one followed. */
   openaiItems: z.array(z.object({ after: z.string(), item: RuntimeJsonObjectSchema })).optional(),
+  /** Complete Anthropic blocks, including signed thinking and pending server tools. */
+  anthropicContent: z.array(RuntimeJsonObjectSchema).optional(),
   /** Gemini server-side tool parts, each before the content block at `before`. */
   googleParts: z
     .array(
@@ -60,7 +63,95 @@ export function applyPiWebReplay(
   if (model.api === 'openai-responses' || model.api === 'azure-openai-responses')
     return replayOpenAIItems(body, messages);
   if (model.api === 'google-generative-ai') return replayGoogleParts(body, model, messages);
+  if (model.api === 'anthropic-messages') return replayAnthropicContent(body, model, messages);
   return payload;
+}
+
+function replayAnthropicContent(
+  body: Record<string, unknown>,
+  model: Model<Api>,
+  messages: readonly Message[],
+): Record<string, unknown> {
+  if (!Array.isArray(body.messages)) return body;
+  const replayed = [...body.messages];
+  const restored: number[] = [];
+  for (const message of messages) {
+    if (
+      message.role !== 'assistant' ||
+      message.provider !== model.provider ||
+      message.model !== model.id
+    )
+      continue;
+    const web = readPiWebResult(message);
+    if (!web?.id || !web.anthropicContent?.length) continue;
+    const anchor = replayAnchor(web.id);
+    const index = replayed.findIndex((value) => {
+      const entry = record(value);
+      return (
+        entry?.role === 'assistant' &&
+        array(entry.content).some((part) => {
+          const text = record(part)?.text;
+          return typeof text === 'string' && text.includes(anchor);
+        })
+      );
+    });
+    if (index < 0) continue;
+    // Replace the projection, including its source-facts marker, with the original response.
+    replayed[index] = { ...record(replayed[index]), content: web.anthropicContent };
+    restored.push(index);
+  }
+  for (const index of restored)
+    replayed[index] = withoutStrandedAnthropicCalls(replayed, index, body.tools);
+  return { ...body, messages: replayed };
+}
+
+/**
+ * A server tool call deferred behind a function call runs on the request that returns the
+ * function results. Anthropic rejects one that is neither answered later nor able to run now,
+ * so it is left out and the turn continues without that lookup.
+ */
+function withoutStrandedAnthropicCalls(
+  messages: readonly unknown[],
+  index: number,
+  tools: unknown,
+): unknown {
+  const message = record(messages[index]);
+  const content = array(message?.content);
+  const next = messages.find((entry, at) => at > index && record(entry)?.role === 'assistant');
+  const answered = new Set(
+    [...content, ...array(record(next)?.content)].flatMap((value) => {
+      const block = record(value);
+      return block?.type === 'web_search_tool_result' || block?.type === 'web_fetch_tool_result'
+        ? [block.tool_use_id]
+        : [];
+    }),
+  );
+  const last = record(messages[index + 1]);
+  const results = array(last?.content);
+  const resumes =
+    index + 2 === messages.length &&
+    last?.role === 'user' &&
+    results.length > 0 &&
+    results.every((block) => record(block)?.type === 'tool_result');
+  return {
+    ...message,
+    content: content.filter((value) => {
+      const block = record(value);
+      return (
+        block?.type !== 'server_tool_use' ||
+        answered.has(block.id) ||
+        (resumes &&
+          array(tools).some((value) => {
+            const tool = record(value);
+            return (
+              tool?.name === block.name &&
+              typeof tool?.type === 'string' &&
+              tool.type.startsWith(`${String(block.name)}_`)
+            );
+          }))
+      );
+    }),
+  };
 }
 
 /**
@@ -207,6 +298,12 @@ export class PiWebResponse {
   private googleSearchSuggestions: string | undefined;
   /** Anthropic stream index to Pi content index, for the blocks Pi keeps. */
   private readonly anthropicBlocks = new Map<number, number>();
+  private readonly anthropicContent = new Map<number, RuntimeJsonObject>();
+  private readonly anthropicInput = new Map<number, string>();
+  private readonly previousAnthropicContent: RuntimeJsonObject[] = [];
+  private anthropicContentOffset = 0;
+  /** Output ended inside a tool call; Pi repairs its own copy, the original cannot be replayed. */
+  private anthropicTruncated = false;
   private readonly anthropicDocuments: (string | undefined)[] = [];
   private readonly blockCitations = new Map<number, string[]>();
   /** Offsets into the whole answer, for hosts that annotate a single text. */
@@ -233,11 +330,26 @@ export class PiWebResponse {
     this.googleBlockSignature = undefined;
     this.googleSearchSuggestions = undefined;
     this.anthropicBlocks.clear();
+    this.anthropicContent.clear();
+    this.anthropicInput.clear();
+    this.previousAnthropicContent.length = 0;
+    this.anthropicContentOffset = 0;
+    this.anthropicTruncated = false;
     this.anthropicDocuments.length = 0;
     this.blockCitations.clear();
     this.answerCitations.length = 0;
     this.numberedSources.length = 0;
     this.failed = false;
+  }
+
+  /** A paused response continues as-is; keep earlier sources and their display offsets. */
+  continueAnthropic(contentOffset: number): RuntimeJsonObject[] {
+    this.previousAnthropicContent.push(...this.anthropicContent.values());
+    this.anthropicContent.clear();
+    this.anthropicInput.clear();
+    this.anthropicBlocks.clear();
+    this.anthropicContentOffset = contentOffset;
+    return [...this.previousAnthropicContent];
   }
 
   observe(value: unknown): void {
@@ -323,8 +435,12 @@ export class PiWebResponse {
     if (!isOffset(event.index)) return;
     const block = record(event.content_block);
     if (event.type === 'content_block_start' && block) {
+      this.anthropicContent.set(event.index, RuntimeJsonObjectSchema.parse(block));
       if (ANTHROPIC_PI_BLOCKS.has(String(block.type))) {
-        this.anthropicBlocks.set(event.index, this.anthropicBlocks.size);
+        this.anthropicBlocks.set(
+          event.index,
+          this.anthropicContentOffset + this.anthropicBlocks.size,
+        );
       } else if (
         block.type === 'web_search_tool_result' ||
         block.type === 'web_fetch_tool_result'
@@ -340,7 +456,35 @@ export class PiWebResponse {
       }
       return;
     }
-    const citation = record(record(event.delta)?.citation);
+    const stored = this.anthropicContent.get(event.index);
+    const delta = record(event.delta);
+    if (stored && event.type === 'content_block_delta' && delta) {
+      if (delta.type === 'input_json_delta' && typeof delta.partial_json === 'string')
+        this.anthropicInput.set(
+          event.index,
+          (this.anthropicInput.get(event.index) ?? '') + delta.partial_json,
+        );
+      else if (delta.type === 'text_delta' && typeof delta.text === 'string')
+        stored.text = String(stored.text ?? '') + delta.text;
+      else if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string')
+        stored.thinking = String(stored.thinking ?? '') + delta.thinking;
+      else if (delta.type === 'signature_delta' && typeof delta.signature === 'string')
+        stored.signature = String(stored.signature ?? '') + delta.signature;
+      else if (delta.type === 'citations_delta' && record(delta.citation))
+        stored.citations = [
+          ...(Array.isArray(stored.citations) ? stored.citations : []),
+          RuntimeJsonObjectSchema.parse(delta.citation),
+        ];
+    }
+    if (stored && event.type === 'content_block_stop') {
+      const input = this.anthropicInput.get(event.index);
+      try {
+        if (input) stored.input = RuntimeJsonObjectSchema.parse(JSON.parse(input));
+      } catch {
+        this.anthropicTruncated = true;
+      }
+    }
+    const citation = record(delta?.citation);
     const contentIndex = this.anthropicBlocks.get(event.index);
     if (event.type !== 'content_block_delta' || !citation || contentIndex === undefined) return;
     const sourceId =
@@ -358,18 +502,33 @@ export class PiWebResponse {
   /** The terminal message Pi persists: signed text intact, display and replay facts attached. */
   settle(message: AssistantMessage): AssistantMessage {
     const openaiItems = this.openaiReplayItems();
+    const capturedAnthropicContent = [
+      ...this.previousAnthropicContent,
+      ...this.anthropicContent.values(),
+    ];
+    const anthropicContent =
+      !this.anthropicTruncated &&
+      capturedAnthropicContent.some(
+        (block) =>
+          block.type === 'server_tool_use' ||
+          block.type === 'web_search_tool_result' ||
+          block.type === 'web_fetch_tool_result',
+      )
+        ? capturedAnthropicContent
+        : [];
     if (
       !this.sourcesByUrl.size &&
       !this.failed &&
       !this.googleSearchSuggestions &&
       !openaiItems.length &&
-      !this.googleParts.length
+      !this.googleParts.length &&
+      !anthropicContent.length
     )
       return message;
     // Source facts precede the tool calls, so no provider sees text after a pending call.
     const firstCall = message.content.findIndex((block) => block.type === 'toolCall');
     const replayIndex = firstCall < 0 ? message.content.length : firstCall;
-    const replay = this.replayText();
+    const replay = this.replayText(anthropicContent.length > 0);
     const moved = (index: number) => (replay && index >= replayIndex ? index + 1 : index);
     const result: PiWebResult = {
       version: 1,
@@ -383,6 +542,7 @@ export class PiWebResponse {
       ...(replay ? { replayIndex } : {}),
       failed: this.failed,
       ...(openaiItems.length ? { openaiItems } : {}),
+      ...(anthropicContent.length ? { anthropicContent } : {}),
       ...(this.googleParts.length
         ? {
             googleParts: this.googleParts.map(({ before, ...part }) => ({
@@ -448,9 +608,10 @@ export class PiWebResponse {
   }
 
   /** Model history keeps source URLs even when the provider's hidden search context is gone. */
-  private replayText(): string | undefined {
+  private replayText(hasAnthropicContent: boolean): string | undefined {
     // Stored Gemini parts need the block as well: it is how a later request finds this message.
-    if (!this.sourcesByUrl.size && !this.failed && !this.googleParts.length) return undefined;
+    if (!this.sourcesByUrl.size && !this.failed && !this.googleParts.length && !hasAnthropicContent)
+      return undefined;
     const sources = [...this.sourcesByUrl.values()].map(({ sourceId, ...source }) => ({
       id: sourceId,
       ...source,

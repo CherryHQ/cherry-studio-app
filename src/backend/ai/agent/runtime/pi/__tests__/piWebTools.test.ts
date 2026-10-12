@@ -156,7 +156,12 @@ describe('native request adapters', () => {
         tools: [
           ...functions,
           { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
-          { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 },
+          {
+            type: 'web_fetch_20250910',
+            name: 'web_fetch',
+            max_uses: 5,
+            max_content_tokens: 4_000,
+          },
         ],
         betas: ['existing', 'web-fetch-2025-09-10'],
       },
