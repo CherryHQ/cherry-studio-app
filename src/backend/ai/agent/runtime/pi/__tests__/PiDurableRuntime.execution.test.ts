@@ -228,8 +228,13 @@ describe('Pi durable execution integration', () => {
       );
       expect(JSON.stringify(requests[1]?.messages)).toContain('Tool value');
       expect(getCurrentSystemPrompt(requests[1]!.messages)).toContain(instructionBody);
+      // Providers send a tool result's content; its details keep the full display value.
       expect(
-        JSON.stringify(requests[1]?.messages.filter((message) => message.role === 'toolResult')),
+        JSON.stringify(
+          requests[1]?.messages.flatMap((message) =>
+            message.role === 'toolResult' ? message.content : [],
+          ),
+        ),
       ).not.toContain(instructionBody);
 
       const second = await runtime.submit(
