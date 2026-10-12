@@ -7,22 +7,28 @@ Model catalog schemas, lookup utilities, and trusted provider connection definit
 ## Mobile Catalog Ownership
 
 The `/mobile` entry bundles only `data/providers.json`. Models and provider-model overrides come
-from Cherry Desktop's published `x-files/provider-registry/v1` catalog. Model metadata fixes belong
+from Cherry Desktop's published `x-files/provider-registry/v3` catalog. Model metadata fixes belong
 upstream; Mobile maintains the reader, compatibility rules, and request adapters. User edits and
 custom models stay in the local database and override downloaded defaults.
 
 `ProviderRegistryUpdaterService` restores a validated snapshot from persistent document storage.
-First use downloads a complete snapshot automatically; afterwards startup stays offline, and only
-opening a provider's model list pulls a newer catalog. Two alternating files preserve the previous
+First use downloads a complete snapshot automatically. Startup also upgrades a saved older schema
+to v3 while keeping that snapshot available offline. Once a v3 snapshot is saved, opening a
+provider's model list pulls a newer catalog. Two alternating files preserve the previous
 snapshot if a write or update fails. Existing downloads from the older cache directory are migrated
 after validation; app updates no longer invalidate data because a bundled model version changed.
 Model workflows show loading/retry feedback until a snapshot is available. Welcome, provider
 configuration, and history remain accessible.
 
 Only compatible schema lanes and supported minimum runtime versions are accepted. Mobile's current
-reader supports the Desktop 2.0.14 catalog semantics, including input-length pricing tiers, and
-continues accepting older compatible snapshots. Provider endpoints and authentication definitions
-remain release-owned. GitHub Models uses its provider API for discovery and remote base metadata;
+reader targets schema v3 with the Desktop 2.1.4 semantic baseline, including input-length pricing
+tiers and always-on adaptive reasoning. Unknown list values and incompatible model/override entries
+are dropped individually. `ultra`, provider-native `serverTools`, and the Anthropic
+`adaptive-between-tools` dialect have no supported Mobile consumer; the latter's models and
+overrides are omitted while the pinned SDK lacks `between_tools`. Older compatible snapshots remain
+readable offline and are replaced by v3 independently of their workflow revision.
+Provider endpoints and authentication definitions remain release-owned. GitHub Models uses its
+provider API for discovery and remote base metadata;
 there is no second bundled GitHub model list.
 
 ## Generator And Regression Fixtures
