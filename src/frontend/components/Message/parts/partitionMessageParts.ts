@@ -5,6 +5,7 @@ import {
   isProviderWebSearchToolPart,
   isToolMessagePart,
   isUserQuestionToolPart,
+  isSkillAdaptationToolPart,
   type ToolMessagePart,
 } from './tools/toolPartState';
 
@@ -125,7 +126,8 @@ export function partitionMessageParts(
     if (
       isToolMessagePart(part) &&
       (isUserQuestionToolPart(part) ||
-        (isAgentMutationToolPart(part) && part.state === 'output-available'))
+        ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
+          part.state === 'output-available'))
     ) {
       body.push({ index, kind: 'part', part });
       return;

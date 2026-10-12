@@ -34,7 +34,9 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
   const renderTool = useToolRenderer();
   if (renderTool) return renderTool(part);
 
-  if (['load_skill', 'find_skills', 'install_skill'].includes(getToolName(part) ?? ''))
+  if (
+    ['load_skill', 'find_skills', 'install_skill', 'adapt_skill'].includes(getToolName(part) ?? '')
+  )
     return <SkillToolPart part={part} />;
   if (isProviderWebSearchToolPart(part)) {
     return null;

@@ -17,6 +17,7 @@ import type {
 } from '@/backend/data/services/AgentGlobalSkillService';
 import {
   type InstallSkillInput,
+  type AdaptSkillInput,
   type SkillInspection,
   type SkillsModule,
   SkillsError,
@@ -30,6 +31,7 @@ import type {
 } from '@/shared/data/types/skill';
 
 import type { BundledSkillDefinition } from './bundled';
+import { adaptSkillPackage } from './skillAdaptation';
 import { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
 import type { SkillEnvironmentReader } from './skillEnvironment';
 import type { SkillMarketplace } from './skillMarketplace';
@@ -77,6 +79,34 @@ export type SkillsBackend = SkillsModule & {
 export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBackend {
   const candidates = new Map<string, ResolvedCandidate>();
   const changes = new Emitter<void>();
+
+  async function prepareAdaptation(input: AdaptSkillInput, signal?: AbortSignal) {
+    const skill = await deps.skills.getById(input.skillId);
+    if (skill.source !== 'marketplace' || !skill.isEnabled)
+      throw new SkillsError(
+        'source-invalid',
+        'Only enabled, installed external Skills can be adapted.',
+      );
+    if (skill.contentHash !== input.expectedContentHash)
+      throw new SkillsError(
+        'content-changed',
+        'The local Skill changed. Read it and review a new proposal.',
+      );
+    const files = new Map<string, Uint8Array>();
+    for (const { path } of skill.manifest) {
+      signal?.throwIfAborted();
+      const bytes = await deps.storage.readFile(skill, path);
+      if (!bytes)
+        throw new SkillsError('storage-unavailable', 'The installed package could not be read.');
+      files.set(path, bytes);
+    }
+    const adapted = adaptSkillPackage(files, skill.name, input.changes);
+    // Detect damaged files before replacing the current accepted package.
+    const original = validateSkillPackage(files, { expectedName: skill.name });
+    if (!original.ok || original.package.contentHash !== skill.contentHash)
+      throw new SkillsError('package-invalid', 'The installed package failed its integrity check.');
+    return { skill, ...adapted, previousInstructions: original.package.instructions };
+  }
 
   function remember(candidate: SkillSourceCandidate): SkillSourceCandidate {
     if (candidates.size >= 64 && !candidates.has(candidate.candidateId))
@@ -294,7 +324,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       signal?.throwIfAborted();
 
       if (existing) {
-        if (existing.contentHash !== pkg.contentHash || !deps.storage.hasRevision(existing))
+        if (!deps.storage.hasRevision(existing))
           throw new SkillsError(
             'already-installed',
             'An existing revision needs an explicit update or repair.',
@@ -372,6 +402,45 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         changes.fire();
         // The previous revision stays until reconciliation so an active turn can finish reading it.
         return { outcome: 'updated', skill };
+      } catch (error) {
+        deps.storage.discardStaging(handle);
+        throw error;
+      }
+    },
+
+    async previewAdaptation(input, signal) {
+      const prepared = await prepareAdaptation(input, signal);
+      return {
+        skill: prepared.skill,
+        instructions: prepared.package.instructions,
+        previousInstructions: prepared.previousInstructions,
+      };
+    },
+
+    async adapt(input, signal) {
+      const prepared = await prepareAdaptation(input, signal);
+      const handle = await deps.storage.stage(prepared.files);
+      try {
+        const skill = await deps.db.withWriteTx(async (tx) => {
+          signal?.throwIfAborted();
+          await deps.storage.publish(handle, {
+            folderName: prepared.skill.folderName,
+            contentHash: prepared.package.contentHash,
+          });
+          return deps.skills.updateRevisionTx(
+            tx,
+            input.skillId,
+            {
+              ...prepared.skill,
+              profile: { ...prepared.skill.profile, provenance: 'unverified' },
+              contentHash: prepared.package.contentHash,
+              manifest: prepared.package.manifest,
+            },
+            input.expectedContentHash,
+          );
+        });
+        changes.fire();
+        return skill;
       } catch (error) {
         deps.storage.discardStaging(handle);
         throw error;

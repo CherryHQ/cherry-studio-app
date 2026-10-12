@@ -31,6 +31,36 @@ function record(name: string, description = 'Draft a short brief'): SkillInstall
 }
 
 describe('AgentGlobalSkillService', () => {
+  it('replaces only the reviewed current content and rejects stale writes', async () => {
+    const installed = await install(record('adapt-me'));
+    const adapted = { ...record('adapt-me'), contentHash: 'directory-sha256:adapted' };
+    await testDb.dbService.withWriteTx((tx) =>
+      service.updateRevisionTx(tx, installed.id, adapted, installed.contentHash),
+    );
+    await expect(
+      testDb.dbService.withWriteTx((tx) =>
+        service.updateRevisionTx(
+          tx,
+          installed.id,
+          { ...adapted, contentHash: 'directory-sha256:stale-write' },
+          installed.contentHash,
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'content-changed' });
+    expect((await service.getById(installed.id)).contentHash).toBe(adapted.contentHash);
+    await service.update(installed.id, { isEnabled: false });
+    await expect(
+      testDb.dbService.withWriteTx((tx) =>
+        service.updateRevisionTx(
+          tx,
+          installed.id,
+          { ...adapted, contentHash: 'directory-sha256:disabled-write' },
+          adapted.contentHash,
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'content-changed' });
+    expect((await service.getById(installed.id)).contentHash).toBe(adapted.contentHash);
+  });
   let service: AgentGlobalSkillService;
   let sqlite: DatabaseSync;
   let testDb: TestDb;

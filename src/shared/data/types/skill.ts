@@ -19,6 +19,7 @@ export type SkillId = z.infer<typeof SkillIdSchema>;
 
 export const SKILL_INSTRUCTIONS_MAX_CHARACTERS = 24_000;
 export const SKILL_ACTIVE_MAX_CHARACTERS = 48_000;
+export const SKILL_ACTIVE_MAX_ENTRIES = 64;
 
 /** App-issued receipt, never accepted from a model or submit-message input. */
 export const SkillActivationSchema = z.strictObject({

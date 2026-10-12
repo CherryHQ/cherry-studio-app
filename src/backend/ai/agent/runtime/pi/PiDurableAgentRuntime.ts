@@ -243,6 +243,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       kind: stored.kind,
       model: { ...stored.model },
       instructions: stored.instructions,
+      initialInstructions: stored.initialInstructions,
       options: { ...stored.options },
       tools: stored.tools.map((tool) => this.toolTemplate(tool)),
       ...(stored.webTools ? { webTools: { ...stored.webTools } } : {}),
@@ -286,6 +287,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       agent,
       options: configuration.options,
       configuration: detachedJson(configuration),
+      initialInstructions: configuration.initialInstructions,
       resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
       entries: originalEntries,
     });
@@ -303,6 +305,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         configuration.options,
         BACKGROUND_CONTEXT,
         detachedJson(configuration),
+        configuration.initialInstructions,
       );
       await this.bindProvider(sessionId);
     } catch (error) {

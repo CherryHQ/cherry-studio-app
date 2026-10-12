@@ -65,6 +65,8 @@ export type RuntimeConversationConfiguration = {
   kind?: 'language' | 'image';
   model: RuntimeModel;
   instructions: string;
+  /** Host-owned replaceable system sections, seeded once for this configuration. */
+  initialInstructions?: readonly { key: string; text: string }[];
   options: RuntimeOptions;
   /** The current offered schema/catalog; execution resolves the owning durable run through ports. */
   tools: readonly RuntimeTool[];

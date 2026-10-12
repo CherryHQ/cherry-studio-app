@@ -58,6 +58,11 @@ export function isUserQuestionToolPart(part: ToolMessagePart) {
   return getToolName(part) === 'ask_user_question';
 }
 
+/** Local edits must be visible even when the completed process disclosure is closed. */
+export function isSkillAdaptationToolPart(part: ToolMessagePart) {
+  return getToolName(part) === 'adapt_skill';
+}
+
 /** A built-in Agent write whose saved definition is a result worth showing inline. */
 export function isAgentMutationToolPart(part: ToolMessagePart) {
   const name = getToolName(part);

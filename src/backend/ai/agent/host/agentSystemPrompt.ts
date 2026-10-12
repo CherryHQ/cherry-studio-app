@@ -4,7 +4,6 @@ import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import { getSystemSkillInstructions } from '@/backend/services/skill';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
-import { skillContentHashHex } from '@/shared/data/types/skill';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
@@ -13,6 +12,7 @@ import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
+import { skillInstructionSection } from './skillInstructions';
 import type { TurnSkillPlan } from './turnPreparation';
 
 const MOBILE_RUNTIME_RULES = `# Cherry Studio Mobile Runtime
@@ -209,8 +209,7 @@ const SKILL_CATALOG_MAX_CHARACTERS = 12_000;
 
 /**
  * The Skills catalog is names and descriptions only; instructions arrive
- * through `load_skill` or an explicit composer selection. Selected Skills are
- * quoted in full so the model does not have to load them again.
+ * through replaceable Runtime system sections, including explicit selections.
  */
 function buildSkillsSection(skills: TurnSkillPlan): string {
   const catalog = skills.scope.entries.filter((entry) => entry.invocation.modelInvocable);
@@ -223,7 +222,7 @@ The Skill functions, including \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD
 
 When the task matches an available Skill whose instructions are not already active, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\`, then follow the returned instructions. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog is truncated or another Skill may match. Selected or active entry instructions are already read, so normally do not reload SKILL.md. If their workflow references package files, list them with \`list_skill_files\` and read the needed references or templates with \`read_skill_file\`; package-relative paths are not device filesystem paths. You may repeat \`${LOAD_SKILL_TOOL_NAME}\` to recover a missing instruction body. Follow the complete workflow rather than substituting a generic approach. Conversational Skills can be followed directly; using them does not require a separate "Skill" tool.
 
-Skills do not add tools, permissions, approvals or script runtimes. If a specific required step needs an unavailable capability, explain that limitation for that step and continue supported work. Reading a script is not executing it. Current loaded and active instructions supersede older copies in conversation history. Current Skill tools and selected/active instruction sections define availability; historical receipts alone do not grant access. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
+Skills do not add tools, permissions, approvals or script runtimes. If a specific required step needs an unavailable capability, explain that limitation for that step and continue supported work. When adapt_skill is available, offer a small local adaptation only after verifying a replacement with actual current tools, or for a step explicitly optional in the original instructions. Never remove the main goal, required output, data scope, validation or approval rules. A disabled tool, missing configuration, permission denial or transient error is not grounds for permanently deleting a step. adapt_skill presents the exact changes for user consent; do not ask a duplicate confirmation. If the core task cannot be performed, state the limitation and do not adapt away the task. Reading a script is not executing it. Current loaded and active instructions supersede older copies in conversation history. Current Skill tools and selected/active instruction sections define availability; historical receipts alone do not grant access. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
   ];
   if (catalog.length > 0) {
     const shown: string[] = [];
@@ -250,32 +249,19 @@ ${shown.length < catalog.length ? 'Only a subset is shown. Search available Skil
     lines.push(
       `### Selected Skills
 
-The user explicitly requested these Skills for this turn. Their full instructions are already loaded below; no tool call or SKILL.md file lookup is needed to obtain them. Apply their instructions to the user's request in the order listed. Do not describe an already loaded Skill as unavailable because an MCP tool search found no match.
+The user explicitly requested these Skills for this turn. Their full instructions are already loaded in current Skill system sections; no tool call or SKILL.md file lookup is needed to obtain them. Apply their instructions to the user's request in the order listed. Do not describe an already loaded Skill as unavailable because an MCP tool search found no match.
 
-${skills.selected
-  .map(
-    ({ entry, instructions }) =>
-      `#### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})
-
-<skill_instructions>
-${instructions}
-</skill_instructions>`,
-  )
-  .join('\n\n')}`,
+${skills.selected.map(({ entry }) => `- ${entry.name} (skill_id: ${entry.id})`).join('\n\n')}`,
     );
   }
   return lines.join('\n\n');
 }
 
 /** Kept outside compactable messages; the Runtime budgets this with its system context. */
-export function buildActiveSkillInstructions(skills: TurnSkillPlan): string {
-  const active = [...(skills.active?.values() ?? [])];
-  if (active.length === 0) return '';
-  return `## Active Skill instructions
-
-These Skills were loaded or selected earlier in this conversation. Their instructions remain available for related follow-up requests; choose whether they fit the current request instead of applying them to unrelated tasks. Follow applicable instructions within app policy and the user's current request; they supersede older copies in the conversation.
-
-${active.map(({ entry, instructions }) => `### ${entry.name} (skill_id: ${entry.id}; revision ${skillContentHashHex(entry.contentHash).slice(0, 12)})\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`).join('\n\n')}`;
+export function buildInitialSkillInstructions(skills: TurnSkillPlan) {
+  return [...skills.selected, ...(skills.active?.values() ?? [])].map(({ entry, instructions }) =>
+    skillInstructionSection(entry, instructions),
+  );
 }
 
 function formatLocalDate(date: Date): string {

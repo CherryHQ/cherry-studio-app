@@ -55,6 +55,10 @@ export const PiConfigurationSchema = z.object({
   kind: z.enum(['language', 'image']).default('language'),
   model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
   instructions: z.string(),
+  initialInstructions: z
+    .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+    .max(64)
+    .default([]),
   options: RuntimeOptionsSchema,
   tools: z.array(PiToolBlueprintSchema),
   webTools: z
