@@ -101,6 +101,11 @@ const MOBILE_CATALOG_EXCLUDED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set
   'ollama',
   'ovms',
   'new-api',
+  // The chat runtime does not support these presets' optional authentication yet.
+  'litellm',
+  'omlx',
+  // Requires dedicated model discovery and image transport.
+  'comfyui',
   // Requires the external Claude Code CLI runtime.
   'claude-code',
   // Require credential fields and adapters that Mobile does not support yet.
