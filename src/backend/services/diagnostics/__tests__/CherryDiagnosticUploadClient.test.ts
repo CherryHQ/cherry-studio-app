@@ -28,6 +28,7 @@ const reportId = '550e8400-e29b-41d4-a716-446655440000';
 const acknowledgement = {
   id: reportId,
   status: 'pending',
+  source: 'app',
   status_url: `https://api.cherry-ai.com/diagnostics/${reportId}`,
   created_at: '2026-08-25T10:00:00Z',
 };
@@ -50,7 +51,7 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-test('signs the final archive and exact normalized description with the ten-line v2 contract', async () => {
+test('sends the app source without changing the ten-line v2 signature contract', async () => {
   const startedAt = Date.parse('2026-08-25T10:00:00Z');
   const now = jest.spyOn(Date, 'now').mockReturnValue(startedAt);
   mockNative.sha256.mockImplementation(async () => {
@@ -90,6 +91,7 @@ test('signs the final archive and exact normalized description with the ten-line
   expect(headers).toEqual({
     'X-Signature-Version': '2',
     'X-Client-ID': 'cherry-studio',
+    'X-Diagnostics-Source': 'app',
     'X-Timestamp': timestamp,
     'X-Request-ID': headers['X-Request-ID'],
     'X-File-Size': archive.length.toString(),
@@ -168,6 +170,7 @@ test.each([
   [400, 'invalid_content_type', 'submission_rejected'],
   [400, 'invalid_file_size', 'invalid_archive'],
   [400, 'invalid_diagnostic_archive', 'invalid_archive'],
+  [400, 'invalid_diagnostic_source', 'submission_rejected'],
   [401, 'unsupported_signature_version', 'authentication_failed'],
   [401, 'invalid_signature_headers', 'authentication_failed'],
   [401, 'invalid_timestamp', 'authentication_failed'],

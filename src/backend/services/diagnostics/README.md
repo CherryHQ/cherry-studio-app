@@ -119,6 +119,12 @@ Technical identifiers can still be private; the dialog describes the scope befor
 `description` and `file` multipart fields. The native transport owns the multipart body,
 boundary, and matching Content-Type. The ZIP is streamed from disk rather than loaded into JS memory.
 
+Mobile sends one `X-Diagnostics-Source: app` header to classify uploads. It is not a multipart field
+and is excluded from the unchanged v2 signature. Both existing native transports forward this
+header map, so the source addition requires no native rebuild or extra environment variable.
+Deploy the source-aware API first; older service instances ignore this header and classify uploads
+as `desktop`. An `invalid_diagnostic_source` rejection maps to submission rejection.
+
 Availability requires the native module's `isUploadConfigured` capability and a provisioned
 signing credential. Missing credentials or an older development client return `not_configured`
 before collecting data or generating a ZIP. Before uploading, the adapter checks the ZIP's

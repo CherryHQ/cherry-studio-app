@@ -22,6 +22,7 @@ const ERROR_REASONS: Record<string, DiagnosticUploadFailureReason | undefined> =
   invalid_content_type: 'submission_rejected',
   invalid_file_size: 'invalid_archive',
   invalid_diagnostic_archive: 'invalid_archive',
+  invalid_diagnostic_source: 'submission_rejected',
   unsupported_signature_version: 'authentication_failed',
   invalid_signature_headers: 'authentication_failed',
   invalid_timestamp: 'authentication_failed',
@@ -87,6 +88,7 @@ export class CherryDiagnosticUploadClient {
     const headers: Record<string, string> = {
       'X-Signature-Version': '2',
       'X-Client-ID': CLIENT_ID,
+      'X-Diagnostics-Source': 'app',
       'X-Timestamp': timestamp,
       'X-Request-ID': requestId,
       'X-File-Size': fileSize.toString(),
