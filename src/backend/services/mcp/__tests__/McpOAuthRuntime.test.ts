@@ -5,7 +5,6 @@ import {
   registerClient,
 } from '@modelcontextprotocol/client';
 import * as SecureStore from 'expo-secure-store';
-import { fetch as expoFetch } from 'expo/fetch';
 
 import { createHttpClient, HttpError } from '@/backend/services/http';
 
@@ -15,9 +14,8 @@ jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { scheme: 'cherrystudio-dev' } },
 }));
-jest.mock('expo/fetch', () => ({
-  fetch: jest.fn(async () => new Response(null, { status: 401 })),
-}));
+const mockExpoFetch = jest.fn();
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockExpoFetch(...args) }));
 jest.mock('@modelcontextprotocol/client', () => ({
   ...jest.requireActual('@modelcontextprotocol/client'),
   discoverOAuthServerInfo: jest.fn(),
@@ -50,6 +48,7 @@ const token = { access_token: 'test-access', refresh_token: 'test-refresh', toke
 const storage = new Map<string, string>();
 beforeEach(() => {
   jest.clearAllMocks();
+  mockExpoFetch.mockResolvedValue(new Response(null, { status: 401 }));
   storage.clear();
   mockRequest.mockResolvedValue({ data: '{}', headers: {}, status: 200 });
   jest.mocked(SecureStore.getItemAsync).mockImplementation(async (key) => storage.get(key) ?? null);
@@ -150,8 +149,11 @@ describe('native remote MCP authorization', () => {
       '/token',
     ]);
     // Only the MCP challenge probe can open a stream and uses the specialized fetch path.
-    expect(expoFetch).toHaveBeenCalledTimes(1);
-    expect(expoFetch).toHaveBeenCalledWith(endpointUrl, expect.objectContaining({ method: 'GET' }));
+    expect(mockExpoFetch).toHaveBeenCalledTimes(1);
+    expect(mockExpoFetch).toHaveBeenCalledWith(
+      endpointUrl,
+      expect.objectContaining({ method: 'GET' }),
+    );
     await runtime.stop();
   });
 
@@ -171,7 +173,7 @@ describe('native remote MCP authorization', () => {
 
   it('closes the MCP challenge stream without waiting for its body to finish', async () => {
     const cancel = jest.fn();
-    jest.mocked(expoFetch).mockResolvedValueOnce(
+    mockExpoFetch.mockResolvedValueOnce(
       new Response(new ReadableStream({ cancel }), {
         headers: { 'Content-Type': 'text/event-stream' },
       }),

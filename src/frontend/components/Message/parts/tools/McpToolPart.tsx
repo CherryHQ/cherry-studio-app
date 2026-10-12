@@ -8,7 +8,11 @@ import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpT
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { McpAppLauncher } from '@/frontend/components/McpApp';
+import {
+  McpAppConversationBridge,
+  McpAppLauncher,
+  useMcpAppConversation,
+} from '@/frontend/components/McpApp';
 import {
   type CherryToolMeta,
   readCherryMeta,
@@ -33,6 +37,7 @@ const MAX_ARG_VALUE_LENGTH = 1200;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
+  const conversation = useMcpAppConversation();
   const toolName = getToolName(part);
   const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
@@ -52,30 +57,32 @@ export function McpToolPart({ part }: McpToolPartProps) {
       testID="mcp-tool-part"
       title={title}
     >
-      {normalizedOutput ? (
-        <McpOutputSection normalized={normalizedOutput} source={part.mcpSource} />
-      ) : null}
-      {part.state === 'output-available' && part.mcpApp ? (
-        <McpAppLauncher reference={part.mcpApp} input={part.input} result={part.output} />
-      ) : null}
-      {readCherryMeta(part)?.settledByApp ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.mcpTool.response')}
-          value={t('chat.mcpTool.unfinishedDetail')}
+      <McpAppConversationBridge value={conversation}>
+        {part.state === 'output-available' && part.mcpApp ? (
+          <McpAppLauncher reference={part.mcpApp} input={part.input} result={part.output} />
+        ) : null}
+        {normalizedOutput ? (
+          <McpOutputSection normalized={normalizedOutput} source={part.mcpSource} />
+        ) : null}
+        {readCherryMeta(part)?.settledByApp ? (
+          <MessagePart.TextSection
+            tone="danger"
+            title={t('chat.mcpTool.response')}
+            value={t('chat.mcpTool.unfinishedDetail')}
+          />
+        ) : part.state === 'output-error' ? (
+          <MessagePart.TextSection
+            tone="danger"
+            title={t('chat.mcpTool.response')}
+            value={part.errorText}
+          />
+        ) : null}
+        <MessagePart.ValueSection
+          maxLength={MAX_ARG_VALUE_LENGTH}
+          title={t('chat.mcpTool.arguments')}
+          value={part.input}
         />
-      ) : part.state === 'output-error' ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.mcpTool.response')}
-          value={part.errorText}
-        />
-      ) : null}
-      <MessagePart.ValueSection
-        maxLength={MAX_ARG_VALUE_LENGTH}
-        title={t('chat.mcpTool.arguments')}
-        value={part.input}
-      />
+      </McpAppConversationBridge>
     </MessagePart.Tool>
   );
 }

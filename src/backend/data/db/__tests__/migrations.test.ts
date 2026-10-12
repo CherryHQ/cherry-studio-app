@@ -509,6 +509,7 @@ describe('bundled SQLite migrations', () => {
         'disabled_tools',
         'created_at',
         'updated_at',
+        'oauth',
       ]);
       expect(columnNames(database, 'plugin_authorization')).toEqual([
         'id',

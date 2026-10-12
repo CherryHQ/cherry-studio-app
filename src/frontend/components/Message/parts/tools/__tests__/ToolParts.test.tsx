@@ -14,6 +14,12 @@ type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool
 const mockSetStringAsync = jest.fn().mockResolvedValue(true);
 const mockToastShow = jest.fn();
 
+jest.mock('@/frontend/components/McpApp', () => ({
+  McpAppLauncher: () => null,
+  McpAppConversationBridge: ({ children }: { children: ReactNode }) => children,
+  useMcpAppConversation: () => null,
+}));
+
 jest.mock('expo-clipboard', () => ({ setStringAsync: (text: string) => mockSetStringAsync(text) }));
 
 jest.mock('react-i18next', () => ({

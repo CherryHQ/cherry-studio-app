@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { useComposerActions, useComposerMeta } from '@/frontend/components/Composer';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import { useMcpAppConversation } from '@/frontend/components/McpApp';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpContentEntry, McpContentPreview } from '@/shared/contracts/mcp';
@@ -24,8 +24,7 @@ export function McpContentPicker({
   const mcp = useBackendModule('mcp');
   const files = useBackendModule('file');
   const { servers } = useMcpServersApi();
-  const { inputRef } = useComposerMeta();
-  const { addAttachments } = useComposerActions();
+  const conversation = useMcpAppConversation();
   const [source, setSource] = useState<{ id: string; name: string }>();
   const [catalog, setCatalog] = useState<McpContentEntry[]>();
   const [entry, setEntry] = useState<McpContentEntry>();
@@ -122,11 +121,9 @@ export function McpContentPicker({
         }
       }
       controller.signal.throwIfAborted();
-      if (!inputRef.current) throw new Error('The composer is unavailable.');
-      inputRef.current.insertText(
-        `\n[${preview.serverName} / ${preview.title}]\n${preview.text}\n`,
-      );
-      addAttachments(attachments);
+      if (!conversation) throw new Error('The composer is unavailable.');
+      conversation.message(`[${preview.serverName} / ${preview.title}]\n${preview.text}`);
+      conversation.addAttachments(attachments);
       onClose();
     } catch {
       await Promise.allSettled(
@@ -209,7 +206,7 @@ export function McpContentPicker({
                   setError(false);
                 }}
               >
-                {item.title} · {t(`mcp.content.${item.kind}`)}
+                {`${item.title} · ${t(`mcp.content.${item.kind}`)}`}
               </Button>
             ))}
           </>

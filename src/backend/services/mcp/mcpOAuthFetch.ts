@@ -1,5 +1,3 @@
-import type { FetchLike } from '@modelcontextprotocol/client';
-
 import { createHttpClient, type HttpClient } from '@/backend/services/http';
 import { McpAuthorizationError } from '@/shared/contracts/mcp';
 
@@ -18,10 +16,10 @@ export function assertMcpOAuthUrl(value: string | URL): URL {
 }
 
 /** Adapt SDK metadata/form requests to the shared non-streaming HTTP transport. */
-export function createMcpOAuthFetch(): FetchLike {
+export function createMcpOAuthFetch() {
   const clients = new Map<string, HttpClient>();
 
-  return async (input, init) => {
+  return async (input: string | URL | Request, init?: RequestInit) => {
     const url = assertMcpOAuthUrl(input instanceof Request ? input.url : String(input));
     const form = init?.body instanceof URLSearchParams ? init.body : undefined;
     const formHeaders = form

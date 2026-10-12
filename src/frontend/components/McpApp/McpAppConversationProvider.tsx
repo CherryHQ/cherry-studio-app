@@ -3,12 +3,14 @@ import { createContext, type PropsWithChildren, use, useMemo, useRef, useState }
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { useComposerMeta } from '@/frontend/components/Composer';
+import { useComposerActions, useComposerMeta } from '@/frontend/components/Composer';
+import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 
 type AppContextEntry = { key: string; title: string; text: string };
 type AppConversationActions = {
   agentId?: string;
   message(text: string): void;
+  addAttachments(attachments: ComposerAttachmentReady[]): void;
   updateContext(key: string, title: string, text: string): void;
   snapshot(): readonly AppContextEntry[];
   consumed(snapshot: readonly AppContextEntry[]): void;
@@ -23,6 +25,7 @@ export function McpAppConversationProvider({
   agentId,
 }: PropsWithChildren<{ enabled: boolean; agentId?: string }>) {
   const { inputRef } = useComposerMeta();
+  const { addAttachments } = useComposerActions();
   const pending = useRef<readonly AppContextEntry[]>([]);
   const [entries, setEntries] = useState<readonly AppContextEntry[]>([]);
   const actions = useMemo<AppConversationActions>(() => {
@@ -32,6 +35,7 @@ export function McpAppConversationProvider({
     };
     return {
       agentId,
+      addAttachments,
       message(text) {
         if (!inputRef.current) throw new Error('The conversation input is unavailable.');
         inputRef.current.insertText(`\n${text}\n`);
@@ -45,7 +49,7 @@ export function McpAppConversationProvider({
         publish(pending.current.filter((entry) => !snapshot.includes(entry)));
       },
     };
-  }, [agentId, inputRef]);
+  }, [addAttachments, agentId, inputRef]);
   return (
     <ActionsContext value={enabled ? actions : null}>
       <PendingContext value={entries}>{children}</PendingContext>
@@ -54,6 +58,14 @@ export function McpAppConversationProvider({
 }
 export function useMcpAppConversation() {
   return use(ActionsContext);
+}
+
+/** Native tool details mount outside the route; retain that route's draft actions. */
+export function McpAppConversationBridge({
+  children,
+  value,
+}: PropsWithChildren<{ value: AppConversationActions | null }>) {
+  return <ActionsContext value={value}>{children}</ActionsContext>;
 }
 
 /** Context is visible and removable before the user sends the next message. */

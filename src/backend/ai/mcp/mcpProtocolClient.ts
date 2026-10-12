@@ -149,19 +149,39 @@ export async function createRemoteMcpClient(input: {
       if (!response.body || init?.method === 'GET' || method === 'subscriptions/listen')
         return response;
       let bytes = 0;
-      return new Response(
-        response.body.pipeThrough(
-          new TransformStream<Uint8Array, Uint8Array>({
-            transform(chunk, controller) {
-              bytes += chunk.byteLength;
-              if (bytes > MAX_RESPONSE_BYTES)
-                throw new Error('The MCP response exceeds the size limit.');
-              controller.enqueue(chunk);
-            },
-          }),
-        ),
-        { status: response.status, statusText: response.statusText, headers: response.headers },
+      const body = response.body.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          transform(chunk, controller) {
+            bytes += chunk.byteLength;
+            if (bytes > MAX_RESPONSE_BYTES)
+              throw new Error('The MCP response exceeds the size limit.');
+            controller.enqueue(chunk);
+          },
+        }),
       );
+      // React Native's Response constructor stringifies streams instead of consuming them.
+      if (response.ok && response.headers.get('content-type')?.includes('text/event-stream')) {
+        Object.defineProperty(response, 'body', { value: body });
+        return response;
+      }
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+        }
+        text += decoder.decode();
+      } finally {
+        reader.releaseLock();
+      }
+      return new Response([204, 205, 304].includes(response.status) ? null : text, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     },
   });
 

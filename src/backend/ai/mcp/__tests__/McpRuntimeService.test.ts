@@ -226,7 +226,7 @@ function makeService(servers: McpServer[], traces?: TraceRecorder) {
 }
 
 beforeEach(() => {
-  jest.replaceProperty(AppState, 'currentState', 'active');
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   mockCreateMCPClient.mockReset();
   storedFiles.clear();
 });
@@ -406,10 +406,7 @@ describe('listTools', () => {
       Object.assign(new Error('session expired'), { statusCode: 503 }),
     );
     const fresh = makeClient(makeRawTools(['search']));
-    mockCreateMCPClient
-      .mockResolvedValueOnce(stale)
-      .mockResolvedValueOnce(stale)
-      .mockResolvedValue(fresh);
+    mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(fresh);
     const server = makeServer();
     const { service } = makeService([server], traces);
 
@@ -1041,7 +1038,10 @@ describe('catalog reuse', () => {
     );
     const fresh = makeClient(makeRawTools(['search']));
     fresh.callTool.mockResolvedValue({ content: [{ text: 'ok', type: 'text' }] });
-    mockCreateMCPClient.mockResolvedValueOnce(stale).mockResolvedValue(fresh);
+    mockCreateMCPClient
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValue(fresh);
     const server = makeServer();
     const { service } = makeService([server]);
     const [descriptor] = await service.listExecutableToolDescriptors(server.id);

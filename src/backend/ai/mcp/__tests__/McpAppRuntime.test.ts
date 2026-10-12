@@ -31,12 +31,18 @@ function createHarness() {
   };
   const runtime = new McpAppRuntime(ports);
   const responses = new Map<number, (message: Record<string, unknown>) => void>();
+  let initialized!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    initialized = resolve;
+  });
   let viewId = '';
   const channel: McpAppChannel = {
     send: (serialized) => {
       const message = JSON.parse(serialized);
       if (message.method === 'ui/resource-teardown') {
         runtime.receive(viewId, JSON.stringify({ jsonrpc: '2.0', id: message.id, result: {} }));
+      } else if (message.method === 'ui/notifications/tool-result') {
+        initialized();
       } else if ('id' in message && !('method' in message)) {
         responses.get(message.id)?.(message);
         responses.delete(message.id);
@@ -81,6 +87,7 @@ function createHarness() {
       viewId,
       JSON.stringify({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }),
     );
+    await ready;
   };
   return { runtime, ports, channel, controller, open, request, initialize };
 }
