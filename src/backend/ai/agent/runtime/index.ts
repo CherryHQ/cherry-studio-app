@@ -16,7 +16,6 @@ export type {
 export type {
   AgentRuntime,
   AgentRuntimeSession,
-  MessageRuntimeTimingSink,
   RuntimeApproval,
   RuntimeArtifact,
   RuntimeCapabilities,
@@ -59,11 +58,10 @@ export type {
   FakeRuntimeProgram,
 } from './FakeRuntime';
 export { FakeRuntime } from './FakeRuntime';
-export { raceAbort, settleWithin } from './raceAbort';
+export { raceAbort } from './raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';
 export {
   createDeniedToolResult,
   createErrorToolResult,
   createInterruptedToolResult,
-  TOOL_EXECUTION_ERROR,
 } from './toolResults';

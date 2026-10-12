@@ -258,11 +258,6 @@ export type RuntimeToolInputPreview = {
   name?: string;
 };
 
-export interface MessageRuntimeTimingSink {
-  onToolExecutionStart(event: { callId: string; toolName?: string }): void;
-  onToolExecutionEnd(event: { callId: string; toolName?: string; durationMs: number }): void;
-}
-
 export type RuntimeExecutionRequest = {
   /** Retained assistant tool-call/result prefix for a fresh manual retry execution. */
   resume?: RuntimeMessagePart[];
@@ -282,7 +277,6 @@ export type RuntimeExecutionRequest = {
   input: RuntimeInputPart[];
   tools: RuntimeTool[];
   options: RuntimeOptions;
-  runtimeTimingSink?: MessageRuntimeTimingSink;
   /** Optional, best-effort instrumentation; the Host owns collection and storage. */
   trace?: TraceSpan;
 };

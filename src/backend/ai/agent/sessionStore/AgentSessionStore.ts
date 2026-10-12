@@ -27,8 +27,6 @@ export type StoredRuntimeTurnContext = {
   hasMessages: boolean;
   /** Lightweight authorization projection across the complete transcript. */
   referencedFileEntryIds: string[];
-  /** Lightweight checkpoint-anchor projection across the complete transcript. */
-  sessionTurnIds: string[];
 };
 
 export type ReserveSubmissionResult = {
@@ -104,12 +102,6 @@ export type DeleteTurnResult =
   | { status: 'turn-not-found' }
   | { status: 'turn-unsettled' };
 
-export type UpdateStreamingAssistantMessageInput = {
-  assistantMessageId: string;
-  /** The Host's current in-memory projection of the assistant message parts. */
-  parts: AgentMessagePart[];
-};
-
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
   /** Refuse a late completion from an execution that a retry has replaced. */
@@ -153,8 +145,6 @@ export interface AgentSessionStore {
   ): Promise<AgentSessionView | null>;
   /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
-  /** Which of these message ids have a row; lets the Host reserve a turn exactly once. */
-  existingMessageIds(messageIds: readonly string[]): Promise<Set<string>>;
   /** Assistant rows still `pending`/`streaming`; the Host matches them against engine state. */
   listUnsettledAssistantMessages(): Promise<
     { sessionId: string; assistantMessageId: string; turnId: string | null }[]
@@ -197,7 +187,7 @@ export interface AgentSessionStore {
    * Any context checkpoint whose summary covers the removed turn is cleared in
    * the same transaction. The summary text is opaque to the store, so a
    * checkpoint anchored at or after the deleted turn is assumed to contain it;
-   * dropping the checkpoint costs a full replay on the next turn and is the
+   * dropping the checkpoint costs a full-history rebuild on the next turn and is the
    * only way to keep deleted content out of the model's context.
    */
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
@@ -205,8 +195,8 @@ export interface AgentSessionStore {
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 
   /**
-   * Loads the bounded Runtime replay tail plus full-transcript authorization
-   * indexes without materializing every message in the Host.
+   * Loads the history tail a working-copy rebuild imports plus full-transcript
+   * authorization indexes without materializing every message in the Host.
    */
   loadRuntimeTurnContext(
     sessionId: string,
@@ -230,25 +220,8 @@ export interface AgentSessionStore {
   ): Promise<void>;
 
   /**
-   * Durably records the parts an active turn has produced so far and marks the
-   * placeholder `streaming`. A no-op once the row has settled: the terminal
-   * write is the only authority for a settled message.
-   */
-  updateStreamingAssistantMessage(input: UpdateStreamingAssistantMessageInput): Promise<void>;
-
-  /**
    * Atomically settles the assistant message's terminal state before terminal
    * events publish (protocol invariant 5).
    */
   finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView>;
-
-  /**
-   * Marks every unsettled message interrupted and stamps the turn-level error.
-   * Returns the reconciled assistant placeholders so the Host can publish
-   * their settled state to observers attached before recovery ran.
-   */
-  reconcileInterrupted(
-    error: AgentErrorView,
-    options?: { excludeSessionIds?: readonly string[] },
-  ): Promise<AgentMessageView[]>;
 }

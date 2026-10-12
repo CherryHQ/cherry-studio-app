@@ -1,5 +1,6 @@
 import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import type { FileEntryId } from '@/shared/data/types/file';
+import { MAX_PDF_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
 import type { ManagedFileFact, TurnFileScope } from '../../resources/managedFileResolver';
 import type { RuntimeJsonValue, RuntimeToolResult } from '../../runtime';
@@ -235,7 +236,7 @@ describe('readFileTool', () => {
             fileEntryId: FILE_ID,
             mediaType: 'application/pdf',
             name: 'report.pdf',
-            size: 2 * 1024 * 1024,
+            size: MAX_PDF_ATTACHMENT_BYTES,
           },
         ],
       ]),
@@ -309,6 +310,23 @@ describe('readFileTool', () => {
       nextOffset: 5,
       complete: false,
       text: '🍒c',
+    });
+  });
+
+  test('reads beyond the old 1 MiB text ceiling without expanding the output window', async () => {
+    const prefix = 'x'.repeat(2 * 1024 * 1024);
+    const tool = createReadFileTool(createFiles(`${prefix}🍒tail`), IN_SCOPE);
+    const output = await execute(tool, {
+      file_entry_id: FILE_ID,
+      offset: prefix.length,
+      max_characters: 2,
+    });
+    expect(output.value).toMatchObject({
+      status: 'ok',
+      text: '🍒t',
+      characterCount: 2,
+      nextOffset: prefix.length + 2,
+      complete: false,
     });
   });
 

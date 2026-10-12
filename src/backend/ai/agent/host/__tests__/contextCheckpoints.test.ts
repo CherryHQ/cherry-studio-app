@@ -1,11 +1,10 @@
 import {
   MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES,
-  validateRuntimeContextCheckpoint,
   validateRuntimeContextCheckpointCandidate,
 } from '../contextCheckpoints';
 
 describe('Runtime context checkpoints', () => {
-  test('accepts a valid candidate whose anchor belongs to the Session', () => {
+  test('accepts a valid candidate', () => {
     const checkpoint = {
       version: 1 as const,
       anchorTurnId: 'turn-1',
@@ -13,10 +12,6 @@ describe('Runtime context checkpoints', () => {
     };
 
     expect(validateRuntimeContextCheckpointCandidate(checkpoint)).toEqual({
-      checkpoint,
-      issue: null,
-    });
-    expect(validateRuntimeContextCheckpoint(checkpoint, new Set(['turn-1']))).toEqual({
       checkpoint,
       issue: null,
     });
@@ -36,15 +31,6 @@ describe('Runtime context checkpoints', () => {
     });
   });
 
-  test('rejects a candidate whose anchor does not belong to the Session', () => {
-    expect(
-      validateRuntimeContextCheckpoint(
-        { version: 1, anchorTurnId: 'missing', payload: {} },
-        new Set(['turn-1']),
-      ),
-    ).toEqual({ checkpoint: null, issue: 'CONTEXT_CHECKPOINT_ANCHOR_INVALID' });
-  });
-
   test('rejects an oversized payload without truncating it', () => {
     const checkpoint = {
       version: 1 as const,
@@ -52,7 +38,7 @@ describe('Runtime context checkpoints', () => {
       payload: 'x'.repeat(MAX_RUNTIME_CONTEXT_CHECKPOINT_BYTES),
     };
 
-    expect(validateRuntimeContextCheckpoint(checkpoint, new Set(['turn-1']))).toEqual({
+    expect(validateRuntimeContextCheckpointCandidate(checkpoint)).toEqual({
       checkpoint: null,
       issue: 'CONTEXT_CHECKPOINT_TOO_LARGE',
     });

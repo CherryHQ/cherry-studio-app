@@ -1,4 +1,7 @@
-import { MAX_DOCUMENT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+import {
+  MAX_DOCUMENT_ATTACHMENT_BYTES,
+  MAX_PDF_ATTACHMENT_BYTES,
+} from '@/shared/utils/fileAttachmentPolicy';
 
 import { extractPdfText } from '../../../../../modules/pdf-text-extractor';
 import { DocumentTextError, readDocumentUriText } from '../documentText';
@@ -26,6 +29,7 @@ beforeEach(() => {
 
 describe('managed document text', () => {
   test('uses the existing native PDF parser with a page ceiling and preserves incomplete extraction', async () => {
+    mockFile.size = MAX_PDF_ATTACHMENT_BYTES;
     await expect(
       readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
     ).resolves.toEqual({
@@ -37,10 +41,23 @@ describe('managed document text', () => {
   });
 
   test('rejects an oversized managed blob before native extraction', async () => {
-    mockFile.size = MAX_DOCUMENT_ATTACHMENT_BYTES + 1;
+    mockFile.size = MAX_PDF_ATTACHMENT_BYTES + 1;
     await expect(
       readDocumentUriText(URI, 'application/pdf', new AbortController().signal),
     ).rejects.toMatchObject({ failure: 'file-bytes' });
+    expect(extractPdfText).not.toHaveBeenCalled();
+  });
+
+  test('keeps the Office ceiling smaller than the PDF ceiling before reading bytes', async () => {
+    mockFile.size = MAX_DOCUMENT_ATTACHMENT_BYTES + 1;
+    await expect(
+      readDocumentUriText(
+        'file:///managed/document.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ failure: 'file-bytes' });
+    expect(readFileUriBytes).not.toHaveBeenCalled();
     expect(extractPdfText).not.toHaveBeenCalled();
   });
 

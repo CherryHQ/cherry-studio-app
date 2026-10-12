@@ -101,6 +101,7 @@ export function createBackend(
   const exportFiles = new FileEntryService(dbService);
   infrastructure.remoteAgent.configure({
     connections: infrastructure.desktopConnectionManager,
+    files: services.fileContent,
     background: infrastructure.remoteBackground,
     journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
   });

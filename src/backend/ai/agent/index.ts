@@ -42,5 +42,4 @@ export {
   FakeRuntime,
   RuntimeContextCheckpointSchema,
   RuntimeJsonValueSchema,
-  TOOL_EXECUTION_ERROR,
 } from './runtime';

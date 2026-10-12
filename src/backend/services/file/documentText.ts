@@ -5,7 +5,7 @@ import {
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
 import {
-  MAX_DOCUMENT_ATTACHMENT_BYTES,
+  documentAttachmentByteLimit,
   MAX_PDF_ATTACHMENT_PAGES,
 } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -32,7 +32,8 @@ export async function readDocumentUriText(
   const type = documentFileTypeFromMediaType(mediaType);
   if (!type || (type !== 'pdf' && !isBuiltinOfficeFileType(type)))
     throw new DocumentTextError('invalid');
-  if (new File(uri).size > MAX_DOCUMENT_ATTACHMENT_BYTES) throw new DocumentTextError('file-bytes');
+  const maxBytes = documentAttachmentByteLimit(mediaType);
+  if (new File(uri).size > maxBytes) throw new DocumentTextError('file-bytes');
 
   let result: ExtractedDocumentText;
   try {
@@ -42,8 +43,7 @@ export async function readDocumentUriText(
       result = { text: extracted.text.trim(), truncated: extracted.isTruncated };
     } else {
       const bytes = await readFileUriBytes(uri, signal);
-      if (bytes.byteLength > MAX_DOCUMENT_ATTACHMENT_BYTES)
-        throw new DocumentTextError('file-bytes');
+      if (bytes.byteLength > maxBytes) throw new DocumentTextError('file-bytes');
       const { extractOfficeText } = await import('./officeText');
       signal.throwIfAborted();
       result = extractOfficeText(bytes, type);

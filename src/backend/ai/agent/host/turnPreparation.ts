@@ -101,11 +101,9 @@ export type TurnPlan = {
   modelPreflight: RuntimeModelPreflight | null;
   imageGeneration?: AgentImageGenerationPlan;
   resources: TurnResourceLedger;
-  runtime: AgentRuntime;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
   runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
-  sessionTurnIds: readonly string[];
   tools: readonly RuntimeTool[];
   pluginGuides: readonly PluginGuideSnapshot[];
   toolDiscoveryWarnings: readonly string[];
@@ -181,8 +179,9 @@ export async function prepareTurn(
 
 /**
  * Resolve the stored compaction checkpoint and the history it anchors. Every
- * turn — submission or retry — reads history through this path, so no caller
- * replays a full transcript the Runtime has already summarized.
+ * working-copy rebuild — a submission without a current copy, or a retry —
+ * reads history through this path, so no caller imports a full transcript the
+ * Runtime has already summarized.
  */
 export async function loadTurnContext(
   dependencies: Pick<TurnPreparationDependencies, 'store'>,
@@ -244,7 +243,6 @@ export async function prepareInitialTurn(
     hasMessages: false,
     history: [],
     referencedFileEntryIds: [],
-    sessionTurnIds: [],
   };
 
   return prepareResolvedTurn(
@@ -280,7 +278,6 @@ export async function prepareDurableTurn(
       hasMessages: true,
       history: [],
       referencedFileEntryIds: [...referencedFileEntryIds],
-      sessionTurnIds: [],
     },
     null,
     dependencies.documentParserMode(),
@@ -356,11 +353,9 @@ export async function prepareResolvedTurn(
       inputParts: parts,
       modelPreflight: null,
       resources,
-      runtime,
       runtimeContextCheckpoint: null,
       runtimeContentAttachments: new Map(),
       sessionTitle: session.name,
-      sessionTurnIds: storedTurnContext.sessionTurnIds,
       tools: [],
       pluginGuides: [],
       toolDiscoveryWarnings: [],
@@ -499,11 +494,9 @@ export async function prepareResolvedTurn(
     inputParts: parts,
     modelPreflight,
     resources,
-    runtime,
     runtimeContextCheckpoint,
     runtimeContentAttachments,
     sessionTitle: session.name,
-    sessionTurnIds: storedTurnContext.sessionTurnIds,
     tools,
     toolDiscoveryWarnings,
     userParts,

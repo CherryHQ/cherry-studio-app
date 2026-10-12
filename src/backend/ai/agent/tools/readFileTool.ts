@@ -24,6 +24,7 @@ import {
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
+import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
 import type {
   ManagedFileFact,
@@ -34,7 +35,7 @@ import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
 export const READ_FILE_TOOL_NAME = 'read_file';
-export const READ_FILE_MAX_SOURCE_BYTES = 1_048_576;
+export const READ_FILE_MAX_SOURCE_BYTES = MAX_TEXT_ATTACHMENT_BYTES;
 export const READ_FILE_DEFAULT_LINE_LIMIT = 500;
 export const READ_FILE_MAX_LINE_LIMIT = 2_000;
 /** Below the attachment projection budget: a read is a window, not an attachment. */
@@ -85,7 +86,7 @@ export function createReadFileTool(
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
 ): RuntimeTool {
   /**
-   * The last document this turn parsed, so paging a 20 MiB document parses it
+   * The last document this turn parsed, so paging a large document parses it
    * once rather than once per window. A document id always names the same
    * content — only UTF-8 drafts are rewritten in place — so it never goes stale.
    */

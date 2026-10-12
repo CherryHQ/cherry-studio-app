@@ -8,6 +8,16 @@ const SCANNER_ACTIVITY =
 module.exports = (config) =>
   withAndroidManifest(config, (mod) => {
     const manifest = AndroidConfig.Manifest.ensureToolsAvailable(mod.modResults);
+    // Scanning and taking photos are optional; CAMERA must not filter device installs.
+    for (const name of ['android.hardware.camera', 'android.hardware.camera.autofocus']) {
+      const features = (manifest.manifest['uses-feature'] ??= []);
+      const feature = features.find((entry) => entry.$['android:name'] === name);
+      if (feature) {
+        feature.$['android:required'] = 'false';
+      } else {
+        features.push({ $: { 'android:name': name, 'android:required': 'false' } });
+      }
+    }
     const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
     application.activity = [
       ...(application.activity ?? []).filter(

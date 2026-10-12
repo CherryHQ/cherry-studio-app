@@ -314,9 +314,7 @@ projection:
 - Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
-  native admission is interrupted with its saved parts retained. The old store streaming-snapshot
-  and bulk-interruption methods remain available to store consumers, but are not the Pi recovery
-  strategy.
+  native admission is interrupted with its saved parts retained.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
@@ -351,7 +349,7 @@ projection:
   schema version, anchor membership, and the 256 KiB payload ceiling. Invalid, incompatible,
   oversized, or orphaned candidates are classified in logs and ignored; execution receives full
   history instead. The store resolves anchor membership and loads rows after the anchor directly;
-  it also returns lightweight full-transcript Turn-id and file-reference indexes, so the Host does
+  it also returns a lightweight full-transcript file-reference index, so the Host does
   not materialize the complete transcript merely to discard its checkpoint-covered prefix.
 - Turn reads and live-status transitions leave the store: the Host holds the active turn's live
   state (`running`/`awaiting-approval`/`cancelling`) in memory and synthesizes `AgentTurnView`

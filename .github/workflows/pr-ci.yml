@@ -5,10 +5,15 @@ permissions:
 
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     branches:
       - main
-    types: [ready_for_review, synchronize, opened]
+    types: [ready_for_review, synchronize, opened, reopened]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -89,6 +94,13 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        env:
+          SHELLCHECK_OPTS: --severity=error
+        with:
+          args: -color
+
       - name: Lint Check
         run: pnpm lint
 
@@ -98,6 +110,12 @@ jobs:
       - name: UI Boundary Check
         run: pnpm ui:check-boundaries
 
+      - name: AI Runtime Boundary Check
+        run: pnpm --filter @cherrystudio/ai-runtime check:boundaries
+
+      - name: Design Contract Check
+        run: pnpm design:check
+
       - name: Format Check
         run: pnpm format:check
 
@@ -106,3 +124,12 @@ jobs:
 
       - name: Skill Check
         run: pnpm skills:check
+
+  ci:
+    name: CI
+    needs: [test, typecheck, lint]
+    if: always() && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every check to succeed
+        run: test "${{ needs.test.result }}${{ needs.typecheck.result }}${{ needs.lint.result }}" = successsuccesssuccess
