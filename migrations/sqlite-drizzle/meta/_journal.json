@@ -57,13 +57,6 @@
       "when": 1791630575230,
       "tag": "0007_agent_mode",
       "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "6",
-      "when": 1791784283689,
-      "tag": "0008_restore_agent_skills",
-      "breakpoints": true
     }
   ]
 }

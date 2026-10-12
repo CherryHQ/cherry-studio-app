@@ -2,50 +2,10 @@ import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 type MigrationJournal = {
-  entries: { idx: number; tag: string; when: number }[];
+  entries: { idx: number; tag: string }[];
 };
 
 describe('bundled SQLite migrations', () => {
-  test('restores Skills after the earlier minimal-mode development migration without resetting data', () => {
-    const database = new DatabaseSync(':memory:');
-    try {
-      database.exec('PRAGMA foreign_keys = ON');
-      const journal = readMigrationJournal();
-      const files = readMigrationSqlFiles();
-      for (const sql of files.slice(0, 6)) applyMigrationSql(database, sql);
-      const modeIndex = journal.entries.findIndex(({ tag }) => tag === '0007_agent_mode');
-      applyMigrationSql(database, files[modeIndex]!);
-      database.exec(`
-        INSERT INTO agent (id, name, mode, order_key, created_at, updated_at)
-        VALUES ('existing', 'Chat', 'minimal', 'a0', 1, 1);
-        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
-        VALUES ('session', 'existing', 'History', 1, 1, 1);
-      `);
-      // Expo's migrator compares timestamps, not the renamed journal tag.
-      const previousTimestamp = journal.entries[modeIndex]!.when;
-      for (const [index, entry] of journal.entries.entries()) {
-        if (entry.when > previousTimestamp) applyMigrationSql(database, files[index]!);
-      }
-      expect(columnNames(database, 'agent_global_skill')).toContain('content_hash');
-      expect(columnNames(database, 'agent_skill')).toContain('skill_id');
-      expect(database.prepare('SELECT name, mode FROM agent').get()).toEqual({
-        name: 'Chat',
-        mode: 'minimal',
-      });
-      expect(database.prepare('SELECT agent_id, name FROM agent_session').get()).toEqual({
-        agent_id: 'existing',
-        name: 'History',
-      });
-      const repairIndex = journal.entries.findIndex(
-        ({ tag }) => tag === '0008_restore_agent_skills',
-      );
-      applyMigrationSql(database, files[repairIndex]!);
-      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      database.close();
-    }
-  });
-
   test('defaults existing and new Agents to standard mode without changing configuration or sessions', () => {
     const database = new DatabaseSync(':memory:');
     try {

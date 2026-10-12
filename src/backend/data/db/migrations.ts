@@ -6,7 +6,6 @@ import m0004 from '../../../../migrations/sqlite-drizzle/0004_agent_message_repl
 import m0005 from '../../../../migrations/sqlite-drizzle/0005_drop_agent_message_replay.sql';
 import m0006 from '../../../../migrations/sqlite-drizzle/0006_agent_skills.sql';
 import m0007 from '../../../../migrations/sqlite-drizzle/0007_agent_mode.sql';
-import m0008 from '../../../../migrations/sqlite-drizzle/0008_restore_agent_skills.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -25,6 +24,5 @@ export const migrations = {
     m0005,
     m0006,
     m0007,
-    m0008,
   },
 };
