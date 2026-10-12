@@ -8,7 +8,12 @@
  * as `"{name} - AI model provider"`). The GENERATION-only fields below (`modelsDevProvider` / `fetchModels`
  * / `overrides`) drive `provider-models.json` and are NOT emitted to `providers.json`.
  */
-import type { ApiFeatures, ProviderConfig, ProviderReasoningFormat } from '../schemas/provider';
+import type {
+  ApiFeatures,
+  ProviderConfig,
+  ProviderReasoningFormat,
+  ServerToolConfig,
+} from '../schemas/provider';
 import type { ProviderModelOverride } from '../schemas/provider-models';
 
 /**
@@ -25,6 +30,7 @@ type ProviderConnection = Omit<
   | 'modelListSource'
   | 'authOptional'
   | 'reportsActualCost'
+  | 'serverTools'
 > & {
   endpointConfigs: Partial<ProviderConfig['endpointConfigs']>;
   defaultChatEndpoint?: ProviderConfig['defaultChatEndpoint'];
@@ -34,12 +40,21 @@ type ProviderConnection = Omit<
   authOptional?: ProviderConfig['authOptional'];
   /** Defaults false; only providers with authoritative billed usage declare it. */
   reportsActualCost?: ProviderConfig['reportsActualCost'];
+  serverTools?: ProviderServerToolConfig[];
   /** Only the non-default flags are declared; the schema fills the rest at load time. */
   apiFeatures?: Partial<ApiFeatures>;
 };
 
-/** A provider as emitted to `providers.json`: the connection config plus its templated `description`. */
-export type ProviderEntry = ProviderConnection & { description: string };
+/** Reviewed model IDs are emitted separately from public connection declarations. */
+export type ProviderServerToolConfig = ServerToolConfig & {
+  modelIds?: string[];
+};
+
+/** A provider as emitted to `providers.json`, without generation-only selectors. */
+export type ProviderEntry = Omit<ProviderConnection, 'serverTools'> & {
+  description: string;
+  serverTools?: ProviderConfig['serverTools'];
+};
 
 /** A provider's website links (official / docs / apiKey / models). */
 type ProviderWebsite = ProviderConfig['metadata']['website'];
@@ -81,6 +96,7 @@ export function openaiCompatible(
     reasoningFormat?: ProviderReasoningFormat;
     authMethods?: ProviderConfig['authMethods'];
     authOptional?: ProviderConfig['authOptional'];
+    serverTools?: ProviderServerToolConfig[];
   } & GenFields,
 ): Provider {
   const endpointConfigs: ProviderConnection['endpointConfigs'] = {
@@ -101,6 +117,7 @@ export function openaiCompatible(
     ...(p.apiFeatures ? { apiFeatures: p.apiFeatures } : {}),
     ...(p.authMethods ? { authMethods: p.authMethods } : {}),
     ...(p.authOptional ? { authOptional: p.authOptional } : {}),
+    ...(p.serverTools ? { serverTools: p.serverTools } : {}),
     ...(p.presetProviderId ? { presetProviderId: p.presetProviderId } : {}),
     ...(p.modelsDevProvider ? { modelsDevProvider: p.modelsDevProvider } : {}),
     ...(p.fetchModels ? { fetchModels: p.fetchModels } : {}),

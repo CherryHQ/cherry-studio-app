@@ -1,4 +1,5 @@
 import type { ReasoningWireProfile } from '../schemas/reasoningWire';
+import { CLAUDE_WEB_TOOL_MODELS } from './serverToolModels';
 import { defineProvider } from './types';
 
 const budgetThinkingWire: ReasoningWireProfile = {
@@ -47,6 +48,20 @@ export default defineProvider({
       baseUrl: 'https://api.anthropic.com',
     },
   },
+  serverTools: [
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['anthropic-messages'],
+      modelIds: CLAUDE_WEB_TOOL_MODELS,
+    },
+    {
+      id: 'url-context',
+      modelScope: 'model-dependent',
+      endpointTypes: ['anthropic-messages'],
+      modelIds: CLAUDE_WEB_TOOL_MODELS,
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://console.anthropic.com/settings/keys',

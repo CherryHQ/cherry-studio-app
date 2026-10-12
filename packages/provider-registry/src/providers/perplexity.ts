@@ -10,6 +10,15 @@ export default defineProvider({
       baseUrl: 'https://api.perplexity.ai/',
     },
   },
+  serverTools: [
+    // Sonar models search on every request; there is no tool to add.
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-chat-completions'],
+      modelIds: ['sonar', 'sonar-deep-research', 'sonar-pro', 'sonar-reasoning-pro'],
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://www.perplexity.ai/settings/api',

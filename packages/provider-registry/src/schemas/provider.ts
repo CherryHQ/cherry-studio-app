@@ -6,11 +6,25 @@
 import * as z from 'zod';
 
 import { MetadataSchema, ProviderIdSchema, VersionSchema, ZodCurrencySchema } from './common';
-import { ENDPOINT_TYPE, type EndpointType, objectValues } from './enums';
+import {
+  ENDPOINT_TYPE,
+  type EndpointType,
+  objectValues,
+  SERVER_TOOL,
+  SERVER_TOOL_MODEL_SCOPE,
+} from './enums';
 import { ReasoningWireProfileSchema } from './reasoningWire';
 
 export const EndpointTypeSchema = z.enum(objectValues(ENDPOINT_TYPE));
 const endpointTypeValues: readonly string[] = objectValues(ENDPOINT_TYPE);
+
+/** Provider-native tools; model eligibility is compiled from provider-owned selectors. */
+export const ServerToolConfigSchema = z.object({
+  id: z.enum(objectValues(SERVER_TOOL)),
+  modelScope: z.enum(objectValues(SERVER_TOOL_MODEL_SCOPE)).default('model-dependent'),
+  endpointTypes: z.array(EndpointTypeSchema).optional(),
+});
+export type ServerToolConfig = z.infer<typeof ServerToolConfigSchema>;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // API Features
@@ -234,6 +248,7 @@ export const ProviderConfigSchema = z
     authOptional: z.boolean().default(false),
     /** API feature flags controlling request construction */
     apiFeatures: ApiFeaturesSchema.optional(),
+    serverTools: z.array(ServerToolConfigSchema).default([]),
     /** Whether usage responses carry the actual billed amount. */
     reportsActualCost: z.boolean().default(false),
     /**

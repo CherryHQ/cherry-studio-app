@@ -56,6 +56,11 @@ const GEN_ONLY_PROVIDER_FIELDS = ['modelsDevProvider', 'fetchModels', 'overrides
 const expectedProviderPayload = (p: Record<string, unknown>) => {
   const conn = { ...p };
   for (const k of GEN_ONLY_PROVIDER_FIELDS) delete conn[k];
+  // Reviewed model ids compile into the eligibility module, never into the public row.
+  if (Array.isArray(conn.serverTools))
+    conn.serverTools = conn.serverTools.map(
+      ({ modelIds: _ids, ...tool }: Record<string, unknown>) => tool,
+    );
   return { ...conn, description: `${String(p.name)} - AI model provider` };
 };
 

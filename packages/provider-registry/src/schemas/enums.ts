@@ -56,6 +56,17 @@ export const MODEL_CAPABILITY = {
 } as const;
 export type ModelCapability = (typeof MODEL_CAPABILITY)[keyof typeof MODEL_CAPABILITY];
 
+export const SERVER_TOOL = {
+  WEB_SEARCH: 'web-search',
+  URL_CONTEXT: 'url-context',
+} as const;
+export type ServerTool = (typeof SERVER_TOOL)[keyof typeof SERVER_TOOL];
+
+export const SERVER_TOOL_MODEL_SCOPE = {
+  ALL_CHAT_MODELS: 'all-chat-models',
+  MODEL_DEPENDENT: 'model-dependent',
+} as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CanonicalParamKey
 // ─────────────────────────────────────────────────────────────────────────────

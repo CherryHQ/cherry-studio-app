@@ -27,6 +27,7 @@ import {
 import { matchReasoningMembership } from '../src/patterns/reasoning-membership';
 import { PROVIDERS } from '../src/providers';
 import type { ProviderEntry } from '../src/providers/types';
+import type { ServerTool } from '../src/schemas/enums';
 import type { ReasoningFamilyRule } from '../src/schemas/model';
 import { ReasoningFamilyRuleSchema } from '../src/schemas/model';
 import { stripHostReprefix } from '../src/utils/normalize';
@@ -52,6 +53,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MODELS_PATH = process.env.MODELS_OUT || path.join(__dirname, '../data/models.json');
 const PROVIDERS_PATH = path.join(__dirname, '../data/providers.json');
 const PROVIDER_MODELS_PATH = path.join(__dirname, '../data/provider-models.json');
+const SERVER_TOOL_MODELS_GEN_PATH = path.join(
+  __dirname,
+  '../src/patterns/server-tool-models.gen.ts',
+);
 const REASONING_FAMILIES_GEN_PATH = path.join(
   __dirname,
   '../src/patterns/reasoning-families.gen.ts',
@@ -403,8 +408,35 @@ function buildProviders(): ProviderEntry[] {
   // oxlint-disable-next-line no-unused-vars
   return PROVIDERS.map(({ modelsDevProvider, fetchModels, overrides, ...conn }) => ({
     ...conn,
+    ...(conn.serverTools
+      ? {
+          serverTools: conn.serverTools.map(({ modelIds: _ids, ...tool }) => tool),
+        }
+      : {}),
     description: `${conn.name} - AI model provider`,
   }));
+}
+
+/** Exact model ids exclude newly discovered image/audio siblings from native chat tools. */
+function writeServerToolModels(): void {
+  const eligibility: Record<string, Partial<Record<ServerTool, string[]>>> = {};
+  for (const provider of PROVIDERS) {
+    for (const tool of provider.serverTools ?? []) {
+      if (tool.modelScope !== 'model-dependent') continue;
+      const ids = [...new Set(tool.modelIds ?? [])].sort();
+      (eligibility[provider.id] ??= {})[tool.id] = ids;
+    }
+  }
+  fs.writeFileSync(
+    SERVER_TOOL_MODELS_GEN_PATH,
+    [
+      '/** GENERATED from provider-owned selectors by generate-catalog.ts. Do not edit. */',
+      "import type { ServerTool } from '../schemas/enums';",
+      'export const PROVIDER_SERVER_TOOL_MODEL_IDS: Readonly<Record<string, Partial<Record<ServerTool, readonly string[]>>>> =',
+      `${JSON.stringify(eligibility, null, 2)};`,
+      '',
+    ].join('\n'),
+  );
 }
 
 /**
@@ -550,6 +582,7 @@ void (async () => {
       return;
     }
     fs.writeFileSync(PROVIDERS_PATH, stampAndSerialize({ providers }));
+    writeServerToolModels();
     console.log(`WROTE ${PROVIDERS_PATH} (${providers.length} providers).`);
     return;
   }
@@ -627,6 +660,7 @@ void (async () => {
   console.log(`WROTE ${PROVIDER_MODELS_PATH} (${pm.overrides.length} rows).`);
 
   const familiesGen = buildReasoningFamiliesGen();
+  writeServerToolModels();
   fs.writeFileSync(REASONING_FAMILIES_GEN_PATH, familiesGen);
   console.log(`WROTE ${REASONING_FAMILIES_GEN_PATH}.`);
 })();

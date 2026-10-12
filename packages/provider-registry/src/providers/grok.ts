@@ -32,6 +32,31 @@ export default defineProvider({
       },
     },
   },
+  serverTools: [
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-responses'],
+      modelIds: [
+        'grok-4',
+        'grok-4-1',
+        'grok-4-1-fast',
+        'grok-4-1-fast-non-reasoning',
+        'grok-4-20',
+        'grok-4-20-0309-non-reasoning',
+        'grok-4-20-multi-agent',
+        'grok-4-20-multi-agent-beta',
+        'grok-4-20-non-reasoning',
+        'grok-4-20-non-reasoning-beta',
+        'grok-4-20-reasoning-beta',
+        'grok-4-3',
+        'grok-4-5',
+        'grok-4-6',
+        'grok-4-7',
+        'grok-4-fast',
+      ],
+    },
+  ],
   metadata: {
     website: {
       docs: 'https://docs.x.ai/',

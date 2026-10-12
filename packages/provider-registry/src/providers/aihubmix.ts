@@ -1,3 +1,9 @@
+import {
+  CLAUDE_WEB_TOOL_MODELS,
+  GEMINI_URL_CONTEXT_MODELS,
+  GEMINI_WEB_SEARCH_MODELS,
+  OPENAI_WEB_SEARCH_MODELS,
+} from './serverToolModels';
 import { defineProvider } from './types';
 
 export default defineProvider({
@@ -23,6 +29,25 @@ export default defineProvider({
       baseUrl: 'https://aihubmix.com/gemini/v1beta',
     },
   },
+  serverTools: [
+    // Each vendor's tool is passed through on that vendor's own endpoint.
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-responses', 'anthropic-messages', 'google-generate-content'],
+      modelIds: [
+        ...OPENAI_WEB_SEARCH_MODELS,
+        ...CLAUDE_WEB_TOOL_MODELS,
+        ...GEMINI_WEB_SEARCH_MODELS,
+      ],
+    },
+    {
+      id: 'url-context',
+      modelScope: 'model-dependent',
+      endpointTypes: ['anthropic-messages', 'google-generate-content'],
+      modelIds: [...CLAUDE_WEB_TOOL_MODELS, ...GEMINI_URL_CONTEXT_MODELS],
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://aihubmix.com',

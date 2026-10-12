@@ -155,6 +155,26 @@ export default defineProvider({
       reasoningFormat: { type: 'openai-responses' },
     },
   },
+  serverTools: [
+    // Ark serves web search on Responses only.
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-responses'],
+      modelIds: [
+        'doubao-seed-1-6',
+        'doubao-seed-1-8',
+        'doubao-seed-2-0-code-preview',
+        'doubao-seed-2-0-lite',
+        'doubao-seed-2-0-mini',
+        'doubao-seed-2-0-pro',
+        'doubao-seed-2-1-pro',
+        'doubao-seed-2-1-turbo',
+        'doubao-seed-character',
+        'doubao-seed-evolving',
+      ],
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://www.volcengine.com/experience/ark',

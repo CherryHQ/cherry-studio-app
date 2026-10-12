@@ -126,3 +126,15 @@ Source **correctness** (as opposed to "the JSON matches the source") is covered 
 ## Runtime side
 
 The app does **not** import the generation pipeline. It reads the JSON via `src/registry-loader.ts` (the `@cherrystudio/provider-registry/node` entry) + the `src/schemas/*` types, and resolves a model with `normalizeModelId`. `registry-loader` / `patterns` / `schemas` are the published surface; `creators` / `provider` / `scripts` are build-time only (not in `dist`).
+
+## Mobile Native Web Tool Eligibility
+
+Trusted provider definitions declare `serverTools` with endpoint constraints and, for
+`model-dependent` tools, explicit `modelIds`. The latter are generation-only fields:
+`generate:providers` writes the public declarations to `providers.json` and emits
+`src/patterns/server-tool-models.gen.ts` directly from those reviewed IDs. This command does not
+refresh remote model fixtures. IDs a vendor shares with the hosts that proxy it live in
+`src/providers/serverToolModels.ts`. Runtime matching tolerates version separators, dated snapshots,
+and a host's `vendor/` namespace, not arbitrary family variants. Downloaded model capabilities
+cannot grant native tool support.
+The application must still check its adapter, authentication, tool mixing, and approval policy.

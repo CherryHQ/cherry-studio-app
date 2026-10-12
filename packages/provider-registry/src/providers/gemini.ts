@@ -1,4 +1,5 @@
 import type { ReasoningWireProfile } from '../schemas/reasoningWire';
+import { GEMINI_URL_CONTEXT_MODELS, GEMINI_WEB_SEARCH_MODELS } from './serverToolModels';
 import { defineProvider } from './types';
 
 const budgetThinkingWire: ReasoningWireProfile = {
@@ -53,6 +54,21 @@ const budgetThinkingModels = [
 export default defineProvider({
   id: 'gemini',
   name: 'Gemini',
+  // Explicit Generate Content support; Live, image and batch variants stay external.
+  serverTools: [
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['google-generate-content'],
+      modelIds: GEMINI_WEB_SEARCH_MODELS,
+    },
+    {
+      id: 'url-context',
+      modelScope: 'model-dependent',
+      endpointTypes: ['google-generate-content'],
+      modelIds: GEMINI_URL_CONTEXT_MODELS,
+    },
+  ],
   defaultChatEndpoint: 'google-generate-content',
   endpointConfigs: {
     'google-generate-content': {

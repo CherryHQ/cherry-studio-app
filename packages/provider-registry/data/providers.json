@@ -34,7 +34,19 @@
           "official": "https://open.cherryin.ai"
         }
       },
-      "name": "CherryIN"
+      "name": "CherryIN",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses", "anthropic-messages", "google-generate-content"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        },
+        {
+          "endpointTypes": ["anthropic-messages", "google-generate-content"],
+          "id": "url-context",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -115,7 +127,19 @@
           "official": "https://aihubmix.com"
         }
       },
-      "name": "AiHubMix"
+      "name": "AiHubMix",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses", "anthropic-messages", "google-generate-content"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        },
+        {
+          "endpointTypes": ["anthropic-messages", "google-generate-content"],
+          "id": "url-context",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authOptional": true,
@@ -216,7 +240,14 @@
           "official": "https://open.bigmodel.cn/"
         }
       },
-      "name": "ZhiPu"
+      "name": "ZhiPu",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-chat-completions"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "apiFeatures": {
@@ -288,7 +319,14 @@
           "official": "https://deepseek.com/"
         }
       },
-      "name": "deepseek"
+      "name": "deepseek",
+      "serverTools": [
+        {
+          "endpointTypes": ["anthropic-messages"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -617,7 +655,14 @@
       },
       "name": "OpenRouter",
       "reportedCostCurrency": "USD",
-      "reportsActualCost": true
+      "reportsActualCost": true,
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-chat-completions"],
+          "id": "web-search",
+          "modelScope": "all-chat-models"
+        }
+      ]
     },
     {
       "authOptional": true,
@@ -695,7 +740,19 @@
           "official": "https://docs.newapi.pro/"
         }
       },
-      "name": "New API"
+      "name": "New API",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses", "anthropic-messages", "google-generate-content"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        },
+        {
+          "endpointTypes": ["anthropic-messages", "google-generate-content"],
+          "id": "url-context",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authOptional": true,
@@ -741,7 +798,19 @@
           "official": "https://anthropic.com/"
         }
       },
-      "name": "Anthropic"
+      "name": "Anthropic",
+      "serverTools": [
+        {
+          "endpointTypes": ["anthropic-messages"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        },
+        {
+          "endpointTypes": ["anthropic-messages"],
+          "id": "url-context",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authMethods": ["external-cli"],
@@ -947,7 +1016,14 @@
           "official": "https://openai.com/"
         }
       },
-      "name": "OpenAI"
+      "name": "OpenAI",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -1120,7 +1196,14 @@
           "official": "https://azure.microsoft.com/en-us/products/ai-services/openai-service"
         }
       },
-      "name": "Azure OpenAI"
+      "name": "Azure OpenAI",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "google-generate-content",
@@ -1140,7 +1223,19 @@
           "official": "https://gemini.google.com/"
         }
       },
-      "name": "Gemini"
+      "name": "Gemini",
+      "serverTools": [
+        {
+          "endpointTypes": ["google-generate-content"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        },
+        {
+          "endpointTypes": ["google-generate-content"],
+          "id": "url-context",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "google-generate-content",
@@ -1346,7 +1441,14 @@
           "official": "https://www.aliyun.com/product/bailian"
         }
       },
-      "name": "Bailian"
+      "name": "Bailian",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-chat-completions", "openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -1435,7 +1537,14 @@
           "official": "https://console.volcengine.com/ark/"
         }
       },
-      "name": "doubao"
+      "name": "doubao",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "apiFeatures": {
@@ -1713,7 +1822,14 @@
           "official": "https://x.ai/"
         }
       },
-      "name": "Grok"
+      "name": "Grok",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "authMethods": ["oauth"],
@@ -1798,7 +1914,14 @@
           "official": "https://perplexity.ai/"
         }
       },
-      "name": "Perplexity"
+      "name": "Perplexity",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-chat-completions"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -2003,7 +2126,14 @@
           "official": "https://poe.com/"
         }
       },
-      "name": "Poe"
+      "name": "Poe",
+      "serverTools": [
+        {
+          "endpointTypes": ["openai-responses"],
+          "id": "web-search",
+          "modelScope": "model-dependent"
+        }
+      ]
     },
     {
       "defaultChatEndpoint": "openai-chat-completions",
@@ -2274,5 +2404,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "985f3aecd45a85af"
+  "version": "844a3cb6b6cee796"
 }

@@ -120,6 +120,15 @@ export default defineProvider({
   apiFeatures: {
     arrayContent: false,
   },
+  serverTools: [
+    // Native search is served on the Anthropic mirror only; Responses ignores `web_search`.
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['anthropic-messages'],
+      modelIds: ['deepseek-flash', 'deepseek-flash-latest', 'deepseek-v4-flash', 'deepseek-v4-pro'],
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://platform.deepseek.com/api_keys',

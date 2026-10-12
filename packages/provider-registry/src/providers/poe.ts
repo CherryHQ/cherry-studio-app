@@ -1,4 +1,5 @@
 import type { ReasoningWireProfile } from '../schemas/reasoningWire';
+import { OPENAI_WEB_SEARCH_MODELS } from './serverToolModels';
 import { defineProvider } from './types';
 import { EFFORT, modeWire } from './wires';
 
@@ -56,6 +57,15 @@ export default defineProvider({
       baseUrl: 'https://api.poe.com',
     },
   },
+  serverTools: [
+    // Poe documents web search for its Responses endpoint only.
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-responses'],
+      modelIds: OPENAI_WEB_SEARCH_MODELS,
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://poe.com/api/keys',

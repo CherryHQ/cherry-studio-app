@@ -40,6 +40,7 @@ export {
 // Enum types (PascalCase, derived from const objects)
 export type {
   CanonicalParamKey,
+  ServerTool,
   Currency,
   EndpointType,
   Modality,
@@ -56,6 +57,8 @@ export {
   objectValues,
   REASONING_EFFORT,
   REASONING_EFFORT_ORDER,
+  SERVER_TOOL,
+  SERVER_TOOL_MODEL_SCOPE,
 } from './schemas/enums';
 // Runtime schemas (zod) — needed by shared types that compose them
 export type { ImageParamCatalogEntry, ParamValue, ParamValues } from './schemas/imageParamCatalog';
@@ -93,6 +96,7 @@ export type {
   ProviderReasoningFormat,
   ReasoningFormatType,
   RegistryEndpointConfig,
+  ServerToolConfig,
   ServiceTierDelivery,
   ServiceTierOptions,
   ServiceTierRequestControl,
@@ -106,7 +110,9 @@ export {
   ServiceTierOptionsSchema,
   ServiceTierRequestControlSchema,
   ServiceTierSelectionSchema,
+  ServerToolConfigSchema,
 } from './schemas/provider';
+export { isServerToolModelEligible } from './patterns/server-tool-model-eligibility';
 export type {
   ProviderModelOverride as ProtoProviderModelOverride,
   ProviderModelOverride,

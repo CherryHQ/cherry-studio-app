@@ -1,3 +1,4 @@
+import { OPENAI_WEB_SEARCH_MODELS } from './serverToolModels';
 import { defineProvider } from './types';
 import { openaiResponsesSummaryWire } from './wires';
 
@@ -14,6 +15,14 @@ export default defineProvider({
       reasoningFormat: { type: 'openai-responses', wire: openaiResponsesSummaryWire },
     },
   },
+  serverTools: [
+    {
+      id: 'web-search',
+      modelScope: 'model-dependent',
+      endpointTypes: ['openai-responses'],
+      modelIds: OPENAI_WEB_SEARCH_MODELS,
+    },
+  ],
   metadata: {
     website: {
       apiKey: 'https://portal.azure.com/',
