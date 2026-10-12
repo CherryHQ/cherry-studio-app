@@ -1,37 +1,38 @@
-import { useToast } from '@cherrystudio/ui/components';
 import { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
 import {
   DiagnosticError,
-  type DiagnosticBundleInput,
-  type DiagnosticInspection,
-  type DiagnosticRange,
-  type DiagnosticSavedBundle,
+  type DiagnosticUploadFailureReason,
   type DiagnosticUploadResult,
 } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-type UploadOutcome = Exclude<DiagnosticUploadResult, { status: 'busy' }>;
-type Outcome = UploadOutcome | DiagnosticSavedBundle;
 const logger = loggerService.withContext('DiagnosticBundle');
+const FAILURE_KEYS = {
+  not_configured: 'settings.about.diagnostics.failures.not_configured',
+  invalid_archive: 'settings.about.diagnostics.failures.invalid_archive',
+  archive_too_large: 'settings.about.diagnostics.failures.archive_too_large',
+  authentication_failed: 'settings.about.diagnostics.failures.authentication_failed',
+  rate_limited: 'settings.about.diagnostics.failures.rate_limited',
+  service_unavailable: 'settings.about.diagnostics.failures.service_unavailable',
+  submission_rejected: 'settings.about.diagnostics.failures.submission_rejected',
+} satisfies Record<DiagnosticUploadFailureReason, string>;
+const ERROR_KEYS = {
+  INSPECT_FAILED: 'settings.about.diagnostics.errors.INSPECT_FAILED',
+  BUNDLE_BUILD_FAILED: 'settings.about.diagnostics.errors.BUNDLE_BUILD_FAILED',
+  SAVE_FAILED: 'settings.about.diagnostics.errors.SAVE_FAILED',
+  NATIVE_UNAVAILABLE: 'settings.about.diagnostics.errors.NATIVE_UNAVAILABLE',
+} satisfies Record<DiagnosticError['code'], string>;
 
-export function useDiagnosticBundle(range: DiagnosticRange) {
+type FeedbackState =
+  | { status: 'editing' | 'submitting' }
+  | { status: 'failed'; messageKey: string }
+  | Extract<DiagnosticUploadResult, { status: 'uploaded' | 'submission_unknown' }>;
+
+export function useDiagnosticBundle() {
   const module = useBackendModule('diagnostics');
-  const { t } = useTranslation();
-  const { toast } = useToast();
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [inspection, setInspection] = useState<{
-    range: DiagnosticRange;
-    refreshKey: number;
-    data?: DiagnosticInspection;
-    failed?: boolean;
-  }>();
-  const [operation, setOperation] = useState<'export' | 'upload' | 'save' | 'discard' | null>(null);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [savedUri, setSavedUri] = useState<string | null>(null);
-  const retainedId = useRef<string | null>(null);
+  const [state, setState] = useState<FeedbackState>({ status: 'editing' });
   const mounted = useRef(true);
   const busy = useRef(false);
 
@@ -39,132 +40,51 @@ export function useDiagnosticBundle(range: DiagnosticRange) {
     mounted.current = true;
     return () => {
       mounted.current = false;
-      if (retainedId.current)
-        void module
-          .discardUpload({ bundleId: retainedId.current })
-          .catch((error) => logger.warn('Failed to discard closed diagnostic upload', { error }));
     };
-  }, [module]);
+  }, []);
 
-  useEffect(() => {
-    let active = true;
-    void module.inspect(range).then(
-      (data) => {
-        if (active) setInspection({ range, refreshKey, data });
-      },
-      (error) => {
-        logger.warn('Failed to inspect diagnostic sources', { error });
-        if (active) setInspection({ range, refreshKey, failed: true });
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [module, range, refreshKey]);
-
-  const showBusy = () =>
-    toast.show({ label: t('settings.about.diagnostics.errors.busy'), variant: 'danger' });
-
-  async function run(kind: NonNullable<typeof operation>, action: () => Promise<void>) {
+  async function submit(description: string) {
     if (busy.current) return;
     busy.current = true;
-    setOperation(kind);
+    setState({ status: 'submitting' });
     try {
-      await action();
+      const result = await module.uploadBundle({
+        description,
+        range: '24h',
+        includeLogs: true,
+        includeTraces: true,
+      });
+      if (!mounted.current) return;
+      if (result.status === 'busy') {
+        setState({ status: 'failed', messageKey: 'settings.about.diagnostics.errors.busy' });
+      } else if (result.status === 'submission_failed') {
+        setState({ status: 'failed', messageKey: FAILURE_KEYS[result.reason] });
+      } else {
+        setState(result);
+      }
     } catch (error) {
-      logger.error('Diagnostic operation failed', { error, operation: kind });
+      logger.error('Feedback submission failed', { error });
       if (mounted.current)
-        toast.show({
-          label:
+        setState({
+          status: 'failed',
+          messageKey:
             error instanceof DiagnosticError
-              ? t(`settings.about.diagnostics.errors.${error.code}`)
-              : t('settings.about.diagnostics.errors.operationFailed'),
-          variant: 'danger',
+              ? ERROR_KEYS[error.code]
+              : 'settings.about.diagnostics.errors.operationFailed',
         });
     } finally {
       busy.current = false;
-      if (mounted.current) setOperation(null);
-      else if (retainedId.current)
-        void module
-          .discardUpload({ bundleId: retainedId.current })
-          .catch((error) =>
-            logger.warn('Failed to discard unmounted diagnostic upload', { error }),
-          );
     }
-  }
-
-  function acceptUpload(result: DiagnosticUploadResult) {
-    if (result.status === 'busy') {
-      if (mounted.current) showBusy();
-      return;
-    }
-    retainedId.current = result.status === 'uploaded' ? null : result.bundleId;
-    if (mounted.current) setOutcome(result);
   }
 
   return {
-    inspection:
-      inspection?.range === range && inspection.refreshKey === refreshKey
-        ? inspection.data
-        : undefined,
-    inspectionFailed:
-      inspection?.range === range &&
-      inspection.refreshKey === refreshKey &&
-      inspection.failed === true,
-    isBusy: operation !== null,
-    operation,
-    outcome,
-    savedUri,
-    refresh: () => setRefreshKey((value) => value + 1),
-    showBusy,
-    exportBundle: (input: DiagnosticBundleInput) =>
-      run('export', async () => {
-        const result = await module.exportBundle(input);
-        if (!mounted.current) return;
-        if (result.status === 'busy') {
-          showBusy();
-          return;
-        }
-        if (result.status === 'saved') {
-          setOutcome(result);
-          toast.show({ label: t('settings.about.diagnostics.saved'), variant: 'success' });
-        }
-      }),
-    uploadBundle: (input: DiagnosticBundleInput, description: string) =>
-      run('upload', async () => {
-        acceptUpload(await module.uploadBundle({ ...input, description }));
-      }),
-    retry: () =>
-      run('upload', async () => {
-        if (retainedId.current)
-          acceptUpload(await module.retryUpload({ bundleId: retainedId.current }));
-      }),
-    save: () =>
-      run('save', async () => {
-        if (!retainedId.current) return;
-        const result = await module.saveUploadBundle({ bundleId: retainedId.current });
-        if (!mounted.current) return;
-        if (result.status === 'busy') showBusy();
-        if (result.status === 'saved') {
-          setSavedUri(result.filePath);
-          toast.show({ label: t('settings.about.diagnostics.saved'), variant: 'success' });
-        }
-      }),
-    reset: () =>
-      run('discard', async () => {
-        if (retainedId.current) {
-          const result = await module.discardUpload({ bundleId: retainedId.current });
-          if (result.status === 'busy') {
-            showBusy();
-            return;
-          }
-        }
-        retainedId.current = null;
-        if (mounted.current) {
-          setOutcome(null);
-          setSavedUri(null);
-          setRefreshKey((value) => value + 1);
-        }
-      }),
+    state,
+    submit,
+    edit: () => {
+      if (!busy.current) setState({ status: 'editing' });
+    },
+    close: (onClose: () => void) => {
+      if (!busy.current) onClose();
+    },
   };
 }

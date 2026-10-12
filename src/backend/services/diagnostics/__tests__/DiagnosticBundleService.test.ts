@@ -7,6 +7,7 @@ const mockWriteZip = jest.fn(
   async (_destination: unknown, _entries: { name: string; content: string }[]) => {},
 );
 const mockUpload = jest.fn();
+let mockUploadAvailable = true;
 const mockSave = jest.fn();
 const mockDeletedPaths: string[] = [];
 const mockNative = { saveFile: mockSave, cancelOperations: jest.fn() };
@@ -17,6 +18,9 @@ jest.mock('../writeBundleZip', () => ({
 }));
 jest.mock('../CherryDiagnosticUploadClient', () => ({
   CherryDiagnosticUploadClient: class {
+    get isAvailable() {
+      return mockUploadAvailable;
+    }
     upload = mockUpload;
   },
 }));
@@ -84,18 +88,21 @@ const snapshot = {
 const mockSnapshot = jest.fn(async () => snapshot);
 
 const input = {
+  description: 'The app stopped responding.',
   range: '24h' as const,
   includeLogs: false,
   includeTraces: false,
 };
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUploadAvailable = true;
+  mockWriteZip.mockReset();
   mockSnapshot.mockResolvedValue(snapshot);
   snapshot.dispose.mockImplementation(() => {});
   snapshot.metadata.diagnostics = { droppedRecords: 0, writeFailures: 0 };
   mockDeletedPaths.length = 0;
   mockSave.mockResolvedValue('content://documents/user-selected.zip');
-  mockUpload.mockResolvedValue({ status: 'submission_unknown', fileSha256: 'a'.repeat(64) });
+  mockUpload.mockResolvedValue({ status: 'submission_unknown' });
 });
 
 function service() {
@@ -116,7 +123,7 @@ test('flushes pending log summaries before taking an inspection snapshot', async
   }
 });
 
-test('exports schema-v2 with an empty crash inventory and reports the system destination', async () => {
+test('exports feedback with metadata and reports the system destination', async () => {
   const result = await service().exportBundle(input);
   expect(result).toMatchObject({
     status: 'saved',
@@ -124,11 +131,13 @@ test('exports schema-v2 with an empty crash inventory and reports the system des
     archiveBytes: 99,
   });
   const entries = mockWriteZip.mock.calls[0][1];
-  expect(entries.map((entry) => entry.name)).toEqual(['diagnostics.json']);
+  expect(entries.map((entry) => entry.name)).toEqual(['diagnostics.json', 'feedback.txt']);
+  expect(entries[1].content).toBe(input.description);
   expect(JSON.parse(entries[0].content)).toMatchObject({
     schemaVersion: 2,
+    feedback: { file: 'feedback.txt', source: 'user' },
     privacy: {
-      containsUnredactedData: false,
+      containsUnredactedData: true,
       publiclyShareable: false,
       uploadedAutomatically: false,
     },
@@ -166,37 +175,82 @@ test('cancelling the picker is never reported as saved', async () => {
   expect(mockDeletedPaths).toHaveLength(1);
 });
 
-test('saving and retrying preserve the original archive and description and never remove the system copy', async () => {
-  const diagnostics = service();
-  const result = await diagnostics.uploadBundle({ ...input, description: ' first\nsecond ' });
-  if (result.status !== 'submission_unknown') throw new Error('Expected retained bundle');
-  const original = mockUpload.mock.calls[0][0];
-  expect(original.description).toBe('first\r\nsecond');
+test.each([
+  [
+    { status: 'uploaded', reportId: 'report-1' },
+    { status: 'uploaded', reportId: 'report-1' },
+  ],
+  [
+    { status: 'rejected', reason: 'service_unavailable' },
+    { status: 'submission_failed', reason: 'service_unavailable' },
+  ],
+  [{ status: 'submission_unknown' }, { status: 'submission_unknown' }],
+])('removes the temporary archive after upload result %j', async (response, expected) => {
+  mockUpload.mockImplementationOnce(async () => {
+    expect(mockDeletedPaths).toEqual([]);
+    return response;
+  });
+  await expect(
+    service().uploadBundle({ ...input, description: ' first\nsecond ' }),
+  ).resolves.toEqual(expected);
+  const submitted = mockUpload.mock.calls[0][0];
+  expect(submitted.description).toBe('first\r\nsecond');
+  expect(mockWriteZip.mock.calls[0][1][1]).toEqual({
+    name: 'feedback.txt',
+    content: submitted.description,
+  });
   expect(JSON.parse(mockWriteZip.mock.calls[0][1][0].content).privacy.uploadedAutomatically).toBe(
     true,
   );
-  await expect(diagnostics.saveUploadBundle({ bundleId: result.bundleId })).resolves.toMatchObject({
-    status: 'saved',
-    filePath: 'content://documents/user-selected.zip',
-  });
-  expect(mockDeletedPaths).toEqual([]);
-  mockUpload.mockResolvedValue({ status: 'uploaded', reportId: 'report-1' });
-  await expect(diagnostics.retryUpload({ bundleId: result.bundleId })).resolves.toEqual({
-    status: 'uploaded',
-    reportId: 'report-1',
-  });
-  expect(mockWriteZip).toHaveBeenCalledTimes(1);
-  expect(mockUpload.mock.calls[1][0]).toMatchObject({
-    description: original.description,
-    filePath: original.filePath,
-    fileName: original.fileName,
-    expectedFileSha256: 'a'.repeat(64),
-  });
+  expect(mockDeletedPaths).toEqual([
+    submitted.filePath.slice(0, submitted.filePath.lastIndexOf('/')),
+  ]);
+  expect(mockSave).not.toHaveBeenCalled();
+});
+
+test('removes the ZIP when upload throws, and a new submission creates a fresh archive', async () => {
+  const diagnostics = service();
+  mockUpload.mockRejectedValueOnce(new Error('connection lost'));
+  await expect(diagnostics.uploadBundle(input)).rejects.toThrow('connection lost');
   expect(mockDeletedPaths).toHaveLength(1);
-  expect(mockDeletedPaths).not.toContain('content://documents/user-selected.zip');
-  await expect(diagnostics.retryUpload({ bundleId: result.bundleId })).rejects.toMatchObject({
-    code: 'RETRY_NOT_AVAILABLE',
+  mockUpload.mockResolvedValueOnce({ status: 'uploaded', reportId: 'report-2' });
+  await expect(diagnostics.uploadBundle(input)).resolves.toMatchObject({ status: 'uploaded' });
+  expect(mockWriteZip).toHaveBeenCalledTimes(2);
+  expect(mockDeletedPaths).toHaveLength(2);
+});
+
+test('does not collect diagnostics or build a ZIP when the cloud adapter is unavailable', async () => {
+  mockUploadAvailable = false;
+  await expect(service().uploadBundle({ ...input, includeTraces: true })).resolves.toEqual({
+    status: 'submission_failed',
+    reason: 'not_configured',
   });
+  expect(mockSnapshot).not.toHaveBeenCalled();
+  expect(mockWriteZip).not.toHaveBeenCalled();
+  expect(mockUpload).not.toHaveBeenCalled();
+  expect(mockDeletedPaths).toEqual([]);
+});
+
+test('stopping the service aborts an upload and removes its temporary ZIP', async () => {
+  let started!: () => void;
+  const uploading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  mockUpload.mockImplementationOnce(
+    ({ signal }: { signal: AbortSignal }) =>
+      new Promise((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        started();
+      }),
+  );
+  const diagnostics = service();
+  const result = diagnostics.uploadBundle(input);
+  const rejected = expect(result).rejects.toBeDefined();
+  await uploading;
+  expect(mockDeletedPaths).toEqual([]);
+  await diagnostics._doStop();
+  await rejected;
+  expect(mockDeletedPaths).toHaveLength(1);
 });
 
 test('operations are mutually exclusive while a native save is pending', async () => {
@@ -252,6 +306,7 @@ test('releases snapshots on archive failure and cleanup failures do not replace 
     code: 'BUNDLE_BUILD_FAILED',
   });
   expect(snapshot.dispose).toHaveBeenCalledTimes(1);
+  expect(mockDeletedPaths).toHaveLength(1);
   snapshot.dispose.mockImplementationOnce(() => {
     throw new Error('cleanup failed');
   });

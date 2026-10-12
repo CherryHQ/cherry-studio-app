@@ -1,6 +1,6 @@
 import {
   DiagnosticBundleInputSchema,
-  DiagnosticUploadInputSchema,
+  DiagnosticReportInputSchema,
   diagnosticDescriptionByteLength,
   normalizeDiagnosticDescription,
 } from '../diagnostics';
@@ -20,17 +20,17 @@ describe('diagnostic wire inputs', () => {
     expect(normalizeDiagnosticDescription('a\nb\rc\r\nd')).toBe('a\r\nb\r\nc\r\nd');
     expect(diagnosticDescriptionByteLength('中\n😀')).toBe(9);
     expect(
-      DiagnosticUploadInputSchema.parse({ ...input, description: ` ${'a'.repeat(4096)} ` })
+      DiagnosticReportInputSchema.parse({ ...input, description: ` ${'a'.repeat(4096)} ` })
         .description,
     ).toHaveLength(4096);
     expect(
-      DiagnosticUploadInputSchema.safeParse({ ...input, description: '中'.repeat(1366) }).success,
+      DiagnosticReportInputSchema.safeParse({ ...input, description: '中'.repeat(1366) }).success,
     ).toBe(false);
-    expect(DiagnosticUploadInputSchema.safeParse({ ...input, description: ' \n ' }).success).toBe(
+    expect(DiagnosticReportInputSchema.safeParse({ ...input, description: ' \n ' }).success).toBe(
       false,
     );
     expect(
-      DiagnosticUploadInputSchema.safeParse({ ...input, description: `${'a'.repeat(4094)}\nb` })
+      DiagnosticReportInputSchema.safeParse({ ...input, description: `${'a'.repeat(4094)}\nb` })
         .success,
     ).toBe(false);
   });

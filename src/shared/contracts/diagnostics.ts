@@ -20,14 +20,14 @@ export const DiagnosticBundleInputSchema = z.strictObject({
 });
 export type DiagnosticBundleInput = z.infer<typeof DiagnosticBundleInputSchema>;
 
-export const DiagnosticUploadInputSchema = DiagnosticBundleInputSchema.extend({
+export const DiagnosticReportInputSchema = DiagnosticBundleInputSchema.extend({
   description: z
     .string()
     .trim()
     .min(1)
     .refine((value) => diagnosticDescriptionByteLength(value) <= DIAGNOSTIC_DESCRIPTION_MAX_BYTES),
 });
-export type DiagnosticUploadInput = z.infer<typeof DiagnosticUploadInputSchema>;
+export type DiagnosticReportInput = z.infer<typeof DiagnosticReportInputSchema>;
 
 export type DiagnosticInspection = {
   hasWarnings: boolean;
@@ -53,6 +53,7 @@ export type DiagnosticSavedBundle = {
 export type DiagnosticExportResult = DiagnosticSavedBundle | { status: 'busy' | 'canceled' };
 
 export type DiagnosticUploadFailureReason =
+  | 'not_configured'
   | 'invalid_archive'
   | 'archive_too_large'
   | 'authentication_failed'
@@ -65,24 +66,13 @@ export type DiagnosticUploadResult =
   | { status: 'uploaded'; reportId: string }
   | {
       status: 'submission_failed';
-      bundleId: string;
-      fileName: string;
       reason: DiagnosticUploadFailureReason;
     }
-  | { status: 'submission_unknown'; bundleId: string; fileName: string };
-
-export type DiagnosticSaveUploadResult =
-  | { status: 'busy' | 'canceled' }
-  | { status: 'saved'; bundleId: string; fileName: string; filePath: string };
+  | { status: 'submission_unknown' };
 
 export class DiagnosticError extends Error {
   constructor(
-    readonly code:
-      | 'INSPECT_FAILED'
-      | 'BUNDLE_BUILD_FAILED'
-      | 'SAVE_FAILED'
-      | 'RETRY_NOT_AVAILABLE'
-      | 'NATIVE_UNAVAILABLE',
+    readonly code: 'INSPECT_FAILED' | 'BUNDLE_BUILD_FAILED' | 'SAVE_FAILED' | 'NATIVE_UNAVAILABLE',
     options?: ErrorOptions,
   ) {
     super(code, options);
@@ -92,11 +82,6 @@ export class DiagnosticError extends Error {
 
 export interface DiagnosticsModule {
   inspect(range: DiagnosticRange): Promise<DiagnosticInspection>;
-  exportBundle(input: DiagnosticBundleInput): Promise<DiagnosticExportResult>;
-  uploadBundle(input: DiagnosticUploadInput): Promise<DiagnosticUploadResult>;
-  retryUpload(input: { bundleId: string }): Promise<DiagnosticUploadResult>;
-  saveUploadBundle(input: { bundleId: string }): Promise<DiagnosticSaveUploadResult>;
-  discardUpload(input: {
-    bundleId: string;
-  }): Promise<{ status: 'busy' | 'discarded' | 'not_found' }>;
+  exportBundle(input: DiagnosticReportInput): Promise<DiagnosticExportResult>;
+  uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult>;
 }

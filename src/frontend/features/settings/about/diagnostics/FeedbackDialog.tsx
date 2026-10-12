@@ -1,0 +1,157 @@
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
+import { Button, Dialog, Input, Spinner, TextField } from '@cherrystudio/ui/components';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Keyboard, Text, View } from 'react-native';
+
+import {
+  diagnosticDescriptionByteLength,
+  DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
+} from '@/shared/contracts/diagnostics';
+
+import { useDiagnosticBundle } from './useDiagnosticBundle';
+
+/** One dialog owns the draft, submission, and result; the service owns temporary files. */
+export function FeedbackDialog({ onClose }: { onClose: () => void }) {
+  // Resolve business hooks here: the shared dialog renders its content through a portal.
+  const { t } = useTranslation();
+  const [description, setDescription] = useState('');
+  const [attempted, setAttempted] = useState(false);
+  const workflow = useDiagnosticBundle();
+  const { state } = workflow;
+  const normalized = description.trim();
+  const bytes = diagnosticDescriptionByteLength(normalized);
+  const isTooLong = bytes > DIAGNOSTIC_DESCRIPTION_MAX_BYTES;
+  const showError = isTooLong || (attempted && normalized.length === 0);
+  const isSubmitting = state.status === 'submitting';
+  const title =
+    state.status === 'uploaded'
+      ? t('settings.about.diagnostics.results.uploaded')
+      : state.status === 'submission_unknown'
+        ? t('settings.about.diagnostics.results.submission_unknown')
+        : state.status === 'failed'
+          ? t('settings.about.diagnostics.results.submission_failed')
+          : t('settings.about.feedback.title');
+
+  function close() {
+    workflow.close(() => {
+      Keyboard.dismiss();
+      onClose();
+    });
+  }
+
+  function submit() {
+    setAttempted(true);
+    if (!normalized || isTooLong) return;
+    Keyboard.dismiss();
+    void workflow.submit(normalized);
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+      testID="feedback-dialog"
+      title={title}
+    >
+      {state.status === 'editing' ? (
+        <>
+          <TextField invalid={showError}>
+            <Input
+              accessibilityLabel={t('settings.about.diagnostics.description')}
+              className="min-h-36"
+              invalid={showError}
+              multiline
+              onChangeText={setDescription}
+              placeholder={t('settings.about.diagnostics.descriptionPlaceholder')}
+              testID="feedback-description"
+              textAlignVertical="top"
+              value={description}
+            />
+            {showError && (
+              <TextField.Error>{t('settings.about.diagnostics.descriptionError')}</TextField.Error>
+            )}
+          </TextField>
+          <View className="gap-1">
+            <Text className="text-sm font-medium text-foreground">
+              {t('settings.about.feedback.attachment')}
+            </Text>
+            <Text className="text-xs leading-5 text-muted-foreground">
+              {t('settings.about.feedback.consent')}
+            </Text>
+          </View>
+          <View className="gap-2">
+            <Button onPress={submit} testID="feedback-submit">
+              {t('settings.about.diagnostics.upload')}
+            </Button>
+            <Button onPress={close} variant="ghost">
+              {t('common.cancel')}
+            </Button>
+          </View>
+        </>
+      ) : isSubmitting ? (
+        <View
+          accessibilityLiveRegion="polite"
+          accessibilityState={{ busy: true }}
+          className="min-h-44 items-center justify-center gap-4 py-6"
+        >
+          <Spinner accessibilityLabel={t('settings.about.feedback.submitting')} size="default" />
+          <View className="gap-2">
+            <Text className="text-center text-base font-medium text-foreground">
+              {t('settings.about.feedback.submitting')}
+            </Text>
+            <Text className="text-center text-sm text-muted-foreground">
+              {t('settings.about.feedback.submittingHint')}
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <>
+          <View accessibilityLiveRegion="polite" className="items-center gap-4 py-4">
+            {state.status === 'uploaded' ? (
+              <CheckIcon className="size-8 text-success" />
+            ) : (
+              <CircleAlertIcon className="size-8 text-muted-foreground" />
+            )}
+            <Text className="text-center text-sm leading-6 text-muted-foreground">
+              {state.status === 'uploaded'
+                ? t('settings.about.feedback.thanks')
+                : state.status === 'submission_unknown'
+                  ? t('settings.about.diagnostics.unknownHint')
+                  : state.status === 'failed'
+                    ? t(state.messageKey)
+                    : null}
+            </Text>
+            {state.status === 'uploaded' && (
+              <View className="w-full gap-1 rounded-lg bg-secondary px-4 py-3">
+                <Text className="text-xs text-muted-foreground">
+                  {t('settings.about.diagnostics.reportId')}
+                </Text>
+                <Text className="text-sm text-foreground" selectable>
+                  {state.reportId}
+                </Text>
+              </View>
+            )}
+          </View>
+          <View className="gap-2">
+            {state.status === 'uploaded' ? (
+              <Button onPress={close}>{t('common.done')}</Button>
+            ) : (
+              <>
+                <Button onPress={workflow.edit}>
+                  {t('settings.about.diagnostics.startAgain')}
+                </Button>
+                <Button onPress={close} variant="ghost">
+                  {t('common.close')}
+                </Button>
+              </>
+            )}
+          </View>
+        </>
+      )}
+    </Dialog>
+  );
+}

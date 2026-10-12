@@ -14,10 +14,9 @@ import { readDiagnosticPluginState } from '@/backend/data/services/diagnosticPlu
 import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
-  DiagnosticBundleInputSchema,
   DiagnosticError,
   DiagnosticRangeSchema,
-  DiagnosticUploadInputSchema,
+  DiagnosticReportInputSchema,
   DIAGNOSTIC_SOURCE_LIMIT_BYTES,
   normalizeDiagnosticDescription,
   type DiagnosticBundleInput,
@@ -25,9 +24,8 @@ import {
   type DiagnosticInspection,
   type DiagnosticRange,
   type DiagnosticSavedBundle,
-  type DiagnosticSaveUploadResult,
   type DiagnosticsModule,
-  type DiagnosticUploadInput,
+  type DiagnosticReportInput,
   type DiagnosticUploadResult,
 } from '@/shared/contracts/diagnostics';
 import { flushLogWriter, loggerService } from '@/shared/core/logger/LoggerService';
@@ -53,13 +51,6 @@ import { writeBundleZip } from './writeBundleZip';
 
 const logger = loggerService.withContext('DiagnosticBundleService');
 const RANGE_DURATION_MS = { '24h': 86400000, '3d': 3 * 86400000, '7d': 7 * 86400000 };
-type RetainedUpload = {
-  bundle: DiagnosticSavedBundle;
-  tempRoot: Directory;
-  description: string;
-  fileSha256?: string;
-  savedUri?: string;
-};
 function toTimeRange(range: DiagnosticRange, now: number): DiagnosticTimeRange {
   return { fromMs: now - RANGE_DURATION_MS[range], toMs: now };
 }
@@ -85,7 +76,6 @@ function cleanup(directory: Directory): void {
 export class DiagnosticBundleService extends BaseService implements DiagnosticsModule {
   private inFlightOperation: Promise<unknown> | null = null;
   private inspectionTail: Promise<unknown> = Promise.resolve();
-  private readonly retainedUploads = new Map<string, RetainedUpload>();
   private readonly uploader = new CherryDiagnosticUploadClient();
   private disposed = false;
   private readonly abort = new AbortController();
@@ -106,8 +96,6 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
       /* Native module may be absent in an old dev client. */
     }
     await Promise.allSettled([this.inspectionTail, this.inFlightOperation]);
-    for (const retained of this.retainedUploads.values()) cleanup(retained.tempRoot);
-    this.retainedUploads.clear();
   }
 
   inspect(rangeName: DiagnosticRange): Promise<DiagnosticInspection> {
@@ -153,11 +141,11 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     }
   }
 
-  exportBundle(input: DiagnosticBundleInput): Promise<DiagnosticExportResult> {
+  exportBundle(input: DiagnosticReportInput): Promise<DiagnosticExportResult> {
     return this.exclusive(async (): Promise<DiagnosticExportResult> => {
       const native = this.native();
       const { bundle, tempRoot } = await this.prepare(
-        DiagnosticBundleInputSchema.parse(input),
+        DiagnosticReportInputSchema.parse(input),
         false,
       );
       try {
@@ -172,58 +160,30 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     });
   }
 
-  uploadBundle(input: DiagnosticUploadInput): Promise<DiagnosticUploadResult> {
-    return this.exclusive(async () => {
+  uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult> {
+    return this.exclusive(async (): Promise<DiagnosticUploadResult> => {
+      const parsed = DiagnosticReportInputSchema.parse(input);
+      // Do not collect data or create a ZIP until the cloud adapter is connected.
+      if (!this.uploader.isAvailable)
+        return { status: 'submission_failed', reason: 'not_configured' };
       this.native();
-      const parsed = DiagnosticUploadInputSchema.parse(input);
-      const prepared = await this.prepare(parsed, true);
-      const retained: RetainedUpload = {
-        ...prepared,
-        description: normalizeDiagnosticDescription(parsed.description),
-      };
-      this.retainedUploads.set(prepared.bundle.bundleId, retained);
-      return this.submit(retained);
-    });
-  }
-
-  retryUpload({ bundleId }: { bundleId: string }): Promise<DiagnosticUploadResult> {
-    return this.exclusive(() => this.submit(this.retained(bundleId)));
-  }
-
-  saveUploadBundle({ bundleId }: { bundleId: string }): Promise<DiagnosticSaveUploadResult> {
-    return this.exclusive(async (): Promise<DiagnosticSaveUploadResult> => {
-      const retained = this.retained(bundleId);
+      const { bundle, tempRoot } = await this.prepare(parsed, true);
       try {
-        const destination =
-          retained.savedUri ??
-          (await this.native().saveFile(retained.bundle.filePath, retained.bundle.fileName));
-        if (!destination) return { status: 'canceled' };
-        retained.savedUri = destination;
-        // Files providers grant a destination URI, not permanent read authority.
-        // Keep the original internal ZIP for retries until success/discard/stop.
-        return {
-          status: 'saved',
-          bundleId,
-          fileName: retained.bundle.fileName,
-          filePath: destination,
-        };
-      } catch (cause) {
-        throw new DiagnosticError('SAVE_FAILED', { cause });
+        this.abort.signal.throwIfAborted();
+        const result = await this.uploader.upload({
+          description: normalizeDiagnosticDescription(parsed.description),
+          fileName: bundle.fileName,
+          filePath: bundle.filePath,
+          signal: this.abort.signal,
+        });
+        if (result.status === 'uploaded') return result;
+        if (result.status === 'submission_unknown') return { status: 'submission_unknown' };
+        return { status: 'submission_failed', reason: result.reason };
+      } finally {
+        // Each attempt owns its ZIP, including failed, uncertain, and aborted uploads.
+        // The UI keeps only the feedback text; a later submission creates a fresh archive.
+        cleanup(tempRoot);
       }
-    });
-  }
-
-  discardUpload({
-    bundleId,
-  }: {
-    bundleId: string;
-  }): Promise<{ status: 'busy' | 'discarded' | 'not_found' }> {
-    return this.exclusive(async () => {
-      const retained = this.retainedUploads.get(bundleId);
-      if (!retained) return { status: 'not_found' as const };
-      this.retainedUploads.delete(bundleId);
-      cleanup(retained.tempRoot);
-      return { status: 'discarded' as const };
     });
   }
 
@@ -233,32 +193,6 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     } catch (cause) {
       throw new DiagnosticError('NATIVE_UNAVAILABLE', { cause });
     }
-  }
-
-  private retained(bundleId: string): RetainedUpload {
-    const retained = this.retainedUploads.get(bundleId);
-    if (!retained) throw new DiagnosticError('RETRY_NOT_AVAILABLE');
-    return retained;
-  }
-
-  private async submit(retained: RetainedUpload): Promise<DiagnosticUploadResult> {
-    this.abort.signal.throwIfAborted();
-    const result = await this.uploader.upload({
-      description: retained.description,
-      expectedFileSha256: retained.fileSha256,
-      fileName: retained.bundle.fileName,
-      filePath: retained.bundle.filePath,
-      signal: this.abort.signal,
-    });
-    if (result.status === 'uploaded') {
-      this.retainedUploads.delete(retained.bundle.bundleId);
-      cleanup(retained.tempRoot);
-      return result;
-    }
-    if (result.fileSha256) retained.fileSha256 ??= result.fileSha256;
-    const info = { bundleId: retained.bundle.bundleId, fileName: retained.bundle.fileName };
-    if (result.status === 'submission_unknown') return { ...info, status: 'submission_unknown' };
-    return { ...info, status: 'submission_failed', reason: result.reason };
   }
 
   private async collect(
@@ -291,7 +225,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     }
   }
 
-  private async prepare(input: DiagnosticBundleInput, uploadedAutomatically: boolean) {
+  private async prepare(input: DiagnosticReportInput, uploadedAutomatically: boolean) {
     const bundleId = randomUUID();
     let tempRoot: Directory | undefined;
     let snapshot: TraceDiagnosticSnapshot | undefined;
@@ -372,7 +306,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         },
         privacy: {
           capture: 'metadata',
-          containsUnredactedData: false,
+          containsUnredactedData: true,
           publiclyShareable: false,
           uploadedAutomatically,
         },
@@ -384,6 +318,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           persistedTracesOnly: true,
         },
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
+        feedback: { file: 'feedback.txt', source: 'user' },
         system,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
@@ -402,7 +337,10 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
       };
       await writeBundleZip(
         destination,
-        [{ name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` }],
+        [
+          { name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
+          { name: 'feedback.txt', content: normalizeDiagnosticDescription(input.description) },
+        ],
         staged,
         this.abort.signal,
       );

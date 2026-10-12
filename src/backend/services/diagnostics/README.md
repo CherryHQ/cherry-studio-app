@@ -1,9 +1,33 @@
 # Diagnostics
 
-`DiagnosticBundleService` owns inspection, archive creation, upload retries, cancellation and
+`DiagnosticBundleService` owns inspection, archive creation, submission, cancellation and
 cleanup. Frontend callers use `Backend.diagnostics`. Export reads selected plugin configuration
 columns through `backend/data/services/diagnosticPluginState.ts`; it does not read chat tables or
 resolve credentials, refresh tokens, connect plugins or make discovery requests.
+
+## Feedback flow
+
+Settings → About → Feedback opens a compact dialog. The user writes a required description
+(at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
+confirms submission. The same dialog shows indeterminate progress, then success or a failure.
+There is no separate diagnostic page, range selector, or file-save step. Desktop's current report
+form and IPC schema accept only a description, so Mobile does not invent issue categories.
+
+Submission uses the last 24 hours with logs and traces included. The description draft survives
+failure and returning to the form; closing the dialog discards it. Submission blocks dialog
+closure until the operation settles. Retrying from the form creates a fresh archive.
+
+The lower-level export and upload methods both take `DiagnosticReportInput`. Archives include
+`feedback.txt` beside the manifest, so an explicitly exported ZIP also preserves the description.
+Export remains a backend capability and is not part of the feedback dialog. The backend validates
+the same input for saving and uploading. Description text stays separate from technical metadata.
+
+Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
+also has a report URL, server processing status, and local submission history. Mobile currently
+implements the feedback-and-bundle flow; cloud acknowledgement, status lookup, and history remain
+for the updated cloud contract. Desktop reference: `CherryHQ/cherry-studio` main commit
+`0ca0ebaffc`, `src/renderer/components/doctor/DoctorDialog.tsx` and
+`src/renderer/components/feedback/DiagnosticUploadPanel.tsx`.
 
 ## Collected data
 
@@ -48,24 +72,36 @@ Export projects every record again through an explicit field allowlist and filte
 The 50 MiB source budget favors representation of both sources, then recent files. The manifest
 reports unreadable/malformed/changed sources, size omissions and trace storage loss counters.
 
-The ZIP contains `diagnostics.json` (schema version 2), optional `logs/` and `traces/` metadata files.
+The ZIP contains `diagnostics.json` (schema version 2), `feedback.txt`, and optional `logs/` and
+`traces/` metadata files.
 The legacy chat and crash envelopes remain fixed empty and the scan status remains `skipped` for
 schema compatibility. Their presence does not enable collection. Plugin configuration is capped
-at 200 connections, with truncation reported. The manifest declares `privacy.capture: metadata`.
-Technical identifiers can still be private; the screen describes the scope before export/upload.
+at 200 connections, with truncation reported. The manifest declares `privacy.capture: metadata`
+for collected diagnostics.
+`privacy.containsUnredactedData` is true because the user-authored feedback is included verbatim
+(after trimming and newline normalization); `feedback` identifies its file and user origin.
+Technical identifiers can still be private; the dialog describes the scope before submission.
 
 ## Save and upload
 
-Upload uses `POST https://api.cherry-ai.com/diagnostics`, v2 HMAC headers, a normalized description
-of at most 4096 UTF-8 bytes, a 100 MiB ZIP limit, a 64 KiB response limit and a 15-minute timeout.
-There is no background upload or automatic retry. An unreadable success acknowledgement or network
-interruption remains `submission_unknown`; a known rejection is `submission_failed`.
+The cloud adapter is intentionally unconnected while the diagnostic service is being updated.
+`CherryDiagnosticUploadClient.isAvailable` is false. Submission returns `not_configured` before
+collecting data or generating a ZIP, and the dialog explains that feedback is not yet available.
+No request, hashing, signing, or fabricated acknowledgement is performed. Replace this adapter
+only when the new cloud contract is known. No current endpoint, signing scheme, response schema,
+report URL or processing-state protocol is assumed to remain valid.
 
-`modules/diagnostics` provides file identity, SHA-256, signing, system saving and file-backed upload.
-iOS uses a document export picker and URLSession; Android uses `ACTION_CREATE_DOCUMENT` and
-HttpURLConnection. Saving succeeds only after the native destination operation completes.
-Retries reuse the original ZIP and description. Success, discard or host disposal removes the
-internal original; user-saved copies remain. Retained upload state is process-local.
+Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
+rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
+remove staged files. There is no retained ZIP, save-original action, or automatic retry. Only the
+in-memory description survives a failed attempt; an uncertain result warns about duplicate reports.
+Explicit exports remove the temporary original after the system picker finishes and leave the
+user-selected destination intact.
+
+`modules/diagnostics` supplies file identity and system saving. iOS uses a document export picker
+and Android uses `ACTION_CREATE_DOCUMENT`. Saving succeeds only after the native destination
+operation completes. Its existing hash/sign/upload primitives are dormant: the placeholder adapter
+does not invoke them.
 
 ## Build Configuration
 
@@ -76,9 +112,10 @@ cannot add it. The module is discovered from Expo's default `modules/` directory
 environment variable `CHERRYAI_CLIENT_SECRET`, with `MAIN_VITE_CHERRYAI_CLIENT_SECRET` accepted
 for Desktop build-environment parity. It places the value in native application resources, not
 Expo's public `extra` configuration. The client ID, secret suffix, and signature field ordering
-match Desktop. No credential is checked into this repository. A build without the credential
-can export locally; upload returns `authentication_failed` and retains the bundle for retry or
-system saving.
+match the earlier Desktop transport. No credential is checked into this repository. The pending
+cloud integration does not use these credentials or native upload primitives.
+Local saving requires no upload credentials. Revisit the native transport and build credential
+configuration together with the updated cloud adapter.
 
 ## Verification scope
 
