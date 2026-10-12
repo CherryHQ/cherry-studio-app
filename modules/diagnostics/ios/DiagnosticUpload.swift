@@ -101,7 +101,7 @@ final class DiagnosticUpload: NSObject, URLSessionDataDelegate, URLSessionTaskDe
     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
   ) {
     status = (response as? HTTPURLResponse)?.statusCode ?? 0
-    if status != 400 && !(200..<300).contains(status) {
+    if !(200..<300).contains(status) && !(400..<600).contains(status) {
       completionHandler(.cancel)
       return
     }

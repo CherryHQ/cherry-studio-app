@@ -67,6 +67,11 @@ public class DiagnosticsModule: Module {
 
     OnDestroy { self.cancelUpload() }
 
+    Function("isUploadConfigured") {
+      let secret = Bundle.main.object(forInfoDictionaryKey: "CherryAIClientSecret") as? String
+      return secret?.isEmpty == false
+    }
+
     AsyncFunction("upload") {
       (uri: URL, name: String, description: String, headers: [String: String], promise: Promise) in
       let upload = DiagnosticUpload(uri: uri, promise: promise)

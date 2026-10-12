@@ -77,7 +77,7 @@ internal class DiagnosticUpload {
         output.write(suffix)
       }
       status = connection.responseCode
-      if (status != 400 && status !in 200..299) {
+      if (status !in 200..299 && status !in 400..599) {
         return mapOf("status" to status, "body" to "", "invalidResponse" to false)
       }
       val length = connection.getHeaderField("Content-Length")?.trim()
@@ -86,7 +86,7 @@ internal class DiagnosticUpload {
       ) {
         return mapOf("status" to status, "body" to "", "invalidResponse" to true)
       }
-      val input = if (status == 400) connection.errorStream else connection.inputStream
+      val input = if (status >= 400) connection.errorStream else connection.inputStream
       val bytes = input?.use { it.readBytesBounded(64 * 1024) } ?: ByteArray(0)
       val decoder = Charsets.UTF_8.newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)

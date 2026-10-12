@@ -163,7 +163,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
   uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult> {
     return this.exclusive(async (): Promise<DiagnosticUploadResult> => {
       const parsed = DiagnosticReportInputSchema.parse(input);
-      // Do not collect data or create a ZIP until the cloud adapter is connected.
+      // Missing native transport or signing credentials must not trigger collection.
       if (!this.uploader.isAvailable)
         return { status: 'submission_failed', reason: 'not_configured' };
       this.native();

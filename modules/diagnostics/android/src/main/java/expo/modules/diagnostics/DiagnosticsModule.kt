@@ -45,6 +45,14 @@ class DiagnosticsModule : Module() {
       }
     }
 
+    Function("isUploadConfigured") {
+      val context = appContext.reactContext
+      if (context == null) false else {
+        val id = context.resources.getIdentifier("cherry_ai_client_secret", "string", context.packageName)
+        id != 0 && context.getString(id).isNotEmpty()
+      }
+    }
+
     AsyncFunction("upload") { uri: String, name: String, description: String, headers: Map<String, String>, promise: Promise ->
       val transfer = DiagnosticUpload()
       upload = transfer

@@ -23,10 +23,10 @@ Export remains a backend capability and is not part of the feedback dialog. The 
 the same input for saving and uploading. Description text stays separate from technical metadata.
 
 Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
-also has a report URL, server processing status, and local submission history. Mobile currently
-implements the feedback-and-bundle flow; cloud acknowledgement, status lookup, and history remain
-for the updated cloud contract. Desktop reference: `CherryHQ/cherry-studio` main commit
-`0ca0ebaffc`, `src/renderer/components/doctor/DoctorDialog.tsx` and
+also has a report URL, server processing status, and local submission history. Mobile implements
+the feedback-and-bundle flow and displays the cloud acknowledgement's tracking ID; status lookup
+and local submission history are separate product capabilities. Desktop reference:
+`CherryHQ/cherry-studio` main commit `0ca0ebaffc`, `src/renderer/components/doctor/DoctorDialog.tsx` and
 `src/renderer/components/feedback/DiagnosticUploadPanel.tsx`.
 
 ## Collected data
@@ -84,12 +84,29 @@ Technical identifiers can still be private; the dialog describes the scope befor
 
 ## Save and upload
 
-The cloud adapter is intentionally unconnected while the diagnostic service is being updated.
-`CherryDiagnosticUploadClient.isAvailable` is false. Submission returns `not_configured` before
-collecting data or generating a ZIP, and the dialog explains that feedback is not yet available.
-No request, hashing, signing, or fabricated acknowledgement is performed. Replace this adapter
-only when the new cloud contract is known. No current endpoint, signing scheme, response schema,
-report URL or processing-state protocol is assumed to remain valid.
+`CherryDiagnosticUploadClient` uses the
+[diagnostic upload API](https://github.com/CherryInternal/cherry-studio-ops/blob/main/services/api/docs/API.md#上传诊断包):
+`POST https://api.cherry-ai.com/diagnostics`, with no query parameters and exactly the
+`description` and `file` multipart fields. The native transport owns the multipart body,
+boundary, and matching Content-Type. The ZIP is streamed from disk rather than loaded into JS memory.
+
+Availability requires the native module's `isUploadConfigured` capability and a provisioned
+signing credential. Missing credentials or an older development client return `not_configured`
+before collecting data or generating a ZIP. Before uploading, the adapter checks the ZIP's
+positive integer size and 100 MiB limit, then hashes the final ZIP and normalized description.
+The description remains limited to 4096 UTF-8 bytes; the existing 50 MiB source budget is separate
+from the server's archive limit.
+
+Each attempt generates a lowercase UUID v4 Request ID and Unix-second timestamp after hashing.
+The v2 signature covers ten newline-separated fields, including the empty query line, ZIP size,
+ZIP SHA-256 and description SHA-256, with no trailing newline. Native signing keeps the credential
+out of JS, and the transport rechecks the archive's signed size and digest before transfer.
+Only a valid `201` acknowledgement with a UUID v4 ID and `pending` status is reported as uploaded.
+Missing or malformed acknowledgements, transport errors and replay responses remain uncertain.
+Known server errors map from `error.code` first, with HTTP status fallback; concurrency exhaustion
+is temporary service unavailability, distinct from the IP frequency limit. Error response text,
+request signatures and tracking IDs are not logged. Responses remain bounded to 64 KiB, and
+redirects are not followed.
 
 Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
@@ -98,28 +115,27 @@ in-memory description survives a failed attempt; an uncertain result warns about
 Explicit exports remove the temporary original after the system picker finishes and leave the
 user-selected destination intact.
 
-`modules/diagnostics` supplies file identity and system saving. iOS uses a document export picker
-and Android uses `ACTION_CREATE_DOCUMENT`. Saving succeeds only after the native destination
-operation completes. Its existing hash/sign/upload primitives are dormant: the placeholder adapter
-does not invoke them.
+`modules/diagnostics` supplies file identity, hashing, signing, foreground upload, cancellation
+and system saving. iOS uses a document export picker and Android uses `ACTION_CREATE_DOCUMENT`.
+Saving succeeds only after the native destination operation completes.
 
 ## Build Configuration
 
-The local Expo module requires rebuilding the custom development client; an OTA JS update alone
-cannot add it. The module is discovered from Expo's default `modules/` directory.
+The local Expo module, including the upload-configuration capability, requires rebuilding the custom
+development client; an OTA JS update alone cannot add it. The module is discovered from Expo's
+default `modules/` directory.
 
 `plugins/withDiagnostics.js` provisions the same Cherry client credential from the build
 environment variable `CHERRYAI_CLIENT_SECRET`, with `MAIN_VITE_CHERRYAI_CLIENT_SECRET` accepted
 for Desktop build-environment parity. It places the value in native application resources, not
 Expo's public `extra` configuration. The client ID, secret suffix, and signature field ordering
-match the earlier Desktop transport. No credential is checked into this repository. The pending
-cloud integration does not use these credentials or native upload primitives.
-Local saving requires no upload credentials. Revisit the native transport and build credential
-configuration together with the updated cloud adapter.
+match the service's mobile signature helper; diagnostic uploads use its v2 field ordering.
+No credential is checked into this repository. Local saving requires no upload credentials.
 
 ## Verification scope
 
 Test cases cover metadata projection, source budgeting/range filtering, snapshot cleanup, plugin
-error facts and upload/save lifecycle behavior. Executing tests, type checks, native builds,
-device acceptance or a real submission requires explicit user authorization. A schema-v2
+error facts, the v2 request/acknowledgement/error contract and upload/save lifecycle behavior.
+Executing tests, type checks, native builds, device acceptance or a real submission requires
+explicit user authorization. A schema-v2
 manifest alone does not establish server acceptance of mobile metadata payloads.
