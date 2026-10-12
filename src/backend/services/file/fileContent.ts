@@ -159,6 +159,22 @@ export const fileContent = {
       };
     });
   },
+  /** Imported originals cannot be rewritten; mutable Agent artifacts need a private snapshot. */
+  prepareUploadSource: async (id: FileEntryId): Promise<ResolvedFile> => {
+    const source = await resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id));
+    if (!source) throw new Error('Upload source is unavailable');
+    if (source.entry.provenance === 'imported') return source;
+    const entry = await createInternalEntry(fileEntryService, {
+      source: 'uri',
+      uri: source.uri,
+      name: source.entry.filename,
+      mediaType: source.entry.mediaType,
+      provenance: 'imported',
+    });
+    const snapshot = await resolveFileEntry(fileEntryService, entry.id);
+    if (!snapshot) throw new Error('Upload snapshot is unavailable');
+    return snapshot;
+  },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   /**
    * Replace a draft text entry's bytes in place. Only a turn's own artifact is

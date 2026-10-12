@@ -60,9 +60,9 @@ native module ownership and the network-independent pairing migration.
 
 ## Shared packages
 
-- `@cherrystudio/remote-protocol@0.3.0` comes from npm. Its published exports include the Agent,
+- `@cherrystudio/remote-protocol@0.4.0` comes from npm. Its published exports include the Agent,
   configuration, failure, and connection contracts; Mobile owns only its consumers and adapters.
-- `@cherrystudio/remote-transport@0.1.2` comes from npm and depends on the matching protocol
+- `@cherrystudio/remote-transport@0.2.0` comes from npm and depends on the matching protocol
   version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
   along with the service registry. Metro applies the libp2p legacy browser maps so native bundles
   use the pure-JS entries. Android pairing and configuration sync were verified against the former
@@ -70,6 +70,13 @@ native module ownership and the network-independent pairing migration.
   execution still require device acceptance.
 - RN `WebSocket` is wrapped into the transport's `RemoteSocket` shape (`binaryType = 'arraybuffer'`,
   `bufferedAmount` reported as 0, `close(code)`).
+
+## File transfer and target design
+
+[Send mobile files to desktop](./file-transfer.md) records current selection-time binary uploads,
+shared protocol, receiver, historical decisions and remaining acceptance/release checks.
+[Managed Attachments](./managed-attachments-design.md) records the integrated simplification: mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable
+pending-message presentation. Desktop intake and attachment-draft tables are removed; mobile source-copy reduction remains pending.
 
 ## Session read cache
 
@@ -233,7 +240,7 @@ These additions require the matching desktop implementation. Device acceptance i
 
 ## Out of scope
 
-Relay service, file bytes for `file` parts (desktop exposes metadata only), approval cards that the
+Relay service, approval cards that the
 desktop persists after a turn (listed and answerable, not streamed), and any write to desktop
 Agents or registered workspaces. Creating a session-owned system workspace is supported.
 

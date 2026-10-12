@@ -4,12 +4,17 @@ import {
   remoteAuthorizationSchema,
   remoteFailureSchema,
   remoteLimits,
+  uploadTransferLimits,
+  uploadAckSchema,
+  type UploadChunk,
+  type UploadAck,
   type RemoteAuthorization,
 } from '@cherrystudio/remote-protocol';
 import { agentMethods } from '@cherrystudio/remote-protocol/agent';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
+import { randomUUID } from 'expo-crypto';
 import { createJSONRPCErrorResponse, JSONRPCClient, JSONRPCErrorException } from 'json-rpc-2.0';
 import type * as z from 'zod';
 
@@ -69,6 +74,8 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
+  agentUploadsVersion?: number;
+  agentAttachmentSelections?: boolean;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
     let session: DesktopSession | undefined;
@@ -76,6 +83,7 @@ export class DesktopSession {
       const connectSecureChannel =
         options.secure ?? (await import('@cherrystudio/remote-transport')).connectSecureChannel;
       const channel = await connectSecureChannel(options.stream, {
+        ...(options.secure ? {} : { crypto: (await import('./remoteCrypto')).remoteCrypto }),
         identity: options.identity,
         remoteIdentity: options.desktopIdentity,
         logger: transportLogger,
@@ -89,6 +97,8 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.agentUploadsVersion = hello.agentUploadsVersion;
+      session.agentAttachmentSelections = hello.agentAttachmentSelections;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
       return session;
@@ -97,6 +107,55 @@ export class DesktopSession {
       options.stream.abort(error instanceof Error ? error : new Error('Handshake failed'));
       throw error;
     }
+  }
+
+  private readonly uploads = new Map<
+    string,
+    { resolve(ack: UploadAck): void; reject(error: unknown): void }
+  >();
+  async sendUploadChunk(
+    input: Omit<UploadChunk, 'kind' | 'requestId'>,
+    signal: AbortSignal,
+  ): Promise<Extract<UploadAck, { ok: true }>> {
+    signal.throwIfAborted();
+    if (this.closed) throw new DesktopUnreachableError(['connection closed']);
+    if (this.agentUploadsVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Binary upload is unavailable',
+      });
+    if (this.uploads.size >= uploadTransferLimits.window)
+      throw new RemoteFailureError({
+        reason: 'RESOURCE_EXHAUSTED',
+        message: 'Upload window is full',
+      });
+    const requestId = randomUUID();
+    const pending = new Promise<UploadAck>((resolve, reject) => {
+      const finish = () => {
+        clearTimeout(timer);
+        this.uploads.delete(requestId);
+      };
+      const timer = setTimeout(() => {
+        this.close();
+      }, remoteLimits.idleMs);
+      const entry = {
+        resolve: (ack: UploadAck) => {
+          finish();
+          resolve(ack);
+        },
+        reject: (error: unknown) => {
+          finish();
+          reject(error);
+        },
+      };
+      this.uploads.set(requestId, entry);
+      void Promise.resolve()
+        .then(() => this.channel.write({ kind: 'upload', requestId, ...input }))
+        .catch(entry.reject);
+    });
+    const ack = await withAbort(pending, signal);
+    if (!ack.ok) throw new RemoteFailureError(ack.error);
+    return ack;
   }
 
   private readonly client: JSONRPCClient;
@@ -140,6 +199,20 @@ export class DesktopSession {
   ): Promise<DesktopResult<M>> {
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     signal?.throwIfAborted();
+    if (
+      (method === 'agent.attachments.present' ||
+        (method === 'agent.messages.send' && 'attachmentDraft' in params)) &&
+      this.agentAttachmentSelections !== true
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support attachment drafts',
+      });
+    if (method.startsWith('agent.uploads.') && this.agentUploadsVersion !== 1)
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support attachments',
+      });
     if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
@@ -212,6 +285,8 @@ export class DesktopSession {
   }
 
   close(): void {
+    for (const entry of this.uploads.values())
+      entry.reject(new DesktopUnreachableError(['connection closed']));
     if (this.closed) return;
     this.closed = true;
     this.client.rejectAllPendingRequests(CLOSED_MESSAGE);
@@ -236,7 +311,10 @@ export class DesktopSession {
     try {
       while (!this.closed) {
         const message = await this.channel.read();
-        if (isNotification(message)) {
+        if (isNotification(message) && message.method === 'agent.uploads.ack') {
+          const ack = uploadAckSchema.parse(message).params;
+          this.uploads.get(ack.requestId)?.resolve(ack);
+        } else if (isNotification(message)) {
           for (const listener of this.listeners) listener(message);
           if (message.method === 'connection.closed') this.close();
         } else {

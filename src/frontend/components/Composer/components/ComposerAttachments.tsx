@@ -1,6 +1,7 @@
-import { Composer } from '@cherrystudio/ui/components';
+import { Composer, type FilePreviewTransfer } from '@cherrystudio/ui/components';
 
 import { useComposerActions, useComposerState } from '../context/ComposerProvider';
+import type { ComposerAttachmentDraft } from '../utils/composerAttachments';
 import { ComposerAttachmentStrip } from './ComposerAttachmentStrip';
 
 /**
@@ -10,7 +11,9 @@ import { ComposerAttachmentStrip } from './ComposerAttachmentStrip';
  * both real callers needed a shape it did not have. This is that row, one layer
  * up, where knowing what an attachment *is* is allowed.
  */
-export function ComposerAttachments() {
+export function ComposerAttachments({
+  transfer,
+}: { transfer?: (file: ComposerAttachmentDraft) => FilePreviewTransfer | undefined } = {}) {
   const { attachments } = useComposerState();
   const { removeAttachment } = useComposerActions();
 
@@ -21,7 +24,11 @@ export function ComposerAttachments() {
 
   return (
     <Composer.Collapsible style={attachmentRowStyle}>
-      <ComposerAttachmentStrip attachments={attachments} onAttachmentRemove={removeAttachment} />
+      <ComposerAttachmentStrip
+        transfer={transfer}
+        attachments={attachments}
+        onAttachmentRemove={removeAttachment}
+      />
     </Composer.Collapsible>
   );
 }

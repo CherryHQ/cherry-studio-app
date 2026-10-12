@@ -1,5 +1,4 @@
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import {
   BottomSheet,
   Button,
@@ -8,9 +7,9 @@ import {
   Section,
   useToast,
 } from '@cherrystudio/ui/components';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import {
   useConversationWorkspaces,
@@ -26,13 +25,18 @@ import {
 } from '@/frontend/appShell/conversation/remote';
 import {
   ComposerSurface,
+  ComposerMenu,
+  ComposerAttachments,
   useComposerPresentationActions,
   useComposerState,
   useComposerActions,
 } from '@/frontend/components/Composer';
+import { useBackendModule } from '@/frontend/data';
 
 import { ChatInputSurface } from '../components/ChatInput';
+import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
+import { restoreRemoteInput } from './restoreRemoteInput';
 import { UndeliveredMessageRow } from './UndeliveredMessageRow';
 import { useRemoteDraftPersistence } from './useRemoteDraftPersistence';
 
@@ -54,8 +58,10 @@ export function RemoteComposer({
   const { t } = useTranslation();
   const { toast } = useToast();
   const existing = draftId === undefined;
-  const { draft: text } = useComposerState();
-  const { setDraft } = useComposerActions();
+  const { draft: text, attachments } = useComposerState();
+  const files = useBackendModule('file');
+  const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
+    useComposerActions();
   const { runInputReplacement } = useComposerPresentationActions();
   const [workspace, setWorkspace] = useState<WorkspaceSummary>();
   const [choosingWorkspace, setChoosingWorkspace] = useState(false);
@@ -86,6 +92,80 @@ export function RemoteComposer({
   const startAvailability = draft.state?.start.availability;
   const starting = startAvailability?.state === 'disabled' && startAvailability.reason === 'busy';
   const action = existing ? snapshot.actions.send : draft.state?.start;
+  const inputAllowsAttachments =
+    (existing ? snapshot.actions.inputPolicy : draft.state?.inputPolicy)?.attachments === true;
+  const upload = existing ? snapshot.upload : draft.state?.upload;
+  const preparation = existing
+    ? snapshot.attachmentPreparation
+    : draft.state?.attachmentPreparation;
+  const supportsAttachments = inputAllowsAttachments && Boolean(preparation);
+  const restoreDraft = useEffectEvent(async (isCurrent: () => boolean) => {
+    if (attachments.length || !preparation?.draft?.items.length) return;
+    const restored = await restoreRemoteInput(
+      {
+        parts: preparation.draft.items.map((file) => ({
+          type: 'file',
+          fileEntryId: file.fileEntryId,
+          filename: file.name,
+          mediaType: file.mediaType,
+        })),
+      },
+      (id) => files.getUri(id),
+    );
+    if (!isCurrent() || !canRestore()) return;
+    setAttachments(restored.attachments);
+    if (restored.missing.length) {
+      toast.show({
+        label: t('remoteAgent.missingAttachments', { names: restored.missing.join(', ') }),
+        variant: 'danger',
+      });
+      stageAttachments(restored.attachments);
+    }
+  });
+  const canRestore = useEffectEvent(() => attachments.length === 0);
+  const restoredKey = useRef<string | undefined>(undefined);
+  const hasPreparation = Boolean(preparation);
+  useEffect(() => {
+    if (!hasPreparation || restoredKey.current === draftKey) return;
+    let current = true;
+    void restoreDraft(() => current).then(() => {
+      if (current) restoredKey.current = draftKey;
+    });
+    return () => {
+      current = false;
+    };
+  }, [hasPreparation, draftKey]);
+  const stageAttachments = (items: typeof attachments) => {
+    try {
+      preparation?.stage(
+        items.flatMap((file) =>
+          file.status === 'ready'
+            ? [{ fileEntryId: file.fileEntryId, name: file.name, mediaType: file.mediaType }]
+            : [],
+        ),
+      );
+    } catch {
+      toast.show({ label: t('remoteAgent.loadFailed'), variant: 'danger' });
+    }
+  };
+  const stage = useEffectEvent(stageAttachments);
+  useEffect(
+    () => subscribeAttachmentChanges?.((items) => stage(items)),
+    [subscribeAttachmentChanges],
+  );
+  const uploadsReady =
+    !attachments.length ||
+    Boolean(
+      preparation &&
+      !preparation.draft?.busy &&
+      attachments.every(
+        (file) =>
+          file.status === 'ready' &&
+          preparation.draft?.items.some(
+            (item) => item.fileEntryId === file.fileEntryId && item.state === 'ready',
+          ),
+      ),
+    );
   const cancellations = snapshot.executions.filter((execution) => execution.cancel);
   const canStop = cancellations.some(
     (execution) => execution.cancel?.availability.state === 'enabled',
@@ -101,7 +181,16 @@ export function RemoteComposer({
     <>
       <UndeliveredMessageRow
         message={undelivered}
-        onEdit={(restored) => setDraft((current) => [restored, current].filter(Boolean).join('\n'))}
+        onEdit={async (input) => {
+          const restored = await restoreRemoteInput(input, (id) => files.getUri(id));
+          addAttachments(restored.attachments);
+          setDraft((current) => [restored.text, current].filter(Boolean).join('\n'));
+          if (restored.missing.length)
+            toast.show({
+              label: t('remoteAgent.missingAttachments', { names: restored.missing.join(', ') }),
+              variant: 'danger',
+            });
+        }}
       />
       <ComposerSurface
         getSendErrorLabel={(error) =>
@@ -109,12 +198,18 @@ export function RemoteComposer({
             ? t(conversationFailureKey(error.failure))
             : undefined
         }
-        canSend={action?.availability.state === 'enabled' && Boolean(text.trim())}
+        canSend={
+          action?.availability.state === 'enabled' &&
+          !upload &&
+          uploadsReady &&
+          Boolean(text.trim() || attachments.length) &&
+          (!attachments.length || supportsAttachments)
+        }
         streaming={canStop}
         dismissKeyboardOnSend
-        onSend={async ({ text }) => {
+        onSend={async (input) => {
           if (!action || action.availability.state !== 'enabled') throw new Error('UNAVAILABLE');
-          const result = await action.execute({ parts: [{ type: 'text', text }] });
+          const result = await action.execute({ parts: toAgentInputParts(input) });
           // A recorded rejection is held by the undelivered row; only unadmitted input returns here.
           if (result.state === 'rejected' && !result.operationId)
             throw new ConversationActionError(result.failure);
@@ -126,22 +221,49 @@ export function RemoteComposer({
         }}
         testID="chat-composer"
       >
+        <ComposerAttachments
+          transfer={(file) => {
+            if (!preparation) return undefined;
+            const item = preparation.draft?.items.find(
+              (item) => item.fileEntryId === file.fileEntryId,
+            );
+            if (item?.state === 'ready') return undefined;
+            const progress = item ? item.sent / Math.max(1, item.total) : undefined;
+            return {
+              progress,
+              state: item?.state === 'failed' ? 'failed' : 'uploading',
+              label:
+                item?.state === 'failed'
+                  ? t('remoteAgent.loadFailed')
+                  : t('remoteAgent.uploadProgress', { percent: Math.floor((progress ?? 0) * 100) }),
+            };
+          }}
+        />
+        {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
+          <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
+            {t('common.retry')}
+          </Button>
+        ) : null}
+        {upload ? (
+          <View className="flex-row items-center gap-2 px-4">
+            <Text className="flex-1 text-sm text-muted-foreground">
+              {t('remoteAgent.uploadProgress', {
+                percent: Math.floor((upload.sent / Math.max(1, upload.total)) * 100),
+              })}
+            </Text>
+            <Button size="xs" variant="ghost" onPress={upload.cancel}>
+              {t('common.cancel')}
+            </Button>
+          </View>
+        ) : null}
         <ChatInputSurface
-          attachmentMode="text-only"
+          attachmentMode={supportsAttachments ? 'images' : 'text-only'}
           streaming={canStop}
-          leadingAction={
-            <Composer.Action
-              accessibilityLabel={t('common.more')}
-              onPress={() => toast.show({ label: t('remoteAgent.attachmentsUnavailable') })}
-              testID="composer-menu-trigger"
-            >
-              <PlusIcon className="size-6 text-foreground" />
-            </Composer.Action>
-          }
+          leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
           secondaryAction={
             <Composer.Pill
               accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || starting}
+              disabled={existing || starting || attachments.length > 0}
               onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
               icon={<FolderIcon className="size-5 text-foreground" />}
               testID="composer-workspace-button"
