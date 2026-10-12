@@ -26,4 +26,5 @@ export type {
   UpdateReminderDetails,
 } from './calendar';
 export { getCurrentLocation } from './location';
+export { isDeviceRegionMainlandChina } from './region';
 export { MAX_QUERY_RANGE_DAYS, NATIVE_TOOL_TIMEOUT_MS } from './utils';

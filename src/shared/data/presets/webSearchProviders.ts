@@ -143,12 +143,11 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   jina: {
     name: 'Jina',
     type: 'api',
-    // Both endpoints answer anonymous requests, so search works before any key is configured.
     capabilities: [
       {
         feature: 'searchKeywords',
         requiresApiHost: true,
-        requiresApiKey: false,
+        requiresApiKey: true,
         apiHost: 'https://s.jina.ai',
       },
       {

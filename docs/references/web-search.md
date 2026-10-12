@@ -38,7 +38,8 @@ Runtime behavior:
 - executes one request per normalized keyword or URL using only the selected provider;
 - returns successful results alongside failed inputs, retaining error kind, message, and available
   status/code even when every input fails;
-- logs failures with their provider and capability; it never retries or switches providers;
+- logs failures with their provider and capability; it never retries a failed lookup or switches
+  providers;
 - bounds fetched page content and applies configured search-result compression;
 - propagates caller aborts.
 
@@ -54,16 +55,16 @@ preset shape, and preference keys are vocabulary shared with Cherry Studio deskt
 | `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
 | `querit` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
-| `jina`, `firecrawl` | yes | yes | API key optional |
+| `jina` | yes | yes | API key required to search, optional to read pages |
+| `firecrawl` | yes | yes | API key optional |
 | `searxng` | yes | | self-hosted address; optional basic auth |
 | `crawl4ai` | | yes | self-hosted address; optional token |
 | `fetch` | | yes | none; see [Local Extraction](#local-extraction) |
 
 Each preset capability declares `requiresApiHost` and `requiresApiKey`. `WebSearchService` enforces
 them before any request, so a missing key or address is the same configuration failure for every
-provider. Two presets differ from desktop on purpose: Jina search does not require a key, because
-`s.jina.ai` answers anonymous requests and search then works before anything is configured; and
-SearXNG has no default address, because a phone has no local instance to reach.
+provider. SearXNG has no default address, unlike desktop, because a phone has no local instance
+to reach.
 
 Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
 for page reading, both without requiring a user API key. Exa MCP also supports page reading
@@ -72,6 +73,12 @@ Both services handle page extraction remotely. The Exa adapter is a fixed HTTP a
 one hosted service, not a general MCP client: it accepts MCP JSON and SSE responses, preserves
 both `Highlights` and `Text` search content, and treats protocol/tool errors as failures rather
 than empty successful searches.
+
+Jina's built-in addresses follow the device: a device whose region is mainland China, or whose
+time zone is Shanghai or Urumqi, uses Jina's mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and
+any other device uses the global hosts. Device settings only guess at what the network can reach,
+so when the chosen host cannot be connected to, the request is sent once to the other. A timeout
+or an answer from the service is not retried, and an address the user entered is used as is.
 
 SearXNG returns the instance's result snippets and sends the configured engine list only when one
 is stored; it does not read each result page. Several API keys rotate per provider across lookups,
@@ -97,8 +104,9 @@ the same resolution an Agent call uses, including values not yet saved, and show
 own error on failure. Local extraction has nothing to configure or check.
 
 Stored provider selections remain unchanged. A selected provider is the only request destination,
-including when it uses a custom host. Exa and Jina reader calls allow 60 seconds each; Exa keyword
-search retains its 25-second limit. Caller cancellation propagates without becoming a lookup error.
+including when it uses a custom host; Jina's two built-in hosts are the same provider. Exa and
+Jina reader calls allow 60 seconds each; Exa keyword search retains its 25-second limit. Caller
+cancellation propagates without becoming a lookup error.
 
 Any lookup failure, including a failed URL in an otherwise successful batch, stops new calls to
 both `web_search` and `web_fetch` for the current turn. The tools share the Runtime's `web` failure
