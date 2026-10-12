@@ -2,9 +2,10 @@
 
 Status: **Mobile now declares published `@cherrystudio/ai-core@2.1.0` and
 `@cherrystudio/ai-sdk-provider@0.1.7` in place of local source packages; Expo and device acceptance
-of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime. Provider
-registry admission remains incomplete, and Mobile's remote registry compatibility stays pinned to
-Desktop `2.0.8` pending an explicit compatibility review.**
+of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
+Mobile now reads schema v3 model catalogs with a Desktop `2.1.4` semantic baseline for its
+consumed fields. Regression sources accompany this migration; local tests, typecheck, and device
+acceptance remain pending until explicitly requested.**
 
 This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
 source of behavior to assess, not a tree to copy. Every port needs a concrete Mobile consumer and
@@ -90,7 +91,7 @@ check, platform exports, and device acceptance before the registry compatibility
 
 | Registry concern | Mobile state | Runtime scope |
 | --- | --- | --- |
-| Remote manifest compatibility | Implemented with an independent registry compatibility version | Shared catalog loading; accepted line remains `2.0.8` |
+| Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
 | Reasoning wire dialects | Implemented for AI SDK and Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
@@ -98,17 +99,18 @@ check, platform exports, and device acceptance before the registry compatibility
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
-| Full catalog compatibility review | Outstanding | Blocks compatibility-version advancement |
+| V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
 | Mobile-only `github` preset | Retained as a product extension | Its bundled provider-model namespace replaces any remote `github` rows |
 
 Last reviewed Desktop commit for `packages/provider-registry`:
-`55feedb21473daf04792962db81ca66ab53e58a0`. The reviewed commit records which Desktop changes have
-been assessed; it does not advance the registry compatibility line.
+`06706ac7e6810759ef763320e792092ce60d8409` for the v3 model/override schemas and adaptive reasoning
+profile. This is a scoped source review, not a claim of complete Desktop feature or device parity.
 
 ### Remote catalog policy
 
-Mobile may fetch `models.json` and `provider-models.json` after explicit user action. Before it
-admits a newer Desktop snapshot, the Runtime must understand every required field it consumes and
+Mobile fetches `models.json` and `provider-models.json` on first use, during a saved-schema upgrade,
+and after explicit model-list access. Before it admits a newer Desktop snapshot, the Runtime must
+understand every required field it consumes and
 explicitly classify unsupported optional fields as ignored product capabilities.
 
 The remote payload is unsigned, so `providers.json` stays bundled and trusted. Remote data may
@@ -120,12 +122,12 @@ are rejected before download and activation. The Mobile-owned `github` namespace
 authoritative: bundled GitHub overrides replace, rather than mix with, any `github` rows in a
 Desktop snapshot.
 
-Desktop `2.0.9` remains rejected while its complete model and override payload has not passed a
-Mobile compatibility review. Provider-native `serverTools` are not by themselves an admission
-requirement: Mobile may explicitly ignore those optional declarations while its application-owned
-Web Search remains the only conversation search path. Admission must still prove that removing the
-older per-model `web-search` capability does not alter any Mobile UI, model filtering, or request
-behavior that actually consumes it.
+The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
+item; entries with an unsupported protocol are omitted. Provider-native `serverTools` and `ultra`
+have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
+pinned Anthropic SDK lacks `between_tools`. Always-on adaptive reasoning uses the shared interpreter.
+Provider connection and authentication behavior stays bundled. Old snapshots remain usable offline
+while startup attempts the schema upgrade; schema version takes priority over workflow revision.
 
 ## Pi Boundary
 
