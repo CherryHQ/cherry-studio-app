@@ -49,6 +49,28 @@ describe('message settlement', () => {
     },
   );
 
+  test('closes open text and keeps produced files when recovery interrupts a message', () => {
+    const filePart = {
+      id: 'file-1',
+      type: 'file',
+      fileEntryId: '11111111-1111-7111-8111-111111111111',
+      purpose: 'artifact',
+      filename: 'note.md',
+      mediaType: 'text/markdown',
+    } as const;
+    expect(
+      settleInterruptedAssistantParts(
+        [{ id: 'reasoning-1', type: 'reasoning', text: 'Thinking', state: 'streaming' }, filePart],
+        INTERRUPTED,
+        'error-turn-1',
+      ),
+    ).toEqual([
+      { id: 'reasoning-1', type: 'reasoning', text: 'Thinking', state: 'done' },
+      filePart,
+      { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },
+    ]);
+  });
+
   test('appends a renderable error part when recovery interrupts an assistant message', () => {
     expect(settleInterruptedAssistantParts([], INTERRUPTED, 'error-turn-1')).toEqual([
       { id: 'error-turn-1', type: 'data-error', data: INTERRUPTED },

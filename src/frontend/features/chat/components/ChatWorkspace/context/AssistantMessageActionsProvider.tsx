@@ -166,7 +166,9 @@ export function AssistantMessageActionsProvider({
       const current = latest.current;
       if (messageId !== current.retryableMessageId || current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions.retry;
-      void run(`retry:${messageId}`, action, undefined, 'retryFailed');
+      void run(`retry:${messageId}`, action, undefined, 'retryFailed', (ref) => {
+        if (ref) router.replace(conversationHref(ref));
+      });
     },
     [run],
   );

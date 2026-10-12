@@ -1,4 +1,4 @@
-import { fileEntryPreviewKind } from '../fileEntryPresentation';
+import { canPreviewDocument, fileEntryPreviewKind } from '../fileEntryPresentation';
 
 describe('fileEntryPreviewKind', () => {
   it.each([
@@ -28,4 +28,22 @@ describe('fileEntryPreviewKind', () => {
     expect(fileEntryPreviewKind({ mediaType: 'Text/Plain; charset=utf-8' })).toBe('text');
     expect(fileEntryPreviewKind({ mediaType: 'APPLICATION/PDF' })).toBe('document');
   });
+});
+
+describe('canPreviewDocument', () => {
+  it.each([
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'APPLICATION/VND.OPENXMLFORMATS-OFFICEDOCUMENT.SPREADSHEETML.SHEET; charset=binary',
+  ])('opens %s in the app', (mediaType) => {
+    expect(canPreviewDocument({ mediaType })).toBe(true);
+  });
+
+  it.each(['application/msword', 'application/vnd.ms-excel', 'application/zip', 'image/png'])(
+    'leaves %s to the system',
+    (mediaType) => {
+      expect(canPreviewDocument({ mediaType })).toBe(false);
+    },
+  );
 });

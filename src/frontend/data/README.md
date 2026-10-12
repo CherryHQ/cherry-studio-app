@@ -10,7 +10,7 @@ src/frontend/data/
 ├── CacheService.ts         # frontend memory and persisted UI cache
 ├── QueryProvider.tsx       # React Query client and AppState focus bridge
 ├── FileQueryBridge.tsx     # invalidates file lists and affected details/content after writes
-├── ProviderRegistryQueryBridge.tsx # invalidates model projections after a registry hot-swap
+├── ProviderRegistryQueryBridge.tsx # invalidates model projections, including Agent model names, after a registry hot-swap
 ├── appUpdate.ts            # GitCode APK update query shared by startup and settings
 ├── queryKeys/              # one file per endpoint family plus the public registry
 ├── hooks/                  # typed Data API, preference, and cache React bindings

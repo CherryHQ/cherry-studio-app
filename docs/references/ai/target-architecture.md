@@ -1,5 +1,11 @@
 # Backend AI Target Architecture
 
+The experimental [Pi Durable migration](../agent/pi-durable-migration.md) supersedes the per-turn
+history and checkpoint ownership below for the active experimental local runtime. Production uses
+the persistent `DurableAgentRuntime` seam; the old per-turn loop and Host are removed. It preserves Pi isolation and the application-owned business, model, capability, and
+presentation boundaries. The migration reference also governs the separate Pi database and backup
+v2; the original frozen-schema constraint below applies only to the historical baseline.
+
 Status: **local target state landed 2026-08-28; PC Agent Controller version 2 implemented, pending device verification** (see [Migration Status](#migration-status)).
 
 This reference records the approved target structure for `src/backend/ai`, the seam rules that keep

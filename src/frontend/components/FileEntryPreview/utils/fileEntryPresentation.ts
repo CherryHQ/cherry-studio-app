@@ -35,6 +35,18 @@ export function fileEntryPreviewKind(entry: Pick<FileEntry, 'mediaType'>): FileE
   );
 }
 
+const inAppDocumentMediaTypes = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]);
+
+/** PDF and Office Open XML documents open in the app's document viewer; other documents open with the system. */
+export function canPreviewDocument(entry: Pick<FileEntry, 'mediaType'>): boolean {
+  return inAppDocumentMediaTypes.has(entry.mediaType.split(';')[0]?.trim().toLowerCase() ?? '');
+}
+
 /**
  * The whole mapping from a managed entry to CherryUI's neutral descriptor, so
  * every caller classifies and labels files the same way.

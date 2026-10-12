@@ -39,8 +39,8 @@ surfaces.
   returns an id. Picking one saves immediately when editing; on create, Save commits the draft.
   An avatar can be set and replaced but not cleared. The preinstalled Cherry Agent stores `🍒`;
   onboarding uses the same emoji when it creates an Agent. Renaming preserves the stored emoji,
-  and choosing a photo replaces it. Unset avatars render the name's first character over a generated
-  colour, falling back to a neutral badge while the name is still blank.
+  and choosing a photo replaces it. Unset avatars render the name's first character on the
+  neutral fallback fill, which stays empty while the name is still blank.
 
 ## Organization
 
@@ -48,8 +48,12 @@ surfaces.
   the editor page.
 - `edit/agentForm.ts` keeps the pure form-state seeding and DTO building logic testable outside the
   screen.
-- The editor lays its fields out bare rather than in a grouped card, so its route keeps the ordinary
-  page background — the field fill needs a lighter page behind it to read as a field at all.
+- The list and editor follow the settings pages: rows sit in grouped cards on the ordinary page
+  background and switch rows carry no icons. Create and edit render the same form — a centered
+  avatar and underlined name, then instructions, model and approval, capabilities, and MCP
+  extensions. Only the header's Save action (create) and the delete row (edit) differ. Create
+  writes the avatar and MCP bindings after the record exists; edit deletes after confirmation and
+  returns to the previous screen.
 - The editor's route is the one screen in this stack with an opaque header, so the native stack owns
   the top inset. Under the stack's floating header that inset comes from `useHeaderHeight()`, which
   reports an estimate until the native header measures itself and so drops the content into place a

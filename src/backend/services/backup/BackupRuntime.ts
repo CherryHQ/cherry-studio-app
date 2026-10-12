@@ -51,14 +51,20 @@ export class BackupRuntime extends BaseService implements BackupModule {
   private hasActiveWork: () => boolean = () => true;
   private resumeWork: () => void = () => {};
   private stopped = false;
+  private quiesceAgent: () => Promise<void> = async () => {};
 
   constructor(private readonly dbService: DbService) {
     super();
   }
 
-  configure(hasActiveWork: () => boolean, resumeWork: () => void): void {
+  configure(
+    hasActiveWork: () => boolean,
+    resumeWork: () => void,
+    quiesceAgent: () => Promise<void> = async () => {},
+  ): void {
     this.hasActiveWork = hasActiveWork;
     this.resumeWork = resumeWork;
+    this.quiesceAgent = quiesceAgent;
   }
   isAvailable = (): boolean => getBackupStorage() !== null;
   getState = (): BackupState => this.backupState;
@@ -91,6 +97,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
         const release = this.freeze();
         let resources: Awaited<ReturnType<typeof captureResources>>;
         try {
+          await this.quiesceAgent();
           const database = archiveFile(work, 'database/cherry.db');
           await captureDatabase(this.dbService.getSqlite(), database);
           resources = await captureResources(storageDirectory(), work, signal);
@@ -216,6 +223,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
       try {
         // Freeze before moving anything, so a busy app fails before the candidate is consumed.
         release = this.freeze();
+        await this.quiesceAgent();
         for (const [index, entry] of manifest.entries.entries()) {
           signal.throwIfAborted();
           const output = restoredFile(target, entry.path);

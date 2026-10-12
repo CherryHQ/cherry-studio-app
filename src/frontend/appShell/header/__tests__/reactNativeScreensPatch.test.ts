@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 const androidSourceRoot = `${process.cwd()}/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens`;
@@ -53,5 +54,47 @@ describe('react-native-screens Android removal transition patch', () => {
     expect(update).toContain(
       'if (!isAttachedToWindow || !isTop || isDestroyed || isInRemovalTransition())',
     );
+  });
+});
+
+// These guards cover the upstream backport and dependency wiring. Native device
+// acceptance requires a new development client containing the C++ changes.
+describe('react-native-screens Android mounting listener patch', () => {
+  const nativeRoot = `${process.cwd()}/node_modules/react-native-screens`;
+  const proxy = readFileSync(`${nativeRoot}/android/src/main/cpp/NativeProxy.cpp`, 'utf8');
+  const listener = readFileSync(`${nativeRoot}/cpp/RNSScreenRemovalListener.cpp`, 'utf8');
+
+  test('pins the backported native sources to the patch and lockfile', () => {
+    const patchPath = 'patches/react-native-screens@4.26.2.patch';
+    const hash = createHash('sha256').update(readFileSync(patchPath)).digest('hex');
+    expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
+      `react-native-screens@4.26.2: ${patchPath}`,
+    );
+    expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(
+      `  react-native-screens@4.26.2: ${hash}\n`,
+    );
+  });
+
+  test('registers one thread-safe listener instead of racing per-proxy shared pointer assignments', () => {
+    expect(proxy).toContain('static const std::shared_ptr<RNSScreenRemovalListener> instance =');
+    expect(proxy).toContain('coordinator->setMountingOverrideDelegate(removalListener());');
+    expect(proxy).not.toContain('screenRemovalListener_');
+    expect(proxy).toMatch(
+      /std::lock_guard<std::mutex> lock\(installMutex_\);\s*removalListenerToken_ =\s*removalListener\(\)->setListener\(\[javaPart = javaPart_\]/,
+    );
+    expect(proxy).toMatch(
+      /std::lock_guard<std::mutex> lock\(installMutex_\);\s*removalListener\(\)->clearListener\(removalListenerToken_\);\s*javaPart_ = nullptr;/,
+    );
+  });
+
+  test('lets stale owners clear only their callback and invokes JNI outside the listener lock', () => {
+    expect(listener).toMatch(
+      /std::lock_guard<std::mutex> lock\(listenerMutex_\);\s*if \(token == currentToken_\) \{\s*listenerFunction_ = nullptr;/,
+    );
+    expect(listener).toMatch(
+      /\{\s*std::lock_guard<std::mutex> lock\(listenerMutex_\);\s*listener = listenerFunction_;\s*\}\s*if \(!listener\)/,
+    );
+    expect(listener).toContain('listener(mutation.oldChildShadowView.tag);');
+    expect(listener).not.toContain('listenerFunction_(mutation.oldChildShadowView.tag);');
   });
 });

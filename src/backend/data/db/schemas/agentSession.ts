@@ -21,8 +21,10 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
     name: text().notNull().default(''),
-    // Whether the title was manually edited by user
+    // Whether the name was manually edited by user
     isNameManuallyEdited: integer({ mode: 'boolean' }).notNull().default(false),
+    /** Invalidates disposable execution history in the same transaction as transcript edits. */
+    runtimeRevision: integer().notNull().default(0),
     // Dedicated conversation activity time: advances to reservation time or
     // terminal stats.runtimeTiming.completedAt, and is inherited by history forks.
     // Administrative mutations such as renames and forks must not stamp "now".

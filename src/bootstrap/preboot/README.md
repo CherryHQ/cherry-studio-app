@@ -23,6 +23,8 @@ here merely because they run early.
 - `abortSignal.ts` preserves cancellation reasons for interruption settlement and supplies
   `AbortSignal.throwIfAborted()` for MCP tool execution on React Native's legacy controller.
 - `blob.ts` installs Expo's Blob implementation on the Hermes global.
+- `promise.ts` supplies `Promise.withResolvers()`, which Pi Durable calls directly, when Hermes lacks
+  it.
 - `webCrypto.ts` installs `crypto.getRandomValues`/`crypto.randomUUID` from expo-crypto; the `uuid`
   package behind Drizzle id column defaults reads the bare `crypto` global that Hermes lacks.
 
@@ -34,6 +36,7 @@ so order and side effects remain visible:
 ```ts
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
+import '@/bootstrap/preboot/promise';
 import '@/bootstrap/preboot/webCrypto';
 ```
 

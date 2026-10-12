@@ -300,7 +300,16 @@ export function toAgentMessageListItem(
   const model = resolveMessageModel(message);
   const item = {
     createdAt: message.createdAt,
-    data: toDisplayParts(message.parts, cache),
+    data: toDisplayParts(
+      message.status === 'cancelled'
+        ? message.parts.filter(
+            (part) =>
+              part.type !== 'data-error' ||
+              (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
+          )
+        : message.parts,
+      cache,
+    ),
     id: message.id,
     ...(message.inferenceSnapshot?.status === 'supported' &&
     message.inferenceSnapshot.snapshot.imageGeneration

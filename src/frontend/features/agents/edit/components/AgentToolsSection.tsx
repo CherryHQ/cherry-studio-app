@@ -1,6 +1,5 @@
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import TrashIcon from '@cherrystudio/app-icons/icons/trash-2';
-import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { Button, Section, Switch } from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -94,118 +93,101 @@ export function AgentToolsSection({
 
   return (
     <View className="gap-6">
-      <View className="gap-2">
-        <Text className="px-1 font-medium text-muted-foreground text-sm">
-          {t('agent.tools.section')}
-        </Text>
-        <View className="gap-2">
-          {serverOptions.map((option) => {
-            const canEnable =
-              option.server !== undefined &&
-              option.server.isEnabled &&
-              isRunnableMcpServer(option.server);
-            const isEnabled = option.binding?.enabled === true;
-            const isStored = option.binding !== undefined;
-            const displayName = option.displayName || t('agent.tools.server');
-            const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
-              id: option.serverId,
-              server: displayName,
-              status: t(`agent.tools.serverStatus.${option.status}`),
+      <Section title={t('agent.tools.section')}>
+        {serverOptions.map((option) => {
+          const canEnable =
+            option.server !== undefined &&
+            option.server.isEnabled &&
+            isRunnableMcpServer(option.server);
+          const isEnabled = option.binding?.enabled === true;
+          const isStored = option.binding !== undefined;
+          const displayName = option.displayName || t('agent.tools.server');
+          const accessibilityLabel = t('agent.tools.serverAccessibilityLabel', {
+            id: option.serverId,
+            server: displayName,
+            status: t(`agent.tools.serverStatus.${option.status}`),
+          });
+
+          return (
+            <Section.Item
+              key={option.serverId}
+              description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
+              label={displayName}
+              trailing={
+                <View className="flex-row items-center gap-1">
+                  {canEnable ? (
+                    <Switch
+                      accessibilityLabel={accessibilityLabel}
+                      onValueChange={(enabled) =>
+                        onChange(setAgentMcpServerEnabled(bindings, option, enabled))
+                      }
+                      value={isEnabled}
+                    />
+                  ) : null}
+                  {isStored && (!canEnable || !isEnabled) ? (
+                    <Button
+                      accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
+                        id: option.serverId,
+                        server: displayName,
+                      })}
+                      icon={<TrashIcon />}
+                      onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, false))}
+                      size="xs"
+                      variant="ghost"
+                    />
+                  ) : !isStored && option.originalBinding && !canEnable ? (
+                    <Button
+                      accessibilityLabel={t('agent.tools.restoreAccessibilityLabel', {
+                        id: option.serverId,
+                        server: displayName,
+                      })}
+                      icon={<RotateCcwIcon />}
+                      onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, true))}
+                      size="xs"
+                      variant="ghost"
+                    />
+                  ) : null}
+                </View>
+              }
+            />
+          );
+        })}
+      </Section>
+      {perToolBindings.length > 0 ? (
+        <Section title={t('agent.tools.existingToolRules')}>
+          {perToolBindings.map((binding) => {
+            const server = serversById.get(binding.serverId);
+            const status = getAgentMcpToolBindingStatus({
+              binding,
+              catalog: catalogs.get(binding.serverId),
+              server,
             });
+            const displayName =
+              server?.name ?? binding.displayNameSnapshot ?? t('agent.tools.server');
 
             return (
-              <Section key={option.serverId}>
-                <Section.Item
-                  density="compact"
-                  description={statusCaption(t, 'agent.tools.serverStatus', option.status)}
-                  label={displayName}
-                  trailing={
-                    <View className="flex-row items-center gap-1">
-                      {canEnable ? (
-                        <Switch
-                          accessibilityLabel={accessibilityLabel}
-                          onValueChange={(enabled) =>
-                            onChange(setAgentMcpServerEnabled(bindings, option, enabled))
-                          }
-                          value={isEnabled}
-                        />
-                      ) : null}
-                      {isStored && (!canEnable || !isEnabled) ? (
-                        <Button
-                          accessibilityLabel={t('agent.tools.removeAccessibilityLabel', {
-                            id: option.serverId,
-                            server: displayName,
-                          })}
-                          icon={<TrashIcon />}
-                          onPress={() =>
-                            onChange(setAgentMcpServerEnabled(bindings, option, false))
-                          }
-                          size="xs"
-                          variant="ghost"
-                        />
-                      ) : !isStored && option.originalBinding && !canEnable ? (
-                        <Button
-                          accessibilityLabel={t('agent.tools.restoreAccessibilityLabel', {
-                            id: option.serverId,
-                            server: displayName,
-                          })}
-                          icon={<RotateCcwIcon />}
-                          onPress={() => onChange(setAgentMcpServerEnabled(bindings, option, true))}
-                          size="xs"
-                          variant="ghost"
-                        />
-                      ) : null}
-                    </View>
-                  }
-                />
-              </Section>
+              <Section.Item
+                key={toolBindingKey(binding)}
+                description={statusCaption(t, 'agent.tools.toolStatus', status)}
+                label={`${displayName} · ${binding.rawToolName}`}
+                trailing={
+                  <Button
+                    accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
+                      id: binding.serverId,
+                      server: displayName,
+                      status: t(`agent.tools.toolStatus.${status}`),
+                      tool: binding.rawToolName,
+                    })}
+                    icon={<TrashIcon />}
+                    onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
+                    size="xs"
+                    variant="ghost"
+                  />
+                }
+              />
             );
           })}
-        </View>
-      </View>
-      {perToolBindings.length > 0 ? (
-        <View className="gap-2">
-          <Text className="px-1 font-medium text-muted-foreground text-sm">
-            {t('agent.tools.existingToolRules')}
-          </Text>
-          <View className="gap-2">
-            {perToolBindings.map((binding) => {
-              const server = serversById.get(binding.serverId);
-              const status = getAgentMcpToolBindingStatus({
-                binding,
-                catalog: catalogs.get(binding.serverId),
-                server,
-              });
-              const displayName =
-                server?.name ?? binding.displayNameSnapshot ?? t('agent.tools.server');
-
-              return (
-                <Section key={toolBindingKey(binding)}>
-                  <Section.Item
-                    density="compact"
-                    description={statusCaption(t, 'agent.tools.toolStatus', status)}
-                    label={`${displayName} · ${binding.rawToolName}`}
-                    leading={<WrenchIcon className="size-5 text-foreground" />}
-                    trailing={
-                      <Button
-                        accessibilityLabel={t('agent.tools.toolAccessibilityLabel', {
-                          id: binding.serverId,
-                          server: displayName,
-                          status: t(`agent.tools.toolStatus.${status}`),
-                          tool: binding.rawToolName,
-                        })}
-                        icon={<TrashIcon />}
-                        onPress={() => onChange(removeAgentToolBinding(bindings, binding))}
-                        size="xs"
-                        variant="ghost"
-                      />
-                    }
-                  />
-                </Section>
-              );
-            })}
-          </View>
-        </View>
+        </Section>
       ) : null}
     </View>
   );

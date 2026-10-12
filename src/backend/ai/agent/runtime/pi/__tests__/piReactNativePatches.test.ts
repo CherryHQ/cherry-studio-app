@@ -62,26 +62,50 @@ function readModuleGraph(entries: string[]): Map<string, string> {
 }
 
 describe('Pi React Native patches', () => {
-  test('keeps the Runtime graph out of the Pi model catalog and Node-only modules', () => {
+  test('keeps the durable storage and model registry graph portable with native auth discovery', () => {
+    const graph = readModuleGraph([
+      '@earendil-works/pi-durable',
+      '@earendil-works/pi-durable/storage/sqlite',
+      '@earendil-works/pi-ai/models',
+    ]);
+    expect([...graph.keys()].some((file) => file.endsWith('/auth/context.native.js'))).toBe(true);
+    for (const [file, source] of graph) {
+      expect({
+        file,
+        nodeImport: /(?:from\s+|require\(|import\()\s*["']node:/.test(source),
+        computedImport: /\bimport\((?!\s*["'])/.test(source),
+      }).toEqual({ file, nodeImport: false, computedImport: false });
+    }
+  });
+
+  test('keeps the Runtime graph free of Pi auth loaders and Node-only modules', () => {
     // Keep in sync with the Pi value imports under src/backend/ai/agent/runtime/pi.
     const graph = readModuleGraph([
-      '@earendil-works/pi-agent-core',
+      '@earendil-works/chord/context',
+      '@earendil-works/pi-durable',
+      '@earendil-works/pi-durable/storage/sqlite',
       '@earendil-works/pi-ai/api/anthropic-messages',
       '@earendil-works/pi-ai/api/azure-openai-responses',
-      '@earendil-works/pi-ai/api/google-generative-ai',
+      '@earendil-works/pi-ai/api/lazy',
       '@earendil-works/pi-ai/api/openai-completions',
       '@earendil-works/pi-ai/api/openai-responses',
-      '@earendil-works/pi-ai/api/openai-codex-responses',
       '@earendil-works/pi-ai/api/simple-options',
+      '@earendil-works/pi-ai/models',
+      '@earendil-works/pi-ai/utils/estimate',
       '@earendil-works/pi-ai/utils/event-stream',
       '@earendil-works/pi-ai/utils/transcript',
     ]);
     const aiDist = `${realpathSync(`${process.cwd()}/node_modules/@earendil-works/pi-ai`)}/dist`;
 
-    // The pi-ai entry and model catalog reach auth modules that Metro cannot bundle.
+    // The pi-ai entry reaches OAuth loaders that Metro cannot bundle. The catalog's auth
+    // resolution stays on the native-safe modules the selective OAuth entry also uses.
     expect([...graph.keys()]).not.toContain(`${aiDist}/index.js`);
-    expect([...graph.keys()]).not.toContain(`${aiDist}/models.js`);
-    expect([...graph.keys()].filter((file) => file.startsWith(`${aiDist}/auth/`))).toEqual([]);
+    expect(
+      [...graph.keys()]
+        .filter((file) => file.startsWith(`${aiDist}/auth/`))
+        .map((file) => file.slice(aiDist.length + 1))
+        .sort(),
+    ).toEqual(['auth/context.native.js', 'auth/credential-store.js', 'auth/resolve.js']);
     for (const [file, source] of graph) {
       expect({ file, nodeImport: /(?:from\s+|require\()["']node:/.test(source) }).toEqual({
         file,

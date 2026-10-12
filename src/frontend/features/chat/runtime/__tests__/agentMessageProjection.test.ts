@@ -28,6 +28,36 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
+    const parts: AgentMessageView['parts'] = [
+      { id: 'text', type: 'text', text: 'Partial answer', state: 'done' },
+      {
+        id: 'legacy-abort',
+        type: 'data-error',
+        data: {
+          code: 'EXECUTION_FAILED',
+          message: 'The Agent run ended without an answer.',
+          retryable: false,
+          failure: {
+            version: 1,
+            reasonCode: 'unknown',
+            source: { layer: 'runtime', code: 'aborted' },
+          },
+        },
+      },
+      {
+        id: 'failure',
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', message: 'Request failed', retryable: true },
+      },
+    ];
+    const item = toAgentMessageListItem(message('cancelled', { status: 'cancelled', parts }));
+    expect(item?.status).toBe('paused');
+    expect(item?.data.partKeys).toEqual(['text', 'failure']);
+    expect(
+      toAgentMessageListItem(message('failed', { status: 'error', parts }))?.data.partKeys,
+    ).toEqual(['text', 'legacy-abort', 'failure']);
+  });
   test('renders a retrying answer as an empty pending row and leaves the rest untouched', () => {
     const question = message('user-1', { role: 'user', status: 'success' });
     const answer = message('assistant-1', {

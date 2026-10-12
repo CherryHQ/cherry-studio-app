@@ -61,21 +61,26 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-it.each(['image/png', 'text/markdown', 'text/plain', 'text/html', 'application/yaml'])(
-  'opens %s in-app with only the entry identity',
-  (mediaType) => {
-    act(() => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/files/[fileEntryId]',
-      params: { fileEntryId: entry.id },
-    });
-    expect(mockOpen).not.toHaveBeenCalled();
-  },
-);
+it.each([
+  'image/png',
+  'text/markdown',
+  'text/plain',
+  'text/html',
+  'application/yaml',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])('opens %s in-app with only the entry identity', (mediaType) => {
+  act(() => actions.openFileEntry({ ...file, entry: { ...entry, mediaType } }));
+  expect(mockPush).toHaveBeenCalledWith({
+    pathname: '/files/[fileEntryId]',
+    params: { fileEntryId: entry.id },
+  });
+  expect(mockOpen).not.toHaveBeenCalled();
+});
 
 it('hands unsupported documents to the platform with the original URI', async () => {
   await act(async () =>
-    actions.openFileEntry({ ...file, entry: { ...entry, mediaType: 'application/pdf' } }),
+    actions.openFileEntry({ ...file, entry: { ...entry, mediaType: 'application/msword' } }),
   );
   expect(mockPush).not.toHaveBeenCalled();
   expect(mockOpen).toHaveBeenCalledWith(

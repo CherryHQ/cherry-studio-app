@@ -147,8 +147,12 @@ reservation, and converts managed bytes to a bounded temporary Data URL for the 
 text, the Host accepts an explicit text/source allowlist, validates bounded managed bytes as strict
 UTF-8, and projects a bounded structured Runtime part that Pi JSON-escapes as untrusted user
 content. A leading UTF-8 BOM is accepted and stripped; NUL, binary controls, invalid UTF-8, and
-unsupported binary media types fail closed before reservation. Documents have a 20 MiB source
-limit. PDFs use the existing Expo native extractor (at most 100 pages). In built-in mode,
+unsupported binary media types fail closed before reservation. Text sources have a 5 MiB ceiling;
+PDFs have a 50 MiB source ceiling and other documents retain a 20 MiB ceiling. PDFs use the existing
+Expo native extractor (at most 100 pages). Android serializes PDF extraction and page-count reads,
+with PDFBox stream buffers limited to 16 MiB in memory and 128 MiB across memory and temporary
+storage in the app cache. Closing the document releases its scratch file. These are stream-buffer
+limits, not a bound on all parsed objects or extracted text. In built-in mode,
 DOCX/PPTX/XLSX use bounded in-memory ZIP/XML parsing and SheetJS
 for workbook cells. Office ZIPs admit at most 2,048 entries, 32 MiB expanded data, and 4 MiB per XML
 part; workbook extraction caps each sheet at 10,000 rows, processes at most 100 sheets, and Office

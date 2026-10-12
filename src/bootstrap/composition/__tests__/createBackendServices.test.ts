@@ -12,6 +12,8 @@ import { createBackendServices } from '../createBackendServices';
 
 const mockDataServices = {
   aiUsageRecord: { kind: 'ai-usage-record' },
+  contentSearch: { kind: 'content-search' },
+  agentSessionMessage: { kind: 'agent-transcript' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
   mcpServer: { kind: 'mcp-server' },
@@ -37,7 +39,9 @@ jest.mock('@/backend/services/permissions', () => ({
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
-    const agent = { kind: 'agent' } as unknown as MobileAgentHost;
+    const agent = {
+      kind: 'agent',
+    } as unknown as MobileAgentHost;
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
     const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;

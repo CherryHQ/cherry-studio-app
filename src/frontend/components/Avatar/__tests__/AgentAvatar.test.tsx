@@ -21,15 +21,19 @@ test('renders the full desktop emoji rather than the Agent name initial', () => 
   expect(tree.root.findByType('avatar-fallback' as never).props.children).toBe('🧑🏽‍💻');
 });
 test.each([
-  { name: 'Developer' },
-  { name: '', emoji: '   ' },
-  { name: 'Developer', avatar: 'managed-file-id' },
-])('uses the robot default without displaying initials or managed file references: %j', (props) => {
-  act(() => {
-    tree = create(<AgentAvatar {...props} />);
-  });
-  expect(tree.root.findByType('avatar-fallback' as never).props.children).toBe('🤖');
-});
+  { expected: 'D', props: { name: 'developer' } },
+  { expected: '周', props: { name: ' 周报助手' } },
+  { expected: '', props: { name: '', emoji: '   ' } },
+  { expected: 'D', props: { name: 'Developer', avatar: 'managed-file-id' } },
+])(
+  'falls back to the name initial, never a managed file reference: $props',
+  ({ expected, props }) => {
+    act(() => {
+      tree = create(<AgentAvatar {...props} />);
+    });
+    expect(tree.root.findByType('avatar-fallback' as never).props.children).toBe(expected);
+  },
+);
 test('resolved image takes precedence over emoji while local Cherry emoji still renders', () => {
   act(() => {
     tree = create(<AgentAvatar name="Developer" avatar="🍒" />);

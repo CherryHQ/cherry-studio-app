@@ -44,7 +44,7 @@ export async function packBackup(
       signal.throwIfAborted();
       const source = archiveFile(root, path).open(FileMode.ReadOnly);
       const entry =
-        path === 'database/cherry.db' || path === 'manifest.json'
+        path.startsWith('database/') || path === 'manifest.json'
           ? new ZipDeflate(path, { level: 1 })
           : new ZipPassThrough(path);
       try {

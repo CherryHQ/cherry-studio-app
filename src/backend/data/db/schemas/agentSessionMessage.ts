@@ -73,11 +73,7 @@ export const agentSessionMessageTable = sqliteTable(
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.
     index('agent_session_message_status_idx').on(t.status),
-    // Invariant 1 (agent-protocol.md): at most one active turn per Session is
-    // a database constraint — a concurrent second reservation fails to insert.
-    uniqueIndex('agent_session_message_active_turn_uniq')
-      .on(t.sessionId)
-      .where(sql`${t.role} = 'assistant' and ${t.status} in ('pending', 'streaming')`),
+    // Pending rows include queued follow-ups; Pi serializes execution within each working copy.
     // FTS5 content_rowid key — UNIQUE so its index keeps the per-row
     // MAX(fts_rowid)+1 assignment O(log N) (see ftsRowid and FTS SQL below).
     uniqueIndex('agent_session_message_fts_rowid_uniq').on(t.ftsRowid),

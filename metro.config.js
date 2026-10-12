@@ -7,6 +7,8 @@ const { withUniwindConfig } = require('uniwind/metro');
 let config = getSentryExpoConfig(__dirname);
 
 config.resolver.sourceExts.push('sql');
+// The document preview page ships pdf.js CMaps and fonts as one byte-range asset.
+config.resolver.assetExts.push('bin');
 config.watchFolders.push(path.resolve(__dirname, 'packages'));
 
 // libp2p packages pick their Node or browser entry through the legacy package.json `browser`

@@ -1,5 +1,7 @@
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useMemo } from 'react';
@@ -23,11 +25,12 @@ import { useAgentMutations, useAgentsApi } from '@/frontend/hooks/agent';
 import type { Agent } from '@/shared/data/types/agent';
 
 const agentSelectionScope = 'agents';
-// A 40pt avatar, its 8pt vertical padding, and the hairline border.
-const AGENT_ROW_ESTIMATED_HEIGHT = 57;
+// A 40pt avatar, its 12pt vertical padding, and the hairline separator.
+const AGENT_ROW_ESTIMATED_HEIGHT = 65;
 
 type AgentListExtraData = {
   isEditing: boolean;
+  lastId: string | undefined;
   onEdit: (agentId: string) => void;
   onStartSelection: (agentId: string) => void;
   onToggle: (agentId: string) => void;
@@ -44,7 +47,7 @@ function AgentListScreenBody() {
   const pendingDeletionIds = usePendingDeletionIds(agentSelectionScope);
   const bottomInset = useListBottomInset();
   const listContentStyle = useMemo(
-    () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
+    () => ({ paddingBottom: bottomInset, paddingHorizontal: 16, paddingTop: 8 }),
     [bottomInset],
   );
   const visibleAgents = useMemo(
@@ -136,12 +139,13 @@ function AgentListScreenBody() {
   const listExtraData = useMemo<AgentListExtraData>(
     () => ({
       isEditing,
+      lastId: listedAgents.at(-1)?.id,
       onEdit: openAgentEditor,
       onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
     }),
-    [handleStartSelection, isEditing, openAgentEditor, selectedIds, toggleId],
+    [handleStartSelection, isEditing, listedAgents, openAgentEditor, selectedIds, toggleId],
   );
   const listEmpty = isFiltering ? (
     <View className="px-8 py-16">
@@ -218,19 +222,31 @@ function agentKeyExtractor(agent: Agent) {
   return agent.id;
 }
 
-function renderAgentItem({ extraData, item }: LegendListRenderItemProps<Agent>) {
-  const { isEditing, onEdit, onStartSelection, onToggle, selectedIds } =
+function renderAgentItem({ extraData, index, item }: LegendListRenderItemProps<Agent>) {
+  const { isEditing, lastId, onEdit, onStartSelection, onToggle, selectedIds } =
     extraData as AgentListExtraData;
+  const isFirst = index === 0;
 
+  // Each row draws its slice of one grouped card, so the list stays virtualized.
   return (
-    <AgentListRow
-      agent={item}
-      isEditing={isEditing}
-      isSelected={selectedIds.has(item.id)}
-      onEdit={onEdit}
-      onStartSelection={onStartSelection}
-      onToggle={onToggle}
-    />
+    <View
+      className={cn(
+        'overflow-hidden bg-card',
+        isFirst && 'rounded-t-2xl',
+        item.id === lastId && 'rounded-b-2xl',
+      )}
+      style={styles.cardSlice}
+    >
+      {isFirst ? null : <View className="mx-4 h-px bg-border" />}
+      <AgentListRow
+        agent={item}
+        isEditing={isEditing}
+        isSelected={selectedIds.has(item.id)}
+        onEdit={onEdit}
+        onStartSelection={onStartSelection}
+        onToggle={onToggle}
+      />
+    </View>
   );
 }
 
@@ -263,7 +279,7 @@ const AgentListRow = memo(function AgentListRow({
       accessibilityLabel={agent.name}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
-      className="w-full active:bg-secondary"
+      className="w-full active:bg-foreground/5"
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'longpress') {
           onStartSelection(agent.id);
@@ -279,26 +295,27 @@ const AgentListRow = memo(function AgentListRow({
       }}
       testID={`agent-list-${agent.id}`}
     >
-      <View className="relative min-w-0 flex-row items-center gap-2 border-border border-b py-2 pl-2 pr-4">
-        <View className="ml-1">
-          <AgentAvatar avatar={agent.avatar} name={agent.name} uri={agent.avatarUri} />
+      <View className="min-w-0 flex-row items-center gap-3 px-4 py-3">
+        <AgentAvatar avatar={agent.avatar} name={agent.name} uri={agent.avatarUri} />
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-base text-foreground" numberOfLines={1}>
+            {agent.name}
+          </Text>
+          <Text className="text-muted-foreground text-sm" numberOfLines={1}>
+            {agent.modelName ?? t('agent.model.none')}
+          </Text>
         </View>
-        <View className="min-w-0 flex-1">
-          <View className="gap-0.5">
-            <Text className="font-semibold text-foreground text-base" numberOfLines={1}>
-              {agent.name}
-            </Text>
-            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-              {agent.modelName ?? t('agent.model.none')}
-            </Text>
-          </View>
-        </View>
-        {isEditing ? <SelectionIndicator selected={isSelected} /> : null}
+        {isEditing ? (
+          <SelectionIndicator selected={isSelected} />
+        ) : (
+          <ChevronRightIcon className="size-5 text-muted-foreground" />
+        )}
       </View>
     </Pressable>
   );
 });
 
 const styles = StyleSheet.create({
+  cardSlice: { borderCurve: 'continuous' },
   list: { flex: 1 },
 });

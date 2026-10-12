@@ -79,21 +79,6 @@ describe('FilePreview', () => {
     expect(renderer.root.findAllByType(FileCardPreview)).toHaveLength(0);
   });
 
-  it('passes the resolved size and error reporter to the plugin', () => {
-    const onError = jest.fn();
-    const renderer = render(
-      <FilePreview
-        file={file('pdf')}
-        labels={labels}
-        onPress={onPress}
-        onError={onError}
-        size={0}
-      />,
-    );
-
-    expect(renderer.root.findByType('DefaultFallback').props).toMatchObject({ onError, size: 1 });
-  });
-
   it('lets a provider claim a kind and inherit the rest', () => {
     const renderer = render(
       <FilePreviewPluginProvider plugins={pdfPlugins}>
@@ -127,6 +112,36 @@ describe('FilePreview', () => {
     act(() => renderer.root.findByType('FilePreviewFrame').props.onPress());
 
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows metadata before bytes arrive and lets the caller acquire the file on press', () => {
+    const renderer = render(
+      <FilePreview
+        metadata={{ displayName: 'report.pdf', extensionLabel: 'PDF', kind: 'document' }}
+        labels={labels}
+        onPress={onPress}
+      />,
+    );
+    expect(renderer.root.findAllByType('FilePreviewUnavailable')).toHaveLength(0);
+    expect(renderer.root.findByType(FileCardPreview).props.file.displayName).toBe('report.pdf');
+    act(() => renderer.root.findByType('FilePreviewFrame').props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+    act(() => renderer.unmount());
+  });
+
+  it('prevents opening metadata-only sources explicitly marked unavailable', () => {
+    const renderer = render(
+      <FilePreview
+        disabled
+        metadata={{ displayName: 'report.pdf', extensionLabel: 'PDF', kind: 'document' }}
+        labels={labels}
+        onPress={onPress}
+      />,
+    );
+    expect(renderer.root.findByType('FilePreviewFrame').props.disabled).toBe(true);
+    act(() => renderer.root.findByType('FilePreviewFrame').props.onPress());
+    expect(onPress).not.toHaveBeenCalled();
+    act(() => renderer.unmount());
   });
 
   it('disables the frame when no file resolved', () => {

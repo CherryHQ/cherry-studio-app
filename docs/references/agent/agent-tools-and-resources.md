@@ -460,11 +460,13 @@ window is cut on a line boundary at 100,000 characters, so `startLine + lineCoun
 next line to request. A single line larger than the whole budget is the one case that cannot be cut
 on a boundary: the head is returned with `lineTruncated: true`, the read reports itself truncated,
 and `nextOffset` gives the code-point offset where the rest of the line starts, since asking for a
-later line cannot reach it. Text sources use the same strict UTF-8 decoding and 1 MiB source limit as
-`edit_file`; NUL is the only control character refused as binary. Documents use the selected local parser and 20 MiB
-source ceiling described in [File Model](../data/file-model.md). `sourceTruncated: true` means the
-document extractor reached its own page/row/text limit; it is independent of the pageable window's
-`truncated` flag. This lets a model continue reading an attached document or revisit a file it wrote
+later line cannot reach it. Text sources share attachment preparation's 5 MiB source ceiling and
+strict UTF-8 decoding; NUL is the only control character refused as binary. `edit_file` retains
+its separate 1 MiB editing ceiling. Documents use the selected local parser, with a 50 MiB PDF
+source ceiling and 20 MiB for other documents, described in [File Model](../data/file-model.md).
+`sourceTruncated: true` means the document extractor reached its own page/row/text limit; it is
+independent of the pageable window's `truncated` flag. This lets a model continue reading an
+attached document or revisit a file it wrote
 in an earlier turn, whose content is deliberately not replayed as an attachment.
 
 Zero-based `offset` and `max_characters` (default/maximum 100,000 Unicode code points) read the

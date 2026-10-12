@@ -1,0 +1,606 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -1,7 +1,8 @@
+ import Anthropic, {} from "@anthropic-ai/sdk";
+ import { ANTHROPIC_FEDERATION_RULE_ID_ENV, ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, ANTHROPIC_ORGANIZATION_ID_ENV, ANTHROPIC_SERVICE_ACCOUNT_ID_ENV, ANTHROPIC_WORKSPACE_ID_ENV, } from "../env-api-keys.js";
+-import { calculateCost } from "../models.js";
+-import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
++import { calculateCost } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
++import { normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+ import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.js";
+@@ -349,7 +350,14 @@
+     let sawMessageEnd = false;
+     for await (const sse of iterateSseMessages(response.body, signal)) {
+         if (sse.event === "error") {
+-            throw new Error(sse.data);
++            let body;
++            try {
++                body = JSON.parse(sse.data);
++            }
++            catch {
++                // Preserve malformed provider errors without guessing their type.
++            }
++            throw Object.assign(new Error(sse.data), { error: body, code: body?.error?.code, type: body?.error?.type ?? body?.type });
+         }
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+@@ -683,6 +691,12 @@
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
++            const normalizedError = normalizeProviderError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+@@ -1307,4 +1321,4 @@
+             throw new Error(`Unhandled stop reason: ${reason}`);
+     }
+ }
+-//# sourceMappingURL=anthropic-messages.js.map
+\ No newline at end of file
++//# sourceMappingURL=anthropic-messages.js.map
+diff --git a/dist/api/azure-openai-responses.js b/dist/api/azure-openai-responses.js
+--- a/dist/api/azure-openai-responses.js
++++ b/dist/api/azure-openai-responses.js
+@@ -1,5 +1,6 @@
+ import { AzureOpenAI } from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+@@ -92,7 +93,13 @@
+                 delete block.customInput;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = formatAzureOpenAIError(error);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/google-generative-ai.js b/dist/api/google-generative-ai.js
+--- a/dist/api/google-generative-ai.js
++++ b/dist/api/google-generative-ai.js
+@@ -1,5 +1,6 @@
+ import { GoogleGenAI, } from "@google/genai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { providerHeadersToRecord } from "../utils/headers.js";
+@@ -226,7 +227,13 @@
+                 }
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
++            const normalizedError = normalizeProviderError(error);
++            output.errorMessage = formatProviderError(normalizedError);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/api/google-shared.js b/dist/api/google-shared.js
+--- a/dist/api/google-shared.js
++++ b/dist/api/google-shared.js
+@@ -2,7 +2,7 @@
+  * Shared utilities for Google Generative AI and Google Vertex providers.
+  */
+ import { FinishReason, FunctionCallingConfigMode, ThinkingLevel as GoogleSdkThinkingLevel, } from "@google/genai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { retryProviderRequest } from "../utils/provider-retry.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+ import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.js";
+diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-responses.js
+--- a/dist/api/openai-codex-responses.js
++++ b/dist/api/openai-codex-responses.js
+@@ -1,4 +1,4 @@
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { registerSessionResourceCleanup } from "../session-resources.js";
+ import { combineAbortSignals } from "../utils/abort-signals.js";
+ import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
+diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
+--- a/dist/api/openai-completions.js
++++ b/dist/api/openai-completions.js
+@@ -1,5 +1,6 @@
+ import OpenAI from "openai";
+-import { calculateCost, clampThinkingLevel } from "../models.js";
++import { calculateCost, clampThinkingLevel } from "../utils/model-runtime.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { shortHash } from "../utils/hash.js";
+@@ -500,7 +501,13 @@
+                 delete block.streamIndex;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
++            const normalizedError = normalizeProviderError(error);
++            output.errorMessage = formatProviderError(normalizedError);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             // Some providers via OpenRouter give additional information in this field.
+             // normalizeProviderError already stringifies the parsed body (error.error)
+             // into errorMessage, so only append the raw metadata when it is not already
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -1,4 +1,4 @@
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { shortHash } from "../utils/hash.js";
+ import { parseStreamingJson } from "../utils/json-parse.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+@@ -640,7 +640,10 @@
+             finalizeResponse(event.response);
+         }
+         else if (event.type === "error") {
+-            throw new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error");
++            throw Object.assign(new Error(`Error Code ${event.code}: ${event.message}` || "Unknown error"), {
++                code: event.code,
++                error: event,
++            });
+         }
+         else if (event.type === "response.failed") {
+             sawTerminalResponseEvent = true;
+@@ -652,7 +655,7 @@
+                 : details?.reason
+                     ? `incomplete: ${details.reason}`
+                     : "Unknown error (no error details in response)";
+-            throw new Error(msg);
++            throw Object.assign(new Error(msg), { code: error?.code, error });
+         }
+     }
+     if (!sawTerminalResponseEvent) {
+diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -1,6 +1,7 @@
+ import OpenAI from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
++import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+ import { headersToRecord } from "../utils/headers.js";
+ import { getPiUserAgent } from "../utils/pi-user-agent.js";
+@@ -165,9 +166,15 @@
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             const errorMessage = formatProviderError(normalizeProviderError(error), `${model.provider === "openai" ? "OpenAI" : model.provider} API error`);
+             // Sign in with ChatGPT shares the subscription's usage limit with other apps.
++            const normalizedError = normalizeProviderError(error);
+             output.errorMessage = errorMessage.includes("subscription_sharing_usage_limit_exceeded")
+                 ? `${errorMessage}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
+                 : errorMessage;
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
+diff --git a/dist/auth/context.native.js b/dist/auth/context.native.js
+new file mode 100644
+--- /dev/null
++++ b/dist/auth/context.native.js
+@@ -0,0 +1,7 @@
++// Mobile credentials are supplied by the application; no Node environment or filesystem discovery.
++export function defaultProviderAuthContext() {
++    return {
++        env: async () => undefined,
++        fileExists: async () => false,
++    };
++}
+diff --git a/dist/auth/oauth/callback-server.native.js b/dist/auth/oauth/callback-server.native.js
+new file mode 100644
+--- /dev/null
++++ b/dist/auth/oauth/callback-server.native.js
+@@ -0,0 +1,50 @@
++// Native apps use the official manual-code fallback; they do not run a TCP listener.
++export async function startOAuthCallbackServer(options) {
++    options.signal?.throwIfAborted();
++    let resolveWait;
++    let rejectWait;
++    const promise = new Promise((resolve, reject) => { resolveWait = resolve; rejectWait = reject; });
++    promise.catch(() => undefined);
++    const abort = () => rejectWait(new Error("Login cancelled"));
++    options.signal?.addEventListener("abort", abort, { once: true });
++    const timer = setTimeout(() => rejectWait(new Error("Login timed out")), options.timeoutMs ?? 300000);
++    return {
++        redirectUri: `http://127.0.0.1:1455${options.path}`,
++        wait: () => promise,
++        cancel: () => resolveWait(undefined),
++        close: () => {
++            clearTimeout(timer);
++            options.signal?.removeEventListener("abort", abort);
++            resolveWait(undefined);
++        },
++    };
++}
++export async function waitForCallbackOrManualInput(interaction, callback, prompt) {
++    const manualAbort = new AbortController();
++    let manualError;
++    const manual = interaction
++        .prompt({ type: "manual_code", ...prompt, signal: manualAbort.signal })
++        .then((input) => {
++        callback?.cancel();
++        return input;
++    })
++        .catch((error) => {
++        manualError = error instanceof Error ? error : new Error(String(error));
++        callback?.cancel();
++        return undefined;
++    });
++    try {
++        const value = await callback?.wait();
++        if (manualError)
++            throw manualError;
++        if (value !== undefined)
++            return { type: "callback", value };
++        const input = await manual;
++        if (manualError)
++            throw manualError;
++        return { type: "manual", input: input ?? "" };
++    }
++    finally {
++        manualAbort.abort();
++    }
++}
+diff --git a/dist/auth/oauth/github-copilot.js b/dist/auth/oauth/github-copilot.js
+--- a/dist/auth/oauth/github-copilot.js
++++ b/dist/auth/oauth/github-copilot.js
+@@ -1,3 +1,4 @@
++import { oauthFetch as fetch } from "./platform.js";
+ /**
+  * GitHub Copilot OAuth flow
+  */
+diff --git a/dist/auth/oauth/kimi-coding.js b/dist/auth/oauth/kimi-coding.js
+--- a/dist/auth/oauth/kimi-coding.js
++++ b/dist/auth/oauth/kimi-coding.js
+@@ -1,3 +1,4 @@
++import { oauthFetch as fetch } from "./platform.js";
+ /**
+  * Kimi Code (subscription) OAuth flow
+  *
+diff --git a/dist/auth/oauth/openai-codex.js b/dist/auth/oauth/openai-codex.js
+--- a/dist/auth/oauth/openai-codex.js
++++ b/dist/auth/oauth/openai-codex.js
+@@ -1,16 +1,10 @@
++import { oauthFetch as fetch } from "./platform.js";
+ /**
+  * OpenAI Codex (ChatGPT OAuth) flow
+  *
+  * NOTE: This module uses Node.js crypto and http (via callback-server.ts) for the OAuth callback.
+  * It is only intended for CLI use, not browser environments.
+  */
+-// NEVER convert to top-level imports - breaks browser/Vite builds
+-let _randomBytes = null;
+-if (typeof process !== "undefined" && (process.versions?.node || process.versions?.bun)) {
+-    import("node:crypto").then((m) => {
+-        _randomBytes = m.randomBytes;
+-    });
+-}
+ import { getProviderEnvValue } from "../../utils/provider-env.js";
+ import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.js";
+ import { pollOAuthDeviceCodeFlow } from "./device-code.js";
+@@ -33,10 +27,7 @@
+     return getProviderEnvValue("PI_OAUTH_CALLBACK_HOST") || "127.0.0.1";
+ }
+ function createState() {
+-    if (!_randomBytes) {
+-        throw new Error("OpenAI Codex OAuth is only available in Node.js environments");
+-    }
+-    return _randomBytes(16).toString("hex");
++    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+ }
+ function parseAuthorizationInput(input) {
+     const value = input.trim();
+diff --git a/dist/auth/oauth/openrouter.js b/dist/auth/oauth/openrouter.js
+--- a/dist/auth/oauth/openrouter.js
++++ b/dist/auth/oauth/openrouter.js
+@@ -1,3 +1,4 @@
++import { oauthFetch as fetch } from "./platform.js";
+ /**
+  * OpenRouter OAuth PKCE flow.
+  *
+diff --git a/dist/auth/oauth/pkce.js b/dist/auth/oauth/pkce.js
+--- a/dist/auth/oauth/pkce.js
++++ b/dist/auth/oauth/pkce.js
+@@ -1,3 +1,4 @@
++import { platformPKCE } from "./platform.js";
+ /**
+  * PKCE utilities using Web Crypto API.
+  * Works in both Node.js 20+ and browsers.
+@@ -17,6 +18,8 @@
+  * Uses Web Crypto API for cross-platform compatibility.
+  */
+ export async function generatePKCE() {
++    const native = platformPKCE();
++    if (native) return native;
+     // Generate random verifier
+     const verifierBytes = new Uint8Array(32);
+     crypto.getRandomValues(verifierBytes);
+diff --git a/dist/auth/oauth/platform.d.ts b/dist/auth/oauth/platform.d.ts
+new file mode 100644
+--- /dev/null
++++ b/dist/auth/oauth/platform.d.ts
+@@ -0,0 +1,6 @@
++export declare function configureOAuthPlatform(platform: {
++  fetch: typeof globalThis.fetch;
++  generatePKCE(): Promise<{ verifier: string; challenge: string }>;
++}): void;
++export declare function oauthFetch(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): ReturnType<typeof fetch>;
++export declare function platformPKCE(): Promise<{ verifier: string; challenge: string }> | undefined;
+diff --git a/dist/auth/oauth/platform.js b/dist/auth/oauth/platform.js
+new file mode 100644
+--- /dev/null
++++ b/dist/auth/oauth/platform.js
+@@ -0,0 +1,4 @@
++let platform;
++export function configureOAuthPlatform(value) { platform = value; }
++export function oauthFetch(input, init) { return (platform?.fetch ?? globalThis.fetch)(input, init); }
++export function platformPKCE() { return platform?.generatePKCE?.(); }
+diff --git a/dist/auth/oauth/xai.js b/dist/auth/oauth/xai.js
+--- a/dist/auth/oauth/xai.js
++++ b/dist/auth/oauth/xai.js
+@@ -1,3 +1,4 @@
++import { oauthFetch as fetch } from "./platform.js";
+ /**
+  * xAI OAuth device-code flow.
+  */
+diff --git a/dist/env-api-keys.js b/dist/env-api-keys.js
+--- a/dist/env-api-keys.js
++++ b/dist/env-api-keys.js
+@@ -10,7 +10,8 @@
+ let _existsSync = null;
+ let _homedir = null;
+ let _join = null;
+-const dynamicImport = (specifier) => import(__rewriteRelativeImportExtension(specifier));
++// Cherry Mobile: Metro rejects computed dynamic imports. Node helpers stay unavailable, as in browsers.
++const dynamicImport = (_specifier) => Promise.resolve({});
+ const NODE_FS_SPECIFIER = "node:" + "fs";
+ const NODE_OS_SPECIFIER = "node:" + "os";
+ const NODE_PATH_SPECIFIER = "node:" + "path";
+diff --git a/dist/native-oauth.d.ts b/dist/native-oauth.d.ts
+new file mode 100644
+--- /dev/null
++++ b/dist/native-oauth.d.ts
+@@ -0,0 +1,9 @@
++// Selective native entry: no provider factories, dynamic OAuth loader, or model catalogs.
++export * from "./auth/resolve.ts";
++export { configureOAuthPlatform } from "./auth/oauth/platform.ts";
++export { githubCopilotOAuth } from "./auth/oauth/github-copilot.ts";
++export { kimiCodingOAuth } from "./auth/oauth/kimi-coding.ts";
++export { xaiOAuth } from "./auth/oauth/xai.ts";
++export { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
++export { openRouterOAuth } from "./auth/oauth/openrouter.ts";
++export type * from "./auth/types.ts";
+diff --git a/dist/native-oauth.js b/dist/native-oauth.js
+new file mode 100644
+--- /dev/null
++++ b/dist/native-oauth.js
+@@ -0,0 +1,8 @@
++// Selective native entry: no provider factories, dynamic OAuth loader, or model catalogs.
++export * from "./auth/resolve.js";
++export { configureOAuthPlatform } from "./auth/oauth/platform.js";
++export { githubCopilotOAuth } from "./auth/oauth/github-copilot.js";
++export { kimiCodingOAuth } from "./auth/oauth/kimi-coding.js";
++export { xaiOAuth } from "./auth/oauth/xai.js";
++export { openaiCodexOAuth } from "./auth/oauth/openai-codex.js";
++export { openRouterOAuth } from "./auth/oauth/openrouter.js";
+diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
+--- a/dist/utils/diagnostics.js
++++ b/dist/utils/diagnostics.js
+@@ -8,7 +8,7 @@
+ export function extractDiagnosticError(error) {
+     if (!(error instanceof Error))
+         return { name: "ThrownValue", message: formatThrownValue(error) };
+-    const code = error.code;
++    const code = error.code ?? error.type;
+     return {
+         name: error.name || undefined,
+         message: error.message || error.name,
+diff --git a/dist/utils/error-body.js b/dist/utils/error-body.js
+--- a/dist/utils/error-body.js
++++ b/dist/utils/error-body.js
+@@ -20,13 +20,22 @@
+     const sdkError = error;
+     const status = extractStatus(sdkError);
+     const body = extractBody(sdkError);
++    const retryable = extractRetryable(sdkError);
+     const messageCarriesBody = body === undefined || error.message.includes(body);
+     return {
+         status,
+         body,
++        retryable,
+         message: error.message,
+         messageCarriesBody,
+     };
++}
++function extractRetryable(error) {
++    if (typeof error.isRetryable === "boolean")
++        return error.isRetryable;
++    if (typeof error.retryable === "boolean")
++        return error.retryable;
++    return undefined;
+ }
+ /**
+  * Probe the HTTP status, first numeric hit wins, in SDK-field order:
+diff --git a/dist/utils/json-parse.js b/dist/utils/json-parse.js
+--- a/dist/utils/json-parse.js
++++ b/dist/utils/json-parse.js
+@@ -91,6 +91,24 @@
+     if (!partialJson || partialJson.trim() === "") {
+         return {};
+     }
++    // File tools usually stream a string value in a root object. Let the native
++    // JSON parser close that value before scanning/rebuilding its growing body in JS.
++    const trimmed = partialJson.trim();
++    if (trimmed.startsWith("{")) {
++        try {
++            return JSON.parse(trimmed + '"}');
++        }
++        catch {
++            // A chunk can stop inside a string escape; partial-json omits it too.
++            const completeEscapePrefix = trimmed.replace(/\\(?:u[0-9a-fA-F]{0,3})?$/, "");
++            if (completeEscapePrefix !== trimmed) {
++                try {
++                    return JSON.parse(completeEscapePrefix + '"}');
++                }
++                catch {}
++            }
++        }
++    }
+     try {
+         return parseJsonWithRepair(partialJson);
+     }
+diff --git a/dist/utils/model-runtime.js b/dist/utils/model-runtime.js
+new file mode 100644
+--- /dev/null
++++ b/dist/utils/model-runtime.js
+@@ -0,0 +1,53 @@
++// Runtime-only helpers keep provider adapters independent from the Node-oriented
++// model catalog and authentication graph.
++export function calculateCost(model, usage) {
++    const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
++    let rates = model.cost;
++    let matchedThreshold = -1;
++    for (const tier of model.cost.tiers ?? []) {
++        if (inputTokens > tier.inputTokensAbove && tier.inputTokensAbove > matchedThreshold) {
++            rates = tier;
++            matchedThreshold = tier.inputTokensAbove;
++        }
++    }
++    const longWrite = usage.cacheWrite1h ?? 0;
++    const shortWrite = usage.cacheWrite - longWrite;
++    usage.cost.input = (rates.input / 1000000) * usage.input;
++    usage.cost.output = (rates.output / 1000000) * usage.output;
++    usage.cost.cacheRead = (rates.cacheRead / 1000000) * usage.cacheRead;
++    usage.cost.cacheWrite = (rates.cacheWrite * shortWrite + rates.input * 2 * longWrite) / 1000000;
++    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
++    return usage.cost;
++}
++const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
++function getSupportedThinkingLevels(model) {
++    if (!model.reasoning)
++        return ["off"];
++    return EXTENDED_THINKING_LEVELS.filter((level) => {
++        const mapped = model.thinkingLevelMap?.[level];
++        if (mapped === null)
++            return false;
++        if (level === "xhigh" || level === "max")
++            return mapped !== undefined;
++        return true;
++    });
++}
++export function clampThinkingLevel(model, level) {
++    const availableLevels = getSupportedThinkingLevels(model);
++    if (availableLevels.includes(level))
++        return level;
++    const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
++    if (requestedIndex === -1)
++        return availableLevels[0] ?? "off";
++    for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    for (let i = requestedIndex - 1; i >= 0; i--) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    return availableLevels[0] ?? "off";
++}
+diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
+--- a/dist/utils/provider-env.js
++++ b/dist/utils/provider-env.js
+@@ -1,35 +1,9 @@
+-let procEnvCache = null;
+ /**
+- * Fallback for https://github.com/oven-sh/bun/issues/27802.
+- * Bun compiled binaries can expose an empty process.env inside Linux sandboxes
+- * even though /proc/self/environ contains the environment.
+- *
+- * This intentionally duplicates restoreSandboxEnv() in
+- * packages/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
+- * used directly, without going through that entrypoint, so provider env lookup
+- * must not depend on process.env having been patched.
++ * React Native receives provider credentials explicitly from Cherry Studio.
++ * Node-only Bun sandbox environment discovery is intentionally disabled.
+  */
+-function getBunSandboxEnvValue(name) {
+-    if (typeof process === "undefined" || !process.versions?.bun || Object.keys(process.env).length > 0) {
+-        return undefined;
+-    }
+-    if (procEnvCache === null) {
+-        procEnvCache = new Map();
+-        try {
+-            const { readFileSync } = require("node:fs");
+-            const data = readFileSync("/proc/self/environ", "utf-8");
+-            for (const entry of data.split("\0")) {
+-                const idx = entry.indexOf("=");
+-                if (idx > 0) {
+-                    procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
+-                }
+-            }
+-        }
+-        catch {
+-            // /proc/self/environ may not exist or may not be readable.
+-        }
+-    }
+-    return procEnvCache.get(name);
++function getBunSandboxEnvValue(_name) {
++    return undefined;
+ }
+ /**
+  * Resolve a provider env value from scoped overrides, normal process.env, then
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -46,6 +46,10 @@
+ 		"./bun-oauth": {
+ 			"types": "./dist/bun-oauth.d.ts",
+ 			"import": "./dist/bun-oauth.js"
++		},
++		"./native-oauth": {
++			"types": "./dist/native-oauth.d.ts",
++			"import": "./dist/native-oauth.js"
+ 		}
+ 	},
+ 	"bin": {
+@@ -102,5 +106,9 @@
+ 		"@types/node": "22.19.19",
+ 		"canvas": "3.2.3",
+ 		"vitest": "4.1.11"
++	},
++	"browser": {
++		"./dist/auth/oauth/callback-server.js": "./dist/auth/oauth/callback-server.native.js",
++		"./dist/auth/context.js": "./dist/auth/context.native.js"
+ 	}
+ }

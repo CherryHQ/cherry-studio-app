@@ -24,7 +24,9 @@ history, message rows and parts, viewport following, and scroll restoration.
   slot is unconditional, including while the placeholder is up; an accessory holds the message and
   decides for itself when to appear.
 - `UserMessage` owns standard user content, including managed attachments and the text bubble.
-  Its attachment slot lets source-owned files reuse the same placement above the bubble.
+  Its attachment slot accepts source-owned cards without a layout wrapper. Both local and remote
+  cards pass through `UserMessageAttachments`, which owns right alignment, wrapping, spacing, and
+  gesture exclusion above the bubble.
 - `getBuiltInToolDisplay` exposes the shared title and platform-specific icon used by
   feature-owned tool approval UI.
 - `ToolRendererProvider` lets a source supply tool detail loading and presentation inside the
@@ -49,7 +51,7 @@ renders the *call*, never the artifact, or the same file appears twice.
 
 `MessageParts` renders managed assistant outputs through `GeneratedFileStrip`. Images stay in the
 body in transcript order, so an image produced by a tool appears before its following explanation.
-Other files collect after the answer. `UserMessage` separately uses `MessageFileStrip` for input
+Other files collect after the answer. `UserMessage` separately uses `UserMessageAttachments` for input
 attachments above its bubble. Two rules hold the assistant-result shape:
 
 - **Images are visible results.** They appear as soon as their file parts arrive and retain their

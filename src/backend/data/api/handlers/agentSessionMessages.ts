@@ -1,13 +1,13 @@
-import type { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
 import {
   type AgentSessionMessageSchemas,
+  type AgentSessionMessageReader,
   AgentTranscriptSelectionSchema,
   ListAgentSessionMessagesQuerySchema,
 } from '@/shared/data/api/schemas/agentSessionMessages';
 import type { HandlersFor } from '@/shared/data/api/types';
 
 export function createAgentSessionMessageHandlers(
-  service: AgentSessionMessageService,
+  service: AgentSessionMessageReader,
 ): HandlersFor<AgentSessionMessageSchemas> {
   return {
     '/agent-sessions/:sessionId/messages/selection': {

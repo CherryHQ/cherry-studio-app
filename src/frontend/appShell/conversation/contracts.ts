@@ -100,6 +100,7 @@ export type ResourceValue =
   | { kind: 'question'; questions: readonly InteractionQuestion[] }
   | { kind: 'text'; text: string; complete: true }
   | { kind: 'json'; value: JsonValue; complete: true }
+  | { kind: 'file'; uri: string; name: string; mediaType?: string; byteLength?: string }
   | { kind: 'metadata'; name: string; mediaType?: string; byteLength?: string };
 /** In-process values arrive inline; desktop-owned bytes are read on demand under a stable key. */
 export type ResourceRead =
@@ -148,10 +149,15 @@ export type ConversationMessage = {
     input?: ResourceRead;
     output?: ResourceRead;
   }[];
-  attachments?: readonly { key: string; name: string; mediaType?: string }[];
+  attachments?: readonly {
+    key: string;
+    name: string;
+    mediaType?: string;
+    resource?: ResourceRead;
+  }[];
   /** Unsupported actions are absent; temporary unavailability is explicit. */
   actions: {
-    retry?: ConversationAction<void, void>;
+    retry?: ConversationAction<void, ConversationRef | void>;
     remove?: ConversationAction<void, void>;
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
   };

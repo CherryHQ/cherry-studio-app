@@ -20,6 +20,30 @@ const MODEL: FileAttachmentTarget = {
   maxInputTokens: 120_000,
 };
 
+describe('attachment source byte limits', () => {
+  test.each([
+    ['notes.txt', 'text/plain', 5 * 1024 * 1024],
+    ['report.pdf', 'application/pdf', 50 * 1024 * 1024],
+    [
+      'report.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      20 * 1024 * 1024,
+    ],
+    ['photo.png', 'image/png', 10 * 1024 * 1024],
+  ] as const)('admits %s at its ceiling and rejects one extra byte', (name, mediaType, limit) => {
+    const file = { ...imageFact(0, limit), name, mediaType };
+    expect(() => validateFileAttachments([file], MODEL)).not.toThrow();
+    expect(() => validateFileAttachments([{ ...file, size: limit + 1 }], MODEL)).toThrow(
+      new FileAttachmentError({
+        code: 'file-bytes',
+        fileEntryId: file.fileEntryId,
+        name,
+        limit,
+      }),
+    );
+  });
+});
+
 describe('image attachment limits', () => {
   test('classifies RTF as a document before generic text while leaving CSV as text', () => {
     expect(fileAttachmentMode({ mediaType: 'text/rtf', name: 'document.rtf' })).toBe('document');

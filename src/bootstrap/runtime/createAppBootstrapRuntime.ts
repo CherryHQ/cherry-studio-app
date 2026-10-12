@@ -157,6 +157,7 @@ export function createAppBootstrapRuntime(
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
+    () => agent.quiesce(),
   );
   const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
@@ -244,7 +245,6 @@ export function createAppBootstrapRuntime(
         }
         if (getStorageBoot().resetCaches) {
           cache.resetForRestore();
-          agent.resetReplayCacheForRestore();
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }

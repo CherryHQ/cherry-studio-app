@@ -310,7 +310,7 @@ export class AgentSessionChatClient {
   async submitMessage(input: AgentSubmitMessageInput) {
     const { sessionId } = input;
     const entry = this.getEntry(sessionId);
-    const submission = this.beginSubmission(entry);
+    const submission = this.beginSubmission(entry, true);
     try {
       await this.observe(sessionId);
       throwIfSubmissionCancelled(submission);
@@ -328,22 +328,23 @@ export class AgentSessionChatClient {
     }
   }
 
-  async retryMessage(input: AgentRetryMessageInput): Promise<void> {
+  async retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void> {
     const entry = this.getEntry(input.sessionId);
-    // Admission is as slow as a submission's, and unlike a submission it has no
-    // new rows to show for it. The answer reads as pending from the press until
-    // the Host publishes the reserved one, so the wait looks like a wait.
-    const submission = this.beginSubmission(entry, input.messageId);
+    // The original answer stays visible while the engine prepares its new branch.
+    const submission = this.beginSubmission(entry);
     try {
       await this.observe(input.sessionId);
       throwIfSubmissionCancelled(submission);
-      await this.protocol.retryMessage(input);
+      const session = await this.protocol.retryMessage(input);
       this.options.onSessionChanged?.(input.sessionId);
       this.options.onTranscriptChanged?.(input.sessionId);
+      if (session) {
+        this.options.onSessionChanged?.(session.id);
+        this.options.onTranscriptChanged?.(session.id);
+      }
+      return session;
     } finally {
-      // The Host published the reserved answer before resolving, so dropping
-      // the projection here reveals that view rather than the replaced one.
-      // A rejected admission has published nothing and restores the old answer.
+      // Admission never replaces the source answer, whether a branch was created or rejected.
       this.endSubmission(entry, submission);
       this.updateState(entry, {
         ...entry.state,
@@ -359,11 +360,13 @@ export class AgentSessionChatClient {
 
   private beginSubmission(
     entry: SessionEntry,
-    retryingMessageId?: string,
+    allowQueue = false,
   ): NonNullable<SessionEntry['submission']> {
     if (
       entry.state.isSubmitting ||
-      (entry.state.activeTurn && !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
+      (!allowQueue &&
+        entry.state.activeTurn &&
+        !TERMINAL_TURN_STATUSES.has(entry.state.activeTurn.status))
     ) {
       throw new AgentProtocolError({
         code: 'SESSION_BUSY',
@@ -371,7 +374,7 @@ export class AgentSessionChatClient {
         retryable: false,
       });
     }
-    this.updateState(entry, { ...entry.state, isSubmitting: true, retryingMessageId });
+    this.updateState(entry, { ...entry.state, isSubmitting: true });
     entry.submission = { isCancelled: false };
     return entry.submission;
   }

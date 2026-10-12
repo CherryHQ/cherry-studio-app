@@ -123,9 +123,13 @@ export function createLocalConversationProjector(input: {
             : {}),
           ...(canModify && message.role === 'assistant'
             ? {
-                retry: action<void, void>(state, true, () =>
-                  client.retryMessage({ sessionId, messageId: message.id }),
-                ),
+                retry: action<void, ConversationRef | void>(state, true, async () => {
+                  const next = await client.retryMessage({ sessionId, messageId: message.id });
+                  if (next) {
+                    input.onSessionChanged?.(next.id);
+                    return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
+                  }
+                }),
                 fork: action<{ title?: string }, ConversationRef>(
                   state,
                   true,

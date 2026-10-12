@@ -1,5 +1,12 @@
 # Runtime Ownership
 
+The active experimental Agent lifetime is specified in
+[Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
+and Pi connection. Native task demand, including compaction, holds the existing execution lease.
+Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
+before resuming. User stop alone aborts. Historical per-turn descriptions below do not override this.
+Its target owner is one application-scoped Harness; route disposal only releases observation.
+
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
 cleanup.
 Terms follow [Domain Language](./domain-language.md).
@@ -148,7 +155,8 @@ The current tool inventory and binding rules live only in
 [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md).
 
 An Agent tool may delegate to `JobRuntime`, but Version 1 still waits for terminal job state inside
-the active turn. The durable job ledger does not make the Agent turn resumable after process death.
+the active turn. Pi recovers committed Agent work after process death; an interrupted unsafe tool
+retains its native interruption outcome and does not blindly redispatch a job or external effect.
 See [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md).
 
 ## Painting Generation

@@ -42,6 +42,12 @@ thumbnail caching. Loading placeholders belong to the caller because it owns the
 />;
 ```
 
+A caller may supply `metadata` before file bytes are available; the tile renders the shared type
+card without reading a URI. `disabled` prevents opening unavailable sources. Optional `transfer`
+state draws acknowledged progress around the frame or marks a failure, with a caller-localized
+accessible label. Removing that state restores the ordinary preview. Transfer tasks, retries,
+and file acquisition remain caller-owned; CherryUI does not start uploads or downloads.
+
 Rendering is plugin-based and `kind` is an open set. CherryUI ships an `image` renderer and falls
 back to the platform preview — an iOS Quick Look thumbnail, an Android extension card — for every
 kind no plugin claims, so a caller may classify files more finely than any renderer handles.

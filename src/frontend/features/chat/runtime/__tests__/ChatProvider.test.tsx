@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AgentProtocolError, type AgentMessageView } from '@/shared/contracts/agent';
 
+import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import {
   ChatProvider,
   useAgentChatControls,
@@ -20,7 +21,14 @@ const mockReplace = jest.fn();
 const mockSetParams = jest.fn();
 const mockStartSession = jest.fn();
 const mockSubmitMessage = jest.fn();
-const mockChatState = { status: 'ready', activeTurn: null, liveMessages: [] as AgentMessageView[] };
+const mockChatState: AgentSessionChatState = {
+  status: 'ready',
+  sessionId: 'session-1',
+  activeTurn: null,
+  liveMessages: [],
+  pendingApprovals: [],
+  pendingQuestion: null,
+};
 const mockSubscribe = jest.fn(() => () => undefined);
 
 jest.mock('@tanstack/react-query', () => ({
@@ -111,6 +119,8 @@ describe('ChatProvider Draft handoff', () => {
     draftHandoff = undefined;
     imageResult = undefined;
     mockChatState.liveMessages = [];
+    mockChatState.activeTurn = null;
+    mockChatState.isSubmitting = false;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
   });
@@ -119,6 +129,27 @@ describe('ChatProvider Draft handoff', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     jest.restoreAllMocks();
+  });
+
+  it('allows a drafted follow-up while retaining the active stop control', () => {
+    mockChatState.activeTurn = {
+      id: 'active-turn',
+      sessionId: 'session-1',
+      assistantMessageId: 'active-answer',
+      status: 'running',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBeUndefined();
+    act(() => {
+      void currentControls().cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {

@@ -166,7 +166,14 @@ export function cleanupStorageAfterBoot(): void {
   }
   if (control.current !== 'legacy') {
     // Never delete Documents or the shared SQLite directory themselves.
-    for (const name of ['cherry.db', 'cherry.db-wal', 'cherry.db-shm']) {
+    for (const name of [
+      'cherry.db',
+      'cherry.db-wal',
+      'cherry.db-shm',
+      'pi-agent.db',
+      'pi-agent.db-wal',
+      'pi-agent.db-shm',
+    ]) {
       const file = new File(defaultDatabaseDirectory, name);
       if (file.exists) file.delete();
     }

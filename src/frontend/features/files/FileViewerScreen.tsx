@@ -6,18 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/appShell/header';
-import {
-  fileEntryPreviewKind,
-  useOpenFileEntry,
-  useResolvedFile,
-} from '@/frontend/components/FileEntryPreview';
+import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { type FileEntryId, FileEntryIdSchema } from '@/shared/data/types/file';
 
+import { FileDocumentViewer } from './components/FileDocumentViewer';
 import { FileImageViewer } from './components/FileImageViewer';
 import { FileTextViewer } from './components/FileTextViewer';
-import { FileViewerHeader } from './components/FileViewerHeader';
 
 export function FileViewerScreen() {
   const { t } = useTranslation();
@@ -40,7 +36,6 @@ export function FileViewerScreen() {
 function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
-  const { openFileEntryWithSystem } = useOpenFileEntry();
   const [background, foreground, black, white] = useThemeColor([
     'background',
     'foreground',
@@ -81,18 +76,7 @@ function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
       ) : kind === 'image' ? (
         <FileImageViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
       ) : kind === 'document' ? (
-        <>
-          <FileViewerHeader file={file} />
-          <View className="flex-1 items-center justify-center p-6">
-            <ContentState.Empty
-              primaryAction={{
-                children: t('filePreview.openWith'),
-                onPress: () => void openFileEntryWithSystem(file),
-              }}
-              title={t('fileViewer.systemPreview')}
-            />
-          </View>
-        </>
+        <FileDocumentViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
       ) : (
         <FileTextViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} kind={kind} />
       )}

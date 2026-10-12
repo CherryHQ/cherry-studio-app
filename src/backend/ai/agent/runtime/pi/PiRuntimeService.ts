@@ -10,11 +10,12 @@ import type {
   RuntimeModel,
   RuntimeModelPreflight,
 } from '../types';
+import { PiDurableAgentRuntime } from './PiDurableAgentRuntime';
 import { supportsPiLanguageModel } from './piLanguageBinding';
+import { PiModelProbeRuntime } from './PiModelProbeRuntime';
 import { createPiModelResolver } from './piModelResolver';
 import { listPiOAuthModels } from './piOAuthModels';
 import { PiProviderAccountAdapter } from './PiProviderAccountAdapter';
-import { PiRuntime } from './PiRuntime';
 
 /**
  * The composition-root binding of the Agent Runtime contract to Pi.
@@ -30,15 +31,17 @@ import { PiRuntime } from './PiRuntime';
 @ServicePhase(Phase.PostReady)
 export class PiRuntimeService extends BaseService implements AgentRuntime, LanguageServingSupport {
   private readonly runtime: AgentRuntime;
+  readonly conversations: PiDurableAgentRuntime;
   readonly providerAccounts = new PiProviderAccountAdapter();
 
   constructor() {
     super();
-    this.runtime = new PiRuntime(
-      createPiModelResolver({
-        resolveAuth: (provider, signal) => this.providerAccounts.resolveAuth(provider, signal),
-      }),
-    );
+    const dependencies = createPiModelResolver({
+      resolveAuth: (provider, signal) => this.providerAccounts.resolveAuth(provider, signal),
+    });
+    this.conversations = new PiDurableAgentRuntime(dependencies);
+    // Short-lived provider probes retain their isolated, non-persistent session contract.
+    this.runtime = new PiModelProbeRuntime(dependencies);
   }
 
   async listAuthenticatedModels(provider: Provider, signal: AbortSignal) {
@@ -47,11 +50,11 @@ export class PiRuntimeService extends BaseService implements AgentRuntime, Langu
   }
 
   get descriptor(): RuntimeDescriptor {
-    return this.runtime.descriptor;
+    return this.conversations.descriptor;
   }
 
   preflightModel(model: RuntimeModel): Promise<RuntimeModelPreflight> {
-    return this.runtime.preflightModel(model);
+    return this.conversations.preflightModel(model);
   }
 
   open(): Promise<AgentRuntimeSession> {

@@ -8,7 +8,7 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockAgent = { kind: 'agent', resetReplayCacheForRestore: jest.fn() };
+const mockAgent = { kind: 'agent', quiesce: jest.fn() };
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
@@ -173,7 +173,6 @@ describe('createAppBootstrapRuntime', () => {
     await Promise.race([initializing, boot]);
     expect(mockValidateRestoringStorage).toHaveBeenCalledTimes(1);
     expect(mockCache.resetForRestore).toHaveBeenCalledTimes(1);
-    expect(mockAgent.resetReplayCacheForRestore).toHaveBeenCalledTimes(1);
     expect(mockCommitStorageBoot).not.toHaveBeenCalled();
     initialized();
     await boot;
@@ -192,7 +191,6 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockRejectStorageCandidate).toHaveBeenCalledTimes(1);
     // The current store's caches still describe it; only a restored store resets them.
     expect(mockCache.resetForRestore).not.toHaveBeenCalled();
-    expect(mockAgent.resetReplayCacheForRestore).not.toHaveBeenCalled();
     expect(mockInitializeAppRuntime).toHaveBeenCalledTimes(1);
     expect(mockFailStorageBoot).not.toHaveBeenCalled();
     await runtime.dispose();

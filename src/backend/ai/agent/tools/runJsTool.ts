@@ -34,7 +34,7 @@ export const RUN_JS_MAX_TIMEOUT_MS = 30_000;
 
 /**
  * The run's budgets apart from its deadline. The two captures together stay
- * under `read_file`'s 1 MiB source limit, so a saved output reads back whole.
+ * under `read_file`'s source limit, so a saved output reads back whole.
  */
 export const RUN_JS_LIMITS: Omit<JsSandboxLimits, 'timeoutMs'> = {
   memoryBytes: 64 * 1024 * 1024,

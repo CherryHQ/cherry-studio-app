@@ -29,7 +29,11 @@ export function ProviderRegistryQueryBridge() {
   return null;
 }
 
-function isRegistryProjectionPath(value: unknown): boolean {
+// An Agent record carries its model's display name, which falls back to the raw
+// model id until the registry is active. Sub-resources such as tool bindings do not.
+const AGENT_RECORD_PATH = /^\/agents(\/[^/]+)?$/;
+
+export function isRegistryProjectionPath(value: unknown): boolean {
   if (typeof value !== 'string') {
     return false;
   }
@@ -38,6 +42,7 @@ function isRegistryProjectionPath(value: unknown): boolean {
     value === 'onboarding-models' ||
     value === '/models' ||
     value.startsWith('/models/') ||
+    AGENT_RECORD_PATH.test(value) ||
     (value.startsWith('/providers/') &&
       (value.includes('/models:resolve') || value.includes('/image-generation-support')))
   );

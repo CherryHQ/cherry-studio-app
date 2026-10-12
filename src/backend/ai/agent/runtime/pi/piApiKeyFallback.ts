@@ -1,7 +1,7 @@
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, AssistantMessageEvent } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import type { PiStreamFn as StreamFn } from './piModelTypes';
 import {
   emptyAssistantMessage,
   errorRecord,

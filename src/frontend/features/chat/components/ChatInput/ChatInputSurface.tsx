@@ -1,6 +1,8 @@
+import PauseIcon from '@cherrystudio/app-icons/icons/pause';
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ReactNode, useCallback, useEffect, useRef } from 'react';
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, type StyleProp, type TextStyle, View } from 'react-native';
 import Animated, {
   Extrapolation,
@@ -13,9 +15,11 @@ import Animated, {
 
 import {
   ComposerField,
+  ComposerSurface,
   useComposerPresentationState,
   useComposerState,
 } from '@/frontend/components/Composer';
+import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
 
 const restingInputHeight = 32;
 const FIELD_CONTENT_STYLE = { minHeight: restingInputHeight };
@@ -28,11 +32,23 @@ const activeTransitionMotion = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
+/** A drafted follow-up can be admitted while Pi continues its current answer. */
+export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>) {
+  const { attachments, draft } = useComposerState();
+  return (
+    <ComposerSurface
+      {...props}
+      streaming={props.streaming && !hasComposerSendableContent(draft, attachments)}
+    />
+  );
+}
+
 export function ChatInputSurface({
   leadingAction,
   secondaryAction,
   trailingAction,
   streaming,
+  onStop,
   fieldStyle,
   attachmentMode = 'images',
 }: {
@@ -40,11 +56,14 @@ export function ChatInputSurface({
   secondaryAction?: ReactNode;
   trailingAction?: ReactNode;
   streaming: boolean;
+  onStop?: () => void;
   fieldStyle?: StyleProp<TextStyle>;
   attachmentMode?: 'images' | 'text-only';
 }) {
+  const { t } = useTranslation();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
+  const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   const isInputActive = isEditing || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
   const activeProgress = useSharedValue(isInputActive ? 1 : 0);
@@ -164,7 +183,19 @@ export function ChatInputSurface({
               {trailingAction}
             </Animated.View>
           ) : null}
-          <Composer.Send testID={streaming ? 'chat-composer-stop' : 'chat-composer-send'} />
+          {streaming && hasFollowUp && onStop ? (
+            <Composer.Action
+              accessibilityLabel={t('chat.input.action.stopGenerating')}
+              className="bg-transparent"
+              onPress={onStop}
+              testID="chat-composer-stop"
+            >
+              <PauseIcon className="size-6 text-foreground" />
+            </Composer.Action>
+          ) : null}
+          <Composer.Send
+            testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
+          />
         </View>
       </Animated.View>
     </Animated.View>

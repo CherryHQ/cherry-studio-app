@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
 jest.mock('@sentry/react-native/metro', () => ({
-  getSentryExpoConfig: () => ({ resolver: { sourceExts: [] }, watchFolders: [] }),
+  getSentryExpoConfig: () => ({ resolver: { sourceExts: [], assetExts: [] }, watchFolders: [] }),
 }));
 jest.mock('react-native-worklets/bundleMode', () => ({
   getBundleModeMetroConfig: (config: unknown) => config,

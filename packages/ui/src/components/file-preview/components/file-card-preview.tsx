@@ -12,7 +12,7 @@ export function FileCardPreview({
   variant,
 }: {
   badge?: ReactNode;
-  file: FilePreviewFile;
+  file: Pick<FilePreviewFile, 'displayName' | 'extensionLabel' | 'kind'>;
   variant: Exclude<FilePreviewVariant, 'thumbnail'>;
 }) {
   const { icon: Icon, iconClassName } = fileVisualPreset(file);

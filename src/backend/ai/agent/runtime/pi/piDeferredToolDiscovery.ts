@@ -1,4 +1,4 @@
-import type { AgentTool as PiAgentTool } from '@earendil-works/pi-agent-core';
+import type { Tool, ToolResultMessage } from '@earendil-works/pi-ai';
 import * as z from 'zod';
 
 import { createErrorToolResult } from '../toolResults';
@@ -84,6 +84,18 @@ type RunMetaTool = (
   operation: (modelOutputCharacterLimit: number) => PiMetaToolExecution,
 ) => Promise<RuntimeToolResult>;
 
+/** Catalog code is shared by the durable tools and the legacy adapter without owning either loop. */
+type PiCatalogTool = Tool & {
+  label: string;
+  /** Resolve only a discovered, validated target, before the durable adapter asks for approval. */
+  approvalTarget?(params: unknown): { tool: RuntimeTool; input: RuntimeJsonValue } | undefined;
+  execute(
+    toolCallId: string,
+    params: unknown,
+    signal?: AbortSignal,
+  ): Promise<{ content: ToolResultMessage['content']; details: RuntimeToolResult }>;
+};
+
 /**
  * Project one frozen MCP catalog into three Pi model-loop tools for deferred
  * discovery. Search and describe publish compact meta activity while the full
@@ -93,12 +105,12 @@ export function createPiDeferredToolDiscoveryTools(
   tools: readonly RuntimeTool[],
   invokeTarget: InvokeTargetTool,
   runMetaTool: RunMetaTool,
-): PiAgentTool[] {
+): PiCatalogTool[] {
   const catalog = new Map(tools.map((tool) => [tool.providerName, tool]));
   const inspectedNames = new Set<string>();
   const inputValidators = new Map<string, z.ZodType | null>();
 
-  const searchTool: PiAgentTool = {
+  const searchTool: PiCatalogTool = {
     name: PI_TOOL_SEARCH_TOOL_NAME,
     label: 'Search tools',
     description:
@@ -143,7 +155,7 @@ export function createPiDeferredToolDiscoveryTools(
     },
   };
 
-  const describeTool: PiAgentTool = {
+  const describeTool: PiCatalogTool = {
     name: PI_TOOL_DESCRIBE_TOOL_NAME,
     label: 'Describe tool',
     description: 'Get the bounded description and TypeScript signature for one discovered tool.',
@@ -172,12 +184,20 @@ export function createPiDeferredToolDiscoveryTools(
     },
   };
 
-  const callTool: PiAgentTool = {
+  const callTool: PiCatalogTool = {
     name: PI_TOOL_CALL_TOOL_NAME,
     label: 'Call tool',
     description:
       'Call one MCP tool using an exact name and params matching a signature returned in the current turn by tool_search or tool_describe. An unseen or invalid call returns the expected signature for a corrected retry.',
     parameters: CALL_INPUT_SCHEMA as never,
+    approvalTarget(params) {
+      if (!isRecord(params) || typeof params.name !== 'string') return;
+      const tool = catalog.get(params.name);
+      if (!tool || !inspectedNames.has(tool.providerName)) return;
+      const input = params.params as RuntimeJsonValue;
+      if (getToolInputError(tool, input, inputValidators)) return;
+      return { tool, input };
+    },
     async execute(toolCallId, params, signal) {
       const input = isRecord(params) ? params : {};
       const name = typeof input.name === 'string' ? input.name : '';

@@ -340,7 +340,9 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         pendingEnteringMessageIdRef.current = undefined;
       }
       restore = scrollToLiveEdge(pendingMessageId ? 'local-send' : 'restored-bottom', {
-        animated: Boolean(pendingMessageId),
+        // Initial placement is hidden by the history cover. Android may not
+        // emit an animation completion event when this target is already reached.
+        animated: false,
       });
     }
 

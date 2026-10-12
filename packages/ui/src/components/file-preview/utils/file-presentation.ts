@@ -85,7 +85,9 @@ const fileVisualPresetByExtension = new Map<string, FileVisualPreset>(
   ),
 );
 
-export function fileVisualPreset(file: FilePreviewFile): FileVisualPreset {
+export function fileVisualPreset(
+  file: Pick<FilePreviewFile, 'displayName' | 'extensionLabel' | 'kind'>,
+): FileVisualPreset {
   const extensionIndex = file.displayName.lastIndexOf('.');
   const extension =
     extensionIndex > 0 ? file.displayName.slice(extensionIndex + 1) : file.extensionLabel;

@@ -83,8 +83,16 @@ export function providerErrorEvent(
   error: unknown,
   aborted = false,
 ): PiStreamErrorEvent {
-  const message = error instanceof Error ? error.message : String(error);
   const record = errorRecord(error);
+  // Normalized failures are plain objects; read their fields instead of stringifying them.
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof record?.message === 'string'
+        ? record.message
+        : String(error);
+  const name =
+    error instanceof Error ? error.name : typeof record?.name === 'string' ? record.name : 'Error';
   const code = record?.code ?? record?.type;
   const reason = aborted ? 'aborted' : 'error';
   return {
@@ -100,7 +108,7 @@ export function providerErrorEvent(
           type: 'provider_response_failure',
           timestamp: Date.now(),
           error: {
-            name: error instanceof Error ? error.name : 'Error',
+            name,
             message,
             ...(typeof code === 'string' || typeof code === 'number' ? { code } : {}),
           },
