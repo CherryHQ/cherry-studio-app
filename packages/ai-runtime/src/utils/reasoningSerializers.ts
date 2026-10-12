@@ -59,8 +59,8 @@ function resolveSelection(
   }
 
   const declared = selectable.filter(
-    (effort): effort is Exclude<ReasoningEffort, 'none' | 'auto'> =>
-      effort !== 'none' && effort !== 'auto',
+    (effort): effort is Exclude<ReasoningEffort, 'none' | 'auto' | 'ultra'> =>
+      effort !== 'none' && effort !== 'auto' && effort !== 'ultra',
   );
   // `selectableEfforts` is the model's UI vocabulary. A cross-dialect request can still carry
   // canonical `auto`; let the wire profile map it when the target has adjustable effort tiers.

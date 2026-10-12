@@ -1,5 +1,10 @@
-import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@shared/data/types/model';
+import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import {
+  createUniqueModelId,
+  MODEL_CAPABILITY,
+  ModelSchema,
+  type Model,
+} from '@shared/data/types/model';
 
 import {
   deriveModelGroupName,
@@ -120,3 +125,8 @@ function createModel(modelId: string, patch: Partial<Model> = {}): Model {
     ...patch,
   };
 }
+
+test('keeps legacy web-search capabilities in saved Mobile models', () => {
+  const saved = createModel('legacy', { capabilities: ['web-search'] });
+  expect(ModelSchema.parse(saved).capabilities).toEqual(['web-search']);
+});

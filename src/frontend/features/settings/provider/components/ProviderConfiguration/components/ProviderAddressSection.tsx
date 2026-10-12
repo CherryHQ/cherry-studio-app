@@ -1,5 +1,5 @@
-import { getProviderBaseUrlIssue } from '@cherrystudio/provider-registry';
 import { Chip, Section } from '@cherrystudio/ui/components';
+import { getProviderBaseUrlIssue } from '@cherrystudio/universal/utils/url';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';

@@ -17,7 +17,10 @@ const EFFORT_RATIO: Record<BudgetEffort, number> = {
 
 const BUDGET_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 const EFFORT_ORDER_INDEX = new Map<ReasoningEffortOption, number>(
-  REASONING_EFFORT_ORDER.map((effort, index) => [effort, index]),
+  REASONING_EFFORT_ORDER.filter((effort) => effort !== 'ultra').map((effort, index) => [
+    effort,
+    index,
+  ]),
 );
 
 export function deriveThinkingOptions(model: Model): ReasoningEffortOption[] | undefined {
@@ -25,7 +28,7 @@ export function deriveThinkingOptions(model: Model): ReasoningEffortOption[] | u
   const vocabulary = model.reasoning?.selectableEfforts;
   if (!vocabulary?.length) return undefined;
 
-  const rest = vocabulary.filter((effort) => effort !== 'none');
+  const rest = vocabulary.filter((effort) => effort !== 'none' && effort !== 'ultra');
   return ['default', ...(vocabulary.includes('none') ? (['none'] as const) : []), ...rest];
 }
 
@@ -89,6 +92,7 @@ function resolveBudgetEffort(
 ): BudgetEffort | undefined {
   if (selection === 'default' || selection === 'none') return undefined;
   const effort = selection === 'auto' ? (reasoning?.defaultEffort ?? 'high') : selection;
+  if (effort === 'ultra') return undefined;
   if (effort === 'none' || effort === 'auto') return effort === 'auto' ? 'high' : undefined;
   return effort;
 }
