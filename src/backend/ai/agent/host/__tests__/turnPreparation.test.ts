@@ -72,6 +72,68 @@ jest.mock('@/backend/services/file/anydocParser', () => ({
 
 describe('turn preparation', () => {
   test.each(['existing', 'initial', 'durable'] as const)(
+    'standard %s chat remains available without function calling or tool discovery',
+    async (kind) => {
+      const harness = createHarness();
+      harness.preflightModel.mockResolvedValue({
+        contextWindow: 128_000,
+        inputModalities: ['text'],
+        maxInputTokens: 120_000,
+        maxOutputTokens: 8_000,
+        supportsTools: false,
+      });
+      const unavailable = async (): Promise<never> => {
+        throw new Error('Tools unavailable');
+      };
+      harness.dependencies.skills = { resolve: jest.fn(unavailable) };
+      harness.dependencies.skillWorkflow = {
+        search: unavailable,
+        popular: unavailable,
+        resolve: unavailable,
+        inspect: unavailable,
+        install: unavailable,
+        update: unavailable,
+        uninstall: unavailable,
+        subscribeChanges: () => () => undefined,
+      };
+      harness.getSystemTools.mockImplementation(unavailable);
+      harness.resolveRuntimeTools.mockImplementation(unavailable);
+      const signal = new AbortController().signal;
+      const input = textInput();
+      const plan =
+        kind === 'initial'
+          ? await prepareInitialTurn(harness.dependencies, { ...input, agentId: AGENT_ID }, signal)
+          : kind === 'durable'
+            ? await prepareDurableTurn(harness.dependencies, input, [], signal)
+            : await prepareTurn(harness.dependencies, input, signal);
+      expect(plan.inputParts).toEqual(input.parts);
+      expect(plan.tools).toEqual([]);
+      expect(plan.pluginGuides).toEqual([]);
+      expect(plan.skills.scope.entries).toEqual([]);
+      expect(harness.getSystemTools).not.toHaveBeenCalled();
+      expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
+      expect(harness.dependencies.skills.resolve).not.toHaveBeenCalled();
+    },
+  );
+
+  test('rejects explicit Skill installation for a model without function calling', async () => {
+    const harness = createHarness();
+    harness.preflightModel.mockResolvedValue({
+      contextWindow: 128_000,
+      inputModalities: ['text'],
+      maxInputTokens: 120_000,
+      maxOutputTokens: 8_000,
+      supportsTools: false,
+    });
+    await expect(
+      prepareTurn(
+        harness.dependencies,
+        { ...textInput(), skillAction: 'find-and-install' },
+        new AbortController().signal,
+      ),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+  });
+  test.each(['existing', 'initial', 'durable'] as const)(
     'minimal %s turns skip tools and plugin discovery even for a model without tool calling',
     async (kind) => {
       const harness = createHarness();
@@ -564,6 +626,8 @@ describe('turn preparation', () => {
       (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
 
     expect(await prepare()).toEqual(policy);
+    harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal', disabledCapabilities: [] });
+    expect(await prepare()).toEqual(policy);
     harness.getAgent.mockResolvedValue({ ...AGENT, disabledCapabilities: ['web'] });
     expect(await prepare()).toBeUndefined();
   });
@@ -594,7 +658,7 @@ describe('turn preparation', () => {
     });
 
     expect(harness.resolveInferenceModel).not.toHaveBeenCalled();
-    expect(harness.preflightModel).not.toHaveBeenCalled();
+    expect(harness.preflightModel).toHaveBeenCalledWith(BASE_MODEL);
   });
 
   test('retains discovery failures for the current turn while keeping other capabilities usable', async () => {

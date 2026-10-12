@@ -440,7 +440,22 @@ export async function prepareResolvedTurn(
   if (parsed.imageGeneration) {
     fail('CAPABILITY_UNSUPPORTED', 'Image generation is unavailable for this Agent.');
   }
-  if ((parsed.skillIds?.length || parsed.skillAction) && !runtime.descriptor.capabilities.tools) {
+  let modelPreflight: RuntimeModelPreflight;
+  try {
+    modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
+  } catch {
+    signal.throwIfAborted();
+    fail(
+      'CAPABILITY_UNSUPPORTED',
+      'The selected model or provider endpoint cannot execute this turn.',
+    );
+  }
+  // Desktop skips the whole function-tool catalog when the model cannot consume it.
+  const canUseTools =
+    agent.mode === 'standard' &&
+    runtime.descriptor.capabilities.tools &&
+    modelPreflight.supportsTools;
+  if ((parsed.skillIds?.length || parsed.skillAction) && !canUseTools) {
     fail('CAPABILITY_UNSUPPORTED', 'Skills are not supported for this Agent.');
   }
 
@@ -457,7 +472,7 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
-  if (agent.mode === 'standard' && runtime.descriptor.capabilities.tools) {
+  if (canUseTools) {
     // Read prior Skill receipts only when this turn can use tools and Skills.
     const receipts = dependencies.skills
       ? latestSkillActivations(
@@ -560,19 +575,6 @@ export async function prepareResolvedTurn(
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
       : undefined;
   const inferenceModel = await resolveInferenceModel();
-  let modelPreflight: RuntimeModelPreflight;
-  try {
-    modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
-  } catch {
-    signal.throwIfAborted();
-    fail(
-      'CAPABILITY_UNSUPPORTED',
-      'The selected model or provider endpoint cannot execute this turn.',
-    );
-  }
-  if (tools.length > 0 && !modelPreflight.supportsTools) {
-    fail('TOOL_CALLING_UNSUPPORTED', 'The selected model does not support native tool calling.');
-  }
   const inferenceSnapshot = createAgentInferenceSnapshot({
     model: inferenceModel,
     options: agent.options,

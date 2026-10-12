@@ -33,13 +33,16 @@ export function useStartSkillChat() {
     try {
       const result = await agents.refetch();
       if (result.error) throw result.error;
-      const available = result.data?.items ?? agents.agents;
+      const available = (result.data?.items ?? agents.agents).filter(
+        (agent) => agent.mode === 'standard',
+      );
       const currentSession =
         target?.kind === 'session' ? (session.data ?? (await session.refetch()).data) : undefined;
       const currentAgentId = target?.kind === 'draft' ? target.agentId : currentSession?.agentId;
       const agentId =
         available.find((agent) => agent.id === currentAgentId)?.id ?? available[0]?.id;
       if (!agentId) {
+        toast.show({ label: t('skills.chatRequiresStandardAgent'), variant: 'danger' });
         router.push('/agents');
         return;
       }
