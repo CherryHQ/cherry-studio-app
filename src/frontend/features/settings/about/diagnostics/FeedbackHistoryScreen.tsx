@@ -102,23 +102,14 @@ export function FeedbackHistoryScreen() {
                   onPress={() => openReport(record.reportId)}
                   testID={`feedback-record-${record.reportId}`}
                   label={
-                    <Text className="text-base text-foreground" numberOfLines={2}>
-                      {record.description}
+                    <Text className="font-medium text-base text-foreground" numberOfLines={1}>
+                      {record.description.replace(/\s+/g, ' ')}
                     </Text>
                   }
                   description={
-                    <View className="gap-1">
-                      <Text className="text-xs text-muted-foreground">
-                        {dateFormatter.format(new Date(record.submittedAt))}
-                      </Text>
-                      {record.lastCheckedAt && (
-                        <Text className="text-xs text-muted-foreground">
-                          {t('settings.about.feedback.history.checkedAt', {
-                            time: dateFormatter.format(new Date(record.lastCheckedAt)),
-                          })}
-                        </Text>
-                      )}
-                    </View>
+                    <Text className="text-xs text-muted-foreground" numberOfLines={1}>
+                      {dateFormatter.format(new Date(record.submittedAt))}
+                    </Text>
                   }
                   trailing={
                     <Chip.Tag className="px-2 py-1">

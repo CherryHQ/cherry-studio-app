@@ -1,18 +1,22 @@
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { ContentState } from '@cherrystudio/ui/components';
+import { BottomSheet, ContentState, Section } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { withUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { useBackendModule, usePersistCache } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { DiagnosticReportIdSchema, diagnosticStatusPageUrl } from '@/shared/contracts/diagnostics';
+import {
+  type DiagnosticFeedbackRecord,
+  DiagnosticReportIdSchema,
+  diagnosticStatusPageUrl,
+} from '@/shared/contracts/diagnostics';
 
 import { feedbackHistoryRecords, FEEDBACK_HISTORY_KEY } from './feedbackHistory';
 import { feedbackStatusQueryOptions } from './feedbackStatusQuery';
@@ -70,16 +74,63 @@ function FeedbackStatusDetail({ reportId, language }: { reportId: string; langua
           },
         ]}
       />
-      {record && (
-        <Text className="px-4 py-3 text-sm text-muted-foreground" numberOfLines={3}>
-          {record.description}
-        </Text>
-      )}
+      {record && <FeedbackDescription record={record} />}
       <FeedbackStatusWebPage
         key={`${reportId}:${language}:${reload}`}
         reportId={reportId}
         language={language}
       />
+    </>
+  );
+}
+
+function FeedbackDescription({ record }: { record: DiagnosticFeedbackRecord }) {
+  const { t, i18n } = useTranslation();
+  const [isOpen, setOpen] = useState(false);
+  return (
+    <>
+      <Section variant="plain">
+        <Section.Item
+          accessibilityLabel={t('settings.about.diagnostics.description')}
+          density="compact"
+          label={
+            <Text className="text-sm text-muted-foreground" numberOfLines={1}>
+              {record.description.replace(/\s+/g, ' ')}
+            </Text>
+          }
+          onPress={() => setOpen(true)}
+          testID="feedback-description-preview"
+        />
+      </Section>
+      {isOpen && (
+        <BottomSheet
+          closeAction={{ accessibilityLabel: t('common.close') }}
+          onClose={() => setOpen(false)}
+          open
+          size="medium"
+          testID="feedback-description-sheet"
+          title={t('settings.about.diagnostics.description')}
+        >
+          <ScrollView className="flex-1" contentContainerClassName="gap-4 px-4 py-3">
+            <Text
+              className="text-base leading-6 text-foreground"
+              testID="feedback-description-full"
+            >
+              {record.description}
+            </Text>
+            {record.lastCheckedAt && (
+              <Text className="text-xs text-muted-foreground">
+                {t('settings.about.feedback.history.checkedAt', {
+                  time: new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  }).format(new Date(record.lastCheckedAt)),
+                })}
+              </Text>
+            )}
+          </ScrollView>
+        </BottomSheet>
+      )}
     </>
   );
 }

@@ -39,7 +39,10 @@ is device-local, starts with submissions made by this flow, and is cleared with 
 UI cache. It does not retain diagnostic ZIPs. A history-write exception cannot change an accepted
 upload into a failed submission.
 
-About → Feedback history lists receipts newest first, 20 per page. Its visible records use
+About → Feedback history lists receipts newest first, 20 per page. Each row shows a one-line
+description preview, submission time and processing status. The detail page keeps the preview
+to one line; tapping it opens the full original description and last-check time in a scrollable
+bottom sheet, leaving the status page more room. Its visible records use
 `GET /diagnostics/:id/status` on entry and manual refresh, with a one-minute query freshness window,
 no retries and no background polling. The public lookup needs no signing credential. The adapter
 validates the matching UUID, documented processing states and timestamps; reads are cancellable,
