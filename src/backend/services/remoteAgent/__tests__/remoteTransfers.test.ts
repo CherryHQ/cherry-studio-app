@@ -257,12 +257,14 @@ it.each([false, true])(
         upload = {
           uploadId: params.uploadId,
           state: 'receiving',
+          checksumAlgorithm: 'sha256',
           committedOffset: '0',
           writerEpoch: '0',
           expiresAt: new Date(Date.now() + 60000).toISOString(),
         };
       } else if (method === 'agent.uploads.resume') upload = { ...upload!, writerEpoch: '1' };
-      else if (method === 'agent.uploads.complete') upload = { ...upload!, state: 'ready' };
+      else if (method === 'agent.uploads.complete')
+        upload = { ...upload!, state: 'ready', sha256: params.expectedSha256 };
       else throw new Error(`Selection must not send a message: ${method}`);
       return reorder ? Object.fromEntries(Object.entries(upload!).toReversed()) : upload;
     }) as AgentRequest;
@@ -274,8 +276,12 @@ it.each([false, true])(
       },
     });
     const files = {
-      resolve: async () => ({ uri, entry: { id: attachment.fileEntryId } }),
-      prepareUploadSource: async () => ({ uri, entry: { id: attachment.fileEntryId } }),
+      hashFile: async () => integrity.sha256(readFileSync(uri)),
+      resolve: async () => ({ uri, entry: { id: attachment.fileEntryId, provenance: 'imported' } }),
+      prepareUploadSource: async () => ({
+        uri,
+        entry: { id: attachment.fileEntryId, provenance: 'imported' },
+      }),
     } as unknown as RemoteUploadFiles;
     let tasks = new RemoteAttachmentDrafts(
       'phone:grant:attachments',
@@ -361,6 +367,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
         upload = {
           uploadId: params.uploadId,
           state: 'receiving',
+          checksumAlgorithm: 'sha256',
           committedOffset: '0',
           writerEpoch: '0',
           expiresAt: new Date(Date.now() + 60000).toISOString(),
@@ -386,8 +393,12 @@ it('persists removal before abort and cannot revive the attachment from a late w
     },
   });
   const files = {
-    resolve: async () => ({ uri, entry: { id: attachment.fileEntryId } }),
-    prepareUploadSource: async () => ({ uri, entry: { id: attachment.fileEntryId } }),
+    hashFile: async () => integrity.sha256(readFileSync(uri)),
+    resolve: async () => ({ uri, entry: { id: attachment.fileEntryId, provenance: 'imported' } }),
+    prepareUploadSource: async () => ({
+      uri,
+      entry: { id: attachment.fileEntryId, provenance: 'imported' },
+    }),
   } as unknown as RemoteUploadFiles;
   let tasks = new RemoteAttachmentDrafts(
     'removal',
@@ -416,7 +427,6 @@ it('persists removal before abort and cannot revive the attachment from a late w
   tasks.recover();
   await tasks.drain();
   expect(draft.items).toEqual([]);
-  expect(draft.items).toEqual([]);
   expect(tasks.get()).toEqual([]);
   tasks.stop();
 });
@@ -428,10 +438,14 @@ it('uploads MiB binary blocks without a pre-scan and resumes the persisted snaps
   writeFileSync(uri, bytes);
   const snapshotId = '12345678-1234-4234-8234-123456789def';
   const files = {
-    prepareUploadSource: jest.fn(async () => ({ uri, entry: { id: snapshotId } })),
+    hashFile: async () => integrity.sha256(readFileSync(uri)),
+    prepareUploadSource: jest.fn(async () => ({
+      uri,
+      entry: { id: snapshotId, provenance: 'imported' },
+    })),
     resolve: async (id: string) => {
       if (id !== snapshotId) throw new Error('Original source must not be reopened');
-      return { uri, entry: { id: snapshotId } };
+      return { uri, entry: { id: snapshotId, provenance: 'imported' } };
     },
   } as unknown as RemoteUploadFiles;
   let saved: SavedUpload[] = [];
@@ -449,13 +463,15 @@ it('uploads MiB binary blocks without a pre-scan and resumes the persisted snaps
       state = {
         uploadId: input.uploadId,
         state: 'receiving',
+        checksumAlgorithm: 'sha256',
         committedOffset: '0',
         writerEpoch: '0',
         expiresAt: new Date().toISOString(),
       };
     } else if (method === 'agent.uploads.resume') {
       state = { ...state!, writerEpoch: String(Number(state!.writerEpoch) + 1) };
-    } else if (method === 'agent.uploads.complete') state = { ...state!, state: 'ready' };
+    } else if (method === 'agent.uploads.complete')
+      state = { ...state!, state: 'ready', sha256: input.expectedSha256 };
     else throw new Error('Unexpected upload request: ' + method);
     return state;
   }) as AgentRequest;
@@ -496,4 +512,162 @@ it('uploads MiB binary blocks without a pre-scan and resumes the persisted snaps
   expect(Buffer.concat(received).equals(bytes)).toBe(true);
   expect(received.map((chunk) => chunk.length)).toEqual([1048576, 1048576, 19]);
   expect(files.prepareUploadSource).toHaveBeenCalledTimes(1);
+});
+
+function verifiedUpload() {
+  const uri = path.join(root, 'verified.bin');
+  writeFileSync(uri, 'source bytes');
+  let state: AgentUploadState | undefined;
+  let saved: SavedUpload[] = [];
+  const writes: number[] = [];
+  const completions: string[] = [];
+  const files = {
+    resolve: async () => ({ uri, entry: { id: attachment.fileEntryId, provenance: 'imported' } }),
+    prepareUploadSource: async () => ({
+      uri,
+      entry: { id: attachment.fileEntryId, provenance: 'imported' },
+    }),
+    hashFile: jest.fn(async (_id: string, _signal: AbortSignal) =>
+      integrity.sha256(readFileSync(uri)),
+    ),
+  } as unknown as RemoteUploadFiles;
+  const request = jest.fn(async (method: string, input: any) => {
+    if (method === 'agent.uploads.get') {
+      if (!state) throw new RemoteAgentError('NOT_FOUND');
+      return state;
+    }
+    if (method === 'agent.uploads.prepare') {
+      state = {
+        uploadId: input.uploadId,
+        checksumAlgorithm: input.checksumAlgorithm,
+        state: 'receiving',
+        committedOffset: '0',
+        writerEpoch: '0',
+        expiresAt: new Date().toISOString(),
+      };
+    } else if (method === 'agent.uploads.resume') {
+      state = { ...state!, writerEpoch: String(Number(state!.writerEpoch) + 1) };
+    } else if (method === 'agent.uploads.complete') {
+      completions.push(input.expectedSha256);
+      state = { ...state!, state: 'ready', sha256: input.expectedSha256 };
+    } else throw new Error(method);
+    return state;
+  });
+  const write = jest.fn(async (input: any) => {
+    writes.push(Number(input.offset));
+    state = { ...state!, committedOffset: String(Number(input.offset) + input.bytes.length) };
+    return { ...state, requestId: 'ack', ok: true as const };
+  });
+  const progress = jest.fn();
+  const run = (signal = new AbortController().signal) =>
+    uploadAttachments(
+      [attachment],
+      files,
+      request as AgentRequest,
+      signal,
+      progress,
+      saved,
+      (value) => {
+        saved = structuredClone(value);
+      },
+      async () => ({ write }),
+    );
+  return { uri, files, request, write, progress, run, completions, writes, saved: () => saved };
+}
+
+it('starts DATA before native hashing finishes and cannot complete until both readers finish', async () => {
+  const task = verifiedUpload();
+  let hashDone!: (digest: string) => void;
+  jest.mocked(task.files.hashFile).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        hashDone = resolve;
+      }),
+  );
+  const work = task.run();
+  while (!task.writes.length) await new Promise((resolve) => setTimeout(resolve, 1));
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(task.completions).toEqual([]);
+  expect(task.progress.mock.calls.at(-1)).toEqual([12, 12, 'verifying']);
+  const digest = integrity.sha256(readFileSync(task.uri));
+  hashDone(digest);
+  await work;
+  expect(task.completions).toEqual([digest]);
+  expect(task.saved()[0].expectedSha256).toBe(digest);
+});
+
+it('rejects a same-size source change before any resume request or DATA', async () => {
+  const task = verifiedUpload();
+  await task.run();
+  writeFileSync(task.uri, 'mutant bytes');
+  task.request.mockClear();
+  task.writes.length = 0;
+  await expect(task.run()).rejects.toMatchObject({ code: 'UPLOAD_SOURCE_CHANGED' });
+  expect(task.request.mock.calls).toEqual([]);
+  expect(task.writes).toEqual([]);
+});
+
+it('aborts and drains native hashing after a lost connection without persisting a late digest', async () => {
+  const task = verifiedUpload();
+  let hashDone!: (digest: string) => void;
+  let nativeCancelled!: () => void;
+  const cancelled = new Promise<void>((resolve) => {
+    nativeCancelled = resolve;
+  });
+  jest.mocked(task.files.hashFile).mockImplementationOnce((_id, signal) => {
+    signal.addEventListener('abort', nativeCancelled, { once: true });
+    return new Promise((resolve) => {
+      hashDone = resolve;
+    });
+  });
+  task.write.mockRejectedValueOnce(new RemoteAgentError('CONNECTION_LOST', true));
+  let settled = false;
+  const work = task.run().finally(() => {
+    settled = true;
+  });
+  const failure = expect(work).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
+  await cancelled;
+  expect(settled).toBe(false);
+  hashDone(integrity.sha256(readFileSync(task.uri)));
+  await failure;
+  expect(task.saved()[0].expectedSha256).toBeUndefined();
+  expect(task.completions).toEqual([]);
+});
+
+it('does not accept a ready response with a different desktop digest', async () => {
+  const task = verifiedUpload();
+  await task.run();
+  task.request.mockImplementationOnce(async () => ({
+    uploadId: task.saved()[0].metadata.uploadId,
+    checksumAlgorithm: 'sha256',
+    state: 'ready',
+    committedOffset: '12',
+    writerEpoch: '1',
+    expiresAt: new Date().toISOString(),
+    sha256: '0'.repeat(64),
+  }));
+  await expect(task.run()).rejects.toMatchObject({ code: 'INVALID_ATTACHMENT' });
+});
+
+it('rejects an unsupported desktop before retaining, hashing or transmitting source bytes', async () => {
+  const task = verifiedUpload();
+  await expect(
+    uploadAttachments(
+      [attachment],
+      task.files,
+      task.request as AgentRequest,
+      new AbortController().signal,
+      task.progress,
+      [],
+      () => {
+        throw new Error('Must not persist an unsupported upload');
+      },
+      async () => {
+        throw new RemoteAgentError('UPGRADE_REQUIRED');
+      },
+    ),
+  ).rejects.toMatchObject({ code: 'UPGRADE_REQUIRED' });
+  expect(task.request.mock.calls).toEqual([]);
+  expect(jest.mocked(task.files.hashFile).mock.calls).toEqual([]);
+  expect(task.writes).toEqual([]);
 });

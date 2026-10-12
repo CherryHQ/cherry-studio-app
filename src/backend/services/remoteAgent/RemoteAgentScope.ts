@@ -134,7 +134,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private getUploadTransport: GetUploadTransport = async (signal) => {
     const session = await this.ready(signal);
-    if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
+    if (session.agentUploadsVersion !== 1 || session.agentUploadChecksum !== 'sha256')
+      throw new RemoteAgentError('UPGRADE_REQUIRED');
     return {
       write: async (input, caller) => {
         try {
@@ -472,7 +473,10 @@ export class RemoteAgentScope implements RemoteAgentSource {
       if (this.state.attachments !== (session.agentAttachmentSelections === true)) {
         this.state = {
           ...this.state,
-          attachments: session.agentAttachmentSelections === true,
+          attachments:
+            session.agentAttachmentSelections === true &&
+            session.agentUploadsVersion === 1 &&
+            session.agentUploadChecksum === 'sha256',
           preupload: session.agentAttachmentSelections === true,
         };
         for (const listener of this.stateListeners) listener();

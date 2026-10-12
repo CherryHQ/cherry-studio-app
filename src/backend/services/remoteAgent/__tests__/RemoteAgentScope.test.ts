@@ -92,6 +92,7 @@ function fixture(
   const notifications = new Set<(notification: DesktopNotification) => void>();
   const connection = {
     agentUploadsVersion: 1,
+    agentUploadChecksum: 'sha256',
     request,
     onNotification: (listener: (notification: DesktopNotification) => void) => {
       notifications.add(listener);
@@ -959,6 +960,7 @@ it.each(['offline', 'suspended'] as const)(
     const test = fixture(undefined, undefined, {
       resolve: jest.fn(),
       prepareUploadSource: jest.fn(),
+      hashFile: jest.fn(),
     });
     let snapshot: RemoteSessionSnapshot | undefined;
     const unobserve = test.source.observe('s', (value) => {
@@ -1034,6 +1036,7 @@ it('persists upload cancellation synchronously while remote cleanup is still pen
   const test = fixture(undefined, undefined, {
     resolve: jest.fn(),
     prepareUploadSource: jest.fn(),
+    hashFile: jest.fn(),
   });
   let snapshot: RemoteSessionSnapshot | undefined;
   const unobserve = test.source.observe('s', (value) => {

@@ -101,6 +101,7 @@
     "@magrinj/expo-quick-look": "^0.3.1",
     "@noble/hashes": "^1.8.0",
     "@openrouter/ai-sdk-provider": "^2.10.0",
+    "@preeternal/react-native-file-hash": "3.0.1",
     "@react-native-community/slider": "5.2.0",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@sentry/react-native": "~7.11.0",

@@ -75,6 +75,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 export class DesktopSession {
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
+  agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
@@ -98,6 +99,7 @@ export class DesktopSession {
       );
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
+      session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();

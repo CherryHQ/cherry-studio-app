@@ -8,6 +8,7 @@ import type {
   ResolvedFile,
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type FileEntry,
   type FileEntryId,
@@ -37,6 +38,16 @@ import {
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
+export class FileHashError extends Error {
+  constructor(
+    readonly code: 'NATIVE_HASH_UNAVAILABLE' | 'VERIFICATION_FAILED' | 'RESOURCE_UNAVAILABLE',
+  ) {
+    super(code);
+    this.name = 'FileHashError';
+  }
+}
+const hashLogger = loggerService.withContext('FileHash');
+
 const createInternalEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema.optional(),
   name: SafeNameSchema.optional(),
@@ -59,6 +70,31 @@ const createTextEntryInputSchema = z.strictObject({
  */
 export const fileContent = {
   subscribeChanges: subscribeFileChanges,
+  async hashFile(id: FileEntryId, signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted();
+    const source = await resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id));
+    if (!source) throw new FileHashError('RESOURCE_UNAVAILABLE');
+    let native: typeof import('@preeternal/react-native-file-hash');
+    try {
+      native =
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- old clients lack this native module
+        require('@preeternal/react-native-file-hash') as typeof import('@preeternal/react-native-file-hash');
+    } catch (error) {
+      hashLogger.warn('Native file hashing is unavailable', { error });
+      signal.throwIfAborted();
+      throw new FileHashError('NATIVE_HASH_UNAVAILABLE');
+    }
+    try {
+      const digest = await native.fileHash(source.uri, { algorithm: 'SHA-256', signal });
+      signal.throwIfAborted();
+      if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid native SHA-256 result');
+      return digest;
+    } catch (error) {
+      signal.throwIfAborted();
+      hashLogger.warn('Native file hashing failed', { error });
+      throw new FileHashError('VERIFICATION_FAILED');
+    }
+  },
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
    * port is import-only by contract, which is why it fixes the provenance
