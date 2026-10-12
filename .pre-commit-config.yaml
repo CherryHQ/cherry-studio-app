@@ -6,8 +6,7 @@ repos:
       - id: oxfmt
         name: oxfmt
         language: system
-        # Formatting does not need current dependencies; stale dependencies must not block commits.
-        entry: pnpm --config.verify-deps-before-run=false oxfmt --no-error-on-unmatched-pattern
+        entry: pnpm oxfmt --no-error-on-unmatched-pattern
         files: '\.(js|jsx|ts|tsx|cjs|mjs|cts|mts|json|jsonc|css)$'
         pass_filenames: true
 
