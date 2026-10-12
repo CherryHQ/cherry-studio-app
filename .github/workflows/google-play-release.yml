@@ -1,20 +1,16 @@
 name: Google Play AAB
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
-      - '!v*.*.*-*'
+  workflow_call:
+    secrets:
+      EXPO_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 env:
   EAS_CLI_VERSION: 24.4.2
-
-concurrency:
-  group: google-play-release-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   build-android:
@@ -27,13 +23,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
-      - name: Validate release version
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "${RELEASE_TAG#v}" = "$(jq -r '.expo.version' app.json)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6

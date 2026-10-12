@@ -1,19 +1,16 @@
 name: iOS TestFlight
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_call:
+    secrets:
+      EXPO_TOKEN:
+        required: true
 
 permissions:
   contents: read
 
 env:
   EAS_CLI_VERSION: 24.4.2
-
-concurrency:
-  group: ios-release-${{ github.ref }}
-  cancel-in-progress: false
 
 jobs:
   build-ios:
@@ -26,14 +23,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
-
-      - name: Validate release version
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
-          version="${RELEASE_TAG#v}"
-          test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
