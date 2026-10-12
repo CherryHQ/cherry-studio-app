@@ -34,6 +34,7 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
+import type { RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
   createSystemCapabilitySource,
@@ -155,6 +156,20 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
 
   documentParserMode(): DocumentParserMode {
     return this.preferenceService.readCached('file.document_parser.mode');
+  }
+
+  async webTools(): Promise<RuntimeWebTools> {
+    const [clientSearchAvailable, clientFetchAvailable] = await Promise.all([
+      this.webSearchService.isConfigured('searchKeywords'),
+      this.webSearchService.isConfigured('fetchUrls'),
+    ]);
+    return {
+      modelToolsPreferred: this.preferenceService.readCached(
+        'chat.web_search.model_tools_preferred',
+      ),
+      clientSearchAvailable,
+      clientFetchAvailable,
+    };
   }
 
   naming(signal: AbortSignal): MobileAgentHostNaming {

@@ -1,7 +1,10 @@
 import { shouldAppendProviderApiVersion } from '@cherrystudio/ai-runtime/provider';
-import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
+import {
+  createAiUsageCaptureContext,
+  resolveReasoningInvocation,
+} from '@cherrystudio/ai-runtime/utils';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
+import { isDeepSeekModel, isGemini3Model } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -21,7 +24,7 @@ import {
   DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
 } from '@/shared/utils/modelTokenLimits';
 
-import type { RuntimeModel, RuntimeModelPreflight, RuntimeUsageContext } from '..';
+import type { RuntimeModel, RuntimeModelPreflight, RuntimeOptions, RuntimeUsageContext } from '..';
 import { bindPiStream, resolvePiApiAdapter, type SupportedPiApi } from './piApiAdapters';
 import { withPiApiKeyFallback } from './piApiKeyFallback';
 import { withPiDeepseekDsml } from './piDeepseekDsml';
@@ -34,6 +37,7 @@ import {
   type ResolvedPiOAuth,
 } from './piOAuthModels';
 import { withPiStreamIdleTimeout } from './piStreamIdleTimeout';
+import type { PiNativeWebTools, PiWebDialect } from './piWebTools';
 
 class PiModelResolutionError extends Error {
   readonly retryable = false;
@@ -53,6 +57,20 @@ export function createPiModelResolver(accounts?: {
   return {
     async preflightModel(runtimeModel): Promise<RuntimeModelPreflight> {
       return (await resolveConfiguredPiModel(runtimeModel)).preflight;
+    },
+    async nativeWebTools(runtimeModel, runtimeOptions) {
+      const { adapter, connection, model, preflight, provider } =
+        await resolveConfiguredPiModel(runtimeModel);
+      const oauth = await accounts?.resolveAuth(provider);
+      if (oauth && !OFFICIAL_API_ACCOUNTS.has(oauth.id)) return NO_NATIVE_WEB_TOOLS;
+      return resolveNativeWebTools({
+        api: adapter.api,
+        connection,
+        maxTokens: runtimeOptions.maxOutputTokens ?? preflight.maxOutputTokens,
+        model,
+        provider,
+        runtimeOptions,
+      });
     },
     async resolveModel(
       runtimeModel,
@@ -310,10 +328,120 @@ export function createPiModelResolver(accounts?: {
         ],
         streamFn: isDeepSeekModel(model) ? withPiDeepseekDsml(timedStream) : timedStream,
         supportsTools: preflight.supportsTools,
+        nativeWebTools:
+          oauth && !OFFICIAL_API_ACCOUNTS.has(oauth.id)
+            ? NO_NATIVE_WEB_TOOLS
+            : resolveNativeWebTools({
+                api: adapter.api,
+                connection,
+                maxTokens: streamBinding.maxTokens ?? piModel.maxTokens,
+                model,
+                provider,
+                runtimeOptions,
+              }),
         usageContext,
       };
     },
   };
+}
+
+/**
+ * Sign-ins that authenticate the provider's ordinary API. The others reach a subscription
+ * endpoint, which has no reviewed native web tool.
+ */
+const OFFICIAL_API_ACCOUNTS: ReadonlySet<string> = new Set(['xai', 'openrouter']);
+
+const NO_NATIVE_WEB_TOOLS: PiNativeWebTools = {
+  search: false,
+  fetch: false,
+  functionToolMixing: false,
+};
+
+function resolveNativeWebTools({
+  api,
+  connection,
+  maxTokens,
+  model,
+  provider,
+  runtimeOptions,
+}: {
+  api: SupportedPiApi;
+  connection: ReturnType<typeof resolveProviderConnection>;
+  maxTokens: number;
+  model: Model;
+  provider: Provider;
+  runtimeOptions: RuntimeOptions;
+}): PiNativeWebTools {
+  if (!connection.endpointType) return NO_NATIVE_WEB_TOOLS;
+  const serverTools = providerRegistryService.resolveServerTools(
+    provider,
+    connection.wireModelId,
+    connection.endpointType,
+  );
+  const dialect = resolveWebDialect(api, provider, connection.wireModelId);
+  if (!serverTools.length || !dialect) return NO_NATIVE_WEB_TOOLS;
+  const reasoningProfile = providerRegistryService.resolveReasoningProfile(
+    provider,
+    model,
+    connection.endpointType,
+  );
+  // OpenAI rejects its search tool under minimal reasoning.
+  const minimalReasoning =
+    (dialect === 'openai-responses' || dialect === 'openai-preview') &&
+    (runtimeOptions.reasoningEffort === 'minimal' ||
+      resolveReasoningInvocation({
+        model: reasoningProfile.support
+          ? {
+              ...model,
+              reasoning: projectRuntimeReasoning(reasoningProfile.support, reasoningProfile.wire),
+            }
+          : model,
+        profile: reasoningProfile.wire,
+        selection:
+          runtimeOptions.reasoningEffort === 'off' ? 'none' : runtimeOptions.reasoningEffort,
+        maxTokens,
+      }).emissions.some(
+        ({ target, value }) => target === 'reasoningEffort' && value === 'minimal',
+      ));
+  return {
+    search: serverTools.includes('web-search') && !minimalReasoning,
+    fetch: serverTools.includes('url-context') && (dialect === 'google' || dialect === 'anthropic'),
+    // Gemini before 3 rejects functions beside its native tools.
+    functionToolMixing: dialect !== 'google' || isGemini3Model(model),
+    dialect,
+  };
+}
+
+/** The adapter that serves a declared native tool on this endpoint, if one has been written. */
+function resolveWebDialect(
+  api: SupportedPiApi,
+  provider: Provider,
+  wireModelId: string,
+): PiWebDialect | undefined {
+  const preset = provider.presetProviderId ?? provider.id;
+  switch (api) {
+    case 'openai-responses':
+      if (preset === 'grok') return 'xai';
+      if (preset === 'poe') return 'openai-preview';
+      // Bailian serves the Responses tool for its Qwen3 line only.
+      if (preset === 'dashscope' && !/^qwen3[.-]/.test(wireModelId)) return undefined;
+      return 'openai-responses';
+    case 'azure-openai-responses':
+      return 'openai-preview';
+    case 'anthropic-messages':
+      return 'anthropic';
+    case 'google-generative-ai':
+      return 'google';
+    case 'openai-completions':
+      return preset === 'zhipu' ||
+        preset === 'dashscope' ||
+        preset === 'openrouter' ||
+        preset === 'perplexity'
+        ? preset
+        : undefined;
+    default:
+      return undefined;
+  }
 }
 
 async function resolveConfiguredPiModel(runtimeModel: RuntimeModel) {

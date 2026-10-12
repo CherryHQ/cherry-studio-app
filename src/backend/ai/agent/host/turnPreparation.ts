@@ -36,6 +36,7 @@ import type {
   RuntimeContextCheckpoint,
   RuntimeModelPreflight,
   RuntimeTool,
+  RuntimeWebTools,
 } from '../runtime';
 import type {
   AgentSessionStore,
@@ -80,6 +81,7 @@ export type TurnPreparationDependencies = {
     'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext'
   >;
   systemCapabilities: SystemCapabilitySource;
+  webTools?(): Promise<RuntimeWebTools>;
 };
 
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
@@ -105,6 +107,7 @@ export type TurnPlan = {
   runtimeContentAttachments: RuntimeAttachmentContents;
   sessionTitle: string;
   tools: readonly RuntimeTool[];
+  webTools?: RuntimeWebTools;
   pluginGuides: readonly PluginGuideSnapshot[];
   toolDiscoveryWarnings: readonly string[];
   /** The user message parts to reserve, projected from the canonical input. */
@@ -431,6 +434,10 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools],
     agent.toolApprovalMode,
   );
+  const webTools =
+    runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
+      ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
+      : undefined;
   const inferenceModel = await resolveInferenceModel();
   let modelPreflight: RuntimeModelPreflight;
   try {
@@ -498,6 +505,7 @@ export async function prepareResolvedTurn(
     runtimeContentAttachments,
     sessionTitle: session.name,
     tools,
+    webTools,
     toolDiscoveryWarnings,
     userParts,
     pluginGuides,

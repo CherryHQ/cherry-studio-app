@@ -518,6 +518,7 @@ export class DurableAgentHost implements AgentProtocol {
       model: plan.agent.model,
       options: plan.agent.options,
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
         appLanguage: this.ports.appLanguage(),
@@ -820,6 +821,7 @@ export class DurableAgentHost implements AgentProtocol {
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
+      webTools: this.ports.webTools ? () => this.ports.webTools!() : undefined,
     };
   }
 
@@ -1508,6 +1510,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
     })),
+    webTools: configuration.webTools,
   };
   return JSON.stringify(facts, (_key, value: unknown) =>
     value && typeof value === 'object' && !Array.isArray(value)

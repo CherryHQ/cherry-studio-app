@@ -364,6 +364,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('hands the frozen web policy to the Runtime with the conversation configuration', async () => {
+    const webTools = {
+      modelToolsPreferred: true,
+      clientSearchAvailable: true,
+      clientFetchAvailable: true,
+    };
+    const state = fixture({ webTools: async () => webTools });
+    const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
+    await state.host.initialize();
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();
     const failed = await state.reserve('failed');

@@ -12,6 +12,7 @@ import type {
   ReasoningWireDialect,
   ReasoningWireProfile,
   ServiceTierRequestControl,
+  ServerTool,
 } from '@cherrystudio/provider-registry';
 import {
   configureOpenAIResponsesSummary,
@@ -20,6 +21,7 @@ import {
   inferReasoningControls,
   inferReasoningMembership,
   inferReasoningOwnedBy,
+  isServerToolModelEligible,
   MODEL_CAPABILITY,
   projectLegacyApiFeatures,
   REASONING_EFFORT,
@@ -470,6 +472,23 @@ export class ProviderRegistryService {
       (context.presetProviderId ? this.loader.findProvider(context.presetProviderId) : null) ??
       undefined
     );
+  }
+
+  /** Native tool facts stay in the trusted bundled catalog, never unsigned model data. */
+  resolveServerTools(
+    provider: Pick<ReasoningProviderContext, 'id' | 'presetProviderId'>,
+    wireModelId: string,
+    endpointType: EndpointType,
+  ): readonly ServerTool[] {
+    const preset = this.findProfileProvider(provider);
+    if (!preset) return [];
+    return preset.serverTools.flatMap((tool) => {
+      if (tool.endpointTypes?.length && !tool.endpointTypes.includes(endpointType)) return [];
+      return tool.modelScope === 'all-chat-models' ||
+        isServerToolModelEligible(wireModelId, preset.id, tool.id)
+        ? [tool.id]
+        : [];
+    });
   }
 
   /**
