@@ -122,7 +122,7 @@ describe('turn preparation', () => {
         { ...textInput(), ...selection },
         new AbortController().signal,
       ),
-    ).rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
     expect(harness.getSystemTools).not.toHaveBeenCalled();
     expect(harness.resolveRuntimeTools).not.toHaveBeenCalled();
   });
