@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Match the tag to app.json
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          version="${RELEASE_TAG#v}"
+          test "${version%%-*}" = "$(jq -r '.expo.version' app.json)"
+
+  ci:
+    needs: validate
+    uses: ./.github/workflows/pr-ci.yml
+
+  android:
+    needs: ci
+    permissions:
+      # GitHub's generate-notes API requires contents: write.
+      contents: write
+    uses: ./.github/workflows/android-release.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  ios:
+    needs: ci
+    uses: ./.github/workflows/ios-release.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  google-play:
+    needs: ci
+    if: ${{ !contains(github.ref_name, '-') }}
+    uses: ./.github/workflows/google-play-release.yml
+    secrets:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
