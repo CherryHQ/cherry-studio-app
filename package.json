@@ -195,6 +195,7 @@
     "tweetnacl": "1.0.3",
     "uniwind": "^1.6.4",
     "uuid": "^14.0.0",
+    "yaml": "2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

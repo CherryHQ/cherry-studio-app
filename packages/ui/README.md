@@ -212,6 +212,8 @@ unmounts; new calls and completion never override the reader's choice.
 `MessagePart.Tool` and `MessagePart.Summary` accept `titleAnimation="none"` when adjacent content
 already communicates live progress. The running state, status text, and detail action remain intact;
 the default title animation is `shimmer`.
+`MessagePart.Tool` also accepts an optional Lucide `icon` for a product-specific activity identity.
+The shared summary owns its size, tone and placement.
 
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
 `Message Parts/Playground` collects every public message-part primitive and state on one interactive

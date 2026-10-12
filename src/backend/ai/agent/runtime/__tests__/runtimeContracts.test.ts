@@ -1,4 +1,5 @@
 import { RuntimeContextCheckpointSchema } from '../runtimeSchemas';
+import { toModelToolResult } from '../toolResults';
 import type {
   RuntimeArtifact,
   RuntimeContextCheckpoint,
@@ -9,6 +10,22 @@ import type {
 } from '../types';
 
 describe('Agent Runtime settled contracts', () => {
+  test('retains full display data but sends only the compact model receipt', () => {
+    const result: RuntimeToolResult = {
+      value: { instructions: 'Complete guide body.' },
+      modelValue: { status: 'ok', instructionsInSystem: true },
+      instructions: { key: 'guide', text: 'Complete guide body.' },
+      artifacts: [],
+    };
+    expect(toModelToolResult(result)).toEqual({
+      value: { status: 'ok', instructionsInSystem: true },
+      artifacts: [],
+    });
+    expect(result.value).toEqual({ instructions: 'Complete guide body.' });
+    expect(
+      toModelToolResult({ value: 'display', modelValue: null, artifacts: [] }).value,
+    ).toBeNull();
+  });
   test('round-trips stable refs, results, and managed artifacts as JSON', async () => {
     const ref: RuntimeToolRef = {
       source: 'mcp',

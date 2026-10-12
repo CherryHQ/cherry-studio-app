@@ -105,8 +105,8 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 
 ## Current Boundaries
 
-- Mobile Skill persistence, Agent-to-Skill bindings, loading, and prompt projection are not
-  implemented.
+- Mobile Skills support package installation, Agent bindings and progressive instruction loading;
+  script execution and long-term activation-version retention remain out of scope.
 - Office generation, inspection, and patching tools are not implemented.
 - Recovery and working-copy reclamation are implemented in source; tests, type checks, builds,
   provider/device lifecycle and backup acceptance for this ownership change remain unverified.
@@ -125,7 +125,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |
 | [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu personal authorization, and CLI-to-JavaScript feasibility |
-| [Agent Skills](./agent-skills.md) | Bundled plugin guide boundary and deferred general Mobile Skill policy |
+| [Agent Skills](./agent-skills.md) | Skill packages, bindings, progressive loading and execution limitations |
 
 ## Related
 

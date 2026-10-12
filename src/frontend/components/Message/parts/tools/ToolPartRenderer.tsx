@@ -10,7 +10,9 @@ import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import { isMetaToolPart, MetaToolPartRenderer } from './metaTool/MetaToolPartRenderer';
 import { isReadFileToolPart, ReadFileToolPart } from './ReadFileToolPart';
 import { isRunJsToolPart, RunJsToolPart } from './RunJsToolPart';
+import { SkillToolPart } from './SkillToolPart';
 import {
+  getToolName,
   isAgentMutationToolPart,
   isProviderWebSearchToolPart,
   isUserQuestionToolPart,
@@ -32,6 +34,8 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
   const renderTool = useToolRenderer();
   if (renderTool) return renderTool(part);
 
+  if (['load_skill', 'find_skills', 'install_skill'].includes(getToolName(part) ?? ''))
+    return <SkillToolPart part={part} />;
   if (isProviderWebSearchToolPart(part)) {
     return null;
   }

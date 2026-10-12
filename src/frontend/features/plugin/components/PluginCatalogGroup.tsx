@@ -21,7 +21,7 @@ export function PluginCatalogGroup() {
   );
 
   return (
-    <PluginGroup testID="plugins-catalog" title={t('plugins.title')}>
+    <PluginGroup testID="plugins-catalog" title={t('plugins.catalog.title')}>
       {!entries.length && (catalog.isLoading || connections.isLoading) ? (
         <ContentState.Loading title={t('plugins.loading')} />
       ) : null}
