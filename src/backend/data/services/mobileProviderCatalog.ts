@@ -19,7 +19,8 @@ export type MobileProviderConfig = Omit<ProviderConfig, 'endpointConfigs'> & {
   modelListSource?: ProviderModelListSource;
 };
 
-// Mobile authentication, connection adapters, and legacy flags are not part of the published catalog.
+// Mobile authentication, connection adapters, legacy flags, and native-tool corrections are not
+// part of the published catalog.
 const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = {
   cherryin: {
     authMethods: ['api-key', 'oauth'],
@@ -37,6 +38,10 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
     apiFeatures: {
       arrayContent: false,
     },
+    // DeepSeek's Responses contract ignores `web_search`; its Anthropic mirror serves it.
+    serverTools: [
+      { id: 'web-search', modelScope: 'model-dependent', endpointTypes: ['anthropic-messages'] },
+    ],
   },
   aionly: {
     authMethods: ['api-key', 'oauth'],
@@ -232,6 +237,15 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
     apiFeatures: {
       arrayContent: false,
     },
+    // Poe documents web search for OpenAI bots on its Responses endpoint only.
+    serverTools: [
+      {
+        id: 'web-search',
+        modelScope: 'model-dependent',
+        endpointTypes: ['openai-responses'],
+        vendors: ['openai'],
+      },
+    ],
   },
   longcat: {
     modelListSource: 'registry',

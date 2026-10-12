@@ -3,8 +3,11 @@ import {
   createAiUsageCaptureContext,
   resolveReasoningInvocation,
 } from '@cherrystudio/ai-runtime/utils';
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { isDeepSeekModel, isGemini3Model } from '@cherrystudio/universal/utils/model';
+import {
+  MODEL_CAPABILITY,
+  supportsServerToolFunctionMixing,
+} from '@cherrystudio/provider-registry';
+import { isDeepSeekModel } from '@cherrystudio/universal/utils/model';
 import type { FetchFunction, Model as PiModel, ModelThinkingLevel } from '@earendil-works/pi-ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -407,7 +410,8 @@ function resolveNativeWebTools({
     search: serverTools.includes('web-search') && !minimalReasoning,
     fetch: serverTools.includes('url-context') && (dialect === 'google' || dialect === 'anthropic'),
     // Gemini before 3 rejects functions beside its native tools.
-    functionToolMixing: dialect !== 'google' || isGemini3Model(model),
+    functionToolMixing:
+      dialect !== 'google' || supportsServerToolFunctionMixing(connection.wireModelId),
     dialect,
   };
 }

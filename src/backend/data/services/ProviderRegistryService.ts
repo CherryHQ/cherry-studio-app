@@ -22,7 +22,9 @@ import {
   inferReasoningMembership,
   inferReasoningOwnedBy,
   isServerToolModelEligible,
+  matchVendor,
   MODEL_CAPABILITY,
+  normalizeModelId,
   REASONING_EFFORT,
   REASONING_FORMAT_PROFILES,
   selectFormatWire,
@@ -484,6 +486,9 @@ export class ProviderRegistryService {
     if (!preset) return [];
     return preset.serverTools.flatMap((tool) => {
       if (tool.endpointTypes?.length && !tool.endpointTypes.includes(endpointType)) return [];
+      // A host passes a tool through for the vendor families it names.
+      const vendor = tool.vendors?.length ? matchVendor(normalizeModelId(wireModelId)) : undefined;
+      if (tool.vendors?.length && !(vendor && tool.vendors.includes(vendor))) return [];
       return tool.modelScope === 'all-chat-models' ||
         isServerToolModelEligible(wireModelId, preset.id, tool.id)
         ? [tool.id]

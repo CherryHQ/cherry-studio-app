@@ -76,14 +76,15 @@ DeepSeek support differs by endpoint. As checked on 2026-10-12, its
 [Responses compatibility contract](https://api-docs.deepseek.com/guides/responses_api/)
 lists `web_search` as ignored, while its
 [Claude Code integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)
-documents native web search through the Anthropic-compatible API. Desktop declares Responses
-search, which conflicts with that contract; Mobile declares the Anthropic endpoint only.
+documents native web search through the Anthropic-compatible API. The published declaration names
+the Responses endpoint, which conflicts with that contract; Mobile declares the Anthropic endpoint.
 
-The bundled Provider definitions own `serverTools` and explicit model IDs. `generate:providers`
-emits the connection declarations and a small eligibility module without fetching the model catalog.
-Remote model flags cannot enable native tools. Unknown, batch, Live, image, Codex, or specialized
-search variants are not inferred from a family prefix. A host's `vendor/model` ID matches by the
-vendor ID behind its namespace.
+The published `@cherrystudio/provider-registry` package owns the `serverTools` declarations, the
+per-provider model eligibility, and the models that accept functions beside a native tool; Mobile
+follows it. `mobileProviderCatalog.ts` holds the two corrections: DeepSeek's endpoint, and Poe,
+which documents web search for OpenAI bots on its Responses endpoint only. Remote model flags cannot
+enable native tools. A host's `vendor/model` ID matches by the vendor ID behind its namespace, and a
+host passes a tool through only for the vendor families its declaration names.
 
 Gemini before 3 rejects functions beside its native tools: the selector keeps the other functions
 and falls back to external web tools, or chooses one compatible web source with the most available
