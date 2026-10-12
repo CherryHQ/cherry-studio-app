@@ -316,6 +316,7 @@ describe('MCP Runtime adapter', () => {
         input: { query: 'private query' },
         signal: new AbortController().signal,
         toolCallId: 'call-1',
+        turnId: 'turn-1',
       }),
     ).rejects.toBe(failure);
     expect(records.at(-1)).toMatchObject({

@@ -653,7 +653,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.connection.temporary': true,
-      'plugin.id': config.origin === 'builtin' ? config.builtinId : undefined,
     });
     let client: McpRuntimeClient | undefined;
     try {
