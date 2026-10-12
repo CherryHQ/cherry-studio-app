@@ -7,11 +7,22 @@ const edit = {
 };
 
 test('accepts a bounded normalized crop and a quarter-turn rotation', () => {
-  expect(EditFileImageInputSchema.parse(edit)).toEqual(edit);
+  expect(EditFileImageInputSchema.parse(edit)).toEqual({
+    ...edit,
+    straighten: 0,
+    horizontal: 0,
+    vertical: 0,
+    flipHorizontal: false,
+    flipVertical: false,
+  });
 });
 
 test.each([
   { ...edit, rotation: 45 },
+  { ...edit, straighten: 46 },
+  { ...edit, horizontal: -46 },
+  { ...edit, vertical: Infinity },
+  { ...edit, flipHorizontal: 'true' },
   { ...edit, fileEntryId: 'file:///private/photo.jpg' },
   { ...edit, crop: { ...edit.crop, width: 0 } },
   { ...edit, crop: { ...edit.crop, x: -0.01 } },

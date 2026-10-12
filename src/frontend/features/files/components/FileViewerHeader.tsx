@@ -43,7 +43,6 @@ export function FileViewerHeader({
 
   return (
     <HeaderChrome
-      actionTone={isImage ? 'inverse' : 'default'}
       leftActions={[leadingAction]}
       rightActions={[
         {

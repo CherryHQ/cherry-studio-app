@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
@@ -52,27 +53,22 @@ function FileViewerRoute({
 }) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
-  const [background, foreground, black, white] = useThemeColor([
-    'background',
-    'foreground',
-    'constant-black',
-    'constant-white',
-  ]);
+  const [background, foreground] = useThemeColor(['background', 'foreground']);
+  const { theme } = useUniwind();
   const file = query.data;
   const kind = file ? fileEntryPreviewKind(file.entry) : 'document';
-  const isImage = kind === 'image';
 
   return (
-    <View className={isImage ? 'flex-1 bg-constant-black' : 'flex-1 bg-background'}>
+    <View className="flex-1 bg-background">
       <Stack.Screen
         options={{
-          contentStyle: { backgroundColor: isImage ? black : background },
-          headerStyle: { backgroundColor: isImage ? black : background },
-          headerTintColor: isImage ? white : foreground,
+          contentStyle: { backgroundColor: background },
+          headerStyle: { backgroundColor: background },
+          headerTintColor: foreground,
           headerTransparent: false,
         }}
       />
-      <StatusBar style={isImage ? 'light' : 'auto'} />
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       {!file ? (
         <>
           <RouteHeader

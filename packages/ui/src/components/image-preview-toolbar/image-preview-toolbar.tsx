@@ -1,28 +1,24 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-/** Optional actions below an image; the owning screen supplies actions and safe-area insets. */
+/** Grouped image actions; the owning screen supplies placement and safe-area insets. */
 function ImagePreviewToolbarRoot({ children }: PropsWithChildren) {
   return (
-    <View className="bg-constant-black">
-      <ScrollView
-        horizontal
-        contentContainerClassName="grow items-center justify-evenly gap-4 px-4 py-3"
-        showsHorizontalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
+    <View className="flex-row items-center justify-evenly gap-2 bg-background px-4 py-1">
+      {children}
     </View>
   );
 }
 
 function ImagePreviewToolbarAction({
   disabled = false,
+  emphasis = 'default',
   icon,
   label,
   onPress,
 }: {
   disabled?: boolean;
+  emphasis?: 'default' | 'primary';
   icon?: ReactNode;
   label: string;
   onPress: () => void;
@@ -32,12 +28,20 @@ function ImagePreviewToolbarAction({
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
-      className="min-h-11 min-w-11 items-center justify-center gap-1 px-3 py-2 active:opacity-70 disabled:opacity-40"
+      className="min-h-11 min-w-0 flex-1 flex-row items-center justify-center gap-2 px-1 active:opacity-70 disabled:opacity-40"
       disabled={disabled}
       onPress={onPress}
     >
       {icon}
-      <Text className="text-center text-sm text-constant-white">{label}</Text>
+      <Text
+        className={
+          emphasis === 'primary'
+            ? 'shrink text-center text-xs font-medium text-primary'
+            : 'shrink text-center text-xs text-foreground'
+        }
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
