@@ -1,3 +1,5 @@
+import { SkillsError } from '@/shared/contracts/skills';
+
 import { adaptSkillPackage } from '../skillAdaptation';
 import { validateSkillPackage } from '../skillPackage';
 
@@ -39,13 +41,13 @@ test('matches the normalized instructions the model read without changing unrela
 });
 
 test.each([
-  [{ ...removal, before: 'missing' }],
-  [{ ...removal, before: 'summary' }],
-  [{ ...removal, before: 'name: mobile-notes' }],
-  [{ ...removal, before: body }],
-  [removal, { ...removal, before: 'desktop clipboard.' }],
-])('rejects absent, ambiguous, metadata, whole-body and overlapping changes', (changes) => {
-  expect(() => adaptSkillPackage(original, 'mobile-notes', changes)).toThrow();
+  { changes: [{ ...removal, before: 'missing' }] },
+  { changes: [{ ...removal, before: 'summary' }] },
+  { changes: [{ ...removal, before: 'name: mobile-notes' }] },
+  { changes: [{ ...removal, before: body }] },
+  { changes: [removal, { ...removal, before: 'desktop clipboard.' }] },
+])('rejects absent, ambiguous, metadata, whole-body and overlapping changes', ({ changes }) => {
+  expect(() => adaptSkillPackage(original, 'mobile-notes', changes)).toThrow(SkillsError);
 });
 
 test('revalidates the adapted package instead of allowing new unsupported semantics', () => {

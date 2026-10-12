@@ -113,6 +113,7 @@ describe('durable capability boundary', () => {
     };
     const extension = capabilityExtension({
       name: 'cherry',
+      approve: async () => true,
       tools: [
         capability({
           approval: 'auto',
@@ -142,8 +143,21 @@ describe('durable capability boundary', () => {
     }
   });
   test('a trusted adaptation replaces selected instructions and survives reopening without old system text', async () => {
+    const readInstructions = async (harness: Harness, conversation: Conversation) => {
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      const sections = await Promise.all(
+        agent.sections.map((section) =>
+          section.render(
+            { conversationId: conversation.id, agent, env: undefined, shown: {}, read: harness },
+            BACKGROUND_CONTEXT,
+          ),
+        ),
+      );
+      return sections.filter(Boolean).join('\n\n');
+    };
     const extension = capabilityExtension({
       name: 'cherry',
+      approve: async () => true,
       tools: [
         capability({
           approval: 'auto',
@@ -173,14 +187,12 @@ describe('durable capability boundary', () => {
         { key: 'skill:notes', text: 'Run desktop Python.' },
       ];
     }, BACKGROUND_CONTEXT);
-    expect((await conversation.context(BACKGROUND_CONTEXT)).systemPrompt).toContain(
-      'Run desktop Python.',
-    );
+    expect(await readInstructions(harness, conversation)).toContain('Run desktop Python.');
     await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
-    const context = await conversation.context(BACKGROUND_CONTEXT);
-    expect(context.systemPrompt).toContain('Use current mobile tools.');
-    expect(context.systemPrompt).not.toContain('Run desktop Python.');
-    expect(context.systemPrompt).toContain('Keep the task goal.');
+    const instructions = await readInstructions(harness, conversation);
+    expect(instructions).toContain('Use current mobile tools.');
+    expect(instructions).not.toContain('Run desktop Python.');
+    expect(instructions).toContain('Keep the task goal.');
     await harness.close(BACKGROUND_CONTEXT);
     const reopened = await open(storage, extension);
     try {
@@ -188,6 +200,11 @@ describe('durable capability boundary', () => {
       expect(document?.sections).toEqual([
         { key: 'skill:notes', text: 'Use current mobile tools.' },
       ]);
+      const restored = await reopened.conversation(id, BACKGROUND_CONTEXT);
+      const restoredInstructions = await readInstructions(reopened, restored!);
+      expect(restoredInstructions).toContain('Use current mobile tools.');
+      expect(restoredInstructions).not.toContain('Run desktop Python.');
+      expect(restoredInstructions).toContain('Keep the task goal.');
     } finally {
       await reopened.close(BACKGROUND_CONTEXT);
     }

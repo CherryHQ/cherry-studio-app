@@ -48,7 +48,11 @@ describe('PiDurableRuntime identity and handoff', () => {
       });
       const read = () =>
         conversation.commit(
-          async (tx) => [...(await tx.doc(ToolInstructions, conversation.id)).sections],
+          async (tx) =>
+            (await tx.doc(ToolInstructions, conversation.id)).sections.map(({ key, text }) => ({
+              key,
+              text,
+            })),
           BACKGROUND_CONTEXT,
         );
       expect(await read()).toEqual(initial);

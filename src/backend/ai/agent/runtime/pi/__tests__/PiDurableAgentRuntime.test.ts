@@ -6,7 +6,10 @@ import { streamSimple as streamResponses } from '@earendil-works/pi-ai/api/opena
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { MemoryStorage } from '@earendil-works/pi-durable';
 
-import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
+import {
+  buildAgentSystemPrompt,
+  buildInitialSkillInstructions,
+} from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import type {
@@ -207,15 +210,16 @@ describe('Persistent Agent facade', () => {
           execute,
         },
       ];
+      const skills = {
+        scope,
+        selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
+      };
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
-        skills: {
-          scope,
-          selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
-        },
+        skills,
         pluginGuides: [
           {
             pluginId: 'github',
@@ -267,7 +271,12 @@ describe('Persistent Agent facade', () => {
       try {
         await runtime.ensureConversation({
           ...seed,
-          configuration: { ...seed.configuration, instructions, tools },
+          configuration: {
+            ...seed.configuration,
+            instructions,
+            initialInstructions: buildInitialSkillInstructions(skills),
+            tools,
+          },
         });
         const text = '你看看我的 github 的 skenora 项目';
         await submitAndWait(runtime, { ...input('first'), input: [{ type: 'text', text }] });

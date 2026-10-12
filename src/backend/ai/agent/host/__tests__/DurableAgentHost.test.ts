@@ -466,9 +466,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         messageId: failed.assistantMessageId,
       });
       // Retry rebuilds the working copy; the original selection must configure it again.
-      expect(ensure.mock.lastCall?.[0].configuration.instructions).toContain(
-        'Use a concise outline.',
-      );
+      expect(ensure.mock.lastCall?.[0].configuration.initialInstructions).toEqual([
+        { key: `skill:${skillId}`, text: expect.stringContaining('Use a concise outline.') },
+      ]);
       const [user] = await state.store.listMessages(state.sessionId);
       expect(user.parts[0]).toMatchObject({
         skillSelections: [selection],

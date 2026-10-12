@@ -65,7 +65,7 @@ export function createSkillAdaptationTool(
     description:
       'Propose up to three small edits to a loaded local SKILL.md when desktop execution is structurally unavailable. The app shows the exact before/after text in its existing question sheet and always waits for explicit consent, including auto mode. Do not ask separately. Preserves metadata, other files, and at least two thirds of the body. Only replace execution using verified available tools, or remove an explicitly optional step. Preserve the goal, output, data scope, checks and approvals. Never remove a core capability to claim success, or delete a step due to disabled tools, permissions, missing configuration or a transient failure. Saves the one current local Skill for all bound Agents, reloads its instructions, then continue the original task. No tools or permissions are granted.',
     inputSchema: toRuntimeInputSchema(inputSchema),
-    async execute(call) {
+    async execute(call): Promise<RuntimeToolResult> {
       try {
         const parsed = inputSchema.parse(call.input);
         const entry = scope.entries.find((item) => item.id === parsed.skill_id);
