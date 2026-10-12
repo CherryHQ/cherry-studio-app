@@ -4,11 +4,13 @@ import { WebSearchService } from '@/backend/services/webSearch/WebSearchService'
 import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
+import { downloadWebPage } from '../http/downloadWebPage';
 import { requestWebSearchJson, type WebSearchJsonRequester } from '../http/requestWebSearchJson';
 
 jest.mock('../http/requestWebSearchJson', () => ({
   requestWebSearchJson: jest.fn(),
 }));
+jest.mock('../http/downloadWebPage', () => ({ downloadWebPage: jest.fn() }));
 
 const requestWebSearchJsonMock =
   requestWebSearchJson as jest.MockedFunction<WebSearchJsonRequester>;
@@ -17,10 +19,49 @@ describe('WebSearchService', () => {
   const originalFetch = global.fetch;
   beforeEach(() => {
     requestWebSearchJsonMock.mockReset();
+    jest.mocked(downloadWebPage).mockReset();
     global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
   });
   afterEach(() => {
     global.fetch = originalFetch;
+  });
+
+  test.each([
+    ['fetch', undefined, true],
+    ['crawl4ai', undefined, false],
+    ['crawl4ai', 'https://crawl.example.com', true],
+    ['crawl4ai', 'ftp://crawl.example.com', false],
+  ] as const)(
+    'checks page-reader readiness for %s with host %s',
+    async (providerId, apiHost, ready) => {
+      const service = new WebSearchService(
+        createPreferenceService({
+          'chat.web_search.default_fetch_urls_provider': providerId,
+          'chat.web_search.provider_overrides': apiHost
+            ? { [providerId]: { capabilities: { fetchUrls: { apiHost } } } }
+            : {},
+        }),
+      );
+
+      await expect(service.isConfigured('fetchUrls')).resolves.toBe(ready);
+      expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+      expect(downloadWebPage).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  test('Jina readiness requires a key only for keyword search', async () => {
+    const service = new WebSearchService(
+      createPreferenceService({
+        ...PreferenceDefaults,
+        'chat.web_search.default_search_keywords_provider': 'jina',
+      }),
+    );
+
+    await expect(service.isConfigured('searchKeywords')).resolves.toBe(false);
+    await expect(service.isConfigured('fetchUrls')).resolves.toBe(true);
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   test('reads through Jina with fresh-install defaults and no provider keys', async () => {
@@ -152,16 +193,9 @@ describe('WebSearchService', () => {
 
     await expect(
       service.checkProvider({
-        provider: {
-          id: 'tavily',
-          name: 'Tavily',
-          type: 'api',
-          apiKeys: ['selected-key'],
-          capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.tavily.com' }],
-          engines: [],
-          basicAuthUsername: '',
-          basicAuthPassword: '',
-        },
+        providerId: 'tavily',
+        capability: 'searchKeywords',
+        override: { apiKeys: ['selected-key'] },
       }),
     ).resolves.toEqual({ valid: true });
 
@@ -173,6 +207,29 @@ describe('WebSearchService', () => {
         url: 'https://api.tavily.com/search',
       }),
     );
+  });
+
+  test('fails a check before any request when a required key is missing', async () => {
+    const service = new WebSearchService(createPreferenceService());
+
+    await expect(
+      service.checkProvider({ providerId: 'parallel', capability: 'searchKeywords' }),
+    ).resolves.toEqual({ valid: false, error: 'API key is required for provider parallel' });
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+  });
+
+  test('reports a self-hosted provider without an address as a configuration failure', async () => {
+    const service = new WebSearchService(
+      createPreferenceService({ 'chat.web_search.default_fetch_urls_provider': 'crawl4ai' }),
+    );
+
+    const response = await service.fetchUrls({ urls: ['https://example.com'] });
+
+    expect(response.results).toEqual([]);
+    expect(response.failures).toEqual([
+      expect.objectContaining({ kind: 'configuration', code: 'api_host_missing' }),
+    ]);
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
   });
 
   test('returns the results it did get when one keyword request fails', async () => {
@@ -241,26 +298,24 @@ describe('WebSearchService', () => {
     ]);
   });
 
-  test('reports the fetch provider as unsupported during checks', async () => {
+  test('reads local text with the final source URL and original input', async () => {
     const service = new WebSearchService(createPreferenceService());
-
+    jest.mocked(downloadWebPage).mockResolvedValue({
+      content: 'Local page content',
+      isHtml: false,
+      url: 'https://example.com/article',
+    });
     await expect(
-      service.checkProvider({
-        provider: {
-          id: 'fetch',
-          name: 'fetch',
-          type: 'api',
-          apiKeys: [],
-          capabilities: [{ feature: 'fetchUrls' }],
-          engines: [],
-          basicAuthUsername: '',
-          basicAuthPassword: '',
+      service.fetchUrls({ providerId: 'fetch', urls: ['https://example.com/start'] }),
+    ).resolves.toMatchObject({
+      providerId: 'fetch',
+      results: [
+        {
+          content: 'Local page content',
+          url: 'https://example.com/article',
+          sourceInput: 'https://example.com/start',
         },
-        capability: 'fetchUrls',
-      }),
-    ).resolves.toEqual({
-      valid: false,
-      error: 'Web search provider fetch is not supported on mobile',
+      ],
     });
   });
 });

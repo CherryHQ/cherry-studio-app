@@ -35,11 +35,38 @@ export function resolveProviderApiHost(
   return host;
 }
 
+/**
+ * The configuration a capability needs before any request is worth sending. Adapters still resolve
+ * their own host and key; this states the preset's contract once for every provider.
+ */
+export function assertProviderReady(
+  provider: WebSearchProvider,
+  capability: WebSearchCapability,
+): void {
+  const providerCapability = provider.capabilities.find((item) => item.feature === capability);
+  if (!providerCapability) {
+    throw new WebSearchConfigError(
+      'capability_unsupported',
+      `Web search provider ${provider.id} does not support capability ${capability}`,
+    );
+  }
+  if (providerCapability.requiresApiHost) {
+    resolveProviderApiHost(provider, capability);
+  }
+  if (providerCapability.requiresApiKey && !provider.apiKeys.some((key) => key.trim())) {
+    throw new WebSearchConfigError(
+      'api_key_missing',
+      `API key is required for provider ${provider.id}`,
+    );
+  }
+}
+
 export class ApiKeyRotationState {
   private readonly lastUsedKeyByProvider = new Map<WebSearchProvider['id'], string>();
 
   resolve(provider: WebSearchProvider, required = true): string {
-    const keys = provider.apiKeys.flatMap((key) => key.trim() || []);
+    // `indexOf` reports the first occurrence, so a repeated entry would pin the rotation to it.
+    const keys = [...new Set(provider.apiKeys.flatMap((key) => key.trim() || []))];
 
     if (keys.length === 0) {
       if (required) {

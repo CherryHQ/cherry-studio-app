@@ -3,16 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
-  WebSearchProvider,
+  WebSearchProviderId,
   WebSearchProviderOverride,
 } from '@/shared/data/types/webSearch';
 
+/** Checks the settings on screen, saved or not, with one real lookup. */
 export function useWebSearchProviderCheck(
-  provider: WebSearchProviderPreset,
-  providerOverride: WebSearchProviderOverride | undefined,
+  providerId: WebSearchProviderId,
   capability: WebSearchCapability,
 ) {
   const { t } = useTranslation();
@@ -29,9 +28,8 @@ export function useWebSearchProviderCheck(
     [],
   );
 
-  const startCheck = async (apiKey: string) => {
-    const trimmedApiKey = apiKey.trim();
-    if (isChecking || !trimmedApiKey) {
+  const startCheck = async (override: WebSearchProviderOverride) => {
+    if (isChecking) {
       return;
     }
 
@@ -40,10 +38,7 @@ export function useWebSearchProviderCheck(
     checkRunIdRef.current = runId;
 
     try {
-      const result = await webSearch.checkProvider({
-        capability,
-        provider: buildCheckProviderConfig(provider, providerOverride, trimmedApiKey),
-      });
+      const result = await webSearch.checkProvider({ capability, override, providerId });
 
       if (checkRunIdRef.current !== runId) {
         return;
@@ -73,29 +68,4 @@ export function useWebSearchProviderCheck(
   };
 
   return { isChecking, startCheck };
-}
-
-export function buildCheckProviderConfig(
-  provider: WebSearchProviderPreset,
-  override: WebSearchProviderOverride | undefined,
-  selectedApiKey: string,
-): WebSearchProvider {
-  return {
-    id: provider.id,
-    name: provider.name,
-    type: provider.type,
-    apiKeys: [selectedApiKey],
-    capabilities: provider.capabilities.map((capability) => {
-      const apiHostOverride = override?.capabilities?.[capability.feature]?.apiHost;
-
-      if (capability.apiHost === undefined || apiHostOverride === undefined) {
-        return capability;
-      }
-
-      return { ...capability, apiHost: apiHostOverride.trim() };
-    }),
-    engines: override?.engines?.flatMap((engine) => engine.trim() || []) ?? [],
-    basicAuthUsername: override?.basicAuthUsername?.trim() ?? '',
-    basicAuthPassword: override?.basicAuthPassword?.trim() ?? '',
-  };
 }

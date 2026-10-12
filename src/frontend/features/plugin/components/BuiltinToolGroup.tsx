@@ -28,7 +28,10 @@ export function BuiltinToolGroup() {
             key={toolId}
             onPress={() => router.push(tool.pathname)}
             status={{
-              label: WEB_SEARCH_PROVIDER_PRESET_MAP[providerIds[toolId]].name,
+              label:
+                providerIds[toolId] === 'fetch'
+                  ? t('settings.websearch.provider.localExtraction')
+                  : WEB_SEARCH_PROVIDER_PRESET_MAP[providerIds[toolId]].name,
               tone: 'default',
             }}
             testID={`plugins-builtin-tool-${toolId}`}

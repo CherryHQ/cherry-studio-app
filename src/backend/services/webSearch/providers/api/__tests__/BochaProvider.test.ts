@@ -96,7 +96,14 @@ function createProvider(): WebSearchProvider {
     name: 'Bocha',
     type: 'api',
     apiKeys: ['bocha-key'],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.bochaai.com' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.bochaai.com',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

@@ -12,8 +12,9 @@ application-owned tools listed on the Plugins page.
 
 - `BuiltinToolScreen.tsx` renders either tool: identity, its provider and credentials, and for web
   search the result count and compression settings.
-- `apiService/` owns provider checks, API key fields, and API key parsing.
+- `apiService/` owns provider checks, the API key, API address, and basic-auth fields, and API key
+  parsing.
 - `components/` contains controls owned by the tool pages.
 - `context/` coordinates each provider's API management section.
 - `hooks/` owns search and fetch provider preferences.
-- `utils/` owns provider presentation and override helpers.
+- `utils/` owns provider presentation, the settings each provider exposes, and override helpers.
