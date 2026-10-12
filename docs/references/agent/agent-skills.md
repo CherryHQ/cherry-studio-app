@@ -23,7 +23,7 @@ bytes follow ordinary storage reconciliation.
 ```text
 backend/services/skill       sources → package validation → managed installation
 backend/data                 installed package facts + Agent binding preferences
-backend/ai/agent/host         current eligibility → pinned scope → active instructions
+backend/ai/agent/host         current eligibility → accepted scope → active instructions
 backend/ai/agent/runtime      Pi Durable model history, compaction and tool loop
 ```
 
@@ -54,7 +54,8 @@ different package with the same name is refused.
 GitHub resolution pins a ref to a commit and acquires the complete package directory, including a
 repository-root package when present. Truncated trees, symlinks and submodules are rejected. Sources
 must be public and resolvable through their supported interfaces; they use the project HTTP client,
-bounded responses and cancellation. There is no script runner or package editor.
+bounded responses and cancellation. There is no script runner; local adaptation edits only entry
+instructions after explicit user review.
 
 Packages require UTF-8 `SKILL.md` with leading YAML frontmatter and a nonempty conforming name and
 description. A named package directory must match the declared name; root packages use the entry's
@@ -134,8 +135,38 @@ the package, installs it and enables it for the current Agent in the same transa
 several Skills returns their URLs for the model to choose from. Package validation failures return their
 reason codes so the Agent can explain them. The built-in reference expresses installation intent and makes
 `install_skill` approval automatic; otherwise it asks. Agent approval policy still applies, and
-search-only requests do not authorize installation. An identical installation is reused for a new
-Agent without republishing its files.
+search-only requests do not authorize installation. An existing installation from the same origin
+is reused for a new Agent without republishing its files, preserving local adaptations.
+
+## Local Adaptation
+
+When a loaded Skill requires structurally unavailable desktop execution, `adapt_skill` proposes
+up to three exact substitutions in the current `SKILL.md` body. It may replace execution with
+tools actually exposed in this turn, or remove a passage explicitly marked optional. At least two
+thirds of the body must remain untouched. Frontmatter, identity, source metadata, references,
+templates and binary resources stay intact. Normalized instruction line endings can be matched
+without changing the original bytes outside the edited passages.
+
+The existing `UserQuestionSheet` displays the actual before/after text, reasons, and a notice that
+the one local Skill changes for all Agents using it. The tool itself requests this choice through
+the Host question port, including in automatic tool approval mode. It does not rely on the model
+remembering to ask. Only the explicit adaptation option with no unresolved custom input permits
+saving. Refusal, skipping, free-text-only answers and cancellation leave files unchanged. The tool
+rechecks current Agent access and package integrity after the answer; an internal content-hash
+comparison in the write transaction rejects concurrent changes instead of overwriting them.
+
+Saving publishes a fully validated package and switches the one current installation atomically,
+preserving bindings. It does not create user-managed versions or per-Agent variants. The accepted
+scope and the same per-Skill Runtime instruction section are replaced before continuing the original
+task. A saved receipt with the actual changes stays inline outside the completed process disclosure,
+even if the model supplies no explanatory prose. A post-save refresh failure reports that saving
+succeeded and requests a new message instead of claiming current-turn execution support.
+
+Tool availability and bounded text changes do not prove semantic equivalence. The model must
+preserve the core goal, output, data scope, validation and approval rules. Configuration problems,
+disabled tools, denied permissions and transient failures are not grounds for permanent deletions.
+If a core function has no supported replacement, it must report that limit rather than delete it
+and claim success. Explicit upstream updates still replace current local content from its source.
 
 ## Persistence And Lifecycle
 
@@ -176,8 +207,9 @@ lifecycle operations belong to `Backend.skills`, separate from the ordinary Data
 ## Runtime And History
 
 The Host resolves installed, globally enabled, bound-enabled and currently eligible packages for this
-Agent, pinning each revision for the turn. After a successful conversation install, it may append
-only that installed ID and exact digest from a freshly checked access scope. It never replaces a pinned revision. A refresh failure preserves the installation but
+Agent, reading accepted package snapshots. After a successful conversation install, it may append
+only that installed ID and exact digest from a freshly checked access scope. Consented local
+adaptation may replace an existing entry with its freshly checked current package. A refresh failure preserves the installation but
 reports it unavailable in this turn. Tools cannot name another Agent or revision, and reads are
 limited to paths in the accepted manifest. The model-facing tools are:
 
@@ -189,6 +221,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
 | `find_skills` | Search skills.sh, or list the Skills behind a supported URL |
 | `install_skill` | Validate, install and bind one Skill for this Agent; append it to the turn |
+| `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
 These are directly exposed built-in functions, not MCP catalog entries. `tool_search` searches only
 MCP tools, so no matches there say nothing about Skill access. Pi Durable does not need a desktop
@@ -204,9 +237,9 @@ scope, including eligible additions installed during the turn. A new installatio
 cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
 not silently create bindings.
 
-Active entry instructions have a 48,000-character aggregate limit; oversized activation fails rather
-than truncating instructions. Explicit selections and previously active instructions are quoted in
-the Host's prepared system instructions. A new automatic `load_skill` returns the full body and a
+Active entry instructions have a 48,000-character aggregate limit and at most 64 entries; oversized
+activation fails rather than truncating instructions. Explicit selections and previously active
+instructions seed individually replaceable Runtime system sections. A new automatic `load_skill` returns the full body and a
 trusted Runtime instruction contribution. The Pi adapter commits that contribution to a native
 conversation document and renders it through a native prompt section before every model request,
 including after compaction or reopening the same working copy. This follows Pi Durable's
@@ -215,9 +248,9 @@ not a dedicated upstream Skill API. The model-facing tool result is a compact re
 the system instructions; the full body stays in the persisted display result for inspection. MCP
 results cannot contribute these instructions or replace their model-facing value.
 
-The next Host configuration atomically clears this per-execution document after rebuilding currently
+The next Host configuration atomically replaces this per-execution document with rebuilt currently
 applicable instructions. Old or disabled Skills therefore cannot survive through native document
-state. Repeat entry reads return the complete pinned body without charging the unique activation
+state. Repeat entry reads return the complete current body without charging the unique activation
 budget again. References and templates remain progressive reads via `list_skill_files` and
 `read_skill_file`; having already loaded the entry does not forbid reading its referenced files.
 
@@ -238,7 +271,8 @@ the user's request.
 
 The current implementation reuses existing load receipts and Host prompt assembly across turns, and
 Pi's native document/section extension mechanism within a running execution. Later turns use the
-current installed revision; a running turn keeps its prepared package scope. There is no separate
+current installed revision; a running turn keeps its prepared package scope except for its own
+consented local adaptation. There is no separate
 application activation table, session-specific unload protocol, or archive of historical package
 files. Existing tool results retain their returned bodies for activity inspection; that snapshot is
 not permission to read removed package resources. Remote script execution remains out of scope.

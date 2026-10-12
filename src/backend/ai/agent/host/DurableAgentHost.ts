@@ -59,7 +59,7 @@ import {
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
-import { buildActiveSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
+import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import {
   durableRuntimeTiming,
   DurableTurnMetadataSchema,
@@ -525,22 +525,17 @@ export class DurableAgentHost implements AgentProtocol {
       model: plan.agent.model,
       options: plan.agent.options,
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
-      // Pi owns and compacts history; Skill instructions active from earlier turns ride with the
-      // system prompt so they outlive compaction.
-      instructions: [
-        buildAgentSystemPrompt({
-          agentInstructions: plan.agent.instructions,
-          mode: plan.agent.mode,
-          appLanguage: this.ports.appLanguage(),
-          tools: plan.tools,
-          pluginGuides: plan.pluginGuides,
-          skills: plan.skills,
-          toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
-        }),
-        plan.agent.mode === 'standard' ? buildActiveSkillInstructions(plan.skills) : '',
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+      initialInstructions:
+        plan.agent.mode === 'standard' ? buildInitialSkillInstructions(plan.skills) : [],
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: plan.agent.instructions,
+        mode: plan.agent.mode,
+        appLanguage: this.ports.appLanguage(),
+        tools: plan.tools,
+        pluginGuides: plan.pluginGuides,
+        skills: plan.skills,
+        toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
+      }),
     };
   }
 
@@ -829,6 +824,7 @@ export class DurableAgentHost implements AgentProtocol {
     return {
       agents: this.ports.agents,
       askUser: (question, call) => this.askUser(question, call),
+      appLanguage: () => this.ports.appLanguage(),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
@@ -1516,6 +1512,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
     kind: configuration.kind ?? 'language',
     model: configuration.model,
     instructions: configuration.instructions,
+    initialInstructions: configuration.initialInstructions ?? [],
     options: configuration.options,
     tools: configuration.tools.map((tool) => ({
       ref: tool.ref,

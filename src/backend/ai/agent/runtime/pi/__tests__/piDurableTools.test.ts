@@ -105,6 +105,93 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('an instruction retention failure preserves the saved mutation receipt and exposes the reload limitation', async () => {
+    const saved = {
+      status: 'adapted',
+      instructionsLoaded: false,
+      changes: [{ before: 'Old step', after: 'New step' }],
+    };
+    const extension = capabilityExtension({
+      name: 'cherry',
+      tools: [
+        capability({
+          approval: 'auto',
+          execute: async () => ({
+            value: { ...saved, instructionsLoaded: true },
+            artifacts: [],
+            instructions: { key: 'skill:notes', text: 'x'.repeat(128_001) },
+            instructionsFailureValue: saved,
+          }),
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        isError: false,
+        details: { output: { value: saved, modelValue: saved } },
+      });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+  test('a trusted adaptation replaces selected instructions and survives reopening without old system text', async () => {
+    const extension = capabilityExtension({
+      name: 'cherry',
+      tools: [
+        capability({
+          approval: 'auto',
+          execute: async () => ({
+            value: {
+              status: 'adapted',
+              changes: [{ before: 'Run desktop Python.', after: 'Use current mobile tools.' }],
+            },
+            instructions: { key: 'skill:notes', text: 'Use current mobile tools.' },
+            artifacts: [],
+          }),
+        }),
+      ],
+    });
+    const storage = new ReopenableMemoryStorage();
+    const harness = await open(storage, extension);
+    const conversation = await harness.createConversation(
+      {
+        ownership: { kind: 'ownerless' },
+        agent: { instructions: 'Keep the task goal.', extensions: [extension] },
+      },
+      BACKGROUND_CONTEXT,
+    );
+    const id = conversation.id;
+    await conversation.commit(async (tx) => {
+      (await tx.doc(ToolInstructions, id)).sections = [
+        { key: 'skill:notes', text: 'Run desktop Python.' },
+      ];
+    }, BACKGROUND_CONTEXT);
+    expect((await conversation.context(BACKGROUND_CONTEXT)).systemPrompt).toContain(
+      'Run desktop Python.',
+    );
+    await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
+    const context = await conversation.context(BACKGROUND_CONTEXT);
+    expect(context.systemPrompt).toContain('Use current mobile tools.');
+    expect(context.systemPrompt).not.toContain('Run desktop Python.');
+    expect(context.systemPrompt).toContain('Keep the task goal.');
+    await harness.close(BACKGROUND_CONTEXT);
+    const reopened = await open(storage, extension);
+    try {
+      const document = await reopened.snapshot(ToolInstructions, id, BACKGROUND_CONTEXT);
+      expect(document?.sections).toEqual([
+        { key: 'skill:notes', text: 'Use current mobile tools.' },
+      ]);
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
   test('MCP corrections do not ask for approval; a discovered valid dispatch preserves artifact details', async () => {
     const result = {
       value: 'Created',

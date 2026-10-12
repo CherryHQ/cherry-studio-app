@@ -47,6 +47,20 @@ export type SkillUpdateResult =
   | { outcome: 'unchanged'; skill: Skill }
   | { outcome: 'rejected'; skill: Skill; inspection: SkillInspection };
 
+/** Small, exact substitutions in the installed SKILL.md body; metadata and resources stay intact. */
+export type SkillTextChange = { before: string; after: string; reason: string };
+export type AdaptSkillInput = {
+  skillId: string;
+  /** Internal stale-write check, not a user-managed version. */
+  expectedContentHash: string;
+  changes: readonly SkillTextChange[];
+};
+export type SkillAdaptationPreview = {
+  skill: Skill;
+  instructions: string;
+  previousInstructions: string;
+};
+
 export type SkillsErrorCode =
   | 'search-unavailable'
   | 'candidate-expired'
@@ -58,6 +72,7 @@ export type SkillsErrorCode =
   | 'admission-setup-required'
   | 'storage-unavailable'
   | 'already-installed'
+  | 'content-changed'
   | 'not-found';
 
 export class SkillsError extends Error {
@@ -101,6 +116,9 @@ export interface SkillsModule {
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;
   /** Re-acquire the accepted source; a rejected revision leaves the installation intact. */
   update(skillId: string, signal?: AbortSignal): Promise<SkillUpdateResult>;
+  previewAdaptation(input: AdaptSkillInput, signal?: AbortSignal): Promise<SkillAdaptationPreview>;
+  /** Caller must obtain consent for these exact changes before saving. */
+  adapt(input: AdaptSkillInput, signal?: AbortSignal): Promise<Skill>;
   uninstall(skillId: string): Promise<void>;
   /** Fires after any installation, update, or removal commits. */
   subscribeChanges(listener: () => void): () => void;

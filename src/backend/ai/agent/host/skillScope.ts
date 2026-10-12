@@ -3,8 +3,8 @@
  *
  * The scope is the intersection the design defines: installed accepted
  * packages ∩ globally enabled ∩ this Agent's enabled bindings. Environment
- * diagnostics never prevent reading instructions. It pins each revision; an
- * installation can append only its freshly checked revision during the turn.
+ * diagnostics never prevent reading instructions. Reads use an accepted package
+ * snapshot; installation can append an entry and consented adaptation can replace it.
  * It is the only thing the Skill tools can read.
  */
 
@@ -34,7 +34,7 @@ export type SkillTurnEntry = {
   name: string;
   description: string;
   invocation: SkillInvocation;
-  /** The accepted revision pinned for this turn. */
+  /** Integrity identity of the currently accepted package snapshot. */
   contentHash: string;
   folderName: string;
   /** Package-relative paths, from the accepted manifest. */
@@ -150,7 +150,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
   };
 }
 
-/** A successful install may append one rechecked revision; existing turn revisions never change. */
+/** Only installation may append entries; consented adaptation may replace an existing entry. */
 export function createExpandingSkillScope(initial: SkillTurnScope) {
   const entries = new Map(initial.entries.map((entry) => [entry.id, entry]));
   const readers = new Map(initial.entries.map((entry) => [entry.id, initial]));
@@ -161,17 +161,26 @@ export function createExpandingSkillScope(initial: SkillTurnScope) {
     readInstructions: (id) => readers.get(id)?.readInstructions(id) ?? Promise.resolve(null),
     readFile: (id, path) => readers.get(id)?.readFile(id, path) ?? Promise.resolve(null),
   };
+  function include(checked: SkillTurnScope, skillId: string, digest: string, replace = false) {
+    const entry = checked.entries.find(
+      (item) => item.id === skillId && item.contentHash === digest,
+    );
+    if (
+      !entry ||
+      (!replace && entries.has(skillId) && entries.get(skillId)!.contentHash !== digest)
+    )
+      return false;
+    if (replace && !entries.has(skillId)) return false;
+    entries.set(skillId, entry);
+    readers.set(skillId, checked);
+    return true;
+  }
   return {
     scope,
     include(checked: SkillTurnScope, skillId: string, digest: string) {
-      const entry = checked.entries.find(
-        (item) => item.id === skillId && item.contentHash === digest,
-      );
-      if (!entry || (entries.has(skillId) && entries.get(skillId)!.contentHash !== digest))
-        return false;
-      entries.set(skillId, entry);
-      readers.set(skillId, checked);
-      return true;
+      return include(checked, skillId, digest);
     },
+    replace: (checked: SkillTurnScope, skillId: string, digest: string) =>
+      include(checked, skillId, digest, true),
   };
 }

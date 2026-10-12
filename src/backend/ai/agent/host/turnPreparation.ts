@@ -24,8 +24,13 @@ import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
-import { SKILL_ACTIVE_MAX_CHARACTERS, type SkillActivation } from '@/shared/data/types/skill';
+import {
+  SKILL_ACTIVE_MAX_CHARACTERS,
+  SKILL_ACTIVE_MAX_ENTRIES,
+  type SkillActivation,
+} from '@/shared/data/types/skill';
 import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import {
   createTurnResourceLedger,
@@ -79,6 +84,7 @@ export type TurnPreparationDependencies = {
   agents: AgentDefinitionSource;
   /** The Host's `ask_user_question` response channel; calls correlate by turn id. */
   askUser: AskUserQuestion;
+  appLanguage?(): AppLanguage;
   documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
@@ -528,6 +534,26 @@ export async function prepareResolvedTurn(
           (sum, { instructions }) => sum + [...instructions].length,
           0,
         ),
+        instructionLengths: new Map(
+          loaded.map(({ entry, instructions }) => [entry.id, [...instructions].length]),
+        ),
+        ...(dependencies.skillWorkflow && dependencies.skills
+          ? {
+              adaptation: {
+                workflow: dependencies.skillWorkflow,
+                source: dependencies.skills,
+                context: {
+                  agentId: agent.id,
+                  disabledCapabilities: agent.disabledCapabilities,
+                  model: agent.model,
+                  tools: [...systemTools, ...configuredTools],
+                },
+                askUser: dependencies.askUser,
+                language: dependencies.appLanguage?.() ?? 'en-US',
+                replace: expanding.replace,
+              },
+            }
+          : {}),
       });
     }
     if (dependencies.skillWorkflow && dependencies.skills) {
@@ -714,6 +740,7 @@ async function resolveTurnSkills(
   // removed or disabled Skill simply stops contributing instructions.
   const active = new Map<string, { entry: SkillTurnEntry; instructions: string }>();
   for (const activation of activations.toReversed()) {
+    if (selected.length + active.size >= SKILL_ACTIVE_MAX_ENTRIES) break;
     if (
       !isSkillActivationCurrent(activation, scope) ||
       selected.some(({ entry }) => entry.id === activation.skillId)

@@ -116,9 +116,9 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         turnId,
       });
       // Only trusted application callbacks can contribute system instructions. MCP payloads cannot.
-      const { instructions, modelValue, ...output } = result;
+      const { instructions, instructionsFailureValue, modelValue, ...output } = result;
       // Callbacks cross into durable JSON here; reject invalid payloads before native persistence.
-      const stored = RuntimeJsonValueSchema.parse(
+      let stored = RuntimeJsonValueSchema.parse(
         JSON.parse(
           JSON.stringify({
             ...output,
@@ -128,8 +128,16 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ) as RuntimeToolResult;
       if (result.failure?.scope === 'tool' && tool.failureGroup)
         failedGroups.add(tool.failureGroup);
-      if (instructions && !stored.failure && tool.ref.source === 'builtin')
-        await retainToolInstructions(instructions, api, context);
+      if (instructions && !stored.failure && tool.ref.source === 'builtin') {
+        try {
+          await retainToolInstructions(instructions, api, context);
+        } catch (error) {
+          signal.throwIfAborted();
+          if (instructionsFailureValue === undefined) throw error;
+          const fallback = RuntimeJsonValueSchema.parse(instructionsFailureValue);
+          stored = { ...stored, value: fallback, modelValue: fallback };
+        }
+      }
       await options.onResult?.(tool, stored, api, context);
       return stored;
     } catch (error) {

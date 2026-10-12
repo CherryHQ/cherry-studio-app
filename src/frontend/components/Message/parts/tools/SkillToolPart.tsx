@@ -18,6 +18,8 @@ export function SkillToolPart({ part }: { part: ToolMessagePart }) {
   const { t } = useTranslation();
   const router = useRouter();
   const output = part.state === 'output-available' && isRecord(part.output) ? part.output : null;
+  if (getToolName(part) === 'adapt_skill')
+    return <SkillAdaptationPart part={part} output={output} />;
   if (getToolName(part) !== 'load_skill')
     return <SkillManagementPart part={part} output={output} />;
   const activation = SkillActivationSchema.safeParse(
@@ -61,6 +63,64 @@ export function SkillToolPart({ part }: { part: ToolMessagePart }) {
             value={output.instructions}
           />
         ) : null}
+      </View>
+    </MessagePart.Tool>
+  );
+}
+
+function SkillAdaptationPart({
+  part,
+  output,
+}: {
+  part: ToolMessagePart;
+  output: Record<string, unknown> | null;
+}) {
+  const { t } = useTranslation();
+  if (!output || !['adapted', 'unchanged'].includes(String(output.status)))
+    return <GenericToolPart part={part} />;
+  const saved = output.status === 'adapted';
+  const changes = Array.isArray(output.changes)
+    ? output.changes.filter(
+        (change): change is { before: string; after: string; reason: string } =>
+          isRecord(change) &&
+          typeof change.before === 'string' &&
+          typeof change.after === 'string' &&
+          typeof change.reason === 'string',
+      )
+    : [];
+  return (
+    <MessagePart.Tool
+      icon={ToolCaseIcon}
+      title={t('skills.adaptation.title')}
+      state="complete"
+      statusText={t(saved ? 'skills.adaptation.saved' : 'skills.adaptation.unchanged')}
+      testID="skill-adaptation-receipt"
+    >
+      <View className="gap-3">
+        <Text className="text-sm text-foreground" selectable>
+          {typeof output.name === 'string' ? output.name : ''}
+        </Text>
+        <Text className="text-sm text-muted-foreground">
+          {t(
+            saved
+              ? output.instructionsLoaded === true
+                ? 'skills.adaptation.continue'
+                : 'skills.adaptation.reloadFailed'
+              : 'skills.adaptation.unchanged',
+          )}
+        </Text>
+        {changes.map((change) => (
+          <View key={change.before} className="gap-2">
+            <Text className="text-sm text-foreground" selectable>
+              {change.reason}
+            </Text>
+            <MessagePart.TextSection title={t('chat.question.before')} value={change.before} />
+            <MessagePart.TextSection
+              title={t('chat.question.after')}
+              value={change.after || t('chat.question.removed')}
+            />
+          </View>
+        ))}
       </View>
     </MessagePart.Tool>
   );

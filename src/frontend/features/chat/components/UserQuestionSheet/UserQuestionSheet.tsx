@@ -1,6 +1,12 @@
 import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { BottomSheet, Button, Input, SelectionIndicator } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  Button,
+  Input,
+  MessagePart,
+  SelectionIndicator,
+} from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -117,6 +123,23 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {form.question.description ? (
+          <Text className="text-sm text-foreground-secondary" selectable>
+            {form.question.description}
+          </Text>
+        ) : null}
+        {form.question.textChanges?.map((change) => (
+          <View key={change.before} className="gap-2">
+            <Text className="text-sm text-foreground" selectable>
+              {change.reason}
+            </Text>
+            <MessagePart.TextSection title={t('chat.question.before')} value={change.before} />
+            <MessagePart.TextSection
+              title={t('chat.question.after')}
+              value={change.after || t('chat.question.removed')}
+            />
+          </View>
+        ))}
         {form.question.options.length ? (
           <View className="gap-2">
             {form.question.options.map((option) => {

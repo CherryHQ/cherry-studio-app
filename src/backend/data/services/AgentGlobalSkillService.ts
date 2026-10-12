@@ -11,6 +11,7 @@ import {
   type InsertAgentGlobalSkillRow,
   monotonicUpdateTimestamp,
 } from '@/backend/data/db/schemas';
+import { SkillsError } from '@/shared/contracts/skills';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   type AgentSkillUpdate,
@@ -412,6 +413,7 @@ export class AgentGlobalSkillService {
     tx: Database,
     skillId: string,
     record: SkillInstallRecord,
+    expectedContentHash?: string,
   ): Promise<Skill> {
     const [row] = await tx
       .update(agentGlobalSkillTable)
@@ -419,9 +421,22 @@ export class AgentGlobalSkillService {
         ...toInsertRow(record),
         updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
       })
-      .where(eq(agentGlobalSkillTable.id, skillId))
+      .where(
+        and(
+          eq(agentGlobalSkillTable.id, skillId),
+          expectedContentHash
+            ? eq(agentGlobalSkillTable.contentHash, expectedContentHash)
+            : undefined,
+          expectedContentHash ? eq(agentGlobalSkillTable.isEnabled, true) : undefined,
+        ),
+      )
       .returning();
     if (!row) {
+      if (expectedContentHash)
+        throw new SkillsError(
+          'content-changed',
+          'The local Skill changed. Review a new proposal before saving.',
+        );
       throw DataApiErrorFactory.notFound('Skill', skillId);
     }
     return rowToSkill(row);
