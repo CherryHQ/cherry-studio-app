@@ -611,7 +611,6 @@ describe('Skill turn preparation', () => {
       harness.loadRuntimeTurnContext.mockResolvedValue({
         ...EMPTY_CONTEXT,
         hasMessages: true,
-        sessionTurnIds: ['old-turn'],
       });
       harness.loadSkillActivations.mockResolvedValue([
         { messageId: 'old-answer', activation: { ...activation, origin } },
