@@ -14,10 +14,12 @@ const logger = loggerService.withContext('ChatInputMenu');
 
 /** Chat owns the library destination; the shared menu still owns media handoffs. */
 export function ChatInputMenu({
+  media = 'all',
   onPickPlugins,
   onPickSkills,
   triggerRef,
 }: {
+  media?: 'all' | 'images';
   onPickPlugins?: () => void;
   onPickSkills?: () => void;
   triggerRef: RefObject<View | null>;
@@ -39,7 +41,11 @@ export function ChatInputMenu({
 
   return (
     <>
-      <ComposerMenu onPickFiles={() => setIsFilePickerOpen(true)} triggerRef={triggerRef}>
+      <ComposerMenu
+        media={media}
+        onPickFiles={() => setIsFilePickerOpen(true)}
+        triggerRef={triggerRef}
+      >
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}
@@ -57,7 +63,7 @@ export function ChatInputMenu({
           />
         ) : null}
       </ComposerMenu>
-      {isFilePickerOpen ? (
+      {media === 'all' && isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />
       ) : null}
     </>

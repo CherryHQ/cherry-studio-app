@@ -3,6 +3,15 @@ import * as z from 'zod';
 import { AgentCapabilitySchema } from '@/shared/data/types/agentCapability';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
+/** Minimal Agents have a fixed chat-only capability boundary. */
+export const AgentModeSchema = z
+  .enum(['standard', 'minimal'])
+  .describe(
+    'standard allows configured tools and plugins; minimal supports only chat and direct image understanding.',
+  );
+export type AgentMode = z.infer<typeof AgentModeSchema>;
+export const DEFAULT_AGENT_MODE: AgentMode = 'standard';
+
 /** Controls only interactive tool approval; it never grants tool availability or resource access. */
 export const AgentToolApprovalModeSchema = z.enum(['default', 'auto']);
 export type AgentToolApprovalMode = z.infer<typeof AgentToolApprovalModeSchema>;
@@ -27,6 +36,7 @@ export const AgentSchema = z.strictObject({
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),
+  mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */
   modelName: z.string().nullable(),

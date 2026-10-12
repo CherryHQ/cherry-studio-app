@@ -530,13 +530,14 @@ export class DurableAgentHost implements AgentProtocol {
       instructions: [
         buildAgentSystemPrompt({
           agentInstructions: plan.agent.instructions,
+          mode: plan.agent.mode,
           appLanguage: this.ports.appLanguage(),
           tools: plan.tools,
           pluginGuides: plan.pluginGuides,
           skills: plan.skills,
           toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
         }),
-        buildActiveSkillInstructions(plan.skills),
+        plan.agent.mode === 'standard' ? buildActiveSkillInstructions(plan.skills) : '',
       ]
         .filter(Boolean)
         .join('\n\n'),

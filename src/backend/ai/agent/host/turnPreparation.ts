@@ -326,6 +326,12 @@ export async function prepareResolvedTurn(
   signal: AbortSignal,
 ): Promise<TurnPlan> {
   const agent = applyTurnOverrides(configuredAgent, parsed);
+  if (agent.mode === 'minimal' && (parsed.skillIds?.length || parsed.skillAction)) {
+    fail('CAPABILITY_UNSUPPORTED', 'Minimal mode does not support Skills.');
+  }
+  if (agent.mode === 'minimal' && parsed.imageGeneration) {
+    fail('CAPABILITY_UNSUPPORTED', 'Minimal mode does not support image generation.');
+  }
   const usageAttribution = createTurnUsageAttribution({
     type: 'agent',
     id: agent.id,
@@ -345,6 +351,21 @@ export async function prepareResolvedTurn(
     storedTurnContext.history,
     signal,
   );
+  if (agent.mode === 'minimal') {
+    const document = [...inputFiles.values()].find((file) => !file.mediaType.startsWith('image/'));
+    if (document) {
+      throw new AgentProtocolError({
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'Minimal mode accepts only text and images.',
+        retryable: false,
+        attachmentIssue: {
+          code: 'runtime-unsupported',
+          fileEntryId: document.fileEntryId,
+          name: document.name,
+        },
+      });
+    }
+  }
   const resources = createTurnResourceLedger(
     inputFiles,
     storedTurnContext.referencedFileEntryIds,
@@ -368,6 +389,9 @@ export async function prepareResolvedTurn(
     signal,
   });
   if (imageGeneration) {
+    if (agent.mode === 'minimal') {
+      fail('CAPABILITY_UNSUPPORTED', 'Minimal mode requires a chat model.');
+    }
     if (parsed.skillIds?.length || parsed.skillAction)
       fail('CAPABILITY_UNSUPPORTED', 'Skills cannot be used with image generation.');
     return {
@@ -430,13 +454,13 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
-  // Receipts come from the Cherry transcript, so they also cover turns Pi has compacted.
-  const receipts = dependencies.skills
-    ? latestSkillActivations(
-        await raceAbort(dependencies.store.loadSkillActivations(parsed.sessionId), signal),
-      )
-    : [];
-  if (runtime.descriptor.capabilities.tools) {
+  if (agent.mode === 'standard' && runtime.descriptor.capabilities.tools) {
+    // Read prior Skill receipts only when this turn can use tools and Skills.
+    const receipts = dependencies.skills
+      ? latestSkillActivations(
+          await raceAbort(dependencies.store.loadSkillActivations(parsed.sessionId), signal),
+        )
+      : [];
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
