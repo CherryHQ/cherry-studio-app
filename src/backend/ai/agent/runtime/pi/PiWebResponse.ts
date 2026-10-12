@@ -29,7 +29,15 @@ const PiWebResultSchema = z.object({
   openaiItems: z.array(z.object({ after: z.string(), item: RuntimeJsonObjectSchema })).optional(),
   /** Gemini server-side tool parts, each before the content block at `before`. */
   googleParts: z
-    .array(z.object({ before: z.number().int().nonnegative(), part: RuntimeJsonObjectSchema }))
+    .array(
+      z.object({
+        before: z.number().int().nonnegative(),
+        part: RuntimeJsonObjectSchema,
+        /** Pi can merge the text on both sides; locate the boundary inside the preceding block. */
+        offsetBefore: z.number().int().nonnegative().optional(),
+        signatureBefore: z.string().optional(),
+      }),
+    )
     .optional(),
 });
 type PiWebResult = z.infer<typeof PiWebResultSchema>;
@@ -130,12 +138,40 @@ function replayGoogleParts(
       )
         emitted++;
     }
+    partIndex.push(emitted);
     const content = record(contents[target])!;
     const parts = [...array(content.parts)];
     // Later parts first, so earlier insertion points stay valid.
-    for (const { before, part } of [...web.googleParts].reverse())
-      parts.splice(partIndex[before] ?? parts.length, 0, part);
-    contents[target] = { ...content, parts };
+    for (const { before, part, offsetBefore, signatureBefore } of [...web.googleParts].reverse()) {
+      if (offsetBefore === undefined || partIndex[before - 1] === partIndex[before]) {
+        parts.splice(partIndex[before] ?? parts.length, 0, part);
+        continue;
+      }
+      const index = partIndex[before - 1];
+      const preceding = record(parts[index]);
+      if (!preceding || typeof preceding.text !== 'string' || offsetBefore > preceding.text.length)
+        throw new Error('The saved Gemini web-tool boundary does not match its text.');
+      const { thoughtSignature, ...textPart } = preceding;
+      const suffix = preceding.text.slice(offsetBefore);
+      parts.splice(
+        index,
+        1,
+        {
+          ...textPart,
+          text: preceding.text.slice(0, offsetBefore),
+          ...(signatureBefore ? { thoughtSignature: signatureBefore } : {}),
+        },
+        part,
+        ...(suffix || (thoughtSignature && thoughtSignature !== signatureBefore)
+          ? [{ ...preceding, text: suffix }]
+          : []),
+      );
+    }
+    // Empty unsigned prefixes keep insertion indices stable until all boundaries are restored.
+    contents[target] = {
+      ...content,
+      parts: parts.filter((part) => record(part)?.text !== '' || record(part)?.thoughtSignature),
+    };
     changed = true;
   }
   return changed ? { ...body, contents } : body;
@@ -166,9 +202,12 @@ export class PiWebResponse {
   private readonly googleParts: GooglePart[] = [];
   private googleBlocks = 0;
   private googleBlockKind: 'text' | 'thinking' | undefined;
+  private googleBlockLength = 0;
+  private googleBlockSignature: string | undefined;
   private googleSearchSuggestions: string | undefined;
   /** Anthropic stream index to Pi content index, for the blocks Pi keeps. */
   private readonly anthropicBlocks = new Map<number, number>();
+  private readonly anthropicDocuments: (string | undefined)[] = [];
   private readonly blockCitations = new Map<number, string[]>();
   /** Offsets into the whole answer, for hosts that annotate a single text. */
   private readonly answerCitations: Citation[] = [];
@@ -190,8 +229,11 @@ export class PiWebResponse {
     this.googleParts.length = 0;
     this.googleBlocks = 0;
     this.googleBlockKind = undefined;
+    this.googleBlockLength = 0;
+    this.googleBlockSignature = undefined;
     this.googleSearchSuggestions = undefined;
     this.anthropicBlocks.clear();
+    this.anthropicDocuments.length = 0;
     this.blockCitations.clear();
     this.answerCitations.length = 0;
     this.numberedSources.length = 0;
@@ -292,7 +334,7 @@ export class PiWebResponse {
         for (const value of array(block.content))
           this.addSource(record(value)?.url, record(value)?.title);
         if (result?.type === 'web_fetch_result')
-          this.addSource(result.url, record(result.content)?.title);
+          this.anthropicDocuments.push(this.addSource(result.url, record(result.content)?.title));
         // Reaching the per-request cap is a limit the model is told about, not an outage.
         else if (result && result.error_code !== 'max_uses_exceeded') this.failed = true;
       }
@@ -301,7 +343,11 @@ export class PiWebResponse {
     const citation = record(record(event.delta)?.citation);
     const contentIndex = this.anthropicBlocks.get(event.index);
     if (event.type !== 'content_block_delta' || !citation || contentIndex === undefined) return;
-    const sourceId = this.addSource(citation.url, citation.title);
+    const sourceId =
+      (citation.type === 'char_location' || citation.type === 'page_location') &&
+      isOffset(citation.document_index)
+        ? this.anthropicDocuments[citation.document_index]
+        : this.addSource(citation.url, citation.title);
     if (sourceId)
       this.blockCitations.set(contentIndex, [
         ...(this.blockCitations.get(contentIndex) ?? []),
@@ -339,10 +385,10 @@ export class PiWebResponse {
       ...(openaiItems.length ? { openaiItems } : {}),
       ...(this.googleParts.length
         ? {
-            googleParts: this.googleParts.map(({ before, part }) => ({
+            googleParts: this.googleParts.map(({ before, ...part }) => ({
+              ...part,
               // A part at the insertion point stays ahead of the source facts.
               before: before > replayIndex ? moved(before) : before,
-              part,
             })),
           }
         : {}),
@@ -495,14 +541,29 @@ export class PiWebResponse {
         this.googleParts.push({
           before: this.googleBlocks,
           part: RuntimeJsonObjectSchema.parse(part),
+          ...(this.googleBlockKind
+            ? {
+                offsetBefore: this.googleBlockLength,
+                ...(this.googleBlockSignature
+                  ? { signatureBefore: this.googleBlockSignature }
+                  : {}),
+              }
+            : {}),
         });
         continue;
       }
       // Mirror Pi's blocks: consecutive text of one kind is one block, each call its own.
       if (part.text !== undefined) {
         const kind = part.thought === true ? 'thinking' : 'text';
-        if (this.googleBlockKind !== kind) this.googleBlocks++;
+        if (this.googleBlockKind !== kind) {
+          this.googleBlocks++;
+          this.googleBlockLength = 0;
+          this.googleBlockSignature = undefined;
+        }
         this.googleBlockKind = kind;
+        if (typeof part.text === 'string') this.googleBlockLength += part.text.length;
+        if (typeof part.thoughtSignature === 'string' && part.thoughtSignature)
+          this.googleBlockSignature = part.thoughtSignature;
       }
       if (part.functionCall) {
         this.googleBlocks++;

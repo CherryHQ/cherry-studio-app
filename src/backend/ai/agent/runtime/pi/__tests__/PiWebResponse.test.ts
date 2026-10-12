@@ -285,6 +285,55 @@ test('keeps source facts ahead of a pending tool call', () => {
   expect(readPiWebResult(settled)?.replayIndex).toBe(1);
 });
 
+test.each(['char_location', 'page_location'])(
+  'links Anthropic fetched-document %s citations to their source',
+  (type) => {
+    const capture = new PiWebResponse('fetch', 'anthropic');
+    for (const [index, url] of ['javascript:invalid', 'https://example.com/page'].entries())
+      capture.observe({
+        type: 'content_block_start',
+        index,
+        content_block: {
+          type: 'web_fetch_tool_result',
+          content: {
+            type: 'web_fetch_result',
+            url,
+            content: { type: 'document', title: 'Page' },
+          },
+        },
+      });
+    capture.observe({
+      type: 'content_block_start',
+      index: 2,
+      content_block: { type: 'text', text: '' },
+    });
+    for (const document_index of [0, 1, 99])
+      capture.observe({
+        type: 'content_block_delta',
+        index: 2,
+        delta: { type: 'citations_delta', citation: { type, document_index } },
+      });
+    const result = readPiWebResult(capture.settle(message('Answer')));
+    expect(result?.sources).toEqual([
+      { sourceId: 'fetch-1', url: 'https://example.com/page', title: 'Page' },
+    ]);
+    expect(result?.texts).toEqual([{ contentIndex: 0, text: 'Answer[cite:fetch-1]' }]);
+
+    capture.reset();
+    capture.observe({
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'text', text: '' },
+    });
+    capture.observe({
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'citations_delta', citation: { type, document_index: 1 } },
+    });
+    expect(readPiWebResult(capture.settle(message('New answer')))).toBeUndefined();
+  },
+);
+
 test.each([
   [
     'zhipu',
@@ -378,8 +427,8 @@ test('returns Gemini server-side tool parts beside the blocks they preceded', ()
   const settled = capture.settle(answer);
   const result = readPiWebResult(settled)!;
   expect(result.googleParts).toEqual([
-    { before: 1, part: { ...call, thoughtSignature: 'sig-1' } },
-    { before: 1, part: { ...response, thoughtSignature: 'sig-2' } },
+    { before: 1, offsetBefore: 8, part: { ...call, thoughtSignature: 'sig-1' } },
+    { before: 1, offsetBefore: 8, part: { ...response, thoughtSignature: 'sig-2' } },
   ]);
 
   const model = { api: 'google-generative-ai', provider: 'test', id: 'test' } as Model<Api>;
@@ -411,5 +460,69 @@ test('returns Gemini server-side tool parts beside the blocks they preceded', ()
   // Signatures belong to the model that produced them; another model gets plain history.
   expect(applyPiWebReplay({ contents }, { ...model, id: 'other' }, [settled])).toEqual({
     contents,
+  });
+});
+
+test('replays stored Gemini tool parts without text-boundary metadata', () => {
+  const call = { toolCall: { toolType: 'GOOGLE_SEARCH_WEB', args: {}, id: 'old-call' } };
+  const sourceFacts = '(lookup old-response; sources)';
+  const stored: AssistantMessage = {
+    ...message('Answer'),
+    api: 'google-generative-ai',
+    content: [
+      { type: 'text', text: 'Answer' },
+      { type: 'text', text: sourceFacts },
+    ],
+    diagnostics: [
+      {
+        type: 'cherry.web',
+        timestamp: 1,
+        details: {
+          version: 1,
+          id: 'old-response',
+          sources: [],
+          texts: [],
+          failed: false,
+          replayIndex: 1,
+          googleParts: [{ before: 0, part: call }],
+        },
+      },
+    ],
+  };
+  const model = { api: 'google-generative-ai', provider: 'test', id: 'test' } as Model<Api>;
+  const parts = [{ text: 'Answer' }, { text: sourceFacts }];
+  expect(applyPiWebReplay({ contents: [{ role: 'model', parts }] }, model, [stored])).toEqual({
+    contents: [{ role: 'model', parts: [call, ...parts] }],
+  });
+});
+
+test('keeps Gemini tool boundaries after an omitted whitespace-only block', () => {
+  const capture = new PiWebResponse('blank', 'google');
+  const call = { toolCall: { toolType: 'GOOGLE_SEARCH_WEB', args: {}, id: 'call' } };
+  capture.observe({
+    candidates: [
+      { content: { parts: [{ text: '  ' }, call, { text: 'Thinking', thought: true }] } },
+    ],
+  });
+  const settled = capture.settle({
+    ...message(''),
+    api: 'google-generative-ai',
+    content: [
+      { type: 'text', text: '  ' },
+      { type: 'thinking', thinking: 'Thinking' },
+    ],
+  });
+  const web = readPiWebResult(settled)!;
+  const sourceFacts = (settled.content[web.replayIndex!] as { text: string }).text;
+  const model = { api: 'google-generative-ai', provider: 'test', id: 'test' } as Model<Api>;
+  const thinking = { text: 'Thinking', thought: true };
+  expect(
+    applyPiWebReplay(
+      { contents: [{ role: 'model', parts: [thinking, { text: sourceFacts }] }] },
+      model,
+      [settled],
+    ),
+  ).toEqual({
+    contents: [{ role: 'model', parts: [call, thinking, { text: sourceFacts }] }],
   });
 });

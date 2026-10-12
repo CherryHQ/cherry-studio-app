@@ -876,6 +876,69 @@ describe('Native web tools', () => {
     }
   });
 
+  test.each([
+    { kind: 'text', thought: false },
+    { kind: 'thinking', thought: true },
+  ])('keeps signed Gemini $kind around native tools after reopen', async ({ thought }) => {
+    const signed = (text: string, thoughtSignature?: string) => ({
+      text,
+      ...(thought ? { thought: true } : {}),
+      ...(thoughtSignature ? { thoughtSignature } : {}),
+    });
+    const call = (id: string) => ({
+      toolCall: { toolType: 'GOOGLE_SEARCH_WEB', args: { queries: ['q'] }, id },
+      thoughtSignature: 'Y2FsbA==',
+    });
+    const result = (id: string) => ({
+      toolResponse: { toolType: 'GOOGLE_SEARCH_WEB', response: {}, id },
+      thoughtSignature: 'cmVzdWx0',
+    });
+    const chunk = (parts: Record<string, unknown>[], finishReason?: string) => ({
+      candidates: [
+        { content: { role: 'model', parts }, ...(finishReason ? { finishReason } : {}) },
+      ],
+    });
+    const body = [
+      chunk([signed('Before ', 'YmVmb3Jl')]),
+      chunk([signed('🍒')]),
+      chunk([call('a1'), result('a1'), signed('After', 'YWZ0ZXI=')]),
+      chunk([call('a2'), result('a2'), signed('Last', 'bGFzdA==')], 'STOP'),
+    ]
+      .map((value) => `data: ${JSON.stringify(value)}\r\n\r\n`)
+      .join('');
+    const state = nativeFixture(
+      [body, body],
+      { search: true, fetch: false, functionToolMixing: true, dialect: 'google' },
+      'google-generative-ai',
+      streamGoogle as PiStreamFn,
+    );
+    const globalFetch = jest.spyOn(globalThis, 'fetch').mockImplementation(state.fetch as never);
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({ ...seed, configuration });
+      await submitAndWait(runtime, input('first'));
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.configure('session', configuration);
+      await submitAndWait(runtime, input('second'));
+      const history = state.payloads[1]!.contents.find((content) => content.role === 'model')!;
+      expect(history.parts.slice(0, 7)).toEqual([
+        signed('Before 🍒', 'YmVmb3Jl'),
+        call('a1'),
+        result('a1'),
+        signed('After', 'YWZ0ZXI='),
+        call('a2'),
+        result('a2'),
+        signed('Last', 'bGFzdA=='),
+      ]);
+    } finally {
+      await runtime.close();
+      globalFetch.mockRestore();
+    }
+  });
+
   test('a Chat Completions host searches through its own switch and reports sources', async () => {
     const chunk = (delta: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
       `data: ${JSON.stringify({
