@@ -93,6 +93,8 @@ describe('turn preparation', () => {
         inspect: unavailable,
         install: unavailable,
         update: unavailable,
+        previewAdaptation: unavailable,
+        adapt: unavailable,
         uninstall: unavailable,
         subscribeChanges: () => () => undefined,
       };
