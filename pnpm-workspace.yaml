@@ -2,7 +2,7 @@ packages:
   - packages/*
 
 # Never write patched or built package output into the shared store, so one checkout cannot
-# contaminate others. CI overrides this per job. See docs/guides/development.md#dependencies.
+# contaminate others. See docs/guides/development.md#dependencies.
 sideEffectsCacheReadonly: true
 # Fail pnpm run/exec/<bin> on stale dependencies instead of installing implicitly.
 verifyDepsBeforeRun: error

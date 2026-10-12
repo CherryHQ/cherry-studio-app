@@ -30,7 +30,7 @@ commits.
 Installs never write patched or built package output back into the shared pnpm store
 (`sideEffectsCacheReadonly` in `pnpm-workspace.yaml`), so a bad install in one checkout cannot
 contaminate other checkouts. Each checkout applies patches and runs dependency build scripts on a
-clean install. CI overrides this setting because each job installs once.
+clean install.
 
 - Run one `pnpm install` at a time per checkout, including the install started by a git hook.
   Concurrent installs in the same directory apply patches twice to the same files.

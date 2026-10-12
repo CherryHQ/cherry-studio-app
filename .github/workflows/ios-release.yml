@@ -49,7 +49,7 @@ jobs:
           packager: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --config.side-effects-cache-readonly=false
+        run: pnpm install --frozen-lockfile
 
       - name: Build iOS on EAS and wait for completion
         id: build
@@ -94,7 +94,7 @@ jobs:
           packager: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --config.side-effects-cache-readonly=false
+        run: pnpm install --frozen-lockfile
 
       - name: Submit this build and wait for upload
         env:
