@@ -20,6 +20,14 @@ export function toAgentErrorView(error: RuntimeError): AgentErrorView {
 }
 
 export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
+  if (part.type === 'error')
+    return AgentMessagePartSchema.parse({
+      id: part.id,
+      type: 'data-error',
+      data: toAgentErrorView(part.error),
+    });
+  if (part.type === 'source-url' || part.type === 'data-search-suggestions')
+    return AgentMessagePartSchema.parse(part);
   if (part.type === 'file') {
     return AgentMessagePartSchema.parse({
       id: part.id,
@@ -45,7 +53,15 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
           },
           artifacts: runtimeOutput.artifacts,
         }
-      : runtimeOutput;
+      : runtimeOutput
+        ? {
+            value: runtimeOutput.value,
+            artifacts: runtimeOutput.artifacts,
+            ...(part.toolRef.source === 'builtin' && runtimeOutput.modelValue !== undefined
+              ? { modelValue: runtimeOutput.modelValue }
+              : {}),
+          }
+        : undefined;
     return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'dynamic-tool',

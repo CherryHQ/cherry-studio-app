@@ -8,6 +8,10 @@ import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
  * capability mobile does not have.
  */
 export class UnsupportedProvider extends BaseWebSearchProvider {
+  validateConfiguration(): never {
+    throw this.unsupported();
+  }
+
   async searchKeywords(): Promise<WebSearchResponse> {
     return Promise.reject(this.unsupported());
   }

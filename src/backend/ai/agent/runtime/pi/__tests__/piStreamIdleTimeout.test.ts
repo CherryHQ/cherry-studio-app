@@ -92,6 +92,25 @@ describe('Pi stream idle timeout', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
+  test('provider search progress renews idle time before any answer text', async () => {
+    const source = controlledSource();
+    let streamOptions: Parameters<StreamFn>[2];
+    const stream = await withPiStreamIdleTimeout((model, context, options) => {
+      streamOptions = options;
+      return source.streamFn(model, context, options);
+    }, IDLE_MS)(MODEL, normalizeContext({ messages: [] }));
+    await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
+    await streamOptions?.onProviderStreamEvent?.(
+      { type: 'response.web_search_call.searching' },
+      MODEL,
+    );
+    await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
+    expect(source.signal?.aborted).toBe(false);
+    source.done('Found it.');
+    expect((await collect(stream)).result.stopReason).toBe('stop');
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
   test('fails a request that produces no data and aborts the provider request', async () => {
     const source = controlledSource();
     const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(

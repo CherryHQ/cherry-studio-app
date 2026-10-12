@@ -158,6 +158,8 @@ function finalTextIndex(parts: Readonly<TranscriptMessage['parts']>): number | u
     if (
       part.type === 'file' ||
       part.type === 'data-error' ||
+      part.type === 'source-url' ||
+      part.type === 'data-search-suggestions' ||
       part.type === 'data-compaction-anchor' ||
       ((part.type === 'text' || part.type === 'reasoning') && !part.text.trim())
     )
@@ -171,6 +173,16 @@ type CitationSource = { title: string; url: string };
 function collectSources(parts: Readonly<TranscriptMessage['parts']>): Map<string, CitationSource> {
   const sources = new Map<string, CitationSource>();
   for (const part of parts) {
+    if (part.type === 'source-url') {
+      try {
+        const url = new URL(part.url);
+        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password)
+          sources.set(part.sourceId, { title: part.title ?? part.url, url: url.href });
+      } catch {
+        /* Invalid remote sources are not exported as links. */
+      }
+      continue;
+    }
     if (
       part.type !== 'dynamic-tool' ||
       part.toolRef.source !== 'builtin' ||

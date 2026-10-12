@@ -62,7 +62,7 @@
     "@ai-sdk/togetherai": "^2.0.53",
     "@cherrystudio/ai-core": "2.1.0",
     "@cherrystudio/ai-sdk-provider": "0.1.7",
-    "@cherrystudio/provider-registry": "workspace:*",
+    "@cherrystudio/provider-registry": "0.1.0",
     "@cherrystudio/universal": "workspace:*",
     "@opeoginni/github-copilot-openai-compatible": "1.0.0",
     "ai": "^6.0.143",

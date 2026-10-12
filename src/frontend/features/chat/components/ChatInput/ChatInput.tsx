@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
@@ -10,6 +10,8 @@ import {
   ComposerAttachments,
   ComposerModelPill,
   type ComposerSendPayload,
+  useComposerActions,
+  useComposerState,
 } from '@/frontend/components/Composer';
 import {
   ModelPickerDrawer,
@@ -25,6 +27,7 @@ import {
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -33,6 +36,7 @@ import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
+import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
@@ -41,6 +45,7 @@ import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 import { readPluginMentions } from './utils/pluginMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
+import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 
 type ChatInputProps = {
   agentId?: string;
@@ -60,9 +65,20 @@ export function ChatInput({
   imageResult,
   sessionId,
 }: ChatInputProps) {
+  const { draft } = useComposerState();
+  const { setDraft } = useComposerActions();
+  const previousAgentId = useRef(agentId);
+  useLayoutEffect(() => {
+    if (previousAgentId.current === agentId) return;
+    previousAgentId.current = agentId;
+    setDraft(removeSkillMentions);
+  }, [agentId, setDraft]);
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
+  const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
+  const findSkills =
+    mode === 'standard' && readSkillMentions(draft).skillAction === 'find-and-install';
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
@@ -119,7 +135,10 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
-      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) ? (
+      {mode === 'standard' &&
+      selectedModelItem &&
+      isImageGenerationModel(selectedModelItem.model) &&
+      !findSkills ? (
         <PaintingInput
           canSend={canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -130,7 +149,9 @@ export function ChatInput({
         />
       ) : (
         <TextChatInput
+          mode={mode}
           agentId={agentId}
+          findSkills={findSkills}
           controls={controls}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           providerSetupReturnTo={providerSetupReturnTo}
@@ -146,7 +167,9 @@ export function ChatInput({
 }
 
 function TextChatInput({
+  mode,
   agentId,
+  findSkills,
   controls,
   dismissKeyboardOnSend,
   providerSetupReturnTo,
@@ -156,6 +179,8 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
 }: Omit<ChatInputProps, 'sessionId'> & {
+  mode: AgentMode;
+  findSkills: boolean;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
@@ -170,6 +195,12 @@ function TextChatInput({
   const selectedModelLabel = selectedModel?.name;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
+  const [pickerAgentId, setPickerAgentId] = useState(agentId);
+  if (pickerAgentId !== agentId) {
+    setPickerAgentId(agentId);
+    setIsSkillPickerOpen(false);
+  }
   const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();
   const pluginConnections = usePluginConnections();
@@ -177,12 +208,17 @@ function TextChatInput({
     pluginCatalog.isError || pluginConnections.isError
       ? []
       : getConnectedChatInputPlugins(pluginCatalog.data, pluginConnections.data);
-  const hasConnectedPlugins = connectedPlugins.length > 0;
   const pluginMenuRef = useRef<View>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
-  const isPluginPickerVisible = isPluginPickerOpen && !isApprovalPending && hasConnectedPlugins;
-  if (isPluginPickerOpen && (isApprovalPending || !hasConnectedPlugins))
-    setIsPluginPickerOpen(false);
+  const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
+  const isPluginPickerVisible = mode === 'standard' && isPluginPickerOpen && !isApprovalPending;
+  const isSkillPickerVisible =
+    mode === 'standard' && isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
+  const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible;
+  if (isApprovalPending || mode === 'minimal') {
+    if (isPluginPickerOpen) setIsPluginPickerOpen(false);
+    if (isSkillPickerOpen) setIsSkillPickerOpen(false);
+  }
   const { fontScale } = useWindowDimensions();
   const inputTextStyle = useResolveClassNames('text-base');
   const compactInputStyle = {
@@ -206,12 +242,30 @@ function TextChatInput({
     openProviderSetup();
   }, [openProviderSetup]);
   const handleSendPress = useCallback(
-    ({ attachments, text }: ComposerSendPayload) => {
+    async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
-      const { pluginReferences, text: prompt } = readPluginMentions(text);
-      const parts = toAgentInputParts({ attachments, text: prompt }, pluginReferences);
-      return sendMessage({
+      setIsSkillPickerOpen(false);
+      const plugins =
+        mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
+      // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
+      const {
+        skills,
+        skillAction,
+        skillReferences,
+        pluginReferences,
+        text: prompt,
+      } = mode === 'standard'
+        ? readSkillMentions(plugins.text, plugins.pluginReferences)
+        : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+      const parts = toAgentInputParts(
+        { attachments, text: prompt },
+        pluginReferences,
+        skillReferences,
+      );
+      await sendMessage({
         parts,
+        ...(skillAction ? { skillAction } : {}),
+        ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
         ...(reasoningEfforts.length > 0
           ? {
@@ -224,7 +278,14 @@ function TextChatInput({
           : {}),
       });
     },
-    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
+    [
+      isReasoningEffortSelected,
+      mode,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedModelId,
+      sendMessage,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -236,77 +297,104 @@ function TextChatInput({
 
   return (
     <>
-      <ChatInputPluginPopover
-        plugins={connectedPlugins}
-        onClose={closePluginPicker}
-        open={isPluginPickerVisible}
+      <ChatInputSkillPopover
+        agentId={agentId}
+        onClose={closeSkillPicker}
+        open={isSkillPickerVisible}
         returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
       >
-        <View
-          accessibilityElementsHidden={isApprovalPending}
-          importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
-          pointerEvents={isApprovalPending ? 'none' : 'auto'}
+        <ChatInputPluginPopover
+          plugins={connectedPlugins}
+          onClose={closePluginPicker}
+          open={isPluginPickerVisible}
+          returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
         >
-          <ChatInputEffortOverlay
-            onChange={selectReasoningEffort}
-            reasoningEffort={reasoningEffort}
-            reasoningEfforts={reasoningEfforts}
+          <View
+            accessibilityElementsHidden={isApprovalPending}
+            importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
+            pointerEvents={isApprovalPending ? 'none' : 'auto'}
           >
-            {(effortGauge) => (
-              <ChatInputComposer
-                canSend={selectedModelItem ? canSend : false}
-                dismissKeyboardOnSend={dismissKeyboardOnSend}
-                getSendErrorLabel={getSendErrorLabel}
-                onSend={handleSendPress}
-                onStop={() => void cancel()}
-                streaming={isBusy}
-                testID="chat-composer"
-              >
-                <View
-                  accessibilityElementsHidden={isPluginPickerVisible}
-                  importantForAccessibility={isPluginPickerVisible ? 'no-hide-descendants' : 'auto'}
-                  pointerEvents={isPluginPickerVisible ? 'none' : 'auto'}
-                  style={isPluginPickerVisible ? foldedAttachmentsStyle : undefined}
-                >
-                  <ComposerAttachments />
-                </View>
-                <ChatInputSurface
-                  streaming={isBusy}
+            <ChatInputEffortOverlay
+              onChange={selectReasoningEffort}
+              reasoningEffort={reasoningEffort}
+              reasoningEfforts={reasoningEfforts}
+            >
+              {(effortGauge) => (
+                <ChatInputComposer
+                  canSend={
+                    selectedModelItem &&
+                    (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                      ? canSend
+                      : false
+                  }
+                  dismissKeyboardOnSend={dismissKeyboardOnSend}
+                  getSendErrorLabel={getSendErrorLabel}
+                  onSend={handleSendPress}
                   onStop={() => void cancel()}
-                  fieldStyle={isPluginPickerVisible ? compactInputStyle : undefined}
-                  leadingAction={
-                    <ChatInputMenu
-                      onPickPlugins={
-                        hasConnectedPlugins ? () => setIsPluginPickerOpen(true) : undefined
-                      }
-                      triggerRef={pluginMenuRef}
-                    />
-                  }
-                  secondaryAction={
-                    <ComposerModelPill
-                      icon={
-                        selectedModelItem ? (
-                          <ModelPickerIcon
-                            model={selectedModelItem.model}
-                            provider={selectedModelItem.provider}
-                            size={20}
-                          />
-                        ) : undefined
-                      }
-                      label={selectedModelLabel}
-                      onPress={openModelPicker}
-                    />
-                  }
-                  trailingAction={effortGauge}
-                />
-              </ChatInputComposer>
-            )}
-          </ChatInputEffortOverlay>
-        </View>
-      </ChatInputPluginPopover>
+                  streaming={isBusy}
+                  testID="chat-composer"
+                >
+                  <View
+                    accessibilityElementsHidden={isPickerVisible}
+                    importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
+                    pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                    style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                  >
+                    <ComposerAttachments />
+                  </View>
+                  <ChatInputSurface
+                    streaming={isBusy}
+                    placeholder={findSkills ? t('skills.find.hint') : undefined}
+                    onStop={() => void cancel()}
+                    fieldStyle={isPickerVisible ? compactInputStyle : undefined}
+                    leadingAction={
+                      <ChatInputMenu
+                        media={mode === 'minimal' ? 'images' : 'all'}
+                        onPickSkills={
+                          mode === 'standard' && agentId
+                            ? () => {
+                                setIsPluginPickerOpen(false);
+                                setIsSkillPickerOpen(true);
+                              }
+                            : undefined
+                        }
+                        onPickPlugins={
+                          mode === 'standard'
+                            ? () => {
+                                setIsSkillPickerOpen(false);
+                                setIsPluginPickerOpen(true);
+                              }
+                            : undefined
+                        }
+                        triggerRef={pluginMenuRef}
+                      />
+                    }
+                    secondaryAction={
+                      <ComposerModelPill
+                        icon={
+                          selectedModelItem ? (
+                            <ModelPickerIcon
+                              model={selectedModelItem.model}
+                              provider={selectedModelItem.provider}
+                              size={20}
+                            />
+                          ) : undefined
+                        }
+                        label={selectedModelLabel}
+                        onPress={openModelPicker}
+                      />
+                    }
+                    trailingAction={effortGauge}
+                  />
+                </ChatInputComposer>
+              )}
+            </ChatInputEffortOverlay>
+          </View>
+        </ChatInputPluginPopover>
+      </ChatInputSkillPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="all"
+          modelType={mode === 'minimal' ? 'text' : 'all'}
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}

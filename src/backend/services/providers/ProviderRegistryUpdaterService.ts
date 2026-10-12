@@ -1,12 +1,3 @@
-import {
-  type CatalogManifest,
-  CatalogManifestSchema,
-  isCatalogManifestCompatible,
-  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
-  REGISTRY_SCHEMA_VERSION,
-  REMOTE_REGISTRY_FILES,
-  type RemoteRegistryFileName,
-} from '@cherrystudio/provider-registry/mobile';
 import { loggerService } from '@logger';
 import { getCalendars, getLocales } from 'expo-localization';
 import { Platform } from 'react-native';
@@ -18,6 +9,15 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import {
+  type CatalogManifest,
+  CatalogManifestSchema,
+  isCatalogManifestCompatible,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+  REGISTRY_SCHEMA_VERSION,
+  REMOTE_REGISTRY_FILES,
+  type RemoteRegistryFileName,
+} from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
@@ -86,7 +86,11 @@ export class ProviderRegistryUpdaterService extends BaseService {
   protected async onReady(): Promise<void> {
     this.stopped = false;
     await this.restoreSnapshot();
-    if (this.stopped || providerRegistryService.isReady()) {
+    if (
+      this.stopped ||
+      (providerRegistryService.isReady() &&
+        this.activeManifest?.schemaVersion === REGISTRY_SCHEMA_VERSION)
+    ) {
       return;
     }
     void this.applyUpdate().catch((error: unknown) => {
@@ -147,10 +151,15 @@ export class ProviderRegistryUpdaterService extends BaseService {
 
   private async activateCachedSnapshot(): Promise<void> {
     const snapshots = await readProviderRegistrySnapshots();
+    snapshots.sort(
+      (left, right) =>
+        right.manifest.schemaVersion - left.manifest.schemaVersion ||
+        right.manifest.revision - left.manifest.revision,
+    );
     for (const snapshot of snapshots) {
       if (this.stopped) return;
       try {
-        this.assertStructurallyCompatibleManifest(snapshot.manifest);
+        this.assertManifestFiles(snapshot.manifest);
         if (!isCatalogManifestCompatible(snapshot.manifest)) continue;
         const parsed = this.parseAndValidateFiles(snapshot.files, snapshot.manifest);
         this.activeSlot = snapshot.slot;
@@ -291,7 +300,12 @@ export class ProviderRegistryUpdaterService extends BaseService {
   private async fetchManifest(source: RegistryNetworkSource): Promise<CatalogManifest | null> {
     const manifestBody = await this.fetchText(source, 'manifest.json', MAX_MANIFEST_BYTES);
     const manifest = CatalogManifestSchema.parse(JSON.parse(manifestBody));
-    this.assertStructurallyCompatibleManifest(manifest);
+    if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
+      throw new Error(
+        `Unsupported registry schema ${manifest.schemaVersion}; expected ${REGISTRY_SCHEMA_VERSION}`,
+      );
+    }
+    this.assertManifestFiles(manifest);
     if (!isCatalogManifestCompatible(manifest)) {
       logger.info('Registry snapshot requires unsupported runtime semantics; skipping', {
         implementedDesktopVersion: REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
@@ -304,6 +318,9 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private isUpdateAvailable(manifest: CatalogManifest): boolean {
+    if (this.activeManifest && this.activeManifest.schemaVersion !== manifest.schemaVersion) {
+      return true;
+    }
     if (this.activeManifest && manifest.revision <= this.activeManifest.revision) {
       return false;
     }
@@ -317,13 +334,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
     return { status: 'current' };
   }
 
-  private assertStructurallyCompatibleManifest(manifest: CatalogManifest): void {
-    if (manifest.schemaVersion !== REGISTRY_SCHEMA_VERSION) {
-      throw new Error(
-        `Unsupported registry schema ${manifest.schemaVersion}; expected ${REGISTRY_SCHEMA_VERSION}`,
-      );
-    }
-
+  private assertManifestFiles(manifest: CatalogManifest): void {
     for (const file of REMOTE_REGISTRY_FILES) {
       if (!manifest.files[file]) {
         throw new Error(`Registry manifest is missing ${file}`);

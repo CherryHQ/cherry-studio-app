@@ -5,11 +5,13 @@ import {
   REASONING_FORMAT_PROFILES,
 } from '@cherrystudio/provider-registry';
 
+import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 
 import {
   mergePresetModel,
   ProviderRegistryService,
+  projectRuntimeReasoning,
   providerRegistryService,
   resolveReasoningProfileFromRegistry,
 } from '../ProviderRegistryService';
@@ -17,6 +19,50 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test('projects downloaded GPT-6.1 Sol efforts for GGAPI without changing its API model id', () => {
+    const loader = new MobileRegistryLoader();
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: {
+          version: 'v3',
+          models: [
+            {
+              id: 'gpt-6-1-sol',
+              name: 'GPT-6.1 Sol',
+              capabilities: ['reasoning'],
+              reasoning: {
+                controls: [
+                  {
+                    kind: 'effort',
+                    values: ['low', 'medium', 'high', 'xhigh', 'max'],
+                    default: 'medium',
+                  },
+                ],
+                supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+                defaultEffort: 'medium',
+              },
+            },
+          ],
+        },
+        providerModels: { version: 'v3', overrides: [] },
+      }),
+    );
+    const service = new ProviderRegistryService(loader);
+    const [model] = service.resolveModels('ggapi', ['gpt-6.1-sol'], {
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      presetProviderId: null,
+    });
+    expect(model).toMatchObject({
+      id: 'ggapi::gpt-6.1-sol',
+      apiModelId: 'gpt-6.1-sol',
+      presetModelId: 'gpt-6-1-sol',
+      reasoning: {
+        selectableEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+        defaultEffort: 'medium',
+      },
+    });
+  });
+
   test('merges preset model and provider override into runtime model', () => {
     const model = mergePresetModel(
       {
@@ -35,7 +81,7 @@ describe('provider-registry-service', () => {
         },
       },
       {
-        capabilities: { add: [MODEL_CAPABILITY.WEB_SEARCH] },
+        capabilities: { add: [MODEL_CAPABILITY.AUDIO_RECOGNITION] },
         endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
         limits: { maxInputTokens: 64000 },
         modelId: 'gpt-4o',
@@ -48,7 +94,7 @@ describe('provider-registry-service', () => {
     );
 
     expect(model).toMatchObject({
-      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.AUDIO_RECOGNITION],
       id: 'openai::gpt-4o',
       maxInputTokens: 64000,
       modelId: 'gpt-4o',
@@ -73,7 +119,27 @@ describe('provider-registry-service', () => {
   });
 
   test('synthesizes standalone provider-model rows from desktop registry data', () => {
-    const registryData = providerRegistryService.lookupModel('302ai', 'chatgpt-4o-latest');
+    const loader = new MobileRegistryLoader();
+    loader.installRemoteSnapshot(
+      loader.parseRemoteSnapshot({
+        models: { version: 'standalone', models: [] },
+        providerModels: {
+          version: 'standalone',
+          overrides: [
+            {
+              providerId: '302ai',
+              modelId: 'chatgpt-4o-latest',
+              apiModelId: 'chatgpt-4o-latest',
+              name: 'chatgpt-4o-latest',
+            },
+          ],
+        },
+      }),
+    );
+    const registryData = new ProviderRegistryService(loader).lookupModel(
+      '302ai',
+      'chatgpt-4o-latest',
+    );
 
     expect(registryData.presetModel).toMatchObject({
       id: 'chatgpt-4o-latest',
@@ -273,12 +339,15 @@ describe('provider-registry-service', () => {
 
     expect(targets(defaultWire)).not.toContain('reasoningSummary');
     expect(targets(enabledWire)).toContain('reasoningSummary');
-    expect(enabledWire.default).toBeUndefined();
-    for (const key of ['off', 'auto', 'effort'] as const) {
+    expect(
+      enabledWire.off?.operations.some((operation) => operation.target === 'reasoningSummary'),
+    ).toBe(false);
+    for (const key of ['default', 'auto', 'effort'] as const) {
       const summaryOperations = enabledWire[key]?.operations.filter(
         (operation) => operation.target === 'reasoningSummary',
       );
       expect(summaryOperations).toEqual([
+        { target: 'reasoningSummary', value: { source: 'literal', value: 'auto' } },
         { target: 'reasoningSummary', value: { source: 'assistant-summary' } },
       ]);
     }
@@ -341,4 +410,13 @@ describe('provider-registry-service', () => {
       wire: { delivery: { key: 'serviceTier', type: 'provider-option' } },
     });
   });
+});
+
+test('keeps unsupported ultra effort out of Mobile defaults and selections', () => {
+  const reasoning = projectRuntimeReasoning(
+    { defaultEffort: 'ultra', controls: [{ kind: 'effort', values: ['high', 'ultra'] }] },
+    REASONING_FORMAT_PROFILES['openai-chat'].wire,
+  );
+  expect(reasoning.selectableEfforts).toEqual(['high']);
+  expect(reasoning.defaultEffort).toBeUndefined();
 });

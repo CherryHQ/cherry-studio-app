@@ -1,7 +1,9 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import {
+  DEFAULT_AGENT_MODE,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
+  type AgentMode,
   type AgentToolApprovalMode,
 } from '@/shared/data/types/agent';
 
@@ -31,6 +33,10 @@ export const agentTable = sqliteTable(
     name: text().notNull(),
     // System instructions supplied to every turn
     instructions: text().notNull().default(''),
+    mode: text({ enum: ['standard', 'minimal'] })
+      .$type<AgentMode>()
+      .notNull()
+      .default(DEFAULT_AGENT_MODE),
     // Built-in Cherry emoji or file reference (agent-avatar-file:{agentId}.{uuid}.webp);
     // NULL renders the default avatar. Never an absolute file:// path.
     avatar: text(),

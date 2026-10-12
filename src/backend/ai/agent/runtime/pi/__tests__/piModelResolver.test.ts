@@ -1,5 +1,4 @@
 import {
-  buildRuntimeEndpointConfigs,
   ENDPOINT_TYPE,
   MODEL_CAPABILITY,
   type EndpointType,
@@ -11,6 +10,7 @@ import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { buildRuntimeEndpointConfigs } from '@/backend/data/services/providerRegistryProjection';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
@@ -903,6 +903,117 @@ describe('Pi model resolver', () => {
     });
     expect(mockResolveApiKey).not.toHaveBeenCalled();
     expect(mockBindPiStream).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['openai', ENDPOINT_TYPE.OPENAI_RESPONSES, true],
+    [null, ENDPOINT_TYPE.OPENAI_RESPONSES, false],
+    ['openai', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, false],
+  ] as const)(
+    'gates native search by trusted identity %s and actual endpoint %s',
+    async (presetProviderId, endpoint, search) => {
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://copied.test', 'openai'),
+        presetProviderId,
+      });
+      mockGetModelById.mockResolvedValue(
+        makeModel(endpoint, { apiModelId: 'gpt-4.1', modelId: 'gpt-4.1' }),
+      );
+      expect((await resolve(resolver)).nativeWebTools).toMatchObject({ search, fetch: false });
+    },
+  );
+
+  test('answers native web support for a configuration without selecting a key', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    mockGetProviderById.mockResolvedValue({
+      ...makeProvider(endpoint, 'https://openai.test', 'openai'),
+      presetProviderId: 'openai',
+    });
+    mockGetModelById.mockResolvedValue(
+      makeModel(endpoint, { apiModelId: 'gpt-5', modelId: 'gpt-5' }),
+    );
+    const model = { modelId: 'test-model', providerId: 'test-provider' };
+    mockResolveApiKey.mockClear();
+    expect(await resolver.nativeWebTools?.(model, {})).toEqual({
+      search: true,
+      fetch: false,
+      functionToolMixing: true,
+      dialect: 'openai-responses',
+    });
+    expect((await resolver.nativeWebTools?.(model, { reasoningEffort: 'minimal' }))?.search).toBe(
+      false,
+    );
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['gemini-3-flash-preview', true],
+    ['gemini-2.5-flash', false],
+  ])('mixes Gemini native tools with functions only from Gemini 3: %s', async (id, mixing) => {
+    const endpoint = ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT;
+    mockGetProviderById.mockResolvedValue({
+      ...makeProvider(endpoint, 'https://gemini.test', 'gemini'),
+      presetProviderId: 'gemini',
+    });
+    mockGetModelById.mockResolvedValue(makeModel(endpoint, { apiModelId: id, modelId: id }));
+    expect((await resolve(resolver)).nativeWebTools).toEqual({
+      search: true,
+      fetch: true,
+      functionToolMixing: mixing,
+      dialect: 'google',
+    });
+  });
+
+  test.each([
+    ['anthropic', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'claude-sonnet-4-5', 'anthropic', true],
+    ['deepseek', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'deepseek-v4-pro', 'anthropic', false],
+    // DeepSeek ignores the tool on Responses, so that endpoint keeps the external service.
+    ['deepseek', ENDPOINT_TYPE.OPENAI_RESPONSES, 'deepseek-v4-pro', undefined, false],
+    ['grok', ENDPOINT_TYPE.OPENAI_RESPONSES, 'grok-4-1-fast', 'xai', false],
+    ['poe', ENDPOINT_TYPE.OPENAI_RESPONSES, 'gpt-5', 'openai-preview', false],
+    ['doubao', ENDPOINT_TYPE.OPENAI_RESPONSES, 'doubao-seed-2-0-pro', 'openai-responses', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen3-max', 'openai-responses', false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_RESPONSES, 'qwen-plus', undefined, false],
+    ['dashscope', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'qwen-plus', 'dashscope', false],
+    ['zhipu', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'glm-5-2', 'zhipu', false],
+    ['openrouter', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'vendor/any-model', 'openrouter', false],
+    ['perplexity', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'sonar-pro', 'perplexity', false],
+    [
+      'cherryin',
+      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      'anthropic/claude-sonnet-4.5',
+      'anthropic',
+      true,
+    ],
+    ['cherryin', ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai/gpt-5', 'openai-responses', false],
+    // A host's Chat Completions endpoint has no native tool to pass through.
+    ['cherryin', ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'openai/gpt-5', undefined, false],
+  ] as const)(
+    'serves %s over %s for %s through the %s adapter',
+    async (presetProviderId, endpoint, id, dialect, fetch) => {
+      mockGetProviderById.mockResolvedValue({
+        ...makeProvider(endpoint, 'https://host.test', 'openai'),
+        presetProviderId,
+      });
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { apiModelId: id, modelId: id }));
+      expect((await resolve(resolver)).nativeWebTools).toMatchObject(
+        dialect ? { search: true, fetch, dialect } : { search: false, fetch: false },
+      );
+    },
+  );
+
+  test('does not enable native search for minimal reasoning', async () => {
+    const endpoint = ENDPOINT_TYPE.OPENAI_RESPONSES;
+    mockGetProviderById.mockResolvedValue({
+      ...makeProvider(endpoint, 'https://openai.test', 'openai'),
+      presetProviderId: 'openai',
+    });
+    mockGetModelById.mockResolvedValue(
+      makeModel(endpoint, { apiModelId: 'gpt-5', modelId: 'gpt-5' }),
+    );
+    expect((await resolve(resolver, { reasoningEffort: 'minimal' })).nativeWebTools?.search).toBe(
+      false,
+    );
   });
 
   test('bounds the independent input limit by the total context window', () => {

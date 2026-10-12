@@ -19,6 +19,7 @@ import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backe
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { AgentSqlDatabase } from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
@@ -28,12 +29,15 @@ import { providerService } from '@/backend/data/services/ProviderService';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { devicePermissions } from '@/backend/services/permissions';
+import { createSkillEnvironmentReader, skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
+import type { RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
   createSystemCapabilitySource,
@@ -46,6 +50,7 @@ import { AgentSessionNaming } from './AgentSessionNaming';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { createAgentInferenceModelResolver } from './inferenceSnapshot';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentHost';
+import { createSkillScopeSource } from './skillScope';
 
 const LEGACY_REPLAY_CACHE_ID = 'cherry-agent-replay-cache';
 
@@ -64,6 +69,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
   readonly files = managedFileResolver;
   readonly inferenceModel = createAgentInferenceModelResolver(modelService);
   readonly runtimeTools;
+  readonly skills;
   readonly imageGeneration;
   readonly usage = new AgentSessionUsageRecorder();
   readonly executionLease = (onInterrupt: (reason: Error) => void | Promise<void>) =>
@@ -121,6 +127,17 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       servers: mcpServerService,
       getMcpRuntime: () => mcpRuntime,
     });
+    this.skills = createSkillScopeSource({
+      skills: agentGlobalSkillService,
+      storage: skillStorage,
+      environment: createSkillEnvironmentReader({
+        permissions: devicePermissions,
+        preference: preferenceService,
+        models: modelService,
+        plugins: mcpRuntime.pluginAuthorizations,
+      }),
+      models: modelService,
+    });
   }
 
   /** Releases before Pi Durable cached per-turn model replay in MMKV; nothing reads it now. */
@@ -155,6 +172,20 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
 
   documentParserMode(): DocumentParserMode {
     return this.preferenceService.readCached('file.document_parser.mode');
+  }
+
+  async webTools(): Promise<RuntimeWebTools> {
+    const [clientSearchAvailable, clientFetchAvailable] = await Promise.all([
+      this.webSearchService.isConfigured('searchKeywords'),
+      this.webSearchService.isConfigured('fetchUrls'),
+    ]);
+    return {
+      modelToolsPreferred: this.preferenceService.readCached(
+        'chat.web_search.model_tools_preferred',
+      ),
+      clientSearchAvailable,
+      clientFetchAvailable,
+    };
   }
 
   naming(signal: AbortSignal): MobileAgentHostNaming {

@@ -1,6 +1,8 @@
 import { agentTable } from './agent';
+import { agentGlobalSkillTable } from './agentGlobalSkill';
 import { agentSessionTable } from './agentSession';
 import { agentSessionMessageTable } from './agentSessionMessage';
+import { agentSkillTable } from './agentSkill';
 import { agentToolBindingTable } from './agentToolBinding';
 import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
@@ -15,6 +17,8 @@ import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
 export * from './agent';
+export * from './agentGlobalSkill';
+export * from './agentSkill';
 export * from './agentToolBinding';
 export * from './agentSession';
 export * from './agentSessionMessage';
@@ -41,6 +45,8 @@ export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;
 
 export const schema = {
   agentTable,
+  agentGlobalSkillTable,
+  agentSkillTable,
   agentToolBindingTable,
   agentSessionTable,
   agentSessionMessageTable,

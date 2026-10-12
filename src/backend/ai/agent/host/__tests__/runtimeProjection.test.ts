@@ -4,6 +4,79 @@ import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 import { toRuntimeHistory } from '../turnRuntimeInput';
 
 describe('Runtime output projection', () => {
+  test('projects recoverable native lookup failures as persisted data-error parts', () => {
+    const error = {
+      code: 'web_lookup_failed',
+      message: 'The provider could not retrieve a web source.',
+      retryable: false,
+      origin: 'provider' as const,
+    };
+    expect(toAgentMessagePart({ id: 'web-error', type: 'error', error })).toEqual({
+      id: 'web-error',
+      type: 'data-error',
+      data: toAgentErrorView(error),
+    });
+  });
+
+  test('serializes native source facts for later turns without replaying search HTML', () => {
+    const source = toAgentMessagePart({
+      id: 'source-1',
+      type: 'source-url',
+      sourceId: 'native-1',
+      url: 'https://example.com/a',
+      title: 'A',
+    });
+    const suggestions = toAgentMessagePart({
+      id: 'suggestions-1',
+      type: 'data-search-suggestions',
+      data: { html: '<div>Suggestions</div>' },
+    });
+    const message: AgentMessageView = {
+      id: 'assistant-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      parts: [source, suggestions],
+      stats: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: '2026-09-07T00:00:00Z',
+      updatedAt: '2026-09-07T00:00:00Z',
+    };
+    const parts = toRuntimeHistory([JSON.parse(JSON.stringify(message))])[0].messages[0].parts;
+    expect(parts).toEqual([
+      { type: 'text', text: 'Source [cite:native-1]: {"title":"A","url":"https://example.com/a"}' },
+    ]);
+    expect(() =>
+      toAgentMessagePart({
+        id: 'bad',
+        type: 'source-url',
+        sourceId: 'bad',
+        url: 'javascript:alert(1)',
+      }),
+    ).toThrow();
+  });
+  test('persists full Skill activity instructions and a compact replay receipt without Runtime control metadata', () => {
+    const output = {
+      value: { status: 'ok', instructions: 'Ask one question at a time.' },
+      modelValue: { status: 'ok', instructionsInSystem: true },
+      artifacts: [],
+    };
+    const part = toAgentMessagePart({
+      type: 'tool',
+      id: 'load',
+      toolCallId: 'load',
+      providerName: 'load_skill',
+      displayName: 'Read Skill',
+      state: 'output-available',
+      input: { skill_id: 'skill' },
+      toolRef: { source: 'builtin', capabilityId: 'load_skill' },
+      output: { ...output, instructions: { key: 'skill', text: 'Ask one question at a time.' } },
+    });
+    expect(part).toMatchObject({ output });
+    expect(part).not.toHaveProperty('output.instructions');
+  });
   test('persists callback failure details and replays partial sources without runtime stop policy', () => {
     const details = {
       status: 'partial',
