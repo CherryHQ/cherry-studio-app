@@ -226,7 +226,7 @@ export function createRemoteConversationSource(
             if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
             if (!target.workspace)
               throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
-            const text = remoteInput(value);
+            const preparedInput = remoteInput(value);
             pending = true;
             state.set(snapshot());
             return outcome(
@@ -234,7 +234,7 @@ export function createRemoteConversationSource(
                 draftId: input.draftId,
                 agentId: target.agentId,
                 workspace: target.workspace,
-                text,
+                ...preparedInput,
               }),
             );
           } catch (error) {
@@ -315,8 +315,33 @@ export function createRemoteConversationSource(
               },
               discard,
             );
+          const upload = remote.getState().upload;
           return {
-            inputPolicy: REMOTE_INPUT_POLICY,
+            inputPolicy: {
+              ...REMOTE_INPUT_POLICY,
+              attachments: remote.getState().attachments === true,
+            },
+            attachmentPreparation:
+              workspace && remote.getState().preupload && remote.stageAttachments
+                ? {
+                    draft: remote
+                      .getState()
+                      .attachmentDrafts?.find((draft) => draft.key === `draft:${input.draftId}`),
+                    stage: (files) =>
+                      remote.stageAttachments!(
+                        `draft:${input.draftId}`,
+                        { agentId, workspace },
+                        files,
+                      ),
+                  }
+                : undefined,
+            upload:
+              upload?.draftId === input.draftId
+                ? {
+                    ...upload,
+                    cancel: () => remote.cancelUpload?.(upload.id),
+                  }
+                : undefined,
             start,
             ...(own?.sessionId && own.status !== 'pending'
               ? {

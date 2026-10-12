@@ -47,10 +47,21 @@ export function useManagedComposerAttachments(
     ),
   );
   const attachmentsRef = useRef(attachments);
+  const listeners = useRef(new Set<(attachments: readonly ComposerAttachmentDraft[]) => void>());
+  const subscribeAttachmentChanges = useCallback(
+    (listener: (attachments: readonly ComposerAttachmentDraft[]) => void) => {
+      listeners.current.add(listener);
+      return () => {
+        listeners.current.delete(listener);
+      };
+    },
+    [],
+  );
 
-  const commitAttachments = useCallback((next: ComposerAttachmentDraft[]) => {
+  const commitAttachments = useCallback((next: ComposerAttachmentDraft[], notify = true) => {
     attachmentsRef.current = next;
     if (isMountedRef.current) setAttachmentState(next);
+    if (notify) for (const listener of listeners.current) listener(next);
   }, []);
 
   const importAttachment = useCallback(
@@ -163,13 +174,13 @@ export function useManagedComposerAttachments(
 
   const clearAttachments = useCallback(() => {
     importTokensRef.current.clear();
-    commitAttachments([]);
+    commitAttachments([], false);
   }, [commitAttachments]);
 
   const setAttachments = useCallback(
     (next: ComposerAttachmentDraft[]) => {
       importTokensRef.current.clear();
-      commitAttachments([...next]);
+      commitAttachments([...next], false);
     },
     [commitAttachments],
   );
@@ -213,6 +224,7 @@ export function useManagedComposerAttachments(
       removeAttachment,
       replaceAttachment,
       setAttachments,
+      subscribeAttachmentChanges,
     }),
     [
       addAttachments,
@@ -221,6 +233,7 @@ export function useManagedComposerAttachments(
       removeAttachment,
       replaceAttachment,
       setAttachments,
+      subscribeAttachmentChanges,
     ],
   );
 }

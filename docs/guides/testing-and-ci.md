@@ -107,8 +107,11 @@ same commit as the change itself.
 
 Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
 final head before marking it ready. [PR CI](../../.github/workflows/pr-ci.yml) runs the configured
-application/package tests, typecheck, lint, format, package build, UI-boundary, skill, and documentation
-link checks for non-draft PRs targeting `main`.
+application/package tests, typecheck, lint, format, translation, UI/AI-runtime boundary, design,
+skill, workflow lint, and documentation link checks for non-draft PRs targeting `main`.
+A new push cancels the PR's previous run. The `CI` job succeeds only when test, typecheck, and lint
+all succeed; use it as the required check on `main`. [Release](../../.github/workflows/release.yml)
+runs the same workflow on the tagged commit before building.
 
 ### Remote Coverage And Local Exceptions
 
