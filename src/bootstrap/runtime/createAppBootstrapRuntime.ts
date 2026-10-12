@@ -32,6 +32,7 @@ import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -133,6 +134,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionManager',
   );
   const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
+  const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -170,6 +172,7 @@ export function createAppBootstrapRuntime(
     desktopConnections,
     desktopConnectionManager,
     remoteAgent,
+    diagnostics,
     languageServing,
     providerRegistryUpdater,
   });

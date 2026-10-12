@@ -1,6 +1,7 @@
 import { newCitePrefix } from '@cherrystudio/ai-runtime/utils';
 import type {
   Api,
+  AssistantMessage,
   AssistantMessageEvent,
   Model,
   SimpleStreamOptions,
@@ -9,7 +10,7 @@ import type {
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 
-import type { TraceSpan } from '../../../observability';
+import { traceErrorAttributes, type TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
 import { imageModelStream } from './piDurableImageModel';
 import { piDurableUsage } from './piDurableProjection';
@@ -101,6 +102,11 @@ export function createPiDurableModels(
             undefined,
             options?.signal,
           );
+          trace?.setAttributes({
+            'gen_ai.request.model': resolved.model.id,
+            'gen_ai.provider.id': resolved.model.provider,
+            'gen_ai.provider.api': resolved.model.api,
+          });
           secrets = resolved.redactionValues;
           options?.signal?.throwIfAborted();
           const effort = selected.reasoningEffort;
@@ -177,7 +183,7 @@ export function createPiDurableModels(
             },
           );
         } catch (error) {
-          trace?.end(options?.signal?.aborted ? 'cancelled' : 'error');
+          trace?.end(options?.signal?.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           return piDurableSetupError(model, error, secrets, options?.signal?.aborted);
         }
       });
@@ -210,6 +216,27 @@ export function piDurableModelKey(reference: RuntimeModel, kind: 'language' | 'i
   return kind === 'image' ? `cherry:image:${reference.modelId}` : reference.modelId;
 }
 
+function terminalErrorFacts(message: AssistantMessage) {
+  if (message.stopReason !== 'error') return {};
+  const diagnostics = message.diagnostics ?? [];
+  for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
+    const diagnostic = diagnostics[index];
+    if (
+      !diagnostic?.error ||
+      (diagnostic.type !== 'pi_messages_response_failure' &&
+        diagnostic.type !== 'provider_response_failure')
+    )
+      continue;
+    return traceErrorAttributes({
+      name: diagnostic.error.name,
+      code: diagnostic.error.code,
+      statusCode: diagnostic.details?.statusCode ?? diagnostic.details?.status,
+      retryable: diagnostic.details?.retryable,
+    });
+  }
+  return {};
+}
+
 async function* webStream(
   source: AsyncIterable<AssistantMessageEvent>,
   web: PiWebResponse | undefined,
@@ -232,6 +259,7 @@ async function* tracedStream(
           event.type === 'done' ? 'ok' : message.stopReason === 'aborted' ? 'cancelled' : 'error',
           {
             'gen_ai.response.finish_reason': message.stopReason,
+            ...terminalErrorFacts(message),
           },
         );
         ended = true;

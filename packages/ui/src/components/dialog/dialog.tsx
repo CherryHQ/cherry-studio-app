@@ -1,6 +1,6 @@
 import { Dialog as HeroDialog } from 'heroui-native';
 import type { ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
 import { usePortalBackgroundIsolation } from '../portal/portal-accessibility';
 
@@ -20,19 +20,29 @@ export function Dialog({ children, onOpenChange, open, testID, title }: DialogPr
     <HeroDialog isOpen={open} onOpenChange={onOpenChange} testID={testID}>
       <HeroDialog.Portal unstable_accessibilityContainerViewIsModal>
         <HeroDialog.Overlay className="bg-scrim" isCloseOnPress={false} />
-        <HeroDialog.Content
-          className="max-h-full w-full max-w-sm self-center border border-border-subtle bg-popover p-6"
-          isSwipeable={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1 justify-center"
+          pointerEvents="box-none"
         >
-          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-            <View className="gap-4">
-              <HeroDialog.Title className="font-semibold text-foreground text-lg">
-                {title}
-              </HeroDialog.Title>
-              {children}
-            </View>
-          </ScrollView>
-        </HeroDialog.Content>
+          <HeroDialog.Content
+            className="max-h-full w-full max-w-sm self-center border border-border-subtle bg-popover p-6"
+            isSwipeable={false}
+          >
+            <ScrollView
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View className="gap-4">
+                <HeroDialog.Title className="font-semibold text-foreground text-lg">
+                  {title}
+                </HeroDialog.Title>
+                {children}
+              </View>
+            </ScrollView>
+          </HeroDialog.Content>
+        </KeyboardAvoidingView>
       </HeroDialog.Portal>
     </HeroDialog>
   );

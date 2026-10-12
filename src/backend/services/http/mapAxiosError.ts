@@ -14,13 +14,13 @@ const MAX_PUBLIC_HEADER_LENGTH = 256;
  * bodies, and query values stay out of the log; the public `HttpError` stays
  * stable and desensitized.
  */
-function logTransportFailure(error: AxiosError): void {
+function logTransportFailure(error: AxiosError, logPath?: string): void {
   logger.warn('HTTP request failed.', {
     code: error.code,
-    message: error.message,
+    message: logPath ? undefined : error.message,
     method: error.config?.method,
     status: error.response?.status,
-    url: `${error.config?.baseURL ?? ''}${error.config?.url ?? ''}`,
+    url: `${error.config?.baseURL ?? ''}${logPath ?? error.config?.url ?? ''}`,
   });
 }
 
@@ -72,7 +72,11 @@ function mapResponseError(error: AxiosError, decode?: HttpErrorDecoder): HttpErr
  * Maps an Axios rejection inside the transport without retaining the original
  * error, request config, credentials, or unvalidated response body.
  */
-export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpError {
+export function mapAxiosError(
+  error: unknown,
+  decode?: HttpErrorDecoder,
+  logPath?: string,
+): HttpError {
   if (isHttpError(error)) {
     return error;
   }
@@ -80,7 +84,7 @@ export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpEr
   if (!isAxiosError(error)) {
     logger.error(
       'HTTP transport failed unexpectedly.',
-      error instanceof Error ? error : { value: String(error) },
+      logPath ? { path: logPath } : error instanceof Error ? error : { value: String(error) },
     );
     return new HttpError('HTTP request failed unexpectedly.', {
       code: 'HTTP_INTERNAL_ERROR',
@@ -95,7 +99,7 @@ export function mapAxiosError(error: unknown, decode?: HttpErrorDecoder): HttpEr
     });
   }
 
-  logTransportFailure(error);
+  logTransportFailure(error, logPath);
 
   if (error.code === AxiosError.ECONNABORTED || error.code === AxiosError.ETIMEDOUT) {
     return new HttpError('HTTP request timed out.', {

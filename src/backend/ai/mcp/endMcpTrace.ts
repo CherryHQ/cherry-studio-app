@@ -15,9 +15,11 @@ export function endMcpTrace(
       ? 'cancelled'
       : attributes['http.status_code'] !== undefined
         ? 'http'
-        : typeof attributes['error.code'] === 'number'
-          ? 'protocol'
-          : (attributes['error.code'] ?? 'unknown');
+        : attributes['plugin.error.reason'] !== undefined
+          ? 'plugin'
+          : typeof attributes['error.code'] === 'number'
+            ? 'protocol'
+            : (attributes['error.code'] ?? 'unknown');
   span.end(!timedOut && signal?.aborted ? 'cancelled' : 'error', {
     ...attributes,
     'error.category': category,
