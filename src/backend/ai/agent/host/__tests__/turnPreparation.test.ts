@@ -552,6 +552,22 @@ describe('turn preparation', () => {
     },
   );
 
+  test('freezes the web policy only for an Agent that may use the web', async () => {
+    const harness = createHarness();
+    const policy = {
+      modelToolsPreferred: true,
+      clientSearchAvailable: true,
+      clientFetchAvailable: false,
+    };
+    harness.dependencies.webTools = async () => policy;
+    const prepare = async () =>
+      (await prepareTurn(harness.dependencies, textInput(), new AbortController().signal)).webTools;
+
+    expect(await prepare()).toEqual(policy);
+    harness.getAgent.mockResolvedValue({ ...AGENT, disabledCapabilities: ['web'] });
+    expect(await prepare()).toBeUndefined();
+  });
+
   test('stops at session admission when the session does not exist', async () => {
     const harness = createHarness();
     harness.getSession.mockResolvedValueOnce(null);

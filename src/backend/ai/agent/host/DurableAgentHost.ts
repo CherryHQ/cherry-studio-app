@@ -525,6 +525,7 @@ export class DurableAgentHost implements AgentProtocol {
       model: plan.agent.model,
       options: plan.agent.options,
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       // Pi owns and compacts history; Skill instructions active from earlier turns ride with the
       // system prompt so they outlive compaction.
       instructions: [
@@ -837,6 +838,7 @@ export class DurableAgentHost implements AgentProtocol {
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
+      webTools: this.ports.webTools ? () => this.ports.webTools!() : undefined,
       ...(this.ports.skills ? { skills: this.ports.skills } : {}),
       ...(this.skillWorkflow ? { skillWorkflow: this.skillWorkflow } : {}),
     };
@@ -1528,6 +1530,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
     })),
+    webTools: configuration.webTools,
   };
   return JSON.stringify(facts, (_key, value: unknown) =>
     value && typeof value === 'object' && !Array.isArray(value)

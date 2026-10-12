@@ -155,6 +155,15 @@ function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'dynamic-too
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
+    case 'source-url':
+      return {
+        type: 'source-url',
+        sourceId: part.sourceId,
+        url: part.url,
+        providerMetadata: { cherry: { nativeWeb: true } },
+        ...(part.title ? { title: part.title } : {}),
+      };
+    case 'data-search-suggestions':
     case 'data-compaction-anchor':
       return part;
     case 'text':

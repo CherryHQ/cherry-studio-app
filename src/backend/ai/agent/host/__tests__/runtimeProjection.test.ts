@@ -38,6 +38,59 @@ describe('Runtime output projection', () => {
     expect(part.output).toEqual(output);
   });
 
+  test('projects recoverable native lookup failures as persisted data-error parts', () => {
+    const error = {
+      code: 'web_lookup_failed',
+      message: 'The provider could not retrieve a web source.',
+      retryable: false,
+      origin: 'provider' as const,
+    };
+    expect(toAgentMessagePart({ id: 'web-error', type: 'error', error })).toEqual({
+      id: 'web-error',
+      type: 'data-error',
+      data: toAgentErrorView(error),
+    });
+  });
+
+  test('serializes native source facts for later turns without replaying search HTML', () => {
+    const source = toAgentMessagePart({
+      id: 'source-1',
+      type: 'source-url',
+      sourceId: 'native-1',
+      url: 'https://example.com/a',
+      title: 'A',
+    });
+    const suggestions = toAgentMessagePart({
+      id: 'suggestions-1',
+      type: 'data-search-suggestions',
+      data: { html: '<div>Suggestions</div>' },
+    });
+    const message: AgentMessageView = {
+      id: 'assistant-1',
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      role: 'assistant',
+      status: 'success',
+      parts: [source, suggestions],
+      stats: null,
+      modelId: null,
+      inferenceSnapshot: null,
+      createdAt: '2026-09-07T00:00:00Z',
+      updatedAt: '2026-09-07T00:00:00Z',
+    };
+    const parts = toRuntimeHistory([JSON.parse(JSON.stringify(message))])[0].messages[0].parts;
+    expect(parts).toEqual([
+      { type: 'text', text: 'Source [cite:native-1]: {"title":"A","url":"https://example.com/a"}' },
+    ]);
+    expect(() =>
+      toAgentMessagePart({
+        id: 'bad',
+        type: 'source-url',
+        sourceId: 'bad',
+        url: 'javascript:alert(1)',
+      }),
+    ).toThrow();
+  });
   test('persists full Skill activity instructions and a compact replay receipt without Runtime control metadata', () => {
     const output = {
       value: { status: 'ok', instructions: 'Ask one question at a time.' },

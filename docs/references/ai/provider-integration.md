@@ -205,13 +205,19 @@ interpreters, normalizers, or endpoint semantics: required behavior consumed by 
 implemented and validated, while unsupported optional behavior must be explicitly classified,
 before the compatibility version advances.
 
-The reader drops unknown list vocabulary and incompatible entries individually. Provider-native
-`serverTools` and `ultra` remain unsupported optional catalog capabilities; application-owned Web
-Search remains the conversation search path. Always-on adaptive reasoning is projected through the
-existing wire interpreter. `adaptive-between-tools` models and overrides are omitted because the
-pinned Anthropic SDK cannot execute `between_tools`; they must not silently use another dialect.
-The v3 migration includes regression sources; local tests, typecheck, and device acceptance remain
-pending until explicitly requested.
+The reader drops unknown list vocabulary and incompatible entries individually. `serverTools` and
+`ultra` in a downloaded catalog remain unsupported optional capabilities. Always-on adaptive
+reasoning is projected through the existing wire interpreter. `adaptive-between-tools` models and
+overrides are omitted because the pinned Anthropic SDK cannot execute `between_tools`; they must not
+silently use another dialect. The v3 migration includes regression sources; local tests, typecheck,
+and device acceptance remain pending until explicitly requested.
+
+Native web tools are an application feature with trusted bundled `serverTools` declarations and
+explicit model eligibility; unsigned downloaded model flags cannot enable them. Adapters for the
+Responses, Anthropic Messages, Generate Content, and Chat Completions search contracts run in the Pi
+Durable execution path; an endpoint without one uses the application-owned external services. See
+[Web Search](../web-search.md) for the adapter table, arbitration, metadata, replay, and failure
+semantics.
 
 ## Transport
 
