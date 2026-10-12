@@ -14,7 +14,7 @@ export function WebSearchProviderIcon({ providerId }: { providerId: WebSearchPro
   return providerIcon ? (
     <Image
       cachePolicy="memory-disk"
-      className="size-5 shrink-0"
+      className={providerId === 'fetch' ? 'size-5 shrink-0 rounded-sm' : 'size-5 shrink-0'}
       contentFit="contain"
       recyclingKey={providerId}
       source={providerIcon}
