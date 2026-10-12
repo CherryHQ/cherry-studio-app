@@ -99,7 +99,8 @@ try {
 ```
 
 This flushes queued records, serializes against retention, and copies retained batches into a
-private `{Paths.cache}/diagnostics/trace-<id>` directory. `files` includes `manifest.json` with the
+private `{Paths.cache}/Diagnostics/trace-<id>` directory, using the same parent-directory casing as
+upload archives. `files` includes `manifest.json` with the
 format version, capture policy, retention limits, file sizes, and collection-loss counters for the
 current service generation. Subsequent tracing and pruning cannot alter these copies.
 `metadata` also exposes retention and loss counters without parsing a file. The caller owns

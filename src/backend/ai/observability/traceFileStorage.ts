@@ -101,7 +101,7 @@ export const traceFileStorage: TraceFileStorage = {
 
   async snapshot(now, diagnostics) {
     await this.prune(now);
-    const directory = new Directory(Paths.cache, 'diagnostics', `trace-${randomUUID()}`);
+    const directory = new Directory(Paths.cache, 'Diagnostics', `trace-${randomUUID()}`);
     directory.create({ intermediates: true });
     try {
       const sources = historyFiles().sort(

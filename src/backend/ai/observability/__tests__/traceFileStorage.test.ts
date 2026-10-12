@@ -21,6 +21,14 @@ jest.mock('expo-file-system', () => {
       return directories.has(this.uri);
     }
     create() {
+      // iOS can reject a new descendant when an existing parent uses different casing.
+      for (const existing of directories) {
+        if (
+          this.uri.toLowerCase().startsWith(existing.toLowerCase()) &&
+          !this.uri.startsWith(existing)
+        )
+          throw new Error('Parent directory uses different letter case');
+      }
       directories.add(this.uri);
     }
     list() {
@@ -202,5 +210,21 @@ describe('traceFileStorage', () => {
     snapshot.dispose();
     snapshot.dispose();
     expect(testState.files.size).toBe(0);
+  });
+
+  it('shares the diagnostic cache parent without a case conflict or removing an upload archive', async () => {
+    testState.directories.add('file:///cache/Diagnostics/');
+    const archive = 'file:///cache/Diagnostics/upload/archive.zip';
+    testState.files.set(archive, 'upload archive');
+
+    const snapshot = await traceFileStorage.snapshot(now, diagnostics);
+    const manifest = snapshot.files.find((file) => file.name === 'manifest.json')!;
+    expect(JSON.parse(testState.files.get(manifest.uri)!)).toMatchObject({
+      capture: 'metadata',
+      diagnostics,
+      files: [],
+    });
+    snapshot.dispose();
+    expect([...testState.files.entries()]).toEqual([[archive, 'upload archive']]);
   });
 });
