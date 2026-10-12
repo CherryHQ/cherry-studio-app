@@ -1,6 +1,11 @@
 packages:
   - packages/*
 
+# Prevent repeated patch applications from contaminating the shared side-effects cache.
+sideEffectsCacheReadonly: true
+# Require explicit installs instead of implicit installs from parallel script/exec commands.
+verifyDepsBeforeRun: error
+
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
 
