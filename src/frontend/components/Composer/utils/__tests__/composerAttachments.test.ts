@@ -58,7 +58,7 @@ describe('composer attachments', () => {
     expect(original[1]).toBe(readyFileAttachment);
     const parts = createComposerMessageParts('keep this text', [result[1]!]);
     expect(parts[0]).toEqual({ type: 'text', text: 'keep this text' });
-    expect(readCherryMeta(parts[1]!)?.fileEntryId).toBe(replacement.fileEntryId);
+    expect(readCherryMeta(parts[1]!)).toMatchObject({ fileEntryId: replacement.fileEntryId });
   });
 
   test('rejects a save after the attachment was removed or replaced by another edit', () => {
