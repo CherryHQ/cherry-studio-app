@@ -24,21 +24,26 @@ const libraries = [
   gfm.code,
 ].join('\n');
 
-/** HTML is a JSON value, never interpolated as executable page source. */
+/**
+ * HTML is a JSON value, never interpolated as executable page source.
+ *
+ * The parsed page is not named `document`: the libraries probe that global while they load, and a
+ * same-named binding declared after them in this scope would still be uninitialized.
+ */
 export function createExtractionCode(html: string, url: string): string {
   return `${libraries}\nconst input = ${JSON.stringify({ html, url })};
-const document = new DOMParser().parseFromString(input.html, 'text/html');
+const page = new DOMParser().parseFromString(input.html, 'text/html');
 let baseUrl = input.url;
-const baseHref = document.querySelector('base[href]')?.getAttribute('href');
+const baseHref = page.querySelector('base[href]')?.getAttribute('href');
 if (baseHref) {
   try { baseUrl = new URL(baseHref, input.url).href; } catch {}
 }
-Object.defineProperties(document, {
+Object.defineProperties(page, {
   URL: { value: input.url },
   documentURI: { value: input.url },
   baseURI: { value: baseUrl },
 });
-const article = new Readability(document, {
+const article = new Readability(page, {
   maxElemsToParse: 20000,
   serializer: node => node,
 }).parse();
