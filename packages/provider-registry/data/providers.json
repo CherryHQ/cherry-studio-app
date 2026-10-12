@@ -2272,7 +2272,27 @@
       },
       "name": "minimax-global",
       "presetProviderId": "minimax"
+    },
+    {
+      "defaultChatEndpoint": "openai-chat-completions",
+      "description": "Atlas Cloud - AI model provider",
+      "endpointConfigs": {
+        "openai-chat-completions": {
+          "adapterFamily": "openai-compatible",
+          "baseUrl": "https://api.atlascloud.ai/v1"
+        }
+      },
+      "id": "atlascloud",
+      "metadata": {
+        "website": {
+          "apiKey": "https://www.atlascloud.ai/",
+          "docs": "https://www.atlascloud.ai/",
+          "models": "https://www.atlascloud.ai/",
+          "official": "https://www.atlascloud.ai/"
+        }
+      },
+      "name": "Atlas Cloud"
     }
   ],
-  "version": "985f3aecd45a85af"
+  "version": "edcec55576307f16"
 }

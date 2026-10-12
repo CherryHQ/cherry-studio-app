@@ -2,7 +2,7 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 159
+ * Total icons: 160
  */
 
 import { resolveGeneralIcon } from '../general';
@@ -62,6 +62,10 @@ export const PROVIDER_ICONS = {
   'arcee-ai': {
     light: require('./light/arcee-ai.webp'),
     dark: require('./light/arcee-ai.webp'),
+  },
+  atlascloud: {
+    light: require('./light/atlascloud.webp'),
+    dark: require('./light/atlascloud.webp'),
   },
   'aws-bedrock': {
     light: require('./light/aws-bedrock.webp'),
