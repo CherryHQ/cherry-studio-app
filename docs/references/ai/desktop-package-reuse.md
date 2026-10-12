@@ -3,9 +3,10 @@
 Status: **Mobile now declares published `@cherrystudio/ai-core@2.1.0` and
 `@cherrystudio/ai-sdk-provider@0.1.7` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile now reads schema v3 model catalogs with a Desktop `2.1.4` semantic baseline for its
-consumed fields. Regression sources accompany this migration; local tests, typecheck, and device
-acceptance remain pending until explicitly requested.**
+Mobile consumes `@cherrystudio/provider-registry@0.1.0` for catalog schemas, queries, and trusted
+provider data. Mobile retains its loader, product extensions, and persisted-data projection.
+The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
+and Metro checks.**
 
 This reference defines what Mobile may reuse from Cherry Desktop. A Desktop implementation is a
 source of behavior to assess, not a tree to copy. Every port needs a concrete Mobile consumer and
@@ -35,7 +36,7 @@ Desktop code is admitted only when all of the following are true:
 | --- | --- |
 | `@cherrystudio/ai-core` | Consume the published package through `AiService` and its provider/tool adapters; keep Mobile conversation execution in Pi |
 | `@cherrystudio/ai-sdk-provider` | Consume the published CherryIN and OpenAI-compatible provider package through Mobile's AI SDK path |
-| `@cherrystudio/provider-registry` | Port platform-neutral catalog semantics while retaining Mobile's static JSON loader and persisted-data compatibility projection |
+| `@cherrystudio/provider-registry` | Consume the published package; retain Mobile snapshot loading, provider extensions, and persisted-data compatibility |
 | Desktop custom providers and image transports | Port reusable wire behavior into Mobile's private `@cherrystudio/ai-runtime` when an existing Mobile feature consumes it |
 | Desktop Pi Runtime | Do not consume it directly; Mobile owns its Pi host, adapters, persistence, tools, and lifecycle |
 | `@cherrystudio/dsh-bridge` | Desktop-only |
@@ -70,19 +71,23 @@ also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the ma
 Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
 by itself is not a reason to change the Mobile graph.
 
-## Provider Registry Is A Semantic Port
+## Published Provider Registry
 
-`@cherrystudio/provider-registry` is independent in Desktop, but its Node package shape cannot
-replace the Mobile package:
+`@cherrystudio/provider-registry@0.1.0` supplies pure schemas, reasoning rules, and `createRegistry`
+through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
+filesystem loader and the complete model catalog stay outside the application bundle. Test-only
+fixtures use the package's JSON exports.
 
-- Desktop's Node loader reads catalog files through `node:fs`.
-- Mobile statically imports JSON so Metro can include the catalog.
-- Mobile retains a compatibility projection for persisted Provider and Model rows.
-- Mobile product-specific providers and remote-catalog behavior require explicit reconciliation.
+`MobileRegistryLoader` owns download readiness, snapshot replacement, and Mobile compatibility
+checks, delegating model queries to the package. `mobileProviderCatalog.ts` adds Mobile-only presets,
+OAuth metadata, adapter differences, and legacy flags. `providerRegistryProjection.ts` retains the
+existing persisted endpoint and feature shapes. Portable URL rules live in the existing
+`@cherrystudio/universal/utils/url` owner. Mobile does not retain the upstream source or generator.
 
-Schemas, generated catalogs, endpoint matrices, reasoning rules, and pure lookup utilities may be
-ported by behavior. Mobile retains the `./mobile` loader and must keep Node code outside the React
-Native export graph.
+The saved Model schema retains the legacy `web-search` capability so existing user data remains
+readable. The published package models native search through `serverTools`, which has no Mobile
+consumer. Mobile excludes `ultra` from selectable reasoning efforts and rejects
+`adaptive-between-tools` entries until the native runtime supports them.
 
 ### Current migration ledger
 
@@ -100,11 +105,7 @@ check, platform exports, and device acceptance before the registry compatibility
 | Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
-| Mobile-only `github` preset | Retained as a product extension | Its bundled provider-model namespace replaces any remote `github` rows |
-
-Last reviewed Desktop commit for `packages/provider-registry`:
-`06706ac7e6810759ef763320e792092ce60d8409` for the v3 model/override schemas and adaptive reasoning
-profile. This is a scoped source review, not a claim of complete Desktop feature or device parity.
+| Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
 
 ### Remote catalog policy
 
@@ -118,9 +119,8 @@ refine model descriptions, capabilities, and Provider-model overrides. Those ove
 an endpoint type already declared by the bundled Provider and may update image-generation
 `vendorTransport` relative paths and sync/async behavior. They cannot add or replace Provider
 definitions, base URLs, adapter families, headers, or credential behavior. Incompatible manifests
-are rejected before download and activation. The Mobile-owned `github` namespace is also
-authoritative: bundled GitHub overrides replace, rather than mix with, any `github` rows in a
-Desktop snapshot.
+are rejected before download and activation. The Mobile-owned provider extensions affect connection metadata only; remote snapshots replace
+all model rows, including the `github` namespace.
 
 The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
 item; entries with an unsupported protocol are omitted. Provider-native `serverTools` and `ultra`
@@ -162,15 +162,15 @@ Desktop changes are reviewed by hand against this document. Blanket copying into
 `src/aiCore` layout is not a supported synchronization path.
 
 1. In a clean Desktop checkout, list the unreviewed changes with
-   `git log <last reviewed commit>..HEAD -- packages/provider-registry`, adding any other path this
-   document admits for the behavior under review. Never record a local absolute checkout path.
+   the release diff for the pinned registry package, adding any other path this document admits
+   for the behavior under review. Never record a local absolute checkout path.
 2. Inventory each candidate behavior's Mobile callers and classify it as Pi conversation behavior,
    non-conversation `AiService` behavior, or shared provider data.
 3. Reject behavior outside that consumer closure. In particular, do not route Desktop context,
    host, persistence, lifecycle, or tool-loop code into the Pi path.
 4. Update the published package only with the smallest Mobile adapter change and tests that protect
    the consumed behavior.
-5. Retain Mobile's static registry loader, Expo transport, persisted-data compatibility, and
+5. Retain Mobile's snapshot loader, Expo transport, persisted-data compatibility, and
    product-specific providers.
 6. Change AI SDK dependencies and patches only when required by the selected behavior, then
    regenerate the lockfile with `pnpm@12.2.1`.
@@ -179,7 +179,7 @@ Desktop changes are reviewed by hand against this document. Blanket copying into
 8. Advance the registry compatibility version only after all consumed required semantics are
    implemented, unsupported optional semantics are explicitly classified, and every required gate
    passes.
-9. After the port passes its gates, update the last reviewed Desktop commit recorded above.
+9. After the package update passes its gates, record the admitted package version above.
 
 ## Published Package Admission
 

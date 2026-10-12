@@ -1,4 +1,5 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { MODEL_CAPABILITY } from '@cherrystudio/universal/data/types/model';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 
 import {
