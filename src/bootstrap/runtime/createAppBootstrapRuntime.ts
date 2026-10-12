@@ -150,14 +150,13 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  backup.configure(
-    () => agent.hasPendingStorageWork() || jobRuntime.hasPendingStorageWork(),
-    () => {
-      void jobRuntime.pump({ reason: 'timer' });
-    },
-    () => agent.quiesce(),
-  );
-  const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
+  const {
+    backend,
+    dataApiDependencies,
+    disposeSystemEntry,
+    initializeSkills,
+    hasPendingSkillStorageWork,
+  } = createBackend(services, {
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
       replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
@@ -174,11 +173,22 @@ export function createAppBootstrapRuntime(
     languageServing,
     providerRegistryUpdater,
   });
+  backup.configure(
+    () =>
+      agent.hasPendingStorageWork() ||
+      jobRuntime.hasPendingStorageWork() ||
+      hasPendingSkillStorageWork(),
+    () => {
+      void jobRuntime.pump({ reason: 'timer' });
+    },
+    () => agent.quiesce(),
+  );
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
+      agentGlobalSkills: services.agentGlobalSkill,
       agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,
       agentSessionMutations: services.agent,
@@ -199,6 +209,8 @@ export function createAppBootstrapRuntime(
         listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
       },
       providers: services.provider,
+      skillAdmissions: dataApiDependencies.skillAdmissions,
+      skillInstructions: dataApiDependencies.skillInstructions,
       providerAccounts,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
@@ -247,6 +259,7 @@ export function createAppBootstrapRuntime(
         }
         await application.install(host);
         await initializeAppRuntime(services);
+        await initializeSkills();
         commitStorageBoot();
         try {
           cleanupStorageAfterBoot();

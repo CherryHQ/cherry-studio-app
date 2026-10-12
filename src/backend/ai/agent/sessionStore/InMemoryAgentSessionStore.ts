@@ -24,6 +24,7 @@ import type {
   ReserveSubmissionResult,
 } from './AgentSessionStore';
 import { finalizeMessageStats } from './messageSettlement';
+import { collectSkillActivations } from './skillActivations';
 
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
@@ -495,6 +496,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       history,
       referencedFileEntryIds,
     });
+  }
+
+  async loadSkillActivations(sessionId: string) {
+    return cloneJson(
+      collectSkillActivations((this.messages.get(sessionId) ?? []).map(({ view }) => view)),
+    );
   }
 
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {

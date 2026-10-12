@@ -2,8 +2,7 @@ import {
   type CatalogManifest,
   REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
   REGISTRY_SCHEMA_VERSION,
-} from '@cherrystudio/provider-registry/mobile';
-
+} from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 
 import {

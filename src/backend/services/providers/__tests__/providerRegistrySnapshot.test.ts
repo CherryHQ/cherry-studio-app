@@ -1,4 +1,4 @@
-import type { CatalogManifest } from '@cherrystudio/provider-registry/mobile';
+import type { CatalogManifest } from '@/backend/data/services/MobileRegistryLoader';
 
 import {
   readProviderRegistrySnapshots,

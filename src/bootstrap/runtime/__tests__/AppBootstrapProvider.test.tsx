@@ -72,6 +72,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
     runtime: {
       backend: {
         file: { subscribeChanges: () => () => {} },
+        skills: { subscribeChanges: () => () => {} },
         backup: { getState: () => backupState, subscribe: () => () => {} },
       } as unknown as Backend,
       dataApi: {} as ApiClient,

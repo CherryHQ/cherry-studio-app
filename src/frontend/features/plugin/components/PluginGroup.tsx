@@ -1,5 +1,5 @@
+import { Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
 
 /** One titled group on the plugins page. */
 export function PluginGroup({
@@ -12,11 +12,8 @@ export function PluginGroup({
   title: string;
 }) {
   return (
-    <View testID={testID}>
-      <Text accessibilityRole="header" className="pb-3 text-lg font-semibold text-foreground">
-        {title}
-      </Text>
-      <View className="gap-2">{children}</View>
-    </View>
+    <Section testID={testID} title={title}>
+      {children}
+    </Section>
   );
 }

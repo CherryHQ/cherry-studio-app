@@ -6,14 +6,16 @@ import { useTranslation } from 'react-i18next';
 import { AppState } from 'react-native';
 
 import { useAgentMutations, useAgentToolBindingMutations } from '@/frontend/hooks/agent';
+import { useSkillMutations } from '@/frontend/hooks/skill';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
+import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 
 import type { AgentFormState } from './agentForm';
 
 const TEXT_SAVE_DELAY_MS = 600;
 const logger = loggerService.withContext('useAgentAutoSave');
 
-type SaveKey = keyof AgentFormState | 'toolBindings';
+type SaveKey = keyof AgentFormState | 'toolBindings' | 'skillBindings';
 type SaveTask = () => Promise<unknown>;
 
 /** Keeps writes ordered and coalesces changes to the same field while a write is in flight. */
@@ -22,6 +24,9 @@ export function useAgentAutoSave(agentId: string | undefined) {
   const { toast } = useToast();
   const { setAgentAvatar, updateAgent } = useAgentMutations();
   const { replaceAgentToolBindings } = useAgentToolBindingMutations();
+  const { replaceAgentSkills } = useSkillMutations();
+  // Skill toggles arrive one at a time; coalesce them so a queued write carries every change.
+  const pendingSkillUpdates = useRef(new Map<string, AgentSkillUpdate>());
   const pending = useRef(new Map<SaveKey, SaveTask>());
   const deferred = useRef(new Map<SaveKey, SaveTask>());
   const failed = useRef(new Map<SaveKey, SaveTask>());
@@ -128,6 +133,28 @@ export function useAgentAutoSave(agentId: string | undefined) {
     [agentId, replaceAgentToolBindings, schedule],
   );
 
+  const saveSkillBindings = useCallback(
+    (updates: readonly AgentSkillUpdate[]) => {
+      if (!agentId) return;
+      for (const update of updates) pendingSkillUpdates.current.set(update.skillId, update);
+      schedule('skillBindings', async () => {
+        const batch = [...pendingSkillUpdates.current.values()];
+        pendingSkillUpdates.current.clear();
+        try {
+          await replaceAgentSkills(agentId, batch);
+        } catch (error) {
+          for (const update of batch) {
+            if (!pendingSkillUpdates.current.has(update.skillId)) {
+              pendingSkillUpdates.current.set(update.skillId, update);
+            }
+          }
+          throw error;
+        }
+      });
+    },
+    [agentId, replaceAgentSkills, schedule],
+  );
+
   const retry = useCallback(() => {
     for (const [key, save] of failed.current) {
       pending.current.set(key, save);
@@ -147,5 +174,5 @@ export function useAgentAutoSave(agentId: string | undefined) {
     return () => subscription.remove();
   }, [flush]);
 
-  return { flush, hasFailedSave, retry, saveField, saveToolBindings };
+  return { flush, hasFailedSave, retry, saveField, saveSkillBindings, saveToolBindings };
 }

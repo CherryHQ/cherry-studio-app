@@ -15,13 +15,14 @@ import {
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
 import { RuntimeJsonValueSchema } from '../runtimeSchemas';
-import { createErrorToolResult } from '../toolResults';
+import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import {
   createPiDeferredToolDiscoveryTools,
   PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
   PI_TOOL_CALL_TOOL_NAME,
 } from './piDeferredToolDiscovery';
+import { retainToolInstructions, toolInstructionsSection } from './piToolInstructions';
 
 type PiDurableToolOptions = {
   name: string;
@@ -114,12 +115,21 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         toolCallId: api.callId,
         turnId,
       });
+      // Only trusted application callbacks can contribute system instructions. MCP payloads cannot.
+      const { instructions, modelValue, ...output } = result;
       // Callbacks cross into durable JSON here; reject invalid payloads before native persistence.
       const stored = RuntimeJsonValueSchema.parse(
-        JSON.parse(JSON.stringify(result)),
+        JSON.parse(
+          JSON.stringify({
+            ...output,
+            ...(tool.ref.source === 'builtin' && modelValue !== undefined ? { modelValue } : {}),
+          }),
+        ),
       ) as RuntimeToolResult;
       if (result.failure?.scope === 'tool' && tool.failureGroup)
         failedGroups.add(tool.failureGroup);
+      if (instructions && !stored.failure && tool.ref.source === 'builtin')
+        await retainToolInstructions(instructions, api, context);
       await options.onResult?.(tool, stored, api, context);
       return stored;
     } catch (error) {
@@ -204,13 +214,18 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
   return defineExtension({
     name: options.name,
     tools: [...tools, ...durableDiscovery],
-    sections: mcp.length
-      ? [
-          section('cherry-mcp-discovery', () => PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT, {
-            tag: false,
-          }),
-        ]
-      : [],
+    sections: [
+      ...(options.tools.some((tool) => tool.ref.source === 'builtin' && tool.approval !== 'deny')
+        ? [toolInstructionsSection]
+        : []),
+      ...(mcp.length
+        ? [
+            section('cherry-mcp-discovery', () => PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT, {
+              tag: false,
+            }),
+          ]
+        : []),
+    ],
     hooks: [
       hook(ToolTask, {
         async beforeTool(call, api, context) {
@@ -254,7 +269,7 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
     ...(tool.failureGroup ? { failureGroup: tool.failureGroup } : {}),
   };
   return {
-    content: [{ type: 'text', text: JSON.stringify(output) }],
+    content: [{ type: 'text', text: JSON.stringify(toModelToolResult(output)) }],
     isError: output.failure !== undefined,
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };

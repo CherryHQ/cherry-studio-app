@@ -2,9 +2,9 @@ import { ContextMenuExclusion } from '@cherrystudio/ui/components';
 import { Image, Text, useWindowDimensions } from 'react-native';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
+import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
-import { splitPluginReferences } from '@/frontend/utils/pluginReferences';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
@@ -12,6 +12,7 @@ import { readCherryMeta } from '@/shared/data/types/uiParts';
 import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
+import { splitTextReferences } from './textReferences';
 
 type TextPartProps = {
   isStreaming: boolean;
@@ -47,8 +48,8 @@ function renderMentionSegments(segments: readonly MentionSegment[]) {
  * along with it.
  */
 function PlainTextWithMentions({ text, references }: { text: string; references?: unknown[] }) {
-  const segments = splitPluginReferences(text, references);
-  const color = useThemeColor('primary');
+  const segments = splitTextReferences(text, references);
+  const color = useThemeColor('link');
   const { theme } = useUniwind();
   const { fontScale } = useWindowDimensions();
   const textStyle = useResolveClassNames('text-base');
@@ -58,9 +59,12 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
     <Text className="text-base text-foreground" accessibilityLabel={text} selectable>
       {segments.map((segment) => {
         if (!segment.reference) return renderMentionSegments(splitToolMentions(segment.text));
-        const icon = getPluginInlineIcon(segment.reference.pluginId, theme);
+        const icon =
+          segment.reference.type === 'plugin'
+            ? getPluginInlineIcon(segment.reference.pluginId, theme)
+            : { base64: skillInlineIcon['tool-case'], tint: true };
         return (
-          <Text className="text-primary" key={segment.reference.offset}>
+          <Text className="text-link" key={segment.reference.offset}>
             <Image
               accessible={false}
               accessibilityIgnoresInvertColors
@@ -68,7 +72,6 @@ function PlainTextWithMentions({ text, references }: { text: string; references?
               style={{
                 width: iconSize,
                 height: iconSize,
-                opacity: 0.8,
                 tintColor: icon.tint ? color : undefined,
               }}
             />

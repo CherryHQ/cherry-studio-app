@@ -511,6 +511,6 @@ function resolveDefaultThinkingLevel(model: Model): ModelThinkingLevel {
   if (!model.reasoning) return 'off';
   const effort = model.reasoning.defaultEffort ?? 'medium';
   if (effort === 'none') return 'off';
-  if (effort === 'auto') return 'medium';
+  if (effort === 'auto' || effort === 'ultra') return 'medium';
   return effort;
 }

@@ -3,11 +3,23 @@ import {
   createPluginMentionUrl,
   readPluginMentions,
 } from '../pluginMentions';
+import { createFindSkillsMention, readSkillMentions } from '../skillMentions';
 
 const SERVER_A = '00000000-0000-4000-8000-000000000001';
 const SERVER_B = '00000000-0000-4000-8000-000000000002';
 
 describe('composer plugin references', () => {
+  test('plugin offsets address the final text when a Skill reference precedes the plugin', () => {
+    const draft = `📄 ${createFindSkillsMention('找技能')} 用 [${createPluginMentionLabel('飞书')}](${createPluginMentionUrl(SERVER_A, 'feishu')}) 搜索`;
+    const skillDraft = readSkillMentions(draft);
+    expect(skillDraft.skillAction).toBe('find-and-install');
+    expect(readPluginMentions(skillDraft.text)).toEqual({
+      text: '📄 找技能 用 飞书 搜索',
+      pluginServerIds: [SERVER_A],
+      pluginReferences: [{ type: 'plugin', pluginId: 'feishu', label: '飞书', offset: 9 }],
+    });
+  });
+
   test('snapshots inline artwork identity and UTF-16 offsets without sending object characters', () => {
     const draft = `📄 用 [${createPluginMentionLabel('飞书')}](${createPluginMentionUrl(SERVER_A, 'feishu')}) 和 [${createPluginMentionLabel('GitHub')}](${createPluginMentionUrl(SERVER_B, 'github')})`;
     expect(readPluginMentions(draft)).toEqual({

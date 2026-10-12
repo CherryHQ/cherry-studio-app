@@ -16,6 +16,7 @@ import type { AgentImageGenerationPort } from './agentImageGeneration';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
+import type { SkillScopeSource } from './skillScope';
 
 export type MobileAgentHostNaming = Pick<
   AgentSessionNaming,
@@ -53,6 +54,7 @@ export type MobileAgentHostPorts = {
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
+  skills?: SkillScopeSource;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
