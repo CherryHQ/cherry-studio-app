@@ -219,6 +219,8 @@ type AgentMessageView = {
 }
 
 type AgentMessagePart =
+  | { id: string; type: 'source-url'; sourceId: string; url: string; title?: string }
+  | { id: string; type: 'data-search-suggestions'; data: { html: string } }
   | {
       id: string
       type: 'data-compaction-anchor'

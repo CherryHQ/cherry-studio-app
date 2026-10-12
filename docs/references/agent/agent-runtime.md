@@ -98,6 +98,20 @@ paths or changing application database fields.
 
 ## Descriptor and lifecycle
 
+`RuntimeConversationConfiguration.webTools` carries the Host's `RuntimeWebTools` selection policy:
+`modelToolsPreferred`, `clientSearchAvailable`, and `clientFetchAvailable`. It is absent when the
+Agent may not use the web. The Runtime selects and persists one route per web capability with the
+configuration. `RuntimeExecutionRequest` serves isolated probes and carries no web policy. See
+[Web Search](../web-search.md#native-tools-and-selection) for the selection contract.
+
+Native sources use Runtime output parts `{ id, type: 'source-url', sourceId, url, title? }`.
+Google's supplied search presentation uses `{ id, type: 'data-search-suggestions', data: { html } }`
+independently of whether any source URL was returned.
+Recoverable provider web failures use `{ id, type: 'error', error: RuntimeError }` parts, which
+the Host projects to Agent Protocol `data-error` parts. These parts are projected from the stored
+assistant message, which also holds provider replay data; a lookup failure disables the turn's
+remaining web routes.
+
 ```ts
 type RuntimeDescriptor = {
   id: string
@@ -612,6 +626,9 @@ type RuntimeEvent =
   | { type: 'cancelled' }
 
 type RuntimeOutputPart =
+  | { id: string; type: 'source-url'; sourceId: string; url: string; title?: string }
+  | { id: string; type: 'data-search-suggestions'; data: { html: string } }
+  | { id: string; type: 'error'; error: RuntimeError }
   | {
       id: string
       type: 'text' | 'reasoning'
