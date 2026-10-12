@@ -24,7 +24,7 @@ const STATUS_TEXT_CLASS = {
 export function SkillListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { isOpening, open } = useStartSkillChat();
+  const { isAvailable: canAddInChat, isOpening, open } = useStartSkillChat();
   const { open: openSearch } = useAppSearch();
   const apiClient = useApiClient();
   const { error, isLoading, refetch, skills, hasNext, loadNext, isLoadingMore } = useSkillsApi({
@@ -89,11 +89,15 @@ export function SkillListScreen() {
             testID: 'skills-more',
             type: 'menu',
             items: [
-              {
-                id: 'skill-add-chat',
-                label: t('skills.addInChat'),
-                onPress: () => void open(),
-              },
+              ...(canAddInChat
+                ? [
+                    {
+                      id: 'skill-add-chat',
+                      label: t('skills.addInChat'),
+                      onPress: () => void open(),
+                    },
+                  ]
+                : []),
               {
                 id: 'skill-discover',
                 label: t('skills.discover.title'),

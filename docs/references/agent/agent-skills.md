@@ -1,5 +1,12 @@
 # Agent Skills
 
+Standard mode exposes Skill discovery, installation and reading only when the selected model
+supports native function calling, matching Desktop's tool-catalog gate. Models without function
+calling still support ordinary chat and supported direct images; explicit Skill selections and
+installation requests fail before discovery. Minimal mode does not use Skills. **Add in chat**
+is offered only while the current Agent is in standard mode; without a current Agent it uses a
+standard-mode Agent, and opens the Agent list with setup guidance when none exists.
+
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. Plugins and Skills have separate sidebar entries and pages.
 The Skills library provides installed search, details, environment guidance, update and uninstall.
