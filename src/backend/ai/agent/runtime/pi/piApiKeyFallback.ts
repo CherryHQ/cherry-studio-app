@@ -10,6 +10,7 @@ import {
   type PiStreamErrorEvent,
   providerErrorEvent,
 } from './piStreamEvents';
+import { isPiNativeWebActivity } from './piWebTools';
 
 /**
  * Serve from `credentials[0]`. When a request fails before any content, try every other
@@ -46,7 +47,13 @@ export function withPiApiKeyFallback(credentials: readonly (() => Promise<Stream
           try {
             active ??= await credentials[activeIndex]();
             options?.signal?.throwIfAborted();
-            const source = await active(model, context, options);
+            const source = await active(model, context, {
+              ...options,
+              onProviderStreamEvent: async (event, model) => {
+                if (isPiNativeWebActivity(event)) committed = true;
+                await options?.onProviderStreamEvent?.(event, model);
+              },
+            });
             for await (const event of source) {
               options?.signal?.throwIfAborted();
               partial =

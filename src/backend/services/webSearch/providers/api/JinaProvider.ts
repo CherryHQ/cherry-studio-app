@@ -55,6 +55,8 @@ type JinaContext = BaseSearchContext & {
 };
 
 export class JinaProvider extends BaseWebSearchProvider {
+  protected readonly requiresApiKey = false;
+
   async searchKeywords(
     query: string,
     config: WebSearchExecutionConfig,

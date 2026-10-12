@@ -3,7 +3,12 @@ import type { LanguageVarious } from '@/shared/data/preference';
 
 import type { TraceRecorder } from '../../observability';
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeSqlDatabase, RuntimeUsageOwner, RuntimeUsageReport } from '../runtime';
+import type {
+  RuntimeSqlDatabase,
+  RuntimeUsageOwner,
+  RuntimeUsageReport,
+  RuntimeWebTools,
+} from '../runtime';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinitionSource } from './agentDefinitions';
@@ -52,5 +57,6 @@ export type MobileAgentHostPorts = {
   skills?: SkillScopeSource;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
+  webTools?(): Promise<RuntimeWebTools>;
   traces?: TraceRecorder;
 };

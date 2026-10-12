@@ -88,6 +88,19 @@ async function collect(streamFn: StreamFn, signal?: AbortSignal) {
 }
 
 describe('Pi API key failover', () => {
+  test('does not repeat provider web work on another key before answer text arrives', async () => {
+    const nextKey = jest.fn(() => source(message()));
+    const first: StreamFn = async (model, _context, options) => {
+      await options?.onProviderStreamEvent?.(
+        { type: 'response.web_search_call.in_progress' },
+        model,
+      );
+      return source(message(503));
+    };
+    const { result } = await collect(ring(first, nextKey));
+    expect(result.stopReason).toBe('error');
+    expect(nextKey).not.toHaveBeenCalled();
+  });
   test('advances past failed keys, hides failed attempts, and keeps the working key for later tool steps', async () => {
     const calls: string[] = [];
     const attempt =
