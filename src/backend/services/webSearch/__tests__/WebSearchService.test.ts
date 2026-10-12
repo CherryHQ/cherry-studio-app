@@ -26,6 +26,44 @@ describe('WebSearchService', () => {
     global.fetch = originalFetch;
   });
 
+  test.each([
+    ['fetch', undefined, true],
+    ['crawl4ai', undefined, false],
+    ['crawl4ai', 'https://crawl.example.com', true],
+    ['crawl4ai', 'ftp://crawl.example.com', false],
+  ] as const)(
+    'checks page-reader readiness for %s with host %s',
+    async (providerId, apiHost, ready) => {
+      const service = new WebSearchService(
+        createPreferenceService({
+          'chat.web_search.default_fetch_urls_provider': providerId,
+          'chat.web_search.provider_overrides': apiHost
+            ? { [providerId]: { capabilities: { fetchUrls: { apiHost } } } }
+            : {},
+        }),
+      );
+
+      await expect(service.isConfigured('fetchUrls')).resolves.toBe(ready);
+      expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+      expect(downloadWebPage).not.toHaveBeenCalled();
+      expect(global.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  test('Jina readiness requires a key only for keyword search', async () => {
+    const service = new WebSearchService(
+      createPreferenceService({
+        ...PreferenceDefaults,
+        'chat.web_search.default_search_keywords_provider': 'jina',
+      }),
+    );
+
+    await expect(service.isConfigured('searchKeywords')).resolves.toBe(false);
+    await expect(service.isConfigured('fetchUrls')).resolves.toBe(true);
+    expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   test('reads through Jina with fresh-install defaults and no provider keys', async () => {
     requestWebSearchJsonMock.mockResolvedValue({
       data: { title: 'Example', content: 'Page body', url: 'https://example.com' },

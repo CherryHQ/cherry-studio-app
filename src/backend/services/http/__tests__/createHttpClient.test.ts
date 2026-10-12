@@ -64,6 +64,28 @@ function mockAdapter(
 }
 
 describe('createHttpClient', () => {
+  it('redacts capability paths and transport messages without changing the request destination', async () => {
+    const reportId = '550e8400-e29b-41d4-a716-446655440000';
+    const adapter = mockAdapter(async (config) => {
+      throw new AxiosError(`Failed to read ${reportId}`, AxiosError.ERR_NETWORK, config);
+    });
+    const client = __testing.createHttpClientFactoryWithAdapter(adapter)({
+      baseUrl: 'https://api.cherry-ai.com',
+    });
+    await expect(
+      client.request({
+        method: 'GET',
+        path: `/diagnostics/${reportId}/status`,
+        logPath: '/diagnostics/[report-id]/status',
+      }),
+    ).rejects.toMatchObject({ kind: 'network' });
+    expect(adapter.mock.calls[0][0].url).toBe(`/diagnostics/${reportId}/status`);
+    expect(JSON.stringify(transportLogger.warn.mock.calls)).not.toContain(reportId);
+    expect(transportLogger.warn).toHaveBeenCalledWith(
+      'HTTP request failed.',
+      expect.objectContaining({ url: 'https://api.cherry-ai.com/diagnostics/[report-id]/status' }),
+    );
+  });
   it('preserves protocol response statuses only for routes that explicitly accept them', async () => {
     const adapter = mockAdapter(async (config) => {
       const data = '{"error":"authorization_pending"}';

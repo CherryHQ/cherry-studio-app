@@ -164,6 +164,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
               id,
               name: 'Agent',
               instructions: '',
+              mode: 'standard',
               model: configuration.model,
               options: {},
               toolApprovalMode: 'default',
@@ -369,6 +370,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       });
       expect(state.conversations.submit).toHaveBeenCalledTimes(1);
       expect(await state.store.listUnsettledAssistantMessages()).toHaveLength(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('hands the frozen web policy to the Runtime with the conversation configuration', async () => {
+    const webTools = {
+      modelToolsPreferred: true,
+      clientSearchAvailable: true,
+      clientFetchAvailable: true,
+    };
+    const state = fixture({ webTools: async () => webTools });
+    const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
+    await state.host.initialize();
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
     } finally {
       await state.host.close();
     }

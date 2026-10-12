@@ -32,10 +32,16 @@ export class PreferenceSeeder implements DatabaseSeeder {
     // holds the user's value, and seeding must never overwrite it.
     await dbService.withWriteTx(async (tx) => {
       for (const [key, value] of missing) {
+        // Existing installs keep their external search choice until the user changes it.
+        const initialValue =
+          key === 'chat.web_search.model_tools_preferred' &&
+          storedKeys.has('chat.web_search.default_search_keywords_provider')
+            ? false
+            : value;
         // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
         await tx
           .insert(preferenceTable)
-          .values({ key, scope: DEFAULT_PREFERENCE_SCOPE, value })
+          .values({ key, scope: DEFAULT_PREFERENCE_SCOPE, value: initialValue })
           .onConflictDoNothing();
       }
     });

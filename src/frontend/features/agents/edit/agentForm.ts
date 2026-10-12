@@ -1,6 +1,8 @@
 import type { CreateAgentDto } from '@/shared/data/api/schemas/agents';
 import {
   type Agent,
+  type AgentMode,
+  DEFAULT_AGENT_MODE,
   DEFAULT_AGENT_TOOL_APPROVAL_MODE,
   type AgentToolApprovalMode,
 } from '@/shared/data/types/agent';
@@ -20,6 +22,7 @@ export type AgentFormState = {
   /** Capability-group deny-list; a group absent from the list is enabled. */
   disabledCapabilities: AgentCapability[];
   instructions: string;
+  mode: AgentMode;
   model: UniqueModelId | null;
   name: string;
   toolApprovalMode: AgentToolApprovalMode;
@@ -39,6 +42,7 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
       ? [...agent.disabledCapabilities]
       : [...DEFAULT_DISABLED_AGENT_CAPABILITIES],
     instructions: agent?.instructions ?? '',
+    mode: agent?.mode ?? DEFAULT_AGENT_MODE,
     model: agent?.model ?? null,
     name: agent?.name ?? '',
     toolApprovalMode: agent?.toolApprovalMode ?? DEFAULT_AGENT_TOOL_APPROVAL_MODE,
@@ -70,6 +74,7 @@ export function buildAgentDto(
     value: {
       disabledCapabilities: form.disabledCapabilities,
       instructions: form.instructions,
+      mode: form.mode,
       ...(options.inheritDefaultModel ? {} : { model: form.model }),
       name,
       toolApprovalMode: form.toolApprovalMode,

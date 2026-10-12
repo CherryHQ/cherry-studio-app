@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+# Never write patched or built package output into the shared store, so one checkout cannot
+# contaminate others. See docs/guides/development.md#dependencies.
+sideEffectsCacheReadonly: true
+
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
 

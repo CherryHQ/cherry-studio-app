@@ -11,6 +11,7 @@ import { BUILTIN_TOOLS, type BuiltinToolId } from './builtinTools';
 import { WebSearchAdvancedSection } from './components/WebSearchAdvancedSection';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import { WebSearchProviderIcon } from './components/WebSearchProviderIcon';
+import { WebSearchSourceSection } from './components/WebSearchSourceSection';
 import { useWebSearchProviderPreferences } from './hooks/useWebSearchProviderPreferences';
 import { getWebSearchProviderPreset } from './utils/providerSettings';
 
@@ -45,6 +46,7 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
             <Text className="text-sm text-muted-foreground">{t(tool.summaryKey)}</Text>
           </View>
         </View>
+        <WebSearchSourceSection />
         <WebSearchApiManagementSection
           capability={tool.capability}
           // Unsaved text in a field belongs to the provider it was typed for.

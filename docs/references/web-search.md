@@ -1,7 +1,7 @@
 # Web Search
 
-This reference defines the external web-search service and separates it from provider-native model
-features. Terms follow [Domain Language](./domain-language.md).
+This reference defines selection between provider-native web tools and the external web-search
+service. Terms follow [Domain Language](./domain-language.md).
 
 ## Current Product Boundary
 
@@ -17,9 +17,125 @@ configuration alone: the composer carries no web-search control, so it requests 
 `web-search` capability and keeps no per-Session selection.
 
 The Plugins page's built-in tool pages (**Web search** and **URL fetch**) configure and check
-external providers globally, and a lookup that
-fails because no provider is configured returns a terminal result telling the model to stop
-retrying rather than a transient error.
+external providers globally and share one source preference. The selected route is frozen before
+the model request; a failed request never starts an automatic alternate-provider attempt.
+
+## Native Tools And Selection
+
+Native tools run inside the Pi Durable conversation loop for every provider endpoint in the
+adapter table below. Each adapter is covered against the installed provider SDK over a scripted
+transport; none has been exercised against a live provider.
+
+`chat.web_search.model_tools_preferred` defaults to true on new installs. Seeding preserves the
+external-first behavior of existing installations and never overwrites a saved choice. The setting
+is global across keyword search and page reading; it does not enable a disabled Agent capability
+or force the model to search on every message.
+
+The Host freezes external configuration readiness and the preference in `TurnPlan.webTools` and
+passes them in the conversation configuration. Pi resolves the model, trusted Provider identity
+(including copied presets), endpoint, and authentication method, then selects one route per
+capability: the preferred available path, then the other path, then no tool. The route is stored
+with the configuration, so a queued input, a retried request, and a request recovered after a
+restart all use it; like the tool set, it cannot change while the conversation is busy. A capability
+reaches the model through one route only: its external function is withheld when the native tool is
+selected. Each request intersects the stored route with the credentials it actually resolved.
+
+Configuration readiness is local and makes no health-check request. Explicit denies and per-call
+approvals cannot be bypassed by a native tool. Requests without Host web policy, including probes,
+never gain native tools. Compaction and budget-exhausted final responses suppress them as well.
+
+Adapters, by the endpoint the model is actually requested on:
+
+| Provider / endpoint | Search | Page reading | Sources shown | Boundaries |
+| --- | --- | --- | --- | --- |
+| OpenAI, Doubao, Bailian (Qwen3) / Responses | `web_search` | External service | URL annotations | No minimal reasoning |
+| Azure OpenAI, Poe / Responses | `web_search_preview` | External service | URL annotations | No minimal reasoning; Poe for OpenAI models only |
+| Grok / Responses | `web_search` and `x_search` | External service | URL annotations | |
+| Anthropic / Messages | `web_search_20250305` | `web_fetch_20250910` | Result blocks and citations | Five uses per request |
+| DeepSeek / Anthropic Messages | `web_search_20250305` | External service | Result blocks and citations | Its Responses endpoint ignores the tool |
+| Gemini / Generate Content | `googleSearch` | `urlContext` | Grounding metadata | Beside functions from Gemini 3 only |
+| Zhipu / Chat Completions | `web_search` tool entry | External service | Result list, no inline markers | |
+| Bailian / Chat Completions | `enable_search` | External service | Result list when returned, no inline markers | |
+| OpenRouter / Chat Completions | `openrouter:web_search` | External service | URL annotations | All chat models |
+| Perplexity / Chat Completions | Built into Sonar | External service | Numbered citations | Nothing is added to the request |
+| CherryIN, AiHubMix, New API | The vendor's tool on its own endpoint | Claude and Gemini only | As the vendor | Chat Completions endpoint stays external |
+| Kimi | External service | External service | | See below |
+| Every other endpoint | External service | External service | | |
+
+A model is eligible only when the trusted bundled catalog lists it for that provider. A sign-in
+uses native tools only when it authenticates the provider's ordinary API (xAI, OpenRouter);
+subscription sign-ins keep the external services. Vertex AI, Bedrock, and Azure Chat Completions
+are not served by Pi on Mobile and have no adapter.
+
+Kimi's search is not a provider-executed tool. The client must run a platform formula with the
+provider credential and return its encrypted output to the model verbatim, and the older
+`$web_search` round trip is scheduled for removal. Neither fits the native route, so Kimi keeps the
+external service.
+
+DeepSeek support differs by endpoint. As checked on 2026-10-12, its
+[Responses compatibility contract](https://api-docs.deepseek.com/guides/responses_api/)
+lists `web_search` as ignored, while its
+[Claude Code integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/claude_code/)
+documents native web search through the Anthropic-compatible API. The published declaration names
+the Responses endpoint, which conflicts with that contract; Mobile declares the Anthropic endpoint.
+
+The published `@cherrystudio/provider-registry` package owns the `serverTools` declarations, the
+per-provider model eligibility, and the models that accept functions beside a native tool; Mobile
+follows it. `mobileProviderCatalog.ts` holds the two corrections: DeepSeek's endpoint, and Poe,
+which documents web search for OpenAI bots on its Responses endpoint only. Remote model flags cannot
+enable native tools. A host's `vendor/model` ID matches by the vendor ID behind its namespace, and a
+host passes a tool through only for the vendor families its declaration names.
+
+Gemini before 3 rejects functions beside its native tools: the selector keeps the other functions
+and falls back to external web tools, or chooses one compatible web source with the most available
+capabilities. Gemini 3 accepts the combination with `toolConfig.includeServerSideToolInvocations`,
+which returns server-side tool parts that must be sent back with their signatures on every later
+request. Pi's history does not model those parts, so they are stored with the message and returned
+to their place in later payloads for the same model. See the official
+[tool combination contract](https://ai.google.dev/gemini-api/docs/generate-content/tool-combination).
+
+Anthropic's server tool blocks are not replayed. A later request carries the answer text and the
+source facts only, so the model no longer has the page content it read in an earlier response, and a
+search the provider deferred behind a parallel function call is not resumed. The per-request cap
+keeps the provider's server loop below the point where it would pause the turn. Anthropic splits an
+answer into one text block per citation; the fragments are shown as one continuous text.
+
+Pi uses `onPayload` and `onProviderStreamEvent` on its existing stream. Each adapter's source
+metadata is attached to the terminal assistant message Pi persists, so sources share that message's
+durability and are projected again after a restart. Original signed
+model text remains unchanged: the display text with `[cite:id]` markers is stored beside it, and an
+additional source-facts text block, never displayed, keeps URLs in Pi replay. Fallback history also
+retains source facts. Native citations open their URLs, source cards remain available, and document
+export converts the same IDs to links. Google-supplied search suggestions are stored separately and
+displayed in an isolated WebView with scripts disabled; they are never sent back to the model as
+page content.
+
+OpenAI validates a replayed reasoning item against the output item that followed it. Pi's history
+keeps reasoning items but has no block for a search call, so each `web_search_call` or
+`x_search_call` that followed a reasoning item is stored with the message and returned to its place
+in later request payloads.
+
+Native search activity commits the credential attempt before answer text arrives, preventing
+failover from repeating billable work, and renews the stream idle timer. Recoverable native lookup
+failures preserve successful sources, add an inline error, and disable both web routes for the rest
+of the turn; unrelated tools and the answer continue. The failure is read from the stored turn, so
+it still applies after recovery. Whole-request failures remain Pi failures. Cancellation aborts the
+same transport; a stopped answer keeps its partial text without sources. There is no automatic
+switch after failure. Provider-internal searches do not consume Mobile's local function-call counter; those
+limits cannot bound server-internal search counts or charges. Provider usage may omit tool fees.
+
+Search result count and compression settings apply only to external services. Native tools use
+their provider's defaults and billing, and the model decides when to search: no adapter forces a
+search on every message. See the official
+[OpenAI](https://developers.openai.com/api/docs/guides/tools-web-search),
+[Gemini search](https://ai.google.dev/gemini-api/docs/google-search),
+[Gemini URL context](https://ai.google.dev/gemini-api/docs/url-context),
+[Anthropic](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool),
+[xAI](https://docs.x.ai/developers/tools/web-search),
+[Zhipu](https://docs.bigmodel.cn/cn/guide/tools/web-search),
+[Bailian](https://help.aliyun.com/zh/model-studio/web-search),
+[OpenRouter](https://openrouter.ai/docs/guides/features/server-tools/web-search), and
+[Poe](https://creator.poe.com/docs/external-applications/openai-compatible-api) contracts.
 
 ## External Runtime
 
@@ -61,8 +177,10 @@ preset shape, and preference keys are vocabulary shared with Cherry Studio deskt
 | `crawl4ai` | | yes | self-hosted address; optional token |
 | `fetch` | | yes | none; see [Local Extraction](#local-extraction) |
 
-Each preset capability declares `requiresApiHost` and `requiresApiKey`. `WebSearchService` enforces
-them before any request, so a missing key or address is the same configuration failure for every
+Each preset capability declares `requiresApiHost` and `requiresApiKey`. Configuration readiness
+and request execution use the same check, so a hostless local reader is available immediately
+and Jina requires a key only for keyword search. `WebSearchService` enforces the requirements
+before any request, so a missing key or address is the same configuration failure for every
 provider. SearXNG has no default address, unlike desktop, because a phone has no local instance
 to reach.
 
@@ -196,4 +314,5 @@ one call's budget in a turn. Previously stored content is not rewritten.
 - Users need a provider outside the closed set. Decide the contract with desktop first; the
   provider vocabulary is shared.
 - Mobile adopts desktop's provider fallback or excluded-domain list.
-- A request needs defined arbitration between external and provider-native search.
+- Additional native adapters or model IDs are reviewed, especially Anthropic server-tool replay
+  with `pause_turn` continuation, and a client-executed route for Kimi.

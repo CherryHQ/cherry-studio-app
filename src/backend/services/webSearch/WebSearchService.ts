@@ -53,6 +53,26 @@ export class WebSearchService extends BaseService {
     this.apiKeyRotationState.clear();
   }
 
+  /** Whether the selected external service can be offered without changing providers. */
+  async isConfigured(capability: WebSearchCapability): Promise<boolean> {
+    try {
+      const provider = await getProviderForCapability(
+        undefined,
+        capability,
+        this.preferenceService,
+      );
+      const driver = createWebSearchProvider(provider, this.apiKeyRotationState);
+      if (!driver[capability]) return false;
+      driver.validateConfiguration(capability);
+      return true;
+    } catch (error) {
+      if (!(error instanceof WebSearchConfigError)) {
+        logger.warn('Web search configuration lookup failed', { capability, error });
+      }
+      return false;
+    }
+  }
+
   private async prepareContext(request: RunCapabilityRequest): Promise<PreparedWebSearchContext> {
     const [provider, runtimeConfig] = await Promise.all([
       getProviderForCapability(

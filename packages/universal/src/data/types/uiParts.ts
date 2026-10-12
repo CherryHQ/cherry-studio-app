@@ -73,6 +73,7 @@ export interface CodePartData {
 }
 
 export type CherryDataPartTypes = {
+  'search-suggestions': { html: string };
   code: CodePartData;
   compact: CompactPartData;
   'compaction-anchor': CompactionAnchorPartData;

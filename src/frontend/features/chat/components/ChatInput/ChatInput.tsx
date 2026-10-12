@@ -27,6 +27,7 @@ import {
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
 import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
@@ -72,10 +73,12 @@ export function ChatInput({
     previousAgentId.current = agentId;
     setDraft(removeSkillMentions);
   }, [agentId, setDraft]);
-  const findSkills = readSkillMentions(draft).skillAction === 'find-and-install';
   const { cancel, canSend, isBusy, sendMessage } = controls;
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
+  const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
+  const findSkills =
+    mode === 'standard' && readSkillMentions(draft).skillAction === 'find-and-install';
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
@@ -132,7 +135,10 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
-      {selectedModelItem && isImageGenerationModel(selectedModelItem.model) && !findSkills ? (
+      {mode === 'standard' &&
+      selectedModelItem &&
+      isImageGenerationModel(selectedModelItem.model) &&
+      !findSkills ? (
         <PaintingInput
           canSend={canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -143,6 +149,7 @@ export function ChatInput({
         />
       ) : (
         <TextChatInput
+          mode={mode}
           agentId={agentId}
           findSkills={findSkills}
           controls={controls}
@@ -160,6 +167,7 @@ export function ChatInput({
 }
 
 function TextChatInput({
+  mode,
   agentId,
   findSkills,
   controls,
@@ -171,6 +179,7 @@ function TextChatInput({
   selectedModelItem,
   selectModel,
 }: Omit<ChatInputProps, 'sessionId'> & {
+  mode: AgentMode;
   findSkills: boolean;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
@@ -202,10 +211,11 @@ function TextChatInput({
   const pluginMenuRef = useRef<View>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
   const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
-  const isPluginPickerVisible = isPluginPickerOpen && !isApprovalPending;
-  const isSkillPickerVisible = isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
+  const isPluginPickerVisible = mode === 'standard' && isPluginPickerOpen && !isApprovalPending;
+  const isSkillPickerVisible =
+    mode === 'standard' && isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
   const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible;
-  if (isApprovalPending) {
+  if (isApprovalPending || mode === 'minimal') {
     if (isPluginPickerOpen) setIsPluginPickerOpen(false);
     if (isSkillPickerOpen) setIsSkillPickerOpen(false);
   }
@@ -235,7 +245,8 @@ function TextChatInput({
     async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
       setIsSkillPickerOpen(false);
-      const plugins = readPluginMentions(text);
+      const plugins =
+        mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
       // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
       const {
         skills,
@@ -243,7 +254,9 @@ function TextChatInput({
         skillReferences,
         pluginReferences,
         text: prompt,
-      } = readSkillMentions(plugins.text, plugins.pluginReferences);
+      } = mode === 'standard'
+        ? readSkillMentions(plugins.text, plugins.pluginReferences)
+        : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
       const parts = toAgentInputParts(
         { attachments, text: prompt },
         pluginReferences,
@@ -265,7 +278,14 @@ function TextChatInput({
           : {}),
       });
     },
-    [isReasoningEffortSelected, reasoningEffort, reasoningEfforts, selectedModelId, sendMessage],
+    [
+      isReasoningEffortSelected,
+      mode,
+      reasoningEffort,
+      reasoningEfforts,
+      selectedModelId,
+      sendMessage,
+    ],
   );
   const getSendErrorLabel = useCallback(
     (error: unknown) => {
@@ -301,7 +321,12 @@ function TextChatInput({
             >
               {(effortGauge) => (
                 <ChatInputComposer
-                  canSend={selectedModelItem ? canSend : false}
+                  canSend={
+                    selectedModelItem &&
+                    (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                      ? canSend
+                      : false
+                  }
                   dismissKeyboardOnSend={dismissKeyboardOnSend}
                   getSendErrorLabel={getSendErrorLabel}
                   onSend={handleSendPress}
@@ -324,18 +349,23 @@ function TextChatInput({
                     fieldStyle={isPickerVisible ? compactInputStyle : undefined}
                     leadingAction={
                       <ChatInputMenu
+                        media={mode === 'minimal' ? 'images' : 'all'}
                         onPickSkills={
-                          agentId
+                          mode === 'standard' && agentId
                             ? () => {
                                 setIsPluginPickerOpen(false);
                                 setIsSkillPickerOpen(true);
                               }
                             : undefined
                         }
-                        onPickPlugins={() => {
-                          setIsSkillPickerOpen(false);
-                          setIsPluginPickerOpen(true);
-                        }}
+                        onPickPlugins={
+                          mode === 'standard'
+                            ? () => {
+                                setIsSkillPickerOpen(false);
+                                setIsPluginPickerOpen(true);
+                              }
+                            : undefined
+                        }
                         triggerRef={pluginMenuRef}
                       />
                     }
@@ -364,7 +394,7 @@ function TextChatInput({
       </ChatInputSkillPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
-          modelType="all"
+          modelType={mode === 'minimal' ? 'text' : 'all'}
           open
           onAddProvider={handleAddProvider}
           onClose={closeModelPicker}
