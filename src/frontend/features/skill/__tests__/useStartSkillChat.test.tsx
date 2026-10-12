@@ -7,6 +7,8 @@ const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockToast = jest.fn();
 const mockHandoff = jest.fn((_value: unknown) => 'handoff');
+let mockRoute: unknown = { status: 'ready', target: { kind: 'draft', agentId: 'current' } };
+let mockCurrentAgent: { id: string; mode: string } | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToast } }),
@@ -19,11 +21,14 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 jest.mock('@/frontend/hooks/agent', () => ({
+  useAgentApiById: (id: string | undefined) => ({
+    agent: id && mockCurrentAgent?.id === id ? mockCurrentAgent : undefined,
+  }),
   useAgentsApi: () => ({ refetch: mockRefetch, agents: [] }),
   useAgentSession: () => ({}),
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
-  parseChatRoute: () => ({ status: 'ready', target: { kind: 'draft', agentId: 'current' } }),
+  parseChatRoute: () => mockRoute,
   createChatComposerHandoff: (value: unknown) => mockHandoff(value),
   chatHref: (value: unknown) => value,
 }));
@@ -35,17 +40,22 @@ describe('Skill installation chat', () => {
     skillChat = useStartSkillChat();
     return null;
   }
-  beforeEach(() => {
-    jest.clearAllMocks();
+  function render() {
     act(() => {
       renderer = create(<Probe />);
     });
+  }
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRoute = { status: 'ready', target: { kind: 'draft', agentId: 'current' } };
+    mockCurrentAgent = { id: 'current', mode: 'standard' };
   });
   afterEach(() => {
     act(() => renderer.unmount());
   });
 
   test('keeps the current standard Agent when opening the installation draft', async () => {
+    render();
     mockRefetch.mockResolvedValue({
       data: {
         items: [
@@ -54,6 +64,7 @@ describe('Skill installation chat', () => {
         ],
       },
     });
+    expect(skillChat.isAvailable).toBe(true);
     await act(async () => {
       await skillChat.open();
     });
@@ -69,7 +80,9 @@ describe('Skill installation chat', () => {
     });
   });
 
-  test('switches away from a minimal Agent before handing off installation intent', async () => {
+  test('offers no installation entry for a minimal current Agent and never switches Agents', async () => {
+    mockCurrentAgent = { id: 'current', mode: 'minimal' };
+    render();
     mockRefetch.mockResolvedValue({
       data: {
         items: [
@@ -78,6 +91,29 @@ describe('Skill installation chat', () => {
         ],
       },
     });
+    expect(skillChat.isAvailable).toBe(false);
+    await act(async () => {
+      await skillChat.open();
+    });
+    expect(mockRefetch).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  test('uses a standard Agent when there is no current Agent', async () => {
+    mockRoute = { status: 'empty' };
+    mockCurrentAgent = undefined;
+    render();
+    mockRefetch.mockResolvedValue({
+      data: {
+        items: [
+          { id: 'minimal', mode: 'minimal' },
+          { id: 'standard', mode: 'standard' },
+        ],
+      },
+    });
+    expect(skillChat.isAvailable).toBe(true);
     await act(async () => {
       await skillChat.open();
     });
@@ -88,8 +124,11 @@ describe('Skill installation chat', () => {
     });
   });
 
-  test('opens Agent setup with guidance when every Agent is minimal', async () => {
-    mockRefetch.mockResolvedValue({ data: { items: [{ id: 'current', mode: 'minimal' }] } });
+  test('opens Agent setup with guidance when no standard Agent exists', async () => {
+    mockRoute = { status: 'empty' };
+    mockCurrentAgent = undefined;
+    render();
+    mockRefetch.mockResolvedValue({ data: { items: [{ id: 'minimal', mode: 'minimal' }] } });
     await act(async () => {
       await skillChat.open();
     });
