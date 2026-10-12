@@ -144,7 +144,15 @@ describe('turn preparation', () => {
         new AbortController().signal,
       ),
     ).rejects.toMatchObject({
-      view: { code: 'CAPABILITY_UNSUPPORTED', attachmentIssue: { name: 'notes.txt' } },
+      view: {
+        code: 'CAPABILITY_UNSUPPORTED',
+        retryable: false,
+        attachmentIssue: {
+          code: 'runtime-unsupported',
+          fileEntryId: FILE_ENTRY_ID,
+          name: 'notes.txt',
+        },
+      },
     });
     expect(harness.files.readAsBytes).not.toHaveBeenCalled();
     expect(harness.getSystemTools).not.toHaveBeenCalled();

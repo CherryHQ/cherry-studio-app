@@ -321,10 +321,15 @@ export async function prepareResolvedTurn(
   if (agent.mode === 'minimal') {
     const document = [...inputFiles.values()].find((file) => !file.mediaType.startsWith('image/'));
     if (document) {
-      fail('CAPABILITY_UNSUPPORTED', 'Minimal mode accepts only text and images.', {
-        code: 'runtime-unsupported',
-        fileEntryId: document.fileEntryId,
-        name: document.name,
+      throw new AgentProtocolError({
+        code: 'CAPABILITY_UNSUPPORTED',
+        message: 'Minimal mode accepts only text and images.',
+        retryable: false,
+        attachmentIssue: {
+          code: 'runtime-unsupported',
+          fileEntryId: document.fileEntryId,
+          name: document.name,
+        },
       });
     }
   }
