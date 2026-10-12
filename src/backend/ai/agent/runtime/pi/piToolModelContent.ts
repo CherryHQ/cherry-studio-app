@@ -2,6 +2,7 @@ import type { ToolResultMessage } from '@earendil-works/pi-ai';
 
 import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
 
+import { toModelToolResult } from '../toolResults';
 import type { RuntimeToolResult } from '../types';
 
 /** Only this channel is sent to the provider; details retain the app projection. */
@@ -29,7 +30,7 @@ export function piToolModelContent(
             }
           : block,
       )
-    : [{ type: 'text', text: JSON.stringify(output) }];
+    : [{ type: 'text', text: JSON.stringify(toModelToolResult(output)) }];
 }
 
 export function persistentToolResult(

@@ -4,6 +4,60 @@ import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 import { toRuntimeHistory } from '../turnRuntimeInput';
 
 describe('Runtime output projection', () => {
+  test('preserves MCP App and resource linkage with managed model content while discarding runtime-only fields', () => {
+    const source = { serverId: 'server', connectionKey: `remote:${'a'.repeat(64)}` };
+    const output = {
+      value: { content: [{ type: 'text', text: 'Dashboard ready' }] },
+      artifacts: [],
+      mcpSource: source,
+      mcpApp: { ...source, toolName: 'show_dashboard', resourceUri: 'ui://dashboard' },
+      modelContent: [
+        {
+          type: 'image' as const,
+          fileEntryId: '00000000-0000-4000-8000-000000000001',
+          mimeType: 'image/png' as const,
+        },
+      ],
+    };
+    const part = toAgentMessagePart({
+      type: 'tool',
+      id: 'dashboard',
+      toolCallId: 'dashboard',
+      providerName: 'mcp_show_dashboard',
+      displayName: 'Dashboard',
+      state: 'output-available',
+      toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'show_dashboard' },
+      output: {
+        ...output,
+        modelValue: 'Replace the model result.',
+        instructions: { key: 'remote', text: 'Replace the system prompt.' },
+        modelImages: [{ ...output.modelContent[0], data: 'aGVsbG8=' }],
+      },
+    });
+    if (part.type !== 'dynamic-tool') throw new Error('Expected a tool part');
+    expect(part.output).toEqual(output);
+  });
+
+  test('persists full Skill activity instructions and a compact replay receipt without Runtime control metadata', () => {
+    const output = {
+      value: { status: 'ok', instructions: 'Ask one question at a time.' },
+      modelValue: { status: 'ok', instructionsInSystem: true },
+      artifacts: [],
+    };
+    const part = toAgentMessagePart({
+      type: 'tool',
+      id: 'load',
+      toolCallId: 'load',
+      providerName: 'load_skill',
+      displayName: 'Read Skill',
+      state: 'output-available',
+      input: { skill_id: 'skill' },
+      toolRef: { source: 'builtin', capabilityId: 'load_skill' },
+      output: { ...output, instructions: { key: 'skill', text: 'Ask one question at a time.' } },
+    });
+    expect(part).toMatchObject({ output });
+    expect(part).not.toHaveProperty('output.instructions');
+  });
   test('persists callback failure details and replays partial sources without runtime stop policy', () => {
     const details = {
       status: 'partial',

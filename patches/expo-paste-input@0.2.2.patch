@@ -152,7 +152,22 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b
          }
          
          let blockIMP = imp_implementationWithBlock(unsafeBitCast(swizzledImplementation, to: AnyObject.self))
-@@ -551,15 +495,21 @@ class ExpoPasteInputView: ExpoView {
+@@ -520,6 +464,13 @@ class ExpoPasteInputView: ExpoView {
+         return
+       }
+-
++
++      // Composer mention icons belong to the editor, not to pasted media.
++      // Keep their text ranges intact and never upload their artwork.
++      let isMentionIcon = attributedText.attribute(NSAttributedString.Key("com.cherryai.composer-mention-icon"), at: range.location, effectiveRange: nil) as? Bool
++      guard isMentionIcon != true else {
++        return
++      }
++
+       if let payload = self.extractMediaPayload(from: attachment, textView: textView, range: range) {
+         attachmentRanges.append(range)
+         mediaPayloads.append(payload)
+@@ -551,15 +502,21 @@ class ExpoPasteInputView: ExpoView {
    }
  
    private func emitImagesAsync(for payloads: [MediaPayload]) {
@@ -177,7 +192,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b
            return
          }
  
-@@ -700,149 +650,111 @@ class ExpoPasteInputView: ExpoView {
+@@ -700,149 +657,111 @@ class ExpoPasteInputView: ExpoView {
      return true
    }
    
@@ -419,7 +434,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b
    /// Detects if the given data is a GIF by checking for GIF87a or GIF89a header
    private func isGIFData(_ data: Data) -> Bool {
      guard data.count >= 6 else { return false }
-@@ -885,19 +797,27 @@ class ExpoPasteInputView: ExpoView {
+@@ -885,19 +804,27 @@ class ExpoPasteInputView: ExpoView {
      return "png"
    }
    
@@ -457,7 +472,7 @@ index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b
    private func handleTextPaste(_ text: String) {
      onPaste([
        "type": "text",
-@@ -1013,15 +933,6 @@ class ExpoPasteInputView: ExpoView {
+@@ -1013,15 +940,6 @@ class ExpoPasteInputView: ExpoView {
      stopMonitoring()
      stopObservingTextView()
    }

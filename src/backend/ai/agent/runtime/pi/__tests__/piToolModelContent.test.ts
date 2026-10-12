@@ -11,6 +11,18 @@ const output = {
 };
 
 describe('MCP model and persisted result channels', () => {
+  it('uses the compact built-in value without sending retained instructions to the model', () => {
+    const result = {
+      value: { instructions: 'Full Skill instructions for activity inspection.' },
+      modelValue: { instructionsInSystem: true },
+      artifacts: [],
+      instructions: { key: 'skill', text: 'Full Skill instructions for the system prompt.' },
+    };
+    expect(piToolModelContent(result)).toEqual([
+      { type: 'text', text: JSON.stringify({ value: result.modelValue, artifacts: [] }) },
+    ]);
+  });
+
   it('sends temporary image bytes to image-capable models without persisting those bytes', () => {
     expect(piToolModelContent(output, true)).toEqual([
       { type: 'image', mimeType: 'image/png', data: 'aGVsbG8=' },

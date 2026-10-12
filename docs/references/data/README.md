@@ -213,9 +213,10 @@ journaled under `app_state` keys prefixed with `seed:`.
 `ProviderRegistryUpdaterService` restores the newest compatible saved model catalog after startup.
 When nothing is saved, first use automatically downloads `models.json` and `provider-models.json`
 in the background; China locale/zone signals prefer GitCode and other devices prefer GitHub, with
-fallback to the other source. Startup never contacts the network once a snapshot is saved. The only
-later refresh trigger is opening a provider's model list. Applying a newer catalog while that list
-is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
+fallback to the other source. Startup also migrates an older schema snapshot to the current v3
+directory, retaining the old snapshot if offline or if the update fails. Once a v3 snapshot is
+saved, the later refresh trigger is opening a provider's model list. Applying a newer catalog while
+that list is visible shows a global success toast at the top of the screen. Offline or unchanged catalogs
 keep the saved snapshot without a toast. The app does not bundle these model files. Model selection,
 model editing, and model calls require a downloaded snapshot; welcome, provider configuration, and
 history remain accessible. Model workflows present a retry action when the initial download fails.
@@ -228,8 +229,10 @@ updates; unset preset fields inherit the current snapshot.
 
 `providers.json` remains bundled: the unsigned model channel cannot change provider API destinations,
 authentication modes, or importable providers. Schema and minimum-reader compatibility checks remain
-in place; newer readers can still use older compatible saved catalogs. Model metadata fixes and
-ordinary updates belong upstream, while Mobile owns interpretation and provider connection support.
+in place; newer readers can still use older compatible saved catalogs. Schema upgrades take priority
+over workflow revisions, and restoration prefers a valid v3 snapshot over an older-schema slot.
+Model metadata fixes and ordinary updates belong upstream, while Mobile owns interpretation and
+provider connection support.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may

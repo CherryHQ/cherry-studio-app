@@ -85,7 +85,7 @@
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",
-    "@cherrystudio/provider-registry": "workspace:*",
+    "@cherrystudio/provider-registry": "0.1.0",
     "@cherrystudio/remote-protocol": "0.4.0",
     "@cherrystudio/remote-transport": "0.2.0",
     "@cherrystudio/ui": "workspace:*",
@@ -199,6 +199,7 @@
     "tweetnacl": "1.0.3",
     "uniwind": "^1.6.4",
     "uuid": "^14.0.0",
+    "yaml": "2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

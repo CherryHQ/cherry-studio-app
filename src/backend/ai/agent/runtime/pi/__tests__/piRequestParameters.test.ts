@@ -154,6 +154,16 @@ describe('Pi registry request parameters', () => {
     ).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
+  test('keeps always-on adaptive thinking active for the default selection', () => {
+    const profile = selectFormatWire(REASONING_FORMAT_PROFILES.anthropic, 'adaptive-always');
+    expect(profile.off).toBeUndefined();
+    expect(apply('anthropic-messages', profile, 'default', { max_tokens: 8192 })).toEqual({
+      thinking: { type: 'adaptive', display: 'summarized' },
+      max_tokens: 4096,
+    });
+    expect(apply('anthropic-messages', profile, 'high').output_config).toEqual({ effort: 'high' });
+  });
+
   test('bounds Claude budget thinking by the total output limit and omits impossible budgets', () => {
     const profile = selectFormatWire(REASONING_FORMAT_PROFILES.anthropic, 'budget');
     expect(apply('anthropic-messages', profile, 'high', { max_tokens: 8192 })).toEqual({

@@ -179,6 +179,7 @@ export function cleanupStorageAfterBoot(): void {
     }
     for (const parts of [
       ['Data', 'Files'],
+      ['Data', 'Skills'],
       ['user-avatar'],
       ['agent-avatars'],
       ['provider-avatars'],

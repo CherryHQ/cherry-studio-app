@@ -1,5 +1,5 @@
-import { formatApiHost, getBaseUrl } from '@cherrystudio/provider-registry';
 import { Button, ContentState, useAlert } from '@cherrystudio/ui/components';
+import { formatApiHost, getBaseUrl } from '@cherrystudio/universal/utils/url';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';

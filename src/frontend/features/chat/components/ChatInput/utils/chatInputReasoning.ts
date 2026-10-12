@@ -1,8 +1,4 @@
-import {
-  objectValues,
-  REASONING_EFFORT,
-  type ReasoningEffort,
-} from '@cherrystudio/provider-registry';
+import { objectValues, REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { deriveThinkingOptions, nearestThinkingOption } from '@cherrystudio/universal/ai/reasoning';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
@@ -10,7 +6,7 @@ import type { Model } from '@/shared/data/types/model';
 
 export const CHAT_INPUT_DEFAULT_REASONING_EFFORT = 'default';
 
-export type ChatInputReasoningEffort = typeof CHAT_INPUT_DEFAULT_REASONING_EFFORT | ReasoningEffort;
+export type ChatInputReasoningEffort = ReasoningEffortOption;
 
 type ChatInputReasoningEffortOption = {
   labelKey: string;
@@ -68,7 +64,9 @@ const chatInputReasoningEffortCycleOrder = [
   REASONING_EFFORT.AUTO,
 ] as const satisfies readonly ChatInputReasoningEffort[];
 
-const reasoningEffortValueSet = new Set<string>(objectValues(REASONING_EFFORT));
+const reasoningEffortValueSet = new Set<string>(
+  objectValues(REASONING_EFFORT).filter((effort) => effort !== 'ultra'),
+);
 const reasoningEffortCycleOrderIndex = new Map<ChatInputReasoningEffort, number>(
   chatInputReasoningEffortCycleOrder.map((value, index) => [value, index]),
 );
@@ -148,5 +146,5 @@ function normalizeChatInputReasoningEffort(value: string): ChatInputReasoningEff
     return CHAT_INPUT_DEFAULT_REASONING_EFFORT;
   }
 
-  return reasoningEffortValueSet.has(value) ? (value as ReasoningEffort) : undefined;
+  return reasoningEffortValueSet.has(value) ? (value as ChatInputReasoningEffort) : undefined;
 }

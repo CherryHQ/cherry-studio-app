@@ -5,7 +5,7 @@ store or `Documents/stores/<uuid>`. Database and managed file resolvers use the 
 cached for the lifetime of the JavaScript runtime. They never retarget a live database connection.
 
 The original store keeps its existing Expo SQLite location and Documents file layout. A new store
-contains `database/cherry.db`, `Data/Files`, and the existing avatar directory names. Missing control
+contains `database/cherry.db`, `Data/Files`, `Data/Skills`, and the existing avatar directory names. Missing control
 metadata or a missing selected database fails closed instead of creating an empty replacement.
 
 1. Import validates in cache, then copies and normalizes a separate candidate store.

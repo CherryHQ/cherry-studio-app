@@ -1,5 +1,4 @@
-import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
-
+import type { MobileProviderConfig } from '@/backend/data/services/mobileProviderCatalog';
 import {
   createPresetProviderInput,
   isRecommendedPresetProvider,
@@ -27,7 +26,7 @@ export type ProvidersModuleDependencies = {
   avatars: ProviderAvatarStorage;
   catalog: {
     isExcluded(providerId: string): boolean;
-    list(): ProtoProviderConfig[];
+    list(): MobileProviderConfig[];
   };
   providers: {
     create(input: ReturnType<typeof createPresetProviderInput>): Promise<Provider>;

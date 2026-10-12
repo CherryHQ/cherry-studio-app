@@ -92,6 +92,7 @@ const OutputSchema = z.object({
   mcpApp: McpAppReferenceSchema.optional(),
   modelContent: McpModelContentSchema.optional(),
   value: RuntimeJsonValueSchema,
+  modelValue: RuntimeJsonValueSchema.optional(),
   artifacts: z.array(
     z.object({
       ref: z.object({ kind: z.literal('managed-file'), fileEntryId: z.string() }),

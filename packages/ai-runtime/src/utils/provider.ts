@@ -1,6 +1,6 @@
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-export type { ProviderBaseUrlIssue } from '@cherrystudio/provider-registry';
+export type { ProviderBaseUrlIssue } from '@cherrystudio/universal/utils/url';
 export {
   formatApiHost,
   formatOllamaApiHost,
@@ -10,7 +10,7 @@ export {
   routeToEndpoint,
   shouldAppendProviderApiVersion,
   withoutTrailingApiVersion,
-} from '@cherrystudio/provider-registry';
+} from '@cherrystudio/universal/utils/url';
 
 export function getExtraHeaders(provider: Provider): Record<string, string> {
   const headers = { ...provider.settings?.extraHeaders };

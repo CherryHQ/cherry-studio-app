@@ -50,7 +50,24 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
           },
           artifacts: runtimeOutput.artifacts,
         }
-      : runtimeOutput;
+      : runtimeOutput
+        ? {
+            value: runtimeOutput.value,
+            artifacts: runtimeOutput.artifacts,
+            ...(part.toolRef.source === 'builtin' && runtimeOutput.modelValue !== undefined
+              ? { modelValue: runtimeOutput.modelValue }
+              : {}),
+            ...(part.toolRef.source === 'mcp'
+              ? {
+                  ...(runtimeOutput.modelContent
+                    ? { modelContent: runtimeOutput.modelContent }
+                    : {}),
+                  ...(runtimeOutput.mcpApp ? { mcpApp: runtimeOutput.mcpApp } : {}),
+                  ...(runtimeOutput.mcpSource ? { mcpSource: runtimeOutput.mcpSource } : {}),
+                }
+              : {}),
+          }
+        : undefined;
     return AgentMessagePartSchema.parse({
       id: part.id,
       type: 'dynamic-tool',

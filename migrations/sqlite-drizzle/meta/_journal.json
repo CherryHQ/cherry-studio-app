@@ -47,8 +47,22 @@
     {
       "idx": 6,
       "version": "6",
-      "when": 1791615557372,
-      "tag": "0006_mcp_remote_oauth",
+      "when": 1791612026855,
+      "tag": "0006_agent_skills",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1791630575230,
+      "tag": "0007_agent_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791796001226,
+      "tag": "0008_mcp_remote_oauth",
       "breakpoints": true
     }
   ]

@@ -79,7 +79,6 @@ module.exports = {
       '<rootDir>/packages/ui/src/background-activity/background-activity.ios.tsx',
     '^@cherrystudio/ui/icons/models$': '<rootDir>/packages/ui/src/icons-webp/models/index.ts',
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
-    '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@cherrystudio/mcp-app-webview$': '<rootDir>/packages/mcp-app-webview/src/index.ts',
     '^@cherrystudio/ai-runtime/(.*)$': '<rootDir>/packages/ai-runtime/src/$1/index.ts',
@@ -101,7 +100,7 @@ module.exports = {
     // `typebox` is Pi's ESM-only tool argument validator, exercised by real-loop tests.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@modelcontextprotocol/ext-apps|@cherrystudio/remote-protocol|@cherrystudio/remote-transport)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@modelcontextprotocol/ext-apps|@cherrystudio/provider-registry|@cherrystudio/remote-protocol|@cherrystudio/remote-transport)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

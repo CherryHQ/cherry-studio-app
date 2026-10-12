@@ -58,7 +58,11 @@ export function useAgentMutations() {
     refresh: ['/agents'],
   });
   const updateMutation = useMutation('PATCH', '/agents/:id', {
-    refresh: ({ args }) => ['/agents', ...(args ? [`/agents/${args.params.id}`] : [])],
+    refresh: ({ args }) => [
+      '/agents',
+      '/skills',
+      ...(args ? [`/agents/${args.params.id}`, `/agents/${args.params.id}/skills`] : []),
+    ],
   });
   const deleteMutation = useMutation('DELETE', '/agents/:id');
   const setAvatarMutation = useMutation('PUT', '/agents/:id/avatar', {

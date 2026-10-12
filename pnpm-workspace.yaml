@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+# Never write patched or built package output into the shared store, so one checkout cannot
+# contaminate others. See docs/guides/development.md#dependencies.
+sideEffectsCacheReadonly: true
+
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
 
@@ -84,6 +88,7 @@ patchedDependencies:
   '@earendil-works/chord@1.1.0': patches/@earendil-works__chord@1.1.0.patch
 
 minimumReleaseAgeExclude:
+  - '@cherrystudio/provider-registry@0.1.0'
   - '@cherrystudio/file-preview@0.1.0'
   - '@cherrystudio/ai-core@2.1.0'
   - '@cherrystudio/ai-sdk-provider@0.1.7'
