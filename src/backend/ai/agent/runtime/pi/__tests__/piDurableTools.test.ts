@@ -105,6 +105,110 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('an instruction retention failure preserves the saved mutation receipt and exposes the reload limitation', async () => {
+    const saved = {
+      status: 'adapted',
+      instructionsLoaded: false,
+      changes: [{ before: 'Old step', after: 'New step' }],
+    };
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: [
+        capability({
+          approval: 'auto',
+          execute: async () => ({
+            value: { ...saved, instructionsLoaded: true },
+            artifacts: [],
+            instructions: { key: 'skill:notes', text: 'x'.repeat(128_001) },
+            instructionsFailureValue: saved,
+          }),
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        isError: false,
+        details: { output: { value: saved, modelValue: saved } },
+      });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+  test('a trusted adaptation replaces selected instructions and survives reopening without old system text', async () => {
+    const readInstructions = async (harness: Harness, conversation: Conversation) => {
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      const sections = await Promise.all(
+        agent.sections.map((section) =>
+          section.render(
+            { conversationId: conversation.id, agent, env: undefined, shown: {}, read: harness },
+            BACKGROUND_CONTEXT,
+          ),
+        ),
+      );
+      return sections.filter(Boolean).join('\n\n');
+    };
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: [
+        capability({
+          approval: 'auto',
+          execute: async () => ({
+            value: {
+              status: 'adapted',
+              changes: [{ before: 'Run desktop Python.', after: 'Use current mobile tools.' }],
+            },
+            instructions: { key: 'skill:notes', text: 'Use current mobile tools.' },
+            artifacts: [],
+          }),
+        }),
+      ],
+    });
+    const storage = new ReopenableMemoryStorage();
+    const harness = await open(storage, extension);
+    const conversation = await harness.createConversation(
+      {
+        ownership: { kind: 'ownerless' },
+        agent: { instructions: 'Keep the task goal.', extensions: [extension] },
+      },
+      BACKGROUND_CONTEXT,
+    );
+    const id = conversation.id;
+    await conversation.commit(async (tx) => {
+      (await tx.doc(ToolInstructions, id)).sections = [
+        { key: 'skill:notes', text: 'Run desktop Python.' },
+      ];
+    }, BACKGROUND_CONTEXT);
+    expect(await readInstructions(harness, conversation)).toContain('Run desktop Python.');
+    await harness.waitForTask(await toolTask(conversation), BACKGROUND_CONTEXT);
+    const instructions = await readInstructions(harness, conversation);
+    expect(instructions).toContain('Use current mobile tools.');
+    expect(instructions).not.toContain('Run desktop Python.');
+    expect(instructions).toContain('Keep the task goal.');
+    await harness.close(BACKGROUND_CONTEXT);
+    const reopened = await open(storage, extension);
+    try {
+      const document = await reopened.snapshot(ToolInstructions, id, BACKGROUND_CONTEXT);
+      expect(document?.sections).toEqual([
+        { key: 'skill:notes', text: 'Use current mobile tools.' },
+      ]);
+      const restored = await reopened.conversation(id, BACKGROUND_CONTEXT);
+      const restoredInstructions = await readInstructions(reopened, restored!);
+      expect(restoredInstructions).toContain('Use current mobile tools.');
+      expect(restoredInstructions).not.toContain('Run desktop Python.');
+      expect(restoredInstructions).toContain('Keep the task goal.');
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
   test('MCP corrections do not ask for approval; a discovered valid dispatch preserves artifact details', async () => {
     const result = {
       value: 'Created',

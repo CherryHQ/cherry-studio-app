@@ -10,6 +10,23 @@ export const AgentUserQuestionsSchema = z.strictObject({
       z.strictObject({
         id: z.string().trim().min(1).max(64),
         question: z.string().trim().min(1).max(300),
+        description: z.string().max(1000).optional(),
+        textChanges: z
+          .array(
+            z.strictObject({
+              before: z.string().min(1).max(4000),
+              after: z.string().max(4000),
+              reason: z.string().min(1).max(300),
+            }),
+          )
+          .max(3)
+          .refine(
+            (changes) => new Set(changes.map(({ before }) => before)).size === changes.length,
+            {
+              message: 'Each before passage must be unique.',
+            },
+          )
+          .optional(),
         selection: z.enum(['single', 'multiple']),
         options: z
           .array(

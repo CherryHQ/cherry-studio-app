@@ -94,11 +94,24 @@ request. Pi's history does not model those parts, so they are stored with the me
 to their place in later payloads for the same model. See the official
 [tool combination contract](https://ai.google.dev/gemini-api/docs/generate-content/tool-combination).
 
-Anthropic's server tool blocks are not replayed. A later request carries the answer text and the
-source facts only, so the model no longer has the page content it read in an earlier response, and a
-search the provider deferred behind a parallel function call is not resumed. The per-request cap
-keeps the provider's server loop below the point where it would pause the turn. Anthropic splits an
-answer into one text block per citation; the fragments are shown as one continuous text.
+Anthropic responses retain their complete content blocks, including signed thinking, streamed
+tool inputs, encrypted search results and fetched documents. Later requests to the same provider
+and model restore the original assistant content before sending client tool results, so a server
+tool deferred behind a parallel function call can run. A deferred call that can no longer run,
+because web tools were withdrawn or the turn moved on without it, is omitted from the restored
+content. A response cut off inside a tool call is not restored; later requests carry its answer
+text and source facts. A `pause_turn` response is continued as-is with the same tools, at most
+five times per model invocation. Continued text keeps its streaming offsets, citations and
+accumulated usage; exceeding the limit ends with an error and preserves the partial answer. The
+five-use tool cap limits each provider request but does not prevent pauses. Each natively fetched
+page is limited to 4,000 tokens, the external reader's per-page allowance, because restored
+documents count as input on every later request.
+Anthropic splits an answer into one text block per citation; the fragments are shown as one
+continuous text. See [Anthropic's server-tool lifecycle](https://platform.claude.com/docs/en/agents-and-tools/tool-use/server-tools).
+
+Minimal Agent mode permits provider-native web search and page reading under the same web policy
+as standard mode, while omitting application tools, Skills and plugins. It has no external-service
+fallback. A disabled web capability withholds native web tools in both modes.
 
 Pi uses `onPayload` and `onProviderStreamEvent` on its existing stream. Each adapter's source
 metadata is attached to the terminal assistant message Pi persists, so sources share that message's
@@ -314,5 +327,4 @@ one call's budget in a turn. Previously stored content is not rewritten.
 - Users need a provider outside the closed set. Decide the contract with desktop first; the
   provider vocabulary is shared.
 - Mobile adopts desktop's provider fallback or excluded-domain list.
-- Additional native adapters or model IDs are reviewed, especially Anthropic server-tool replay
-  with `pause_turn` continuation, and a client-executed route for Kimi.
+- Additional native adapters or model IDs are reviewed, including a client-executed route for Kimi.

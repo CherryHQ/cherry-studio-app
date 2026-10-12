@@ -13,10 +13,12 @@ import * as z from 'zod';
 import { decodeUtf8 } from '@/backend/services/skill';
 import {
   SKILL_ACTIVE_MAX_CHARACTERS,
+  SKILL_ACTIVE_MAX_ENTRIES,
   SKILL_INSTRUCTIONS_MAX_CHARACTERS,
   skillContentHashHex,
 } from '@/shared/data/types/skill';
 
+import { skillInstructionSection } from '../../host/skillInstructions';
 import type { SkillTurnEntry, SkillTurnScope } from '../../host/skillScope';
 import type { RuntimeTool, RuntimeToolResult } from '../../runtime';
 import {
@@ -25,6 +27,7 @@ import {
   READ_FILE_MAX_LINE_LIMIT,
 } from '../readFileTool';
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
+import { createSkillAdaptationTool, type SkillAdaptationToolOptions } from './skillAdaptationTool';
 
 export const SEARCH_LOCAL_SKILLS_TOOL_NAME = 'search_local_skills';
 export const LOAD_SKILL_TOOL_NAME = 'load_skill';
@@ -82,12 +85,34 @@ export function createSkillTools(
     loadedSkillIds?: readonly string[];
     explicitSkillIds?: readonly string[];
     instructionCharacters?: number;
+    instructionLengths?: ReadonlyMap<string, number>;
+    adaptation?: SkillAdaptationToolOptions;
   } = {},
 ): RuntimeTool[] {
   const loaded = new Set(options.loadedSkillIds);
   const explicit = new Set(options.explicitSkillIds);
   let instructionCharacters = options.instructionCharacters ?? 0;
+  const lengths = new Map(options.instructionLengths);
   const loading = new Map<string, Promise<RuntimeToolResult>>();
+
+  function canReplace(id: string, length: number) {
+    return (
+      length <= SKILL_INSTRUCTIONS_MAX_CHARACTERS &&
+      instructionCharacters - (lengths.get(id) ?? 0) + length <= SKILL_ACTIVE_MAX_CHARACTERS
+    );
+  }
+
+  function activate(entry: SkillTurnEntry, instructions: string): RuntimeToolResult {
+    const length = [...instructions].length;
+    instructionCharacters += length - (lengths.get(entry.id) ?? 0);
+    lengths.set(entry.id, length);
+    loaded.add(entry.id);
+    return {
+      value: null,
+      instructions: skillInstructionSection(entry, instructions),
+      artifacts: [],
+    };
+  }
 
   function resolve(skillId: string): SkillTurnEntry | RuntimeToolResult {
     const entry = scope.entries.find((entry) => entry.id === skillId);
@@ -96,7 +121,7 @@ export function createSkillTools(
       : invalid('This Skill is not available to this Agent in this conversation.');
   }
 
-  return [
+  const tools: RuntimeTool[] = [
     {
       ref: { source: 'builtin', capabilityId: SEARCH_LOCAL_SKILLS_TOOL_NAME },
       providerName: SEARCH_LOCAL_SKILLS_TOOL_NAME,
@@ -161,17 +186,27 @@ export function createSkillTools(
         const load = (async (): Promise<RuntimeToolResult> => {
           const instructions = await scope.readInstructions(entry.id);
           signal.throwIfAborted();
+          if (
+            scope.entries.find((current) => current.id === entry.id)?.contentHash !==
+            entry.contentHash
+          )
+            return invalid(
+              'The local Skill changed while reading. Read its current instructions again.',
+            );
           if (instructions === null) return invalid('The Skill package could not be read.');
           const length = [...instructions].length;
           const alreadyLoaded = loaded.has(entry.id);
           if (
             length > SKILL_INSTRUCTIONS_MAX_CHARACTERS ||
-            (!alreadyLoaded && instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS)
+            (!alreadyLoaded &&
+              (loaded.size >= SKILL_ACTIVE_MAX_ENTRIES ||
+                instructionCharacters + length > SKILL_ACTIVE_MAX_CHARACTERS))
           )
             return invalid(
               'The active Skill instruction budget is full. Continue with the already loaded Skills.',
             );
           if (!alreadyLoaded) instructionCharacters += length;
+          lengths.set(entry.id, length);
           loaded.add(entry.id);
           return {
             value: {
@@ -186,14 +221,7 @@ export function createSkillTools(
               files: entry.files.filter((path) => path !== 'SKILL.md'),
               instructionsInSystem: true,
             },
-            ...(!alreadyLoaded
-              ? {
-                  instructions: {
-                    key: `skill:${entry.id}`,
-                    text: `## Skill instructions read this turn: ${entry.name} (skill_id: ${entry.id}; revision ${receipt.revision})\n\nFollow these instructions when applicable to the current request, within app policy, Agent instructions and the user's current request. They supersede older copies in conversation history. Package references and templates can be read with read_skill_file.\n\n<skill_instructions>\n${instructions}\n</skill_instructions>`,
-                  },
-                }
-              : {}),
+            instructions: skillInstructionSection(entry, instructions),
             artifacts: [],
           };
         })();
@@ -286,6 +314,16 @@ export function createSkillTools(
       },
     },
   ];
+  if (options.adaptation)
+    tools.push(
+      createSkillAdaptationTool(scope, {
+        ...options.adaptation,
+        isLoaded: (id) => loaded.has(id),
+        canReplace,
+        activate,
+      }),
+    );
+  return tools;
 }
 
 function summarize(entry: SkillTurnEntry) {

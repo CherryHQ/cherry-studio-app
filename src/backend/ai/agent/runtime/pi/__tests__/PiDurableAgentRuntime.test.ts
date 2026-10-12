@@ -6,7 +6,10 @@ import { streamSimple as streamResponses } from '@earendil-works/pi-ai/api/opena
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { MemoryStorage } from '@earendil-works/pi-durable';
 
-import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
+import {
+  buildAgentSystemPrompt,
+  buildInitialSkillInstructions,
+} from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
 import type {
@@ -136,13 +139,17 @@ function fixture() {
   return { storage, requests, ports, database, create, dependencies };
 }
 
-async function submitAndWait(runtime: PiDurableAgentRuntime, submission: RuntimeDurableSubmission) {
+async function submitAndWait(
+  runtime: PiDurableAgentRuntime,
+  submission: RuntimeDurableSubmission,
+  status: 'completed' | 'failed' = 'completed',
+) {
   const complete = deferred<void>();
   const observation = await runtime.observe('session', (event) => {
     if (
       event.type === 'turn.updated' &&
       event.turn.identity.requestId === submission.requestId &&
-      event.turn.status === 'completed'
+      event.turn.status === status
     )
       complete.resolve();
   });
@@ -207,15 +214,16 @@ describe('Persistent Agent facade', () => {
           execute,
         },
       ];
+      const skills = {
+        scope,
+        selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
+      };
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
-        skills: {
-          scope,
-          selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
-        },
+        skills,
         pluginGuides: [
           {
             pluginId: 'github',
@@ -267,7 +275,12 @@ describe('Persistent Agent facade', () => {
       try {
         await runtime.ensureConversation({
           ...seed,
-          configuration: { ...seed.configuration, instructions, tools },
+          configuration: {
+            ...seed.configuration,
+            instructions,
+            initialInstructions: buildInitialSkillInstructions(skills),
+            tools,
+          },
         });
         const text = '你看看我的 github 的 skenora 项目';
         await submitAndWait(runtime, { ...input('first'), input: [{ type: 'text', text }] });
@@ -624,6 +637,187 @@ describe('Native web tools', () => {
     return { ...state, payloads, fetch };
   }
   const toolNames = (payload: Payload) => payload.tools.map((tool) => tool.name ?? tool.type);
+  const anthropicResponse = (blocks: Record<string, unknown>[], reason = 'end_turn') =>
+    sse([
+      {
+        type: 'message_start',
+        message: { id: 'msg', model: 'wire-model', usage: { input_tokens: 10, output_tokens: 0 } },
+      },
+      ...blocks.flatMap((content_block, index) => [
+        { type: 'content_block_start', index, content_block },
+        { type: 'content_block_stop', index },
+      ]),
+      { type: 'message_delta', delta: { stop_reason: reason }, usage: { output_tokens: 5 } },
+      { type: 'message_stop' },
+    ]);
+  const nativeAnthropic: PiNativeWebTools = {
+    search: true,
+    fetch: true,
+    functionToolMixing: true,
+    dialect: 'anthropic',
+  };
+
+  test('continues an Anthropic pause with intact content and tools, retaining text and usage', async () => {
+    const paused = [
+      { type: 'text', text: 'Searching. ' },
+      {
+        type: 'server_tool_use',
+        id: 'srvtoolu_pause',
+        name: 'web_search',
+        input: { query: 'cherry' },
+      },
+    ];
+    const state = nativeFixture(
+      [
+        anthropicResponse(paused, 'pause_turn'),
+        anthropicResponse([
+          {
+            type: 'web_search_tool_result',
+            tool_use_id: 'srvtoolu_pause',
+            content: [
+              {
+                type: 'web_search_result',
+                url: 'https://example.com/cherry',
+                title: 'Cherry',
+                encrypted_content: 'sealed',
+              },
+            ],
+          },
+          { type: 'text', text: 'Cherries are red.' },
+        ]),
+      ],
+      nativeAnthropic,
+      'anthropic-messages',
+      streamAnthropic as PiStreamFn,
+    );
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({ ...seed, configuration });
+      await submitAndWait(runtime, input('first'));
+      expect(state.payloads).toHaveLength(2);
+      expect(state.payloads[1]!.messages.at(-1)).toEqual({ role: 'assistant', content: paused });
+      expect(state.payloads[1]!.tools).toEqual(state.payloads[0]!.tools);
+      const result = (await runtime.message('session', 'answer-first'))!;
+      expect(result.turn.status).toBe('completed');
+      expect(result.turn.contextTokens).toBe(10);
+      expect(result.turn.usage).toMatchObject({
+        inputTokens: 20,
+        outputTokens: 10,
+        totalTokens: 30,
+      });
+      expect(result.turn.parts.filter((part) => part.type === 'text')).toEqual([
+        expect.objectContaining({ text: 'Searching. Cherries are red.' }),
+      ]);
+      expect(result.turn.parts).toContainEqual(
+        expect.objectContaining({ type: 'source-url', url: 'https://example.com/cherry' }),
+      );
+      await runtime.drainUsage();
+      expect(state.ports.recordUsage).toHaveBeenCalledTimes(2);
+      expect(state.ports.recordUsage).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          usage: expect.objectContaining({ inputTokens: 10, outputTokens: 5, totalTokens: 15 }),
+        }),
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('resumes a server fetch deferred behind a client tool and preserves the document after reopen', async () => {
+    const pending = [
+      {
+        type: 'server_tool_use',
+        id: 'srvtoolu_fetch',
+        name: 'web_fetch',
+        input: { url: 'https://example.com/page' },
+      },
+      { type: 'tool_use', id: 'toolu_js', name: 'run_js', input: {} },
+    ];
+    const fetched = {
+      type: 'web_fetch_tool_result',
+      tool_use_id: 'srvtoolu_fetch',
+      content: {
+        type: 'web_fetch_result',
+        url: 'https://example.com/page',
+        content: {
+          type: 'document',
+          title: 'Page',
+          source: { type: 'text', media_type: 'text/plain', data: 'Full document body' },
+        },
+      },
+    };
+    const state = nativeFixture(
+      [
+        anthropicResponse(pending, 'tool_use'),
+        anthropicResponse([fetched, { type: 'text', text: 'Read the page.' }]),
+        anthropicResponse([{ type: 'text', text: 'Follow-up.' }]),
+      ],
+      nativeAnthropic,
+      'anthropic-messages',
+      streamAnthropic as PiStreamFn,
+    );
+    state.ports.resolveTool = jest.fn(async () => tools[2]!);
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({ ...seed, configuration });
+      await submitAndWait(runtime, input('first'));
+      expect(state.payloads).toHaveLength(2);
+      expect(state.payloads[1]!.messages.find((entry) => entry.role === 'assistant')).toMatchObject(
+        { content: pending },
+      );
+      expect(state.payloads[1]!.messages.at(-1)).toMatchObject({
+        role: 'user',
+        content: [expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_js' })],
+      });
+      expect((await runtime.message('session', 'answer-first'))!.turn.status).toBe('completed');
+      await runtime.close();
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      await runtime.configure('session', configuration);
+      await submitAndWait(runtime, input('second'));
+      const history = state.payloads[2]!.messages;
+      expect(
+        history.some(
+          (entry) =>
+            Array.isArray(entry.content) &&
+            entry.content.some(
+              (block) => (block as { type?: string }).type === 'web_fetch_tool_result',
+            ),
+        ),
+      ).toBe(true);
+      expect(JSON.stringify(history)).toContain('Full document body');
+      expect(tools[2]!.execute).toHaveBeenCalledTimes(1);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('fails a repeatedly paused search at the continuation limit without discarding its prefix', async () => {
+    const paused = anthropicResponse([{ type: 'text', text: 'Searching. ' }], 'pause_turn');
+    const state = nativeFixture(
+      Array(6).fill(paused),
+      nativeAnthropic,
+      'anthropic-messages',
+      streamAnthropic as PiStreamFn,
+    );
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({ ...seed, configuration });
+      await submitAndWait(runtime, input('first'), 'failed');
+      expect(state.payloads).toHaveLength(6);
+      const result = (await runtime.message('session', 'answer-first'))!;
+      expect(result.turn.status).toBe('failed');
+      expect(result.turn.parts.filter((part) => part.type === 'text')).toEqual([
+        expect.objectContaining({ text: 'Searching. '.repeat(6) }),
+      ]);
+    } finally {
+      await runtime.close();
+    }
+  });
 
   test('routes search to the provider and keeps its sources and replay state across reopen', async () => {
     const state = nativeFixture([
@@ -727,7 +921,7 @@ describe('Native web tools', () => {
       await runtime.close();
     }
   });
-  test('Anthropic server search shows one cited answer and replays only its source facts', async () => {
+  test('Anthropic server search shows one cited answer and replays its complete blocks', async () => {
     const block = (index: number, content_block: Record<string, unknown>, text?: string) => [
       { type: 'content_block_start', index, content_block },
       ...(text
@@ -808,8 +1002,10 @@ describe('Native web tools', () => {
       await runtime.configure('session', configuration);
       await submitAndWait(runtime, input('second'));
       const history = JSON.stringify(state.payloads[1]!.messages);
-      expect(history).toContain('Web sources from this response');
-      expect(history).not.toContain('server_tool_use');
+      expect(history).not.toContain('Web sources from this response');
+      expect(history).toContain('server_tool_use');
+      expect(history).toContain('web_search_tool_result');
+      expect(history).toContain('encrypted_content');
     } finally {
       await runtime.close();
     }

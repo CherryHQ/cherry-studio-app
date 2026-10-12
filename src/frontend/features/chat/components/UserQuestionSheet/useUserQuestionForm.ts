@@ -6,6 +6,8 @@ export type QuestionFormQuestion = {
   id: string;
   header?: string;
   question: string;
+  description?: string;
+  textChanges?: readonly { before: string; after: string; reason: string }[];
   selection: 'single' | 'multiple';
   options: readonly QuestionFormOption[];
 };

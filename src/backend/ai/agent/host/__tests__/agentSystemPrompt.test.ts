@@ -42,7 +42,10 @@ describe('buildAgentSystemPrompt', () => {
     });
     expect(prompt).toContain('minimal mode');
     expect(prompt).toContain('images supplied by the user');
-    expect(prompt).toContain('Application tools and plugins are unavailable');
+    expect(prompt).toContain(
+      "model provider's native web search and page reading may be available",
+    );
+    expect(prompt).toContain('Application tools, Skills and plugins are unavailable');
     expect(prompt).toContain('`2026-10-10`');
     expect(prompt).toContain('`zh-CN`');
     expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
