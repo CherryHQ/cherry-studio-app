@@ -1910,6 +1910,7 @@
   "skills.detail.version": "版本",
   "skills.discover.empty": "未找到匹配的技能",
   "skills.discover.hint": "在 skills.sh 中搜索。也可以粘贴 GitHub 仓库、文件夹或 SKILL.md 文件的链接。",
+  "skills.discover.popular": "热门",
   "skills.discover.query": "关键词，或 skills.sh / GitHub 链接",
   "skills.discover.search": "查找技能",
   "skills.discover.searching": "正在搜索…",

@@ -42,7 +42,9 @@ plugin connection ownership and per-turn tool filtering.
 ## Sources And Package Format
 
 Keyword search uses skills.sh and returns listings only; nothing is downloaded until a listing URL
-is resolved. skills.sh pages and
+is resolved. The same registry's all-time leaderboard supplies the popular list: its first page,
+bounded to 50 listings with their install counts. Listings from publishers other than a GitHub
+`<owner>/<repo>` cannot resolve to a package and are omitted from both. skills.sh pages and
 public GitHub repository, directory, raw entry and `SKILL.md` links resolve to GitHub packages;
 repositories with multiple Skills return candidates, with a maximum of 20 package directories.
 Like desktop, a package's folder name is its declared name and holds one installation. A candidate
@@ -109,8 +111,9 @@ message, including retries. Deleting the reference cancels the installation inte
 retain the reference, successful sends clear the submitted selection, and switching Agents clears it.
 The app-owned discovery instructions are always available
 when management tools are present, so no bootstrap package needs to be installed first. The
-composer plus menu only selects already installed Skills. Manual search is available through
-**Discover Skills** in the same **More** menu.
+composer plus menu only selects already installed Skills. Manual discovery is available through
+**Discover Skills** in the same **More** menu. That page opens on the popular list, so it offers
+something to browse before any query; its search shows the same list while the query is empty.
 
 Installed and discovery searches use the shared App Search route, which owns the input, cancellation
 and result selection. Selecting a discovery listing opens its detail page before resolving and

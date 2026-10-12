@@ -1919,6 +1919,7 @@
   "skills.detail.version": "Sürüm",
   "skills.discover.empty": "Eşleşen beceri bulunamadı",
   "skills.discover.hint": "skills.sh üzerinde arar. Bir GitHub deposu, klasörü veya SKILL.md dosyası bağlantıları da kullanılabilir.",
+  "skills.discover.popular": "Popüler",
   "skills.discover.query": "Anahtar kelimeler ya da bir skills.sh veya GitHub bağlantısı",
   "skills.discover.search": "Skills ara",
   "skills.discover.searching": "Aranıyor…",

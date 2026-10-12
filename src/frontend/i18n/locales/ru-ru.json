@@ -1937,6 +1937,7 @@
   "skills.detail.version": "Версия",
   "skills.discover.empty": "Подходящие навыки не найдены",
   "skills.discover.hint": "Поиск по skills.sh. Также подходят ссылки на репозиторий GitHub, папку или файл SKILL.md.",
+  "skills.discover.popular": "Популярные",
   "skills.discover.query": "Ключевые слова или ссылка на skills.sh или GitHub",
   "skills.discover.search": "Найти навыки",
   "skills.discover.searching": "Поиск…",

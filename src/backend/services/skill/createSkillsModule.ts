@@ -254,6 +254,8 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       return deps.marketplace.search(trimmed, signal);
     },
 
+    popular: (signal) => deps.marketplace.popular(signal),
+
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
       if (resolved.some((candidate) => candidate.source.registry !== 'github'))

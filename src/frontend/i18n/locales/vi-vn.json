@@ -1910,6 +1910,7 @@
   "skills.detail.version": "Phiên bản",
   "skills.discover.empty": "Không tìm thấy kỹ năng phù hợp",
   "skills.discover.hint": "Tìm trên skills.sh. Cũng có thể dùng liên kết tới kho GitHub, thư mục hoặc tệp SKILL.md.",
+  "skills.discover.popular": "Phổ biến",
   "skills.discover.query": "Từ khóa, hoặc liên kết skills.sh hay GitHub",
   "skills.discover.search": "Tìm kỹ năng",
   "skills.discover.searching": "Đang tìm…",

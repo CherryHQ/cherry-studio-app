@@ -1910,6 +1910,7 @@
   "skills.detail.version": "バージョン",
   "skills.discover.empty": "一致するスキルが見つかりません",
   "skills.discover.hint": "skills.sh を検索します。GitHub のリポジトリ、フォルダー、SKILL.md ファイルへのリンクも使えます。",
+  "skills.discover.popular": "人気",
   "skills.discover.query": "キーワード、または skills.sh / GitHub のリンク",
   "skills.discover.search": "スキルを検索",
   "skills.discover.searching": "検索中…",

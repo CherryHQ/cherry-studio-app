@@ -6,10 +6,18 @@ import { SkillsError, type SkillListing } from '@/shared/contracts/skills';
 import type { createGithubSkillSource, SkillSourceCandidate } from './skillSources';
 
 const segment = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/);
-const skillsShSchema = z.object({
-  skills: z.array(z.object({ id: z.string(), name: z.string(), source: z.string() })),
+const listingsSchema = z.object({
+  skills: z.array(
+    z.object({
+      source: z.string(),
+      skillId: z.string(),
+      name: z.string(),
+      installs: z.number().optional().catch(undefined),
+    }),
+  ),
 });
 const SEARCH_LIMIT = 20;
+const POPULAR_LIMIT = 50;
 
 export type SkillMarketplace = ReturnType<typeof createSkillMarketplace>;
 
@@ -58,38 +66,49 @@ export function createSkillMarketplace(github: ReturnType<typeof createGithubSki
     );
   }
 
+  async function listings(
+    request: { path: string; query?: Record<string, string> },
+    signal?: AbortSignal,
+  ): Promise<SkillListing[]> {
+    let data: unknown;
+    try {
+      ({ data } = await skillsSh.request<unknown>({
+        method: 'GET',
+        ...request,
+        signal,
+        maxResponseBytes: 512 * 1024,
+      }));
+    } catch (error) {
+      signal?.throwIfAborted();
+      throw new SkillsError('search-unavailable', 'skills.sh could not be reached.', {
+        cause: error,
+      });
+    }
+    const parsed = listingsSchema.safeParse(data);
+    if (!parsed.success)
+      throw new SkillsError('search-unavailable', 'skills.sh returned an unexpected response.');
+    return parsed.data.skills.flatMap(({ source, skillId, name, installs }) => {
+      const [owner, repo, ...rest] = source.split('/');
+      // skills.sh also lists other publishers; only `<owner>/<repo>` sources resolve to packages.
+      if (
+        rest.length > 0 ||
+        !segment.safeParse(owner).success ||
+        !segment.safeParse(repo).success ||
+        !skillId ||
+        skillId.includes('/')
+      )
+        return [];
+      return [{ name, source, url: `https://skills.sh/${source}/${skillId}`, installs }];
+    });
+  }
+
   return {
     resolveUrl,
-    async search(query: string, signal?: AbortSignal): Promise<SkillListing[]> {
-      let data: unknown;
-      try {
-        ({ data } = await skillsSh.request<unknown>({
-          method: 'GET',
-          path: '/api/search',
-          query: { q: query, limit: String(SEARCH_LIMIT) },
-          signal,
-          maxResponseBytes: 512 * 1024,
-        }));
-      } catch (error) {
-        signal?.throwIfAborted();
-        throw new SkillsError('search-unavailable', 'skills.sh could not be reached.', {
-          cause: error,
-        });
-      }
-      const parsed = skillsShSchema.safeParse(data);
-      if (!parsed.success)
-        throw new SkillsError('search-unavailable', 'skills.sh returned an unexpected response.');
-      return parsed.data.skills.flatMap((skill) => {
-        const [owner, repo, name] = skill.id.split('/');
-        if (
-          !segment.safeParse(owner).success ||
-          !segment.safeParse(repo).success ||
-          !name ||
-          skill.source !== `${owner}/${repo}`
-        )
-          return [];
-        return [{ name: skill.name, source: skill.source, url: `https://skills.sh/${skill.id}` }];
-      });
+    search: (query: string, signal?: AbortSignal) =>
+      listings({ path: '/api/search', query: { q: query, limit: String(SEARCH_LIMIT) } }, signal),
+    /** The registry's all-time most installed Skills, most installed first. */
+    async popular(signal?: AbortSignal): Promise<SkillListing[]> {
+      return (await listings({ path: '/api/skills/all-time/0' }, signal)).slice(0, POPULAR_LIMIT);
     },
   };
 }

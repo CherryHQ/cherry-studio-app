@@ -1928,6 +1928,7 @@
   "skills.detail.version": "Versão",
   "skills.discover.empty": "Não foram encontradas competências correspondentes",
   "skills.discover.hint": "Pesquisa no skills.sh. Também funcionam ligações para um repositório, pasta ou ficheiro SKILL.md do GitHub.",
+  "skills.discover.popular": "Populares",
   "skills.discover.query": "Palavras-chave ou uma ligação do skills.sh ou GitHub",
   "skills.discover.search": "Procurar Skills",
   "skills.discover.searching": "A pesquisar…",

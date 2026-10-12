@@ -81,6 +81,8 @@ export type SkillListing = {
   /** Publishing repository, `<owner>/<repo>`. */
   source: string;
   url: string;
+  /** Registry install count, when the registry reports one. */
+  installs?: number;
 };
 
 /**
@@ -90,6 +92,8 @@ export type SkillListing = {
 export interface SkillsModule {
   /** Search skills.sh by keywords; returns listings without downloading packages. */
   search(query: string, signal?: AbortSignal): Promise<SkillListing[]>;
+  /** skills.sh's most installed Skills; returns listings without downloading packages. */
+  popular(signal?: AbortSignal): Promise<SkillListing[]>;
   /** Resolve a skills.sh page or a public GitHub repository, directory, or `SKILL.md` URL. */
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
   /** Download, validate, and report environment guidance; never installs. */

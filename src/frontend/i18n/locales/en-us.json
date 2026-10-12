@@ -1919,6 +1919,7 @@
   "skills.detail.version": "Version",
   "skills.discover.empty": "No matching Skills found",
   "skills.discover.hint": "Searches skills.sh. Links to a GitHub repository, folder or SKILL.md file also work.",
+  "skills.discover.popular": "Popular",
   "skills.discover.query": "Keywords, or a skills.sh or GitHub link",
   "skills.discover.search": "Find Skills",
   "skills.discover.searching": "Searching…",

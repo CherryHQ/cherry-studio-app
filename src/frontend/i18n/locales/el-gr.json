@@ -1919,6 +1919,7 @@
   "skills.detail.version": "Έκδοση",
   "skills.discover.empty": "Δεν βρέθηκαν σχετικές δεξιότητες",
   "skills.discover.hint": "Αναζήτηση στο skills.sh. Λειτουργούν επίσης σύνδεσμοι προς αποθετήριο GitHub, φάκελο ή αρχείο SKILL.md.",
+  "skills.discover.popular": "Δημοφιλείς",
   "skills.discover.query": "Λέξεις-κλειδιά ή σύνδεσμος skills.sh ή GitHub",
   "skills.discover.search": "Εύρεση Skills",
   "skills.discover.searching": "Αναζήτηση…",

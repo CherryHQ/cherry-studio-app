@@ -138,7 +138,11 @@ function createFakes() {
   return fakes;
 }
 
-const marketplace = { resolveUrl: async () => [], search: async () => [] };
+const marketplace = {
+  popular: async () => [],
+  resolveUrl: async () => [],
+  search: async () => [],
+};
 
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
   const candidates = (): SkillSourceCandidate[] =>

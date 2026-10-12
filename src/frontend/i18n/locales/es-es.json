@@ -1928,6 +1928,7 @@
   "skills.detail.version": "Versión",
   "skills.discover.empty": "No se encontraron habilidades coincidentes",
   "skills.discover.hint": "Busca en skills.sh. También funcionan los enlaces a un repositorio, carpeta o archivo SKILL.md de GitHub.",
+  "skills.discover.popular": "Populares",
   "skills.discover.query": "Palabras clave o un enlace de skills.sh o GitHub",
   "skills.discover.search": "Buscar Skills",
   "skills.discover.searching": "Buscando…",

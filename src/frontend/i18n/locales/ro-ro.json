@@ -1928,6 +1928,7 @@
   "skills.detail.version": "Versiune",
   "skills.discover.empty": "Nu s-au găsit abilități potrivite",
   "skills.discover.hint": "Caută pe skills.sh. Funcționează și linkurile către un depozit GitHub, un folder sau un fișier SKILL.md.",
+  "skills.discover.popular": "Populare",
   "skills.discover.query": "Cuvinte cheie sau un link skills.sh ori GitHub",
   "skills.discover.search": "Caută Skills",
   "skills.discover.searching": "Se caută…",
