@@ -9,6 +9,7 @@ import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError, SkillsError, type SkillInspection } from '@/shared/contracts/skills';
+import { skillContentHashHex } from '@/shared/data/types/skill';
 
 import { SkillPage } from './SkillPage';
 import { SkillReasonList } from './SkillReasonList';
@@ -89,6 +90,8 @@ function SkillCandidate({
   const queryClient = useQueryClient();
 
   const { admission, candidate, issues, package: pkg } = inspection;
+  // The same value an installation stores, so the row reads the same before and after installing.
+  const version = pkg?.version ?? candidate.version;
   const status = admission?.status ?? null;
   const tone = status ? skillStatusTone(status) : 'danger';
   const isInstalled = candidate.installedSkillId !== null;
@@ -181,14 +184,22 @@ function SkillCandidate({
             trailing={<Text className="text-sm text-muted-foreground">{candidate.author}</Text>}
           />
         ) : null}
-        <Section.Item
-          label={t('skills.detail.revision')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">
-              {candidate.source.revision.slice(0, 12)}
-            </Text>
-          }
-        />
+        {version ? (
+          <Section.Item
+            label={t('skills.detail.version')}
+            trailing={<Text className="text-sm text-muted-foreground">{version}</Text>}
+          />
+        ) : null}
+        {pkg ? (
+          <Section.Item
+            label={t('skills.detail.revision')}
+            trailing={
+              <Text className="text-sm text-muted-foreground">
+                {skillContentHashHex(pkg.contentHash).slice(0, 12)}
+              </Text>
+            }
+          />
+        ) : null}
         {pkg ? (
           <Section.Item
             label={t('skills.detail.files')}
