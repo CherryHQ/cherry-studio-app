@@ -222,7 +222,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
-| `search_local_skills` | Scoped automatic-invocation metadata, 20 results per page |
+| `search_local_skills` | Scoped automatic-invocation metadata, 20 results per page; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
@@ -243,6 +243,15 @@ scope, including eligible additions installed during the turn. A new installatio
 `load_skill` to activate instructions and create the ordinary loading receipt. Manual-only packages
 cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
 not silently create bindings.
+
+The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
+subset, even when either is zero, and distinguishes them from the app's installed library, explicit
+selections and app-owned system workflows. Current inventory questions use `search_local_skills`
+with an empty query and `include_manual: true`: `total` is the requested scoped inventory count,
+`automaticTotal` is its automatically invocable subset, `matched` is the query count, and `returned`
+is one page. Complete lists follow `nextCursor` until null with the same options. This also refreshes
+inventory after a conversation installation without loading every package's instructions. Default
+automatic discovery and `load_skill` retain the manual-only invocation gate.
 
 Active entry instructions have a 48,000-character aggregate limit and at most 64 entries; oversized
 activation fails rather than truncating instructions. Explicit selections and previously active

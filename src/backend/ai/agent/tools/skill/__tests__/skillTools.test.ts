@@ -1,6 +1,7 @@
 import { SKILL_ACTIVE_MAX_CHARACTERS } from '@/shared/data/types/skill';
 
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
+import { createExpandingSkillScope } from '../../../host/skillScope';
 import type { RuntimeTool } from '../../../runtime';
 import { createSkillTools } from '../skillTools';
 
@@ -72,6 +73,59 @@ describe('skill tools', () => {
       skills: [{ skill_id: 'b' }],
     });
     expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+  });
+
+  it('includes manual-only metadata for an explicit inventory without granting loading access', async () => {
+    const search = toolNamed(tools, 'search_local_skills');
+    expect(await run(search, { query: '', include_manual: true })).toMatchObject({
+      total: 3,
+      automaticTotal: 2,
+      matched: 3,
+      returned: 3,
+      skills: [
+        { skill_id: 'a', invocation: { modelInvocable: true, userInvocable: true } },
+        { skill_id: 'b', invocation: { modelInvocable: true, userInvocable: true } },
+        { skill_id: 'manual', invocation: { modelInvocable: false, userInvocable: true } },
+      ],
+      nextCursor: null,
+    });
+    expect(await run(toolNamed(tools, 'load_skill'), { skill_id: 'manual' })).toMatchObject({
+      status: 'error',
+    });
+    expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+  });
+
+  it('enumerates every page and refreshes the count after a conversation installation', async () => {
+    const entries = Array.from({ length: 45 }, (_, index) =>
+      entry({ id: `skill-${index}`, name: `skill-${index}` }),
+    );
+    const expanding = createExpandingSkillScope(createScope(entries));
+    const search = toolNamed(createSkillTools(expanding.scope), 'search_local_skills');
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    const pageSizes: number[] = [];
+    do {
+      const page = await run(search, { query: '', ...(cursor ? { cursor } : {}) });
+      expect(page.total).toBe(45);
+      expect(page.matched).toBe(45);
+      pageSizes.push(page.returned as number);
+      ids.push(...(page.skills as { skill_id: string }[]).map(({ skill_id }) => skill_id));
+      cursor = page.nextCursor as string | null;
+    } while (cursor);
+    expect(pageSizes).toEqual([20, 20, 5]);
+    expect(ids).toEqual(entries.map(({ id }) => id));
+
+    const installed = entry({ id: 'installed', name: 'installed' });
+    expect(expanding.include(createScope([installed]), installed.id, installed.contentHash)).toBe(
+      true,
+    );
+    expect(await run(search, { query: 'installed' })).toMatchObject({
+      total: 46,
+      matched: 1,
+      returned: 1,
+      skills: [{ skill_id: 'installed' }],
+      nextCursor: null,
+    });
   });
 
   it('loads instructions and lists files only for scoped Skills', async () => {
