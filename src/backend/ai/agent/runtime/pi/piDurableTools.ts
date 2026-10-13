@@ -207,50 +207,70 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ...(codemode?.tools ?? []).map((tool) => ({
         ...tool,
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
-          const { tool: current } = await resolve(scriptCapability!, api, context);
+          const { tool: current, turnId } = await resolve(scriptCapability!, api, context);
           if (current.approval === 'deny') throw new Error('JavaScript execution is disabled.');
           // The ledger only grows within a turn, so one refusal settles every later call.
           let exhausted = false;
-          return tool.execute(
-            args,
-            {
-              ...api,
-              // Admission precedes upstream argument validation and nested task creation, so a
-              // refused call costs no task. The script receives an error and keeps its output.
-              async executeTool(name, arguments_, callContext, nestedOptions) {
-                const key = nestedOptions?.key;
-                if (key === undefined) throw new Error('A nested tool call requires a stable key.');
-                exhausted ||=
-                  options.admitCall !== undefined &&
-                  !(await options.admitCall(
-                    {
-                      type: 'toolCall',
-                      // Upstream derives the nested task's call ID the same way.
-                      id: `${api.callId}/${key}`,
-                      name,
-                      arguments: arguments_,
-                      parent: { taskId: api.taskId, callId: api.callId },
-                    },
-                    api,
-                    callContext,
-                  ));
-                if (exhausted)
-                  return {
-                    taskId: api.taskId,
-                    isError: true,
-                    diagnostics: [
+          const script = () =>
+            tool.execute(
+              args,
+              {
+                ...api,
+                // Admission precedes upstream argument validation and nested task creation, so a
+                // refused call costs no task. The script receives an error and keeps its output.
+                async executeTool(name, arguments_, callContext, nestedOptions) {
+                  const key = nestedOptions?.key;
+                  if (key === undefined)
+                    throw new Error('A nested tool call requires a stable key.');
+                  exhausted ||=
+                    options.admitCall !== undefined &&
+                    !(await options.admitCall(
                       {
-                        severity: 'error' as const,
-                        code: 'tool_call_limit_exceeded',
-                        message: BUDGET_REFUSAL,
+                        type: 'toolCall',
+                        // Upstream derives the nested task's call ID the same way.
+                        id: `${api.callId}/${key}`,
+                        name,
+                        arguments: arguments_,
+                        parent: { taskId: api.taskId, callId: api.callId },
                       },
-                    ],
-                  };
-                return api.executeTool(name, arguments_, callContext, nestedOptions);
+                      api,
+                      callContext,
+                    ));
+                  if (exhausted)
+                    return {
+                      taskId: api.taskId,
+                      isError: true,
+                      diagnostics: [
+                        {
+                          severity: 'error' as const,
+                          code: 'tool_call_limit_exceeded',
+                          message: BUDGET_REFUSAL,
+                        },
+                      ],
+                    };
+                  return api.executeTool(name, arguments_, callContext, nestedOptions);
+                },
               },
+              context,
+            );
+          // The capability's execute is the Host's boundary for tool diagnostics; it sees the
+          // script's outcome while Pi keeps the upstream result.
+          let result: Awaited<ReturnType<typeof script>> | undefined;
+          await current.execute({
+            input: RuntimeJsonValueSchema.parse(args),
+            signal: requireSignal(context),
+            toolCallId: api.callId,
+            turnId,
+            run: async () => {
+              result = await script();
+              const value: RuntimeJsonValue = result.isError
+                ? { status: 'error', code: 'script_failed' }
+                : { status: 'ok' };
+              return { value, artifacts: [] };
             },
-            context,
-          );
+          });
+          if (!result) throw new Error('The JavaScript capability did not run its script.');
+          return result;
         },
       })),
       ...(options.tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny')

@@ -470,8 +470,9 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 ### JavaScript Sandbox
 
 The `run_js` capability owns the setting, the approval policy and the transcript identity. Upstream
-`codemode` is its only executor: the Runtime registers that tool in the capability's place, and
-`run_js` itself is never a model tool. Upstream owns script syntax, tool discovery, `text` and
+`codemode` is its only executor: the Runtime registers that tool in the capability's place and runs
+each script inside the capability's `execute`, the same boundary where the Host records tool
+diagnostics. `run_js` itself is never a model tool. Upstream owns script syntax, tool discovery, `text` and
 `image` output, console capture, `store/load`, nested durable tasks and deterministic replay. Mobile
 adapts its transport to the existing native QuickJS-NG engine; no WASM runtime is loaded. Upstream
 `models.*` is disabled: model-backed capabilities such as `generate_image` retain Cherry's existing

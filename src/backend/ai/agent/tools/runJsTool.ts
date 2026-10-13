@@ -3,8 +3,8 @@
  *
  * The capability owns the setting, the approval policy and the transcript identity. Pi's Code Mode
  * executes it (docs/references/agent/agent-tools-and-resources.md): the Runtime registers the
- * upstream script tool in this capability's place, so a client without the interactive native
- * bridge offers no JavaScript capability at all.
+ * upstream script tool in this capability's place and runs each script through `execute`, so a
+ * client without the interactive native bridge offers no JavaScript capability at all.
  */
 
 import type { RuntimeTool } from '../runtime';
@@ -21,8 +21,10 @@ export function createRunJsTool(): RuntimeTool {
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.
     approval: 'auto',
-    async execute() {
-      throw new Error('JavaScript runs through Code Mode.');
+    // The script runs inside this call, so approval rechecks and tool diagnostics cover it.
+    async execute({ run }) {
+      if (!run) throw new Error('JavaScript runs through Code Mode.');
+      return run();
     },
   };
 }

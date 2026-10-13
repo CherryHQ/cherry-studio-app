@@ -244,6 +244,8 @@ export type RuntimeToolCall = {
   toolCallId: string;
   /** The executing turn, so a Host-bound tool can correlate to its live turn state. */
   turnId: string;
+  /** The Runtime's executor for a capability the Host only describes, such as Code Mode. */
+  run?(): Promise<RuntimeToolResult>;
 };
 
 export type RuntimeTool = {

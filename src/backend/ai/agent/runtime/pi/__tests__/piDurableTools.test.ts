@@ -55,6 +55,23 @@ function capability(overrides: Partial<RuntimeTool> = {}): RuntimeTool {
   };
 }
 
+/** The JavaScript capability as the Host supplies it: Code Mode runs through its execute. */
+function scriptCapability(
+  approval: RuntimeTool['approval'] = 'auto',
+  outcomes: unknown[] = [],
+): RuntimeTool {
+  return capability({
+    ref: { source: 'builtin', capabilityId: 'run_js' },
+    providerName: 'run_js',
+    approval,
+    async execute({ run }) {
+      const outcome = await run!();
+      outcomes.push(outcome.value);
+      return outcome;
+    },
+  });
+}
+
 function capabilityExtension(
   options: Omit<Parameters<typeof createPiDurableToolExtension>[0], 'resolve'>,
 ) {
@@ -141,10 +158,7 @@ describe('durable capability boundary', () => {
     const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
     const extension = capabilityExtension({
       name: 'cherry',
-      tools: [
-        capability({ approval: 'auto', execute }),
-        capability({ providerName: 'run_js', approval: 'auto' }),
-      ],
+      tools: [capability({ approval: 'auto', execute }), scriptCapability()],
       approve: async () => true,
       admitCall: (call, _api, context) => admitPiToolCall(conversation, context, 1, call, ['call']),
       codemode: defineExtension({
@@ -206,7 +220,7 @@ describe('durable capability boundary', () => {
         name: 'cherry',
         tools: [
           capability({ approval: 'auto' }),
-          ...(approval ? [capability({ providerName: 'run_js', approval })] : []),
+          ...(approval ? [scriptCapability(approval)] : []),
         ],
         approve: async () => true,
         codemode: defineExtension({
@@ -244,10 +258,7 @@ describe('durable capability boundary', () => {
     });
     const extension = capabilityExtension({
       name: 'cherry',
-      tools: [
-        capability({ approval: 'auto', execute: created }),
-        capability({ providerName: 'run_js', approval: 'auto' }),
-      ],
+      tools: [capability({ approval: 'auto', execute: created }), scriptCapability()],
       approve: async () => true,
       codemode: defineExtension({
         name: 'test-codemode',
@@ -327,6 +338,50 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test.each([
+    ['completed', false, { status: 'ok' }],
+    ['failed', true, { status: 'error', code: 'script_failed' }],
+  ])(
+    'a %s script reports its outcome through the JavaScript capability and keeps its own result',
+    async (_case, isError, outcome) => {
+      const outcomes: unknown[] = [];
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [scriptCapability('auto', outcomes)],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              parameters: { type: 'object' } as TSchema,
+              description: 'Run a script.',
+              replay: 'safe',
+              execute: async () => ({ output: [{ type: 'text', text: 'Script text.' }], isError }),
+            }),
+          ],
+        }),
+      });
+      const harness = await open(new MemoryStorage(), extension);
+      try {
+        const conversation = await harness.createConversation(
+          { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+          BACKGROUND_CONTEXT,
+        );
+        await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
+        // The Host traces tools at the capability's execute; Pi still stores the script's text.
+        expect(outcomes).toEqual([outcome]);
+        expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+          role: 'toolResult',
+          isError,
+          details: { output: { modelValue: 'Script text.' } },
+        });
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
   test('native child calls retain approval, structured results and parent artifacts', async () => {
     const artifact: RuntimeArtifact = {
       ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
@@ -367,11 +422,7 @@ describe('durable capability boundary', () => {
       codemode: parent,
       tools: [
         capability({ execute: async () => ({ value: { created: true }, artifacts: [artifact] }) }),
-        capability({
-          ref: { source: 'builtin', capabilityId: 'run_js' },
-          providerName: 'run_js',
-          approval: 'auto',
-        }),
+        scriptCapability(),
       ],
     });
     const harness = await open(new MemoryStorage(), extension);
