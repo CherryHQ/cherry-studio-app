@@ -23,6 +23,7 @@ import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
+import { MessageTranslationProvider } from './translation/MessageTranslationProvider';
 
 type ChatWorkspaceProps = {
   enteringUserMessageId?: string;
@@ -45,6 +46,8 @@ type ChatWorkspaceProps = {
   snapshot: ConversationSnapshot;
   onShare?: (messageId: string) => void;
   sessionId?: string;
+  /** Stable pairing scope for desktop conversations; local Sessions use the default. */
+  translationScope?: string;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -66,6 +69,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
+  translationScope = 'local',
   renderUsage,
 }: ChatWorkspaceProps) {
   const {
@@ -250,39 +254,48 @@ export function ChatWorkspace({
 
   return (
     <View className="flex-1 bg-chat-background">
-      <AssistantMessageActionsProvider
-        key={`assistant-actions-${listKey}`}
-        isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-        retryableMessageId={retryableMessageId}
-        onShare={onShare}
-        snapshot={live}
+      <MessageTranslationProvider
+        scope={translationScope}
+        sessionId={listKey ?? ''}
         messages={mergedMessages}
       >
-        <ChatMessageRowProvider messages={mergedMessages} timestampMessageIds={timestampMessageIds}>
-          <ChatTranscript
-            requiresInitialLayout={requiresInitialHistoryLayout}
-            isLoadingMore={isLoadingOlder || isLoadingNewer}
-            contentBottomInset={contentBottomInset}
-            // A draft window has no Session yet and reports an empty key. Keying the
-            // first send by its pending Session keeps the list on one dataset across
-            // the draft-to-Session handoff instead of starting as a keyless list.
-            dataKey={dataKey || listKey}
-            enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
-            extraData={messageListExtraData}
-            initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
-            initialScrollTarget={initialScrollTarget}
-            hasNewerMessages={hasNewerMessages}
-            keyboardOffset={keyboardOffset}
-            // ChatScreen owns background presses so blur also ends composer editing.
-            keyboardShouldPersistTaps="always"
-            messages={listMessages}
-            onLoadOlder={loadOlder}
-            onLoadNewer={loadNewer}
-            onReturnToLatest={returnToLatest}
-            renderMessage={renderChatMessage}
-          />
-        </ChatMessageRowProvider>
-      </AssistantMessageActionsProvider>
+        <AssistantMessageActionsProvider
+          key={`assistant-actions-${listKey}`}
+          isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+          retryableMessageId={retryableMessageId}
+          onShare={onShare}
+          snapshot={live}
+          messages={mergedMessages}
+        >
+          <ChatMessageRowProvider
+            messages={mergedMessages}
+            timestampMessageIds={timestampMessageIds}
+          >
+            <ChatTranscript
+              requiresInitialLayout={requiresInitialHistoryLayout}
+              isLoadingMore={isLoadingOlder || isLoadingNewer}
+              contentBottomInset={contentBottomInset}
+              // A draft window has no Session yet and reports an empty key. Keying the
+              // first send by its pending Session keeps the list on one dataset across
+              // the draft-to-Session handoff instead of starting as a keyless list.
+              dataKey={dataKey || listKey}
+              enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
+              extraData={messageListExtraData}
+              initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+              initialScrollTarget={initialScrollTarget}
+              hasNewerMessages={hasNewerMessages}
+              keyboardOffset={keyboardOffset}
+              // ChatScreen owns background presses so blur also ends composer editing.
+              keyboardShouldPersistTaps="always"
+              messages={listMessages}
+              onLoadOlder={loadOlder}
+              onLoadNewer={loadNewer}
+              onReturnToLatest={returnToLatest}
+              renderMessage={renderChatMessage}
+            />
+          </ChatMessageRowProvider>
+        </AssistantMessageActionsProvider>
+      </MessageTranslationProvider>
       {sessionId ? (
         <>
           <ConversationApprovals snapshot={live} />
