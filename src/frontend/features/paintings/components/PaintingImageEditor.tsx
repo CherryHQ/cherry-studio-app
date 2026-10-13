@@ -7,7 +7,6 @@ import {
   getComposerKeyboardStickyOffset,
   Image,
 } from '@cherrystudio/ui/components';
-import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -154,7 +153,6 @@ export function PaintingImageEditor({
   return (
     <View className="absolute inset-0 z-50 bg-constant-black" accessibilityViewIsModal>
       <StatusBar style="light" />
-      <Stack.Screen options={{ gestureEnabled: false }} />
       <View
         className="flex-row items-center gap-3 px-4 pb-3"
         style={{ paddingTop: Math.max(insets.top, 12) }}

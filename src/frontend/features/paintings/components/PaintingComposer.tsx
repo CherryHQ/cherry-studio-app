@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { RouteHeader } from '@/frontend/appShell/header';
 import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
 import {
   ComposerDismissArea,
@@ -371,6 +372,8 @@ export function PaintingComposer({
         }
       >
         <PaintingWorkspaceBridge workspaceId={workspaceId} onEdit={openEditor} />
+        {/* iOS toolbar composition forces the native header visible while mounted. */}
+        {!isImmersive ? <RouteHeader /> : null}
         <Stack.Screen options={{ headerShown: !isImmersive, gestureEnabled: !isImmersive }} />
         <View
           className="flex-1"

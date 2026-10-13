@@ -2,11 +2,14 @@ import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import SquareIcon from '@cherrystudio/app-icons/icons/square';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
 import { Button, Composer, Image } from '@cherrystudio/ui/components';
+import { useQueries } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
 import { type ReactNode, type RefObject, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import {
@@ -25,6 +28,7 @@ import {
   useModelPickerData,
   type ModelPickerModelItem,
 } from '@/frontend/components/ModelPicker';
+import { queryKeys, useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -39,6 +43,7 @@ import {
   supportsPaintingParameterPicker,
 } from './PaintingParameterPicker';
 import { PaintingReferencePicker } from './PaintingReferencePicker';
+import { PaintingReferencePreview } from './PaintingReferencePreview';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 import { usePaintingInput } from './usePaintingInput';
 
@@ -162,6 +167,22 @@ function PaintingInputControls({
   const firstAttachment = visibleAttachments[0];
   const workspace = presentation !== 'chat';
   const fixedReference = presentation === 'image-editor';
+  // Popover content mounts at the UI portal host, outside the app's data providers.
+  // Resolve file access here and pass only presentation and event handlers into it.
+  const file = useBackendModule('file');
+  const router = useRouter();
+  const candidateUris = useQueries({
+    queries: reference.images.map((image) => ({
+      enabled: workspace && panel === 'references',
+      queryKey: queryKeys.files.uri(image.fileEntryId),
+      queryFn: () => file.getUri(image.fileEntryId),
+      retry: false,
+    })),
+  });
+  function openReference(fileEntryId: string) {
+    setPanel(null);
+    router.push({ pathname: '/files/[fileEntryId]', params: { fileEntryId } });
+  }
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       if (modelSelection) modelSelection.onSelect(item.modelId);
@@ -380,10 +401,32 @@ function PaintingInputControls({
                   </Text>
                 </View>
                 {visibleAttachments.length > 0 ? (
-                  <ComposerAttachmentStrip
-                    attachments={visibleAttachments}
-                    onAttachmentRemove={input.removeAttachment}
-                  />
+                  <ScrollView
+                    horizontal
+                    contentContainerClassName="gap-2"
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {visibleAttachments.map((attachment) => (
+                      <View key={attachment.id}>
+                        <PaintingReferencePreview
+                          image={attachment}
+                          onPress={() => {
+                            if (attachment.fileEntryId) openReference(attachment.fileEntryId);
+                          }}
+                        />
+                        <Pressable
+                          accessibilityLabel={t('common.remove')}
+                          accessibilityRole="button"
+                          className="absolute top-0 right-0 size-11 active:opacity-70"
+                          onPress={() => input.removeAttachment(attachment.id)}
+                        >
+                          <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-constant-white">
+                            <XIcon className="size-4.5 text-constant-black" />
+                          </View>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </ScrollView>
                 ) : null}
                 {onEditReference &&
                 visibleAttachments.length === 1 &&
@@ -404,20 +447,45 @@ function PaintingInputControls({
                   </Button>
                 ) : null}
                 {reference.images.length > 1 ? (
-                  <PaintingReferencePicker
-                    reference={{
-                      ...reference,
-                      isPickerOpen: true,
-                      select: (image) => {
-                        reference.select(image);
-                        setPanel(null);
-                      },
-                      clear: () => {
+                  <>
+                    <ScrollView
+                      horizontal
+                      contentContainerClassName="gap-2"
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      {reference.images.map((image, index) => (
+                        <View className="items-center gap-1" key={image.fileEntryId}>
+                          <PaintingReferencePreview
+                            image={{ ...image, uri: candidateUris[index]?.data }}
+                            onPress={() => openReference(image.fileEntryId)}
+                          />
+                          <Button
+                            accessibilityLabel={t('painting.input.useReferenceNumber', {
+                              number: index + 1,
+                            })}
+                            onPress={() => {
+                              reference.select(image);
+                              setPanel(null);
+                            }}
+                            size="sm"
+                            variant="secondary"
+                          >
+                            <Button.Label>{t('painting.input.useReference')}</Button.Label>
+                          </Button>
+                        </View>
+                      ))}
+                    </ScrollView>
+                    <Button
+                      onPress={() => {
                         reference.clear();
                         setPanel(null);
-                      },
-                    }}
-                  />
+                      }}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Button.Label>{t('painting.input.newImage')}</Button.Label>
+                    </Button>
+                  </>
                 ) : null}
               </View>
             )

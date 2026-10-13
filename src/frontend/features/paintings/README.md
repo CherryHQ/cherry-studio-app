@@ -34,6 +34,8 @@ for editing replaces the participating input images with that output, preserving
 Only one native input is mounted at a time. Model selection and per-mode parameters survive the
 switch. A single-image edit/resize handoff opens this editor directly; multi-image handoffs retain
 the ordinary workspace so none of the participating images are hidden.
+Immersive editing and comparison unmount the route toolbar, whose iOS composition would otherwise
+force the native header over their own Back actions.
 
 The editor displays the original reference inside the requested output frame. Its hit target fits
 the original image, so normalized annotation positions exclude letterboxing and remain stable when
@@ -56,6 +58,8 @@ The reference popover can reopen a single image for editing. Annotation drafts r
 album attachment identity and the managed file identity, so returning before import finishes does
 not lose notes. Sending that image from the ordinary workspace also includes its saved notes.
 Submitted reference thumbnails open the original file preview.
+Popover reference images resolve in the input's data scope; the UI portal receives presentational
+previews and navigation callbacks, without mounting file queries outside their providers.
 
 Viewers opened by a workspace carry its mounted session identity. Edit, Resize, and generation
 details return to that workspace, retaining its timeline and drafts. Only a live workspace receives

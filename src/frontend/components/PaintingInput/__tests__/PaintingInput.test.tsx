@@ -45,9 +45,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@tanstack/react-query', () => ({ useQueries: () => [] }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => jest.fn() }));
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({ prepareAttachments: mockPrepareAttachments }),
+  queryKeys: { files: { uri: (id: string) => ['file-uri', id] } },
 }));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => ['provider::image'] }));
 jest.mock('@/frontend/components/ModelPicker', () => ({

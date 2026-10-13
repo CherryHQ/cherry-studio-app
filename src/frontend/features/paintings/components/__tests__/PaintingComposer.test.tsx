@@ -131,6 +131,7 @@ jest.mock('expo-router/react-navigation', () => ({
 }));
 
 jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
+jest.mock('@/frontend/appShell/header', () => ({ RouteHeader: () => null }));
 jest.mock('../PaintingImageEditor', () => ({
   PaintingImageEditor: (props: PaintingInputProps) =>
     jest.requireMock('@/frontend/components/PaintingInput').PaintingWorkspaceInput(props),
