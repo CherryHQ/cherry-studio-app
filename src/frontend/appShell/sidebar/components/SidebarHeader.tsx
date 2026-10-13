@@ -13,6 +13,7 @@ import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarFade } from './SidebarFade/SidebarFade';
 import { SidebarTitle } from './SidebarTitle';
 
@@ -27,6 +28,7 @@ import { SidebarTitle } from './SidebarTitle';
 export function SidebarHeader() {
   const { t } = useTranslation();
   const { openSearch } = useSidebarActions('SidebarHeader');
+  const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const insets = useSafeAreaInsets();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
@@ -48,13 +50,15 @@ export function SidebarHeader() {
             <Pressable
               accessibilityLabel={t('session.search.placeholder')}
               accessibilityRole="button"
+              accessibilityState={{ disabled }}
+              disabled={disabled}
               hitSlop={4}
               onPress={openSearch}
               style={({ pressed }) => ({
                 alignItems: 'center',
                 height: appSidebar.headerRowHeight,
                 justifyContent: 'center',
-                opacity: pressed ? 0.6 : 1,
+                opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
                 width: appSidebar.headerRowHeight,
               })}
               testID="sidebar-search"
@@ -82,6 +86,7 @@ function SidebarDeviceTitle() {
   const { closeDrawer } = useSidebarActions('SidebarDeviceTitle');
   const { source, remoteTarget, selectDevice } = useChatSource();
   const { connections } = useDesktopConnections();
+  const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const current =
     source === 'remote'
       ? connections.find((connection) => connection.id === remoteTarget.connectionId)
@@ -123,10 +128,11 @@ function SidebarDeviceTitle() {
     },
   ];
   return frame(
-    <ActionMenu items={items}>
+    <ActionMenu items={disabled ? [] : items}>
       <View
         accessibilityLabel={t('navigation.deviceSwitcher', { name })}
         accessibilityRole="button"
+        accessibilityState={{ disabled }}
         className="min-w-0 flex-row items-center gap-1"
         testID="sidebar-device-switcher"
       >

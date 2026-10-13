@@ -19,11 +19,21 @@ handles prevent concurrent Sessions from adopting each other's spans.
 
 Current producers are:
 
-- `DurableAgentHost`: one `pi.execute_tool` trace per tool execution, with Agent, Session, turn,
-  tool name and call ids. Returned failures and thrown errors retain safe error facts; cancellation
-  remains a distinct outcome. Export accepts these records as well as legacy `ai.turn` records.
-- Pi: conversation provider requests as `pi.generate_content`, including compaction. Observation
-  uses the existing result promise and does not read, tee, or replace the response stream.
+- `DurableAgentHost`: `ai.admission` covers input preparation and native admission; `ai.prepare`
+  covers rebuilding execution capabilities. `ai.recovery`, `ai.suspend`, `ai.observe`,
+  `ai.settlement` and `ai.checkpoint` record recovery, background suspension, observation, transcript
+  writes and checkpoint writes. Operations retain started records so unfinished boundaries remain
+  visible; failures retain safe error facts and a fixed `Agent operation failed` log. `ai.queue`
+  records queue length and `ai.turn_state` records new queued inputs and changed execution states,
+  including approval/question waits and terminal outcomes. Terminal outcomes are recorded after
+  successful transcript settlement, even when a later input is running or recovery has no observer;
+  `ai.settlement` reports the write outcome separately. These are point-in-time records, not
+  full turn-duration spans. Existing identities correlate independent operation traces.
+- Pi: language-model requests as `pi.generate_content`, including compaction and failures while
+  resolving configuration/permissions before a provider stream exists. `pi.execute_tool` records
+  attempted application capability execution, including built-in tools and image generation,
+  with tool call id, outcome and safe failure facts. The model bridge records terminal stream
+  events without copying provider payloads.
 - MCP: `mcp.connect` for each new connection, `mcp.list_tools` for each complete catalog request
   (including pagination), and `mcp.call_tool` for each attempted tool execution. A reconnect produces
   separate records with a new connection generation. Reusing a client adds no connection record.
@@ -43,11 +53,18 @@ Categories distinguish timeout, cancellation, HTTP rejection, protocol errors, s
 codes, and tool-reported `isError` results. Unknown failures remain unknown; messages are not parsed
 to guess a cause. Transport responses and caller-visible errors keep their existing behavior.
 
-Detailed tool/approval timing remains in message runtime statistics, and token usage remains in the
-existing invocation ledger. Tool traces record execution boundaries and outcomes, including built-in
-tools, without their arguments or results. Diagnostics do not instrument generic text/image
-generation, model listing/checks, context preparation, or approvals. This is a
-request-failure diagnostic surface, not a second analytics pipeline.
+Pi's existing event observer records fixed failure metadata for failed tasks, automatic retry
+attempts and interrupted tool executions. Recovery inspection records blocked tasks and their
+closed reason codes; the Harness report callback records extension failures that do not fail the
+calling operation. Failed asynchronous usage delivery is logged while its receipt remains pending.
+Task ids/kinds and available Session/turn/request/message ids are included, never event messages
+or event payloads. Task failures use current turn identities only for generation and tool tasks;
+compaction and extension task failures retain Session/task identity without borrowing the active
+turn. This does not export the engine database, raw events or its complete task graph.
+
+Detailed tool/approval timing remains in message runtime statistics, and token usage remains in
+the existing invocation ledger. Diagnostics do not duplicate those records or instrument generic
+text/image generation outside conversation execution, or model listing/checks.
 
 Span records contain ids, timestamps, elapsed time, model/provider/tool identifiers, catalog counts,
 finish reasons, and safe error facts. They never receive prompts, message text, tool

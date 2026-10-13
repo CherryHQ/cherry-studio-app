@@ -18,6 +18,8 @@ import {
 } from '@earendil-works/pi-durable';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type {
   DurableAgentRuntime,
   RuntimeConversationConfiguration,
@@ -65,6 +67,7 @@ const DESCRIPTOR: RuntimeDescriptor = {
   name: 'Pi Durable',
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 };
+const logger = loggerService.withContext('PiDurableAgentRuntime');
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
@@ -115,7 +118,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         return async (report) => {
           await this.requireRuntime().saveUsage(report.requestId, detachedJson({ owner, report }));
           // Delivery failure retains the outbox record. It must not cause the model to resend an answer.
-          this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+          this.delivery = this.delivery
+            .then(() => this.deliverUsage())
+            .catch((error) => {
+              logger.warn('Pi durable usage delivery failed', {
+                error,
+                operation: 'pi.usage_delivery',
+              });
+            });
         };
       },
       (providerId, signal) =>
@@ -139,6 +149,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         models: this.models.models,
         registry: this.registry,
         settings: { followUpMode: 'one-at-a-time' },
+        onReport: (error) => {
+          logger.warn('Pi durable extension failed', { error, operation: 'pi.extension' });
+        },
       });
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const sessionId of await this.unfinishedSessions()) {
@@ -171,7 +184,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   resume(): void {
-    this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+    this.delivery = this.delivery
+      .then(() => this.deliverUsage())
+      .catch((error) => {
+        logger.warn('Pi durable usage delivery failed', { error, operation: 'pi.usage_delivery' });
+      });
     this.requireRuntime().resume();
   }
 
@@ -223,6 +240,16 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async unfinishedSessions() {
     const runtime = this.requireRuntime();
     const inspection = await runtime.inspect();
+    for (const task of inspection.tasks) {
+      if (task.state.kind === 'blocked')
+        logger.warn('Pi durable task blocked', {
+          operation: 'pi.task',
+          taskId: Number(task.record.id),
+          taskKind: task.record.kind,
+          reasonCode: task.state.reason,
+          error: task.state.error,
+        });
+    }
     const conversations = new Set([
       ...inspection.tasks.map((task) => task.record.conversationId),
       ...inspection.submissions.map((submission) => submission.conversationId),

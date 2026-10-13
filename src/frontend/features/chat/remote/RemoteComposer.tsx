@@ -234,8 +234,22 @@ export function RemoteComposer({
               state: item?.state === 'failed' ? 'failed' : 'uploading',
               label:
                 item?.state === 'failed'
-                  ? t('remoteAgent.loadFailed')
-                  : t('remoteAgent.uploadProgress', { percent: Math.floor((progress ?? 0) * 100) }),
+                  ? t(
+                      item.error === 'UPLOAD_SOURCE_CHANGED'
+                        ? 'remoteAgent.uploadSourceChanged'
+                        : item.error === 'CHECKSUM_MISMATCH'
+                          ? 'remoteAgent.uploadChecksumMismatch'
+                          : item.error === 'VERIFICATION_FAILED'
+                            ? 'remoteAgent.uploadVerificationFailed'
+                            : item.error === 'NATIVE_HASH_UNAVAILABLE'
+                              ? 'remoteAgent.uploadNativeUnavailable'
+                              : 'remoteAgent.loadFailed',
+                    )
+                  : item?.state === 'verifying'
+                    ? t('remoteAgent.uploadVerifying')
+                    : t('remoteAgent.uploadProgress', {
+                        percent: Math.floor((progress ?? 0) * 100),
+                      }),
             };
           }}
         />
