@@ -72,6 +72,10 @@ test('exports only allowlisted trace fields even if stored metadata contains ext
       'http.status_code': 403,
       'tool.name': 'list_tasks',
       'error.code': 'Bearer-private',
+      'error.stage': 'stream',
+      'error.category': 'permission',
+      'error.retryable': false,
+      'tool.result.status': 'partial',
       endpoint: 'https://private.test',
       'tool.arguments': 'private parameters',
       'tool.result': 'private response',
@@ -85,9 +89,14 @@ test('exports only allowlisted trace fields even if stored metadata contains ext
       'plugin.error.reason': 'access',
       'http.status_code': 403,
       'tool.name': 'list_tasks',
+      'error.stage': 'stream',
+      'error.category': 'permission',
+      'error.retryable': false,
+      'tool.result.status': 'partial',
     },
   });
-  expect(JSON.stringify(projected)).not.toMatch(/private|Bearer|endpoint|arguments|result/);
+  expect(JSON.stringify(projected)).not.toMatch(/private|Bearer|endpoint|arguments/);
+  expect(projected?.attributes).not.toHaveProperty('tool.result');
   expect(projectDiagnosticTrace({ ...record, name: 'agent.event' })).toBeUndefined();
 });
 

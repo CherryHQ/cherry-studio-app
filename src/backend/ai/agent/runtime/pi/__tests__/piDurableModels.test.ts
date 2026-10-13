@@ -87,6 +87,8 @@ describe('Pi durable model bridge', () => {
         'gen_ai.request.model': reference.modelId,
         'gen_ai.provider.id': reference.providerId,
         'error.code': 'EXECUTION_UNAVAILABLE',
+        'error.stage': 'configuration',
+        'error.category': 'unknown',
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');
@@ -170,6 +172,102 @@ describe('Pi durable model bridge', () => {
 });
 
 describe('Pi durable request diagnostics', () => {
+  test.each([
+    { code: 'stream_disconnected', retryable: true, category: 'network' },
+    { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },
+    { code: 'insufficient_quota', status: 429, retryable: false, category: 'quota' },
+    { code: 'rate_limit_exceeded', status: 429, retryable: true, category: 'rate_limit' },
+    { code: 'runtime_error', status: 401, retryable: false, category: 'authentication' },
+    { code: 'runtime_error', status: 503, retryable: true, category: 'provider' },
+    { code: 'runtime_error', retryable: false, category: 'unknown' },
+  ])('records structured $category failures without changing the response', async (failure) => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const source = new AssistantMessageEventStream();
+    const message: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      stopReason: 'error',
+      errorMessage: 'private response',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { name: 'ProviderError', code: failure.code, message: 'private credential' },
+          // Retryability is deliberately absent: diagnostics must use the engine's classifier.
+          details: { ...(failure.status ? { status: failure.status } : {}), body: 'private body' },
+        },
+      ],
+    };
+    if (failure.category === 'network' || failure.category === 'timeout')
+      message.diagnostics![0]!.details!.retryable = true;
+    source.push({ type: 'error', reason: 'error', error: message });
+    bridge.streamFn.mockReturnValueOnce(source);
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(result.errorMessage).toBe(message.errorMessage);
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: {
+        'error.stage': 'stream',
+        'error.category': failure.category,
+        'error.code': failure.code,
+        'error.retryable': failure.retryable,
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
+  test('keeps provider resolution separate from streaming failures', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    bridge.resolveModel.mockRejectedValueOnce(
+      Object.assign(new Error('private model configuration'), { code: 'MODEL_UNAVAILABLE' }),
+    );
+    await bridge.registerModel(reference);
+    await bridge.models.completeSimple(bridge.getModel(reference)!, { messages: [] });
+    expect(bridge.streamFn).not.toHaveBeenCalled();
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: { 'error.stage': 'model_resolution', 'error.code': 'MODEL_UNAVAILABLE' },
+    });
+  });
+
+  test('does not classify an aborted stream as a network failure', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const source = new AssistantMessageEventStream();
+    const message: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      stopReason: 'aborted',
+      errorMessage: 'private cancellation',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { code: 'stream_disconnected', message: 'private transport error' },
+          details: { retryable: true },
+        },
+      ],
+    };
+    source.push({ type: 'error', reason: 'aborted', error: message });
+    bridge.streamFn.mockReturnValueOnce(source);
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('aborted');
+    expect(records.at(-1)).toMatchObject({
+      status: 'cancelled',
+      attributes: { 'gen_ai.response.finish_reason': 'aborted' },
+    });
+    expect(records.at(-1)?.attributes).not.toHaveProperty('error.category');
+    expect(records.at(-1)?.attributes).not.toHaveProperty('error.retryable');
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
   test('records request facts and preserves content without collecting prompts, responses, or usage', async () => {
     const { traces, records } = createTraceRecorder();
     const bridge = setup(async () => traces.startTrace('pi.generate_content'));
@@ -260,7 +358,11 @@ describe('Pi durable request diagnostics', () => {
     expect(result.stopReason).toBe('error');
     expect(records.at(-1)).toMatchObject({
       status: 'error',
-      attributes: { 'http.status_code': 401 },
+      attributes: {
+        'http.status_code': 401,
+        'error.stage': 'stream',
+        'error.category': 'authentication',
+      },
     });
     expect(JSON.stringify(records)).not.toContain('private');
   });

@@ -134,6 +134,8 @@ function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
             if (done) controller.close();
             else controller.enqueue(value);
           } catch (error) {
+            if (error instanceof Error && !init?.signal?.aborted && !('code' in error))
+              Object.assign(error, { code: 'stream_disconnected' });
             controller.error(
               error instanceof Error ? Object.assign(error, { retryable: true }) : error,
             );

@@ -41,6 +41,20 @@ Current producers are:
   refresh and remote revocation. Records carry plugin/method/step, outcome and safe failure facts;
   passive state reads add no trace. The existing request flow owns all network activity.
 
+Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
+`error.category` from structured codes/statuses: network, timeout, authentication, permission,
+quota, rate limit, provider, request, or unknown. Messages are not used to guess a category.
+Terminal model failures use Pi's existing retry decision for `error.retryable`; cancellation
+remains a cancelled outcome. Correlate existing retry attempt logs with model requests and the
+final `ai.turn_state` to distinguish a failed attempt from a turn that later succeeded. Retry
+backoff ending alone does not establish success.
+
+Tool traces project the built-in tools' app-owned status envelope into `tool.result.status`:
+`ok`, `error`, `partial`, `choice_required`, or `requires_user_action`. Returned business errors
+and partial failures end the span as an error even when the function did not throw. This projection
+does not alter tool results or execution failure policy. External MCP payloads are not interpreted
+as built-in envelopes; their trusted failure metadata and adapter diagnostics remain authoritative.
+
 MCP diagnostics start in the client/adapter, so connection and catalog failures are retained even
 when turn preparation fails before a conversation is admitted. Correlate MCP records by process id,
 server id, and connection generation. `tool.call.id` helps locate existing message parts, but a

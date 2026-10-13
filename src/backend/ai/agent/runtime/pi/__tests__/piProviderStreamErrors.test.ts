@@ -236,6 +236,7 @@ describe('Pi provider stream errors', () => {
       expect(isRetryableAssistantError(result)).toBe(true);
       expect(result.diagnostics?.at(-1)).toMatchObject({
         type: 'provider_response_failure',
+        error: { code: 'stream_disconnected' },
         details: { retryable: true },
       });
     },
