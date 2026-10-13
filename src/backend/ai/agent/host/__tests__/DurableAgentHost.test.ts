@@ -357,55 +357,95 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
-  test('a delayed settlement cannot replace the status of the next running queued input', async () => {
-    const state = fixture();
-    const first = await state.reserve('running');
-    await state.host.initialize();
-    let release!: () => void;
-    let started!: () => void;
-    const blocked = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const entered = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const finalize = state.store.finalizeAssistantMessage.bind(state.store);
-    jest.spyOn(state.store, 'finalizeAssistantMessage').mockImplementationOnce(async (input) => {
-      started();
-      await blocked;
-      return finalize(input);
-    });
-    const events: AgentEvent[] = [];
-    await state.host.observeSession(state.sessionId, (event) => events.push(event));
-    state.emit({ ...first, status: 'completed' });
-    await entered;
-    const reserved = await state.store.reserveSubmission({
-      sessionId: state.sessionId,
-      userMessageId: uuid(),
-      assistantMessageId: uuid(),
-      userParts: [{ id: 'next', type: 'text', text: 'Next question', state: 'done' }],
-      modelId: inferenceSnapshot.model.uniqueModelId,
-      inferenceSnapshot,
-    });
-    state.emit({
-      ...first,
-      identity: { sessionId: state.sessionId, turnId: reserved.turnId, requestId: reserved.turnId },
-      userMessageId: reserved.userMessage.id,
-      assistantMessageId: reserved.assistantMessage.id,
-      status: 'running',
-      parts: [],
-    });
-    release();
-    await state.host.close();
-    expect(state.host.getSessionStatus(state.sessionId)).toEqual({
-      turnId: reserved.turnId,
-      status: 'running',
-    });
-    expect(events.filter((event) => event.type === 'message.finalized')).toHaveLength(1);
-    expect(events.findLast((event) => event.type === 'turn.updated')).toMatchObject({
-      turn: { id: reserved.turnId, status: 'running' },
-    });
-  });
+  test.each([
+    ['completed', 'ok'],
+    ['failed', 'error'],
+    ['cancelled', 'cancelled'],
+    ['interrupted', 'interrupted'],
+  ] as const)(
+    'records a delayed %s outcome without replacing the next running input',
+    async (status, outcome) => {
+      const { traces, records } = createTraceRecorder();
+      const state = fixture({ traces });
+      const first = await state.reserve('running');
+      await state.host.initialize();
+      let release!: () => void;
+      let started!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const entered = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const finalize = state.store.finalizeAssistantMessage.bind(state.store);
+      jest.spyOn(state.store, 'finalizeAssistantMessage').mockImplementationOnce(async (input) => {
+        started();
+        await blocked;
+        return finalize(input);
+      });
+      const events: AgentEvent[] = [];
+      await state.host.observeSession(state.sessionId, (event) => events.push(event));
+      state.emit({
+        ...first,
+        status,
+        error:
+          status === 'failed'
+            ? { code: 'TIMEOUT', message: 'private provider response', retryable: true }
+            : null,
+      });
+      await entered;
+      const reserved = await state.store.reserveSubmission({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        userParts: [{ id: 'next', type: 'text', text: 'Next question', state: 'done' }],
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
+      state.emit({
+        ...first,
+        identity: {
+          sessionId: state.sessionId,
+          turnId: reserved.turnId,
+          requestId: reserved.turnId,
+        },
+        userMessageId: reserved.userMessage.id,
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'running',
+        parts: [],
+      });
+      release();
+      await state.host.close();
+      expect(state.host.getSessionStatus(state.sessionId)).toEqual({
+        turnId: reserved.turnId,
+        status: 'running',
+      });
+      expect(events.filter((event) => event.type === 'message.finalized')).toHaveLength(1);
+      expect(events.findLast((event) => event.type === 'turn.updated')).toMatchObject({
+        turn: { id: reserved.turnId, status: 'running' },
+      });
+      const terminal = records.filter(
+        (record) =>
+          record.name === 'ai.turn_state' &&
+          record.revision === 2 &&
+          record.context.turnId === first.identity.turnId &&
+          record.attributes['agent.turn.status'] === status,
+      );
+      expect(terminal).toEqual([
+        expect.objectContaining({
+          status: outcome,
+          context: { ...first.identity, messageId: first.assistantMessageId },
+          attributes: expect.objectContaining({
+            'agent.turn.status': status,
+            ...(status === 'failed'
+              ? { 'error.code': 'EXECUTION_FAILED', 'error.retryable': true }
+              : {}),
+          }),
+        }),
+      ]);
+      expect(JSON.stringify(terminal)).not.toContain('private');
+    },
+  );
 
   test('reserves the full input and assistant identity before native execution starts', async () => {
     const state = fixture();
@@ -531,7 +571,8 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   });
 
   test('settles completed native results at startup and keeps the idle working copy', async () => {
-    const state = fixture();
+    const { traces, records } = createTraceRecorder();
+    const state = fixture({ traces });
     const turn = await state.reserve();
     await state.store.renameSession(state.sessionId, 'My title');
     await state.host.initialize();
@@ -544,6 +585,16 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(state.conversations.discardConversation).not.toHaveBeenCalled();
       expect(state.copies.has(state.sessionId)).toBe(true);
       expect(await state.store.getSession(state.sessionId)).toMatchObject({ name: 'My title' });
+      expect(state.host.getSessionStatus(state.sessionId)).toBeNull();
+      expect(
+        records.filter((record) => record.name === 'ai.turn_state' && record.revision === 2),
+      ).toEqual([
+        expect.objectContaining({
+          status: 'ok',
+          context: { ...turn.identity, messageId: turn.assistantMessageId },
+          attributes: { 'agent.turn.status': 'completed' },
+        }),
+      ]);
     } finally {
       await state.host.close();
     }
@@ -602,7 +653,8 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   });
 
   test('publishes a terminal event only after the complete assistant row commits', async () => {
-    const state = fixture();
+    const { traces, records } = createTraceRecorder();
+    const state = fixture({ traces });
     const running = await state.reserve('running');
     await state.host.initialize();
     const statuses: Promise<string | undefined>[] = [];
@@ -623,6 +675,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         message: expect.objectContaining({ parts: running.parts }),
       }),
     );
+    expect(
+      records.filter(
+        (record) =>
+          record.name === 'ai.turn_state' &&
+          record.revision === 2 &&
+          record.attributes['agent.turn.status'] === 'completed',
+      ),
+    ).toHaveLength(1);
     await state.host.close();
   });
 
@@ -650,6 +710,14 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       attributes: { 'error.code': 'SQLITE_FULL' },
     });
     expect(JSON.stringify(writes)).not.toContain('disk full');
+    expect(
+      records.filter(
+        (record) =>
+          record.name === 'ai.turn_state' &&
+          record.revision === 2 &&
+          record.attributes['agent.turn.status'] === 'completed',
+      ),
+    ).toHaveLength(1);
     await state.host.close();
   });
 

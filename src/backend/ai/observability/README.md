@@ -25,7 +25,9 @@ Current producers are:
   writes and checkpoint writes. Operations retain started records so unfinished boundaries remain
   visible; failures retain safe error facts and a fixed `Agent operation failed` log. `ai.queue`
   records queue length and `ai.turn_state` records new queued inputs and changed execution states,
-  including approval/question waits and terminal outcomes. These are point-in-time records, not
+  including approval/question waits and terminal outcomes. Terminal outcomes are recorded after
+  successful transcript settlement, even when a later input is running or recovery has no observer;
+  `ai.settlement` reports the write outcome separately. These are point-in-time records, not
   full turn-duration spans. Existing identities correlate independent operation traces.
 - Pi: language-model requests as `pi.generate_content`, including compaction and failures while
   resolving configuration/permissions before a provider stream exists. `pi.execute_tool` records
@@ -56,7 +58,9 @@ attempts and interrupted tool executions. Recovery inspection records blocked ta
 closed reason codes; the Harness report callback records extension failures that do not fail the
 calling operation. Failed asynchronous usage delivery is logged while its receipt remains pending.
 Task ids/kinds and available Session/turn/request/message ids are included, never event messages
-or event payloads. This does not export the engine database, raw events or its complete task graph.
+or event payloads. Task failures use current turn identities only for generation and tool tasks;
+compaction and extension task failures retain Session/task identity without borrowing the active
+turn. This does not export the engine database, raw events or its complete task graph.
 
 Detailed tool/approval timing remains in message runtime statistics, and token usage remains in
 the existing invocation ledger. Diagnostics do not duplicate those records or instrument generic

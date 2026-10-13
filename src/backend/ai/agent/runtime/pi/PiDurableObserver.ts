@@ -187,7 +187,10 @@ export class PiDurableObserver {
           break;
         case 'task_failed':
           logger.error('Pi durable task failed', {
-            ...this.diagnosticContext(),
+            // Compaction and extension tasks need not belong to the currently displayed run.
+            ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
+              ? this.diagnosticContext()
+              : { sessionId: this.sessionId }),
             operation: 'pi.task',
             taskId: Number(event.taskId),
             taskKind: event.kind,

@@ -1172,6 +1172,8 @@ export class DurableAgentHost implements AgentProtocol {
         this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
       },
     );
+    // Settlement can outlive the current UI turn, including recovery without an observer.
+    this.recordTurnState({ ...turn.identity, messageId: assistant.id }, view.status, view.error);
   }
 
   private settle(turn: RuntimeDurableTurn) {
@@ -1303,11 +1305,7 @@ export class DurableAgentHost implements AgentProtocol {
       state.active.identity.requestId === turn.identity.requestId
     ) {
       this.publish(sessionId, { type: 'turn.updated', turn: projected });
-      this.setStatus(
-        sessionId,
-        { turnId: projected.id, status: projected.status },
-        projected.error,
-      );
+      this.setStatus(sessionId, { turnId: projected.id, status: projected.status });
     }
     if (!terminal) {
       if (state?.background && state.backgroundRequestId !== turn.identity.requestId) {
@@ -1469,29 +1467,15 @@ export class DurableAgentHost implements AgentProtocol {
         });
       }
   }
-  private setStatus(
-    sessionId: string,
-    status: AgentSessionStatus | null,
-    error?: AgentErrorView | null,
-  ) {
+  private setStatus(sessionId: string, status: AgentSessionStatus | null) {
     const previous = this.statuses.get(sessionId);
     if (previous?.turnId === status?.turnId && previous?.status === status?.status) return;
-    if (status) {
-      const span = this.ports.traces?.startTrace(
-        'ai.turn_state',
-        { sessionId, turnId: status.turnId },
-        { 'agent.turn.status': status.status, ...traceErrorAttributes(error) },
-      );
-      span?.end(
-        status.status === 'failed'
-          ? 'error'
-          : status.status === 'cancelled'
-            ? 'cancelled'
-            : status.status === 'interrupted'
-              ? 'interrupted'
-              : 'ok',
-      );
-    }
+    // Terminal outcomes are recorded by persistence, independently of the current UI status.
+    if (
+      status &&
+      ['running', 'awaiting-approval', 'awaiting-input', 'cancelling'].includes(status.status)
+    )
+      this.recordTurnState({ sessionId, turnId: status.turnId }, status.status);
     if (status) this.statuses.set(sessionId, Object.freeze(status));
     else this.statuses.delete(sessionId);
     for (const listener of this.statusListeners.get(sessionId) ?? [])
@@ -1503,6 +1487,25 @@ export class DurableAgentHost implements AgentProtocol {
           operation: 'agent.status_listener',
         });
       }
+  }
+  private recordTurnState(
+    context: TraceContext,
+    status: AgentSessionStatus['status'],
+    error?: AgentErrorView | null,
+  ) {
+    const span = this.ports.traces?.startTrace('ai.turn_state', context, {
+      'agent.turn.status': status,
+      ...traceErrorAttributes(error),
+    });
+    span?.end(
+      status === 'failed'
+        ? 'error'
+        : status === 'cancelled'
+          ? 'cancelled'
+          : status === 'interrupted'
+            ? 'interrupted'
+            : 'ok',
+    );
   }
   private renameFrom(operation: Promise<AgentSessionView | null>) {
     this.track(
