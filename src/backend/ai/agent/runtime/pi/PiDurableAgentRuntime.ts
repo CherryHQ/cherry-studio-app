@@ -18,6 +18,8 @@ import {
 } from '@earendil-works/pi-durable';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type {
   DurableAgentRuntime,
   RuntimeConversationConfiguration,
@@ -52,6 +54,12 @@ import {
   PiToolBudgetExceededError,
   piToolBudgetState,
 } from './piToolBudget';
+import {
+  PI_WEB_FAILURE_GROUP,
+  resolvePiWebToolRoutes,
+  selectPiClientTools,
+  type PiWebToolRoutes,
+} from './piWebTools';
 import { createPiContextCheckpoint, createWorkingPiEntries } from './piWorkingHistory';
 
 const DESCRIPTOR: RuntimeDescriptor = {
@@ -59,6 +67,7 @@ const DESCRIPTOR: RuntimeDescriptor = {
   name: 'Pi Durable',
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 };
+const logger = loggerService.withContext('PiDurableAgentRuntime');
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
@@ -75,6 +84,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   private readonly requestOwners = new WeakMap<AbortSignal, RuntimeExecutionIdentity>();
   /** Requests after an exhausted tool budget, which must not select tools. */
   private readonly toolFreeRequests = new WeakSet<AbortSignal>();
+  /** Requests that may use a native web tool: the turn has budget left and no failed lookup. */
+  private readonly webRequests = new WeakMap<AbortSignal, PiWebToolRoutes>();
   private readonly observers = new Set<PiDurableObserver>();
   private delivery: Promise<void> = Promise.resolve();
   private readonly models: ReturnType<typeof createPiDurableModels>;
@@ -107,12 +118,20 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         return async (report) => {
           await this.requireRuntime().saveUsage(report.requestId, detachedJson({ owner, report }));
           // Delivery failure retains the outbox record. It must not cause the model to resend an answer.
-          this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+          this.delivery = this.delivery
+            .then(() => this.deliverUsage())
+            .catch((error) => {
+              logger.warn('Pi durable usage delivery failed', {
+                error,
+                operation: 'pi.usage_delivery',
+              });
+            });
         };
       },
       (providerId, signal) =>
         Promise.resolve(this.requirePorts().traceModel?.(this.executionOwner(providerId, signal))),
       (signal) => signal !== undefined && this.toolFreeRequests.has(signal),
+      (signal) => (signal ? this.webRequests.get(signal) : undefined),
     );
   }
 
@@ -130,6 +149,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         models: this.models.models,
         registry: this.registry,
         settings: { followUpMode: 'one-at-a-time' },
+        onReport: (error) => {
+          logger.warn('Pi durable extension failed', { error, operation: 'pi.extension' });
+        },
       });
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const sessionId of await this.unfinishedSessions()) {
@@ -162,7 +184,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   resume(): void {
-    this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+    this.delivery = this.delivery
+      .then(() => this.deliverUsage())
+      .catch((error) => {
+        logger.warn('Pi durable usage delivery failed', { error, operation: 'pi.usage_delivery' });
+      });
     this.requireRuntime().resume();
   }
 
@@ -214,6 +240,16 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async unfinishedSessions() {
     const runtime = this.requireRuntime();
     const inspection = await runtime.inspect();
+    for (const task of inspection.tasks) {
+      if (task.state.kind === 'blocked')
+        logger.warn('Pi durable task blocked', {
+          operation: 'pi.task',
+          taskId: Number(task.record.id),
+          taskKind: task.record.kind,
+          reasonCode: task.state.reason,
+          error: task.state.error,
+        });
+    }
     const conversations = new Set([
       ...inspection.tasks.map((task) => task.record.conversationId),
       ...inspection.submissions.map((submission) => submission.conversationId),
@@ -234,8 +270,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       kind: stored.kind,
       model: { ...stored.model },
       instructions: stored.instructions,
+      initialInstructions: stored.initialInstructions,
       options: { ...stored.options },
       tools: stored.tools.map((tool) => this.toolTemplate(tool)),
+      ...(stored.webTools ? { webTools: { ...stored.webTools } } : {}),
     };
   }
 
@@ -250,7 +288,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         throw new Error('The working copy is obsolete.');
       return;
     }
-    const configuration = configurationBlueprint(seed.configuration);
+    const configuration = await this.configurationBlueprint(seed.configuration);
     const agent = await this.installConfiguration(seed.sessionId, configuration);
     const model = this.requireModel(configuration);
     const originalEntries = seed.history
@@ -276,6 +314,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       agent,
       options: configuration.options,
       configuration: detachedJson(configuration),
+      initialInstructions: configuration.initialInstructions,
       resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
       entries: originalEntries,
     });
@@ -284,7 +323,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async configure(sessionId: string, input: RuntimeConversationConfiguration): Promise<void> {
     const previous = this.configurations.get(sessionId);
-    const configuration = configurationBlueprint(input);
+    const configuration = await this.configurationBlueprint(input);
     const agent = await this.installConfiguration(sessionId, configuration);
     try {
       await this.requireRuntime().configure(
@@ -293,6 +332,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         configuration.options,
         BACKGROUND_CONTEXT,
         detachedJson(configuration),
+        configuration.initialInstructions,
       );
       await this.bindProvider(sessionId);
     } catch (error) {
@@ -488,9 +528,15 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       // still preflights strictly, and Pi settles recovered requests with its native no-model result.
       if (!rehydrating) throw error;
     }
+    const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
+    const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${sessionId}`,
-      tools: configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
+      // A web capability reaches the model through one route: its function or the native tool.
+      tools: selectPiClientTools(
+        configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
+        routes,
+      ),
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
         return inputs[0]
@@ -515,7 +561,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               : [],
           );
         const index = calls.findIndex((part) => part.id === call.id);
-        return index < 0 || index >= 64 ? 'The turn exceeded its 64 tool-call budget.' : undefined;
+        if (index < 0 || index >= 64) return 'The turn exceeded its 64 tool-call budget.';
+        // A failed native lookup is known only from the transcript, never from a tool result.
+        return nativeWeb &&
+          configuration.tools.find((tool) => tool.providerName === call.name)?.failureGroup ===
+            PI_WEB_FAILURE_GROUP &&
+          failedPiToolGroups(entries).includes(PI_WEB_FAILURE_GROUP)
+          ? 'This tool group stopped after an earlier failure.'
+          : undefined;
       },
       resolve: async (template, api, context) => {
         const identity = await this.taskIdentity(sessionId, api, context);
@@ -570,8 +623,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             this.requestOwners.set(signal, await this.taskIdentity(sessionId, api, context));
             const budget = piToolBudgetState(request.messages);
             if (budget === 'exceeded') throw new PiToolBudgetExceededError();
+            this.webRequests.delete(signal);
             if (budget === 'available') {
               this.toolFreeRequests.delete(signal);
+              if (nativeWeb && !(await this.webLookupFailed(sessionId, api, context)))
+                this.webRequests.set(signal, routes);
               return undefined;
             }
             this.toolFreeRequests.add(signal);
@@ -591,9 +647,34 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         provider: configuration.model.providerId,
         modelId: piDurableModelKey(configuration.model, configuration.kind),
       },
-      instructions: configuration.instructions,
+      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}`,
       extensions: [extension],
     };
+  }
+
+  /** The route is chosen once per configuration and stored with it, never re-derived on recovery. */
+  private async configurationBlueprint(input: RuntimeConversationConfiguration) {
+    const native =
+      input.webTools && input.kind !== 'image'
+        ? await this.dependencies
+            .nativeWebTools?.(input.model, input.options)
+            .catch(() => undefined)
+        : undefined;
+    return PiConfigurationSchema.parse({
+      ...input,
+      version: 1,
+      tools: input.tools.map(piToolBlueprint),
+      ...(input.webTools
+        ? { webRoutes: resolvePiWebToolRoutes(input.webTools, native, input.tools) }
+        : {}),
+    });
+  }
+
+  private async webLookupFailed(sessionId: string, api: HookApi, context: Context) {
+    const inputs = await this.requireRuntime().inputsForTask(api, context);
+    return failedPiToolGroups(
+      await this.requireRuntime().turnEntries(sessionId, inputs[0]!.record, context),
+    ).includes(PI_WEB_FAILURE_GROUP);
   }
 
   private toolTemplate(blueprint: PiStoredConfiguration['tools'][number]): RuntimeTool {
@@ -683,12 +764,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 }
 
-function configurationBlueprint(input: RuntimeConversationConfiguration) {
-  return PiConfigurationSchema.parse({
-    ...input,
-    version: 1,
-    tools: input.tools.map(piToolBlueprint),
-  });
+/** The Host writes its web guidance for the external tools; the selected route may differ. */
+function webInstructions(policy: PiStoredConfiguration['webTools'], routes: PiWebToolRoutes) {
+  if (!policy) return '';
+  if (routes.search === 'none' && routes.fetch === 'none')
+    return '\n\nLive web search and page retrieval are unavailable for this turn. Explain this when current sources are needed; do not claim to have searched or fetched a page.';
+  if (routes.search === 'server' || routes.fetch === 'server')
+    return "\n\nSome web lookups in this conversation run on the model provider's built-in tool. Its results carry no citation ids: never invent one for them. Their sources are attached to the answer automatically.";
+  return '';
 }
 
 function parseBoundary(value: string): EntryId {

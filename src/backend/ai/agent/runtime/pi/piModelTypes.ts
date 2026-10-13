@@ -13,6 +13,7 @@ import type {
   RuntimeOptions,
   RuntimeUsageContext,
 } from '../types';
+import type { PiNativeWebTools } from './piWebTools';
 
 /** Provider transport shared by the durable engine and the temporary model probe. */
 export type PiStreamFn = (
@@ -28,11 +29,14 @@ export type PiModelResolution = {
   redactionValues: readonly string[];
   streamFn: PiStreamFn;
   supportsTools: boolean;
+  nativeWebTools?: PiNativeWebTools;
   usageContext: RuntimeUsageContext;
 };
 
 export interface PiRuntimeDependencies {
   preflightModel(model: RuntimeModel): RuntimeModelPreflight | Promise<RuntimeModelPreflight>;
+  /** Native web support of the model as it would be requested now, without selecting a key. */
+  nativeWebTools?(model: RuntimeModel, options: RuntimeOptions): Promise<PiNativeWebTools>;
   resolveModel(
     model: RuntimeModel,
     options: RuntimeOptions,

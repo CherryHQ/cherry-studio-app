@@ -1,6 +1,7 @@
-import type { Api, Model } from '@earendil-works/pi-ai';
+import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 
+import { createTraceRecorder } from '../../../../observability/__tests__/_traceRecorder';
 import type { RuntimeModelPreflight } from '../../types';
 import { createPiDurableModels } from '../piDurableModels';
 import type { PiModelResolution } from '../piModelTypes';
@@ -27,7 +28,7 @@ const wire: Model<Api> = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
-function setup() {
+function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
   const streamFn = jest.fn(() => {
     const stream = new AssistantMessageEventStream();
     const message = { ...emptyAssistantMessage(wire), stopReason: 'stop' as const };
@@ -61,11 +62,35 @@ function setup() {
       resolveModel,
     },
     configuration,
+    undefined,
+    traceRequest,
   );
   return { ...bridge, streamFn, resolveModel, configuration };
 }
 
 describe('Pi durable model bridge', () => {
+  test('records configuration failures that happen before resolving the provider transport', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    await bridge.registerModel(reference);
+    bridge.configuration.mockRejectedValueOnce(
+      Object.assign(new Error('private execution owner'), { code: 'EXECUTION_UNAVAILABLE' }),
+    );
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(records.at(-1)).toMatchObject({
+      name: 'pi.generate_content',
+      status: 'error',
+      attributes: {
+        'gen_ai.request.model': reference.modelId,
+        'gen_ai.provider.id': reference.providerId,
+        'error.code': 'EXECUTION_UNAVAILABLE',
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
   test('keeps image scheduling separate from language requests for the same Cherry model', async () => {
     const bridge = setup();
     await bridge.registerModel(reference);
@@ -141,5 +166,102 @@ describe('Pi durable model bridge', () => {
         reasoning: undefined,
       }),
     );
+  });
+});
+
+describe('Pi durable request diagnostics', () => {
+  test('records request facts and preserves content without collecting prompts, responses, or usage', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const source = new AssistantMessageEventStream();
+    const message: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      content: [{ type: 'text', text: 'private response' }],
+      stopReason: 'stop',
+    };
+    source.push({ type: 'start', partial: message });
+    source.push({ type: 'done', reason: 'stop', message });
+    bridge.streamFn.mockReturnValueOnce(source);
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [{ role: 'user', content: 'private prompt', timestamp: 1 }],
+    });
+    expect(result.content).toEqual(message.content);
+    expect(records.at(-1)).toMatchObject({
+      status: 'ok',
+      attributes: {
+        'gen_ai.request.model': wire.id,
+        'gen_ai.provider.id': wire.provider,
+        'gen_ai.provider.api': wire.api,
+        'gen_ai.response.finish_reason': 'stop',
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+    expect(JSON.stringify(records)).not.toContain('gen_ai.usage');
+  });
+
+  test('retains provider status and code without copying response diagnostics', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const source = new AssistantMessageEventStream();
+    const message: AssistantMessage = {
+      ...emptyAssistantMessage(wire),
+      stopReason: 'error',
+      errorMessage: 'private response',
+      diagnostics: [
+        {
+          type: 'provider_response_failure',
+          timestamp: 1,
+          error: { name: 'ProviderError', message: 'private credential', code: 'quota' },
+          details: { statusCode: 429, body: 'private body' },
+        },
+      ],
+    };
+    source.push({ type: 'error', reason: 'error', error: message });
+    bridge.streamFn.mockReturnValueOnce(source);
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: { 'http.status_code': 429, 'error.code': 'quota' },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
+  test('keeps cancellation terminal when the provider resolves late', async () => {
+    const { traces, records } = createTraceRecorder();
+    const trace = traces.startTrace('pi.generate_content');
+    const bridge = setup(async () => trace);
+    bridge.streamFn.mockImplementationOnce(() => {
+      trace?.end('cancelled');
+      const source = new AssistantMessageEventStream();
+      const message = { ...emptyAssistantMessage(wire), stopReason: 'stop' as const };
+      source.push({ type: 'done', reason: 'stop', message });
+      return source;
+    });
+    await bridge.registerModel(reference);
+    await bridge.models.completeSimple(bridge.getModel(reference)!, { messages: [] });
+    expect(records.at(-1)?.status).toBe('cancelled');
+  });
+
+  test('records synchronous provider failure status without its sensitive message', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    bridge.streamFn.mockImplementationOnce(() => {
+      throw Object.assign(new Error('private credential'), { statusCode: 401 });
+    });
+    await bridge.registerModel(reference);
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(records.at(-1)).toMatchObject({
+      status: 'error',
+      attributes: { 'http.status_code': 401 },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
   });
 });

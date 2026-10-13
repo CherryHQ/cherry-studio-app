@@ -26,6 +26,14 @@ jest.mock('../SourceGroup', () => {
   };
 });
 
+jest.mock('../GoogleSearchSuggestions', () => {
+  const { createElement } = jest.requireActual('react');
+
+  return {
+    GoogleSearchSuggestions: (props: object) => createElement('GoogleSearchSuggestions', props),
+  };
+});
+
 jest.mock('../GeneratedFileStrip', () => {
   const { createElement } = jest.requireActual('react');
 
@@ -77,6 +85,26 @@ describe('MessageParts', () => {
       expect.objectContaining({ filename: 'summary.md' }),
     ]);
     expect(renderer.root.findByType('SourceGroup').props.parts).toEqual(message.data.parts);
+  });
+
+  test('shows supplied search suggestions below a settled answer, never as answer text', () => {
+    const suggestions = {
+      type: 'data-search-suggestions' as const,
+      data: { html: '<div>Suggestions</div>' },
+    };
+    const parts = [{ text: 'Hello', type: 'text' as const }, suggestions];
+    const settled = render(
+      <MessageParts message={{ ...makeMessage('success'), data: { parts } }} />,
+    );
+
+    expect(settled.root.findAllByType('MessagePartRenderer')).toHaveLength(1);
+    expect(settled.root.findByType('GoogleSearchSuggestions').props.html).toBe(
+      suggestions.data.html,
+    );
+    const streaming = render(
+      <MessageParts message={{ ...makeMessage('pending'), data: { parts } }} />,
+    );
+    expect(streaming.root.findAllByType('GoogleSearchSuggestions')).toHaveLength(0);
   });
 
   test('renders the generated image once without a duplicate Markdown image placeholder', () => {

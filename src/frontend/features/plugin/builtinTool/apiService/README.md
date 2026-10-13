@@ -1,13 +1,14 @@
 # Web Search API Service Settings
 
-This module owns web search provider API key fields and provider API key settings behavior.
+This module owns the web search provider credential fields (API key, API address, basic auth) and
+the provider check.
 
 ## Public Interface
 
-- API key forms, field groups, hooks, and pure API key helpers are exported from `index.ts`.
+- Field groups and pure API key helpers are exported from `index.ts`.
 
 ## Organization
 
 - `components/` contains field and form UI.
-- `hooks/` owns preference-backed API key settings state.
+- `hooks/` owns the provider check.
 - `utils/` contains pure API key parsing and normalization helpers with co-located tests.

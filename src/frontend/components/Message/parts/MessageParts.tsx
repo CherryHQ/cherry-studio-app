@@ -7,6 +7,7 @@ import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 import type { MessageListItem } from '../types';
 import { resolveMessageCitations } from './citations';
 import { GeneratedFileStrip } from './GeneratedFileStrip';
+import { GoogleSearchSuggestions } from './GoogleSearchSuggestions';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
 import { partitionMessageParts } from './partitionMessageParts';
@@ -96,6 +97,18 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
       {showSources ? (
         <SourceGroup citationNumberBySourceId={citations.sourceNumberById} parts={parts} />
       ) : null}
+      {isSettled
+        ? parts.flatMap((part, index) =>
+            part.type === 'data-search-suggestions'
+              ? [
+                  <GoogleSearchSuggestions
+                    key={getMessagePartKey(message, part, index)}
+                    html={part.data.html}
+                  />,
+                ]
+              : [],
+          )
+        : null}
       {/* Downloadable files collect in the footer once the answer settles.
           Images stay in the body as soon as their file part arrives. */}
       {isSettled && files.length > 0 ? <GeneratedFileStrip parts={files} /> : null}

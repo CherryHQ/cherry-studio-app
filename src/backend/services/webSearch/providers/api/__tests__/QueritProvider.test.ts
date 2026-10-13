@@ -104,6 +104,82 @@ describe('QueritProvider', () => {
     ]);
   });
 
+  test('keeps the usable results when one has no URL or title', async () => {
+    const requester = createMockJsonRequester({
+      error_code: 200,
+      error_msg: '',
+      query_context: { query: 'hello' },
+      results: {
+        result: [
+          { title: 'No URL', snippet: 'dropped' },
+          { url: 'https://querit.example/untitled', site_name: 'Querit Example' },
+        ],
+      },
+    });
+
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
+    const result = await provider.searchKeywords('hello', runtimeConfig);
+
+    expect(result.results).toEqual([
+      {
+        title: 'Querit Example',
+        content: '',
+        url: 'https://querit.example/untitled',
+        sourceInput: 'hello',
+      },
+    ]);
+  });
+
+  test('reads a page as markdown and takes its title from the metadata', async () => {
+    const requester = createMockJsonRequester({
+      error_code: 200,
+      error_msg: '',
+      results: [
+        {
+          url: 'https://example.com/final',
+          content: ' # Page ',
+          extrasMeta: { title: ' Page Title ' },
+        },
+      ],
+    });
+
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
+    const result = await provider.fetchUrls(' https://example.com/start ', runtimeConfig);
+
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: { urls: ['https://example.com/start'], format: 'markdown', extrasMeta: true },
+        method: 'POST',
+        operation: 'contents',
+        url: 'https://api.querit.ai/v1/contents',
+      }),
+    );
+    expect(result).toEqual({
+      query: 'https://example.com/start',
+      providerId: 'querit',
+      capability: 'fetchUrls',
+      inputs: ['https://example.com/start'],
+      results: [
+        {
+          title: 'Page Title',
+          content: '# Page',
+          url: 'https://example.com/final',
+          sourceInput: 'https://example.com/start',
+        },
+      ],
+    });
+  });
+
+  test('fails a page read that returns no content', async () => {
+    const requester = createMockJsonRequester({ error_code: 200, error_msg: '', results: [{}] });
+
+    const provider = new QueritProvider(createProvider(), new ApiKeyRotationState(), requester);
+
+    await expect(provider.fetchUrls('https://example.com', runtimeConfig)).rejects.toThrow(
+      'Querit contents returned empty content for https://example.com',
+    );
+  });
+
   test('raises an HTTP error before parsing when the response is not ok', async () => {
     const requester = createRejectedJsonRequester(
       new HttpError('HTTP request failed with status 503.', { kind: 'http', status: 503 }),
@@ -123,7 +199,20 @@ function createProvider(): WebSearchProvider {
     name: 'Querit',
     type: 'api',
     apiKeys: ['querit-key'],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.querit.ai' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.querit.ai',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: true,
+        apiHost: 'https://api.querit.ai',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

@@ -1,7 +1,7 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
-import { projectPiTurn } from '../piDurableProjection';
+import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -12,6 +12,24 @@ const writeFile = {
   inputPreview: { textField: 'content', nameField: 'filename' },
   approval: 'auto' as const,
 };
+
+test('older configurations remain readable and current replaceable instructions round-trip', () => {
+  const old = {
+    version: 1,
+    model: { providerId: 'p', modelId: 'm' },
+    instructions: 'App policy',
+    options: {},
+    tools: [],
+  };
+  expect(PiConfigurationSchema.parse(old).initialInstructions).toEqual([]);
+  const current = {
+    ...old,
+    initialInstructions: [{ key: 'skill:notes', text: 'Current skill body' }],
+  };
+  expect(
+    PiConfigurationSchema.parse(JSON.parse(JSON.stringify(current))).initialInstructions,
+  ).toEqual(current.initialInstructions);
+});
 const metadata = {
   kind: 'cherry.input',
   version: 1,

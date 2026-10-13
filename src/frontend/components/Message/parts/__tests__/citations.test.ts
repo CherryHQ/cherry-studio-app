@@ -3,6 +3,21 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { resolveMessageCitations } from '../citations';
 
 describe('resolveMessageCitations', () => {
+  test('makes native provider citations clickable while keeping copied text readable', () => {
+    const parts: CherryMessagePart[] = [
+      { type: 'text', text: 'Answer [cite:native-1]' },
+      {
+        type: 'source-url',
+        sourceId: 'native-1',
+        url: 'https://example.com/a',
+        providerMetadata: { cherry: { nativeWeb: true } },
+      },
+    ];
+    expect(resolveMessageCitations(parts).textByPartIndex.get(0)).toEqual({
+      markdown: 'Answer [❶](cite:https%3A%2F%2Fexample.com%2Fa)',
+      plainText: 'Answer [1]',
+    });
+  });
   test('resolves IDs from projected source URL parts', () => {
     const parts = [
       {

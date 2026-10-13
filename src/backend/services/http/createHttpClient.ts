@@ -99,7 +99,14 @@ function assertValidRequest(request: HttpRequest<unknown>): void {
     });
   }
 
-  if (request.redirect !== undefined && request.redirect !== 'error') {
+  if (request.credentials !== undefined && request.credentials !== 'omit') {
+    throw new HttpError('HTTP credentials policy is invalid.', {
+      code: 'INVALID_CREDENTIALS_POLICY',
+      kind: 'internal',
+    });
+  }
+
+  if (request.redirect !== undefined && !['error', 'manual'].includes(request.redirect)) {
     throw new HttpError('HTTP redirect policy is invalid.', {
       code: 'INVALID_REDIRECT_POLICY',
       kind: 'internal',
@@ -184,6 +191,7 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
   let mappedError = mapAxiosError(
     error,
     context?.request.errorDecoder ?? context?.route.errorDecoder,
+    context?.request.logPath,
   );
 
   if (!context) {
@@ -204,7 +212,7 @@ async function dispatchError(error: unknown, context?: HttpRequestContext): Prom
             kind: 'internal',
           });
     } catch (interceptorError) {
-      mappedError = mapAxiosError(interceptorError);
+      mappedError = mapAxiosError(interceptorError, undefined, context.request.logPath);
     }
   }
 
@@ -243,6 +251,7 @@ const dispatchRequestInterceptors = async (
     config.responseType = request.responseType;
     config.signal = request.signal;
     config.fetchOptions = { redirect: request.redirect };
+    if (request.credentials) config.withCredentials = false;
     config.timeout = request.timeoutMs ?? context.route.timeoutMs;
     config.url = request.path;
     config.validateStatus =
@@ -375,7 +384,11 @@ function createHttpClientWithTransport(
           status: response.status,
         });
       } catch (error) {
-        throw mapAxiosError(error, routedRequest.errorDecoder ?? route.errorDecoder);
+        throw mapAxiosError(
+          error,
+          routedRequest.errorDecoder ?? route.errorDecoder,
+          routedRequest.logPath,
+        );
       }
     },
   });

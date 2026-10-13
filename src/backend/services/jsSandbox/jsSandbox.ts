@@ -53,6 +53,8 @@ export type JsSandboxRun = {
   code: string;
   limits: JsSandboxLimits;
   signal: AbortSignal;
+  /** Fires after native cleanup, including when the caller already received cancellation. */
+  onSettled?: () => void;
 };
 
 export type JsSandbox = {
@@ -100,11 +102,13 @@ export function createJsSandbox(
     return null;
   }
   return {
-    async run({ code, limits, signal }) {
-      await acquireRunSlot(signal);
+    async run({ code, limits, signal, onSettled }) {
       let onAbort: (() => void) | undefined;
       let hasStarted = false;
+      let hasSlot = false;
       try {
+        await acquireRunSlot(signal);
+        hasSlot = true;
         signal.throwIfAborted();
         const runId = createRunId();
         // Settle on abort without waiting; the native side holds a cancel that
@@ -118,11 +122,17 @@ export function createJsSandbox(
         });
         // Cancellation releases the caller immediately, but the slot remains
         // occupied until native cleanup finishes, so cancelled threads count too.
-        const running = native.run(runId, code, limits).finally(releaseRunSlot);
+        const running = native.run(runId, code, limits).finally(() => {
+          releaseRunSlot();
+          onSettled?.();
+        });
         hasStarted = true;
         return parseOutcome(await Promise.race([running, aborted]));
       } finally {
-        if (!hasStarted) releaseRunSlot();
+        if (!hasStarted) {
+          if (hasSlot) releaseRunSlot();
+          onSettled?.();
+        }
         if (onAbort) {
           signal.removeEventListener('abort', onAbort);
         }

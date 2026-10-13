@@ -172,6 +172,36 @@ describe('useManagedComposerAttachments', () => {
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
   });
 
+  it('notifies draft subscribers after an image edit and rejects a stale source', async () => {
+    const source = {
+      ...readyAttachment('00000000-0000-7000-8000-000000000042', 'source.png'),
+      kind: 'image' as const,
+      mediaType: 'image/png',
+    };
+    const other = readyAttachment('00000000-0000-7000-8000-000000000043', 'other.pdf');
+    const replacement = {
+      ...source,
+      id: 'edited-image',
+      fileEntryId: '00000000-0000-7000-8000-000000000044' as FileEntryId,
+      name: 'edited.png',
+      uri: 'file:///managed/edited.png',
+    };
+    await renderHook([source, other]);
+    const listener = jest.fn();
+    const unsubscribe = snapshot!.subscribeAttachmentChanges!(listener);
+
+    await act(async () => {
+      expect(snapshot!.replaceAttachment(source.id, source.fileEntryId, replacement)).toBe(true);
+    });
+
+    expect(snapshot!.attachments).toEqual([{ ...replacement, id: source.id }, other]);
+    expect(listener).toHaveBeenCalledWith(snapshot!.attachments);
+    expect(snapshot!.replaceAttachment(source.id, source.fileEntryId, replacement)).toBe(false);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
   it('keeps an imported file when the user removes its draft reference', async () => {
     mockCreateInternalEntry.mockResolvedValue(
       resolvedFile('00000000-0000-7000-8000-000000000016', 'owned.pdf'),

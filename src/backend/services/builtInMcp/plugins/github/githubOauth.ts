@@ -70,18 +70,24 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 function safeError(error: unknown, signal?: AbortSignal): PluginError {
   if (signal?.aborted) return new PluginError('cancelled', 'GitHub authorization cancelled.');
   if (error instanceof PluginError) return error;
+  const metadata = isHttpError(error) ? { statusCode: error.status } : undefined;
   if (isHttpError(error)) {
     if (error.code && invalidGrantCodes.has(error.code))
-      return new PluginError('authorization', 'GitHub authorization requires reconnecting.');
+      return new PluginError(
+        'authorization',
+        'GitHub authorization requires reconnecting.',
+        metadata,
+      );
     if (error.status === 401)
-      return new PluginError('authorization', 'GitHub authorization is no longer valid.');
+      return new PluginError('authorization', 'GitHub authorization is no longer valid.', metadata);
     if (error.status === 429 || error.retryAfter || error.code === 'rate_limited')
-      return new PluginError('quota', 'GitHub authorization rate limited.');
-    if (error.status === 403) return new PluginError('access', 'GitHub denied resource access.');
+      return new PluginError('quota', 'GitHub authorization rate limited.', metadata);
+    if (error.status === 403)
+      return new PluginError('access', 'GitHub denied resource access.', metadata);
     if (error.status && error.status < 500)
-      return new PluginError('request', 'GitHub rejected the authorization request.');
+      return new PluginError('request', 'GitHub rejected the authorization request.', metadata);
   }
-  return new PluginError('network', 'Could not reach GitHub authorization.');
+  return new PluginError('network', 'Could not reach GitHub authorization.', metadata);
 }
 
 const TokenResponseSchema = z.object({

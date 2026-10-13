@@ -8,6 +8,7 @@ import {
 import type {
   WebSearchCapability,
   WebSearchProvider,
+  WebSearchProviderOverride,
   WebSearchProviderOverrides,
   WebSearchExecutionConfig,
 } from '@/shared/data/types/webSearch';
@@ -57,7 +58,7 @@ function getWebSearchProviderPresetById(
 
 export function mergeWebSearchProviderPreset(
   preset: WebSearchProviderPreset,
-  override?: WebSearchProviderOverrides[WebSearchProvider['id']],
+  override?: WebSearchProviderOverride,
 ): WebSearchProvider {
   return {
     id: preset.id,
@@ -80,6 +81,22 @@ export function mergeWebSearchProviderPreset(
     basicAuthUsername: trimString(override?.basicAuthUsername ?? ''),
     basicAuthPassword: trimString(override?.basicAuthPassword ?? ''),
   };
+}
+
+/**
+ * `exa-mcp` and `exa` are the same service behind two presets, and only `exa` has a key field.
+ * Without keys of its own, `exa-mcp` authenticates with the ones configured there.
+ */
+function inheritExaMcpApiKeys(
+  provider: WebSearchProvider,
+  providerOverrides: WebSearchProviderOverrides,
+): WebSearchProvider {
+  if (provider.id !== 'exa-mcp' || provider.apiKeys.length > 0) {
+    return provider;
+  }
+
+  const exaKeys = trimStringList(providerOverrides.exa?.apiKeys ?? []);
+  return exaKeys.length > 0 ? { ...provider, apiKeys: exaKeys } : provider;
 }
 
 async function inheritZhipuModelProviderApiKeys(
@@ -118,24 +135,29 @@ export async function getRuntimeConfig(
   };
 }
 
+/**
+ * `override` replaces the stored settings of this provider only, so unsaved settings can be checked
+ * through the same resolution a real lookup uses.
+ */
 export async function getProviderById<TProviderId extends WebSearchProvider['id']>(
   providerId: TProviderId,
   preferences: WebSearchPreferenceReader,
+  override?: WebSearchProviderOverride,
 ): Promise<WebSearchProvider & { id: TProviderId }> {
   const providerOverrides = await getProviderOverrides(preferences);
-  const override = providerOverrides[providerId];
   const preset = getWebSearchProviderPresetById(providerId);
-  const provider = mergeWebSearchProviderPreset(preset, override);
+  const provider = mergeWebSearchProviderPreset(preset, override ?? providerOverrides[providerId]);
 
-  return (await inheritZhipuModelProviderApiKeys(provider)) as WebSearchProvider & {
-    id: TProviderId;
-  };
+  return (await inheritZhipuModelProviderApiKeys(
+    inheritExaMcpApiKeys(provider, providerOverrides),
+  )) as WebSearchProvider & { id: TProviderId };
 }
 
 export async function getProviderForCapability(
   requestedProviderId: WebSearchProvider['id'] | undefined,
   capability: WebSearchCapability,
   preferences: WebSearchPreferenceReader,
+  override?: WebSearchProviderOverride,
 ): Promise<WebSearchProvider> {
   const providerId =
     requestedProviderId ?? (await preferences.get(DEFAULT_PROVIDER_KEY_BY_CAPABILITY[capability]));
@@ -147,7 +169,7 @@ export async function getProviderForCapability(
     );
   }
 
-  const provider = await getProviderById(providerId, preferences);
+  const provider = await getProviderById(providerId, preferences, override);
 
   if (
     !provider.capabilities.some((providerCapability) => providerCapability.feature === capability)

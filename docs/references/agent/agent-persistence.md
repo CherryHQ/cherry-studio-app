@@ -41,12 +41,16 @@ System capability enablement persists on the Agent row as a capability-group den
 capability resolves per turn and needs no Session persistence.
 
 The Agent's `mode` is either `standard` (the creation and migration default) or
-`minimal`. Minimal mode has a fixed text-chat and direct-image boundary: the Host skips built-in
-tools, MCP discovery and plugin guides, rejects new document attachments and image generation,
+`minimal`. Minimal mode supports text chat, direct images and provider-native web tools: the Host
+skips application tools, Skills, MCP discovery and plugin guides, rejects new document attachments
+and image generation,
 and uses a compact application prompt. Capability, approval and MCP binding preferences stay
 stored when modes change, so switching back to standard restores them. Mode changes apply to
 subsequent turns; existing transcript content remains part of the conversation history.
-Provider-native web search is not configured by this mode setting.
+Provider-native web search and page reading follow the shared web policy in either mode. They
+remain available when the web capability is enabled and the selected provider endpoint supports
+them. Minimal mode never falls back to application-owned external web services. Mode selection
+does not grant web access or change the stored web capability preference.
 
 ## Current limitations
 

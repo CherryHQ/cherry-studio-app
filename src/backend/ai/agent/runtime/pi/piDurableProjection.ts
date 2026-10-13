@@ -24,6 +24,8 @@ import type {
   RuntimeUsage,
 } from '../types';
 import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
+import { readPiWebResult } from './PiWebResponse';
+import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
 const ToolRefSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('builtin'), capabilityId: z.string().min(1) }),
@@ -46,13 +48,28 @@ export const PiToolBlueprintSchema = z.object({
   autoApprovalEligible: z.boolean().optional(),
 });
 
+const WebToolRouteSchema = z.enum(['client', 'server', 'none']);
+
 export const PiConfigurationSchema = z.object({
   version: z.literal(1),
   kind: z.enum(['language', 'image']).default('language'),
   model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
   instructions: z.string(),
+  initialInstructions: z
+    .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+    .max(64)
+    .default([]),
   options: RuntimeOptionsSchema,
   tools: z.array(PiToolBlueprintSchema),
+  webTools: z
+    .object({
+      modelToolsPreferred: z.boolean(),
+      clientSearchAvailable: z.boolean(),
+      clientFetchAvailable: z.boolean(),
+    })
+    .optional(),
+  /** Selected with the configuration, so queued, retried and recovered requests share one route. */
+  webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
 });
 
 const PiSubmissionSchema = z.object({
@@ -143,6 +160,8 @@ export function failedPiToolGroups(entries: readonly EntryRecord[]): string[] {
   const groups = new Set<string>();
   for (const entry of entries)
     for (const message of entry.model ?? []) {
+      if (message.role === 'assistant' && readPiWebResult(message)?.failed)
+        groups.add(PI_WEB_FAILURE_GROUP);
       if (message.role !== 'toolResult') continue;
       const details = ToolDetailsSchema.safeParse(message.details);
       if (
@@ -167,6 +186,44 @@ export function piDurableUsage(usage: Usage): RuntimeUsage {
     cacheWriteTokens: usage.cacheWrite,
     ...(usage.reasoning !== undefined ? { reasoningTokens: usage.reasoning } : {}),
   };
+}
+
+const ContinuationUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  totalTokens: z.number(),
+  noCacheTokens: z.number(),
+  cacheReadTokens: z.number(),
+  cacheWriteTokens: z.number(),
+  reasoningTokens: z.number().optional(),
+});
+const CONTINUATION_USAGE_DIAGNOSTIC = 'cherry.continuation-usage';
+
+/** Pi budgets context from the last request, while Cherry counts every billed continuation. */
+export function withPiContinuationUsage(
+  message: AssistantMessage,
+  lastUsage: Usage,
+): AssistantMessage {
+  return {
+    ...message,
+    usage: lastUsage,
+    diagnostics: [
+      ...(message.diagnostics ?? []),
+      {
+        type: CONTINUATION_USAGE_DIAGNOSTIC,
+        timestamp: Date.now(),
+        details: piDurableUsage(message.usage) as JsonObject,
+      },
+    ],
+  };
+}
+
+function responseUsage(message: AssistantMessage): RuntimeUsage {
+  const details = message.diagnostics?.find(
+    ({ type }) => type === CONTINUATION_USAGE_DIAGNOSTIC,
+  )?.details;
+  const total = ContinuationUsageSchema.safeParse(details);
+  return total.success ? total.data : piDurableUsage(message.usage);
 }
 
 /** Bound previews of growing tool inputs; completed results settle into the Cherry transcript. */
@@ -216,8 +273,9 @@ export function projectPiTurn(options: {
     if (!streaming) {
       const measured = piDurableUsage(message.usage);
       if ((measured.inputTokens ?? 0) > 0) contextTokens = measured.inputTokens;
-      for (const key of Object.keys(measured) as (keyof RuntimeUsage)[])
-        usage[key] = (usage[key] ?? 0) + (measured[key] ?? 0);
+      const billed = responseUsage(message);
+      for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
+        usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
     if (message.stopReason === 'error')
       error = {
@@ -231,13 +289,33 @@ export function projectPiTurn(options: {
           finishReason: message.stopReason,
         },
       };
+    const web = readPiWebResult(message);
+    // Anthropic splits one answer at every citation; the fragments are a single paragraph flow.
+    let answer: Extract<RuntimeOutputPart, { text: string }> | undefined;
     message.content.forEach((block, index) => {
+      if (index === web?.replayIndex) return;
       const id = `${prefix}:block:${index}`;
-      if (block.type === 'text' || block.type === 'thinking') {
+      if (block.type === 'text') {
+        const text = web?.texts.find((text) => text.contentIndex === index)?.text ?? block.text;
+        if (answer) answer.text += text;
+        else {
+          const part = {
+            id,
+            type: 'text' as const,
+            text,
+            state: streaming ? ('streaming' as const) : ('done' as const),
+          };
+          parts.push(part);
+          if (message.api === 'anthropic-messages') answer = part;
+        }
+        return;
+      }
+      answer = undefined;
+      if (block.type === 'thinking') {
         parts.push({
           id,
-          type: block.type === 'thinking' ? 'reasoning' : 'text',
-          text: block.type === 'thinking' ? block.thinking : block.text,
+          type: 'reasoning',
+          text: block.thinking,
           state: streaming ? 'streaming' : 'done',
         });
         return;
@@ -273,6 +351,26 @@ export function projectPiTurn(options: {
       if (part.state === 'interrupted')
         part.output = createInterruptedToolResult('The tool ended without a confirmed result.');
     });
+    if (!web) return;
+    for (const source of web.sources)
+      parts.push({ id: `${prefix}:source:${source.sourceId}`, type: 'source-url', ...source });
+    if (web.suggestions)
+      parts.push({
+        id: `${prefix}:search-suggestions`,
+        type: 'data-search-suggestions',
+        data: { html: web.suggestions },
+      });
+    if (web.failed)
+      parts.push({
+        id: `${prefix}:web-error`,
+        type: 'error',
+        error: {
+          code: 'web_lookup_failed',
+          message: 'The provider could not complete a web lookup.',
+          retryable: false,
+          origin: 'tool',
+        },
+      });
   }
 
   function toolResult(entry: EntryRecord, message: ToolResultMessage) {

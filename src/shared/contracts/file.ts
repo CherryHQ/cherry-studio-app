@@ -6,6 +6,7 @@ import type {
   FileAttachmentReport,
   FileAttachmentTarget,
 } from './fileAttachment';
+import type { EditFileImageInput } from './fileImageEdit';
 
 export type ResolvedFile = {
   entry: FileEntry;
@@ -43,6 +44,8 @@ export interface FileModule {
   subscribeChanges(listener: (entryId: FileEntryId) => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
+  /** Crops/rotates a still image into a new managed entry, preserving the source. */
+  editImage(input: EditFileImageInput, signal?: AbortSignal): Promise<ResolvedFile>;
   /** Validates managed references and parses supported content only when the caller submits. */
   prepareAttachments(input: PrepareFileAttachmentsInput): Promise<PreparedFile[]>;
   /** Hard-delete: removes the entry row and its bytes. */

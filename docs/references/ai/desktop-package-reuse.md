@@ -85,8 +85,9 @@ existing persisted endpoint and feature shapes. Portable URL rules live in the e
 `@cherrystudio/universal/utils/url` owner. Mobile does not retain the upstream source or generator.
 
 The saved Model schema retains the legacy `web-search` capability so existing user data remains
-readable. The published package models native search through `serverTools`, which has no Mobile
-consumer. Mobile excludes `ultra` from selectable reasoning efforts and rejects
+readable. The published package models native search through `serverTools`; the Pi runtime consumes
+the bundled declarations and eligibility as described in [Web Search](../web-search.md). Mobile
+excludes `ultra` from selectable reasoning efforts and rejects
 `adaptive-between-tools` entries until the native runtime supports them.
 
 ### Current migration ledger
@@ -102,7 +103,7 @@ check, platform exports, and device acceptance before the registry compatibility
 | Reasoning wire dialects | Implemented for AI SDK and Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
 | Service tiers | Implemented for the AI SDK request path | Does not add service-tier delivery to Pi conversation requests |
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
-| Server tools and model eligibility | Intentionally unsupported by the current Mobile product path | Must be ignored explicitly; Mobile's application Web Search remains independent |
+| Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |
 | V3 reader migration | Implemented; validation pending | Unknown vocabulary and incompatible entries are dropped individually; unsupported native tools and reasoning dialects remain excluded |
 | Mobile-only presets and OAuth | Retained as product extensions | Trusted connection data stays local; all model rows come from the remote snapshot |
@@ -123,8 +124,8 @@ are rejected before download and activation. The Mobile-owned provider extension
 all model rows, including the `github` namespace.
 
 The current download lane is v3. Unknown capabilities and efforts are dropped at the smallest list
-item; entries with an unsupported protocol are omitted. Provider-native `serverTools` and `ultra`
-have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
+item; entries with an unsupported protocol are omitted. `serverTools` in a downloaded catalog and
+`ultra` have no Mobile consumer. The `adaptive-between-tools` model dialect is also excluded while the
 pinned Anthropic SDK lacks `between_tools`. Always-on adaptive reasoning uses the shared interpreter.
 Provider connection and authentication behavior stays bundled. Old snapshots remain usable offline
 while startup attempts the schema upgrade; schema version takes priority over workflow revision.
