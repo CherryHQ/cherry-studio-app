@@ -23,6 +23,7 @@ import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
+import { piModelTerminalErrorAttributes } from '../piModelDiagnostics';
 import type { PiStreamFn as StreamFn } from '../piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 
@@ -236,10 +237,101 @@ describe('Pi provider stream errors', () => {
       expect(isRetryableAssistantError(result)).toBe(true);
       expect(result.diagnostics?.at(-1)).toMatchObject({
         type: 'provider_response_failure',
+        error: { code: 'stream_disconnected' },
         details: { retryable: true },
       });
     },
   );
+
+  test.each([
+    {
+      name: 'OpenAI Chat',
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      adapterFamily: undefined,
+      streamSimple: streamSimpleCompletions,
+    },
+    {
+      name: 'Anthropic',
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      adapterFamily: undefined,
+      streamSimple: streamSimpleAnthropic,
+    },
+    {
+      name: 'OpenAI Responses',
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      adapterFamily: undefined,
+      streamSimple: streamSimpleResponses,
+    },
+    {
+      name: 'Codex',
+      endpointType: ENDPOINT_TYPE.OPENAI_RESPONSES,
+      adapterFamily: 'openai-codex',
+      streamSimple: streamSimpleCodex,
+    },
+  ])(
+    'classifies a $name request that receives no response as a network failure',
+    async ({ endpointType, adapterFamily, streamSimple }) => {
+      const adapter = resolvePiApiAdapter(endpointType, adapterFamily);
+      const loadStream = jest
+        .spyOn(adapter, 'loadStreamSimple')
+        .mockResolvedValue(streamSimple as unknown as StreamFn);
+      const stream = await bindPiStream(adapter, {
+        apiKey: adapter.api === 'openai-codex-responses' ? CODEX_API_KEY : 'test-key',
+        // The native layer rejects with an OS-localized message without status or code.
+        fetch: async () => {
+          throw new Error('fetch failed: 似乎已断开与互联网的连接。');
+        },
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 256,
+      });
+      loadStream.mockRestore();
+      const source = await stream(
+        model(adapter.api),
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+        {},
+      );
+      const result = await source.result();
+      expect(result.stopReason).toBe('error');
+      // The code is diagnostic only; the existing retry decision still applies.
+      expect(isRetryableAssistantError(result)).toBe(true);
+      expect(piModelTerminalErrorAttributes(result)).toMatchObject({
+        'error.code': 'no_response',
+        'error.stage': 'stream',
+        'error.category': 'network',
+        'error.retryable': true,
+      });
+    },
+  );
+
+  test('does not classify a cancelled connection attempt as a network failure', async () => {
+    // Codex surfaces the fetch rejection itself; the SDK adapters replace it on abort.
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_RESPONSES, 'openai-codex');
+    const loadStream = jest
+      .spyOn(adapter, 'loadStreamSimple')
+      .mockResolvedValue(streamSimpleCodex as unknown as StreamFn);
+    const controller = new AbortController();
+    const stream = await bindPiStream(adapter, {
+      apiKey: CODEX_API_KEY,
+      fetch: async () => {
+        controller.abort();
+        throw new Error('fetch failed: The operation was aborted.');
+      },
+      headers: {},
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+    loadStream.mockRestore();
+    const result = await (
+      await stream(
+        model(adapter.api),
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+        { signal: controller.signal },
+      )
+    ).result();
+    expect(result.stopReason).toBe('aborted');
+    expect(result.diagnostics?.at(-1)?.error?.code).toBeUndefined();
+  });
 
   test.each([
     { status: 503, body: '暂时不可用', retryable: true },

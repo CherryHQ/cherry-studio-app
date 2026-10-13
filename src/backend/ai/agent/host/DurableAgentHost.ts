@@ -68,6 +68,7 @@ import {
   projectDurableHostTurn,
 } from './durableHostProjection';
 import { toAgentApprovalView } from './runtimeProjection';
+import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareDurableTurn,
@@ -934,7 +935,10 @@ export class DurableAgentHost implements AgentProtocol {
         );
         try {
           const output = await tool.execute(call);
-          span?.end(output.failure ? 'error' : 'ok', traceErrorAttributes(output.failure?.error));
+          if (span) {
+            const diagnostic = toolResultDiagnostics(tool.ref, output);
+            span.end(diagnostic.status, diagnostic.attributes);
+          }
           return output;
         } catch (error) {
           span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));

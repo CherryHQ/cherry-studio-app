@@ -475,7 +475,7 @@ diff --git a/dist/utils/diagnostics.js b/dist/utils/diagnostics.js
      if (!(error instanceof Error))
          return { name: "ThrownValue", message: formatThrownValue(error) };
 -    const code = error.code;
-+    const code = error.code ?? error.type;
++    const code = error.code ?? error.type ?? error.cause?.code;
      return {
          name: error.name || undefined,
          message: error.message || error.name,
