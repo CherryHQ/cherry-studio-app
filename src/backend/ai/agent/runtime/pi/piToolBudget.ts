@@ -1,7 +1,56 @@
+import type { Context } from '@earendil-works/chord';
 import type { Message, SystemMessage } from '@earendil-works/pi-ai';
+import { defineDoc, type HookApi, type ToolHookCall } from '@earendil-works/pi-durable';
 
 /** Per-run tool budget. Exhaustion asks for one final tool-free answer instead of failing. */
 export const PI_TOOL_BUDGET = Object.freeze({ maxToolCalls: 64, maxToolSteps: 20 });
+
+/** One bounded admission ledger, shared by model calls and nested calls across recovery. */
+export const PiToolBudget = defineDoc<{
+  inputId: number;
+  modelCalls: string[];
+  nestedCalls: string[];
+  failedGroups: string[];
+  finalResponseModelCalls?: number;
+}>({
+  kind: 'cherry.tool-budget',
+  version: 1,
+  scope: 'conversation',
+  history: 'latest',
+  fork: 'current',
+  initial: () => ({ inputId: 0, modelCalls: [], nestedCalls: [], failedGroups: [] }),
+});
+
+export function admitPiToolCall(
+  api: HookApi,
+  context: Context,
+  inputId: number,
+  call: ToolHookCall,
+  modelCalls: readonly string[],
+) {
+  return api.commit(async (tx) => {
+    const budget = await tx.doc(PiToolBudget, api.conversationId);
+    if (budget.inputId !== inputId) {
+      budget.inputId = inputId;
+      budget.modelCalls = [];
+      budget.nestedCalls = [];
+      budget.failedGroups = [];
+      delete budget.finalResponseModelCalls;
+    }
+    for (const id of modelCalls) {
+      if (budget.modelCalls.includes(id)) continue;
+      if (budget.modelCalls.length + budget.nestedCalls.length >= PI_TOOL_BUDGET.maxToolCalls)
+        break;
+      budget.modelCalls.push(id);
+    }
+    if (!call.parent) return budget.modelCalls.includes(call.id);
+    if (budget.nestedCalls.includes(call.id)) return true;
+    if (budget.modelCalls.length + budget.nestedCalls.length >= PI_TOOL_BUDGET.maxToolCalls)
+      return false;
+    budget.nestedCalls.push(call.id);
+    return true;
+  }, context);
+}
 
 export const PI_TOOL_BUDGET_FINAL_RESPONSE: SystemMessage = Object.freeze({
   role: 'system',
@@ -26,6 +75,7 @@ export class PiToolBudgetExceededError extends Error {
 export function piToolBudgetState(
   messages: readonly Message[],
   budget: { maxToolCalls: number; maxToolSteps: number } = PI_TOOL_BUDGET,
+  nestedToolCalls = 0,
 ): 'available' | 'final-response' | 'exceeded' {
   const start = messages.findLastIndex((message) => message.role === 'user') + 1;
   const steps = messages
@@ -38,7 +88,15 @@ export function piToolBudgetState(
     .filter((calls) => calls > 0);
   const exhaustedAfter = (count: number) =>
     count >= budget.maxToolSteps ||
-    steps.slice(0, count).reduce((total, calls) => total + calls, 0) >= budget.maxToolCalls;
-  if (steps.length > 0 && exhaustedAfter(steps.length - 1)) return 'exceeded';
+    steps.slice(0, count).reduce((total, calls) => total + calls, nestedToolCalls) >=
+      budget.maxToolCalls;
+  // Nested calls belong to the current budget, not to every earlier model step. Their final
+  // response boundary is recorded by the request hook instead of inferred from the transcript.
+  if (
+    steps.length > 0 &&
+    (steps.length - 1 >= budget.maxToolSteps ||
+      steps.slice(0, -1).reduce((total, calls) => total + calls, 0) >= budget.maxToolCalls)
+  )
+    return 'exceeded';
   return exhaustedAfter(steps.length) ? 'final-response' : 'available';
 }

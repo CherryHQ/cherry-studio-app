@@ -173,49 +173,26 @@ pinned to the catalog rather than to a live connection, it may execute over a re
 the same configuration; execution still rereads the stored server row, and a tool absent from the
 live listing fails closed.
 
-The snapshot contains the real executable callbacks. Pi cannot discover and execute an arbitrary
-application function by name: every callable target must still exist in the frozen turn catalog.
-The Pi binding consumes the Host-prepared application prompt, exposes system capabilities directly,
-and translates eligible MCP tools into three catalog tools for the active model loop. When that
-catalog is present, Pi also appends its binding-specific catalog workflow guidance to the prompt:
+The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
+functions: every target must still exist in the current authorized catalog.
 
-- `tool_search` ranks frozen MCP names and descriptions by the number of distinct query terms a
-  tool matches, then by BM25 inside that tier, and returns only the top tier, at most 20 matches
-  with bounded TypeScript call signatures. Because the MCP layer prefixes every description with its
-  service name, a service-name query browses that service and a domain word narrows it, without
-  plugin-specific search rules. Each result leads with `catalogTotal` (the frozen catalog size),
-  `matched` (the top-tier count before limits), and `returned` (the count actually included), and
-  lists whole query words that matched nothing as `unmatchedTerms`. Unmatched words describe lexical
-  coverage, not whether a capability exists. For service overviews, the prompt asks for one initial
-  service-name search rather than parallel subdomain searches. `returned === catalogTotal` means
-  the whole catalog is in hand; `returned === matched` without truncation means this query is
-  complete. A service-name search can still be truncated and require narrower queries. The model
-  should not repeat successful searches merely to confirm coverage. The complete serialized model
-  result is capped by both a 32,000-character ceiling and the live model-context headroom; a result
-  that drops matches reports `truncated: true`.
-- `tool_describe` returns one description and signature bounded by the same live headroom.
-- `tool_call` resolves an exact name only inside the frozen catalog and re-enters the target
-  `RuntimeTool` approval, cancellation, call-limit, artifact, and event boundary before execution.
+MCP capabilities register as upstream `deferred` tools. Upstream `tool_search` ranks names,
+descriptions and parameter metadata with BM25, then loads matching real tools for the next model
+request through `control.addTools`. The default result limit is eight; the query must be nonempty.
+Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
+only a small Unicode tokenization patch so Chinese service and capability names can be searched.
 
-The Pi binding keeps a per-turn inspected-name ledger. Each tool whose signature was returned by
-`tool_search` or `tool_describe` joins that ledger. Calling an uninspected tool does not enter its
-approval or execution boundary: the failed meta result returns the bounded signature and records
-the name so a corrected retry can proceed. Before dispatch, `tool_call` also validates `params`
-against the frozen MCP JSON Schema; a mismatch returns the same bounded signature without invoking
-the target, together with bounded field paths and validation reasons. The model receives these
-correction details, while failed meta activity retains only the failure code and a short summary.
-The message detail sheet translates the correction code rather than displaying the model's signature.
+Cherry no longer maintains empty-query browsing, coverage counters, distinct-term ranking tiers,
+`tool_describe`, a per-turn inspected-name ledger, or the `tool_call` dispatch/correction wrapper.
+Pi owns schema validation and tool exposure. Every direct or nested capability call still resolves
+its stable ref through the Host, checks current policy, requests approval when required, admits
+verified artifacts, and participates in the turn's budget and failure-group policy. Historical
+`tool_call` entries remain readable; reconstructed history uses real provider aliases.
 
-These catalog operations are model-binding mechanics, not application capabilities. `tool_search`
-and `tool_describe` emit user-visible message activity with a message-only `meta` ref. Pi receives
-the bounded descriptions and signatures, while Runtime output and persistence keep only compact
-queries, target names, counts, truncation status, and errors. An invalid `tool_call` target or a
-dispatch rejected before execution emits failed meta activity containing only the requested target
-name; unresolved parameters are neither persisted nor displayed. Once a target resolves, the
-Runtime emits and persists only that target's stable MCP ref, catalog alias, display snapshot,
-actual parameters, approval, and result; it does not emit a duplicate `tool_call` wrapper. When
-reconstructing Pi history, the Pi message adapter replays meta activity under its own model-loop
-name and wraps a persisted MCP target call back into `tool_call({ name, params })`.
+`tool_search` is a model-only meta tool. Code Mode uses upstream `searchTools`, `describeTool`, and
+`describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
+`callers` independently controls model and script access. Application callbacks provide structured
+`{ value, artifacts }` to scripts while retaining their model output and display details separately.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -227,10 +204,9 @@ records that real catalog, not Pi's meta catalog tools. Deferred tool discovery 
 tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
 Configuration changes therefore still affect the next turn only.
 
-Mobile does not expose the desktop `tool_exec` JavaScript executor, a shell, workspace, dynamic
-extension, or unrestricted filesystem tool. The TypeScript signatures are model guidance only and
-are never compiled or executed. `run_js` is not a substitute for `tool_exec`: its sandbox cannot
-call tools, MCP, or any application capability.
+Mobile exposes no shell, working directory, dynamic extension loader, or unrestricted filesystem.
+Code Mode can call only the authorized application tools; scripts have no direct network, device,
+or filesystem access.
 
 ## Controlled File Ledger
 
@@ -282,7 +258,8 @@ never shape-matched as a Cherry result envelope. Only an application capability 
 artifacts, and it does so after creating and validating each entry and granting it through the turn
 ledger.
 
-Tool results never contain absolute device paths or large base64 payloads. The Pi adapter projects
+Cherry-persisted tool details never contain absolute device paths or image base64 payloads.
+Explicit image reads carry pixels only in Pi’s model output, not in those details. The Pi adapter projects
 the typed outer envelope as the model's tool result, so an application artifact's bounded managed
 ref remains available for a follow-up tool call while an MCP payload with similar keys stays nested
 under `value`. Each artifact is also projected into a Runtime file part; the Host persists it as an
@@ -476,8 +453,8 @@ continues, and the only paging AnyDoc output accepts: its result is explicitly
 `format: 'json-fragment'`. Concatenating
 successive `text` windows until `nextOffset` is null recovers the complete original IR JSON, even
 through a single very long string or non-BMP characters. Fragments are not complete JSON objects.
-Parser/version, original warnings, and asset descriptors accompany each window. Assets are
-`reference-only`: no pixel bytes, image artifacts, or multimodal tool-result extension is added.
+Parser/version, original warnings, and asset descriptors accompany each window. Document assets remain `reference-only`; an explicit read of an authorized managed image is a
+separate operation.
 Mixed line/offset parameters fail explicitly. The original community `fallback` result remains an
 error result rather than being replaced by built-in text.
 
@@ -491,45 +468,48 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### JavaScript Sandbox
 
-`run_js` lets the model compute exactly instead of estimating: arithmetic, statistics, dates,
-counting, sorting, parsing, and data transformation. It takes a `code` string, run as the body of an
-async function, plus optional `timeout_ms` and `max_output_tokens`, and returns
-`{ status: 'ok', result?, logs? }` or `{ status: 'error', kind, message, logs? }`, where `kind` is
-`syntax`, `exception`, `timeout`, `memory`, `unsettled`, `cancelled`, or `internal`. The result is
-the returned value's JSON; Map and Set become object and array and BigInt becomes a string. The output
-budget follows Pi's codemode tool; mobile execution has a bounded deadline and shared concurrency
-limit.
+Clients with the interactive native bridge expose upstream `codemode` in place of `run_js`, under
+the existing JavaScript capability policy. Upstream owns script syntax, tool discovery, `text` and
+`image` output, console capture, `store/load`, nested durable tasks and deterministic replay. Mobile
+adapts its transport to the existing native QuickJS-NG engine; no WASM runtime is loaded. Upstream
+`models.*` is disabled: model-backed capabilities such as `generate_image` retain Cherry's existing
+approval, provider selection and usage attribution.
 
-Isolation is structural rather than a permission check. [`modules/js-sandbox`](../../../modules/js-sandbox/README.md)
-creates a fresh QuickJS runtime for every call, on its own native thread, and destroys it when the
-script ends. Its global object holds the standard ECMAScript built-ins, `atob`/`btoa`,
-`queueMicrotask`, `performance.now()`, and a captured `console`; there is no `Intl`,
-so locale arguments are ignored. Timers, modules, network, files, and every application binding are
-absent, and `eval` or `Function` only produce more code inside the same runtime. The tool runs as
-`auto` without an Agent capability group and requires only that the model supports function calling
-and the client includes the native module; older clients omit the tool. Every call starts fresh;
-inputs must be included in the code and results are retained through tool-result messages.
+A script receives structured tool results and can combine calls, but every nested call passes the
+same capability checks and approval as a direct model call. Parent and child calls share the
+sixty-four-call turn budget; only model rounds count toward twenty steps. The live parent shows
+bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
+child outputs are not copied into separate model-history messages. Unsafe child execution is not
+promised exactly once after a crash.
 
-- **Output.** Output within `max_output_tokens` (default 10,000, estimated at four characters per
-  token) keeps the structured form above. Longer output becomes one `output` text that keeps its
-  start and end around a count of the removed tokens, and the full text — the returned value's JSON,
-  then the console output — is saved as a generated `run_js-output.txt` managed file. The result
-  carries its `fullOutputFileEntryId`, and the file is granted to the turn so `read_file` can page
-  through it. The native side captures at most 500 KiB of each, which keeps a saved output within
-  `read_file`'s source limit.
-- **Limits.** Execution defaults to 5 seconds; `timeout_ms` can request at most 30 seconds.
-  Across all turns, the sandbox service runs at most two scripts concurrently and queues the rest
-  in arrival order. Queue waiting does not consume the execution deadline. Cancelling a queued call
-  removes it; cancelling a running call releases the caller immediately but holds its slot until
-  native cleanup finishes. QuickJS interrupts bytecode and regular expressions, and JavaScript
-  cannot catch the interruption. Each runtime's heap is limited to 64 MiB; an allocation past it
-  fails inside the script. Native stacks and output copies consume additional memory, and the
-  sandbox shares the app process, so these limits do not provide process-level crash isolation.
-  Recursion stops with a catchable `RangeError` about 7,000 calls deep.
+Each script has a fresh native VM, a 64 MiB heap and a dedicated 8 MiB thread stack with a 7 MiB
+QuickJS stack limit. The service shares at most two active VMs across turns. Cancellation removes
+queued runs and keeps running slots until native cleanup. The bridge also enforces a deterministic
+100,000-interrupt-poll compute budget, including periodic polls while draining promise jobs; waiting
+for tools consumes none of that budget. Upstream script timeout options still apply. These are
+in-process limits, not process isolation.
 
-The Host adds a prompt section asking the model to use the tool for exact computation, to copy the
-data it needs into the code because the sandbox cannot read files or tool results itself, and to page
-through a saved output instead of rerunning the script.
+Replay uses the upstream journal and start seed. Native clock reads are virtual, timezone is UTC,
+and WeakRef/FinalizationRegistry are absent. Engine, driver/prelude, platform and budget fingerprints
+reject incompatible unfinished replay. The VM transports JSON and invokes only upstream's prelude;
+its native message and clock callbacks are not globals available to scripts.
+
+Full output and script images become generated managed files. `managed-file:<id>` paths denote
+`read_file`'s `file_entry_id`; they are not device paths. File receipts and nested artifacts survive
+normal task replay and reach Cherry with the parent result. A crash between file creation and its
+Pi receipt can leave an unreferenced managed file; this is not an exactly-once file transaction.
+`store/load` is temporary Pi working data: history rebuilds, Cherry forks and backup/restore may clear
+it. Lasting results belong in managed files. No parallel long-term store is maintained.
+
+An older development client without `runBridge` retains the existing pure-computation `run_js`
+tool (default five-second timeout, maximum thirty seconds, no host calls). A client without the
+native module offers neither tool. A new development build is required for the interactive bridge.
+
+`read_file` can explicitly read PNG, JPEG, WebP and GIF within the same conversation file ledger.
+It reuses native image normalization and the existing attachment byte limit. Vision-capable model
+calls receive bounded pixels; scripts receive metadata. Pixels stay in Pi's working context and
+are omitted from Cherry history, so a rebuilt conversation must read the image again. Arbitrary
+paths and directory enumeration remain unavailable.
 
 ### Skill Boundary
 

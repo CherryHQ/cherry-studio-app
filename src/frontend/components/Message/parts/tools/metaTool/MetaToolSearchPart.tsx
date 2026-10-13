@@ -21,9 +21,11 @@ export function MetaToolSearchPart({ part }: { part: ToolMessagePart }) {
       ) : null}
       {namespaces.map((group) => (
         <View className="gap-1.5" key={group.namespace}>
-          <Text className="font-medium text-muted-foreground text-sm" selectable>
-            {group.namespace} ({group.tools.length})
-          </Text>
+          {group.namespace ? (
+            <Text className="font-medium text-muted-foreground text-sm" selectable>
+              {group.namespace} ({group.tools.length})
+            </Text>
+          ) : null}
           <View className="gap-1">
             {group.tools.map((tool) => (
               <View

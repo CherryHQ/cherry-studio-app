@@ -1,5 +1,10 @@
 import type { JsSandboxNativeModule } from '../../../../../modules/js-sandbox';
-import { createJsSandbox, JS_SANDBOX_MAX_CONCURRENT_RUNS, type JsSandboxRun } from '../jsSandbox';
+import {
+  createJsSandbox,
+  JS_SANDBOX_MAX_CONCURRENT_RUNS,
+  type JsSandboxRun,
+  type JsSandboxBridgeInput,
+} from '../jsSandbox';
 
 const LIMITS = {
   timeoutMs: 1000,
@@ -13,6 +18,69 @@ const DONE = { durationMs: 1, logs: '', logsTruncated: false };
 describe('createJsSandbox', () => {
   test('is absent on clients built without the native module', () => {
     expect(createJsSandbox(null)).toBeNull();
+  });
+
+  test('keeps the bridge absent on older clients', () => {
+    expect(createJsSandbox(createNative(async () => '{}'))!.startBridge).toBeUndefined();
+  });
+
+  test('routes bridge messages by run and keeps its listener until native cleanup', async () => {
+    const finished = deferred<string>();
+    const remove = jest.fn();
+    let deliverEvent!: (event: { runId: string; message: string }) => void;
+    const native = {
+      ...createNative(async () => JSON.stringify({ status: 'ok', ...DONE })),
+      runBridge: jest.fn(() => finished.promise),
+      deliver: jest.fn(),
+      addListener: jest.fn((_name: 'onMessage', listener: typeof deliverEvent) => {
+        deliverEvent = listener;
+        return { remove };
+      }),
+    };
+    const sandbox = createJsSandbox(native, () => 'bridge')!;
+    const onMessage = jest.fn();
+    const bridge = await sandbox.startBridge!(bridgeInput({ onMessage }));
+    deliverEvent({ runId: 'other', message: 'ignored' });
+    deliverEvent({ runId: 'bridge', message: 'done' });
+    expect(onMessage.mock.calls).toEqual([['done']]);
+    bridge.post('reply');
+    expect(native.deliver).toHaveBeenCalledWith('bridge', 'reply');
+    const stopping = bridge.stop();
+    expect(native.cancel).toHaveBeenCalledWith('bridge');
+    expect(remove).not.toHaveBeenCalled();
+    finished.resolve('');
+    await stopping;
+    expect(remove).toHaveBeenCalledTimes(1);
+    bridge.post('too late');
+    expect(native.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  test('a queued bridge shares pure-run slots and cancels before native admission', async () => {
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    let count = 0;
+    const native = {
+      ...createNative(() => {
+        if (++count === JS_SANDBOX_MAX_CONCURRENT_RUNS) started.resolve();
+        return finished.promise;
+      }),
+      runBridge: jest.fn(async () => ''),
+      deliver: jest.fn(),
+      addListener: jest.fn(() => ({ remove() {} })),
+    };
+    const sandbox = createJsSandbox(native)!;
+    const active = Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS }, () =>
+      sandbox.run(runInput()),
+    );
+    await started.promise;
+    const controller = new AbortController();
+    const queued = sandbox.startBridge!(bridgeInput({ signal: controller.signal }));
+    controller.abort(new Error('queued bridge cancelled'));
+    await expect(queued).rejects.toThrow('queued bridge cancelled');
+    expect(native.runBridge).not.toHaveBeenCalled();
+    expect(native.cancel).not.toHaveBeenCalled();
+    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await Promise.all(active);
   });
 
   test('passes one run id, code, and limits to the native run and parses its outcome', async () => {
@@ -210,6 +278,18 @@ function runInput(overrides: Partial<JsSandboxRun> = {}): JsSandboxRun {
     code: 'return 1',
     limits: LIMITS,
     signal: new AbortController().signal,
+    ...overrides,
+  };
+}
+
+function bridgeInput(overrides: Partial<JsSandboxBridgeInput> = {}): JsSandboxBridgeInput {
+  return {
+    setup: '',
+    data: '{}',
+    clock: { startedAt: 100, seed: 1 },
+    limits: LIMITS,
+    signal: new AbortController().signal,
+    onMessage() {},
     ...overrides,
   };
 }

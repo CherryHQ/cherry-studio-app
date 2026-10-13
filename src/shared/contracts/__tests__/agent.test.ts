@@ -23,6 +23,19 @@ import {
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
 
+test('transient context and runtime events round-trip without diagnostic payloads', () => {
+  for (const event of [
+    { type: 'context.updated', status: 'compacting' },
+    { type: 'context.updated', status: 'compaction-failed' },
+    { type: 'context.updated', status: null },
+    { type: 'runtime.failed' },
+  ])
+    expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
+  expect(AgentEventSchema.safeParse({ type: 'runtime.failed', error: 'device path' }).success).toBe(
+    false,
+  );
+});
+
 function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }

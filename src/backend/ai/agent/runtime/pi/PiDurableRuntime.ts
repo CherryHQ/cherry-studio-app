@@ -578,6 +578,10 @@ export class PiDurableRuntime {
     return this.harness.watchTaskGraph(context);
   }
 
+  get closed() {
+    return this.harness.closed;
+  }
+
   /** Call only after current capabilities and approval handlers have been reconstructed. */
   resume(): void {
     this.harness.resume();

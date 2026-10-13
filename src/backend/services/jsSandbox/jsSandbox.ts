@@ -60,6 +60,24 @@ export type JsSandboxRun = {
 export type JsSandbox = {
   /** Script failures resolve as outcomes; only cancellation rejects. */
   run(input: JsSandboxRun): Promise<JsSandboxOutcome>;
+  /** Absent on development clients built before the interactive native bridge. */
+  startBridge?(input: JsSandboxBridgeInput): Promise<JsSandboxBridge>;
+};
+
+export type JsSandboxBridgeInput = {
+  setup: string;
+  data: string;
+  clock: { startedAt: number; seed: number };
+  limits: JsSandboxLimits;
+  signal: AbortSignal;
+  onMessage(message: string): void;
+};
+
+export type JsSandboxBridge = {
+  post(message: string): void;
+  /** Empty on normal termination, otherwise a native error description. */
+  result: Promise<string>;
+  stop(): Promise<void>;
 };
 
 /** Shared across service instances and turns; each run can allocate 64 MiB. */
@@ -102,6 +120,54 @@ export function createJsSandbox(
     return null;
   }
   return {
+    ...(native.runBridge && native.deliver && native.addListener
+      ? {
+          async startBridge(input: JsSandboxBridgeInput): Promise<JsSandboxBridge> {
+            await acquireRunSlot(input.signal);
+            let started = false;
+            let subscription: { remove(): void } | undefined;
+            const runId = createRunId();
+            const abort = () => native.cancel(runId);
+            try {
+              input.signal.throwIfAborted();
+              subscription = native.addListener!('onMessage', (event) => {
+                if (event.runId === runId) input.onMessage(event.message);
+              });
+              input.signal.addEventListener('abort', abort, { once: true });
+              let finished = false;
+              const result = native.runBridge!(
+                runId,
+                input.setup,
+                input.data,
+                input.clock,
+                input.limits,
+              ).finally(() => {
+                finished = true;
+                subscription?.remove();
+                input.signal.removeEventListener('abort', abort);
+                releaseRunSlot();
+              });
+              started = true;
+              return {
+                post: (message) => {
+                  if (!finished) native.deliver!(runId, message);
+                },
+                result,
+                stop: async () => {
+                  if (!finished) abort();
+                  await result;
+                },
+              };
+            } finally {
+              if (!started) {
+                subscription?.remove();
+                input.signal.removeEventListener('abort', abort);
+                releaseRunSlot();
+              }
+            }
+          },
+        }
+      : {}),
     async run({ code, limits, signal, onSettled }) {
       let onAbort: (() => void) | undefined;
       let hasStarted = false;

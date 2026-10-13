@@ -72,6 +72,58 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
 }
 
 describe('Pi turn projection', () => {
+  test('preserves upstream loaded tool names for search presentation', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'search',
+                  name: 'tool_search',
+                  arguments: { query: 'notes' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'search',
+              toolName: 'tool_search',
+              content: [{ type: 'text', text: 'Loaded 1 tool.' }],
+              details: { loaded: ['mcp_notes'] },
+              isError: false,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.parts[0]).toMatchObject({
+      type: 'tool',
+      toolRef: { source: 'meta', name: 'tool_search' },
+      state: 'output-available',
+      output: { value: { loaded: ['mcp_notes'] } },
+    });
+  });
+
   test('recovered terminal inputs settle tool calls that have no result entry', () => {
     const turn = projectPiTurn({
       sessionId: 'session',

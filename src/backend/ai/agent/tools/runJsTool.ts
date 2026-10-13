@@ -89,6 +89,8 @@ export function createRunJsTool({ sandbox, files }: RunJsToolDependencies): Runt
     displayName: 'Run JavaScript',
     description: `Run JavaScript in an isolated sandbox for exact computation: arithmetic, statistics, date and time math, counting, sorting, parsing, and transforming data. \`return\` a JSON-serializable value (Map and Set become object and array, BigInt becomes a string); \`console.log\` output is returned as \`logs\`. Standard ECMAScript plus atob/btoa. There is no Intl, so locale arguments to toLocaleString and similar methods are ignored; format numbers and dates yourself. There is no network, file, timer, module, device, or app access. Every call starts fresh; include every input value in the code. Memory is limited to 64 MB. Execution defaults to ${RUN_JS_DEFAULT_TIMEOUT_MS / 1000} seconds; \`timeout_ms\` can request at most ${RUN_JS_MAX_TIMEOUT_MS / 1000} seconds. Parallel calls may queue before execution. Output over \`max_output_tokens\` keeps its start and end, and the full text is saved to a file you can page through with \`read_file\`.`,
     inputSchema: toRuntimeInputSchema(runJsInputSchema),
+    // A Code Mode script already owns a VM; nesting another could exhaust the shared run slots.
+    callers: ['model'],
     // The catalog overrides this from the resolved binding policy; the value
     // here is only the floor this tool declares for itself.
     approval: 'auto',

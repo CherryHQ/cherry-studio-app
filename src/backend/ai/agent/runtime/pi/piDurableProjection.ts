@@ -18,12 +18,12 @@ import {
 } from '../toolResults';
 import type {
   RuntimeError,
+  RuntimeJsonValue,
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolInputPreview,
   RuntimeUsage,
 } from '../types';
-import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -42,6 +42,8 @@ export const PiToolBlueprintSchema = z.object({
   displayName: z.string(),
   description: z.string(),
   inputSchema: RuntimeJsonValueSchema,
+  outputSchema: RuntimeJsonValueSchema.optional(),
+  callers: z.array(z.enum(['model', 'tools'])).optional(),
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
   failureGroup: z.string().optional(),
@@ -252,6 +254,10 @@ export function projectPiTurn(options: {
   active?: boolean;
   inherited?: boolean;
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
+  nestedTools?: ReadonlyMap<
+    string,
+    { parentCallId: string; name: string; args: string; status: string; error?: string }
+  >;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
   const { record, entries } = options;
@@ -320,17 +326,17 @@ export function projectPiTurn(options: {
         });
         return;
       }
-      const binding = stored.tools.find((tool) => tool.providerName === block.name);
+      const binding = stored.tools.find(
+        (tool) => tool.providerName === (block.name === 'codemode' ? 'run_js' : block.name),
+      );
       const target =
-        block.name === PI_TOOL_CALL_TOOL_NAME && typeof block.arguments.name === 'string'
+        block.name === 'tool_call' && typeof block.arguments.name === 'string'
           ? stored.tools.find(
               (tool) => tool.ref.source === 'mcp' && tool.providerName === block.arguments.name,
             )
           : binding;
       const args =
-        target && block.name === PI_TOOL_CALL_TOOL_NAME
-          ? (block.arguments.params ?? null)
-          : block.arguments;
+        target && block.name === 'tool_call' ? (block.arguments.params ?? null) : block.arguments;
       // A growing file body streams as a bounded preview instead of its full partial input.
       const inputPreview =
         streaming && target?.inputPreview ? toolInputPreview(target.inputPreview, args) : undefined;
@@ -339,8 +345,8 @@ export function projectPiTurn(options: {
         type: 'tool',
         toolCallId: block.id,
         toolRef: target?.ref ?? { source: 'meta', name: block.name },
-        providerName: target?.providerName ?? block.name,
-        displayName: target?.displayName ?? block.name,
+        providerName: block.name === 'codemode' ? block.name : (target?.providerName ?? block.name),
+        displayName: block.name === 'codemode' ? 'Code Mode' : (target?.displayName ?? block.name),
         state: streaming
           ? 'input-streaming'
           : (options.toolStates?.get(block.id) ?? 'input-available'),
@@ -348,6 +354,22 @@ export function projectPiTurn(options: {
       };
       parts.push(part);
       toolsByCall.set(block.id, part);
+      if (options.active && options.nestedTools) {
+        const calls: RuntimeJsonValue[] = [...options.nestedTools].flatMap(([callId, call]) =>
+          call.parentCallId === block.id
+            ? [
+                {
+                  id: callId,
+                  name: call.name,
+                  args: call.args,
+                  status: call.status,
+                  ...(call.error ? { error: call.error } : {}),
+                },
+              ]
+            : [],
+        );
+        if (calls.length) part.output = { value: { calls }, artifacts: [] };
+      }
       if (part.state === 'interrupted')
         part.output = createInterruptedToolResult('The tool ended without a confirmed result.');
     });
@@ -420,10 +442,13 @@ export function projectPiTurn(options: {
     } else {
       part.state = 'output-available';
       part.output = output ?? {
-        value: message.content
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join('\n'),
+        value:
+          part.providerName === 'tool_search' && message.details !== undefined
+            ? RuntimeJsonValueSchema.parse(message.details)
+            : message.content
+                .filter((block) => block.type === 'text')
+                .map((block) => block.text)
+                .join('\n'),
         artifacts: [],
       };
     }

@@ -189,6 +189,36 @@ describe('character windows', () => {
 });
 
 describe('readFileTool', () => {
+  test('reads bounded pixels only for an in-scope image without paging parameters', async () => {
+    const files = createFiles('unused');
+    files.resolveAvailable.mockResolvedValue(
+      new Map([
+        [
+          FILE_ID,
+          {
+            fileEntryId: FILE_ID,
+            mediaType: 'image/png',
+            name: 'chart.png',
+            size: 12,
+          },
+        ],
+      ]),
+    );
+    const readImage = jest.fn(async () => ({ data: 'cGl4ZWxz', mediaType: 'image/png' }));
+    const tool = createReadFileTool({ ...files, readImage }, IN_SCOPE);
+    expectError(await execute(tool, { file_entry_id: OTHER_ID }), 'not part');
+    expectError(await execute(tool, { file_entry_id: FILE_ID, offset: 0 }), 'paging');
+    expect(readImage).not.toHaveBeenCalled();
+    const output = await execute(tool, { file_entry_id: FILE_ID });
+    expect(output).toMatchObject({
+      value: { status: 'ok', fileEntryId: FILE_ID, mediaType: 'image/png' },
+      modelImages: [{ data: 'cGl4ZWxz', mediaType: 'image/png' }],
+      artifacts: [],
+    });
+    expect(JSON.stringify(output.value)).not.toContain('cGl4ZWxz');
+    expect(files.readAsBytes).not.toHaveBeenCalled();
+  });
+
   test('returns the whole file when it fits the default window', async () => {
     const files = createFiles('line 1\nline 2\n');
     const output = await execute(createReadFileTool(files, IN_SCOPE), { file_entry_id: FILE_ID });

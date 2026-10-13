@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace cherry::jssandbox {
@@ -27,5 +28,19 @@ std::string run(const std::string &runId,
 
 /// Interrupts the run with this id, including one that has not started yet.
 void cancel(const std::string &runId);
+
+/// Runs a trusted bridge setup in the same isolated engine. The setup returns
+/// deliver(JSON) and drained() ("again", "idle", or "done"). Only this thread
+/// enters QuickJS; application replies are queued by deliver(). Returns an
+/// empty string after normal completion, otherwise an error description.
+std::string runBridge(const std::string &runId,
+                      const std::string &setup,
+                      const std::string &data,
+                      double startedAt,
+                      uint32_t seed,
+                      const Limits &limits,
+                      const std::function<void(const std::string &)> &post);
+
+void deliver(const std::string &runId, const std::string &message);
 
 } // namespace cherry::jssandbox

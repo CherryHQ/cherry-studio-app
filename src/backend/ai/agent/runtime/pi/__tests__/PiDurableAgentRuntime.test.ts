@@ -292,7 +292,7 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
         expect(serialized).toContain('## JavaScript Sandbox');
         expect(serialized).toContain('# GitHub');
-        expect(serialized).toContain('## MCP Tool Discovery');
+        expect(serialized).toContain('# Tool discovery');
         expect(serialized).toContain('grill-me');
         expect(serialized).toContain(selectedInstructions);
         expect(serialized).toContain('launch-checklist');
@@ -309,8 +309,6 @@ describe('Persistent Agent facade', () => {
           'list_skill_files',
           'read_skill_file',
           'tool_search',
-          'tool_describe',
-          'tool_call',
         ]);
         expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([
           'system',

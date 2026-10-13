@@ -107,6 +107,44 @@ async function waitForCall(mock: { mock: { calls: unknown[] } }): Promise<void> 
 }
 
 describe('AgentSessionChatClient', () => {
+  test('keeps live text on runtime failure and clears the error after refreshing the observation', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_id, listener) => {
+      publish = listener;
+      return {
+        snapshot: {
+          ...snapshot(),
+          contextStatus: 'compacting',
+          streamingMessage: assistantMessage(),
+        },
+        unsubscribe: jest.fn(),
+      };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    const release = client.subscribe('session-1', () => undefined);
+    await client.observe('session-1');
+    expect(client.getState('session-1').contextStatus).toBe('compacting');
+    publish({ type: 'context.updated', status: 'compaction-failed' });
+    expect(client.getState('session-1').contextStatus).toBe('compaction-failed');
+    const messages = client.getState('session-1').liveMessages;
+    publish({ type: 'runtime.failed' });
+    expect(client.getState('session-1')).toMatchObject({
+      status: 'error',
+      contextStatus: null,
+      liveMessages: messages,
+      error: { view: { code: 'EXECUTION_UNAVAILABLE' } },
+    });
+    await client.refresh('session-1');
+    expect(protocol.observeSession).toHaveBeenCalledTimes(2);
+    expect(client.getState('session-1')).toMatchObject({
+      status: 'ready',
+      error: null,
+      contextStatus: 'compacting',
+    });
+    release();
+    client.dispose();
+  });
+
   test('admits a follow-up without replacing the streaming turn and keeps retries blocked', async () => {
     const activeTurn = {
       id: 'turn-1',

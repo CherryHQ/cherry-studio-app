@@ -33,6 +33,7 @@ import { createFindSkillsMention } from './components/ChatInput/utils/skillMenti
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import {
@@ -129,6 +130,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           <SessionReadReceipt sessionId={sessionId} />
         ) : null}
         {/* Native background taps yield to scrolling and excluded message content. */}
+        {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
         <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
           {sessionId && session.error ? (
             <View className="flex-1 justify-center px-8 py-16">

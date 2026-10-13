@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { CompactionEntry } from '@earendil-works/pi-durable';
 import type {
   AgentEvent,
   AgentEventStream,
@@ -23,9 +24,21 @@ export class PiDurableObserver {
   private readonly inputs = new Map<SubmissionId, InputView>();
   private readonly entries = new Map<number, EntryRecord>();
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
+  private readonly nestedTools = new Map<
+    string,
+    {
+      parentCallId: string;
+      name: string;
+      args: string;
+      status: string;
+      error?: string;
+    }
+  >();
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
   private generationAttempt = 0;
+  private readonly compactions = new Set<number>();
+  private compactionFailed = false;
 
   constructor(
     private readonly runtime: PiDurableRuntime,
@@ -55,17 +68,24 @@ export class PiDurableObserver {
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
+    this.nestedTools.clear();
     this.run = [];
     this.partial = undefined;
+    this.compactions.clear();
+    this.compactionFailed = false;
   }
 
   private async loadSnapshot(snapshot: SnapshotEvent) {
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
+    this.nestedTools.clear();
     this.run = snapshot.run?.inputs ?? [];
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
+    this.compactions.clear();
+    for (const compaction of snapshot.compactions) this.compactions.add(compaction.taskId);
+    this.compactionFailed = snapshot.compactionFailure !== undefined;
     const queued = new Set(snapshot.inbox.map((item) => item.id));
     const through = snapshot.entries.at(-1)?.id;
     for (const input of await this.runtime.submissions([...this.run, ...queued])) {
@@ -105,6 +125,14 @@ export class PiDurableObserver {
         this.toolStates.set(tool.callId, tool.status === 'running' ? 'running' : 'input-available');
       else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
     }
+    for (const tool of snapshot.nestedTools)
+      this.nestedTools.set(tool.callId, {
+        parentCallId: tool.parentCallId,
+        name: tool.name,
+        args: JSON.stringify(tool.arguments).slice(0, 1000),
+        status: tool.summary ? (tool.summary.isError ? 'error' : 'ok') : tool.status,
+        ...(tool.summary?.error ? { error: tool.summary.error } : {}),
+      });
   }
 
   private async advance(events: readonly AgentEvent[]) {
@@ -115,6 +143,7 @@ export class PiDurableObserver {
       return;
     }
     const touched = new Set(this.run);
+    const previousContextStatus = this.contextStatus();
     const wasQueue = [...this.inputs.values()]
       .filter((input) => input.record.status === 'queued')
       .map((input) => input.record.id)
@@ -135,6 +164,7 @@ export class PiDurableObserver {
           this.run = event.inputs;
           this.partial = undefined;
           this.toolStates.clear();
+          this.nestedTools.clear();
           event.inputs.forEach((id) => touched.add(id));
           break;
         case 'run_end':
@@ -155,6 +185,14 @@ export class PiDurableObserver {
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);
+          if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
+          break;
+        case 'compaction_start':
+          this.compactions.add(event.taskId);
+          break;
+        case 'compaction_end':
+          this.compactions.delete(event.taskId);
+          if (event.error !== undefined) this.compactionFailed = true;
           break;
         case 'auto_retry_start':
           this.partial = undefined;
@@ -164,13 +202,39 @@ export class PiDurableObserver {
           this.generationAttempt = event.attempt;
           break;
         case 'tool_execution_start':
+          if (event.parentToolCallId) {
+            this.nestedTools.set(event.toolCallId, {
+              parentCallId: event.parentToolCallId,
+              name: event.toolName,
+              args: JSON.stringify(event.args).slice(0, 1000),
+              status: 'running',
+            });
+            break;
+          }
           this.toolStates.set(event.toolCallId, 'running');
           break;
         case 'tool_execution_end':
+          if (event.parentToolCallId) {
+            const nested = this.nestedTools.get(event.toolCallId);
+            if (nested) {
+              nested.status = event.result
+                ? event.result.isError
+                  ? 'error'
+                  : 'ok'
+                : 'interrupted';
+              const error = event.result?.diagnostics.find(
+                (item) => item.severity === 'error',
+              )?.message;
+              if (error) nested.error = error.slice(0, 500);
+            }
+            break;
+          }
           if (event.entry) this.entries.set(event.entry.id, event.entry);
           else this.toolStates.set(event.toolCallId, 'interrupted');
           break;
       }
+    if (this.contextStatus() !== previousContextStatus)
+      this.listener({ type: 'context.updated', status: this.contextStatus() });
     for (const id of this.run) touched.add(id);
     for (const id of touched) {
       const input = this.inputs.get(id);
@@ -195,10 +259,19 @@ export class PiDurableObserver {
     const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
     return {
       activeTurn: active ? this.project(active) : null,
+      contextStatus: this.contextStatus(),
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
         .map((input) => this.project(input)),
     };
+  }
+
+  private contextStatus(): 'compacting' | 'compaction-failed' | null {
+    return this.compactions.size
+      ? 'compacting'
+      : this.compactionFailed
+        ? 'compaction-failed'
+        : null;
   }
 
   private project(input: InputView) {
@@ -220,6 +293,7 @@ export class PiDurableObserver {
       entries,
       active,
       toolStates: this.toolStates,
+      nestedTools: this.nestedTools,
       ...(active && this.partial
         ? {
             partial: this.partial,

@@ -33,6 +33,7 @@ export type AgentSessionChatState = {
   pendingQuestion: AgentPendingQuestion | null;
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
+  contextStatus?: AgentSessionSnapshot['contextStatus'];
   status: AgentSessionChatStatus;
 };
 
@@ -521,6 +522,7 @@ export class AgentSessionChatClient {
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
+      contextStatus: snapshot.contextStatus,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -529,6 +531,23 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'context.updated':
+        this.updateState(entry, { ...entry.state, contextStatus: event.status });
+        return;
+      case 'runtime.failed':
+        this.updateState(entry, {
+          ...entry.state,
+          contextStatus: null,
+          pendingApprovals: [],
+          pendingQuestion: null,
+          status: 'error',
+          error: new AgentProtocolError({
+            code: 'EXECUTION_UNAVAILABLE',
+            message: 'Agent storage failed. Reopen the session to resume unfinished work.',
+            retryable: true,
+          }),
+        });
+        return;
       case 'question.updated':
         this.updateState(entry, { ...entry.state, pendingQuestion: event.question });
         return;

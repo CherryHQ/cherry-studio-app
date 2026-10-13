@@ -250,7 +250,7 @@ describe('buildAgentSystemPrompt', () => {
       tools: [tool('run_js')],
     });
     expect(prompt).toContain('## JavaScript Sandbox');
-    expect(prompt).toContain('copy the data it needs into the code');
+    expect(prompt).toContain('Follow its declared environment and tool-access contract');
     expect(
       buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
     ).not.toContain('## JavaScript Sandbox');

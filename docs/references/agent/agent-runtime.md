@@ -1,6 +1,6 @@
 # Cherry Agent Runtime
 
-> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.1.0.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.2.0.
 
 The experimental branch has replaced this per-turn production contract with upstream-owned durable
 history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active

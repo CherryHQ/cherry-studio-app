@@ -130,6 +130,8 @@ export type RuntimeToolResult = {
   artifacts: RuntimeArtifact[];
   /** Compact built-in model value when the full display value is already supplied in instructions. */
   modelValue?: RuntimeJsonValue;
+  /** Transient built-in vision output. Pi may retain pixels in its working copy; Cherry keeps file IDs. */
+  modelImages?: { data: string; mediaType: string }[];
   /**
    * Trusted built-in callback instructions for subsequent requests in this execution.
    * Kept outside compactable messages; the Host replaces them when configuring the next turn.
@@ -250,6 +252,9 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /** Schema of the result value consumed by scripts; omitted values remain unknown. */
+  outputSchema?: RuntimeJsonValue;
+  callers?: readonly ('model' | 'tools')[];
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';

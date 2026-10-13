@@ -1,5 +1,5 @@
 /**
- * `read_file`: the model reads a managed text or document file it already holds a
+ * `read_file`: the model reads a managed text, document, or image file it already holds a
  * reference to.
  *
  * Reads expose content, so unlike `edit_file` this tool is ledger-scoped: only
@@ -24,7 +24,11 @@ import {
 import type { FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { documentFileTypeFromMediaType } from '@/shared/utils/documentFileTypes';
-import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
+import {
+  MAX_IMAGE_ATTACHMENT_BYTES,
+  MAX_TEXT_ATTACHMENT_BYTES,
+} from '@/shared/utils/fileAttachmentPolicy';
+import { isAiSupportedImageMediaType } from '@/shared/utils/imageFileTypes';
 
 import type {
   ManagedFileFact,
@@ -71,6 +75,7 @@ export const readFileInputSchema = z.strictObject({
 });
 
 export type ReadFileFiles = {
+  readImage?: ManagedFileResolver['readImage'];
   readAsBytes(file: ManagedFileFact, signal: AbortSignal): Promise<Uint8Array | undefined>;
   resolveAvailable(ids: readonly FileEntryId[]): Promise<ReadonlyMap<string, ManagedFileFact>>;
   readDocumentText: ManagedFileResolver['readDocumentText'];
@@ -120,9 +125,9 @@ export function createReadFileTool(
     displayName: 'Read file',
     description: `Read a Cherry-managed file referenced in this conversation. Use file_entry_id from an attachment or an earlier file tool result. This turn uses the ${documentParserMode} document parser. ${
       documentParserMode === 'anydoc'
-        ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Asset descriptors are references only: this tool sends no image pixels.'
+        ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
         : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. No image pixels are returned by this tool.`,
+    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again when its pixels are needed.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal }): Promise<RuntimeToolResult> {
@@ -152,6 +157,32 @@ export function createReadFileTool(
       const source = (await files.resolveAvailable([fileEntryId])).get(fileEntryId);
       if (!source) {
         return invalid('The managed file is unavailable.');
+      }
+      if (isAiSupportedImageMediaType(source.mediaType)) {
+        if (source.size > MAX_IMAGE_ATTACHMENT_BYTES)
+          return invalid('The image exceeds the attachment byte limit.');
+        if (hasLineParameters || hasJsonParameters)
+          return invalid('Images do not support paging parameters.');
+        try {
+          const image = await files.readImage?.(source, signal);
+          signal.throwIfAborted();
+          if (!image) return invalid('The image could not be read within the model image budget.');
+          return {
+            value: {
+              status: 'ok',
+              fileEntryId,
+              filename: source.name,
+              mediaType: image.mediaType,
+              delivery:
+                'image-to-model; scripts receive metadata only; read again after a history rebuild',
+            },
+            modelImages: [image],
+            artifacts: [],
+          };
+        } catch {
+          signal.throwIfAborted();
+          return invalid('The managed image could not be read.');
+        }
       }
       let text: string;
       let sourceTruncated: boolean;

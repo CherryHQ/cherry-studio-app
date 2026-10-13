@@ -4,6 +4,65 @@ The local entry uses `PiDurableAgentRuntime` behind `MobileAgentHost` and `Durab
 This branch implements Cherry-owned history with disposable Pi execution working copies. Runtime
 and device acceptance of this ownership change have not been run.
 
+## Pi 1.2.0 Upgrade
+
+`pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned together at `1.2.0`, published on 2026-10-12.
+The package-specific [Durable changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/durable/CHANGELOG.md)
+and [Chord changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/chord/CHANGELOG.md)
+describe additional breaking changes beyond the coding-agent-focused release notes.
+
+The upgrade brings bounded idle document caching, smaller scheduler ownership indexes, faster
+document-array appends, and compaction fixes. Summaries omit reasoning blocks, and a failed blocking
+compaction fails the generation rather than sending an oversized request. The default document
+retention is ten minutes; on runtimes without unreferenced timers, expired documents are evicted
+after commits. Mobile keeps these upstream defaults until device measurements justify tuning.
+
+Mobile compatibility changes and boundaries:
+
+- Tool implementations return model-visible `output` instead of `content`. This includes built-in
+  and MCP results. Success results also expose structured output for script callers. Stored
+  `ToolResultMessage.content` and Cherry's full `details` remain unchanged.
+- Newly created `ToolTask` inputs carry `kind: 'model'`. Upstream migrates live version-1 `pi.tool`
+  tasks to version 2; an unsafe execution intent still becomes an interrupted result after restart.
+  The published SQLite schema/migrations are unchanged, and no Cherry database migration is needed.
+  Do not assume a downgrade to 1.1 can resume tasks already migrated to version 2.
+- Chord replaced its host/service APIs, but Mobile uses the retained JSON, context, and delta APIs.
+  The Hermes numeric-key patch remains necessary. Pi AI's native OAuth, Metro import isolation,
+  structured provider errors, and streaming-JSON patches also remain necessary and are rebased
+  against the published 1.2.0 files.
+- MCP discovery uses upstream deferred tools and `tool_search`; the custom discovery/dispatch layer
+  is removed. A Unicode tokenization patch preserves Chinese lookup. The patch also exposes a
+  managed output writer for Code Mode. `pi-codemode` gains a small native export containing its
+  host protocol and prelude without importing the WASM launcher.
+- Code Mode runs through that upstream extension and the existing native QuickJS engine. Native
+  changes add bidirectional JSON delivery, virtual clocks, deterministic seeding and compute
+  budgets. Cherry retains tool approval, artifact admission, shared call budgets, failure-group
+  policy and model-backed capability attribution. Completed parents preserve upstream child-call
+  summaries; live child results no longer appear interrupted merely because they have no transcript
+  entry. Older development clients retain `run_js` until rebuilt.
+- Upstream `models.*` stays disabled. `store/load` remains disposable working data, not a new
+  Cherry backup/fork contract. Custom input/display record migration and directory enumeration
+  are deferred. Explicit managed image reads reuse the native image normalizer; no Photon loader
+  is added to the mobile runtime graph.
+- Compaction progress and failure are transient conversation events, shown in chat and restored
+  from upstream snapshots. Failure clears when a successful summary is committed.
+- A guarded storage failure closes the shared Pi session, releases its work lease, notifies open
+  chats and suspends the Host. Retry observation or foreground resume reopens its working copies;
+  it does not manufacture terminal Cherry messages or erase unfinished receipts. No automatic
+  retry loop runs against failed storage. Subscriber errors are reported through `onReport`.
+
+Because the release was less than 24 hours old when adopted, `minimumReleaseAgeExclude` lists only
+the exact 1.2.0 versions of these four packages plus `pi-telemetry`. The general
+release-age and provenance policies remain enabled. Dependency installation skips lifecycle scripts
+so this change does not compile packages or rebuild the development client.
+
+Regression sources cover adapter output, old task migration, native bridge sequencing and cancellation,
+nested-call budgeting, artifact ownership, managed image reads and storage recovery. Existing native
+import-graph, Hermes, provider-error, history/recovery, and backup suites remain relevant. Tests, type
+checks, builds, and device acceptance have not been run for this upgrade. Once authorized,
+prioritize those suites and on-device queued-input recovery, tool approval, long-context compaction,
+and storage-failure recovery before release.
+
 ## Ownership
 
 | Data | Owner |

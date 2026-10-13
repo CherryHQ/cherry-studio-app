@@ -1,6 +1,7 @@
 import type { Context } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, Model } from '@earendil-works/pi-ai';
+import type { CodemodeSandboxBase } from '@earendil-works/pi-codemode/native';
 import {
   createRegistry,
   GenerationTask,
@@ -16,7 +17,10 @@ import {
   type Storage,
   type SubmissionRecord,
 } from '@earendil-works/pi-durable';
+import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
+
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
   DurableAgentRuntime,
@@ -32,6 +36,8 @@ import type {
 } from '../durableTypes';
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
+import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
 import {
@@ -48,7 +54,10 @@ import { PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import {
+  PI_TOOL_BUDGET,
   PI_TOOL_BUDGET_FINAL_RESPONSE,
+  PiToolBudget,
+  admitPiToolCall,
   PiToolBudgetExceededError,
   piToolBudgetState,
 } from './piToolBudget';
@@ -65,6 +74,7 @@ const DESCRIPTOR: RuntimeDescriptor = {
   name: 'Pi Durable',
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 };
+const logger = loggerService.withContext('PiDurableAgentRuntime');
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
@@ -86,6 +96,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   private readonly observers = new Set<PiDurableObserver>();
   private delivery: Promise<void> = Promise.resolve();
   private readonly models: ReturnType<typeof createPiDurableModels>;
+  private codemodeSandbox: CodemodeSandboxBase | undefined;
 
   constructor(
     private readonly dependencies: PiRuntimeDependencies,
@@ -132,6 +143,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async initialize(database: RuntimeSqlDatabase, ports: RuntimeExecutionPorts): Promise<void> {
     if (this.runtime) throw new Error('The durable Agent runtime is already initialized.');
     this.ports = ports;
+    this.codemodeSandbox = createPiCodemodeSandbox(ports.scriptSandbox);
     let storage: Storage | undefined;
     try {
       storage = await this.createStorage(database);
@@ -139,7 +151,21 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         models: this.models.models,
         registry: this.registry,
         settings: { followUpMode: 'one-at-a-time' },
+        onReport: (error) => logger.warn('Pi runtime reported an error', error),
       });
+      const opened = this.runtime;
+      void opened.closed
+        .then((end) => {
+          if (end.reason !== 'failed' || this.runtime !== opened) return;
+          logger.error('Pi storage session closed after a failure', end.error);
+          ports.onFailure?.({
+            code: 'runtime_storage_failed',
+            message: 'Agent storage failed. Reopen the session to resume unfinished work.',
+            retryable: true,
+            origin: 'runtime',
+          });
+        })
+        .catch((error) => logger.warn('Could not report runtime closure', error));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const sessionId of await this.unfinishedSessions()) {
         const configuration = PiConfigurationSchema.parse(
@@ -161,6 +187,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         );
         throw failure;
       } finally {
+        await this.codemodeSandbox?.close();
+        this.codemodeSandbox = undefined;
         this.runtime = undefined;
         this.ports = undefined;
         this.configurations.clear();
@@ -179,9 +207,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const watch = await this.requireRuntime().watchWork();
     const active = Object.keys(watch.value.tasks).length > 0;
     watch.start(async (value) => listener(Object.keys(value.tasks).length > 0));
+    let observing = true;
+    void watch.closed.then(() => {
+      if (observing) listener(false);
+    });
     return {
       active,
       unsubscribe: async () => {
+        observing = false;
         await watch.stop();
       },
     };
@@ -190,11 +223,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async close(): Promise<void> {
     const runtime = this.runtime;
     if (!runtime) return;
-    await Promise.all([...this.observers].map((observer) => observer.stop()));
+    await Promise.allSettled([...this.observers].map((observer) => observer.stop()));
     await this.delivery;
     try {
       await runtime.close();
     } finally {
+      await this.codemodeSandbox?.close();
+      this.codemodeSandbox = undefined;
       this.runtime = undefined;
       this.ports = undefined;
       this.configurations.clear();
@@ -505,6 +540,43 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${sessionId}`,
+      ...(this.codemodeSandbox && configuration.kind !== 'image'
+        ? {
+            codemode: createCodemodeExtension({
+              sandbox: this.codemodeSandbox,
+              models: false,
+              writeOutput: async (name, data, api, context) => {
+                const writer = this.requirePorts().writeToolOutput;
+                if (!writer) return { error: 'Managed output storage is unavailable.' };
+                const signal = requireSignal(context);
+                const identity = await this.taskIdentity(sessionId, api, context);
+                await this.requirePorts().assertExecutionAllowed(identity, signal);
+                const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
+                let artifact = previous?.outputs[name];
+                if (!artifact) {
+                  try {
+                    artifact = await writer(identity, { name, data }, signal);
+                  } catch {
+                    signal.throwIfAborted();
+                    return { error: 'Could not save the managed output file.' };
+                  }
+                }
+                const saved = artifact;
+                await api.commit(async (tx) => {
+                  (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = saved;
+                }, context);
+                await retainPiCodemodeArtifacts(api, api.taskId, [artifact], context);
+                await this.requirePorts().admitArtifacts(identity, [artifact], signal);
+                await this.requireRuntime().grantFiles(
+                  sessionId,
+                  [artifact.ref.fileEntryId],
+                  context,
+                );
+                return { path: `managed-file:${artifact.ref.fileEntryId}` };
+              },
+            }),
+          }
+        : {}),
       // A web capability reaches the model through one route: its function or the native tool.
       tools: selectPiClientTools(
         configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
@@ -512,10 +584,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       ),
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
+        const budget = await api.snapshot(PiToolBudget, api.conversationId, context);
         return inputs[0]
-          ? failedPiToolGroups(
-              await this.requireRuntime().turnEntries(sessionId, inputs[0].record, context),
-            )
+          ? [
+              ...(budget?.inputId === inputs[0].record.id ? budget.failedGroups : []),
+              ...failedPiToolGroups(
+                await this.requireRuntime().turnEntries(sessionId, inputs[0].record, context),
+              ),
+            ]
           : [];
       },
       beforeCall: async (call, api, context) => {
@@ -533,8 +609,16 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               ? message.content.filter((part) => part.type === 'toolCall')
               : [],
           );
-        const index = calls.findIndex((part) => part.id === call.id);
-        if (index < 0 || index >= 64) return 'The turn exceeded its 64 tool-call budget.';
+        if (
+          !(await admitPiToolCall(
+            api,
+            context,
+            inputs[0]!.record.id,
+            call,
+            calls.map((part) => part.id),
+          ))
+        )
+          return 'The turn exceeded its 64 tool-call budget.';
         // A failed native lookup is known only from the transcript, never from a tool result.
         return nativeWeb &&
           configuration.tools.find((tool) => tool.providerName === call.name)?.failureGroup ===
@@ -570,7 +654,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           )) === 'approve'
         );
       },
-      onResult: async (_tool, result, api, context) => {
+      onResult: async (tool, result, api, context) => {
+        if (result.failure?.scope === 'tool' && tool.failureGroup) {
+          await api.commit(async (tx) => {
+            const budget = await tx.doc(PiToolBudget, api.conversationId);
+            if (!budget.failedGroups.includes(tool.failureGroup!))
+              budget.failedGroups.push(tool.failureGroup!);
+          }, context);
+        }
         if (!result.artifacts.length) return;
         const identity = await this.taskIdentity(sessionId, api, context);
         await this.requirePorts().admitArtifacts(
@@ -594,8 +685,40 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             // The harness derives this context from the same invocation signal it forwards to Models.
             const signal = requireSignal(context);
             this.requestOwners.set(signal, await this.taskIdentity(sessionId, api, context));
-            const budget = piToolBudgetState(request.messages);
+            const inputs = await this.requireRuntime().inputsForTask(api, context);
+            const admitted = await api.snapshot(PiToolBudget, api.conversationId, context);
+            const current = admitted?.inputId === inputs[0]?.record.id ? admitted : undefined;
+            const transcriptBudget = piToolBudgetState(
+              request.messages,
+              undefined,
+              current?.nestedCalls.length,
+            );
+            // Compaction may remove older model calls from the request, never from admission.
+            const budget =
+              transcriptBudget === 'available' &&
+              current &&
+              current.modelCalls.length + current.nestedCalls.length >= PI_TOOL_BUDGET.maxToolCalls
+                ? 'final-response'
+                : transcriptBudget;
             if (budget === 'exceeded') throw new PiToolBudgetExceededError();
+            const afterUser =
+              request.messages.findLastIndex((message) => message.role === 'user') + 1;
+            const modelCalls = request.messages
+              .slice(afterUser)
+              .reduce(
+                (count, message) =>
+                  count +
+                  (message.role === 'assistant'
+                    ? message.content.filter((block) => block.type === 'toolCall').length
+                    : 0),
+                0,
+              );
+            if (
+              admitted?.inputId === inputs[0]?.record.id &&
+              admitted?.finalResponseModelCalls !== undefined &&
+              modelCalls > admitted.finalResponseModelCalls
+            )
+              throw new PiToolBudgetExceededError();
             this.webRequests.delete(signal);
             if (budget === 'available') {
               this.toolFreeRequests.delete(signal);
@@ -604,6 +727,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               return undefined;
             }
             this.toolFreeRequests.add(signal);
+            await api.commit(async (tx) => {
+              const current = await tx.doc(PiToolBudget, api.conversationId);
+              if (current.inputId === inputs[0]?.record.id)
+                current.finalResponseModelCalls ??= modelCalls;
+            }, context);
             return {
               messages: [
                 ...request.messages,
@@ -620,7 +748,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         provider: configuration.model.providerId,
         modelId: piDurableModelKey(configuration.model, configuration.kind),
       },
-      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}`,
+      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}${
+        this.codemodeSandbox
+          ? '\nCode Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.'
+          : ''
+      }`,
       extensions: [extension],
     };
   }
