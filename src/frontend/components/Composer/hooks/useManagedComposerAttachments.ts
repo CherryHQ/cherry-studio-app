@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
@@ -16,6 +17,8 @@ import {
   isComposerImageMediaType,
   isDropStagedFile,
   removeComposerAttachment,
+  replaceComposerAttachment,
+  type ComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('useManagedComposerAttachments');
@@ -182,6 +185,23 @@ export function useManagedComposerAttachments(
     [commitAttachments],
   );
 
+  const replaceAttachment = useCallback(
+    (attachmentId: string, sourceId: FileEntryId, replacement: ComposerAttachmentReady) => {
+      if (!isMountedRef.current) return false;
+      const next = replaceComposerAttachment(
+        attachmentsRef.current,
+        attachmentId,
+        sourceId,
+        replacement,
+      );
+      if (!next) return false;
+      importTokensRef.current.delete(attachmentId);
+      commitAttachments(next);
+      return true;
+    },
+    [commitAttachments],
+  );
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
@@ -202,6 +222,7 @@ export function useManagedComposerAttachments(
       attachments,
       clearAttachments,
       removeAttachment,
+      replaceAttachment,
       setAttachments,
       subscribeAttachmentChanges,
     }),
@@ -210,6 +231,7 @@ export function useManagedComposerAttachments(
       attachments,
       clearAttachments,
       removeAttachment,
+      replaceAttachment,
       setAttachments,
       subscribeAttachmentChanges,
     ],

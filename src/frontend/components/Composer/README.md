@@ -56,7 +56,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   Skill artwork follows desktop's Lucide ToolCase. Only the editor's raster-only inline attachment
   API uses encoded PNG bytes; normal controls use the vector icon.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
-  shrinks with them.
+  shrinks with them. Ready still images open the shared preview with optional image editing.
+  Saving replaces the matching attachment in place; cancellation, failure and a removed/stale
+  source preserve the current draft. The source library file remains unchanged.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator. `onPickFiles` can replace the files destination;
   the menu still settles input dismissal before calling it.

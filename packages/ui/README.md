@@ -21,6 +21,23 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 `Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
 API.
 
+`ImagePreviewToolbar` lays out optional `.Action` children on a continuous footer surface. Actions
+take caller-owned labels, icons and callbacks, with optional primary emphasis; icons and wrapping
+labels sit side by side in accessible press targets. The screen owns placement, safe-area insets and
+which actions are available.
+
+`ImageEditor` keeps crop, aspect presets, straightening, horizontal/vertical perspective,
+mirroring, quarter turns and bounded undo/redo history local until Done. Three compact tools group
+crop ratios, rotation/mirroring and perspective sliders in content-sized panels. The tool tabs use
+inline icons and labels. Undo, redo, hold-to-compare and restore sit
+below the canvas; individual sliders expose zero and fine-step controls.
+The caller supplies translated labels and a pure `getGeometry` function shared with its pixel
+writer. That function describes the transformed frame, matrix and safe crop bounds. `onSubmit`
+reports the transform and normalized crop; the editor never writes files or owns navigation.
+The caller controls `isSaving`, persistence, errors, cancellation and screen insets. Locked aspect
+ratios survive handle adjustments. Crop edges and sliders expose accessibility adjustment actions;
+cancelled pans restore their starting state. A completed slider drag contributes one undo step.
+
 `FilePreview` renders a business-neutral file descriptor and delegates presses to its caller. The caller supplies display
 metadata, the file's kind, localized unavailable/opening labels, and an error callback; the
 component owns the frame, the press target, unavailable states, and iOS Quick Look
