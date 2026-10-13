@@ -2,7 +2,7 @@ import type {
   AgentGlobalSkillService,
   ListSkillsResult,
 } from '@/backend/data/services/AgentGlobalSkillService';
-import type { Skill, SkillAdmission } from '@/shared/data/types/skill';
+import type { Skill } from '@/shared/data/types/skill';
 
 import { createSkillHandlers } from '../skills';
 
@@ -18,15 +18,10 @@ it('fills composer pages from readable results beyond a missing-package SQL page
   const handlers = createSkillHandlers(
     service,
     {
-      evaluate: async (skills) =>
-        skills.map((skill) => {
-          const admission: SkillAdmission = {
-            status: skill.name === 'missing' ? 'setup-required' : 'unverified',
-            reasons:
-              skill.name === 'missing' ? [{ code: 'package-unavailable', subject: null }] : [],
-          };
-          return { admission, agentAdmission: admission };
-        }),
+      read: (skill) => ({
+        isPackageMissing: skill.name === 'missing',
+        limitations: { scripts: [], unavailableTools: [] },
+      }),
     },
     { read: async () => null },
   );
@@ -38,7 +33,7 @@ it('fills composer pages from readable results beyond a missing-package SQL page
   expect(list).toHaveBeenNthCalledWith(2, expect.objectContaining({ cursor: 'sql-next' }));
 });
 
-it('returns the complete installed instruction body and its pinned revision without environment gating', async () => {
+it('returns the complete installed instruction body and its pinned revision', async () => {
   const skill = {
     id: AGENT_ID,
     name: 'notes',
@@ -46,13 +41,12 @@ it('returns the complete installed instruction body and its pinned revision with
     isEnabled: false,
   } as Skill;
   const service = { getById: async () => skill } as unknown as AgentGlobalSkillService;
-  const handlers = createSkillHandlers(
-    service,
-    { evaluate: async () => [] },
-    {
-      read: async () => 'Write notes.\nRead references/template.md.',
-    },
-  );
+  const availability = {
+    read: () => ({ isPackageMissing: false, limitations: { scripts: [], unavailableTools: [] } }),
+  };
+  const handlers = createSkillHandlers(service, availability, {
+    read: async () => 'Write notes.\nRead references/template.md.',
+  });
   const result = await handlers['/skills/:skillId/instructions'].GET({
     params: { skillId: skill.id },
   });
@@ -62,11 +56,7 @@ it('returns the complete installed instruction body and its pinned revision with
     contentHash: skill.contentHash,
     instructions: 'Write notes.\nRead references/template.md.',
   });
-  const missing = createSkillHandlers(
-    service,
-    { evaluate: async () => [] },
-    { read: async () => null },
-  );
+  const missing = createSkillHandlers(service, availability, { read: async () => null });
   await expect(
     missing['/skills/:skillId/instructions'].GET({ params: { skillId: skill.id } }),
   ).rejects.toMatchObject({ code: 'NOT_FOUND' });

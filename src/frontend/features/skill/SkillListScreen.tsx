@@ -10,17 +10,10 @@ import { HeaderMenuGuide, RouteHeader, type RouteHeaderProps } from '@/frontend/
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useSkillsApi } from '@/frontend/hooks/skill';
-import { effectiveSkillStatus, skillStatusTone } from '@/frontend/utils/skillStatus';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
 import { SkillPage } from './SkillPage';
 import { useStartSkillChat } from './useStartSkillChat';
-
-const STATUS_TEXT_CLASS = {
-  danger: 'text-error',
-  default: 'text-muted-foreground',
-  success: 'text-success',
-} as const;
 
 export function SkillListScreen() {
   const { t } = useTranslation();
@@ -157,19 +150,17 @@ export function SkillListScreen() {
 
 function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: SkillListItem }) {
   const { t } = useTranslation();
-  const status = effectiveSkillStatus(skill.admission, skill.agentAdmission);
-  const tone = skillStatusTone(status);
   return (
     <Section.Item
-      accessibilityLabel={`${skill.name}, ${t(`skills.status.${status}`)}`}
+      accessibilityLabel={skill.name}
       description={
         <View className="gap-0.5">
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
             {skill.description}
           </Text>
-          <Text className={`text-xs ${STATUS_TEXT_CLASS[tone]}`}>
-            {skill.isEnabled ? t(`skills.status.${status}`) : t('skills.status.disabled')}
-          </Text>
+          {skill.isPackageMissing ? (
+            <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
+          ) : null}
         </View>
       }
       label={skill.name}

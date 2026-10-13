@@ -14,7 +14,7 @@ function entry(overrides: Partial<SkillTurnEntry> & { id: string; name: string }
     contentHash: 'abcdef0123456789',
     folderName: overrides.name,
     files: ['SKILL.md', 'references/format.md'],
-    admission: { status: 'ready', reasons: [] },
+    limitations: { scripts: [], unavailableTools: [] },
     ...overrides,
   };
 }
@@ -40,6 +40,11 @@ const run = (tool: RuntimeTool, input: unknown) =>
     .then((r) => r.value as Record<string, unknown>);
 const toolNamed = (tools: RuntimeTool[], name: string) =>
   tools.find((t) => t.providerName === name)!;
+/** The body reaches the model as a system contribution, never through the stored receipt. */
+const loadedBody = (tools: RuntimeTool[], skillId: string) =>
+  toolNamed(tools, 'load_skill')
+    .execute({ input: { skill_id: skillId }, signal, toolCallId: 'call', turnId: 'turn-1' })
+    .then((r) => r.instructions?.text);
 
 describe('skill tools', () => {
   const scope = createScope([
@@ -64,8 +69,8 @@ describe('skill tools', () => {
       returned: 2,
       nextCursor: null,
       skills: [
-        { skill_id: 'a', name: 'daily-agenda', environment: { status: 'ready', reasons: [] } },
-        { skill_id: 'b', name: 'research-brief', environment: { status: 'ready', reasons: [] } },
+        { skill_id: 'a', name: 'daily-agenda' },
+        { skill_id: 'b', name: 'research-brief' },
       ],
     });
     expect(await run(search, { query: 'RESEARCH' })).toMatchObject({
@@ -131,29 +136,28 @@ describe('skill tools', () => {
   it('loads instructions and lists files only for scoped Skills', async () => {
     tools = createSkillTools(scope);
     const load = toolNamed(tools, 'load_skill');
-    // Every successful read carries the complete pinned instructions.
-    expect(await run(load, { skill_id: 'a' })).toMatchObject({
+    // The stored receipt names the Skill and its resources; it never repeats the body.
+    const receipt = await run(load, { skill_id: 'a' });
+    expect(receipt).toMatchObject({
       status: 'ok',
       skill_id: 'a',
       revision: 'abcdef012345',
       files: ['references/format.md'],
-      instructions: '# a\n\nDo it.',
+      instructionsInSystem: true,
     });
+    expect(receipt).not.toHaveProperty('instructions');
     expect(await run(load, { skill_id: 'manual' })).toMatchObject({ status: 'error' });
-    const repeated = await run(load, { skill_id: 'a' });
-    expect(repeated).toMatchObject({ alreadyLoaded: true, instructions: '# a\n\nDo it.' });
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({ alreadyLoaded: true });
+    // Every successful read carries the complete pinned instructions.
+    expect(await loadedBody(tools, 'a')).toContain('# a\n\nDo it.');
     const selectedTools = createSkillTools(scope, {
       loadedSkillIds: ['manual'],
       explicitSkillIds: ['manual'],
     });
     expect(await run(toolNamed(selectedTools, 'load_skill'), { skill_id: 'manual' })).toMatchObject(
-      {
-        status: 'ok',
-        alreadyLoaded: true,
-        instructions: '# manual\n\nDo it.',
-        activation: { origin: 'explicit' },
-      },
+      { status: 'ok', alreadyLoaded: true, activation: { origin: 'explicit' } },
     );
+    expect(await loadedBody(selectedTools, 'manual')).toContain('# manual\n\nDo it.');
     expect(await run(load, { skill_id: 'other' })).toMatchObject({ status: 'error' });
     expect(
       await run(toolNamed(tools, 'list_skill_files'), { skill_id: 'a', prefix: 'references/' }),
@@ -170,10 +174,8 @@ describe('skill tools', () => {
       instructionCharacters: SKILL_ACTIVE_MAX_CHARACTERS,
     });
     const load = toolNamed(tools, 'load_skill');
-    expect(await run(load, { skill_id: 'a' })).toMatchObject({
-      alreadyLoaded: true,
-      instructions: '# a\n\nDo it.',
-    });
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({ alreadyLoaded: true });
+    expect(await loadedBody(tools, 'a')).toContain('# a\n\nDo it.');
     expect(await run(load, { skill_id: 'b' })).toMatchObject({ status: 'error' });
   });
 

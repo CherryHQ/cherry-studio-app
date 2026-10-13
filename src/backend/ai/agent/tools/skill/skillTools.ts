@@ -221,12 +221,6 @@ export function createSkillTools(
               ...receipt,
               alreadyLoaded,
               files: entry.files.filter((path) => path !== 'SKILL.md'),
-              instructions,
-            },
-            modelValue: {
-              ...receipt,
-              alreadyLoaded,
-              files: entry.files.filter((path) => path !== 'SKILL.md'),
               instructionsInSystem: true,
             },
             instructions: skillInstructionSection(entry, instructions),
@@ -340,7 +334,6 @@ function summarize(entry: SkillTurnEntry) {
     name: entry.name,
     description: entry.description,
     invocation: entry.invocation,
-    environment: entry.admission,
   };
 }
 
