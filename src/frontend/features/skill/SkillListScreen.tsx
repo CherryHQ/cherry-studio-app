@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { HeaderMenuGuide, RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useSkillsApi } from '@/frontend/hooks/skill';
@@ -68,47 +69,65 @@ export function SkillListScreen() {
     });
   }
 
-  return (
-    <SkillPage
-      headerProps={{
-        title: t('skills.title'),
-        rightActions: [
+  const headerProps: RouteHeaderProps = {
+    title: t('skills.title'),
+    rightActions: [
+      {
+        accessibilityLabel: t('skills.search'),
+        icon: SearchIcon,
+        key: 'skill-search',
+        onPress: searchSkills,
+        testID: 'skills-search',
+        type: 'icon',
+      },
+      {
+        accessibilityLabel: t('common.more'),
+        disabled: isOpening,
+        icon: EllipsisIcon,
+        key: 'skill-actions',
+        testID: 'skills-more',
+        type: 'menu',
+        items: [
+          ...(canAddInChat
+            ? [
+                {
+                  id: 'skill-add-chat',
+                  label: t('skills.addInChat'),
+                  onPress: () => void open(),
+                },
+              ]
+            : []),
           {
-            accessibilityLabel: t('skills.search'),
-            icon: SearchIcon,
-            key: 'skill-search',
-            onPress: searchSkills,
-            testID: 'skills-search',
-            type: 'icon',
-          },
-          {
-            accessibilityLabel: t('common.more'),
-            disabled: isOpening,
-            icon: EllipsisIcon,
-            key: 'skill-actions',
-            testID: 'skills-more',
-            type: 'menu',
-            items: [
-              ...(canAddInChat
-                ? [
-                    {
-                      id: 'skill-add-chat',
-                      label: t('skills.addInChat'),
-                      onPress: () => void open(),
-                    },
-                  ]
-                : []),
-              {
-                id: 'skill-discover',
-                label: t('skills.discover.title'),
-                onPress: () => router.push('/skills/discover'),
-              },
-            ],
+            id: 'skill-discover',
+            label: t('skills.discover.title'),
+            onPress: () => router.push('/skills/discover'),
           },
         ],
-      }}
-      testID="skills-list"
-    >
+      },
+    ],
+  };
+
+  if (!isLoading && !error && skills.length === 0) {
+    return (
+      <View className="flex-1 bg-background" testID="skills-list">
+        <RouteHeader {...headerProps} />
+        <HeaderMenuGuide
+          hint={
+            canAddInChat
+              ? t('skills.installedEmptyHint', {
+                  add: t('skills.addInChat'),
+                  discover: t('skills.discover.title'),
+                })
+              : t('skills.installedEmptyDiscoverHint', { discover: t('skills.discover.title') })
+          }
+          title={t('skills.installedEmpty')}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <SkillPage headerProps={headerProps} testID="skills-list">
       {isLoading ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading title={t('skills.loading')} />
@@ -118,22 +137,6 @@ export function SkillListScreen() {
           <ContentState.Error
             primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
             title={t('skills.loadFailed')}
-          />
-        </View>
-      ) : skills.length === 0 ? (
-        <View className="flex-1 justify-center">
-          <ContentState.Empty
-            description={
-              canAddInChat
-                ? t('skills.installedEmptyHint', {
-                    add: t('skills.addInChat'),
-                    discover: t('skills.discover.title'),
-                  })
-                : t('skills.installedEmptyDiscoverHint', { discover: t('skills.discover.title') })
-            }
-            icon={<EllipsisIcon className="size-8 text-muted-foreground" />}
-            prominence="prominent"
-            title={t('skills.installedEmpty')}
           />
         </View>
       ) : (
