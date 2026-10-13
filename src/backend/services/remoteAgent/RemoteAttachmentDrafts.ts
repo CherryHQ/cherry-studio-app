@@ -64,7 +64,10 @@ type RecordEntry = z.infer<typeof recordSchema>;
 export class RemoteAttachmentDrafts {
   private records: RecordEntry[];
   private readonly running = new Map<string, { abort: AbortController; work: Promise<void> }>();
-  private readonly progress = new Map<string, { sent: number; total: number; error?: string }>();
+  private readonly progress = new Map<
+    string,
+    { sent: number; total: number; error?: string; phase?: 'verifying' }
+  >();
   private views: readonly RemoteAttachmentDraftView[] = [];
   private stopped = false;
   private queue: Promise<void> = Promise.resolve();
@@ -86,6 +89,7 @@ export class RemoteAttachmentDrafts {
       value = [];
     }
     this.records = z.array(recordSchema).safeParse(value).data ?? [];
+    for (const row of this.records) for (const file of row.files) file.ready = false;
     this.publish(false);
   }
   get = () => this.views;
@@ -115,14 +119,15 @@ export class RemoteAttachmentDrafts {
           attachmentId: file.attachmentId,
           name: file.name,
           mediaType: file.mediaType,
-          error: this.progress.get(file.attachmentId)?.error,
+          error:
+            this.progress.get(file.attachmentId)?.error ?? (row.blocked ? row.error : undefined),
           sent: file.ready ? (file.size ?? 0) : (this.progress.get(file.attachmentId)?.sent ?? 0),
           total: file.size ?? 0,
           state: file.ready
             ? 'ready'
-            : this.progress.get(file.attachmentId)?.error
+            : this.progress.get(file.attachmentId)?.error || row.blocked
               ? 'failed'
-              : 'uploading',
+              : (this.progress.get(file.attachmentId)?.phase ?? 'uploading'),
         })),
       }));
     if (notify) this.changed();
@@ -154,14 +159,30 @@ export class RemoteAttachmentDrafts {
       ) === JSON.stringify(attachments)
     ) {
       if (row.blocked) {
-        if (row.error === 'NOT_FOUND') {
-          row.files = row.files.map((file) => ({
-            ...file,
-            attachmentId: randomUUID(),
-            uploadId: randomUUID(),
-            saved: [],
-            ready: false,
-          }));
+        if (
+          [
+            'NOT_FOUND',
+            'CHECKSUM_MISMATCH',
+            'VERIFICATION_FAILED',
+            'UPLOAD_SOURCE_CHANGED',
+          ].includes(row.error ?? '')
+        ) {
+          row.removed.push(...row.files);
+          row.files = row.files.map((file) => {
+            const uploadId = randomUUID();
+            return {
+              ...file,
+              attachmentId: randomUUID(),
+              uploadId,
+              saved: file.saved.map((saved) => ({
+                ...saved,
+                metadata: { ...saved.metadata, checksumAlgorithm: 'sha256' as const, uploadId },
+                expectedSha256: undefined,
+                resume: undefined,
+              })),
+              ready: false,
+            };
+          });
         }
         for (const file of row.files) this.progress.delete(file.attachmentId);
         row.blocked = false;
@@ -233,6 +254,8 @@ export class RemoteAttachmentDrafts {
   }
   private async advance(row: RecordEntry, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
+    if (row.files.length) await this.getTransport(signal);
+    signal.throwIfAborted();
     if (!row.sessionId) {
       if ('sessionId' in row.target) row.sessionId = row.target.sessionId;
       else {
@@ -261,6 +284,33 @@ export class RemoteAttachmentDrafts {
         if (!resolved) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
         file.size = new File(resolved.uri).size;
       }
+    for (const file of row.files) {
+      if (!file.saved.length) continue;
+      const legacy = file.saved.some((saved) => saved.metadata.checksumAlgorithm !== 'sha256');
+      let expired = false;
+      if (!legacy) {
+        try {
+          await this.request('agent.uploads.get', { uploadId: file.uploadId }, signal);
+        } catch (error) {
+          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
+          expired = true;
+        }
+        signal.throwIfAborted();
+      }
+      if (legacy || expired) {
+        row.removed.push({ ...file });
+        file.uploadId = randomUUID();
+        file.attachmentId = randomUUID();
+        file.ready = false;
+        file.saved = file.saved.map((saved) => ({
+          ...saved,
+          metadata: { ...saved.metadata, checksumAlgorithm: 'sha256', uploadId: file.uploadId },
+          expectedSha256: legacy ? undefined : saved.expectedSha256,
+          resume: undefined,
+        }));
+        this.persist();
+      }
+    }
     const items = row.files.map((file) => ({
       attachmentId: file.attachmentId,
       uploadId: file.uploadId,
@@ -300,8 +350,9 @@ export class RemoteAttachmentDrafts {
         this.files,
         this.request,
         signal,
-        (sent, total) => {
-          this.progress.set(file.attachmentId, { sent, total });
+        (sent, total, phase) => {
+          signal.throwIfAborted();
+          this.progress.set(file.attachmentId, { sent, total, phase });
           if (!this.progressTimer)
             this.progressTimer = setTimeout(() => {
               this.progressTimer = undefined;
@@ -310,6 +361,7 @@ export class RemoteAttachmentDrafts {
         },
         file.saved,
         (saved) => {
+          signal.throwIfAborted();
           file.saved = saved;
           this.persist();
         },
