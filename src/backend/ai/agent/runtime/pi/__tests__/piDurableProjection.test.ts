@@ -1,6 +1,7 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
+import { toAgentMessagePart } from '../../../host/runtimeProjection';
 import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
@@ -212,6 +213,18 @@ describe('Pi turn projection', () => {
               toolCallId: 'script',
               toolName: 'codemode',
               content: [{ type: 'text', text: scriptText }],
+              // What the capability's afterTool hook stores for every script, failed or not.
+              details: {
+                kind: 'cherry.tool-result',
+                ref: { source: 'builtin', capabilityId: 'run_js' },
+                providerName: 'codemode',
+                displayName: 'Run JavaScript',
+                output: {
+                  value: { output: scriptText, details: { calls: [] } },
+                  modelValue: scriptText,
+                  artifacts: [],
+                },
+              },
               isError: true,
               timestamp: 2100,
             },
@@ -230,6 +243,11 @@ describe('Pi turn projection', () => {
     // The reason is a bounded tail, so the error survives long output ahead of it.
     expect(part.error?.message.endsWith('Script error:\nSyntaxError: unexpected token')).toBe(true);
     expect(part.error!.message.length).toBeLessThan(scriptText.length);
+    // The protocol accepts an error tool part only with the error result shape.
+    expect(toAgentMessagePart(part)).toMatchObject({
+      state: 'error',
+      output: { value: { status: 'error' }, artifacts: [] },
+    });
   });
 
   test('live child status is progress, never a final tool output', () => {

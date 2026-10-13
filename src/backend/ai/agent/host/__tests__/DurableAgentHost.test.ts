@@ -432,6 +432,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.host.close();
   });
 
+  test('a submission from a new chat reopens the engine after a storage failure', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    try {
+      // No session is observed, so nothing on screen carries a retry action.
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('records a failed recovery even when the durable database cannot open', async () => {
     const { traces, records } = createTraceRecorder();
     const state = fixture({

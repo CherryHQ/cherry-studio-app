@@ -1592,6 +1592,10 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     operation: (signal: AbortSignal) => Promise<Result>,
   ): Promise<Result> {
+    // A submission reopens a suspended engine, as observing a session does: a new chat has no
+    // session on screen to carry the retry action.
+    if (this.suspended && !this.controller.signal.aborted)
+      return this.resumeSuspended().then(() => this.admit(sessionId, operation));
     if (!this.accepting)
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not accepting submissions.');
     storageMutationGate.assertWritable();

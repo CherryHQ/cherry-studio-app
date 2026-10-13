@@ -454,7 +454,9 @@ export function projectPiTurn(options: {
       };
       part.state = 'error';
       part.error = failure;
-      part.output = output ?? createErrorToolResult(failure);
+      // A result that failed without the application's failure envelope, such as a failed
+      // script, still carries display details; the error contract admits only the error.
+      part.output = output?.failure ? output : createErrorToolResult(failure);
     } else {
       part.state = 'output-available';
       part.output = output ?? {

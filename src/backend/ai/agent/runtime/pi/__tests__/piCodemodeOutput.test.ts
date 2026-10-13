@@ -20,7 +20,7 @@ test.each([
   expect(bytes(saved)).toBeLessThanOrEqual(MAX_TEXT_ATTACHMENT_BYTES);
   const [kept, note] = saved.split('\n[Saved output cut: ');
   expect(text.startsWith(kept!)).toBe(true);
-  expect(note).toContain(`of ${text.length} characters`);
+  expect(note).toBe(`the first ${kept!.length} of ${text.length} characters are kept.]`);
   // A split surrogate pair would encode as a replacement character.
   expect(saved).not.toContain('�');
   expect(/[\uD800-\uDBFF]$/.test(kept!)).toBe(false);

@@ -14,9 +14,9 @@ export function fitPiCodemodeOutput(data: string | Uint8Array): string | Uint8Ar
     new TextEncoder().encode(data).byteLength <= MAX_TEXT_ATTACHMENT_BYTES
   )
     return data;
-  const note = `\n[Saved output cut: the first ${MAX_CHARACTERS} of ${data.length} characters are kept.]`;
-  let end = MAX_CHARACTERS - note.length;
+  // Room for the note; the count it states is what the file keeps.
+  let end = MAX_CHARACTERS - 120;
   const last = data.charCodeAt(end - 1);
   if (last >= 0xd800 && last <= 0xdbff) end--;
-  return data.slice(0, end) + note;
+  return `${data.slice(0, end)}\n[Saved output cut: the first ${end} of ${data.length} characters are kept.]`;
 }
