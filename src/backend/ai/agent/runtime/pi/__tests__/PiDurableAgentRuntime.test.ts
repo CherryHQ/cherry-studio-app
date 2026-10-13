@@ -22,7 +22,7 @@ import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
-import { emptyAssistantMessage } from '../piStreamEvents';
+import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 import type { PiNativeWebTools } from '../piWebTools';
 
@@ -323,6 +323,75 @@ describe('Persistent Agent facade', () => {
       }
     },
   );
+
+  test('recovers a structured transient failure after a tool without repeating its action', async () => {
+    const state = fixture();
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      description: 'Save a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute,
+    };
+    state.ports.resolveTool = async () => tool;
+    const resolveModel = state.dependencies.resolveModel;
+    let requests = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        const stream = new AssistantMessageEventStream();
+        requests += 1;
+        if (requests === 2) {
+          stream.push(
+            providerErrorEvent(emptyAssistantMessage(wire), {
+              message: '网络连接已中断',
+              retryable: true,
+            }),
+          );
+        } else {
+          const reason = requests === 1 ? 'toolUse' : 'stop';
+          stream.push({
+            type: 'done',
+            reason,
+            message: {
+              ...emptyAssistantMessage(wire),
+              stopReason: reason,
+              content:
+                requests === 1
+                  ? [{ type: 'toolCall', id: 'save', name: 'write_file', arguments: {} }]
+                  : [{ type: 'text', text: 'Saved.' }],
+            },
+          });
+        }
+        stream.end();
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    const terminal = deferred<string>();
+    const observation = await runtime.observe('session', (event) => {
+      if (event.type === 'turn.updated' && ['completed', 'failed'].includes(event.turn.status))
+        terminal.resolve(event.turn.status);
+    });
+    try {
+      await runtime.submit('session', input('recovery'));
+      expect(await terminal.promise).toBe('completed');
+      expect(requests).toBe(3);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect((await runtime.message('session', 'answer-recovery'))?.turn.error).toBeNull();
+    } finally {
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
 
   test('stopping a streamed partial settles the task and preserves the answer across reopen', async () => {
     const state = fixture();
