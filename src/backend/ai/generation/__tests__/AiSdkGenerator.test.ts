@@ -3,10 +3,11 @@ import {
   createToolCallLimitStopCondition,
   markTrustedLocalToolTerminalFailure,
 } from '@cherrystudio/ai-runtime/runtime';
+import type { FinishReason } from 'ai';
 
 import { AiSdkGenerator } from '../AiSdkGenerator';
 
-const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
+const mockGenerate = jest.fn(async () => ({ finishReason: 'stop', text: 'ok', usage: undefined }));
 const testUsage = {
   inputTokenDetails: {},
   inputTokens: 1,
@@ -133,11 +134,32 @@ describe('AiSdkGenerator tool request wiring', () => {
       name: 'ToolLoopTerminalError',
     });
   });
+
+  test.each(['stop', 'length'] as const)(
+    'preserves the non-streaming %s finish reason',
+    async (finishReason) => {
+      (createAgent as jest.Mock).mockResolvedValueOnce({
+        generate: jest.fn(async () => ({ finishReason, text: 'answer', usage: testUsage })),
+      });
+      const generator = new AiSdkGenerator({
+        modelId: 'test-model',
+        providerId: 'openai-compatible',
+        providerSettings: { apiKey: 'test', baseURL: 'https://example.com', name: 'test' },
+      });
+
+      await expect(generator.generate({ prompt: 'source' })).resolves.toEqual({
+        finishReason,
+        text: 'answer',
+        usage: testUsage,
+      });
+    },
+  );
 });
 
 describe('AiSdkGenerator streamed text', () => {
-  function setup(parts: AsyncIterable<unknown>) {
+  function setup(parts: AsyncIterable<unknown>, finishReason: FinishReason = 'stop') {
     const stream = jest.fn().mockResolvedValue({
+      finishReason: Promise.resolve(finishReason),
       fullStream: parts,
       totalUsage: Promise.resolve(testUsage),
       steps: Promise.resolve([]),
@@ -161,10 +183,26 @@ describe('AiSdkGenerator streamed text', () => {
     );
     const onText = jest.fn();
     await expect(generator.generate({ prompt: 'source' }, undefined, onText)).resolves.toEqual({
+      finishReason: 'stop',
       text: 'Hello world',
       usage: testUsage,
     });
     expect(onText.mock.calls).toEqual([['Hello'], ['Hello world']]);
+  });
+
+  test('preserves a length-limited finish for the caller to decide whether partial text is usable', async () => {
+    const { generator } = setup(
+      (async function* () {
+        yield { type: 'text-delta', text: 'partial' };
+      })(),
+      'length',
+    );
+
+    await expect(generator.generate({ prompt: 'source' }, undefined, jest.fn())).resolves.toEqual({
+      finishReason: 'length',
+      text: 'partial',
+      usage: testUsage,
+    });
   });
 
   test('rejects a provider stream error instead of returning a partial translation', async () => {

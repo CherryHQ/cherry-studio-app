@@ -23,7 +23,8 @@ text; translation never changes installed files or the instructions supplied to 
 are cancellable and are not made on page load. Successful translations are saved in the existing
 local persistent UI cache by package content hash and language, and appear immediately when the
 same document is reopened, including after an app restart. A changed package or another language
-uses its own translation; failed and cancelled requests are not saved. The existing update action is
+uses its own translation; truncated, failed and cancelled requests are not saved. Cached results
+from before completion checking are regenerated on demand. The existing update action is
 labeled **Update skill** because it applies the upstream content directly.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.

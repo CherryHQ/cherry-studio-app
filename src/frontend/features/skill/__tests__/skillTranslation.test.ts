@@ -42,6 +42,20 @@ test('keeps translations separate for different content and languages', async ()
   expect(skillTranslationQueryOptions(skills, input).initialData()).toBe(translated);
 });
 
+test('regenerates legacy cached text whose completion was never checked', async () => {
+  const { cacheService } = jest.requireMock('@/frontend/data/CacheService');
+  cacheService.setPersist('skills.translations', {
+    [`${input.contentHash}:${input.language}`]: 'old partial translation',
+  });
+  const translation = { translate: jest.fn().mockResolvedValue(translated) };
+  const options = skillTranslationQueryOptions(translation, input);
+
+  expect(options.initialData()).toBeUndefined();
+  expect(await options.queryFn({ signal: new AbortController().signal })).toBe(translated);
+  expect(translation.translate).toHaveBeenCalledTimes(1);
+  expect(options.initialData()).toBe(translated);
+});
+
 test('failed and cancelled translations do not leave a saved document', async () => {
   const skills = { translate: jest.fn().mockRejectedValue(new Error('offline')) };
   const controller = new AbortController();

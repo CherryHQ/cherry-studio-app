@@ -18,7 +18,7 @@ export function createTranslationModule({
         requestOptions: { signal?: AbortSignal };
       },
       onText?: (text: string) => void,
-    ): Promise<{ text: string }>;
+    ): Promise<{ finishReason: string; text: string }>;
   };
   preference: Pick<PreferenceService, 'get'>;
   models: Pick<ModelService, 'getById'>;
@@ -56,6 +56,13 @@ export function createTranslationModule({
             : undefined,
         );
         signal?.throwIfAborted();
+        if (
+          result.finishReason === 'length' ||
+          result.finishReason === 'content-filter' ||
+          result.finishReason === 'error'
+        ) {
+          throw new TranslationError('failed', 'The model did not complete the translation.');
+        }
         if (!result.text.trim())
           throw new TranslationError('failed', 'The model returned an empty translation.');
         return result.text;

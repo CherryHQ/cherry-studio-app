@@ -14,6 +14,7 @@ import {
 } from '@cherrystudio/ai-runtime/runtime';
 import type { RequestContext } from '@cherrystudio/ai-runtime/tools';
 import type {
+  FinishReason,
   LanguageModelUsage,
   ModelMessage,
   StopCondition,
@@ -108,7 +109,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
     input: { messages: ModelMessage[] } | { prompt: string },
     signal?: AbortSignal,
     onText?: (text: string) => void,
-  ): Promise<{ text: string; usage: LanguageModelUsage }> {
+  ): Promise<{ finishReason: FinishReason; text: string; usage: LanguageModelUsage }> {
     const hooks = this.composedHooks();
     try {
       await safeCall('onStart', hooks.onStart);
@@ -132,7 +133,12 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
           }
         }
         signal?.throwIfAborted();
-        return { text, usage: await stream.totalUsage, steps: await stream.steps };
+        return {
+          finishReason: await stream.finishReason,
+          text,
+          usage: await stream.totalUsage,
+          steps: await stream.steps,
+        };
       })();
       signal?.throwIfAborted();
       const terminalError = resolveToolLoopTerminalError({
@@ -141,7 +147,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
       });
       if (terminalError) throw terminalError;
       await safeCall('onFinish', hooks.onFinish);
-      return { text: result.text, usage: result.usage };
+      return { finishReason: result.finishReason, text: result.text, usage: result.usage };
     } catch (error) {
       const isCancellation =
         signal?.aborted === true && (error === signal.reason || isAbortError(error));

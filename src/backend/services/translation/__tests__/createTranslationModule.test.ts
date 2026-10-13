@@ -5,7 +5,10 @@ function setup(
   defaultModel: string | null = 'provider::default',
 ) {
   const ai = {
-    generateText: jest.fn().mockResolvedValue({ text: '# 使用方法\n\n运行 `example()`。' }),
+    generateText: jest.fn().mockResolvedValue({
+      finishReason: 'stop',
+      text: '# 使用方法\n\n运行 `example()`。',
+    }),
   };
   const preference = {
     get: jest.fn(async (key: string) =>
@@ -72,6 +75,24 @@ test('rejects empty and failed generations with a localized error code', async (
   ai.generateText.mockRejectedValue(new Error('offline'));
   await expect(translator.translate(input)).rejects.toMatchObject({ code: 'failed' });
 });
+
+test.each(['length', 'content-filter', 'error'])(
+  'rejects nonempty %s output, including after streamed text was published',
+  async (finishReason) => {
+    const { ai, translator } = setup();
+    const result = { finishReason, text: 'partial translation' };
+    ai.generateText.mockResolvedValueOnce(result);
+    await expect(translator.translate(input)).rejects.toMatchObject({ code: 'failed' });
+
+    const onText = jest.fn();
+    ai.generateText.mockImplementationOnce(async (_request, publish) => {
+      publish(result.text);
+      return result;
+    });
+    await expect(translator.translate(input, { onText })).rejects.toMatchObject({ code: 'failed' });
+    expect(onText).toHaveBeenCalledWith(result.text);
+  },
+);
 
 test('forwards streamed text and prevents late chunks and results after cancellation', async () => {
   const { ai, translator } = setup();

@@ -11,7 +11,7 @@ import {
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
-const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
+const mockGenerate = jest.fn(async () => ({ finishReason: 'stop', text: 'ok', usage: undefined }));
 const mockGeneratorConstructor = jest.fn();
 
 jest.mock('@cherrystudio/ai-core', () => ({

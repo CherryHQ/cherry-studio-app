@@ -6,14 +6,15 @@ export function skillTranslationQueryOptions(
   translation: TranslationModule,
   { contentHash, language, text }: { contentHash: string; language: AppLanguage; text: string },
 ) {
-  const key = `${contentHash}:${language}`;
+  // Earlier results were saved without checking whether generation was truncated.
+  const key = `v2:${contentHash}:${language}`;
   const read = () => {
     const saved = cacheService.getPersist('skills.translations')?.[key];
     return typeof saved === 'string' && saved.trim() ? saved : undefined;
   };
 
   return {
-    queryKey: ['skillTranslation', contentHash, language],
+    queryKey: ['skillTranslation', key],
     initialData: read,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const saved = read();
