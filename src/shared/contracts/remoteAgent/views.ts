@@ -18,7 +18,7 @@ export type RemoteAttachmentDraftView = {
     attachmentId: string;
     sent: number;
     total: number;
-    state: 'uploading' | 'ready' | 'failed';
+    state: 'uploading' | 'verifying' | 'ready' | 'failed';
     error?: string;
   })[];
 };
