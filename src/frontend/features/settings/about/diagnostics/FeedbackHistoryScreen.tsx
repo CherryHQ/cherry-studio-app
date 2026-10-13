@@ -1,5 +1,13 @@
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Button, Chip, ContentState, Section, useToast } from '@cherrystudio/ui/components';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
+import {
+  Button,
+  Chip,
+  ContentState,
+  Section,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { useQueries } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -7,11 +15,14 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useBackendModule, usePersistCache } from '@/frontend/data';
-import type { DiagnosticProcessingStatus } from '@/shared/contracts/diagnostics';
+import type {
+  DiagnosticFeedbackRecord,
+  DiagnosticProcessingStatus,
+} from '@/shared/contracts/diagnostics';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { FeedbackDialog } from './FeedbackDialog';
-import { feedbackHistoryRecords, FEEDBACK_HISTORY_KEY } from './feedbackHistory';
+import { feedbackHistoryRecords, FEEDBACK_HISTORY_KEY, forgetFeedback } from './feedbackHistory';
 import { feedbackStatusQueryOptions } from './feedbackStatusQuery';
 
 const PAGE_SIZE = 20;
@@ -25,6 +36,7 @@ const STATUS_KEYS = {
 
 export function FeedbackHistoryScreen() {
   const { t, i18n } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const router = useRouter();
   const isFocused = useIsFocused();
@@ -54,6 +66,19 @@ export function FeedbackHistoryScreen() {
   function openReport(reportId: string) {
     setFeedbackOpen(false);
     router.push({ pathname: '/settings/about/feedback/[reportId]', params: { reportId } });
+  }
+
+  function requestDelete(record: DiagnosticFeedbackRecord) {
+    alert.confirm({
+      title: t('settings.about.feedback.history.deleteTitle'),
+      description: t('settings.about.feedback.history.deleteDescription'),
+      confirmLabel: t('common.delete'),
+      role: 'destructive',
+      onConfirm: () => {
+        forgetFeedback(record.reportId);
+        toast.show({ label: t('settings.about.feedback.history.deleted'), variant: 'success' });
+      },
+    });
   }
 
   async function refresh() {
@@ -98,7 +123,11 @@ export function FeedbackHistoryScreen() {
             <Section>
               {visible.map((record) => (
                 <Section.Item
+                  accessibilityActions={[{ name: 'delete', label: t('common.delete') }]}
                   key={record.reportId}
+                  onAccessibilityAction={({ nativeEvent }) => {
+                    if (nativeEvent.actionName === 'delete') requestDelete(record);
+                  }}
                   onPress={() => openReport(record.reportId)}
                   testID={`feedback-record-${record.reportId}`}
                   label={
@@ -112,15 +141,29 @@ export function FeedbackHistoryScreen() {
                     </Text>
                   }
                   trailing={
-                    <Chip.Tag className="px-2 py-1">
-                      <Chip.Label className="text-xs">
-                        {t(
-                          record.isUnavailable
-                            ? 'settings.about.feedback.status.unavailable'
-                            : STATUS_KEYS[record.processingStatus],
-                        )}
-                      </Chip.Label>
-                    </Chip.Tag>
+                    <View className="max-w-full flex-row items-center gap-2">
+                      <Chip.Tag className="shrink px-2 py-1">
+                        <Chip.Label className="text-xs" numberOfLines={1}>
+                          {t(
+                            record.isUnavailable
+                              ? 'settings.about.feedback.status.unavailable'
+                              : STATUS_KEYS[record.processingStatus],
+                          )}
+                        </Chip.Label>
+                      </Chip.Tag>
+                      <Button
+                        accessibilityLabel={t('settings.about.feedback.history.delete', {
+                          description: record.description.replace(/\s+/g, ' '),
+                        })}
+                        icon={<Trash2Icon />}
+                        onPress={(event) => {
+                          event.stopPropagation();
+                          requestDelete(record);
+                        }}
+                        testID={`feedback-delete-${record.reportId}`}
+                        variant="ghost"
+                      />
+                    </View>
                   }
                 />
               ))}
@@ -164,9 +207,6 @@ export function FeedbackHistoryScreen() {
             />
           </View>
         )}
-        <Text className="text-xs text-muted-foreground">
-          {t('settings.about.feedback.history.localNotice')}
-        </Text>
       </SettingsScrollPage>
       {isFeedbackOpen && (
         <FeedbackDialog onClose={() => setFeedbackOpen(false)} onViewReport={openReport} />
