@@ -264,6 +264,22 @@ function toDisplayParts(
   const sourcePartKeys: string[] = [];
 
   for (const sourcePart of parts) {
+    // Restored history can still contain separate provider summaries and opaque empty items.
+    if (sourcePart.type === 'reasoning') {
+      const previous = displayParts.at(-1);
+      if (previous?.type === 'reasoning') {
+        // The previous display part may be cached; keep source and cached objects unchanged.
+        displayParts[displayParts.length - 1] = {
+          ...previous,
+          text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
+          state: sourcePart.state,
+        };
+      } else if (sourcePart.text.trim()) {
+        displayParts.push(projectAgentPart(sourcePart, cache).part);
+        partKeys.push(sourcePart.id);
+      }
+      continue;
+    }
     if (sourcePart.type === 'file' && sourcePart.attachmentReport) {
       attachmentReports[sourcePart.id] = sourcePart.attachmentReport;
     }

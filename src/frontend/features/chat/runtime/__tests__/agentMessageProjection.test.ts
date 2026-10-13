@@ -28,6 +28,98 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test.each(['streaming', 'success'] as const)(
+    'joins restored reasoning summaries without changing source history, status=%s',
+    (status) => {
+      const first = '**我准备穷举验证数字排列**\n\n**我构造双重穷举校验**\n\n**我枚举全部排列**';
+      const second = '**Refining search bounds**\n\n**Preparing validation output**';
+      const parts: AgentMessageView['parts'] = [
+        { id: 'opaque', type: 'reasoning', text: '', state: 'done' },
+        {
+          id: 'summary-1',
+          type: 'reasoning',
+          text: first,
+          state: 'done',
+        },
+        {
+          id: 'summary-2',
+          type: 'reasoning',
+          text: second,
+          state: 'done',
+        },
+        {
+          id: 'tool',
+          type: 'dynamic-tool',
+          title: 'Run JavaScript',
+          toolCallId: 'js-call',
+          toolName: 'run_js',
+          toolRef: { source: 'builtin', capabilityId: 'run_js' },
+          input: { code: '1 + 1' },
+          output: { value: 2, artifacts: [] },
+          state: 'output-available',
+        },
+        {
+          id: 'summary-3',
+          type: 'reasoning',
+          text: '**Checking A>399 solutions**',
+          state: 'done',
+        },
+        { id: 'empty', type: 'reasoning', text: '\n \t', state: 'done' },
+        { id: 'answer', type: 'text', text: '168 solutions.', state: 'done' },
+      ];
+      const original = JSON.parse(JSON.stringify(parts));
+      const item = toAgentMessageListItem(message('restored', { parts, status }));
+
+      expect(item?.data.partKeys).toEqual(['summary-1', 'tool', 'summary-3', 'answer']);
+      expect(item?.data.parts).toEqual([
+        {
+          type: 'reasoning',
+          text: `${first}\n\n${second}`,
+          state: 'done',
+        },
+        expect.objectContaining({ type: 'dynamic-tool', toolCallId: 'js-call' }),
+        { type: 'reasoning', text: '**Checking A>399 solutions**', state: 'done' },
+        { type: 'text', text: '168 solutions.', state: 'done' },
+      ]);
+      expect(parts).toEqual(original);
+    },
+  );
+
+  test('keeps an existing summary active without an empty disclosure or mutating cached parts', () => {
+    const cache = createAgentMessageListProjectionCache();
+    const summary = {
+      id: 'summary',
+      type: 'reasoning' as const,
+      text: 'Received summary.',
+      state: 'done' as const,
+    };
+    const settled = toAgentMessageListItem(
+      message('settled', { parts: [summary], status: 'success' }),
+      cache,
+    );
+    const growing = toAgentMessageListItem(
+      message('growing', {
+        parts: [summary, { id: 'next', type: 'reasoning', text: '', state: 'streaming' }],
+      }),
+      cache,
+    );
+
+    expect(growing?.data.partKeys).toEqual(['summary']);
+    expect(growing?.data.parts).toEqual([
+      { type: 'reasoning', text: 'Received summary.', state: 'streaming' },
+    ]);
+    expect(settled?.data.parts).toEqual([
+      { type: 'reasoning', text: 'Received summary.', state: 'done' },
+    ]);
+    expect(
+      toAgentMessageListItem(
+        message('empty', {
+          parts: [{ id: 'opaque', type: 'reasoning', text: '', state: 'streaming' }],
+        }),
+      )?.data.parts,
+    ).toEqual([]);
+  });
+
   test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
     const parts: AgentMessageView['parts'] = [
       { id: 'text', type: 'text', text: 'Partial answer', state: 'done' },
