@@ -16,7 +16,7 @@ const original: SkillTurnEntry = {
   folderName: 'notes',
   files: ['SKILL.md', 'references/template.md'],
   invocation: { modelInvocable: true, userInvocable: true },
-  admission: { status: 'unverified', reasons: [] },
+  limitations: { scripts: [], unavailableTools: [] },
 };
 const before = 'Optional: copy to desktop clipboard.';
 const oldBody = `Summarize notes, preserve sources and verify output.\n${before}\nReturn the summary.`;
@@ -67,12 +67,8 @@ function setup(response = answer(['adapt'])) {
       askUser,
       language: 'zh-CN',
       replace: expanded.replace,
-      context: {
-        agentId: 'agent',
-        disabledCapabilities: [],
-        model: { providerId: 'p', modelId: 'm' },
-        tools: [],
-      },
+      context: { agentId: 'agent' },
+      tools: [],
     },
   });
   return {
@@ -119,10 +115,9 @@ test('shows exact changes through the existing question port, then replaces the 
   expect(result.instructions?.text).not.toContain(before);
   expect(await state.expanded.scope.readInstructions('notes')).toBe(state.nextBody);
   const load = state.tools.find((tool) => tool.providerName === 'load_skill')!;
-  expect((await load.execute({ ...call, input: { skill_id: 'notes' } })).value).toMatchObject({
-    alreadyLoaded: true,
-    instructions: state.nextBody,
-  });
+  const reloaded = await load.execute({ ...call, input: { skill_id: 'notes' } });
+  expect(reloaded.value).toMatchObject({ alreadyLoaded: true });
+  expect(reloaded.instructions?.text).toContain(state.nextBody);
 });
 
 test('rejects deleting a required step and replacements naming unavailable tools before asking', async () => {

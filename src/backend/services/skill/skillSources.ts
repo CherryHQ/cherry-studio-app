@@ -24,7 +24,6 @@ export type SkillSourceCandidate = {
   version: string | null;
   tags: string[];
   source: SkillSource;
-  reviewed: BundledSkillDefinition | null;
 };
 
 export type SkillAcquisition = {
@@ -62,7 +61,6 @@ export function createBundledSkillSource(
         url: null,
         revision: String(definition.revision),
       },
-      reviewed: definition,
     };
   };
   const byLocator = new Map(definitions.map((d) => [bundledSkillLocator(d.name), d] as const));
@@ -197,7 +195,6 @@ export function createGithubSkillSource(clients: GithubSkillSourceClients): Skil
         url: `https://github.com/${location.owner}/${location.repo}/blob/${encodeURIComponent(location.ref)}/${entryPath}`,
         revision: sha,
       },
-      reviewed: null,
     };
   }
 

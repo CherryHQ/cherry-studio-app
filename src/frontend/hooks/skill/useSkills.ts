@@ -68,7 +68,11 @@ export function useSkillMutations() {
   const queryClient = useQueryClient();
   const bindingsMutation = useMutation('PUT', '/agents/:agentId/skills', {
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ predicate: ({ queryKey }) => isSkillQuery(queryKey) });
+      const filters = {
+        predicate: ({ queryKey }: { queryKey: readonly unknown[] }) => isSkillQuery(queryKey),
+      };
+      await queryClient.cancelQueries(filters);
+      await queryClient.invalidateQueries(filters);
     },
   });
   const triggerBindings = bindingsMutation.trigger;

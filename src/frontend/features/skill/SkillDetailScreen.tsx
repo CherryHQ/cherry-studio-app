@@ -1,7 +1,6 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import {
   BottomSheet,
-  Button,
   ContentState,
   Section,
   useAlert,
@@ -17,12 +16,11 @@ import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError } from '@/shared/contracts/skills';
-import { type SkillListItem, skillContentHashHex } from '@/shared/data/types/skill';
+import type { SkillListItem } from '@/shared/data/types/skill';
 
+import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
-import { SkillReasonList } from './SkillReasonList';
 
 const logger = loggerService.withContext('SkillDetailScreen');
 
@@ -66,8 +64,6 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
   const [isBusy, setIsBusy] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const instructions = useSkillInstructionsApi(skill.id, showInstructions);
-  const status = skill.admission.status;
-  const tone = skillStatusTone(status);
 
   async function checkForUpdates() {
     setIsBusy(true);
@@ -153,29 +149,16 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
         <Text className="text-base text-foreground" selectable>
           {skill.description}
         </Text>
-        <Text
-          className={`text-sm ${tone === 'success' ? 'text-success' : tone === 'danger' ? 'text-error' : 'text-muted-foreground'}`}
-        >
-          {t(`skills.status.${status}`)}
-        </Text>
-        {skill.profile.workflowScope ? (
-          <Text className="text-sm text-muted-foreground" selectable>
-            {skill.profile.workflowScope}
-          </Text>
+        {skill.isPackageMissing ? (
+          <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
         ) : null}
-        <SkillReasonList reasons={skill.admission.reasons} />
+        <SkillLimitationList limitations={skill.limitations} />
         <Text className="text-sm text-muted-foreground">{t('skills.executionHint')}</Text>
       </View>
       <Section title={t('skills.detail.about')}>
         <Section.Item
           label={t('skills.detail.instructions')}
           onPress={() => setShowInstructions(true)}
-        />
-        <Section.Item
-          label={t('skills.detail.source')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">{t('skills.source.github')}</Text>
-          }
         />
         {skill.author ? (
           <Section.Item
@@ -189,28 +172,6 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
             trailing={<Text className="text-sm text-muted-foreground">{skill.version}</Text>}
           />
         ) : null}
-        <Section.Item
-          label={t('skills.detail.revision')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">
-              {skillContentHashHex(skill.contentHash).slice(0, 12)}
-            </Text>
-          }
-        />
-        <Section.Item
-          label={t('skills.detail.files')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">{String(skill.manifest.length)}</Text>
-          }
-        />
-        <Section.Item
-          label={t('skills.detail.verification')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">
-              {t(`skills.provenance.${skill.profile.provenance}`)}
-            </Text>
-          }
-        />
       </Section>
       <BottomSheet
         onClose={() => setShowInstructions(false)}
@@ -230,24 +191,14 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
               title={t('skills.detail.instructionsUnavailable')}
             />
           ) : (
-            <>
-              <Text className="text-sm text-muted-foreground" selectable>
-                {instructions.data.name} ·{' '}
-                {skillContentHashHex(instructions.data.contentHash).slice(0, 12)}
-              </Text>
-              <Text className="text-base text-foreground" selectable>
-                {instructions.data.instructions}
-              </Text>
-            </>
+            <Text className="text-base text-foreground" selectable>
+              {instructions.data.instructions}
+            </Text>
           )}
         </ScrollView>
       </BottomSheet>
       <Text className="px-1 text-muted-foreground text-xs">{t('skills.detail.bindHint')}</Text>
-      {isBusy ? (
-        <Button disabled size="sm" variant="secondary">
-          {t('skills.working')}
-        </Button>
-      ) : null}
+      {isBusy ? <ContentState.Loading layout="row" title={t('skills.working')} /> : null}
     </SkillPage>
   );
 }

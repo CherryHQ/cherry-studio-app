@@ -32,7 +32,7 @@ import { createProviderHandlers, type ProviderAccountCleanup } from './providers
 import { createSearchHandlers } from './search';
 import {
   createSkillHandlers,
-  type SkillAdmissionReader,
+  type SkillAvailabilityReader,
   type SkillInstructionReader,
 } from './skills';
 
@@ -40,7 +40,7 @@ export type DataApiDependencies = {
   agentAvatars: AgentAvatars;
   agents: AgentService;
   agentGlobalSkills: AgentGlobalSkillService;
-  skillAdmissions: SkillAdmissionReader;
+  skillAvailability: SkillAvailabilityReader;
   skillInstructions: SkillInstructionReader;
   agentToolBindings: AgentToolBindingService;
   agentSessionMessages: AgentSessionMessageReader;
@@ -86,7 +86,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
     ...createSkillHandlers(
       dependencies.agentGlobalSkills,
-      dependencies.skillAdmissions,
+      dependencies.skillAvailability,
       dependencies.skillInstructions,
     ),
   };

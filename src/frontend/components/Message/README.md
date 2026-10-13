@@ -327,8 +327,8 @@ Plugin and Skill references stay inline as an icon and name in the input's link 
 recorded UTF-16 text ranges. User messages do not show a separate Skill selection or revision caption.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
-the exact returned instruction body and revision, with a separate link to the current Skill page.
-Instruction bodies and revision hashes stay inside the detail sheet rather than the compact trace.
+the Skill's name and description. Instruction bodies, revision hashes and library navigation belong
+to the Skills library, not the transcript.
 
 Text selection uses React Native `Text` for user messages and the existing Markdown renderer for
 assistant messages. Message text is always selectable; there is no per-message selection toggle,

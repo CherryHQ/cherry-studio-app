@@ -175,7 +175,7 @@ describe('Persistent Agent facade', () => {
         contentHash: 'abcdef0123456789',
         folderName: 'grill-me',
         files: ['SKILL.md'],
-        admission: { status: 'ready', reasons: [] },
+        limitations: { scripts: [], unavailableTools: [] },
       };
       const selectedInstructions =
         'Ask one question at a time. Recommend an answer for each question.';

@@ -276,6 +276,50 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('durable tool diagnostics', () => {
+  test('records returned installation errors without changing execution failure policy', async () => {
+    const { traces, records } = createTraceRecorder();
+    const output: RuntimeToolResult = {
+      value: { status: 'error', code: 'package-invalid', message: 'private package details' },
+      artifacts: [],
+    };
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'install_skill' },
+      providerName: 'install_skill',
+      displayName: 'Install Skill',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => output,
+    };
+    const state = fixture({ traces, tools: { getTools: async () => [tool] } });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const signal = new AbortController().signal;
+      const resolved = await state.execution()!.resolveTool(turn.identity, tool.ref, signal);
+      const result = await resolved.execute({
+        input: { url: 'https://private.example' },
+        signal,
+        toolCallId: 'call-1',
+        turnId: turn.identity.turnId,
+      });
+      expect(result).toBe(output);
+      expect(result.failure).toBeUndefined();
+      expect(records.at(-1)).toMatchObject({
+        name: 'pi.execute_tool',
+        status: 'error',
+        attributes: {
+          'tool.result.status': 'error',
+          'error.code': 'package-invalid',
+          'error.origin': 'tool',
+        },
+      });
+      expect(JSON.stringify(records)).not.toContain('private');
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test.each(['returned', 'thrown', 'cancelled'] as const)(
     'retains safe facts for a %s tool failure without changing the result',
     async (outcome) => {
@@ -640,7 +684,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           contentHash: 'directory-sha256:abc',
           folderName: 'outline',
           files: ['SKILL.md'],
-          admission: { status: 'ready', reasons: [] },
+          limitations: { scripts: [], unavailableTools: [] },
         },
       ],
       readInstructions: async () => 'Use a concise outline.',

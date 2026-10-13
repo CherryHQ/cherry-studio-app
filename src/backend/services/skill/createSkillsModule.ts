@@ -1,5 +1,5 @@
 /**
- * The Skills workflow owner: discovery, inspection, admission, managed
+ * The Skills workflow owner: discovery, inspection, managed
  * installation, update, and removal. Library reads and Agent bindings stay in
  * the Data API; per-turn scope resolution for the Agent Host lives beside it
  * in `skillScope.ts` and reads the same facts.
@@ -7,7 +7,7 @@
 
 import { Emitter } from '@/backend/core/lifecycle/event';
 import type {
-  SkillAdmissionReader,
+  SkillAvailabilityReader,
   SkillInstructionReader,
 } from '@/backend/data/api/handlers/skills';
 import type { Database } from '@/backend/data/db/DbService';
@@ -23,17 +23,10 @@ import {
   SkillsError,
   type SkillUpdateResult,
 } from '@/shared/contracts/skills';
-import type {
-  Skill,
-  SkillAdmission,
-  SkillCandidate,
-  SkillProfile,
-} from '@/shared/data/types/skill';
+import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
 
-import type { BundledSkillDefinition } from './bundled';
 import { adaptSkillPackage } from './skillAdaptation';
-import { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
-import type { SkillEnvironmentReader } from './skillEnvironment';
+import { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
   decodeUtf8,
@@ -56,21 +49,19 @@ export type SkillsModuleDependencies = {
   db: { withWriteTx<T>(fn: (tx: Database) => Promise<T>): Promise<T> };
   skills: AgentGlobalSkillService;
   storage: SkillStorage;
-  environment: SkillEnvironmentReader;
   sources: {
     bundled: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
   };
-  /** Agent facts for binding-time and turn-time evaluation. */
-  agentFacts(agentId: string): Promise<SkillAgentFacts | null>;
+  agentExists(agentId: string): Promise<boolean>;
 };
 
 type ResolvedCandidate = { candidate: SkillSourceCandidate; resolvedAt: number };
 
 export type SkillsBackend = SkillsModule & {
-  admissions: SkillAdmissionReader;
+  availability: SkillAvailabilityReader;
   instructionReader: SkillInstructionReader;
   /** Startup-only cleanup, before any installations or Agent turns can start. */
   reconcileStorage(): Promise<void>;
@@ -140,7 +131,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       author: candidate.author,
       version: candidate.version,
       tags: candidate.tags,
-      profileProvenance: candidate.reviewed ? 'reviewed' : 'unverified',
       installedSkillId: installed?.id ?? null,
     };
   }
@@ -153,22 +143,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       : null;
   }
 
-  function buildProfile(reviewed: BundledSkillDefinition | null): SkillProfile {
-    if (reviewed) {
-      return {
-        provenance: 'reviewed',
-        requirements: reviewed.requirements,
-        workflowScope: reviewed.workflowScope,
-      };
-    }
-    return {
-      provenance: 'unverified',
-      requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
-      workflowScope: null,
-    };
-  }
-
-  /** Validate package bytes and report environment guidance separately. */
+  /** Validate package bytes and report the app's limitations separately. */
   async function acquireAndInspect(
     candidate: SkillSourceCandidate,
     signal?: AbortSignal,
@@ -189,19 +164,16 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           candidate: publicCandidate,
           package: null,
           issues: validation.issues,
-          profile: null,
-          admission: null,
+          limitations: null,
         },
         package: null,
         files: null,
       };
     }
     const pkg = validation.package;
-    const profile = buildProfile(candidate.reviewed);
-    const admission = evaluateSkillAdmission(profile, await deps.environment.read());
     return {
       inspection: {
-        candidate: { ...publicCandidate, profileProvenance: profile.provenance },
+        candidate: publicCandidate,
         package: {
           name: pkg.name,
           description: pkg.description,
@@ -216,8 +188,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           instructionsPreview: previewInstructions(pkg.instructions),
         },
         issues: [],
-        profile,
-        admission,
+        limitations: evaluateSkillLimitations({
+          manifest: pkg.manifest,
+          profile: deriveSkillProfile(pkg),
+        }),
       },
       package: pkg,
       files: acquisition.files,
@@ -227,7 +201,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   function toRecord(
     candidate: SkillSourceCandidate,
     pkg: ValidatedSkillPackage,
-    profile: SkillProfile,
   ): SkillInstallRecord {
     return {
       name: pkg.name,
@@ -239,34 +212,19 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       tags: pkg.tags.length > 0 ? pkg.tags : candidate.tags,
       contentHash: pkg.contentHash,
       manifest: pkg.manifest,
-      profile,
+      // Read from the bytes once, here; reads only compare stored facts with the app's capabilities.
+      profile: deriveSkillProfile(pkg),
       invocation: pkg.invocation,
     };
   }
 
-  const admissions: SkillAdmissionReader = {
-    async evaluate(skills, agentId) {
-      const environment = await deps.environment.read();
-      const agent = agentId ? await deps.agentFacts(agentId) : null;
-      return skills.map((skill) => {
-        const hasPackage = deps.storage.hasRevision(skill);
-        const admission: SkillAdmission = hasPackage
-          ? evaluateSkillAdmission(skill.profile, environment)
-          : { status: 'setup-required', reasons: [{ code: 'package-unavailable', subject: null }] };
-        return agent
-          ? {
-              admission,
-              agentAdmission: !hasPackage
-                ? admission
-                : evaluateSkillAdmission(skill.profile, environment, agent),
-            }
-          : { admission };
-      });
-    },
-  };
-
   const module: SkillsBackend = {
-    admissions,
+    availability: {
+      read: (skill) => ({
+        isPackageMissing: !deps.storage.hasRevision(skill),
+        limitations: evaluateSkillLimitations(skill),
+      }),
+    },
     instructionReader: {
       async read(skill) {
         if (!skill.manifest.some(({ path }) => path === 'SKILL.md')) return null;
@@ -313,13 +271,13 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         );
       if (existing && !input.agentIds?.length)
         throw new SkillsError('already-installed', 'This Skill is already installed.');
-      const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
-      if (!pkg || !files || !inspection.profile || !inspection.admission) {
+      const { package: pkg, files } = await acquireAndInspect(candidate, signal);
+      if (!pkg || !files) {
         throw new SkillsError('package-invalid', 'The Skill package failed validation.');
       }
       for (const agentId of input.agentIds ?? []) {
-        const facts = await deps.agentFacts(agentId);
-        if (!facts) throw new SkillsError('not-found', 'The target Agent no longer exists.');
+        if (!(await deps.agentExists(agentId)))
+          throw new SkillsError('not-found', 'The target Agent no longer exists.');
       }
       signal?.throwIfAborted();
 
@@ -353,11 +311,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             folderName: pkg.name,
             contentHash: pkg.contentHash,
           });
-          return deps.skills.createTx(
-            tx,
-            toRecord(candidate, pkg, inspection.profile!),
-            input.agentIds ?? [],
-          );
+          return deps.skills.createTx(tx, toRecord(candidate, pkg), input.agentIds ?? []);
         });
         candidates.delete(input.candidateId);
         changes.fire();
@@ -379,7 +333,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
       const candidate = remember(resolved);
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
-      if (!pkg || !files || !inspection.profile || !inspection.admission) {
+      if (!pkg || !files) {
         return { outcome: 'rejected', skill: current, inspection };
       }
       if (pkg.contentHash === current.contentHash && deps.storage.hasRevision(current)) {
@@ -393,11 +347,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             folderName: current.folderName,
             contentHash: pkg.contentHash,
           });
-          return deps.skills.updateRevisionTx(
-            tx,
-            skillId,
-            toRecord(candidate, pkg, inspection.profile!),
-          );
+          return deps.skills.updateRevisionTx(tx, skillId, toRecord(candidate, pkg));
         });
         changes.fire();
         // The previous revision stays until reconciliation so an active turn can finish reading it.
@@ -432,7 +382,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             input.skillId,
             {
               ...prepared.skill,
-              profile: { ...prepared.skill.profile, provenance: 'unverified' },
               contentHash: prepared.package.contentHash,
               manifest: prepared.package.manifest,
             },
