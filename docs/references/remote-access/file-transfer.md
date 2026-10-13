@@ -8,13 +8,13 @@ transport below supersedes the older upload-on-Send notes.
 
 ## Native source checksum (implementation, 2026-10-12)
 
-Implemented in the paired working trees, with shared-package release and native-device acceptance pending.
+Implemented in the paired working trees; native-device checksum acceptance remains pending.
 The canonical cross-repository implementation contract is
 `CherryHQ/cherry-studio: docs/references/file/upload-integrity.md` (title: Upload Integrity).
 It defines the shared schemas, receiver checkpoint/recovery rules, compatibility matrix and
-acceptance cases. The manifest still consumes published protocol 0.4.0; this change needs the
-additive desktop protocol release before a clean install can pass. Current validation uses an
-ignored local protocol build in `.context`/`node_modules`, not a committed dependency override.
+acceptance cases. Mobile consumes published `@cherrystudio/remote-protocol@0.5.0` and
+`@cherrystudio/remote-transport@0.2.1`. Installation and validation use npm artifacts; no local
+protocol link or dependency override is required.
 
 Use `@preeternal/react-native-file-hash@3.0.1`, default native engine and SHA-256. Its
 [published-source API](https://github.com/Preeternal/react-native-file-hash/blob/c0f799a456b80850d9d355842fb13003ac5c5f57/README.md)
@@ -71,9 +71,9 @@ workspace copies or custom editing tools. Agent-edit preview revision refresh is
 
 Local verification covers native-port validation/cancellation, parallel DATA and hashing,
 checksum readiness, source mutation, resume and command recovery. Expo prebuild configuration
-resolves the native plugin. Android/iOS native builds and empty/few-MiB/1 GiB device comparisons
-are still pending. After the shared release, update manifest/lockfile, remove the local protocol
-link and rerun tests/typecheck on a clean install before rebuilding the clients.
+resolves the native plugin. The Android ARM64 development client was built and installed on
+2026-10-12, with application startup verified. This does not establish checksum correctness:
+empty/few-MiB/1 GiB comparisons, interruption/relaunch and iOS native acceptance remain pending.
 
 ## Binary transport baseline (2026-10-10)
 

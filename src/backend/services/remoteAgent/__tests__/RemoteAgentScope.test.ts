@@ -91,6 +91,7 @@ function fixture(
   });
   const notifications = new Set<(notification: DesktopNotification) => void>();
   const connection = {
+    agentAttachmentSelections: false,
     agentUploadsVersion: 1,
     agentUploadChecksum: 'sha256',
     request,
@@ -134,6 +135,7 @@ function fixture(
   );
   return {
     source,
+    connection,
     request,
     projection,
     lease,
@@ -148,6 +150,60 @@ function fixture(
     },
   };
 }
+
+it.each([
+  { agentAttachmentSelections: false },
+  { agentUploadsVersion: 0 },
+  { agentUploadChecksum: undefined },
+])('disables attachments after reconnect loses capability %j', async (unsupported) => {
+  const test = fixture();
+  test.connection.agentAttachmentSelections = true;
+  const signal = new AbortController().signal;
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().attachments).toBe(true);
+
+  test.setState({ status: 'suspended' });
+  Object.assign(test.connection, unsupported);
+  test.setState({ status: 'ready' });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().attachments).toBe(false);
+  expect(test.source.getState().preupload).toBe(test.connection.agentAttachmentSelections);
+
+  Object.assign(test.connection, {
+    agentAttachmentSelections: true,
+    agentUploadsVersion: 1,
+    agentUploadChecksum: 'sha256',
+  });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().attachments).toBe(true);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('does not notify capability subscribers repeatedly for a checksum-incapable desktop', async () => {
+  const test = fixture();
+  Object.assign(test.connection, {
+    agentAttachmentSelections: true,
+    agentUploadChecksum: undefined,
+  });
+  const states: ReturnType<typeof test.source.getState>[] = [];
+  const unsubscribe = test.source.subscribeState(() => states.push(test.source.getState()));
+  const signal = new AbortController().signal;
+  await test.source.listAgents(undefined, signal);
+  const initial = test.source.getState();
+  expect(initial).toMatchObject({ attachments: false, preupload: true });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState()).toBe(initial);
+  expect(states).toEqual([initial]);
+
+  test.connection.agentAttachmentSelections = false;
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState()).toMatchObject({ attachments: false, preupload: false });
+  expect(states).toHaveLength(2);
+  unsubscribe();
+  test.source.dispose();
+  await test.source.drain();
+});
 
 it('observes through its lease, suppresses stale command targets, and never owns socket close', async () => {
   const test = fixture();

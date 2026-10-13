@@ -241,11 +241,11 @@ importers:
         specifier: 0.1.0
         version: 0.1.0(zod@4.4.3)
       '@cherrystudio/remote-protocol':
-        specifier: 0.4.0
-        version: 0.4.0(zod@4.4.3)
+        specifier: 0.5.0
+        version: 0.5.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: 0.2.0
-        version: 0.2.0(zod@4.4.3)
+        specifier: 0.2.1
+        version: 0.2.1(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -1741,13 +1741,13 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@cherrystudio/remote-protocol@0.4.0':
-    resolution: {integrity: sha512-Eg/75/iboKTbt8zLta+gUZjdWdbjUpx0k7t3vzXn10RIOQCgwjyGdf44Puzri3hEJecI+IvGbLeXY0DeawhciQ==}
+  '@cherrystudio/remote-protocol@0.5.0':
+    resolution: {integrity: sha512-j54HUCS3tCFWSB1ZUvT0YGYQXBTNdB0zipvoP+V0fvkNB3sd4N7CytjKR5tFi1cv9/46N85gqsi5IEaftV7L1A==}
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@0.2.0':
-    resolution: {integrity: sha512-xP4i9x1Wc386NqNRq38Apfhr4BhJIyz+ZuTxmeht6RGtbwADu9bz34Vuuwe7UNWuFDcwR9+0UjrLLKsacSYSeg==}
+  '@cherrystudio/remote-transport@0.2.1':
+    resolution: {integrity: sha512-cJ6NtAT8TZ5vpRa4TqbYQYTmJxEeR5H2tGwv8y7WBkGn/83QB6zuR47klpzPyRTkgOsIQIFxFXjfuA6DRaIAaw==}
 
   '@craftzdog/react-native-buffer@6.1.2':
     resolution: {integrity: sha512-KV1HitN05FHLLDG7Zb/yftDsa+mKBYBzFMQ0PMldvUicq6vWOtAvz9mDavt7Fzozh+WNqORE+yFDkkdWysZ/SA==}
@@ -11007,14 +11007,14 @@ snapshots:
       semver: 7.8.5
       zod: 4.4.3
 
-  '@cherrystudio/remote-protocol@0.4.0(zod@4.4.3)':
+  '@cherrystudio/remote-protocol@0.5.0(zod@4.4.3)':
     dependencies:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@0.2.0(zod@4.4.3)':
+  '@cherrystudio/remote-transport@0.2.1(zod@4.4.3)':
     dependencies:
-      '@cherrystudio/remote-protocol': 0.4.0(zod@4.4.3)
+      '@cherrystudio/remote-protocol': 0.5.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
       '@libp2p/interface': 3.3.0
       '@libp2p/noise': 17.0.2
