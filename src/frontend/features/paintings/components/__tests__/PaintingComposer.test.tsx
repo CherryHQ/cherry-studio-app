@@ -136,6 +136,7 @@ jest.mock('../PaintingImageEditor', () => ({
     jest.requireMock('@/frontend/components/PaintingInput').PaintingWorkspaceInput(props),
 }));
 jest.mock('../PaintingComparison', () => ({ PaintingComparison: () => null }));
+jest.mock('../PaintingWorkspaceBridge', () => ({ PaintingWorkspaceBridge: () => null }));
 jest.mock('@/frontend/components/ArtifactPreview', () => ({
   ArtifactPreviewLink: ({ children }: { children: React.ReactNode }) => children,
 }));
@@ -343,7 +344,7 @@ describe('PaintingComposer', () => {
       type: 'text',
     });
     expect(mockMessageListProps?.messages.at(-1)?.status).toBe('pending');
-    expect(mockMessageListProps?.enteringMessageId).toBe('uuid-2');
+    expect(mockMessageListProps?.enteringMessageId).toBe('uuid-3');
 
     await act(async () => {
       mockGeneration.status = 'idle';

@@ -25,15 +25,17 @@ import {
   imageParamsResolutionLabel,
 } from '@/shared/utils/imageGenerationParams';
 
+import { usePaintingEditor } from '../hooks/usePaintingEditor';
 import {
   type PaintingGenerationInput,
   usePaintingGeneration,
 } from '../hooks/usePaintingGeneration';
-import type { PaintingAnnotation } from '../utils/paintingAnnotations';
+import { preparePaintingAnnotationPrompts } from '../utils/paintingAnnotations';
 import { createPaintingMessages } from '../utils/paintingMessages';
 import { PaintingComparison, type PaintingComparisonImage } from './PaintingComparison';
 import { PaintingImageEditor } from './PaintingImageEditor';
 import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
+import { PaintingWorkspaceBridge } from './PaintingWorkspaceBridge';
 
 type ActivePaintingTurn = {
   assistantMessageId: string;
@@ -77,21 +79,14 @@ export function PaintingComposer({
   const { bottom: bottomInset } = useSafeAreaInsets();
   const keyboardOffset = getComposerKeyboardStickyOffset(bottomInset);
   const isSubmittingRef = useRef(false);
+  const [workspaceId] = useState(() => Crypto.randomUUID());
   const firstAttachment = initialAttachments[0];
-  const [editorOutput, setEditorOutput] = useState<{ fileEntryId?: string; uri: string } | null>(
-    () =>
-      isHandoff && initialAttachments.length === 1 && firstAttachment?.kind === 'image'
-        ? firstAttachment
-        : null,
+  const editor = usePaintingEditor(
+    isHandoff && initialAttachments.length === 1 && firstAttachment?.kind === 'image'
+      ? firstAttachment
+      : null,
   );
-  const [isEditorOpen, setIsEditorOpen] = useState(Boolean(editorOutput));
-  const annotationDrafts = useRef(new Map<string, readonly PaintingAnnotation[]>());
-  const [editorAnnotations, setEditorAnnotations] = useState<readonly PaintingAnnotation[]>([]);
-  const openEditor = useCallback((output: { fileEntryId: string; uri: string }) => {
-    setEditorAnnotations(annotationDrafts.current.get(output.fileEntryId) ?? []);
-    setEditorOutput(output);
-    setIsEditorOpen(true);
-  }, []);
+  const openEditor = editor.open;
   const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
   const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
   const [archivedTurns, setArchivedTurns] = useState<readonly ArchivedPaintingTurn[]>([]);
@@ -99,7 +94,7 @@ export function PaintingComposer({
     images: readonly PaintingComparisonImage[];
     initialOutput: string;
   } | null>(null);
-  const isImmersive = isEditorOpen || comparison !== null;
+  const isImmersive = editor.isOpen || comparison !== null;
   const [previousResult, setPreviousResult] = useState<{
     activeTurn: ActivePaintingTurn | null;
     showPersistedTurn: boolean;
@@ -338,6 +333,7 @@ export function PaintingComposer({
           onEditOutput={openEditor}
           onCompareOutput={comparisonImages.length > 1 ? openComparison : undefined}
           versionNumber={archived?.versionNumber ?? archivedTurns.length + 1}
+          workspaceId={workspaceId}
         />
       );
     },
@@ -350,6 +346,7 @@ export function PaintingComposer({
       openEditor,
       openComparison,
       comparisonImages.length,
+      workspaceId,
     ],
   );
   // Results belong to the message list. Only an explicit handoff or an
@@ -373,6 +370,7 @@ export function PaintingComposer({
             : undefined
         }
       >
+        <PaintingWorkspaceBridge workspaceId={workspaceId} onEdit={openEditor} />
         <Stack.Screen options={{ headerShown: !isImmersive, gestureEnabled: !isImmersive }} />
         <View
           className="flex-1"
@@ -412,6 +410,14 @@ export function PaintingComposer({
               initialParamValues={seededParamValues}
               onCancel={handleCancel}
               onGenerate={handleGenerate}
+              onEditReference={openEditor}
+              preparePrompt={(text, images) =>
+                preparePaintingAnnotationPrompts(
+                  t,
+                  text,
+                  images.length === 1 ? editor.getAnnotations(images[0]) : [],
+                )
+              }
               painting={painting}
               status={generation.status}
             />
@@ -428,21 +434,16 @@ export function PaintingComposer({
             }}
           />
         ) : null}
-        {editorOutput && isEditorOpen ? (
+        {editor.output && editor.isOpen ? (
           <PaintingImageEditor
-            initialAnnotations={editorAnnotations}
+            initialAnnotations={editor.initialAnnotations}
             initialParamValues={seededParamValues}
-            key={editorOutput.fileEntryId ?? editorOutput.uri}
-            onAnnotationsChange={(annotations) =>
-              annotationDrafts.current.set(
-                editorOutput.fileEntryId ?? editorOutput.uri,
-                annotations,
-              )
-            }
+            key={editor.output.fileEntryId ?? editor.output.uri}
+            onAnnotationsChange={editor.saveAnnotations}
             onCancel={handleCancel}
-            onClose={() => setIsEditorOpen(false)}
+            onClose={editor.close}
             onGenerate={handleGenerate}
-            output={editorOutput}
+            output={editor.output}
             painting={painting}
             status={generation.status}
           />

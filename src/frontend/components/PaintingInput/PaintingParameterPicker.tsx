@@ -5,7 +5,7 @@ import type { RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import type { ImageParamField } from '@/shared/utils/imageGenerationParams';
+import { parseImageRatio, type ImageParamField } from '@/shared/utils/imageGenerationParams';
 
 import { imageParamLabel, imageParamOptionLabel } from './imageGenerationLabels';
 
@@ -109,11 +109,8 @@ export function PaintingParameterPicker({
 }
 
 export function PaintingRatioShape({ value }: { value: string }) {
-  const dimensions = value.split(/[:x×]/).map(Number);
-  const ratio =
-    dimensions.length === 2 && dimensions.every((side) => Number.isFinite(side) && side > 0)
-      ? dimensions[0] / dimensions[1]
-      : undefined;
+  const dimensions = parseImageRatio(value);
+  const ratio = dimensions ? dimensions.width / dimensions.height : undefined;
   if (!ratio) return null;
   return (
     <View className="size-6 items-center justify-center" accessible={false}>

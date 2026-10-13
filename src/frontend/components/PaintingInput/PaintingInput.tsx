@@ -15,6 +15,7 @@ import {
   ComposerMenu,
   ComposerModelPill,
   ComposerSurface,
+  useComposerActions,
   useComposerPresentationActions,
 } from '@/frontend/components/Composer';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
@@ -66,6 +67,11 @@ export type PaintingInputSubmission = {
   displayPrompt?: string;
 };
 
+export type PaintingPromptPreparation = (
+  text: string,
+  images: readonly ComposerAttachmentReady[],
+) => string | { prompt: string; displayPrompt: string };
+
 type PaintingModelSelection = {
   modelId: UniqueModelId | null;
   onSelect: (modelId: UniqueModelId) => void;
@@ -79,7 +85,8 @@ type PaintingInputProps = {
   modelSelection?: PaintingModelSelection;
   onCancel: () => void;
   onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
-  preparePrompt?: (text: string) => string;
+  onEditReference?: (image: ComposerAttachmentReady) => void;
+  preparePrompt?: PaintingPromptPreparation;
   placeholder?: string;
   painting?: Painting;
   status: 'idle' | 'generating';
@@ -104,6 +111,7 @@ function PaintingInputControls({
   modelSelection,
   onCancel,
   onGenerate,
+  onEditReference,
   preparePrompt,
   placeholder,
   painting,
@@ -142,7 +150,8 @@ function PaintingInputControls({
     modelSelection?.providerSetupReturnTo ??
       (painting ? `/paintings?paintingId=${encodeURIComponent(painting.id)}` : '/paintings'),
   );
-  const { runInputReplacement } = useComposerPresentationActions();
+  const { runInputReplacement, dismissInput } = useComposerPresentationActions();
+  const { setAttachments } = useComposerActions();
   const isReferenceVisible = !input.isSubmitting && status === 'idle' && canSend !== false;
   const visibleAttachments = isReferenceVisible
     ? input.attachments
@@ -375,6 +384,24 @@ function PaintingInputControls({
                     attachments={visibleAttachments}
                     onAttachmentRemove={input.removeAttachment}
                   />
+                ) : null}
+                {onEditReference &&
+                visibleAttachments.length === 1 &&
+                firstAttachment?.status === 'ready' &&
+                firstAttachment.kind === 'image' ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => {
+                      setPanel(null);
+                      dismissInput();
+                      setAttachments([firstAttachment]);
+                      reference.clear();
+                      onEditReference(firstAttachment);
+                    }}
+                  >
+                    <Button.Label>{t('painting.editor.title')}</Button.Label>
+                  </Button>
                 ) : null}
                 {reference.images.length > 1 ? (
                   <PaintingReferencePicker

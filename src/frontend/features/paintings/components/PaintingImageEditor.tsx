@@ -30,7 +30,7 @@ import {
   type PaintingInputSubmission,
 } from '@/frontend/components/PaintingInput';
 import type { Painting } from '@/shared/data/types/painting';
-import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
+import { parseImageRatio, type ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import {
   fitPaintingImage,
@@ -85,7 +85,6 @@ export function PaintingImageEditor({
   const selected = annotations.find((annotation) => annotation.id === selectedId);
   const latest = useRef({ draft, annotations });
   const submittedAnnotations = useRef<readonly PaintingAnnotation[] | null>(null);
-  const submittedDisplayPrompt = useRef<string | undefined>(undefined);
   const focusFrameRef = useRef<number | null>(null);
   useLayoutEffect(() => {
     latest.current = { draft, annotations };
@@ -105,13 +104,8 @@ export function PaintingImageEditor({
         ? `${parameters.customSize_width}x${parameters.customSize_height}`
         : undefined,
     ].flatMap((value) => {
-      const dimensions = String(value ?? '')
-        .split(/[:x×]/)
-        .map(Number);
-      return dimensions.length === 2 &&
-        dimensions.every((side) => Number.isFinite(side) && side > 0)
-        ? [dimensions[0] / dimensions[1]]
-        : [];
+      const dimensions = parseImageRatio(value);
+      return dimensions ? [dimensions.width / dimensions.height] : [];
     })[0] ?? sourceRatio;
   const frame = targetRatio
     ? fitPaintingImage(bounds.width, bounds.height, targetRatio)
@@ -316,11 +310,15 @@ export function PaintingImageEditor({
                 size="sm"
                 variant="ghost"
               >
-                <Button.Label
-                  className={selectedId === null ? 'text-constant-white' : 'text-constant-white/60'}
+                <Text
+                  className={
+                    selectedId === null
+                      ? 'font-medium text-sm text-constant-white'
+                      : 'font-medium text-sm text-constant-white/60'
+                  }
                 >
                   {t('painting.editor.wholeImage')}
-                </Button.Label>
+                </Text>
               </Button>
               {annotations.map((annotation) => (
                 <Button
@@ -335,15 +333,15 @@ export function PaintingImageEditor({
                   size="sm"
                   variant="ghost"
                 >
-                  <Button.Label
+                  <Text
                     className={
                       annotation.id === selectedId
-                        ? 'text-constant-white'
-                        : 'text-constant-white/60'
+                        ? 'font-medium text-sm text-constant-white'
+                        : 'font-medium text-sm text-constant-white/60'
                     }
                   >
                     {t('painting.editor.annotation', { number: annotation.id })}
-                  </Button.Label>
+                  </Text>
                 </Button>
               ))}
             </ScrollView>
@@ -368,19 +366,14 @@ export function PaintingImageEditor({
             setAnnotations(next);
             onAnnotationsChange(next);
             submittedAnnotations.current = next;
-            const prompts = preparePaintingAnnotationPrompts(
+            return preparePaintingAnnotationPrompts(
               t,
               selectedId === null ? text : generalDraft,
               next,
             );
-            submittedDisplayPrompt.current = prompts.displayPrompt;
-            return prompts.prompt;
           }}
           onGenerate={async (input) => {
-            const result = await onGenerate({
-              ...input,
-              displayPrompt: submittedDisplayPrompt.current,
-            });
+            const result = await onGenerate(input);
             if (
               result &&
               !latest.current.draft &&

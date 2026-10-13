@@ -119,9 +119,9 @@ export function PaintingComparison({
                 size="sm"
                 variant="ghost"
               >
-                <Button.Label className="text-constant-white">
+                <Text className="font-medium text-sm text-constant-white">
                   {t('painting.input.useReference')}
-                </Button.Label>
+                </Text>
               </Button>
             </View>
           );

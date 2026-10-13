@@ -6,7 +6,7 @@ import type { ComposerSurface } from '@/frontend/components/Composer';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import type { Model } from '@/shared/data/types/model';
 
-import { PaintingInput } from '../PaintingInput';
+import { PaintingInput, type PaintingPromptPreparation } from '../PaintingInput';
 import { PaintingInputProvider, usePaintingInputSession } from '../PaintingInputProvider';
 
 let mockSurfaceProps: ComponentProps<typeof ComposerSurface>;
@@ -85,7 +85,7 @@ type HarnessProps = {
   outputs?: string[];
   status?: 'idle' | 'generating';
   showText?: boolean;
-  preparePrompt?: (text: string) => string;
+  preparePrompt?: PaintingPromptPreparation;
 };
 function Probe({ canSend, status = 'idle', showText, preparePrompt }: HarnessProps) {
   const session = usePaintingInputSession();
@@ -148,9 +148,10 @@ describe('capability-aware painting input', () => {
   afterEach(() => act(() => renderer.unmount()));
 
   it('freezes image-local instructions before prompt validation and asynchronous preparation', async () => {
-    const preparePrompt = jest.fn(
-      (text: string) => `Location instruction: ${text || 'soften the marked edge'}`,
-    );
+    const preparePrompt = jest.fn((text: string) => ({
+      prompt: `Location instruction: ${text || 'soften the marked edge'}`,
+      displayPrompt: 'Soften the marked edge',
+    }));
     const preparation = deferred<ReturnType<typeof mockFile>[]>();
     mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
     update({ preparePrompt });
@@ -159,14 +160,23 @@ describe('capability-aware painting input', () => {
       pending = mockSurfaceProps.onSend({ attachments: [], text: '' });
       await Promise.resolve();
     });
-    preparePrompt.mockImplementation(() => 'new instructions');
+    preparePrompt.mockImplementation(() => ({
+      prompt: 'new instructions',
+      displayPrompt: 'New instructions',
+    }));
     await act(async () => {
       preparation.resolve([mockFile('first')]);
       await pending;
     });
     expect(preparePrompt).toHaveBeenCalledTimes(1);
+    expect(preparePrompt).toHaveBeenCalledWith('', [
+      expect.objectContaining({ fileEntryId: 'first' }),
+    ]);
     expect(mockGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: 'Location instruction: soften the marked edge' }),
+      expect.objectContaining({
+        prompt: 'Location instruction: soften the marked edge',
+        displayPrompt: 'Soften the marked edge',
+      }),
     );
   });
 

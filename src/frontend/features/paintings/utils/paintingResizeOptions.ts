@@ -1,5 +1,6 @@
 import {
   getImageParamFields,
+  parseImageRatio,
   type ImageParamDraft,
   type ResolvedImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
@@ -12,15 +13,14 @@ export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefi
     if (!field || field.spec.type !== 'enum') continue;
     const options = new Map<string, { ratio: string; paramValues: ImageParamDraft }>();
     for (const value of field.spec.options) {
-      const dimensions = value.split(/[:x×]/).map(Number);
-      if (dimensions.length !== 2 || !dimensions.every((side) => Number.isFinite(side) && side > 0))
-        continue;
-      let ratio = value;
+      const dimensions = parseImageRatio(value);
+      if (!dimensions) continue;
+      let ratio = `${dimensions.width}:${dimensions.height}`;
       if (key !== 'aspectRatio') {
-        if (!dimensions.every(Number.isInteger)) continue;
-        let [width, height] = dimensions;
+        if (!Number.isInteger(dimensions.width) || !Number.isInteger(dimensions.height)) continue;
+        let { width, height } = dimensions;
         while (height) [width, height] = [height, width % height];
-        ratio = `${dimensions[0] / width}:${dimensions[1] / width}`;
+        ratio = `${dimensions.width / width}:${dimensions.height / width}`;
       }
       if (!options.has(ratio) || value === field.spec.default) {
         options.set(ratio, { ratio, paramValues: { [field.key]: value } });

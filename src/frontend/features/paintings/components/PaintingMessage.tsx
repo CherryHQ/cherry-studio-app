@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { ArtifactPreviewLink } from '@/frontend/components/ArtifactPreview';
-import { PreviewImage, useResolvedFile } from '@/frontend/components/FileEntryPreview';
+import {
+  PreviewImage,
+  useResolvedFile,
+  useOpenFileEntry,
+} from '@/frontend/components/FileEntryPreview';
 import { type MessageListItem } from '@/frontend/components/Message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
@@ -13,7 +17,7 @@ import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 type AssistantProps = ComponentProps<typeof PaintingAssistantMessage>;
 export type PaintingMessageState = Omit<
   AssistantProps,
-  'onRetry' | 'onEditOutput' | 'onCompareOutput'
+  'onRetry' | 'onEditOutput' | 'onCompareOutput' | 'workspaceId'
 >;
 
 type PaintingMessageProps = {
@@ -24,6 +28,7 @@ type PaintingMessageProps = {
   onRetry?: AssistantProps['onRetry'];
   onEditOutput?: AssistantProps['onEditOutput'];
   onCompareOutput?: AssistantProps['onCompareOutput'];
+  workspaceId?: string;
 };
 
 export const PaintingMessage = memo(function PaintingMessage({
@@ -34,6 +39,7 @@ export const PaintingMessage = memo(function PaintingMessage({
   onRetry,
   onEditOutput,
   onCompareOutput,
+  workspaceId,
 }: PaintingMessageProps) {
   const { t } = useTranslation();
   if (message.role === 'user') {
@@ -82,7 +88,11 @@ export const PaintingMessage = memo(function PaintingMessage({
               <ArtifactPreviewLink
                 href={{
                   pathname: '/paintings/[paintingId]',
-                  params: { paintingId: state.paintingId, fileEntryId: output.fileEntryId },
+                  params: {
+                    paintingId: state.paintingId,
+                    fileEntryId: output.fileEntryId,
+                    workspaceId,
+                  },
                 }}
               >
                 <Pressable
@@ -119,21 +129,34 @@ export const PaintingMessage = memo(function PaintingMessage({
       onRetry={onRetry}
       onEditOutput={onEditOutput}
       onCompareOutput={onCompareOutput}
+      workspaceId={workspaceId}
     />
   );
 });
 
 function PaintingPromptReference({ fileEntryId }: { fileEntryId: string }) {
   const file = useResolvedFile(fileEntryId);
+  const { openFileEntry } = useOpenFileEntry();
   if (!file.data) return null;
   return (
-    <View className="size-8 overflow-hidden rounded-sm bg-secondary">
-      <PreviewImage
-        label={file.data.entry.filename}
-        source={file.data.uri}
-        contentFit="cover"
-        style={{ height: '100%', width: '100%' }}
-      />
-    </View>
+    <BackgroundPressExclusion>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={file.data.entry.filename}
+        className="size-11 items-center justify-center active:opacity-80"
+        onPress={() => {
+          if (file.data) openFileEntry(file.data);
+        }}
+      >
+        <View className="size-8 overflow-hidden rounded-sm bg-secondary" accessible={false}>
+          <PreviewImage
+            label={file.data.entry.filename}
+            source={file.data.uri}
+            contentFit="cover"
+            style={{ height: '100%', width: '100%' }}
+          />
+        </View>
+      </Pressable>
+    </BackgroundPressExclusion>
   );
 }

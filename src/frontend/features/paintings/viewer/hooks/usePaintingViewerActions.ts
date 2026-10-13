@@ -7,19 +7,23 @@ import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExpo
 import { useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import { createPaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
+import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 import type { ImageParamDraft } from '@/shared/utils/imageGenerationParams';
 
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
+import { editPaintingWorkspace, hasPaintingWorkspace } from '../../utils/paintingWorkspaceSession';
 
 type ViewerOutput = { fileEntryId: string; uri: string };
 
 export function usePaintingViewerActions({
   currentOutput,
   painting,
+  workspaceId,
 }: {
   currentOutput: ViewerOutput;
   painting: Painting;
+  workspaceId?: string;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -62,13 +66,24 @@ export function usePaintingViewerActions({
     });
   }, [alert, deletePaintings, painting.files.output.length, painting.id, router, t, toast]);
 
-  // Both edit and resize reopen the composer seeded with the current output as an
-  // input attachment; paintingId additionally preselects the painting's model.
-  // Edit leaves the prompt blank for the user to write fresh. Resize seeds it
-  // with just the aspect-ratio directive, and the user reviews and sends it
-  // manually.
+  // Return to the live workspace when available, preserving authored drafts.
+  // Independent viewers seed a new composer with this output and its model.
+  // Resize supplies a dimension directive; the user reviews and sends it manually.
   const openComposer = useCallback(
     (draft: string, paramValues?: ImageParamDraft) => {
+      if (
+        editPaintingWorkspace(workspaceId, {
+          output: currentOutput,
+          ...(draft ? { draft } : {}),
+          ...(paramValues ? { paramValues } : {}),
+          ...(paramValues && painting.modelId && isUniqueModelId(painting.modelId)
+            ? { modelId: painting.modelId }
+            : {}),
+        })
+      ) {
+        router.back();
+        return;
+      }
       const handoff = createPaintingDraftHandoff({
         attachments: [createPaintingOutputAttachmentDraft(currentOutput)],
         draft,
@@ -76,7 +91,7 @@ export function usePaintingViewerActions({
       });
       router.push({ pathname: '/paintings', params: { handoff, paintingId: painting.id } });
     },
-    [currentOutput, painting.id, router],
+    [currentOutput, painting.id, painting.modelId, router, workspaceId],
   );
 
   const edit = useCallback(() => openComposer(''), [openComposer]);
@@ -88,11 +103,15 @@ export function usePaintingViewerActions({
   );
 
   const viewConversation = useCallback(() => {
+    if (hasPaintingWorkspace(workspaceId)) {
+      router.back();
+      return;
+    }
     router.push({
       params: { paintingId: painting.id },
       pathname: '/paintings',
     });
-  }, [painting.id, router]);
+  }, [painting.id, router, workspaceId]);
 
   return { canShare, download, edit, remove, resize, share, viewConversation };
 }

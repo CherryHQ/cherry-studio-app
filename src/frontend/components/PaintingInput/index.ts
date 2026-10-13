@@ -8,5 +8,6 @@ export {
   PaintingInputProvider,
   usePaintingReferenceSelection,
   usePaintingParameterDraft,
+  usePaintingInputSession,
 } from './PaintingInputProvider';
 export { type PaintingInputResult } from './usePaintingReference';

@@ -52,6 +52,17 @@ contract: they are not masks or pixel-constrained edits. The persisted prompt re
 model instructions. Annotation drafts are retained per source within the mounted workspace, not
 stored in a new database schema. Completion does not close an editor containing newer input.
 
+The reference popover can reopen a single image for editing. Annotation drafts recognize both the
+album attachment identity and the managed file identity, so returning before import finishes does
+not lose notes. Sending that image from the ordinary workspace also includes its saved notes.
+Submitted reference thumbnails open the original file preview.
+
+Viewers opened by a workspace carry its mounted session identity. Edit, Resize, and generation
+details return to that workspace, retaining its timeline and drafts. Only a live workspace receives
+these actions; a viewer opened independently keeps the existing draft-handoff flow. Resize applies
+the selected dimensions to the viewer's model while retaining its other parameter drafts. Registry
+ratios such as `ASPECT_16_9` display as `16:9` without changing the submitted registry value.
+
 `PaintingInputProvider` owns reference selection and parameter drafts. Its shared strategy only
 includes references accepted by the selected model; multiple outputs remain optional candidates.
 Successful outputs never replace input edited during generation. Each generation still creates

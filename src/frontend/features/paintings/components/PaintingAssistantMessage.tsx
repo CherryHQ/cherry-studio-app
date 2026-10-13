@@ -52,6 +52,7 @@ export function PaintingAssistantMessage({
   status,
   onEditOutput,
   onCompareOutput,
+  workspaceId,
 }: {
   animateOutput?: boolean;
   aspectRatio: number;
@@ -66,6 +67,7 @@ export function PaintingAssistantMessage({
   status: PaintingGenerationStatus;
   onEditOutput?: (output: PaintingOutput) => void;
   onCompareOutput?: (output: PaintingOutput) => void;
+  workspaceId?: string;
 }) {
   const { t } = useTranslation();
   const [previewWidth, setPreviewWidth] = useState(0);
@@ -207,7 +209,7 @@ export function PaintingAssistantMessage({
             <ArtifactPreviewLink
               href={{
                 pathname: '/paintings/[paintingId]',
-                params: { fileEntryId: output.fileEntryId, paintingId },
+                params: { fileEntryId: output.fileEntryId, paintingId, workspaceId },
               }}
             >
               {result}

@@ -1,6 +1,21 @@
 import { paintingResizeOptions } from '../paintingResizeOptions';
 
 describe('painting resize admission', () => {
+  it('shows registry-prefixed ratios while preserving their exact request values', () => {
+    expect(
+      paintingResizeOptions({
+        mode: 'edit',
+        definition: {
+          supports: {
+            aspectRatio: { type: 'enum', options: ['ASPECT_1_1', 'ASPECT_16_9', 'auto'] },
+          },
+        },
+      }),
+    ).toEqual([
+      { ratio: '1:1', paramValues: { aspectRatio: 'ASPECT_1_1' } },
+      { ratio: '16:9', paramValues: { aspectRatio: 'ASPECT_16_9' } },
+    ]);
+  });
   it('maps dimensions to a ratio without inventing an unsupported aspectRatio parameter', () => {
     const options = paintingResizeOptions({
       mode: 'edit',

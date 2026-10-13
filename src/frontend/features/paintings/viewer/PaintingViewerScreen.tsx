@@ -32,6 +32,7 @@ export function PaintingViewerScreen() {
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     paintingId?: string | string[];
+    workspaceId?: string | string[];
   }>();
   const paintingId = getSingleRouteParam(params.paintingId);
   const fileEntryId = getSingleRouteParam(params.fileEntryId);
@@ -99,6 +100,7 @@ export function PaintingViewerScreen() {
         outputCount={outputs.length}
         outputIndex={currentIndex + 1}
         painting={painting.data}
+        workspaceId={getSingleRouteParam(params.workspaceId)}
       />
     </View>
   );
@@ -109,16 +111,19 @@ function PaintingViewerContent({
   outputCount,
   outputIndex,
   painting,
+  workspaceId,
 }: {
   current: ResolvedPaintingAttachment;
   outputCount: number;
   outputIndex: number;
   painting: Painting;
+  workspaceId?: string;
 }) {
   const { t } = useTranslation();
   const actions = usePaintingViewerActions({
     currentOutput: current,
     painting,
+    workspaceId,
   });
   const models = useModelPickerData({ modelType: 'image' });
   const model =

@@ -25,7 +25,7 @@ import {
   PaintingGenerationError,
 } from '@/shared/utils/paintingGenerationStrategy';
 
-import type { PaintingInputSubmission } from './PaintingInput';
+import type { PaintingInputSubmission, PaintingPromptPreparation } from './PaintingInput';
 import { usePaintingInputSession } from './PaintingInputProvider';
 
 export function usePaintingInput({
@@ -37,7 +37,7 @@ export function usePaintingInput({
   model: Model | undefined;
   initialParamValues?: ImageParamDraft;
   onGenerate(input: PaintingInputSubmission): Promise<unknown>;
-  preparePrompt?: (text: string) => string;
+  preparePrompt?: PaintingPromptPreparation;
 }) {
   const file = useBackendModule('file');
   const { attachments, draft } = useComposerState();
@@ -134,8 +134,17 @@ export function usePaintingInput({
       removeAttachment(id);
     },
     async send({ attachments: manualAttachments, text }: ComposerSendPayload) {
+      const images = referenceAttachment
+        ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
+            isComposerAttachmentReady,
+          )
+        : [...manualAttachments];
       // Image-local editing instructions must be frozen before validation and file preparation.
-      const promptSnapshot = preparePrompt?.(text) ?? text;
+      const preparedPrompt = preparePrompt?.(text, images) ?? text;
+      const promptSnapshot =
+        typeof preparedPrompt === 'string' ? preparedPrompt : preparedPrompt.prompt;
+      const displayPrompt =
+        typeof preparedPrompt === 'string' ? undefined : preparedPrompt.displayPrompt;
       if (!model) throw new PaintingGenerationError({ code: 'model-unavailable' });
       if (isReferenceUnavailable || isCheckingReference)
         throw new FileAttachmentError({
@@ -144,11 +153,6 @@ export function usePaintingInput({
         });
       if (!isImageParamDraftValid(paramValues, resolvedMode))
         throw new PaintingGenerationError({ code: 'invalid-parameters' });
-      const images = referenceAttachment
-        ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
-            isComposerAttachmentReady,
-          )
-        : [...manualAttachments];
       const paramValuesSnapshot = prepareImageParamValues(
         paramValues,
         model.imageGeneration,
@@ -184,6 +188,7 @@ export function usePaintingInput({
         });
         await onGenerate({
           ...request,
+          displayPrompt,
           attachments: actualImages,
           modelId: model.id,
           modelName: model.name,
