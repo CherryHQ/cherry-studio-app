@@ -26,11 +26,12 @@ export function Dialog({ children, onOpenChange, open, testID, title }: DialogPr
           pointerEvents="box-none"
         >
           <HeroDialog.Content
-            className="max-h-full w-full max-w-sm self-center border border-border-subtle bg-popover p-6"
+            className="max-h-full w-full max-w-sm self-center border border-border-subtle bg-popover p-0"
             isSwipeable={false}
           >
             <ScrollView
               bounces={false}
+              contentContainerClassName="p-6"
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >

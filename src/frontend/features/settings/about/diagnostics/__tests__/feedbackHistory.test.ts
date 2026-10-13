@@ -3,6 +3,7 @@ import { CacheService, cacheService } from '@/frontend/data/CacheService';
 import {
   feedbackHistoryRecords,
   FEEDBACK_HISTORY_KEY,
+  forgetFeedback,
   rememberFeedback,
   rememberFeedbackStatus,
 } from '../feedbackHistory';
@@ -48,6 +49,25 @@ test('records sort newest first, deduplicate, and isolate malformed persisted en
     first,
   ]);
   expect(feedbackHistoryRecords(null)).toEqual([]);
+});
+
+test('deletion persists, preserves other receipts, and an in-flight status cannot restore it', () => {
+  rememberFeedback(id, 'delete this');
+  rememberFeedback(secondId, 'keep this');
+  const remaining = cacheService
+    .getPersist(FEEDBACK_HISTORY_KEY)
+    .find((record) => record.reportId === secondId);
+
+  forgetFeedback(id);
+  rememberFeedbackStatus(id, found);
+
+  const { testStorage } = jest.requireMock('@/frontend/data/CacheService');
+  const reloaded = new CacheService(testStorage);
+  expect(reloaded.getPersist(FEEDBACK_HISTORY_KEY)).toEqual([remaining]);
+
+  forgetFeedback(secondId);
+  const empty = new CacheService(testStorage);
+  expect(empty.getPersist(FEEDBACK_HISTORY_KEY)).toEqual([]);
 });
 
 test('failed lookups preserve the last known status and successful checks update only their record', () => {
