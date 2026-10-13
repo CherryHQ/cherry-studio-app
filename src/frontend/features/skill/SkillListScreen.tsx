@@ -123,14 +123,15 @@ export function SkillListScreen() {
       ) : skills.length === 0 ? (
         <View className="flex-1 justify-center">
           <ContentState.Empty
-            description={t('skills.installedEmptyHint')}
-            primaryAction={{
-              accessibilityState: { busy: isOpening },
-              children: t('skills.add'),
-              disabled: isOpening,
-              onPress: () => void open(),
-              testID: 'skills-empty-add',
-            }}
+            description={
+              canAddInChat
+                ? t('skills.installedEmptyHint', {
+                    add: t('skills.addInChat'),
+                    discover: t('skills.discover.title'),
+                  })
+                : t('skills.installedEmptyDiscoverHint', { discover: t('skills.discover.title') })
+            }
+            icon={<EllipsisIcon className="size-8 text-muted-foreground" />}
             prominence="prominent"
             title={t('skills.installedEmpty')}
           />
