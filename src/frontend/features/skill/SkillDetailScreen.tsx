@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
+import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
@@ -13,7 +14,7 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError } from '@/shared/contracts/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { SkillDocument } from './SkillDocument';
+import { SkillDocumentPage } from './SkillDocumentPage';
 import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
 
@@ -95,77 +96,86 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
     }
   }
 
-  return (
-    <SkillPage
-      headerProps={{
-        rightActions: [
+  const headerProps: RouteHeaderProps = {
+    rightActions: [
+      {
+        accessibilityLabel: t('common.more'),
+        disabled: isBusy,
+        icon: EllipsisIcon,
+        items: [
+          ...(skill.sourceUrl
+            ? [
+                {
+                  id: 'skill-update',
+                  label: t('skills.detail.update'),
+                  onPress: () => void update(),
+                },
+                {
+                  id: 'skill-source',
+                  label: t('skills.detail.openSource'),
+                  onPress: () => void openExternalUrl(skill.sourceUrl!),
+                },
+              ]
+            : []),
           {
-            accessibilityLabel: t('common.more'),
-            disabled: isBusy,
-            icon: EllipsisIcon,
-            items: [
-              ...(skill.sourceUrl
-                ? [
-                    {
-                      id: 'skill-update',
-                      label: t('skills.detail.update'),
-                      onPress: () => void update(),
-                    },
-                    {
-                      id: 'skill-source',
-                      label: t('skills.detail.openSource'),
-                      onPress: () => void openExternalUrl(skill.sourceUrl!),
-                    },
-                  ]
-                : []),
-              {
-                destructive: true,
-                id: 'skill-uninstall',
-                label: t('skills.detail.uninstall'),
-                onPress: () =>
-                  alert.confirm({
-                    confirmLabel: t('skills.detail.uninstall'),
-                    description: t('skills.detail.uninstallMessage'),
-                    onConfirm: () => void uninstall(),
-                    role: 'destructive',
-                    title: t('skills.detail.uninstallTitle', { name: skill.name }),
-                  }),
-              },
-            ],
-            key: 'skill-actions',
-            type: 'menu',
+            destructive: true,
+            id: 'skill-uninstall',
+            label: t('skills.detail.uninstall'),
+            onPress: () =>
+              alert.confirm({
+                confirmLabel: t('skills.detail.uninstall'),
+                description: t('skills.detail.uninstallMessage'),
+                onConfirm: () => void uninstall(),
+                role: 'destructive',
+                title: t('skills.detail.uninstallTitle', { name: skill.name }),
+              }),
           },
         ],
-        title: skill.name,
-      }}
-    >
+        key: 'skill-actions',
+        type: 'menu',
+      },
+    ],
+    title: skill.name,
+  };
+
+  const feedback = (
+    <>
       {skill.isPackageMissing ? (
         <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
       ) : null}
       <SkillLimitationList limitations={skill.limitations} />
-      {instructions.data && !instructions.error ? (
-        <SkillDocument
-          contentHash={instructions.data.contentHash}
-          description={skill.description}
-          instructions={instructions.data.instructions}
-        />
-      ) : (
-        <>
-          <Text className="text-base text-foreground">{skill.description}</Text>
-          {instructions.isLoading ? (
-            <ContentState.Loading title={t('skills.loading')} />
-          ) : (
-            <ContentState.Error
-              primaryAction={{
-                children: t('common.retry'),
-                onPress: () => void instructions.refetch(),
-              }}
-              title={t('skills.detail.instructionsUnavailable')}
-            />
-          )}
-        </>
-      )}
       {isBusy ? <ContentState.Loading layout="row" title={t('skills.working')} /> : null}
+    </>
+  );
+
+  if (instructions.data && !instructions.error) {
+    return (
+      <SkillDocumentPage
+        contentHash={instructions.data.contentHash}
+        description={skill.description}
+        headerProps={headerProps}
+        instructions={instructions.data.instructions}
+      >
+        {feedback}
+      </SkillDocumentPage>
+    );
+  }
+
+  return (
+    <SkillPage headerProps={headerProps}>
+      {feedback}
+      <Text className="text-base text-foreground">{skill.description}</Text>
+      {instructions.isLoading ? (
+        <ContentState.Loading title={t('skills.loading')} />
+      ) : (
+        <ContentState.Error
+          primaryAction={{
+            children: t('common.retry'),
+            onPress: () => void instructions.refetch(),
+          }}
+          title={t('skills.detail.instructionsUnavailable')}
+        />
+      )}
     </SkillPage>
   );
 }

@@ -14,8 +14,10 @@ Lists show names and descriptions without environment-status captions. Detail pa
 complete entry as Markdown, including before installation; revision hashes, file counts and
 provenance rows stay out of the reading surface. Known static execution limitations remain visible
 and accompany instructions supplied to the Agent.
-The reading surface offers an explicit AI translation action for the description and document in
-the current app language, using the configured default model. The user can return to the original
+The reading surface offers an explicit AI translation icon in the top-right navigation bar, before
+the overflow menu when present. It translates the description and document into the current app
+language using the configured default model, shows progress in place, and switches to an original-text
+action once translated. The user can return to the original
 text; translation never changes installed files or the instructions supplied to the Agent. Requests
 are cancellable and are not made on page load. Successful translations are saved in the existing
 local persistent UI cache by package content hash and language, and appear immediately when the

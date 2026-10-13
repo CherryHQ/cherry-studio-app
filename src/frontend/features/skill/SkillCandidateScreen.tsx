@@ -9,7 +9,7 @@ import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError, SkillsError, type SkillInspection } from '@/shared/contracts/skills';
 
-import { SkillDocument } from './SkillDocument';
+import { SkillDocumentPage } from './SkillDocumentPage';
 import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
 
@@ -96,47 +96,55 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
     }
   }
 
+  const headerProps = { title: pkg?.name ?? candidate.name };
+  const installAction = candidate.installedSkillId ? (
+    <Button
+      onPress={() =>
+        router.replace({
+          pathname: '/skills/[skillId]',
+          params: { skillId: candidate.installedSkillId! },
+        })
+      }
+      size="lg"
+      variant="secondary"
+    >
+      {t('skills.candidate.openInstalled')}
+    </Button>
+  ) : pkg ? (
+    <Button disabled={isInstalling} onPress={() => void install()} size="lg">
+      {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
+    </Button>
+  ) : null;
+
+  if (pkg) {
+    return (
+      <SkillDocumentPage
+        contentHash={pkg.contentHash}
+        description={pkg.description}
+        headerProps={headerProps}
+        instructions={pkg.instructions}
+      >
+        {installAction}
+        {limitations ? <SkillLimitationList limitations={limitations} /> : null}
+      </SkillDocumentPage>
+    );
+  }
+
   return (
-    <SkillPage headerProps={{ title: pkg?.name ?? candidate.name }}>
-      {candidate.installedSkillId ? (
-        <Button
-          onPress={() =>
-            router.replace({
-              pathname: '/skills/[skillId]',
-              params: { skillId: candidate.installedSkillId! },
-            })
-          }
-          size="lg"
-          variant="secondary"
-        >
-          {t('skills.candidate.openInstalled')}
-        </Button>
-      ) : pkg ? (
-        <Button disabled={isInstalling} onPress={() => void install()} size="lg">
-          {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
-        </Button>
-      ) : null}
-      {limitations ? <SkillLimitationList limitations={limitations} /> : null}
-      {pkg ? (
-        <SkillDocument
-          contentHash={pkg.contentHash}
-          description={pkg.description}
-          instructions={pkg.instructions}
-        />
-      ) : (
-        <View className="gap-3">
-          <Text className="text-base text-foreground">{candidate.description}</Text>
-          <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>
-          {issues.map((issue) => (
-            <Text
-              className="text-sm text-muted-foreground"
-              key={`${issue.code}:${issue.subject ?? ''}`}
-            >
-              {t(`skills.issue.${issue.code}`, { subject: issue.subject ?? '' })}
-            </Text>
-          ))}
-        </View>
-      )}
+    <SkillPage headerProps={headerProps}>
+      {installAction}
+      <View className="gap-3">
+        <Text className="text-base text-foreground">{candidate.description}</Text>
+        <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>
+        {issues.map((issue) => (
+          <Text
+            className="text-sm text-muted-foreground"
+            key={`${issue.code}:${issue.subject ?? ''}`}
+          >
+            {t(`skills.issue.${issue.code}`, { subject: issue.subject ?? '' })}
+          </Text>
+        ))}
+      </View>
     </SkillPage>
   );
 }

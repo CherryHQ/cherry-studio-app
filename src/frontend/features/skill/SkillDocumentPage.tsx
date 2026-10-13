@@ -1,23 +1,29 @@
-import { Button, useToast } from '@cherrystudio/ui/components';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
+import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
+import { Spinner, useToast } from '@cherrystudio/ui/components';
 import { isCancelledError, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 
+import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useBackendModule } from '@/frontend/data';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isSkillsError } from '@/shared/contracts/skills';
 import { resolveAppLanguage, type AppLanguage } from '@/shared/utils/languages';
 
+import { SkillPage } from './SkillPage';
 import { skillTranslationQueryOptions } from './skillTranslation';
 
-type SkillDocumentProps = {
+type SkillDocumentPageProps = {
+  children?: ReactNode;
   contentHash: string;
   description: string;
+  headerProps: RouteHeaderProps;
   instructions: string;
 };
 
-export function SkillDocument(props: SkillDocumentProps) {
+export function SkillDocumentPage(props: SkillDocumentPageProps) {
   const { i18n } = useTranslation();
   const language = resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language);
   return (
@@ -26,11 +32,13 @@ export function SkillDocument(props: SkillDocumentProps) {
 }
 
 function DocumentContent({
+  children,
   contentHash,
   description,
+  headerProps,
   instructions,
   language,
-}: SkillDocumentProps & { language: AppLanguage }) {
+}: SkillDocumentPageProps & { language: AppLanguage }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const skills = useBackendModule('skills');
@@ -62,24 +70,40 @@ function DocumentContent({
   }
 
   return (
-    <View className="gap-4">
-      <View className="flex-row justify-end">
-        <Button
-          disabled={translation.isFetching}
-          onPress={() => void toggleTranslation()}
-          size="sm"
-          variant="ghost"
-        >
-          {t(
-            translation.isFetching
-              ? 'skills.translation.translating'
+    <SkillPage
+      headerProps={{
+        ...headerProps,
+        rightActions: [
+          {
+            accessibilityLabel: t(
+              translation.isFetching
+                ? 'skills.translation.translating'
+                : showTranslation
+                  ? 'skills.translation.original'
+                  : 'skills.translation.translate',
+            ),
+            disabled: translation.isFetching,
+            icon: translation.isFetching
+              ? TranslationProgressIcon
               : showTranslation
-                ? 'skills.translation.original'
-                : 'skills.translation.translate',
-          )}
-        </Button>
-      </View>
+                ? FileTextIcon
+                : LanguagesIcon,
+            key: 'skill-translation',
+            onPress: () => void toggleTranslation(),
+            testID: 'skill-translation',
+            type: 'icon',
+          },
+          ...(headerProps.rightActions ?? []),
+        ],
+      }}
+    >
+      {children}
       <MarkdownText markdown={showTranslation && translation.data ? translation.data : markdown} />
-    </View>
+    </SkillPage>
   );
+}
+
+function TranslationProgressIcon() {
+  const color = useThemeColor('foreground');
+  return <Spinner color={color} size="sm" />;
 }
