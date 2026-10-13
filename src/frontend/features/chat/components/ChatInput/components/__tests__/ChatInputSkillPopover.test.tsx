@@ -12,8 +12,8 @@ import type { SkillListItem } from '@/shared/data/types/skill';
 
 import { ChatInputSkillPopover } from '../ChatInputSkillPopover';
 
-jest.mock('@cherrystudio/app-icons/icons/check', () => ({ CheckIcon: () => null }));
-jest.mock('@cherrystudio/app-icons/icons/tool-case', () => ({ ToolCaseIcon: () => null }));
+jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/tool-case', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => ({
   Button: () => null,
   Composer: {
