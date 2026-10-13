@@ -7,6 +7,7 @@ import type { Skill } from '@/shared/data/types/skill';
 import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
 import type { SkillEnvironmentFacts } from '../skillAdmission';
+import type { SkillEnvironmentReader } from '../skillEnvironment';
 import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
@@ -144,7 +145,11 @@ const marketplace = {
   search: async () => [],
 };
 
-function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
+function createModule(
+  fakes: Fakes,
+  definitions: BundledSkillDefinition[],
+  environmentReader: SkillEnvironmentReader = { read: async () => environment },
+) {
   const candidates = (): SkillSourceCandidate[] =>
     createBundledSkillSource(definitions)
       .list()
@@ -163,7 +168,7 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
-    environment: { read: async () => environment },
+    environment: environmentReader,
     sources: {
       bundled: createBundledSkillSource([]),
       github: {
@@ -188,6 +193,64 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
+  it('projects external profiles and missing packages without waiting on environment reads', async () => {
+    const fakes = createFakes();
+    const read = jest.fn(async () => environment);
+    const module = createModule(fakes, [reviewed], { read });
+    const [candidate] = await module.resolve('https://github.com/owner/repo');
+    const installed = await module.install({ candidateId: candidate!.candidateId });
+    read.mockClear();
+    const external: Skill = {
+      ...installed,
+      profile: { ...installed.profile, provenance: 'unverified' },
+    };
+    const admission = { status: 'unverified', reasons: [] };
+
+    expect(await module.admissions.evaluate([], 'agent-1')).toEqual([]);
+    expect(await module.admissions.evaluate([external], 'agent-1')).toEqual([
+      { admission, agentAdmission: admission },
+    ]);
+    expect(
+      await module.admissions.evaluate([
+        { ...external, profile: { ...external.profile, provenance: 'analyzed' } },
+      ]),
+    ).toEqual([{ admission }]);
+    fakes.storage.hasRevision = () => false;
+    expect(await module.admissions.evaluate([external], 'agent-1')).toEqual([
+      {
+        admission: {
+          status: 'setup-required',
+          reasons: [{ code: 'package-unavailable', subject: null }],
+        },
+        agentAdmission: {
+          status: 'setup-required',
+          reasons: [{ code: 'package-unavailable', subject: null }],
+        },
+      },
+    ]);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('still evaluates reviewed workflows against the current environment', async () => {
+    const fakes = createFakes();
+    const read = jest.fn(async () => environment);
+    const module = createModule(fakes, [needsWeb], { read });
+    const [candidate] = await module.resolve('https://github.com/owner/repo');
+    const installed = await module.install({ candidateId: candidate!.candidateId });
+    read.mockClear();
+
+    expect(await module.admissions.evaluate([installed], 'agent-1')).toMatchObject([
+      {
+        admission: { status: 'setup-required', reasons: [{ code: 'web-search-unconfigured' }] },
+        agentAdmission: {
+          status: 'setup-required',
+          reasons: [{ code: 'web-search-unconfigured' }],
+        },
+      },
+    ]);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses to expose system workflows as installable candidates', async () => {
     const fakes = createFakes();
     const bundled = createBundledSkillSource();

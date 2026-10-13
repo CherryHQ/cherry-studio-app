@@ -246,19 +246,26 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
   const admissions: SkillAdmissionReader = {
     async evaluate(skills, agentId) {
-      const environment = await deps.environment.read();
+      if (skills.length === 0) return [];
+      // External profiles always project as unverified; their list needs no device/plugin I/O.
+      const environment = skills.some((skill) => skill.profile.provenance === 'reviewed')
+        ? await deps.environment.read()
+        : null;
       const agent = agentId ? await deps.agentFacts(agentId) : null;
       return skills.map((skill) => {
         const hasPackage = deps.storage.hasRevision(skill);
         const admission: SkillAdmission = hasPackage
-          ? evaluateSkillAdmission(skill.profile, environment)
+          ? environment
+            ? evaluateSkillAdmission(skill.profile, environment)
+            : { status: 'unverified', reasons: [] }
           : { status: 'setup-required', reasons: [{ code: 'package-unavailable', subject: null }] };
         return agent
           ? {
               admission,
-              agentAdmission: !hasPackage
-                ? admission
-                : evaluateSkillAdmission(skill.profile, environment, agent),
+              agentAdmission:
+                !hasPackage || !environment
+                  ? admission
+                  : evaluateSkillAdmission(skill.profile, environment, agent),
             }
           : { admission };
       });
