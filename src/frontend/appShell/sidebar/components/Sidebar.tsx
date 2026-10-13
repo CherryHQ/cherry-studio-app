@@ -12,6 +12,7 @@ import {
 
 import { type SidebarActions, SidebarActionsContext } from '../context';
 import { useSessionSearch } from '../hooks/useSessionSearch';
+import { SidebarSelectionProvider } from '../SidebarSelectionProvider';
 import { SidebarBody } from './SidebarBody';
 import { SidebarFooter } from './SidebarFooter';
 import { SidebarHeader } from './SidebarHeader';
@@ -34,7 +35,7 @@ export function Sidebar({ navigation }: SidebarProps) {
       : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
-  const { source, startRemoteChat } = useChatSource();
+  const { source, remoteTarget, viewMode, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({
@@ -93,11 +94,13 @@ export function Sidebar({ navigation }: SidebarProps) {
 
   return (
     <SidebarActionsContext value={actions}>
-      <View className="flex-1" testID="sidebar">
-        <SidebarBody />
-        <SidebarHeader />
-        <SidebarFooter />
-      </View>
+      <SidebarSelectionProvider scope={`${source}:${remoteTarget.connectionId ?? ''}:${viewMode}`}>
+        <View className="flex-1" testID="sidebar">
+          <SidebarBody />
+          <SidebarHeader />
+          <SidebarFooter />
+        </View>
+      </SidebarSelectionProvider>
     </SidebarActionsContext>
   );
 }

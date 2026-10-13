@@ -126,7 +126,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         return async (report) => {
           await this.requireRuntime().saveUsage(report.requestId, detachedJson({ owner, report }));
           // Delivery failure retains the outbox record. It must not cause the model to resend an answer.
-          this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+          this.delivery = this.delivery
+            .then(() => this.deliverUsage())
+            .catch((error) => {
+              logger.warn('Pi durable usage delivery failed', {
+                error,
+                operation: 'pi.usage_delivery',
+              });
+            });
         };
       },
       (providerId, signal) =>
@@ -151,7 +158,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         models: this.models.models,
         registry: this.registry,
         settings: { followUpMode: 'one-at-a-time' },
-        onReport: (error) => logger.warn('Pi runtime reported an error', error),
+        onReport: (error) => {
+          logger.warn('Pi durable extension failed', { error, operation: 'pi.extension' });
+        },
       });
       const opened = this.runtime;
       void opened.closed
@@ -199,7 +208,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   resume(): void {
-    this.delivery = this.delivery.then(() => this.deliverUsage()).catch(() => undefined);
+    this.delivery = this.delivery
+      .then(() => this.deliverUsage())
+      .catch((error) => {
+        logger.warn('Pi durable usage delivery failed', { error, operation: 'pi.usage_delivery' });
+      });
     this.requireRuntime().resume();
   }
 
@@ -258,6 +271,16 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async unfinishedSessions() {
     const runtime = this.requireRuntime();
     const inspection = await runtime.inspect();
+    for (const task of inspection.tasks) {
+      if (task.state.kind === 'blocked')
+        logger.warn('Pi durable task blocked', {
+          operation: 'pi.task',
+          taskId: Number(task.record.id),
+          taskKind: task.record.kind,
+          reasonCode: task.state.reason,
+          error: task.state.error,
+        });
+    }
     const conversations = new Set([
       ...inspection.tasks.map((task) => task.record.conversationId),
       ...inspection.submissions.map((submission) => submission.conversationId),

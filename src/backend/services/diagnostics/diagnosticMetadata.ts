@@ -14,6 +14,18 @@ const LOG_MESSAGES = new Set([
   'MCP tools() failed, reconnecting once',
   'Trace storage operation failed',
   'Device tool failed',
+  'Agent operation failed',
+  'Agent listener failed',
+  'Agent status listener failed',
+  'Agent projection failed',
+  'Agent result remains in Pi until Cherry settlement can be retried',
+  'Agent reservation recovered as interrupted',
+  'Pi durable extension failed',
+  'Pi durable usage delivery failed',
+  'Pi durable task failed',
+  'Pi durable task blocked',
+  'Pi durable generation retry scheduled',
+  'Pi durable tool execution interrupted',
 ]);
 const LOG_STRING_FIELDS = new Set([
   'code',
@@ -29,6 +41,8 @@ const LOG_STRING_FIELDS = new Set([
   'assistantMessageId',
   'serverId',
   'requestId',
+  'toolCallId',
+  'taskKind',
 ]);
 const LOG_NUMBER_FIELDS = new Set([
   'status',
@@ -37,6 +51,8 @@ const LOG_NUMBER_FIELDS = new Set([
   'totalTokens',
   'writeFailures',
   'droppedRecords',
+  'taskId',
+  'retryAttempt',
 ]);
 const TRACE_FIELDS = new Set([
   'error.type',
@@ -64,6 +80,11 @@ const TRACE_FIELDS = new Set([
   'host.error.code',
   'trace.dropped_spans',
   'trace.attributes_truncated',
+  'runtime.name',
+  'agent.turn.status',
+  'agent.queue.length',
+  'agent.recovery.session_count',
+  'agent.recovery.unfinished_count',
 ]);
 
 function metadataValue(value: unknown): string | number | boolean | undefined {
@@ -168,7 +189,7 @@ export function projectDiagnosticTrace(value: unknown) {
   if (!parsed.success) return undefined;
   const record = parsed.data;
   if (
-    !/^(?:ai\.turn|pi\.generate_content|mcp\.(?:connect|list_tools|call_tool)|plugin\.[a-z_]+)$/.test(
+    !/^(?:ai\.(?:turn|turn_state|queue|admission|recovery|suspend|prepare|observe|settlement|checkpoint)|pi\.(?:generate_content|execute_tool)|mcp\.(?:connect|list_tools|call_tool)|plugin\.[a-z_]+)$/.test(
       record.name,
     )
   )

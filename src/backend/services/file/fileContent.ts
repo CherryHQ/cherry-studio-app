@@ -20,6 +20,7 @@ import {
 } from '@/shared/data/types/file';
 
 import { readDocumentUriText } from './documentText';
+import { editFileImage } from './editFileImage';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
@@ -70,6 +71,7 @@ const createTextEntryInputSchema = z.strictObject({
  */
 export const fileContent = {
   subscribeChanges: subscribeFileChanges,
+  editImage: editFileImage,
   async hashFile(id: FileEntryId, signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
     const source = await resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id));

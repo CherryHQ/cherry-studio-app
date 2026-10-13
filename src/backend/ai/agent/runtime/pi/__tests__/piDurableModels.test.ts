@@ -69,6 +69,28 @@ function setup(traceRequest?: Parameters<typeof createPiDurableModels>[3]) {
 }
 
 describe('Pi durable model bridge', () => {
+  test('records configuration failures that happen before resolving the provider transport', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    await bridge.registerModel(reference);
+    bridge.configuration.mockRejectedValueOnce(
+      Object.assign(new Error('private execution owner'), { code: 'EXECUTION_UNAVAILABLE' }),
+    );
+    const result = await bridge.models.completeSimple(bridge.getModel(reference)!, {
+      messages: [],
+    });
+    expect(result.stopReason).toBe('error');
+    expect(records.at(-1)).toMatchObject({
+      name: 'pi.generate_content',
+      status: 'error',
+      attributes: {
+        'gen_ai.request.model': reference.modelId,
+        'gen_ai.provider.id': reference.providerId,
+        'error.code': 'EXECUTION_UNAVAILABLE',
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
   test('keeps image scheduling separate from language requests for the same Cherry model', async () => {
     const bridge = setup();
     await bridge.registerModel(reference);

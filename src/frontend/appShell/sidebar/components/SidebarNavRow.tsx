@@ -9,6 +9,7 @@ type SidebarNavRowProps = {
   label: string;
   onPress: () => void;
   testID: string;
+  disabled?: boolean;
 };
 
 // Gesture Handler's Pressable, not React Native's: these rows sit inside the
@@ -17,9 +18,21 @@ type SidebarNavRowProps = {
 //
 // Uniwind does not resolve className or active: on RNGH Pressable. Keep the
 // row's layout and pressed background on a native View using RNGH's press state.
-export function SidebarNavRow({ icon: Icon, label, onPress, testID }: SidebarNavRowProps) {
+export function SidebarNavRow({
+  icon: Icon,
+  label,
+  onPress,
+  testID,
+  disabled,
+}: SidebarNavRowProps) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} testID={testID}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      testID={testID}
+    >
       {({ pressed }) => (
         <View
           className={cn(

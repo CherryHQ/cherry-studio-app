@@ -12,11 +12,14 @@ import type {
   SubmissionRecord,
 } from '@earendil-works/pi-durable';
 
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
 
 type InputView = { record: SubmissionRecord; metadata: JsonObject | undefined };
+const logger = loggerService.withContext('PiDurableObserver');
 
 /** A disposable presentation mount. Stopping it releases observation and preserves execution. */
 export class PiDurableObserver {
@@ -195,6 +198,11 @@ export class PiDurableObserver {
           if (event.error !== undefined) this.compactionFailed = true;
           break;
         case 'auto_retry_start':
+          logger.warn('Pi durable generation retry scheduled', {
+            ...this.diagnosticContext(),
+            operation: 'pi.retry',
+            retryAttempt: event.attempt,
+          });
           this.partial = undefined;
           this.generationAttempt = event.attempt;
           break;
@@ -230,7 +238,25 @@ export class PiDurableObserver {
             break;
           }
           if (event.entry) this.entries.set(event.entry.id, event.entry);
-          else this.toolStates.set(event.toolCallId, 'interrupted');
+          else {
+            this.toolStates.set(event.toolCallId, 'interrupted');
+            logger.warn('Pi durable tool execution interrupted', {
+              ...this.diagnosticContext(),
+              operation: 'pi.execute_tool',
+              toolCallId: event.toolCallId,
+            });
+          }
+          break;
+        case 'task_failed':
+          logger.error('Pi durable task failed', {
+            // Compaction and extension tasks need not belong to the currently displayed run.
+            ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
+              ? this.diagnosticContext()
+              : { sessionId: this.sessionId }),
+            operation: 'pi.task',
+            taskId: Number(event.taskId),
+            taskKind: event.kind,
+          });
           break;
       }
     if (this.contextStatus() !== previousContextStatus)
@@ -272,6 +298,16 @@ export class PiDurableObserver {
       : this.compactionFailed
         ? 'compaction-failed'
         : null;
+  }
+
+  private diagnosticContext() {
+    const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
+    return {
+      sessionId: this.sessionId,
+      requestId: active?.record.requestId,
+      turnId: active?.metadata?.turnId,
+      assistantMessageId: active?.metadata?.assistantMessageId,
+    };
   }
 
   private project(input: InputView) {

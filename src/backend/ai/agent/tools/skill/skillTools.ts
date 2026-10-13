@@ -42,7 +42,13 @@ const searchInputSchema = z.strictObject({
     .string()
     .max(200)
     .describe(
-      'Words to match against Skill names and descriptions. Empty lists every available Skill.',
+      'Words to match against Skill names and descriptions. Empty lists the requested inventory.',
+    ),
+  include_manual: z
+    .boolean()
+    .optional()
+    .describe(
+      'Include manual-only metadata when the user asks for their complete Skill count or list. Defaults to false for automatic discovery; does not authorize loading manual-only instructions.',
     ),
   cursor: z
     .string()
@@ -127,7 +133,7 @@ export function createSkillTools(
       providerName: SEARCH_LOCAL_SKILLS_TOOL_NAME,
       displayName: 'Search Skills',
       description:
-        'Search the Skills available to this Agent by name and description. Returns metadata only; call load_skill with a returned skill_id to read its instructions. Results never include Skills outside this Agent.',
+        'Search Skills enabled for this Agent by name and description. Automatic discovery excludes manual-only packages. For the user\'s complete inventory, use query: "", include_manual: true: total is the requested inventory count, automaticTotal is its automatically invocable subset, matched is the query count, and returned is this page size. Follow nextCursor until null for a complete list. Unbound, disabled and unreadable packages and app-owned system workflows are excluded. Metadata grants no permission to load manual-only instructions.',
       inputSchema: toRuntimeInputSchema(searchInputSchema),
       inputPreview: { textField: 'query' },
       approval: 'auto',
@@ -136,7 +142,8 @@ export function createSkillTools(
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
         const terms = parsed.data.query.toLowerCase().split(/\s+/).filter(Boolean);
         const modelInvocable = scope.entries.filter((entry) => entry.invocation.modelInvocable);
-        const matched = modelInvocable.filter((entry) => {
+        const available = parsed.data.include_manual ? scope.entries : modelInvocable;
+        const matched = available.filter((entry) => {
           if (terms.length === 0) return true;
           const haystack = `${entry.name} ${entry.description}`.toLowerCase();
           return terms.some((term) => haystack.includes(term));
@@ -146,7 +153,8 @@ export function createSkillTools(
         const next = offset + page.length;
         return {
           value: {
-            total: modelInvocable.length,
+            total: available.length,
+            automaticTotal: modelInvocable.length,
             matched: matched.length,
             returned: page.length,
             skills: page.map(summarize),
@@ -331,6 +339,7 @@ function summarize(entry: SkillTurnEntry) {
     skill_id: entry.id,
     name: entry.name,
     description: entry.description,
+    invocation: entry.invocation,
     environment: entry.admission,
   };
 }
