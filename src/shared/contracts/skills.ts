@@ -7,6 +7,7 @@ import type {
   SkillManifestEntry,
   SkillPackageIssue,
 } from '@/shared/data/types/skill';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import type {
   CherryinSkillLibraryDetail,
@@ -26,8 +27,8 @@ export type SkillInspectedPackage = {
   invocation: SkillInvocation;
   manifest: SkillManifestEntry[];
   contentHash: string;
-  /** Bounded head of the instruction body, for the detail view. */
-  instructionsPreview: string;
+  /** Complete instruction body for reading before installation. */
+  instructions: string;
 };
 
 /**
@@ -78,6 +79,8 @@ export type SkillsErrorCode =
   | 'storage-unavailable'
   | 'already-installed'
   | 'content-changed'
+  | 'translation-model-unavailable'
+  | 'translation-failed'
   | 'not-found';
 
 export class SkillsError extends Error {
@@ -121,6 +124,8 @@ export interface SkillsModule {
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
   /** Download, validate, and report the app's limitations; never installs. */
   inspect(candidateId: string, signal?: AbortSignal): Promise<SkillInspection>;
+  /** Translate documentation for display only; never changes the installed instructions. */
+  translate(input: { text: string; language: AppLanguage }, signal?: AbortSignal): Promise<string>;
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;
   /** Re-acquire the accepted source; a rejected revision leaves the installation intact. */
   update(skillId: string, signal?: AbortSignal): Promise<SkillUpdateResult>;

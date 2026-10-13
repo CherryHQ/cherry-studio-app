@@ -162,6 +162,7 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
       }));
   return createSkillsModule({
     readAuthor: async () => 'Current user',
+    translate: jest.fn(),
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
@@ -210,6 +211,7 @@ describe('createSkillsModule', () => {
     const module = createSkillsModule({
       ...fakes,
       readAuthor: async () => 'Current user',
+      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
       sources: {
         bundled: createBundledSkillSource([]),
@@ -290,6 +292,7 @@ describe('createSkillsModule', () => {
     const bundled = createBundledSkillSource();
     const module = createSkillsModule({
       readAuthor: async () => 'Current user',
+      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
       db: fakes.db,
       skills: fakes.skills,
@@ -362,7 +365,11 @@ describe('createSkillsModule', () => {
     expect(inspection).toMatchObject({
       issues: [],
       limitations: { scripts: [], unavailableTools: [] },
-      package: { name: 'notes', manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }] },
+      package: {
+        name: 'notes',
+        instructions: 'Write notes.',
+        manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }],
+      },
     });
     expect(await module.inspect(py!.candidateId)).toMatchObject({
       limitations: { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] },
@@ -489,6 +496,7 @@ describe('createSkillsModule', () => {
     };
     const module = createSkillsModule({
       readAuthor: async () => 'Current user',
+      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,

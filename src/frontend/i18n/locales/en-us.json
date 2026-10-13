@@ -2034,6 +2034,7 @@
   "skills.detail.uninstall": "Uninstall",
   "skills.detail.uninstallMessage": "The Skill is removed from every Agent. Files it helped create stay in your library.",
   "skills.detail.uninstallTitle": "Uninstall {{name}}?",
+  "skills.detail.update": "Update skill",
   "skills.detail.version": "Version",
   "skills.discover.empty": "No matching Skills found",
   "skills.discover.search": "Find Skills",
@@ -2049,6 +2050,8 @@
   "skills.error.search-unavailable": "Skill search is unavailable. Check your connection and try again.",
   "skills.error.source-invalid": "Provide a supported Skill page, GitHub repository, directory or SKILL.md link.",
   "skills.error.source-unreachable": "The Skill source could not be reached.",
+  "skills.error.translation-failed": "Translation failed. Please try again.",
+  "skills.error.translation-model-unavailable": "Set a default model to use AI translation.",
   "skills.executionHint": "Installing and reading a Skill does not mean every step can run. Execution depends on the available tools and script runtime.",
   "skills.find.hint": "Describe a task or paste a Skill link",
   "skills.find.installed": "Added to this Agent",
@@ -2094,6 +2097,9 @@
   "skills.toast.update.rejected": "The new package failed validation; the installed version was kept.",
   "skills.toast.update.unchanged": "Already up to date",
   "skills.toast.update.updated": "Skill updated",
+  "skills.translation.original": "Original",
+  "skills.translation.translate": "AI translation",
+  "skills.translation.translating": "Translating…",
   "skills.working": "Working…",
   "systemEntry.failed": "Could not open this share. Share the content again."
 }

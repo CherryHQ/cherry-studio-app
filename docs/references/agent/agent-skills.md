@@ -9,7 +9,19 @@ standard-mode Agent, and opens the Agent list with setup guidance when none exis
 
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. Plugins and Skills have separate sidebar entries and pages.
-The Skills library provides installed search, details, creation, update and uninstall.
+The Skills library provides installed search, document reading, creation, update and uninstall.
+Lists show names and descriptions without environment-status captions. Detail pages present the
+complete entry as Markdown, including before installation; revision hashes, file counts and
+provenance rows stay out of the reading surface. Known static execution limitations remain visible
+and accompany instructions supplied to the Agent.
+The reading surface offers an explicit AI translation action for the description and document in
+the current app language, using the configured default model. The user can return to the original
+text; translation never changes installed files or the instructions supplied to the Agent. Requests
+are cancellable and are not made on page load. Successful translations are saved in the existing
+local persistent UI cache by package content hash and language, and appear immediately when the
+same document is reopened, including after an app restart. A changed package or another language
+uses its own translation; failed and cancelled requests are not saved. The existing update action is
+labeled **Update skill** because it applies the upstream content directly.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference

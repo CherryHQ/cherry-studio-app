@@ -1,16 +1,10 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import {
-  BottomSheet,
-  ContentState,
-  Section,
-  useAlert,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
@@ -19,6 +13,7 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError } from '@/shared/contracts/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
+import { SkillDocument } from './SkillDocument';
 import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
 
@@ -62,10 +57,9 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
   const [isBusy, setIsBusy] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
-  const instructions = useSkillInstructionsApi(skill.id, showInstructions);
+  const instructions = useSkillInstructionsApi(skill.id, true);
 
-  async function checkForUpdates() {
+  async function update() {
     setIsBusy(true);
     try {
       const result = await skillsModule.update(skill.id);
@@ -114,8 +108,8 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
                 ? [
                     {
                       id: 'skill-update',
-                      label: t('skills.detail.checkUpdates'),
-                      onPress: () => void checkForUpdates(),
+                      label: t('skills.detail.update'),
+                      onPress: () => void update(),
                     },
                     {
                       id: 'skill-source',
@@ -145,44 +139,22 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
         title: skill.name,
       }}
     >
-      <View className="gap-2">
-        <Text className="text-base text-foreground" selectable>
-          {skill.description}
-        </Text>
-        {skill.isPackageMissing ? (
-          <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
-        ) : null}
-        <SkillLimitationList limitations={skill.limitations} />
-        <Text className="text-sm text-muted-foreground">{t('skills.executionHint')}</Text>
-      </View>
-      <Section title={t('skills.detail.about')}>
-        <Section.Item
-          label={t('skills.detail.instructions')}
-          onPress={() => setShowInstructions(true)}
+      {skill.isPackageMissing ? (
+        <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
+      ) : null}
+      <SkillLimitationList limitations={skill.limitations} />
+      {instructions.data && !instructions.error ? (
+        <SkillDocument
+          contentHash={instructions.data.contentHash}
+          description={skill.description}
+          instructions={instructions.data.instructions}
         />
-        {skill.author ? (
-          <Section.Item
-            label={t('skills.detail.author')}
-            trailing={<Text className="text-sm text-muted-foreground">{skill.author}</Text>}
-          />
-        ) : null}
-        {skill.version ? (
-          <Section.Item
-            label={t('skills.detail.version')}
-            trailing={<Text className="text-sm text-muted-foreground">{skill.version}</Text>}
-          />
-        ) : null}
-      </Section>
-      <BottomSheet
-        onClose={() => setShowInstructions(false)}
-        open={showInstructions}
-        size="large"
-        title={t('skills.detail.instructions')}
-      >
-        <ScrollView contentContainerClassName="gap-4 p-6">
+      ) : (
+        <>
+          <Text className="text-base text-foreground">{skill.description}</Text>
           {instructions.isLoading ? (
             <ContentState.Loading title={t('skills.loading')} />
-          ) : instructions.error || !instructions.data ? (
+          ) : (
             <ContentState.Error
               primaryAction={{
                 children: t('common.retry'),
@@ -190,14 +162,9 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
               }}
               title={t('skills.detail.instructionsUnavailable')}
             />
-          ) : (
-            <Text className="text-base text-foreground" selectable>
-              {instructions.data.instructions}
-            </Text>
           )}
-        </ScrollView>
-      </BottomSheet>
-      <Text className="px-1 text-muted-foreground text-xs">{t('skills.detail.bindHint')}</Text>
+        </>
+      )}
       {isBusy ? <ContentState.Loading layout="row" title={t('skills.working')} /> : null}
     </SkillPage>
   );
