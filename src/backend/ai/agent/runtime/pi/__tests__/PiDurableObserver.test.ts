@@ -1,6 +1,7 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   AgentEventStream,
+  CompactionResult,
   SnapshotEvent,
   SubmissionId,
   SubmissionRecord,
@@ -22,7 +23,7 @@ test.each([
   'attributes %s failures to their owned scope while a turn is running',
   async (kind, ownsTurn) => {
     const inputId = 1 as SubmissionId;
-    const taskId = 42 as TaskId;
+    const taskId = 42 as TaskId<CompactionResult>;
     const snapshot: SnapshotEvent = {
       type: 'snapshot',
       run: { inputs: [inputId] },

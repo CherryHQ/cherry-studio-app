@@ -1138,7 +1138,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   private async persistTurn(turn: RuntimeDurableTurn) {
     const { assistant, turn: view } = projectDurableHostTurn(turn);
-    if (!assistant || turn.status === 'running' || turn.status === 'queued') return;
+    const status = turn.status;
+    if (!assistant || status === 'running' || status === 'queued') return;
     await this.traceOperation(
       'ai.settlement',
       { ...turn.identity, messageId: assistant.id },
@@ -1151,12 +1152,7 @@ export class DurableAgentHost implements AgentProtocol {
         await this.store.finalizeAssistantMessage({
           assistantMessageId: assistant.id,
           turnId: turn.identity.turnId,
-          status:
-            turn.status === 'completed'
-              ? 'success'
-              : turn.status === 'failed'
-                ? 'error'
-                : turn.status,
+          status: status === 'completed' ? 'success' : status === 'failed' ? 'error' : status,
           parts: assistant.parts,
           usage: turn.usage,
           error: view.error,
