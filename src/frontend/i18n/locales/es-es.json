@@ -1525,6 +1525,7 @@
   "settings.mcp.tabs.configuration": "Configuración",
   "settings.mcp.toast.deleteFailed": "Fallo al eliminar servidor",
   "settings.mcp.toast.deleted": "Servidor eliminado",
+  "settings.mcp.toast.redirected": "Esta dirección redirige a {{url}}. Actualiza la dirección e inténtalo de nuevo.",
   "settings.mcp.toast.saveFailed": "No se pudo guardar el servidor",
   "settings.mcp.tools.empty": "Este servidor no expone herramientas.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} de {{total}} activadas",

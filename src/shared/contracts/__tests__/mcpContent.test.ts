@@ -1,4 +1,4 @@
-import { projectMcpModelContent } from '../mcpContent';
+import { mcpModelTextOverflow, projectMcpModelContent } from '../mcpContent';
 
 describe('MCP model projection', () => {
   it('keeps images in the image channel and excludes UI metadata and user-only content', () => {
@@ -29,6 +29,41 @@ describe('MCP model projection', () => {
         }),
       ),
     ).not.toContain('private');
+  });
+
+  it('sends structured output once when the server also serialized it as text', () => {
+    const structuredContent = { count: 2, items: [{ id: 'a' }] };
+    expect(
+      projectMcpModelContent({
+        content: [{ type: 'text', text: JSON.stringify({ items: [{ id: 'a' }], count: 2 }) }],
+        structuredContent,
+      }),
+    ).toEqual([{ type: 'text', text: '{"items":[{"id":"a"}],"count":2}' }]);
+    expect(
+      projectMcpModelContent({
+        content: [{ type: 'text', text: 'Found 2 items' }],
+        structuredContent,
+      }),
+    ).toEqual([
+      { type: 'text', text: 'Found 2 items' },
+      { type: 'text', text: '{"count":2,"items":[{"id":"a"}]}' },
+    ]);
+  });
+
+  it('states how much text was cut and offers the whole text for retention', () => {
+    const result = {
+      content: [
+        { type: 'text', text: 'a'.repeat(60_000) },
+        { type: 'text', text: 'b'.repeat(40_000) },
+      ],
+    };
+    const projection = projectMcpModelContent(result, 'Read the rest elsewhere.');
+    expect(projection.at(-1)).toEqual({
+      type: 'text',
+      text: '[MCP text truncated: the first 65536 of 100000 characters are shown. Read the rest elsewhere.]',
+    });
+    expect(mcpModelTextOverflow(result)).toBe(`${'a'.repeat(60_000)}\n${'b'.repeat(40_000)}`);
+    expect(mcpModelTextOverflow({ content: [{ type: 'text', text: 'short' }] })).toBeUndefined();
   });
 
   it('bounds text and omits binary resource bytes from the text channel', () => {

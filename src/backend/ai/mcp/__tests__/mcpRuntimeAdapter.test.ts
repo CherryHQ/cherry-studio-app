@@ -142,7 +142,7 @@ describe('MCP Runtime adapter', () => {
       expect.any(AbortSignal),
       'https://mcp.example/mcp',
       7,
-      expect.any(Function),
+      { sent: expect.any(Function), waiting: expect.any(Function) },
     );
   });
 
@@ -192,15 +192,24 @@ describe('MCP Runtime adapter', () => {
     ]);
   });
 
-  it.each([undefined, 'read', 'write'] as const)(
-    'bounds a stalled %s call without inviting write retries',
-    async (effect) => {
+  it.each([
+    [undefined, false, 'mcp_tool_timeout', true],
+    ['write', false, 'mcp_tool_timeout', true],
+    ['read', true, 'mcp_tool_timeout', true],
+    ['write', true, 'mcp_tool_write_outcome_unknown', false],
+    [undefined, true, 'mcp_tool_outcome_unknown', false],
+  ] as const)(
+    'bounds a stalled %s call (sent: %s) as %s',
+    async (effect, sent, code, retryable) => {
       jest.useFakeTimers();
       try {
         const { traces, records } = createTraceRecorder();
         const capability = {
           traces,
-          invoke: jest.fn(() => new Promise(() => undefined)),
+          invoke: jest.fn((...args: Parameters<McpToolInvocationCapability['invoke']>) => {
+            if (sent) args[5].sent();
+            return new Promise(() => undefined);
+          }),
         } satisfies McpToolInvocationCapability;
         const execution = createTool(capability, { effect }).execute({
           input: { query: 'cherry' },
@@ -210,10 +219,7 @@ describe('MCP Runtime adapter', () => {
         });
 
         jest.advanceTimersByTime(MCP_TOOL_CALL_TIMEOUT_MS);
-        await expect(execution).rejects.toMatchObject({
-          code: effect !== 'read' ? 'mcp_tool_write_outcome_unknown' : 'mcp_tool_timeout',
-          retryable: effect === 'read',
-        });
+        await expect(execution).rejects.toMatchObject({ code, retryable });
         expect(records.at(-1)).toMatchObject({
           status: 'error',
           attributes: {
@@ -226,6 +232,45 @@ describe('MCP Runtime adapter', () => {
       }
     },
   );
+
+  it.each([
+    [undefined, 'mcp_tool_cancelled'],
+    ['write', 'mcp_tool_write_outcome_unknown'],
+  ] as const)('reports stopping a sent %s call as %s', async (effect, code) => {
+    const controller = new AbortController();
+    const invoke = jest.fn((...args: Parameters<McpToolInvocationCapability['invoke']>) => {
+      args[5].sent();
+      controller.abort();
+      return new Promise(() => undefined);
+    });
+    await expect(
+      createTool({ invoke }, { effect }).execute({
+        input: { query: 'cherry' },
+        signal: controller.signal,
+        toolCallId: 'call-1',
+        turnId: 'turn-1',
+      }),
+    ).rejects.toMatchObject({ code, retryable: false });
+  });
+
+  it('points the model at the saved file when the text exceeds its budget', async () => {
+    const fileEntryId = '00000000-0000-4000-8000-0000000000f1';
+    const remote = { content: [{ type: 'text', text: 'x'.repeat(70_000) }] };
+    const tool = createTool({
+      invoke: async () => remote,
+      storeResult: async (value) => ({ value, artifacts: [], fullTextFileEntryId: fileEntryId }),
+    });
+    const result = await tool.execute({
+      input: { query: 'cherry' },
+      signal: new AbortController().signal,
+      toolCallId: 'call-1',
+      turnId: 'turn-1',
+    });
+    expect(result.modelContent?.at(-1)).toEqual({
+      type: 'text',
+      text: `[MCP text truncated: the first 65536 of 70000 characters are shown. Full text: read_file with file_entry_id ${fileEntryId}, paging with start_line and limit.]`,
+    });
+  });
 
   it('keeps a write cancelled before invocation distinct from an unknown outcome', async () => {
     const invoke = jest.fn();

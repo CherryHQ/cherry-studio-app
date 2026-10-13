@@ -36,7 +36,11 @@ export type McpExecutableToolDescriptor = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
-  /** Trusted bundled policy; remote annotations do not decide retry safety. */
+  /**
+   * What a failure after transmission means. `read`: repeating the call is harmless, from
+   * bundled policy or a remote read-only or idempotent annotation. `write`: a bundled write.
+   * Absent: the remote server declared nothing, so the outcome is unknown.
+   */
   effect?: 'read' | 'write';
   /**
    * The endpoint this catalog was discovered against. Execution is pinned to
@@ -57,6 +61,14 @@ export type McpRuntimeToolSelection = {
   approval: 'ask' | 'deny';
 };
 
+/** What an invocation reports back while it runs. */
+export type McpInvocationProgress = {
+  /** The request is about to leave the device; a later failure no longer proves it did not run. */
+  sent(): void;
+  /** Human consent is in progress, which pauses the active network budget. */
+  waiting(active: boolean): void;
+};
+
 export type McpToolInvocationCapability = {
   traces?: TraceRecorder;
   storeResult?(
@@ -66,6 +78,8 @@ export type McpToolInvocationCapability = {
     value: unknown;
     artifacts: import('../agent/runtime/types').RuntimeArtifact[];
     images?: NonNullable<RuntimeToolResult['modelImages']>;
+    /** Managed file holding model text that exceeded the model budget. */
+    fullTextFileEntryId?: string;
   }>;
   invoke(
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
@@ -73,7 +87,7 @@ export type McpToolInvocationCapability = {
     signal: AbortSignal,
     discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
-    waiting?: (active: boolean) => void,
+    progress: McpInvocationProgress,
   ): Promise<unknown>;
 };
 
@@ -81,6 +95,7 @@ type McpRuntimeToolErrorCode =
   | 'mcp_tool_cancelled'
   | 'mcp_tool_call_failed'
   | 'mcp_tool_input_invalid'
+  | 'mcp_tool_outcome_unknown'
   | 'mcp_tool_result_invalid'
   | 'mcp_tool_timeout'
   | 'mcp_tool_write_outcome_unknown'
@@ -200,7 +215,7 @@ export function createMcpRuntimeTools(
     providerNames.add(providerName);
 
     const { inputSchema, inputValidator } = compileMcpInputSchema(descriptor.inputSchema);
-    const effect = descriptor.effect ?? 'write';
+    const effect = descriptor.effect;
     const endpointUrl = descriptor.endpointUrl;
     const generation = descriptor.generation;
 
@@ -253,6 +268,14 @@ async function executeMcpRuntimeTool(input: {
     'tool.call.id': call.toolCallId,
   });
   let bound: BoundedSignal | undefined;
+  let sent = false;
+  const incomplete = () =>
+    incompleteCallError({
+      cancelled: call.signal.aborted,
+      effect: input.effect,
+      sent,
+      timedOut: bound?.didTimeout() ?? false,
+    });
   try {
     if (call.signal.aborted) throw cancelledError();
     if (!input.inputValidator.safeParse(call.input).success) {
@@ -264,27 +287,21 @@ async function executeMcpRuntimeTool(input: {
     }
     bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
     const remoteResult = await raceAbort(
-      input.invoke(
-        input.ref,
-        call.input,
-        bound.signal,
-        input.endpointUrl,
-        input.generation,
-        (active) => bound?.setPaused(active),
-      ),
+      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation, {
+        sent: () => {
+          sent = true;
+        },
+        waiting: (active) => bound?.setPaused(active),
+      }),
       bound.signal,
     );
-    if (bound.didTimeout()) {
-      throw input.effect === 'write' ? unknownWriteError() : timeoutError();
-    }
-    if (call.signal.aborted) {
-      throw input.effect === 'write' ? unknownWriteError() : cancelledError();
-    }
+    if (bound.didTimeout() || call.signal.aborted) throw incomplete();
 
     const stored: {
       value: unknown;
       artifacts: RuntimeToolResult['artifacts'];
       images?: RuntimeToolResult['modelImages'];
+      fullTextFileEntryId?: string;
     } = (await input.storeResult?.(remoteResult, call.signal)) ?? {
       value: remoteResult,
       artifacts: [],
@@ -302,17 +319,20 @@ async function executeMcpRuntimeTool(input: {
     return {
       artifacts: stored.artifacts,
       value,
-      modelContent: projectMcpModelContent(remoteResult).flatMap(
-        (block): NonNullable<RuntimeToolResult['modelContent']> => {
-          if (block.type === 'text') return [block];
-          const image = stored.images?.find(
-            (item) => item.data === block.data && item.mimeType === block.mimeType,
-          );
-          return image
-            ? [{ type: 'image', fileEntryId: image.fileEntryId, mimeType: block.mimeType }]
-            : [{ type: 'text', text: '[MCP image could not be retained as a managed attachment]' }];
-        },
-      ),
+      modelContent: projectMcpModelContent(
+        remoteResult,
+        stored.fullTextFileEntryId
+          ? `Full text: read_file with file_entry_id ${stored.fullTextFileEntryId}, paging with start_line and limit.`
+          : undefined,
+      ).flatMap((block): NonNullable<RuntimeToolResult['modelContent']> => {
+        if (block.type === 'text') return [block];
+        const image = stored.images?.find(
+          (item) => item.data === block.data && item.mimeType === block.mimeType,
+        );
+        return image
+          ? [{ type: 'image', fileEntryId: image.fileEntryId, mimeType: block.mimeType }]
+          : [{ type: 'text', text: '[MCP image could not be retained as a managed attachment]' }];
+      }),
       ...(stored.images?.length ? { modelImages: stored.images } : {}),
       ...(input.app ? { mcpApp: input.app } : {}),
       ...(input.connectionKey
@@ -325,18 +345,7 @@ async function executeMcpRuntimeTool(input: {
     if (error instanceof McpRuntimeToolError) {
       throw error;
     }
-    // The SDK may fail while reading the body, or this boundary may time out
-    // before invoke() settles. Neither proves a remote write was rolled back.
-    if (input.effect === 'write') {
-      throw unknownWriteError();
-    }
-    if (bound?.didTimeout()) {
-      throw timeoutError();
-    }
-    if (call.signal.aborted) {
-      throw cancelledError();
-    }
-    throw new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
+    throw incomplete();
   } finally {
     bound?.done();
   }
@@ -469,6 +478,33 @@ function cancelledError(): McpRuntimeToolError {
 
 function timeoutError(): McpRuntimeToolError {
   return new McpRuntimeToolError('mcp_tool_timeout', 'The MCP tool call timed out.', true);
+}
+
+/**
+ * A call that ended without a classified result. Before transmission, or for a call that is
+ * harmless to repeat, the failure is exact. After transmission the SDK may still fail while
+ * reading the body, or this boundary may time out before invoke() settles; neither proves
+ * the service did nothing.
+ */
+function incompleteCallError(call: {
+  cancelled: boolean;
+  effect: McpExecutableToolDescriptor['effect'];
+  sent: boolean;
+  timedOut: boolean;
+}): McpRuntimeToolError {
+  if (!call.sent || call.effect === 'read') {
+    if (call.timedOut) return timeoutError();
+    if (call.cancelled) return cancelledError();
+    return new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
+  }
+  if (call.effect === 'write') return unknownWriteError();
+  // The user stopped a call whose effect the server never declared; the stop is what happened.
+  if (call.cancelled && !call.timedOut) return cancelledError();
+  return new McpRuntimeToolError(
+    'mcp_tool_outcome_unknown',
+    'The MCP tool call did not complete, so its outcome is unknown. Retry only if repeating it is harmless; otherwise check the service first.',
+    false,
+  );
 }
 
 function unknownWriteError(): McpRuntimeToolError {

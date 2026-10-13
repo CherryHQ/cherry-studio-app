@@ -1525,6 +1525,7 @@
   "settings.mcp.tabs.configuration": "Configuration",
   "settings.mcp.toast.deleteFailed": "Échec de la suppression du serveur",
   "settings.mcp.toast.deleted": "Serveur supprimé",
+  "settings.mcp.toast.redirected": "Cette adresse redirige vers {{url}}. Mettez à jour l’adresse et réessayez.",
   "settings.mcp.toast.saveFailed": "Échec de la sauvegarde du serveur",
   "settings.mcp.tools.empty": "Ce serveur n'expose aucun outil.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} sur {{total}} activés",

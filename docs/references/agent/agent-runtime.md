@@ -587,8 +587,8 @@ reset the idle timer, so ongoing generation can continue. Expiry fails the reque
 request settles on cancellation, source failure, or premature stream closure, even when the source
 ignores abort. Tool execution is outside this timer, and the next model request starts a fresh
 budget. Streamable HTTP MCP callbacks add a 60-second active invocation budget. It pauses during
-explicit MCP elicitation, whose native consent queue has a separate ten-minute limit and the same
-initiating cancellation owner.
+explicit MCP elicitation, whose native consent queue has a separate ten-minute limit and withdraws a
+question once no call on its server remains.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.

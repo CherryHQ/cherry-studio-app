@@ -27,7 +27,7 @@ import {
   useMcpServerRuntimeSummaries,
 } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
-import { McpAuthorizationError } from '@/shared/contracts/mcp';
+import { McpAuthorizationError, McpRedirectError } from '@/shared/contracts/mcp';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -239,6 +239,13 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
         if (error instanceof McpAuthorizationError) {
           if (error.code !== 'cancelled')
             toast.show({ label: t(`settings.mcp.oauth.errors.${error.code}`), variant: 'danger' });
+          return;
+        }
+        if (error instanceof McpRedirectError) {
+          toast.show({
+            label: t('settings.mcp.toast.redirected', { url: error.location }),
+            variant: 'danger',
+          });
           return;
         }
         logger.error('Failed to save MCP server', error as Error);

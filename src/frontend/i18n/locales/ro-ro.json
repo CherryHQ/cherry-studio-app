@@ -1525,6 +1525,7 @@
   "settings.mcp.tabs.configuration": "Config",
   "settings.mcp.toast.deleteFailed": "Nu s-a putut șterge serverul",
   "settings.mcp.toast.deleted": "Serverul a fost șters",
+  "settings.mcp.toast.redirected": "Această adresă redirecționează către {{url}}. Actualizați adresa și încercați din nou.",
   "settings.mcp.toast.saveFailed": "Nu s-a putut salva serverul",
   "settings.mcp.tools.empty": "Acest server nu expune niciun instrument.",
   "settings.mcp.tools.enabledSummary": "{{enabled}} din {{total}} activate",

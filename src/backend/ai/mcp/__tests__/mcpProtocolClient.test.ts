@@ -1,11 +1,21 @@
-import { createRemoteMcpClient } from '../mcpProtocolClient';
+import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+
+import { McpAuthorizationError, McpRedirectError } from '@/shared/contracts/mcp';
+
+import { classifyMcpCallRejection, createRemoteMcpClient } from '../mcpProtocolClient';
 
 const mockTool = { name: 'write', inputSchema: { type: 'object' } };
 const mockCall = jest.fn();
 const mockClose = jest.fn(async () => {});
+const mockConnect = jest.fn(async () => {});
 const mockExpoFetch = jest.fn();
 let mockOptions: Record<string, unknown>;
-let mockTransport: { fetch: typeof fetch; authProvider?: unknown; onInsufficientScope?: unknown };
+let mockTransport: {
+  fetch: typeof fetch;
+  authProvider?: unknown;
+  onInsufficientScope?: unknown;
+  requestInit?: RequestInit;
+};
 let mockHandler: (
   request: { params: unknown },
   context: { mcpReq: { signal: AbortSignal } },
@@ -14,11 +24,12 @@ let mockListResult: object;
 
 jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockExpoFetch(...args) }));
 jest.mock('@modelcontextprotocol/client', () => ({
+  ...jest.requireActual('@modelcontextprotocol/client'),
   Client: class {
     constructor(_info: unknown, options: Record<string, unknown>) {
       mockOptions = options;
     }
-    connect = async () => {};
+    connect = mockConnect;
     close = mockClose;
     getServerVersion = () => ({ name: 'Server', version: '1' });
     getServerCapabilities = () => ({ tools: {}, resources: {}, prompts: {} });
@@ -171,8 +182,80 @@ describe('native MCP protocol boundary', () => {
     expect(mockTransport.onInsufficientScope).toBe('throw');
     expect(mockCall).toHaveBeenCalledTimes(1);
     expect(mockCall.mock.calls[0]![1]).toMatchObject({ toolDefinition: mockTool });
-    expect(client.catalogExpiresAt).toBeGreaterThan(Date.now());
+    // A server hint cannot make the phone revalidate more often than the floor.
+    expect(client.catalogExpiresAt).toBeGreaterThan(Date.now() + 4 * 60 * 1000);
     await client.close();
+  });
+
+  it('leaves same-origin redirects to the transport and refuses to follow one to another origin', async () => {
+    const client = await open();
+    expect(mockTransport.requestInit).toEqual({ headers: {} });
+    mockExpoFetch.mockResolvedValue(
+      new Response(null, { status: 307, headers: { location: '/mcp/' } }),
+    );
+    const canonical = await mockTransport.fetch(endpointUrl, {
+      method: 'POST',
+      body: '{}',
+      redirect: 'manual',
+    });
+    expect(canonical.headers.get('location')).toBe('/mcp/');
+    await expect(
+      mockTransport.fetch('https://mcp.example/mcp/', { method: 'POST', body: '{}' }),
+    ).resolves.toBeDefined();
+
+    mockExpoFetch.mockResolvedValue(
+      new Response(null, {
+        status: 307,
+        headers: { location: 'https://user:pass@elsewhere.example/mcp?token=secret#frag' },
+      }),
+    );
+    const moved = await mockTransport
+      .fetch(endpointUrl, { method: 'POST', body: '{}' })
+      .catch((error: unknown) => error);
+    expect(moved).toBeInstanceOf(McpRedirectError);
+    expect((moved as McpRedirectError).location).toBe('https://elsewhere.example/mcp');
+    await expect(
+      mockTransport.fetch('https://elsewhere.example/mcp', { method: 'POST', body: '{}' }),
+    ).rejects.toMatchObject({ code: 'configuration' });
+    expect(mockExpoFetch).toHaveBeenCalledTimes(3);
+    await client.close();
+  });
+
+  it('surfaces the boundary failure that version negotiation wrapped while connecting', async () => {
+    const moved = new McpRedirectError('https://elsewhere.example/mcp');
+    mockConnect.mockRejectedValueOnce(
+      new Error('Version negotiation probe failed', { cause: moved }),
+    );
+    await expect(open()).rejects.toBe(moved);
+  });
+
+  it('recognizes failures that prove the server refused the call', () => {
+    expect(classifyMcpCallRejection(new McpAuthorizationError('reauthorize'))).toMatchObject({
+      failure: { code: 'mcp_tool_unavailable', retryable: false },
+      staleCatalog: false,
+    });
+    expect(
+      classifyMcpCallRejection(new McpRedirectError('https://elsewhere.example/mcp')),
+    ).toMatchObject({
+      failure: {
+        code: 'mcp_tool_unavailable',
+        message: expect.stringContaining('https://elsewhere.example/mcp'),
+      },
+    });
+    expect(classifyMcpCallRejection(new ProtocolError(-32602, 'Unknown tool'))).toMatchObject({
+      failure: { code: 'mcp_tool_call_failed', retryable: false },
+      staleCatalog: true,
+    });
+    const http = (status: number) =>
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'failed', { status });
+    expect(classifyMcpCallRejection(http(404))).toMatchObject({
+      failure: { code: 'mcp_tool_call_failed', retryable: true },
+      staleCatalog: false,
+    });
+    // A server error or a dropped socket can follow a call that already ran.
+    expect(classifyMcpCallRejection(http(502))).toBeUndefined();
+    expect(classifyMcpCallRejection(new ProtocolError(-32603, 'Internal error'))).toBeUndefined();
+    expect(classifyMcpCallRejection(new Error('socket closed'))).toBeUndefined();
   });
 
   it('rejects a token once without repeating the HTTP write', async () => {

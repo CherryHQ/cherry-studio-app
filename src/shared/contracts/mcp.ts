@@ -73,6 +73,16 @@ export class McpAuthorizationError extends Error {
   }
 }
 
+/** The endpoint answered with a redirect to another origin, which credentials never follow. */
+export class McpRedirectError extends Error {
+  /** Redirect target without credentials, query, or fragment. */
+  constructor(readonly location: string) {
+    super('MCP endpoint redirected to another origin');
+    this.name = 'McpRedirectError';
+    this.stack = undefined;
+  }
+}
+
 /**
  * Native UI capabilities. Ordinary configuration edits use the Data API;
  * consent, credentials, resource reads, and live Apps stay with the MCP owner.

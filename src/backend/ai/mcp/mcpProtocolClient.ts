@@ -1,6 +1,9 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
 import {
   Client,
+  ProtocolError,
+  ProtocolErrorCode,
+  SdkHttpError,
   StreamableHTTPClientTransport,
   type McpSubscription,
   type Tool,
@@ -12,14 +15,97 @@ import type { PluginClient } from '@/backend/services/builtInMcp';
 import type { McpOAuthRuntime } from '@/backend/services/mcp';
 import {
   McpAuthorizationError,
+  McpRedirectError,
   type McpConnectionConfig,
   type McpProtocolInfo,
 } from '@/shared/contracts/mcp';
 import { normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
 
-const LEGACY_CATALOG_TTL_MS = 5 * 60 * 1000;
+import { McpRuntimeToolError } from './mcpRuntimeAdapter';
+
+/** A catalog is revalidated on use at most this often; push notifications cover faster changes. */
+const MIN_CATALOG_TTL_MS = 5 * 60 * 1000;
 const MAX_CATALOG_TTL_MS = 60 * 60 * 1000;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
+
+/** The transport's own same-origin rule: one origin, or its https form on default ports. */
+function isWithinOrigin(from: URL, to: URL): boolean {
+  if (from.protocol === to.protocol && from.host === to.host) return true;
+  return (
+    from.protocol === 'http:' &&
+    to.protocol === 'https:' &&
+    from.hostname === to.hostname &&
+    !from.port &&
+    !to.port
+  );
+}
+
+/** Version negotiation wraps what the fetch boundary threw; callers match on the original. */
+function boundaryError(error: unknown): unknown {
+  for (let current = error, depth = 0; current instanceof Error && depth < 4; depth += 1) {
+    if (current instanceof McpAuthorizationError || current instanceof McpRedirectError)
+      return current;
+    current = current.cause;
+  }
+  return error;
+}
+
+/**
+ * A failure that proves the server refused the call without running it, as the exact error
+ * the model should see. `staleCatalog` marks a refusal of the tool or its arguments, which
+ * the cached catalog may no longer describe.
+ */
+export function classifyMcpCallRejection(
+  error: unknown,
+): { failure: McpRuntimeToolError; staleCatalog: boolean } | undefined {
+  if (error instanceof McpAuthorizationError)
+    return {
+      failure: new McpRuntimeToolError(
+        'mcp_tool_unavailable',
+        'The MCP connection must be authorized again before this tool can run.',
+        false,
+      ),
+      staleCatalog: false,
+    };
+  if (error instanceof McpRedirectError)
+    return {
+      failure: new McpRuntimeToolError(
+        'mcp_tool_unavailable',
+        `The MCP server moved to ${error.location}. The user must update the connection address.`,
+        false,
+      ),
+      staleCatalog: false,
+    };
+  if (
+    ProtocolError.isInstance(error) &&
+    (error.code === ProtocolErrorCode.InvalidParams ||
+      error.code === ProtocolErrorCode.MethodNotFound)
+  )
+    return {
+      failure: new McpRuntimeToolError(
+        'mcp_tool_call_failed',
+        `The MCP server rejected the call: ${error.message.slice(0, 500)}`,
+        false,
+      ),
+      staleCatalog: true,
+    };
+  // An HTTP client error answers the request itself, such as an expired session.
+  if (
+    SdkHttpError.isInstance(error) &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408
+  )
+    return {
+      failure: new McpRuntimeToolError(
+        'mcp_tool_call_failed',
+        'The MCP server refused the request. The tool did not run.',
+        true,
+      ),
+      staleCatalog: false,
+    };
+  return undefined;
+}
 
 /** Optional protocol features do not burden the bundled, tool-only API adapters. */
 export type McpRuntimeClient = Pick<
@@ -33,7 +119,6 @@ export type McpRuntimeClient = Pick<
   getPrompt?: Client['getPrompt'];
   readonly protocolInfo?: McpProtocolInfo;
   readonly catalogExpiresAt?: number;
-  readonly needsReconnect?: boolean;
   setForeground?(active: boolean): void;
 };
 
@@ -59,7 +144,6 @@ export async function createRemoteMcpClient(input: {
 > {
   let foreground = input.foreground;
   let closed = false;
-  let legacyEventsInterrupted = false;
   let eventsAbort = new AbortController();
   let subscription: McpSubscription | undefined;
   let subscriptionPending = false;
@@ -99,12 +183,16 @@ export async function createRemoteMcpClient(input: {
   );
   if (input.elicit)
     client.setRequestHandler('elicitation/create', async (request, context) =>
+      // The connection can outlive the operation that opened it; the owner scopes the question.
       interactiveRequests > 0
-        ? input.elicit!(request.params, AbortSignal.any([input.signal, context.mcpReq.signal]))
+        ? input.elicit!(request.params, context.mcpReq.signal)
         : { action: 'cancel' as const },
     );
-  const transport = new StreamableHTTPClientTransport(new URL(input.config.endpointUrl), {
-    requestInit: { headers: normalizeMcpHeaders(input.config.headers), redirect: 'error' },
+  const endpoint = new URL(input.config.endpointUrl);
+  // The transport follows a redirect that stays within the endpoint's origin and keeps the
+  // method, which is how servers canonicalize a path. Nothing here leaves that origin.
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    requestInit: { headers: normalizeMcpHeaders(input.config.headers) },
     // Do not give the transport an authProvider: its 401 recovery can replay a write.
     onInsufficientScope: 'throw',
     reconnectionOptions: {
@@ -119,7 +207,7 @@ export async function createRemoteMcpClient(input: {
         connectionAbort.signal,
         ...(init?.signal ? [init.signal] : []),
       ]);
-      if (new URL(String(url)).href !== new URL(input.config.endpointUrl).href)
+      if (!isWithinOrigin(endpoint, new URL(String(url))))
         throw new McpAuthorizationError('configuration');
       const token = await input.authorization.token(input.config, signal);
       const headers = new Headers(init?.headers);
@@ -143,6 +231,16 @@ export async function createRemoteMcpClient(input: {
         await input.authorization.rejected(input.config, token, response);
         await response.body?.cancel().catch(() => undefined);
         throw new McpAuthorizationError('reauthorize');
+      }
+      const location =
+        response.status >= 300 && response.status < 400 ? response.headers.get('location') : null;
+      if (location) {
+        const target = new URL(location, String(url));
+        if (!isWithinOrigin(endpoint, target)) {
+          await response.body?.cancel().catch(() => undefined);
+          target.username = target.password = target.search = target.hash = '';
+          throw new McpRedirectError(target.href);
+        }
       }
       const method = typeof init?.body === 'string' ? JSON.parse(init.body).method : undefined;
       // Subscriptions are long-lived streams; ordinary RPC responses have a total byte budget.
@@ -239,7 +337,7 @@ export async function createRemoteMcpClient(input: {
     connectionAbort.abort();
     eventsAbort.abort();
     await client.close().catch(() => undefined);
-    throw error;
+    throw boundaryError(error);
   }
   const serverInfo = client.getServerVersion();
   if (!serverInfo) {
@@ -263,14 +361,10 @@ export async function createRemoteMcpClient(input: {
     get catalogExpiresAt() {
       return catalogExpiresAt;
     },
-    get needsReconnect() {
-      return foreground && legacyEventsInterrupted;
-    },
     setForeground(active) {
       foreground = active;
       if (!active) {
         eventsAbort.abort();
-        legacyEventsInterrupted = client.getProtocolEra() === 'legacy';
         stopSubscription();
       } else {
         eventsAbort = new AbortController();
@@ -285,13 +379,19 @@ export async function createRemoteMcpClient(input: {
       for (const tool of result.tools) tools.set(tool.name, tool);
       const hintedTtl =
         'ttlMs' in result && typeof result.ttlMs === 'number' ? result.ttlMs : undefined;
-      const ttl = hintedTtl ?? (client.getProtocolEra() === 'legacy' ? LEGACY_CATALOG_TTL_MS : 0);
-      catalogExpiresAt = Date.now() + Math.max(0, Math.min(ttl, MAX_CATALOG_TTL_MS));
+      catalogExpiresAt =
+        Date.now() +
+        Math.max(MIN_CATALOG_TTL_MS, Math.min(hintedTtl ?? MIN_CATALOG_TTL_MS, MAX_CATALOG_TTL_MS));
       return result;
     },
     async callTool({ name, args, options }) {
       const toolDefinition = tools.get(name);
-      if (!toolDefinition) throw new Error('The MCP tool is no longer available.');
+      if (!toolDefinition)
+        throw new McpRuntimeToolError(
+          'mcp_tool_unavailable',
+          'The MCP tool is no longer available.',
+          false,
+        );
       return interactive(() =>
         client.callTool(
           { name, arguments: args },

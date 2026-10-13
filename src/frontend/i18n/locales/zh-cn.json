@@ -1507,6 +1507,7 @@
   "settings.mcp.tabs.configuration": "配置",
   "settings.mcp.toast.deleteFailed": "删除服务器失败",
   "settings.mcp.toast.deleted": "服务器已删除",
+  "settings.mcp.toast.redirected": "该地址已跳转到 {{url}}，请更新服务器地址后重试。",
   "settings.mcp.toast.saveFailed": "保存服务器失败",
   "settings.mcp.tools.empty": "该服务器未提供任何工具。",
   "settings.mcp.tools.enabledSummary": "已启用 {{enabled}}/{{total}}",

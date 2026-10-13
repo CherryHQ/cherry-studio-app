@@ -1516,6 +1516,7 @@
   "settings.mcp.tabs.configuration": "Yapılandırma",
   "settings.mcp.toast.deleteFailed": "Sunucu silinemedi",
   "settings.mcp.toast.deleted": "Sunucu silindi",
+  "settings.mcp.toast.redirected": "Bu adres {{url}} adresine yönlendiriyor. Adresi güncelleyip yeniden deneyin.",
   "settings.mcp.toast.saveFailed": "Sunucu kaydedilemedi",
   "settings.mcp.tools.empty": "Bu sunucu hiçbir araç göstermez.",
   "settings.mcp.tools.enabledSummary": "{{total}} araçtan {{enabled}} açık",

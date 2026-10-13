@@ -1507,6 +1507,7 @@
   "settings.mcp.tabs.configuration": "Cấu hình",
   "settings.mcp.toast.deleteFailed": "Không xóa được máy chủ",
   "settings.mcp.toast.deleted": "Máy chủ đã bị xóa",
+  "settings.mcp.toast.redirected": "Địa chỉ này chuyển hướng đến {{url}}. Hãy cập nhật địa chỉ rồi thử lại.",
   "settings.mcp.toast.saveFailed": "Không lưu được máy chủ",
   "settings.mcp.tools.empty": "Máy chủ này không có công cụ nào.",
   "settings.mcp.tools.enabledSummary": "Đã bật {{enabled}}/{{total}}",

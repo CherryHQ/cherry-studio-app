@@ -1507,6 +1507,7 @@
   "settings.mcp.tabs.configuration": "構成",
   "settings.mcp.toast.deleteFailed": "サーバーの削除に失敗しました",
   "settings.mcp.toast.deleted": "サーバーが削除されました",
+  "settings.mcp.toast.redirected": "このアドレスは {{url}} にリダイレクトされます。アドレスを更新して再試行してください。",
   "settings.mcp.toast.saveFailed": "サーバーの保存に失敗しました",
   "settings.mcp.tools.empty": "このサーバーはツールを公開しません。",
   "settings.mcp.tools.enabledSummary": "{{enabled}}/{{total}} 件有効",

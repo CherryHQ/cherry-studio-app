@@ -1534,6 +1534,7 @@
   "settings.mcp.tabs.configuration": "Конфигурация",
   "settings.mcp.toast.deleteFailed": "Не удалось удалить сервер",
   "settings.mcp.toast.deleted": "Сервер удален",
+  "settings.mcp.toast.redirected": "Этот адрес перенаправляет на {{url}}. Обновите адрес и повторите попытку.",
   "settings.mcp.toast.saveFailed": "Не удалось сохранить сервер.",
   "settings.mcp.tools.empty": "Этот сервер не предоставляет никаких инструментов.",
   "settings.mcp.tools.enabledSummary": "Включено {{enabled}} из {{total}}",

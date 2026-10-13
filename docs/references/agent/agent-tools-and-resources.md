@@ -161,13 +161,17 @@ discovery. A send arriving during that local cache handoff waits for it through 
 preparation path. The temporary validation client is closed; actual tool calls still use a
 grant-bound client and its live routing checks.
 
-Catalog entries carry an expiry: modern servers supply `ttlMs` (capped at one hour), while
-legacy and bundled clients use a five-minute fallback. An expired catalog remains a candidate for
-the frozen turn while foreground reconciliation refreshes it. Tools-list notifications, a return
-to the foreground, and a one-minute foreground timer also schedule reconciliation. Modern
-subscriptions close in the background; interrupted legacy event connections reconnect when idle.
-Execution lists an expired catalog before calling, and settings screens read live. A catalog with partial-discovery warnings is served immediately and never written to
-disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+There is no timed refresh: a catalog is only worth refreshing when a turn is about to use it. A
+remote catalog carries a freshness window, the server's `ttlMs` bounded to between five minutes and
+one hour, or five minutes when the server supplies none. A turn that finds the window elapsed still
+receives the cached catalog at once and, while the app is in the foreground, starts a background
+refresh for the next turn.
+A tools-list notification and a call the server rejects as unknown or invalid refresh the same way.
+Bundled plugin catalogs do not age; their grant changes invalidate them. Nothing refreshes on a
+timer or on return to the foreground, and an elapsed window never delays a call. Modern
+subscriptions close in the background and reopen in the foreground. A fresh connection lists tools
+before its first call, and settings screens read live. A catalog with partial-discovery warnings
+is served immediately and never written to disk. Both partial and failed discoveries back off before a send can trigger another attempt;
 partial catalogs refresh in the background after that delay. Consecutive failures start at 30
 seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
 screens may still probe the server. The file stores a
@@ -288,7 +292,9 @@ ledger.
 Canonical tool results never contain absolute device paths or inline image bytes. Ordinary tools
 project their typed outer envelope to the model. MCP results instead carry an explicit bounded
 `modelContent` projection: text excludes `_meta` recursively and user-only content; supported images
-reference managed files. The MCP importer alone can create artifacts from bounded image, audio,
+reference managed files. Structured content that a text block already serializes is sent once. Text
+over the 64K-character budget is cut with both sizes stated, and the whole text is retained as a
+managed text artifact the model can page through with `read_file`. The MCP importer alone can create artifacts from bounded image, audio,
 and embedded binary content. Remote JSON never becomes an artifact merely by resembling one.
 Temporary `modelImages` bytes reach image-capable models but are removed from canonical results.
 Older MCP history uses the same metadata-stripping projection. Each artifact is also projected into a Runtime file part; the Host persists it as an
@@ -344,9 +350,17 @@ retry; cancellation still propagates without becoming a cached failure.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
   a 256 KiB JSON result projection. Remote payloads stay under `value`; a separate bounded native
-  importer may retain binary results as managed artifacts. Unknown remote effects are treated as
-  writes for failure classification. Neither authorization failure nor transport failure replays a
-  tool call; an uncertain write outcome requires the user to check the service.
+  importer may retain binary results as managed artifacts.
+- Tool calls share the server's pooled connection. A failure is classified by what it proves. A
+  call that never left the device, an authorization failure, an HTTP client error, and a JSON-RPC
+  rejection of the tool or its arguments all mean the tool did not run. After transmission, a
+  timeout or transport failure is retryable for a bundled read or a remote tool annotated read-only
+  or idempotent, an unconfirmed write for a bundled write, and an unknown outcome otherwise: the
+  model retries only when repeating the call is harmless. A wrong remote annotation costs one
+  repeated call and never widens approval. No failure replays a tool call.
+- A redirect is followed only within the endpoint's origin, or to its HTTPS form, and only when it
+  keeps the method, which covers path canonicalization. A redirect to another origin fails with the
+  target address so the user can update the connection; headers and tokens never follow it.
 - The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
   generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
@@ -384,10 +398,12 @@ Prompt roles remain quoted user content. Bounded binary content becomes managed 
 neither listing nor preview starts an Agent turn. Tool-returned resource links use the same preview
 flow. Their host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
 sends the URI to that server even when the URI uses HTTPS or is absent from its resource list.
-An edited connection cannot reinterpret an old link. Form and URL elicitation belong to one initiating
-operation. Both legacy server requests and modern input-required rounds use the same native consent
-queue. Discovery cannot prompt. The active network budget pauses during consent; cancellation or
-the ten-minute consent deadline removes the request. Passwords and credentials belong in the
+An edited connection cannot reinterpret an old link. Form and URL elicitation need an operation in
+flight. A question asked during tool calls belongs to its server, the scope the consent dialog
+names: every call in flight on that server pauses its network budget until the user answers, and the
+question is withdrawn when none remains. Content reads keep a connection of their own. Both legacy
+server requests and modern input-required rounds use the same native consent queue. Discovery cannot
+prompt. Cancellation or the ten-minute consent deadline removes the request. Passwords and credentials belong in the
 service's browser flow, not in a form.
 
 MCP Apps uses the official `io.modelcontextprotocol/ui` extension and `AppBridge`. Tool visibility

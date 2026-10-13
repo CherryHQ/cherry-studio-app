@@ -1,5 +1,7 @@
 import * as z from 'zod';
 
+import { deepEqual } from '@/shared/utils/deepEqual';
+
 /** Host-issued resource authority, independent of server-authored result JSON. */
 export const McpResultSourceSchema = z.strictObject({
   serverId: z.string().min(1),
@@ -44,8 +46,8 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** Also used for pre-projection history, so older tool envelopes cannot leak _meta. */
-export function projectMcpModelContent(value: unknown): McpModelOutputContent {
+/** Every model-visible block before the text budget applies. */
+function collectMcpModelContent(value: unknown): McpModelOutputContent {
   const result = record(value);
   const content: McpModelOutputContent = [];
   let imageBytes = 0;
@@ -106,10 +108,17 @@ export function projectMcpModelContent(value: unknown): McpModelOutputContent {
     }
   }
   if (result?.structuredContent !== undefined) {
-    content.push({
-      type: 'text',
-      text: JSON.stringify(stripMcpMetadata(result.structuredContent)),
+    const structured = stripMcpMetadata(result.structuredContent);
+    // Servers repeat structured output as serialized text for older clients; send it once.
+    const repeated = content.some((block) => {
+      if (block.type !== 'text') return false;
+      try {
+        return deepEqual(stripMcpMetadata(JSON.parse(block.text)), structured);
+      } catch {
+        return false;
+      }
     });
+    if (!repeated) content.push({ type: 'text', text: JSON.stringify(structured) });
   }
   if (result?.isError === true)
     content.unshift({ type: 'text', text: '[MCP tool reported an error]' });
@@ -120,19 +129,47 @@ export function projectMcpModelContent(value: unknown): McpModelOutputContent {
         ? '[MCP result has no model-visible content]'
         : (JSON.stringify(stripMcpMetadata(value)) ?? 'null'),
     });
+  return content;
+}
+
+function modelTexts(content: McpModelOutputContent): string[] {
+  return content.flatMap((block) => (block.type === 'text' ? [block.text] : []));
+}
+
+function textLength(content: McpModelOutputContent): number {
+  return modelTexts(content).reduce((total, text) => total + text.length, 0);
+}
+
+/** The whole model-visible text of a result over the text budget, for retention as a file. */
+export function mcpModelTextOverflow(value: unknown): string | undefined {
+  const content = collectMcpModelContent(value);
+  return textLength(content) > MAX_TEXT_CHARS ? modelTexts(content).join('\n') : undefined;
+}
+
+/**
+ * Also used for pre-projection history, so older tool envelopes cannot leak _meta.
+ * Text over the budget is cut with its sizes stated; `overflowHint` says where the rest is.
+ */
+export function projectMcpModelContent(
+  value: unknown,
+  overflowHint?: string,
+): McpModelOutputContent {
+  const content = collectMcpModelContent(value);
+  const total = textLength(content);
+  if (total <= MAX_TEXT_CHARS) return content;
   let remaining = MAX_TEXT_CHARS;
-  return content.flatMap((block): McpModelOutputContent => {
+  const bounded = content.flatMap((block): McpModelOutputContent => {
     if (block.type === 'image') return [block];
     if (remaining <= 0) return [];
     const text = block.text.slice(0, remaining);
     remaining -= text.length;
-    return [
-      {
-        type: 'text' as const,
-        text: text.length < block.text.length ? `${text}\n[MCP text truncated]` : text,
-      },
-    ];
+    return [{ type: 'text' as const, text }];
   });
+  bounded.push({
+    type: 'text',
+    text: `[MCP text truncated: the first ${MAX_TEXT_CHARS} of ${total} characters are shown.${overflowHint ? ` ${overflowHint}` : ''}]`,
+  });
+  return bounded;
 }
 
 export function stripMcpMetadata(value: unknown): unknown {
