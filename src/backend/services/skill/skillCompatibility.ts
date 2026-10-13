@@ -4,8 +4,9 @@
  *
  * The app's side is fixed by the build: it ignores permissions, providers,
  * plugin connections and the Agent, because an unconfigured capability is the
- * user's to configure. The package's side is read once from accepted bytes
- * and stored as its profile, so comparing the two needs no I/O.
+ * user's to configure. The package's side is already stored with the
+ * installation, as its manifest and the profile read once from accepted bytes,
+ * so comparing the two needs no I/O.
  */
 
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
@@ -39,10 +40,11 @@ const APP_TOOL_FOR_DECLARED_NAME: ReadonlyMap<string, BuiltInToolCapabilityId | 
 
 /**
  * The app runs no package script: `run_js` evaluates only code the model
- * writes. Source files elsewhere in a package are usually templates, so only
- * the conventional directory and shell or Python files count.
+ * writes. Shell and Python files count anywhere. Other source files count only
+ * under the conventional directory, because elsewhere they are usually
+ * templates; schemas and data kept beside scripts are not scripts.
  */
-const SCRIPT_EXTENSION = /\.(?:sh|bash|zsh|ps1|bat|cmd|py)$/i;
+const SCRIPT_PATH = /\.(?:sh|bash|zsh|ps1|bat|cmd|py)$|^scripts\/.*\.(?:[cm]?js|ts|rb|pl|php)$/i;
 const DECLARED_TOOL_NAME = /^[\w.:-]{1,64}$/;
 const DECLARED_TOOLS_MAX = 64;
 
@@ -57,23 +59,18 @@ function readDeclaredTools(value: unknown): string[] {
 }
 
 /** Reads a package's profile from its validated bytes. */
-export function deriveSkillProfile(pkg: {
-  manifest: readonly SkillManifestEntry[];
-  frontmatter: SkillFrontmatter;
-}): SkillProfile {
-  return {
-    scripts: pkg.manifest
-      .map(({ path }) => path)
-      .filter((path) => path.startsWith('scripts/') || SCRIPT_EXTENSION.test(path)),
-    declaredTools: readDeclaredTools(pkg.frontmatter['allowed-tools']),
-  };
+export function deriveSkillProfile(pkg: { frontmatter: SkillFrontmatter }): SkillProfile {
+  return { declaredTools: readDeclaredTools(pkg.frontmatter['allowed-tools']) };
 }
 
-/** The part of a profile this build of the app does not provide. */
-export function evaluateSkillLimitations(profile: SkillProfile): SkillLimitations {
+/** The part of a package this build of the app does not provide. */
+export function evaluateSkillLimitations(pkg: {
+  manifest: readonly Pick<SkillManifestEntry, 'path'>[];
+  profile: SkillProfile;
+}): SkillLimitations {
   return {
-    scripts: profile.scripts,
-    unavailableTools: profile.declaredTools.filter(
+    scripts: pkg.manifest.map(({ path }) => path).filter((path) => SCRIPT_PATH.test(path)),
+    unavailableTools: pkg.profile.declaredTools.filter(
       (name) => APP_TOOL_FOR_DECLARED_NAME.get(name) === null,
     ),
   };

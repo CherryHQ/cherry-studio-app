@@ -79,7 +79,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           contentHash: skill.contentHash,
           folderName: skill.folderName,
           files: skill.manifest.map((entry) => entry.path),
-          limitations: evaluateSkillLimitations(skill.profile),
+          limitations: evaluateSkillLimitations(skill),
         });
       }
       const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
@@ -106,8 +106,9 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
             typeof compatibility === 'string' && compatibility.trim()
               ? `Package environment requirements (not verified): ${compatibility.trim()}`
               : '',
+            // A count, not the paths: this text shares the instruction budget with the body.
             scripts.length
-              ? `This app cannot run the package's scripts: ${scripts.join(', ')}. They can only be read.`
+              ? `This app cannot run scripts. The ${scripts.length} script file(s) in this package can only be read.`
               : '',
             unavailableTools.length
               ? `The package declares tools this app does not provide: ${unavailableTools.join(', ')}.`

@@ -188,7 +188,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           instructionsPreview: previewInstructions(pkg.instructions),
         },
         issues: [],
-        limitations: evaluateSkillLimitations(deriveSkillProfile(pkg)),
+        limitations: evaluateSkillLimitations({
+          manifest: pkg.manifest,
+          profile: deriveSkillProfile(pkg),
+        }),
       },
       package: pkg,
       files: acquisition.files,
@@ -209,7 +212,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       tags: pkg.tags.length > 0 ? pkg.tags : candidate.tags,
       contentHash: pkg.contentHash,
       manifest: pkg.manifest,
-      // Read from the bytes once, here; reads only compare it with the app's capabilities.
+      // Read from the bytes once, here; reads only compare stored facts with the app's capabilities.
       profile: deriveSkillProfile(pkg),
       invocation: pkg.invocation,
     };
@@ -219,7 +222,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     availability: {
       read: (skill) => ({
         isPackageMissing: !deps.storage.hasRevision(skill),
-        limitations: evaluateSkillLimitations(skill.profile),
+        limitations: evaluateSkillLimitations(skill),
       }),
     },
     instructionReader: {

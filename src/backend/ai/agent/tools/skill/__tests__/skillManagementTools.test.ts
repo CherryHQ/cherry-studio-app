@@ -26,7 +26,7 @@ const installed: Skill = {
   contentHash: 'a'.repeat(64),
   manifest: [{ path: 'SKILL.md', size: 1, digest: 'e'.repeat(64) }],
   invocation: { modelInvocable: true, userInvocable: true },
-  profile: { scripts: [], declaredTools: [] },
+  profile: { declaredTools: [] },
   isEnabled: true,
   createdAt: '2026-09-23T00:00:00.000Z',
   updatedAt: '2026-09-23T00:00:00.000Z',

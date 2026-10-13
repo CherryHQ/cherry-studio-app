@@ -548,6 +548,7 @@ function AgentEditForm({
         ) : null}
         {isEditing && form.mode === 'standard' ? (
           <AgentSkillsSection
+            agentId={agentId}
             bindings={skillBindings}
             onChange={handleSkillBindingsChange}
             skills={skills}

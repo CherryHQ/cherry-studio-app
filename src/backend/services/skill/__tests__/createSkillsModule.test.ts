@@ -266,7 +266,7 @@ describe('createSkillsModule', () => {
     expect(installed).toMatchObject({
       name: 'notes',
       folderName: 'notes',
-      profile: { scripts: [], declaredTools: [] },
+      profile: { declaredTools: [] },
     });
     expect(fakes.published).toEqual([`notes/${installed.contentHash}`]);
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
@@ -412,7 +412,7 @@ describe('createSkillsModule', () => {
       'references/outline.md',
       'scripts/fill.py',
     ]);
-    expect(installed.profile).toEqual({ scripts: ['scripts/fill.py'], declaredTools: [] });
+    expect(installed.profile).toEqual({ declaredTools: [] });
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
     expect((await module.update(installed.id)).outcome).toBe('unchanged');
     files = {
@@ -423,7 +423,7 @@ describe('createSkillsModule', () => {
     expect(await module.update(installed.id)).toMatchObject({
       outcome: 'updated',
       skill: {
-        profile: { scripts: ['scripts/fill.py'], declaredTools: ['Bash', 'Read'] },
+        profile: { declaredTools: ['Bash', 'Read'] },
         manifest: [{ path: 'SKILL.md' }, { path: 'scripts/fill.py' }],
       },
     });

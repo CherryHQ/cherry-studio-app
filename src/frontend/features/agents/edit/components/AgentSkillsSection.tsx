@@ -8,6 +8,8 @@ import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
 type AgentSkillsSectionProps = {
+  /** Keeps "Add in chat" from the Skill library on this Agent. */
+  agentId?: string;
   skills: readonly SkillListItem[];
   /** Draft binding state keyed by Skill id; absent means unbound. */
   bindings: ReadonlyMap<string, boolean>;
@@ -19,7 +21,12 @@ type AgentSkillsSectionProps = {
  * reports a missing package. Installation and updates live in the Skill library,
  * linked from the footer.
  */
-export function AgentSkillsSection({ bindings, onChange, skills }: AgentSkillsSectionProps) {
+export function AgentSkillsSection({
+  agentId,
+  bindings,
+  onChange,
+  skills,
+}: AgentSkillsSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -49,7 +56,7 @@ export function AgentSkillsSection({ bindings, onChange, skills }: AgentSkillsSe
       })}
       <Section.Item
         label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-        onPress={() => router.push('/skills')}
+        onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
         trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
       />
     </Section>

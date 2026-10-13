@@ -17,8 +17,8 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
  * the `directory-sha256:` content hash. Desktop's `namespace` is absent: mobile
  * has no built-in namespaces or system skill placements. Three mobile columns
  * follow: `manifest` lists the accepted files for backup completeness and
- * package-local reads, `profile` holds what the package asks of its host, read
- * from its bytes once at installation, and `invocation` lets list queries
+ * package-local reads, `profile` holds the tool names the package declares,
+ * read from its bytes once at installation, and `invocation` lets list queries
  * filter by the package's invocation policy.
  *
  * Package bytes live at `Data/Skills/<folder_name>/<hash hex>/`;

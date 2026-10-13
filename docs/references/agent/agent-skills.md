@@ -92,20 +92,22 @@ app provides. Neither side depends on the user's configuration. A missing permis
 provider, drawing model, plugin connection or Agent capability is the user's to configure, and the
 owning tool reports it when a step runs.
 
-- **The package's side** is its profile, read once from the accepted bytes at installation and again
-  on update, then stored in `agent_global_skill.profile`. It records two facts: the package's script
-  files, and the tool names in its `allowed-tools` frontmatter without their argument patterns.
-  Scripts are every file under `scripts/` plus shell and Python files anywhere; other source files are
-  usually templates and are not counted. Prose, mentioned commands and the free-text `compatibility`
-  note are never interpreted.
+- **The package's side** is two stored facts. Its script files come from the accepted manifest:
+  shell and Python files anywhere, plus JavaScript, TypeScript, Ruby, Perl and PHP files under
+  `scripts/`. Schemas and data kept beside scripts are not counted, and neither are source files
+  elsewhere, which are usually templates. Its declared tools are the names in the `allowed-tools`
+  frontmatter without their argument patterns, read once from the accepted bytes at installation and
+  again on update, then stored in `agent_global_skill.profile`. Prose, mentioned commands and the
+  free-text `compatibility` note are never interpreted.
 - **The app's side** is a table in `skillCompatibility.ts`. The app runs no package script: `run_js`
   evaluates only code the model writes. For declared tools, the table maps each known desktop tool
   name to the built-in tool that covers it, or marks it as having no counterpart. Names outside the
   table, such as MCP tools, are unknown and never reported.
 
-Reads compare the stored profile with the table in memory and perform no I/O, so a newer app build
-that adds a capability corrects every installed Skill without touching stored data. Profiles written
-by the earlier environment evaluation are read as empty until the Skill's next update.
+Reads compare the stored manifest and profile with the app in memory and perform no I/O, so a newer
+app build that adds a capability or refines the script rule corrects every installed Skill without
+touching stored data. Profiles written by the earlier environment evaluation are read as empty until
+the Skill's next update.
 
 The detail and candidate pages state the result as facts — the number of script files the app cannot
 run, and the declared tools it does not provide — beside the general execution hint. They never
@@ -116,8 +118,9 @@ check for updates.
 Limitations describe the app rather than grant or deny access. Binding, global enablement,
 invocation policy and readable package bytes determine instruction access. Missing package bytes
 exclude a Skill from loading and composer selection; limitations do not. The Agent receives the same
-facts with loaded instructions and must explain an unavailable capability before a step that needs
-it. Reading a script must never be reported as running it.
+facts with loaded instructions — the number of script files rather than their paths, because this
+text shares the instruction budget with the body — and must explain an unavailable capability before
+a step that needs it. Reading a script must never be reported as running it.
 
 ## Conversation Installation
 
@@ -197,7 +200,7 @@ as global enablement; new
 installations and conversation bindings are written enabled. Desktop's `namespace` is absent
 because app-owned system workflows live in Host instructions rather than user installations.
 Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
-`profile` holds what the package asks of its host, and
+`profile` holds the tool names the package declares, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
 Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding
 changes preserve unrelated bindings; global disablement preserves binding preferences.

@@ -21,7 +21,7 @@ function record(name: string, description = 'Draft a short brief'): SkillInstall
     tags: [],
     contentHash: `directory-sha256:${name}`,
     manifest: [{ path: 'SKILL.md', size: 10, digest: 'd' }],
-    profile: { scripts: ['scripts/run.py'], declaredTools: ['Bash'] },
+    profile: { declaredTools: ['Bash'] },
     invocation: { modelInvocable: true, userInvocable: true },
   };
 }
@@ -94,7 +94,7 @@ describe('AgentGlobalSkillService', () => {
       }),
       first.id,
     );
-    expect((await service.getById(first.id)).profile).toEqual({ scripts: [], declaredTools: [] });
+    expect((await service.getById(first.id)).profile).toEqual({ declaredTools: [] });
     await expect(install(record('brief'))).rejects.toMatchObject({ code: 'CONFLICT' });
 
     const page = await service.list({ search: 'status', scope: 'library' });

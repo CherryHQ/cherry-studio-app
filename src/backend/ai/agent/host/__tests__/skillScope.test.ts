@@ -8,7 +8,7 @@ jest.mock('@/backend/services/skill/skillStorage', () => ({}));
 
 const encoder = new TextEncoder();
 
-function skill(id: string, profile: Partial<Skill['profile']> = {}): Skill {
+function skill(id: string, declaredTools: string[] = [], scripts: string[] = []): Skill {
   return {
     id,
     name: id,
@@ -26,14 +26,17 @@ function skill(id: string, profile: Partial<Skill['profile']> = {}): Skill {
         size: 1,
         digest: sha256HexOfText(`---\nname: ${id}\ndescription: d\n---\nBody of digest-${id}`),
       },
+      ...scripts.map((path) => ({ path, size: 1, digest: 'd' })),
     ],
-    profile: { scripts: [], declaredTools: [], ...profile },
+    profile: { declaredTools },
     invocation: { modelInvocable: true, userInvocable: true },
     isEnabled: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
+
+const SCRIPTS = Array.from({ length: 150 }, (_, index) => `scripts/office/step-${index}.py`);
 
 const projection = (s: Skill): AgentSkillProjection => ({
   skill: s,
@@ -53,10 +56,7 @@ describe('createSkillScopeSource', () => {
         listUsableForAgent: async () =>
           [
             skill('plain'),
-            skill('scripted', {
-              scripts: ['scripts/run.py'],
-              declaredTools: ['Bash', 'Read', 'mcp__docs__search'],
-            }),
+            skill('scripted', ['Bash', 'Read', 'mcp__docs__search'], SCRIPTS),
             skill('missing'),
           ].map(projection),
       },
@@ -76,11 +76,13 @@ describe('createSkillScopeSource', () => {
     });
     expect(scope.entries.map((entry) => [entry.id, entry.limitations])).toEqual([
       ['plain', { scripts: [], unavailableTools: [] }],
-      ['scripted', { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] }],
+      ['scripted', { scripts: SCRIPTS, unavailableTools: ['Bash'] }],
     ]);
     expect(await scope.readInstructions('plain')).toBe('Body of digest-plain');
     const scripted = await scope.readInstructions('scripted');
-    expect(scripted).toContain("cannot run the package's scripts: scripts/run.py");
+    // Paths would spend the instruction budget the body is validated against at installation.
+    expect(scripted).toContain('The 150 script file(s) in this package can only be read.');
+    expect(scripted).not.toContain('scripts/');
     expect(scripted).toContain('does not provide: Bash.');
     expect(scripted).toContain('Body of digest-scripted');
     expect(await scope.readFile('plain', 'SKILL.md')).toBeInstanceOf(Uint8Array);

@@ -3,26 +3,34 @@ import { deriveSkillProfile, evaluateSkillLimitations } from '../skillCompatibil
 const manifest = (...paths: string[]) => paths.map((path) => ({ path, size: 1, digest: 'd' }));
 
 describe('skill compatibility', () => {
-  it('counts executable files as scripts and leaves template sources alone', () => {
+  it('counts script files and leaves data beside them and template sources alone', () => {
     expect(
-      deriveSkillProfile({
+      evaluateSkillLimitations({
         manifest: manifest(
           'SKILL.md',
           'scripts/build.js',
           'scripts/data.json',
+          'scripts/office/schemas/wml.xsd',
+          'scripts/office/validate.py',
           'tools/setup.sh',
           'examples/Check.PY',
           'assets/template/src/App.tsx',
+          'assets/template/index.js',
           'references/api.md',
         ),
-        frontmatter: {},
+        profile: { declaredTools: [] },
       }).scripts,
-    ).toEqual(['scripts/build.js', 'scripts/data.json', 'tools/setup.sh', 'examples/Check.PY']);
+    ).toEqual([
+      'scripts/build.js',
+      'scripts/office/validate.py',
+      'tools/setup.sh',
+      'examples/Check.PY',
+    ]);
   });
 
   it('reads declared tool names from either frontmatter form without their argument patterns', () => {
     const declared = (value: unknown) =>
-      deriveSkillProfile({ manifest: [], frontmatter: { 'allowed-tools': value } }).declaredTools;
+      deriveSkillProfile({ frontmatter: { 'allowed-tools': value } }).declaredTools;
     expect(declared('Bash(git add:*), Read  Bash(npm run *) mcp__docs__search')).toEqual([
       'Bash',
       'Read',
@@ -36,11 +44,13 @@ describe('skill compatibility', () => {
   it('reports only what the app lacks, never a tool it covers or does not know', () => {
     expect(
       evaluateSkillLimitations({
-        scripts: ['scripts/run.py'],
-        declaredTools: ['Read', 'Bash', 'WebSearch', 'mcp__docs__search', 'Grep'],
+        manifest: manifest('scripts/run.py'),
+        profile: { declaredTools: ['Read', 'Bash', 'WebSearch', 'mcp__docs__search', 'Grep'] },
       }),
     ).toEqual({ scripts: ['scripts/run.py'], unavailableTools: ['Bash', 'Grep'] });
-    expect(evaluateSkillLimitations({ scripts: [], declaredTools: ['Edit'] })).toEqual({
+    expect(
+      evaluateSkillLimitations({ manifest: [], profile: { declaredTools: ['Edit'] } }),
+    ).toEqual({
       scripts: [],
       unavailableTools: [],
     });

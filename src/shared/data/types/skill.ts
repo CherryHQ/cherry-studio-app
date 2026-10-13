@@ -92,26 +92,25 @@ export const SkillSourceSchema = z.strictObject({
 export type SkillSource = z.infer<typeof SkillSourceSchema>;
 
 /**
- * What an accepted package asks of its host, read once from its bytes at
- * installation and stored with the installation. These are facts about the
- * package, never about the user's configuration.
+ * What an accepted package asks of its host that its manifest does not already
+ * record, read once from its bytes at installation and stored with the
+ * installation. These are facts about the package, never about the user's
+ * configuration.
  */
 export const SkillProfileSchema = z.strictObject({
-  /** Package-relative paths of files meant to be executed. */
-  scripts: z.array(z.string().min(1)),
   /** Tool names from the `allowed-tools` frontmatter, without their argument patterns. */
   declaredTools: z.array(z.string().min(1)),
 });
 export type SkillProfile = z.infer<typeof SkillProfileSchema>;
 
-export const EMPTY_SKILL_PROFILE: SkillProfile = { scripts: [], declaredTools: [] };
+export const EMPTY_SKILL_PROFILE: SkillProfile = { declaredTools: [] };
 
 /**
- * The part of a profile this app does not provide at all. Missing permissions,
+ * The part of a package this app does not provide at all. Missing permissions,
  * providers and plugin connections are the user's configuration and never appear.
  */
 export const SkillLimitationsSchema = z.strictObject({
-  /** Package scripts; the app has no interpreter for them. */
+  /** Package-relative paths of script files; the app has no interpreter for them. */
   scripts: z.array(z.string().min(1)),
   /** Declared tools the app has no counterpart for. */
   unavailableTools: z.array(z.string().min(1)),
