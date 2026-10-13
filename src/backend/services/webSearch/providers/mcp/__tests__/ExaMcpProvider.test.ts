@@ -168,7 +168,11 @@ describe('ExaMcpProvider', () => {
     const fetchMock = mockTextResponse(SSE_RESULT_FRAME);
 
     const provider = new ExaMcpProvider(
-      createProvider({ capabilities: [{ feature: 'searchKeywords', apiHost }] }),
+      createProvider({
+        capabilities: [
+          { feature: 'searchKeywords', requiresApiHost: true, requiresApiKey: false, apiHost },
+        ],
+      }),
       new ApiKeyRotationState(),
     );
 
@@ -287,8 +291,18 @@ function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchPr
     type: 'mcp',
     apiKeys: [],
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://mcp.exa.ai/mcp' },
-      { feature: 'fetchUrls', apiHost: 'https://mcp.exa.ai/mcp' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://mcp.exa.ai/mcp',
+      },
+      {
+        feature: 'fetchUrls',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://mcp.exa.ai/mcp',
+      },
     ],
     engines: [],
     basicAuthUsername: '',

@@ -71,7 +71,7 @@ their source owner. File resolution uses the same query as the cards. Invalid or
 entries show an inline unavailable state; reads and image loads have explicit retry states.
 
 The native stack owns entry, exit, and back. The header is opaque so content does not disappear
-under system bars. Images use constant black/white chrome; text uses theme surfaces. iOS's pop
+under system bars. Images and text use theme surfaces. iOS's pop
 gesture is disabled while an image is zoomed, matching the existing painting viewer. Android
 system back remains native navigation.
 
@@ -87,8 +87,11 @@ caller-owned controls below the image. The painting viewer retains
 its own route and painting-specific actions.
 
 Composer images opt into Edit through `FileEntryPreview.onImageReplace`. Static JPEG, PNG and WebP
-images support freeform cropping, clockwise quarter-turn rotation and reset in CherryUI's
-`ImageEditor`. GIF, vector images and images reported as animated retain ordinary preview actions.
+images support freeform and fixed-ratio cropping, clockwise quarter-turn rotation, mirroring,
+straightening and horizontal/vertical perspective in CherryUI's `ImageEditor`. Undo, redo,
+hold-to-compare and reset keep adjustments local until Done. Preview and Skia pixel export share
+the same transform and safe crop bounds. GIF, vector images and images reported as animated retain
+ordinary preview actions.
 Done creates a new managed file and replaces the same draft attachment, preserving its position
 and the text draft. The source file and sent messages are unchanged. Cancel discards only local
 edit state; a failed or stale save cannot replace the source. Backend storage owns pixel writes

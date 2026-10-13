@@ -1,7 +1,7 @@
 import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { Button } from '@cherrystudio/ui/components';
+import { Button, Section } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 const STATUS_CLASS_NAMES = {
   danger: 'shrink-0 text-sm text-error',
@@ -36,40 +36,41 @@ export function PluginRow({
   title: string;
 }) {
   return (
-    <Pressable
+    <Section.Item
       accessibilityLabel={[title, status?.label, description].filter(Boolean).join(', ')}
-      accessibilityRole="button"
-      className="flex-row items-center gap-3 rounded-2xl bg-card px-4 py-3 active:bg-secondary"
-      onPress={onPress}
-      style={{ borderCurve: 'continuous' }}
-      testID={testID}
-    >
-      {icon}
-      <View className="min-w-0 flex-1 gap-0.5">
-        <Text className="text-base font-medium text-foreground" numberOfLines={1}>
-          {title}
-        </Text>
-        {description ? (
+      description={
+        description ? (
           <Text className="text-sm text-muted-foreground" numberOfLines={1}>
             {description}
           </Text>
-        ) : null}
-      </View>
-      {status ? (
-        <Text className={STATUS_CLASS_NAMES[status.tone]} numberOfLines={1}>
-          {status.label}
+        ) : undefined
+      }
+      label={
+        <Text className="text-base font-medium text-foreground" numberOfLines={1}>
+          {title}
         </Text>
-      ) : addAction ? (
-        <Button
-          accessibilityLabel={addAction.accessibilityLabel}
-          icon={<PlusIcon />}
-          onPress={addAction.onPress}
-          shape="pill"
-          size="xs"
-          testID={testID ? `${testID}-add` : undefined}
-          variant="secondary"
-        />
-      ) : null}
-    </Pressable>
+      }
+      leading={icon}
+      onPress={onPress}
+      showChevron={false}
+      testID={testID}
+      trailing={
+        status ? (
+          <Text className={STATUS_CLASS_NAMES[status.tone]} numberOfLines={1}>
+            {status.label}
+          </Text>
+        ) : addAction ? (
+          <Button
+            accessibilityLabel={addAction.accessibilityLabel}
+            icon={<PlusIcon />}
+            onPress={addAction.onPress}
+            shape="pill"
+            size="xs"
+            testID={testID ? `${testID}-add` : undefined}
+            variant="secondary"
+          />
+        ) : undefined
+      }
+    />
   );
 }

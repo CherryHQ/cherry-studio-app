@@ -48,8 +48,15 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
   shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
+  Plugin and Skill references use the link color and stay inline at the field's font size. The
+  native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
+  the paste wrapper excludes marked ranges from media extraction while continuing to import real
+  pasted images. The marker is cleared with link formatting during deletion and undo. It cannot live
+  in `NSTextAttachment.fileType`, which UIKit invalidates when assigning an image.
+  Skill artwork follows desktop's Lucide ToolCase. Only the editor's raster-only inline attachment
+  API uses encoded PNG bytes; normal controls use the vector icon.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
-  shrinks with them. Ready still images open the shared preview with optional crop/rotate editing.
+  shrinks with them. Ready still images open the shared preview with optional image editing.
   Saving replaces the matching attachment in place; cancellation, failure and a removed/stale
   source preserve the current draft. The source library file remains unchanged.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s

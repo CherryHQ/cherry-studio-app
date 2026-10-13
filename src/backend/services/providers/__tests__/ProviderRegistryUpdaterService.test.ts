@@ -1,5 +1,8 @@
-import type { CatalogManifest } from '@cherrystudio/provider-registry/mobile';
-
+import {
+  type CatalogManifest,
+  REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+  REGISTRY_SCHEMA_VERSION,
+} from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 
 import {
@@ -34,12 +37,12 @@ class Updater extends ProviderRegistryUpdaterService {
   }
 }
 
-function snapshot(revision: number, minimum = '2.0.9') {
+function snapshot(revision: number, minimum = '2.1.4') {
   const manifest: CatalogManifest = {
     files: { 'models.json': `models-${revision}`, 'provider-models.json': `providers-${revision}` },
     minAppVersion: minimum,
-    sourceAppVersion: minimum === '2.0.8' ? '2.0.8' : '2.0.14',
-    schemaVersion: 1,
+    sourceAppVersion: minimum === '2.0.8' ? '2.0.8' : REGISTRY_DESKTOP_COMPATIBILITY_VERSION,
+    schemaVersion: REGISTRY_SCHEMA_VERSION,
     revision,
   };
   const files = {
@@ -109,13 +112,51 @@ it('starts from the saved snapshot without contacting the network until a model 
 });
 
 it('uses a saved older compatible snapshot offline and retains it after refresh failure', async () => {
-  jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([snapshot(1, '2.0.8')]);
+  const cached = snapshot(1, '2.0.8');
+  cached.manifest.schemaVersion = 1;
+  jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([cached]);
   mockRequest.mockRejectedValue(new Error('Offline'));
   await updater.ensureReady();
   expect(mockRequest).not.toHaveBeenCalled();
   await expect(updater.applyUpdate()).rejects.toThrow('Offline');
   expect(providerRegistryService.isReady()).toBe(true);
   expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-1');
+  expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
+});
+
+it('migrates an old cached schema to v3 even when its revision is higher', async () => {
+  const cached = snapshot(100, '2.0.8');
+  cached.manifest.schemaVersion = 1;
+  jest.mocked(readProviderRegistrySnapshots).mockResolvedValue([cached]);
+  serve(snapshot(2));
+  await updater.start();
+  await updater.applyUpdate();
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
+  expect(writeProviderRegistrySnapshot).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ schemaVersion: 3, revision: 2 }),
+    'a',
+  );
+  expect(mockRequest.mock.calls.every(([source]) => source.endsWith('/v3'))).toBe(true);
+});
+
+it('prefers the saved v3 snapshot over an older schema with a higher revision', async () => {
+  const older = snapshot(100, '2.0.8');
+  older.manifest.schemaVersion = 1;
+  jest
+    .mocked(readProviderRegistrySnapshots)
+    .mockResolvedValue([older, { ...snapshot(2), slot: 'b' }]);
+  await updater.ensureReady();
+  expect(providerRegistryService.getCatalogVersion('models.json')).toBe('models-2');
+  expect(mockRequest).not.toHaveBeenCalled();
+});
+
+it('rejects an old-schema manifest returned from the v3 publication path', async () => {
+  const remote = snapshot(1, '2.0.8');
+  remote.manifest.schemaVersion = 1;
+  serve(remote);
+  await expect(updater.ensureReady()).rejects.toThrow('Unsupported registry schema');
+  expect(providerRegistryService.isReady()).toBe(false);
   expect(writeProviderRegistrySnapshot).not.toHaveBeenCalled();
 });
 

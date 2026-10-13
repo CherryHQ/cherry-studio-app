@@ -58,6 +58,7 @@ export interface PreferenceSchema {
   'chat.web_search.default_fetch_urls_provider': WebSearchProviderId;
   'chat.web_search.default_search_keywords_provider': WebSearchProviderId;
   'chat.web_search.max_results': number;
+  'chat.web_search.model_tools_preferred': boolean;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
 
   'feature.paintings.default_model_id': string | null;
@@ -99,6 +100,7 @@ export const PreferenceDefaults = {
   'chat.web_search.default_fetch_urls_provider': 'jina',
   'chat.web_search.default_search_keywords_provider': 'exa-mcp',
   'chat.web_search.max_results': 5,
+  'chat.web_search.model_tools_preferred': true,
   'chat.web_search.provider_overrides': {},
 
   'feature.paintings.default_model_id': null,

@@ -2,8 +2,8 @@
  * Minimal Agent configuration source.
  *
  * Tool bindings and the fixed built-in catalog are resolved separately from the
- * definition. Agent lookup stays limited to id/name/model/instructions and the
- * interactive tool-approval preference.
+ * definition. Agent lookup owns the fixed mode boundary, model, instructions,
+ * capability preferences and interactive tool-approval preference.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
@@ -11,7 +11,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas';
 import { AgentProtocolError } from '@/shared/contracts/agent';
-import type { AgentToolApprovalMode } from '@/shared/data/types/agent';
+import type { AgentMode, AgentToolApprovalMode } from '@/shared/data/types/agent';
 import {
   type AgentCapability,
   sanitizeDisabledAgentCapabilities,
@@ -24,6 +24,7 @@ export type AgentDefinition = {
   id: string;
   name: string;
   instructions: string;
+  mode: AgentMode;
   model: RuntimeModel;
   options: RuntimeOptions;
   toolApprovalMode: AgentToolApprovalMode;
@@ -63,6 +64,7 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         id: agent.id,
         name: agent.name,
         instructions: agent.instructions,
+        mode: agent.mode,
         model: { providerId, modelId },
         options: {},
         toolApprovalMode: agent.toolApprovalMode,

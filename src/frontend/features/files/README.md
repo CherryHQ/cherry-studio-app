@@ -19,8 +19,9 @@ for format behavior, limits, selection evidence and pending acceptance.
 
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
   bottom toolbar offers sharing and saving to Photos; the header retains system opening. A
-  caller-owned image editing request also supplies Edit. Crop/rotate happens before sending and
-  creates a new managed image through `Backend.file.editImage`. Only an accepted source-matching
+  caller-owned image editing request also supplies Edit. Cropping, rotation, mirroring,
+  straightening and perspective adjustments happen before sending and create a new managed image
+  through `Backend.file.editImage`. Only an accepted source-matching
   callback replaces the caller's attachment. The source file and existing messages retain their
   original bytes. Cancellation and failed saves retain the current draft image.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
@@ -49,7 +50,8 @@ An editable preview adds `imageEditRequestId` to its route identity. This opaque
 is owned by `appShell/imagePreview`; callbacks never enter URLs, persisted drafts or file rows.
 Back first cancels an active edit. Leaving the preview or disposing its source releases the request;
 late results cannot restore a removed attachment. Repeated edits stay in the same preview and use
-the last accepted image. The crop/rotate change adds no native dependency. Its gesture, orientation,
+the last accepted image. The image editor uses the installed Skia renderer and adds no native
+dependency. Its gesture, orientation,
 save/cancel and light/dark acceptance remain pending authorized device verification.
 
 The new native dependencies require a development-client rebuild before device acceptance.

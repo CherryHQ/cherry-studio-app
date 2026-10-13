@@ -5,6 +5,7 @@ import {
   isProviderWebSearchToolPart,
   isToolMessagePart,
   isUserQuestionToolPart,
+  isSkillAdaptationToolPart,
   type ToolMessagePart,
 } from './tools/toolPartState';
 
@@ -92,7 +93,7 @@ export function partitionMessageParts(
   const resultTextIndex = findResultTextIndex(parts);
 
   parts.forEach((part, index) => {
-    if (part.type === 'source-url') {
+    if (part.type === 'source-url' || part.type === 'data-search-suggestions') {
       return;
     }
 
@@ -125,7 +126,8 @@ export function partitionMessageParts(
     if (
       isToolMessagePart(part) &&
       (isUserQuestionToolPart(part) ||
-        (isAgentMutationToolPart(part) && part.state === 'output-available'))
+        ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
+          part.state === 'output-available'))
     ) {
       body.push({ index, kind: 'part', part });
       return;
@@ -148,6 +150,7 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
     if (!part) continue;
     if (
       part.type === 'source-url' ||
+      part.type === 'data-search-suggestions' ||
       part.type === 'file' ||
       part.type === 'data-error' ||
       part.type === 'data-compaction-anchor' ||

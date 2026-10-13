@@ -1,6 +1,5 @@
 import { act, create } from 'react-test-renderer';
 
-import { getWebSearchProviderPreset } from '../../../utils/providerSettings';
 import { useWebSearchProviderCheck } from '../useWebSearchProviderCheck';
 
 const mockCheckProvider = jest.fn(
@@ -26,15 +25,11 @@ describe('useWebSearchProviderCheck', () => {
     mockCheckProvider.mockResolvedValue({ valid: true });
   });
 
-  test('checks the supplied key and reports success', async () => {
-    let startCheck: ((apiKey: string) => Promise<void>) | undefined;
+  test('checks the settings it is given and reports success', async () => {
+    let startCheck: ReturnType<typeof useWebSearchProviderCheck>['startCheck'] | undefined;
 
     function Harness() {
-      ({ startCheck } = useWebSearchProviderCheck(
-        getWebSearchProviderPreset('exa'),
-        { apiKeys: ['stored-key'] },
-        'searchKeywords',
-      ));
+      ({ startCheck } = useWebSearchProviderCheck('exa', 'searchKeywords'));
       return null;
     }
 
@@ -42,13 +37,13 @@ describe('useWebSearchProviderCheck', () => {
     act(() => {
       renderer = create(<Harness />);
     });
-    await act(async () => startCheck?.('first-key'));
+    await act(async () => startCheck?.({ apiKeys: ['first-key'] }));
 
-    expect(mockCheckProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: expect.objectContaining({ apiKeys: ['first-key'], id: 'exa' }),
-      }),
-    );
+    expect(mockCheckProvider).toHaveBeenCalledWith({
+      capability: 'searchKeywords',
+      override: { apiKeys: ['first-key'] },
+      providerId: 'exa',
+    });
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'settings.websearch.provider.checkSuccess',
       variant: 'success',

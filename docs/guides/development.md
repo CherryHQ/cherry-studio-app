@@ -19,6 +19,21 @@ cd cherry-studio-app
 pnpm install
 ```
 
+## Dependencies
+
+Installs never write patched or built package output back into the shared pnpm store
+(`sideEffectsCacheReadonly` in `pnpm-workspace.yaml`), so a bad install in one checkout cannot
+contaminate other checkouts. Each checkout applies patches and runs dependency build scripts on a
+clean install.
+
+- Run one `pnpm install` at a time per checkout. Git hooks and any pnpm command on stale
+  dependencies start an install; wait for it before starting another. Concurrent installs in the
+  same directory apply patches twice to the same files.
+- Do not run `pnpm rebuild`, and do not rebuild packages listed in `patchedDependencies`: pnpm
+  12.2.1 reapplies patches to already patched files.
+- Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.
+  Delete that package's directory under `node_modules/.pnpm` and run `pnpm install --force`.
+
 ## Run
 
 Build and install the development client for your target platform. Choose one:

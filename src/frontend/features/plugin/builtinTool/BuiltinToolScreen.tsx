@@ -11,6 +11,7 @@ import { BUILTIN_TOOLS, type BuiltinToolId } from './builtinTools';
 import { WebSearchAdvancedSection } from './components/WebSearchAdvancedSection';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import { WebSearchProviderIcon } from './components/WebSearchProviderIcon';
+import { WebSearchSourceSection } from './components/WebSearchSourceSection';
 import { useWebSearchProviderPreferences } from './hooks/useWebSearchProviderPreferences';
 import { getWebSearchProviderPreset } from './utils/providerSettings';
 
@@ -45,8 +46,11 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
             <Text className="text-sm text-muted-foreground">{t(tool.summaryKey)}</Text>
           </View>
         </View>
+        <WebSearchSourceSection />
         <WebSearchApiManagementSection
           capability={tool.capability}
+          // Unsaved text in a field belongs to the provider it was typed for.
+          key={provider.id}
           provider={provider}
           providerOverrides={webSearchProviders.providerOverrides.value}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
@@ -54,7 +58,11 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
           <Section.SelectItem
             label={t(tool.providerLabelKey)}
             onPress={() => setIsProviderPickerOpen(true)}
-            value={provider.name}
+            value={
+              provider.id === 'fetch'
+                ? t('settings.websearch.provider.localExtraction')
+                : provider.name
+            }
             valueLeading={<WebSearchProviderIcon providerId={provider.id} />}
           />
         </WebSearchApiManagementSection>
@@ -69,7 +77,7 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
           leading: <WebSearchProviderIcon providerId={option.value} />,
         }))}
         selectedValue={providerPreference.value}
-        size={tool.capability === 'searchKeywords' ? 'medium' : 'compact'}
+        size="medium"
         testID={`${toolId}-provider-picker`}
         title={t(tool.providerLabelKey)}
       />

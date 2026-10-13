@@ -3,7 +3,12 @@ import type { LanguageVarious } from '@/shared/data/preference';
 
 import type { TraceRecorder } from '../../observability';
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeSqlDatabase, RuntimeUsageOwner, RuntimeUsageReport } from '../runtime';
+import type {
+  RuntimeSqlDatabase,
+  RuntimeUsageOwner,
+  RuntimeUsageReport,
+  RuntimeWebTools,
+} from '../runtime';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import type { AgentDefinitionSource } from './agentDefinitions';
@@ -11,6 +16,7 @@ import type { AgentImageGenerationPort } from './agentImageGeneration';
 import type { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import type { AgentInferenceModelResolver } from './inferenceSnapshot';
+import type { SkillScopeSource } from './skillScope';
 
 export type MobileAgentHostNaming = Pick<
   AgentSessionNaming,
@@ -48,7 +54,9 @@ export type MobileAgentHostPorts = {
   /** Bound to the Host's lifecycle signal so stopping the Host aborts naming. */
   naming(signal: AbortSignal): MobileAgentHostNaming;
   runtimeTools: AgentRuntimeToolResolver;
+  skills?: SkillScopeSource;
   usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
   tools: SystemCapabilitySource;
+  webTools?(): Promise<RuntimeWebTools>;
   traces?: TraceRecorder;
 };

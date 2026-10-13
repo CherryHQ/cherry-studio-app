@@ -59,6 +59,40 @@ describe('createJsSandbox', () => {
     expect(native.run).not.toHaveBeenCalled();
   });
 
+  test('notifies resource owners only after cancelled native work finishes', async () => {
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    const native = createNative(() => {
+      started.resolve();
+      return finished.promise;
+    });
+    const onSettled = jest.fn();
+    const controller = new AbortController();
+    const running = createJsSandbox(native)!.run(
+      runInput({ signal: controller.signal, onSettled }),
+    );
+    await started.promise;
+    controller.abort(new Error('cancelled'));
+    await expect(running).rejects.toThrow('cancelled');
+    expect(onSettled).not.toHaveBeenCalled();
+    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await finished.promise;
+    await Promise.resolve();
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  test('releases resource owners when cancellation prevents any native work', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('cancelled'));
+    const onSettled = jest.fn();
+    await expect(
+      createJsSandbox(createNative(async () => '{}'))!.run(
+        runInput({ signal: controller.signal, onSettled }),
+      ),
+    ).rejects.toThrow('cancelled');
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
   test('reports an unreadable native outcome as an internal error', async () => {
     const sandbox = createJsSandbox(createNative(async () => 'not json'))!;
 

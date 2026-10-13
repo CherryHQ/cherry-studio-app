@@ -23,6 +23,7 @@ const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
+const mockDiagnostics = { kind: 'diagnostics' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = {
@@ -50,6 +51,8 @@ const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
+  initializeSkills: jest.fn(async () => undefined),
+  hasPendingSkillStorageWork: () => false,
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
 }));
@@ -131,6 +134,7 @@ const createRuntime = () =>
     DesktopConnectionRuntime: mockDesktopConnections,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
+    DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
@@ -246,6 +250,7 @@ describe('createAppBootstrapRuntime', () => {
       desktopConnections: mockDesktopConnections,
       remoteAgent: mockRemoteAgent,
       desktopConnectionManager: mockDesktopConnectionManager,
+      diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,

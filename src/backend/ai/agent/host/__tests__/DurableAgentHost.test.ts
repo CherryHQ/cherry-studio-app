@@ -1,6 +1,10 @@
 import { v7 as uuid } from 'uuid';
 
-import type { AgentEvent, AgentInferenceSnapshotV1 } from '@/shared/contracts/agent';
+import type {
+  AgentEvent,
+  AgentInferenceSnapshotV1,
+  AgentMessagePart,
+} from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
 import {
@@ -13,6 +17,7 @@ import {
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
+import type { SkillTurnScope } from '../skillScope';
 
 const inferenceSnapshot: AgentInferenceSnapshotV1 = {
   version: 1,
@@ -159,6 +164,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
               id,
               name: 'Agent',
               instructions: '',
+              mode: 'standard',
               model: configuration.model,
               options: {},
               toolApprovalMode: 'default',
@@ -210,14 +216,19 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     }),
   };
   const host = new DurableAgentHost(store, ports, background, new FakeRuntime(), conversations);
-  const reserve = async (status: RuntimeDurableTurn['status'] = 'completed') => {
+  const reserve = async (
+    status: RuntimeDurableTurn['status'] = 'completed',
+    userParts: AgentMessagePart[] = [
+      { id: 'question', type: 'text', text: 'Question', state: 'done' },
+    ],
+  ) => {
     const reserved = await store.reserveInitialSubmission({
       sessionId,
       agentId,
 
       userMessageId: uuid(),
       assistantMessageId: uuid(),
-      userParts: [{ id: 'question', type: 'text', text: 'Question', state: 'done' }],
+      userParts,
       modelId: inferenceSnapshot.model.uniqueModelId,
       inferenceSnapshot,
     });
@@ -364,6 +375,30 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('hands the frozen web policy to the Runtime with the conversation configuration', async () => {
+    const webTools = {
+      modelToolsPreferred: true,
+      clientSearchAvailable: true,
+      clientFetchAvailable: true,
+    };
+    const state = fixture({ webTools: async () => webTools });
+    const ensureConversation = jest.spyOn(state.conversations, 'ensureConversation');
+    await state.host.initialize();
+    try {
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(ensureConversation.mock.calls[0]![0].configuration.webTools).toEqual(webTools);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('retries a failed answer from stored parts using the aligned input contract', async () => {
     const state = fixture();
     const failed = await state.reserve('failed');
@@ -383,6 +418,62 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('carries selected Skill instructions in the system prompt, including on retry', async () => {
+    const skillId = '00000000-0000-4000-8000-000000000123';
+    const scope: SkillTurnScope = {
+      entries: [
+        {
+          id: skillId,
+          name: 'outline',
+          description: 'Outline a document',
+          invocation: { modelInvocable: true, userInvocable: true },
+          contentHash: 'directory-sha256:abc',
+          folderName: 'outline',
+          files: ['SKILL.md'],
+          admission: { status: 'ready', reasons: [] },
+        },
+      ],
+      readInstructions: async () => 'Use a concise outline.',
+      readFile: async () => null,
+    };
+    const selection = {
+      skillId,
+      name: 'outline',
+      contentHash: 'directory-sha256:abc',
+      origin: 'explicit' as const,
+    };
+    const state = fixture({ skills: { resolve: async () => scope } });
+    const ensure = jest.spyOn(state.conversations, 'ensureConversation');
+    const failed = await state.reserve('failed', [
+      {
+        id: 'question',
+        type: 'text',
+        text: 'Question outline',
+        state: 'done',
+        skillSelections: [selection],
+        skillReferences: [{ type: 'skill', skillId, label: 'outline', offset: 9 }],
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: failed.assistantMessageId,
+      });
+      // Retry rebuilds the working copy; the original selection must configure it again.
+      expect(ensure.mock.lastCall?.[0].configuration.initialInstructions).toEqual([
+        { key: `skill:${skillId}`, text: expect.stringContaining('Use a concise outline.') },
+      ]);
+      const [user] = await state.store.listMessages(state.sessionId);
+      expect(user.parts[0]).toMatchObject({
+        skillSelections: [selection],
+        skillReferences: [{ type: 'skill', skillId, label: 'outline', offset: 9 }],
+      });
     } finally {
       await state.host.close();
     }

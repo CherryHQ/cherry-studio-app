@@ -8,6 +8,7 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
+import { withoutPluginDiagnostics, type RecordPluginOperation } from '../../pluginDiagnostics';
 import {
   FeishuApplicationSchema,
   FeishuUserCredentialSchema,
@@ -38,7 +39,10 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private state: AuthorizationState | undefined;
 
-  constructor(private readonly store: PluginAuthorizationStore) {}
+  constructor(
+    private readonly store: PluginAuthorizationStore,
+    private readonly diagnostics: RecordPluginOperation = withoutPluginDiagnostics,
+  ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operations
@@ -216,7 +220,9 @@ export class FeishuAuthorizationRuntime implements PluginAuthorizationRuntime {
         'authorization',
         'Feishu user authorization expired. Reauthorize the existing application.',
       );
-    const tokens = await feishuOauth.refresh(credential.application, credential.tokens, signal);
+    const tokens = await this.diagnostics('refresh', () =>
+      feishuOauth.refresh(credential.application, credential.tokens, signal),
+    );
     signal.throwIfAborted();
     return { ...credential, tokens };
   }

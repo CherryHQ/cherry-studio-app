@@ -3,13 +3,14 @@ import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-s
 
 import type { PiStreamFn as StreamFn } from './piModelTypes';
 import { emptyAssistantMessage, isEmptyContentEvent, providerErrorEvent } from './piStreamEvents';
+import { isPiNativeWebActivity } from './piWebTools';
 
 /** Shared by all credential attempts within one model request. */
 export const PI_STREAM_IDLE_TIMEOUT_MS = 120_000;
 
 /**
  * Wrap key failover so switching credentials cannot reset the idle budget. Measure from the
- * call, then reset on content events; start and empty text/thinking events do not count, so the
+ * call, then reset on content or native web activity; start and empty text/thinking events do not count, so the
  * budget is the same whether or not failover buffers them. Long generations keep the request
  * alive; tool execution is outside this timer. Always return a terminal result, even if the
  * source ignores abort.
@@ -59,7 +60,15 @@ export function withPiStreamIdleTimeout(
     arm();
     void (async () => {
       try {
-        const source = await streamFn(model, context, { ...options, signal: controller.signal });
+        const source = await streamFn(model, context, {
+          ...options,
+          signal: controller.signal,
+          onProviderStreamEvent: async (event, model) => {
+            if (settled) return;
+            if (isPiNativeWebActivity(event)) arm();
+            await options?.onProviderStreamEvent?.(event, model);
+          },
+        });
         if (settled) return;
         for await (const event of source) {
           if (settled) return;

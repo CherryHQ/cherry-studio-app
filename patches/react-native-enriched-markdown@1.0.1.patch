@@ -539,12 +539,13 @@ diff --git a/ios/input/ENRMInputFormatter.mm b/ios/input/ENRMInputFormatter.mm
 index 851d9902478af68906739d03a93fff94afc07000..79d858eaa2d27d72a15bf020703b20dc8ea12f3d 100644
 --- a/ios/input/ENRMInputFormatter.mm
 +++ b/ios/input/ENRMInputFormatter.mm
-@@ -92,6 +92,8 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
+@@ -92,6 +92,9 @@ - (void)applyFormattingRanges:(NSArray<ENRMFormattingRange *> *)ranges
    [textStorage removeAttribute:NSUnderlineStyleAttributeName range:scopeRange];
    [textStorage removeAttribute:NSStrikethroughStyleAttributeName range:scopeRange];
    [textStorage removeAttribute:NSBackgroundColorAttributeName range:scopeRange];
 +  // Attachments are derived from link ranges, so deletion and undo cannot leave stale icons.
 +  [textStorage removeAttribute:NSAttachmentAttributeName range:scopeRange];
++  [textStorage removeAttribute:@"com.cherryai.composer-mention-icon" range:scopeRange];
  
    UIFontDescriptorSymbolicTraits *traitMap =
        (UIFontDescriptorSymbolicTraits *)calloc(scopeLength, sizeof(UIFontDescriptorSymbolicTraits));
@@ -612,7 +613,7 @@ diff --git a/ios/input/styles/ENRMLinkStyleHandler.mm b/ios/input/styles/ENRMLin
 index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83364e40d7 100644
 --- a/ios/input/styles/ENRMLinkStyleHandler.mm
 +++ b/ios/input/styles/ENRMLinkStyleHandler.mm
-@@ -38,6 +38,18 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
+@@ -38,6 +38,20 @@ - (void)applyNonFontAttributesToTextStorage:(NSTextStorage *)storage
    BOOL linkUnderline = variant ? variant.underline : style.linkUnderline;
    RCTUIColor *backgroundColor = variant ? variant.backgroundColor : style.linkBackgroundColor;
  
@@ -625,6 +626,8 @@ index f0f678af51a9d9878b4ce3946a8e9c455c8d1967..dced4add78c7c08ce2173e44d0ad0f83
 +    CGFloat size = style.baseFont.pointSize;
 +    attachment.bounds = CGRectMake(0, style.baseFont.descender, size, size);
 +    [storage addAttribute:NSAttachmentAttributeName value:attachment range:NSMakeRange(iconIndex, 1)];
++    // Setting attachment.image invalidates fileType; keep the marker on the text range instead.
++    [storage addAttribute:@"com.cherryai.composer-mention-icon" value:@YES range:NSMakeRange(iconIndex, 1)];
 +  }
 +#endif
 +

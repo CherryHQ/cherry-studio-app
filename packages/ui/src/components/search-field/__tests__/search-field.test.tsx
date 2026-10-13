@@ -53,17 +53,37 @@ describe('SearchField', () => {
     const input = renderer!.root.findByProps({ mockComponent: 'hero-search-input' });
 
     expect(root.props.isDisabled).toBe(false);
-    expect(input.props).toEqual(
-      expect.objectContaining({
-        accessibilityLabel: 'Search providers',
-        autoCapitalize: 'none',
-        autoCorrect: false,
-        autoFocus: false,
-        className:
-          'min-h-10 rounded-full border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
-        placeholder: 'Search',
-        returnKeyType: 'search',
-      }),
+    // Compare picked props: the input's ref holds a fiber tree that floods a failure diff.
+    const {
+      accessibilityLabel,
+      autoCapitalize,
+      autoCorrect,
+      autoFocus,
+      className,
+      placeholder,
+      returnKeyType,
+    } = input.props;
+    expect({
+      accessibilityLabel,
+      autoCapitalize,
+      autoCorrect,
+      autoFocus,
+      className,
+      placeholder,
+      returnKeyType,
+    }).toEqual({
+      accessibilityLabel: 'Search providers',
+      autoCapitalize: 'none',
+      autoCorrect: false,
+      autoFocus: false,
+      className:
+        'min-h-0 border-0 bg-transparent py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-0 android:shadow-none android:focus:border-0',
+      placeholder: 'Search',
+      returnKeyType: 'search',
+    });
+    // The group draws the capsule, so its whole surface is the field.
+    expect(renderer!.root.findByProps({ testID: 'group' }).props.className).toBe(
+      'min-h-10 rounded-full border border-border bg-field',
     );
     expect(input.props.className).not.toContain('text-[16px]');
     expect(input.props.style).toEqual({
@@ -75,6 +95,13 @@ describe('SearchField', () => {
 
     act(() => root.props.onChange('Studio'));
     expect(onChangeText).toHaveBeenCalledWith('Studio');
+
+    const focus = jest.spyOn(input.props.ref.current, 'focus');
+    const surface = renderer!.root.findAll(
+      (node) => node.props.focusable === false && typeof node.props.onPress === 'function',
+    )[0]!;
+    act(() => surface.props.onPress());
+    expect(focus).toHaveBeenCalledTimes(1);
 
     act(() => {
       renderer!.update(

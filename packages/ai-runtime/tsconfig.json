@@ -8,8 +8,6 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "paths": {
-      "@cherrystudio/provider-registry": ["../provider-registry/src/index.ts"],
-      "@cherrystudio/provider-registry/*": ["../provider-registry/src/*"],
       "@cherrystudio/universal/*": ["../universal/src/*"],
       "@shared/*": ["../universal/src/*"]
     },

@@ -50,6 +50,7 @@ export function ChatInputSurface({
   streaming,
   onStop,
   fieldStyle,
+  placeholder,
   attachmentMode = 'images',
 }: {
   leadingAction?: ReactNode;
@@ -58,6 +59,7 @@ export function ChatInputSurface({
   streaming: boolean;
   onStop?: () => void;
   fieldStyle?: StyleProp<TextStyle>;
+  placeholder?: string;
   attachmentMode?: 'images' | 'text-only';
 }) {
   const { t } = useTranslation();
@@ -150,6 +152,7 @@ export function ChatInputSurface({
           style={FIELD_CONTENT_STYLE}
         >
           <ComposerField
+            placeholder={placeholder}
             style={fieldStyle}
             attachmentMode={attachmentMode}
             testID="chat-composer-input"

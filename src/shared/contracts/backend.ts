@@ -3,6 +3,7 @@ import type { AppUpdateModule } from './appUpdate';
 import type { BackgroundExecutionModule } from './backgroundExecution';
 import type { BackupModule } from './backup';
 import type { DesktopConnectionsModule } from './desktopConnections';
+import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
 import type { McpModule } from './mcp';
@@ -13,6 +14,7 @@ import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { RemoteAgentModule } from './remoteAgent';
+import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
 
@@ -24,6 +26,7 @@ export interface Backend {
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;
   readonly desktopConnections: DesktopConnectionsModule;
+  readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;
   readonly mcp: McpModule;
@@ -33,6 +36,7 @@ export interface Backend {
   readonly plugins: PluginsModule;
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
+  readonly skills: SkillsModule;
   readonly webSearch: WebSearchModule;
 }
 

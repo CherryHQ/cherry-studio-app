@@ -190,10 +190,11 @@ configuration and API-version settings influence the generated provider settings
 
 ## Remote Registry Boundary
 
-Mobile may fetch Desktop-published `models.json` and `provider-models.json` snapshots after an
-explicit user action. The manifest must match the schema lane and the latest Desktop registry
-semantics fully implemented by this Mobile Runtime. This compatibility number is independent of
-the Mobile application version.
+Mobile downloads Desktop-published `models.json` and `provider-models.json` from schema v3 on first
+use and when upgrading an older saved schema. Later refreshes follow explicit model-list access.
+The remote manifest must match v3 and the Desktop 2.1.4 semantic baseline supported by Mobile's
+consumed fields. This compatibility number is independent of the Mobile application version.
+Older saved schemas remain readable offline; startup attempts to replace them with v3.
 
 The snapshot is unsigned. `providers.json` therefore stays in the application bundle and cannot be
 replaced remotely. Provider base URLs, adapter families, headers, and credential behavior remain
@@ -204,12 +205,19 @@ interpreters, normalizers, or endpoint semantics: required behavior consumed by 
 implemented and validated, while unsupported optional behavior must be explicitly classified,
 before the compatibility version advances.
 
-The accepted semantic line is currently Desktop `2.0.8`. Desktop `2.0.9` remains gated on a full
-Mobile compatibility review of the downloaded model and override payloads. Mobile does not need to
-implement provider-native `serverTools` merely to consume newer model data: those optional fields
-may be explicitly ignored while application-owned Web Search remains the only conversation search
-path. The review must still prove that removal of the older per-model `web-search` capability does
-not affect any Mobile consumer before the compatibility number advances.
+The reader drops unknown list vocabulary and incompatible entries individually. `serverTools` and
+`ultra` in a downloaded catalog remain unsupported optional capabilities. Always-on adaptive
+reasoning is projected through the existing wire interpreter. `adaptive-between-tools` models and
+overrides are omitted because the pinned Anthropic SDK cannot execute `between_tools`; they must not
+silently use another dialect. The v3 migration includes regression sources; local tests, typecheck,
+and device acceptance remain pending until explicitly requested.
+
+Native web tools are an application feature with trusted bundled `serverTools` declarations and
+explicit model eligibility; unsigned downloaded model flags cannot enable them. Adapters for the
+Responses, Anthropic Messages, Generate Content, and Chat Completions search contracts run in the Pi
+Durable execution path; an endpoint without one uses the application-owned external services. See
+[Web Search](../web-search.md) for the adapter table, arbitration, metadata, replay, and failure
+semantics.
 
 ## Transport
 

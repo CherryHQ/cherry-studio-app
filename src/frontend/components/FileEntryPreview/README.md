@@ -7,7 +7,7 @@ logging, and the single opening policy shared by the composer, messages, and fil
 ## Public Interface
 
 - `FileEntryPreview`: a square attachment tile resolved by entry id.
-  Its optional `onImageReplace` enables crop/rotate for supported images in the viewer. The caller
+  Its optional `onImageReplace` enables image editing for supported images in the viewer. The caller
   must accept the replacement only while the source still belongs to its draft; absent that
   callback, viewing a file never enables editing. The tile owns the navigation request lifetime.
 - `LoadedFileEntryPreview`: the same tile with caller-resolved entry, original URI, and preview URI.

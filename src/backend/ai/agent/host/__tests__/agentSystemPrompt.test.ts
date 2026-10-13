@@ -21,6 +21,93 @@ function mcpTool(): RuntimeTool {
 }
 
 describe('buildAgentSystemPrompt', () => {
+  test('minimal mode keeps chat context and custom instructions without capability guidance', () => {
+    const prompt = buildAgentSystemPrompt({
+      mode: 'minimal',
+      agentInstructions: 'Explain simply.',
+      appLanguage: 'zh-CN',
+      currentDate: '2026-10-10',
+      tools: [
+        tool('web_search'),
+        tool('read_file'),
+        tool('run_js'),
+        tool('find_skills'),
+        mcpTool(),
+      ],
+      pluginGuides: [
+        { pluginId: 'example', serverId: 'server-1', revision: 1, content: 'Plugin guide body.' },
+      ],
+      toolDiscoveryWarnings: ['Discovery failed.'],
+      retry: 'resumed',
+    });
+    expect(prompt).toContain('minimal mode');
+    expect(prompt).toContain('images supplied by the user');
+    expect(prompt).toContain(
+      "model provider's native web search and page reading may be available",
+    );
+    expect(prompt).toContain('Application tools, Skills and plugins are unavailable');
+    expect(prompt).toContain('`2026-10-10`');
+    expect(prompt).toContain('`zh-CN`');
+    expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
+    for (const heading of [
+      'Web Research',
+      'Web Citations',
+      'Managed Files',
+      'Reading Attachments',
+      'JavaScript Sandbox',
+      'Plugin Guides',
+      'Tool Availability',
+      'Answer Recovery',
+      'System Skills',
+      'Skills',
+    ]) {
+      expect(prompt).not.toContain(`## ${heading}`);
+    }
+    expect(prompt).not.toContain('Plugin guide body.');
+    expect(prompt).not.toContain('Discovery failed.');
+  });
+
+  test('provides system workflows without installation and only with their available built-in tools', () => {
+    const base = { agentInstructions: '', appLanguage: 'en-US' as const };
+    const textOnly = buildAgentSystemPrompt({ ...base, tools: [] });
+    expect(textOnly).toContain('### structured-notes');
+    expect(textOnly).toContain('## Action items');
+    expect(textOnly).not.toContain('### daily-agenda');
+    expect(textOnly).not.toContain('### research-brief');
+    expect(textOnly).not.toContain('### Available Skills');
+
+    const complete = buildAgentSystemPrompt({
+      ...base,
+      tools: [
+        tool('calendar_list_collections', 'mobile_calendar_collections'),
+        tool('calendar_list_events', 'mobile_calendar_events'),
+        tool('web_search', 'mobile_web_search'),
+        tool('web_fetch', 'mobile_web_fetch'),
+      ],
+    });
+    expect(complete).toContain('### daily-agenda');
+    expect(complete).toContain('`mobile_calendar_collections`');
+    expect(complete).toContain('`mobile_calendar_events`');
+    expect(complete).toContain('travel gaps under 15 minutes');
+    expect(complete).toContain('### research-brief');
+    expect(complete).toContain('`mobile_web_fetch`');
+    expect(complete).toContain('at most five bullets');
+    expect(complete).not.toContain('Read `references/');
+
+    const incomplete = buildAgentSystemPrompt({
+      ...base,
+      tools: [tool('calendar_list_events'), tool('web_search')],
+    });
+    expect(incomplete).not.toContain('### daily-agenda');
+    expect(incomplete).not.toContain('### research-brief');
+
+    const denied = buildAgentSystemPrompt({
+      ...base,
+      tools: [tool('web_search'), { ...tool('web_fetch'), approval: 'deny' }],
+    });
+    expect(denied).not.toContain('### research-brief');
+  });
+
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

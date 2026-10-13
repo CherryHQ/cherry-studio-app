@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUniwind } from 'uniwind';
 
+import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
 
@@ -36,7 +37,7 @@ export function ComposerField({
   const { addAttachments } = useComposerActions();
   const { inputRef } = useComposerMeta();
   const { activateInput } = useComposerPresentationActions();
-  const linkColor = useThemeColor('primary');
+  const linkColor = useThemeColor('link');
   const { theme } = useUniwind();
 
   const handlePaste = useCallback(
@@ -48,7 +49,7 @@ export function ComposerField({
     [addAttachments, attachmentMode],
   );
 
-  // A tool mention is the only link this field can contain — nothing here
+  // A plugin or Skill mention is the only link this field can contain — nothing here
   // creates any other kind, and auto-detection is off — so the base `link`
   // style is set alongside the variant rather than left to the library's blue.
   const markdownStyle = useMemo(() => {
@@ -56,7 +57,12 @@ export function ComposerField({
 
     return {
       link: mentionStyle,
-      linkVariants: getPluginMentionLinkStyles(linkColor, theme),
+      linkVariants: {
+        ...getPluginMentionLinkStyles(linkColor, theme),
+        // The native editor needs raster bytes for an inline text attachment.
+        // Menus and the sidebar use the same ToolCase shape as a Lucide SVG.
+        '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
+      },
     };
   }, [linkColor, theme]);
 
