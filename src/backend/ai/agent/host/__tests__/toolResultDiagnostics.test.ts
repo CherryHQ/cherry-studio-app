@@ -25,12 +25,26 @@ test.each<{ value: RuntimeToolResult['value']; status: string; outcome: string }
   expect(output.failure).toBeUndefined();
 });
 
-test('does not interpret external tool data as a built-in status envelope', () => {
-  const diagnostic = toolResultDiagnostics(
-    { source: 'mcp', serverId: 'server', rawToolName: 'read_record' },
-    { value: { status: 'error', code: 'private-code', retryable: true }, artifacts: [] },
-  );
-  expect(diagnostic).toEqual({ status: 'ok', attributes: { 'tool.result.status': 'ok' } });
+test('claims no result status for external tool data', () => {
+  const ref = { source: 'mcp', serverId: 'server', rawToolName: 'read_record' } as const;
+  const value = { status: 'error', code: 'private-code', retryable: true };
+  expect(toolResultDiagnostics(ref, { value, artifacts: [] })).toEqual({
+    status: 'ok',
+    attributes: {},
+  });
+  expect(
+    toolResultDiagnostics(ref, {
+      value,
+      artifacts: [],
+      failure: {
+        scope: 'call',
+        error: { code: 'mcp_tool_call_failed', message: 'private failure', retryable: true },
+      },
+    }),
+  ).toEqual({
+    status: 'error',
+    attributes: { 'error.code': 'mcp_tool_call_failed', 'error.retryable': true },
+  });
 });
 
 test('retains trusted failures and partial success without copying payloads', () => {

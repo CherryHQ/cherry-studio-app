@@ -12,38 +12,27 @@ function errorCategory(facts: TraceAttributes): string {
   if (
     [
       'insufficient_quota',
-      'quota_exceeded',
       'usage_limit_reached',
       'usage_not_included',
       'subscription_sharing_usage_limit_exceeded',
       'billing_not_active',
       'gousagelimiterror',
       'freeusagelimiterror',
-    ].includes(code)
+    ].includes(code) ||
+    status === 402
   )
     return 'quota';
-  if (['stream_idle_timeout', 'etimedout', 'request_timeout'].includes(code)) return 'timeout';
-  if (
-    [
-      'connection_failed',
-      'stream_disconnected',
-      'econnreset',
-      'econnrefused',
-      'enetdown',
-      'enetunreach',
-      'enotfound',
-      'eai_again',
-    ].includes(code)
-  )
-    return 'network';
+  if (code === 'stream_idle_timeout') return 'timeout';
+  // No response covers every failure before headers, including native timeouts and TLS errors.
+  if (['no_response', 'stream_disconnected'].includes(code)) return 'network';
   if (['invalid_api_key', 'authentication_error'].includes(code) || status === 401)
     return 'authentication';
-  if (code === 'permission_denied' || status === 403) return 'permission';
+  if (code === 'permission_error' || status === 403) return 'permission';
   if (['rate_limit_exceeded', 'rate_limit_error'].includes(code) || status === 429)
     return 'rate_limit';
   if (status === 408 || status === 504) return 'timeout';
   if (
-    ['server_error', 'internal_server_error', 'overloaded_error'].includes(code) ||
+    ['server_error', 'overloaded_error', 'api_error'].includes(code) ||
     (typeof status === 'number' && status >= 500 && status <= 599)
   )
     return 'provider';

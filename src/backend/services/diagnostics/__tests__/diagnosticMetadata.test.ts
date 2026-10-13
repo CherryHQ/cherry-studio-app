@@ -96,7 +96,7 @@ test('exports only allowlisted trace fields even if stored metadata contains ext
     },
   });
   expect(JSON.stringify(projected)).not.toMatch(/private|Bearer|endpoint|arguments/);
-  expect(projected?.attributes).not.toHaveProperty('tool.result');
+  expect(projected?.attributes).not.toHaveProperty(['tool.result']);
   expect(projectDiagnosticTrace({ ...record, name: 'agent.event' })).toBeUndefined();
 });
 

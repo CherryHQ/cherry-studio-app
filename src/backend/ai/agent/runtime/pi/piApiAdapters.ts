@@ -124,9 +124,9 @@ function withTransportCode(error: unknown, init: RequestInit | undefined, code: 
 /**
  * A body that fails after its headers arrived is a dropped connection. The native message is
  * OS-localized and carries no status, so Pi's retry policy cannot classify it by text; mark it
- * here. An aborted request stays terminal through its stop reason. A request that never receives
+ * here. An aborted request stays terminal through its stop reason. A request rejected before
  * headers keeps its existing retry classification and only gains a code, which Pi reads from the
- * cause of the SDK's connection error.
+ * cause of the SDK's connection error. The rejection does not say why no response arrived.
  */
 function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
   return async (input, init) => {
@@ -134,7 +134,7 @@ function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
     try {
       response = await fetch(input, init);
     } catch (error) {
-      throw withTransportCode(error, init, 'connection_failed');
+      throw withTransportCode(error, init, 'no_response');
     }
     const source = response.ok ? response.body : null;
     if (!source) return response;

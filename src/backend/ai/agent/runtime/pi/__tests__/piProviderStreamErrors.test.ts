@@ -269,7 +269,7 @@ describe('Pi provider stream errors', () => {
       streamSimple: streamSimpleCodex,
     },
   ])(
-    'classifies a $name request that never connects as a network failure',
+    'classifies a $name request that receives no response as a network failure',
     async ({ endpointType, adapterFamily, streamSimple }) => {
       const adapter = resolvePiApiAdapter(endpointType, adapterFamily);
       const loadStream = jest
@@ -296,7 +296,7 @@ describe('Pi provider stream errors', () => {
       // The code is diagnostic only; the existing retry decision still applies.
       expect(isRetryableAssistantError(result)).toBe(true);
       expect(piModelTerminalErrorAttributes(result)).toMatchObject({
-        'error.code': 'connection_failed',
+        'error.code': 'no_response',
         'error.stage': 'stream',
         'error.category': 'network',
         'error.retryable': true,

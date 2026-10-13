@@ -7,12 +7,15 @@ export function toolResultDiagnostics(
   ref: RuntimeToolRef,
   output: RuntimeToolResult,
 ): { status: 'ok' | 'error'; attributes: TraceAttributes } {
-  // MCP payloads are arbitrary user data, not the built-in tools' result contract.
+  // MCP payloads are arbitrary user data, not the built-in tools' result contract. Their outcome
+  // is recorded by the MCP adapter; claim nothing about it here.
+  if (ref.source !== 'builtin')
+    return {
+      status: output.failure ? 'error' : 'ok',
+      attributes: traceErrorAttributes(output.failure?.error),
+    };
   const value =
-    ref.source === 'builtin' &&
-    output.value !== null &&
-    typeof output.value === 'object' &&
-    !Array.isArray(output.value)
+    output.value !== null && typeof output.value === 'object' && !Array.isArray(output.value)
       ? output.value
       : undefined;
   const outcome =

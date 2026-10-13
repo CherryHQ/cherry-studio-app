@@ -174,10 +174,14 @@ describe('Pi durable model bridge', () => {
 describe('Pi durable request diagnostics', () => {
   test.each([
     { code: 'stream_disconnected', retryable: true, category: 'network' },
+    { code: 'no_response', retryable: true, category: 'network' },
     { code: 'stream_idle_timeout', retryable: true, category: 'timeout' },
     { code: 'insufficient_quota', status: 429, retryable: false, category: 'quota' },
     { code: 'rate_limit_exceeded', status: 429, retryable: true, category: 'rate_limit' },
+    { code: 'runtime_error', status: 402, retryable: false, category: 'quota' },
     { code: 'runtime_error', status: 401, retryable: false, category: 'authentication' },
+    { code: 'permission_error', retryable: false, category: 'permission' },
+    { code: 'api_error', retryable: false, category: 'provider' },
     { code: 'runtime_error', status: 503, retryable: true, category: 'provider' },
     { code: 'runtime_error', retryable: false, category: 'unknown' },
   ])('records structured $category failures without changing the response', async (failure) => {
@@ -235,6 +239,30 @@ describe('Pi durable request diagnostics', () => {
     });
   });
 
+  test('records no failure facts when the request is cancelled before a stream exists', async () => {
+    const { traces, records } = createTraceRecorder();
+    const bridge = setup(async () => traces.startTrace('pi.generate_content'));
+    const controller = new AbortController();
+    bridge.resolveModel.mockImplementationOnce(async () => {
+      controller.abort();
+      throw Object.assign(new Error('private model configuration'), { code: 'MODEL_UNAVAILABLE' });
+    });
+    await bridge.registerModel(reference);
+    await bridge.models.completeSimple(
+      bridge.getModel(reference)!,
+      { messages: [] },
+      { signal: controller.signal },
+    );
+    expect(records.at(-1)).toMatchObject({
+      status: 'cancelled',
+      attributes: {
+        'gen_ai.request.model': reference.modelId,
+        'gen_ai.provider.id': reference.providerId,
+      },
+    });
+    expect(Object.keys(records.at(-1)!.attributes)).toHaveLength(2);
+  });
+
   test('does not classify an aborted stream as a network failure', async () => {
     const { traces, records } = createTraceRecorder();
     const bridge = setup(async () => traces.startTrace('pi.generate_content'));
@@ -263,8 +291,9 @@ describe('Pi durable request diagnostics', () => {
       status: 'cancelled',
       attributes: { 'gen_ai.response.finish_reason': 'aborted' },
     });
-    expect(records.at(-1)?.attributes).not.toHaveProperty('error.category');
-    expect(records.at(-1)?.attributes).not.toHaveProperty('error.retryable');
+    // A dotted string is a nested path; these attribute names are single keys.
+    expect(records.at(-1)?.attributes).not.toHaveProperty(['error.category']);
+    expect(records.at(-1)?.attributes).not.toHaveProperty(['error.retryable']);
     expect(JSON.stringify(records)).not.toContain('private');
   });
 
