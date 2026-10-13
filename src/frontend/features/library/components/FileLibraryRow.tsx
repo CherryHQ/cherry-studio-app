@@ -7,8 +7,8 @@ import {
   fileEntryPreviewKind,
   FileEntrySkeleton,
   LoadedFileEntryPreview,
-  useOpenFileEntry,
 } from '@/frontend/components/FileEntryPreview';
+import type { ResolvedFile } from '@/shared/contracts/file';
 
 import type { FileLibraryEntry } from '../hooks/useFileEntries';
 
@@ -22,6 +22,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   isSelected,
   item,
   modifiedDate,
+  onOpen,
   onStartSelection,
   onToggle,
 }: {
@@ -29,11 +30,11 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   isSelected: boolean;
   item: FileLibraryEntry;
   modifiedDate: string;
+  onOpen: (file: ResolvedFile) => void;
   onStartSelection: (fileEntryId: string) => void;
   onToggle: (fileEntryId: string) => void;
 }) {
   const { t } = useTranslation();
-  const { openFileEntry } = useOpenFileEntry();
   const description = !item.uri
     ? t('filePreview.unavailable')
     : t('library.modifiedAt', { date: modifiedDate });
@@ -60,7 +61,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
         if (isEditing) {
           onToggle(item.entry.id);
         } else if (item.uri) {
-          openFileEntry({ entry: item.entry, uri: item.uri });
+          onOpen({ entry: item.entry, uri: item.uri });
         }
       }}
       testID={`file-library-entry-${item.entry.id}`}
