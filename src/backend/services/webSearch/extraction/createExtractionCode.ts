@@ -33,6 +33,26 @@ const libraries = [
 export function createExtractionCode(html: string, url: string): string {
   return `${libraries}\nconst input = ${JSON.stringify({ html, url })};
 const page = new DOMParser().parseFromString(input.html, 'text/html');
+// linkedom does not insert omitted HTML document wrappers like a browser does.
+// Normalize before Readability accesses head/body, or those getters can create an empty body
+// beside the real content (or inside the first article element).
+let root = page.documentElement;
+if (root?.tagName !== 'HTML') {
+  root = page.createElement('html');
+  Array.from(page.childNodes).forEach(node => {
+    if (node.nodeType !== 10) root.appendChild(node);
+  });
+  page.appendChild(root);
+}
+const head = Array.from(root.children).find(node => node.tagName === 'HEAD') || page.createElement('head');
+const body = Array.from(root.children).find(node => node.tagName === 'BODY') || page.createElement('body');
+root.prepend(head);
+root.appendChild(body);
+Array.from(root.childNodes).forEach(node => {
+  if (node === head || node === body) return;
+  const parent = ['BASE', 'LINK', 'META', 'TITLE'].includes(node.nodeName) ? head : body;
+  parent.appendChild(node);
+});
 let baseUrl = input.url;
 const baseHref = page.querySelector('base[href]')?.getAttribute('href');
 if (baseHref) {

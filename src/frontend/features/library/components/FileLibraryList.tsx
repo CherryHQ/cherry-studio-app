@@ -24,6 +24,7 @@ import {
 } from '@/frontend/components/Selection';
 import { useBackendModule } from '@/frontend/data';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
+import type { ResolvedFile } from '@/shared/contracts/file';
 
 import {
   type FileLibraryEntry,
@@ -48,6 +49,7 @@ type FileLibraryListProps = {
 type FileLibraryListExtraData = {
   dateFormatter: Intl.DateTimeFormat;
   isEditing: boolean;
+  onOpen: (file: ResolvedFile) => void;
   onStartSelection: (fileEntryId: string) => void;
   onToggle: (fileEntryId: string) => void;
   selectedIds: ReadonlySet<string>;
@@ -76,6 +78,8 @@ export function FileLibraryList({
 }: FileLibraryListProps) {
   const { t, i18n } = useTranslation();
   const file = useBackendModule('file');
+  // Keep the edit request above recycled rows so refreshing the library cannot cancel it.
+  const { openFileEntry } = useOpenFileEntry();
   const bottomInset = useListBottomInset();
   const pendingDeletionIds = usePendingDeletionIds(fileLibrarySelectionScope);
   const { enterEditing, toggleId } = useSelectionActions();
@@ -157,13 +161,24 @@ export function FileLibraryList({
     () => ({
       dateFormatter,
       isEditing,
+      // Each edit is already a new library entry; accepting it only advances the viewer.
+      onOpen: (resolvedFile) => openFileEntry(resolvedFile, () => true),
       onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
       tileSize,
       viewMode,
     }),
-    [dateFormatter, handleStartSelection, isEditing, selectedIds, tileSize, toggleId, viewMode],
+    [
+      dateFormatter,
+      handleStartSelection,
+      isEditing,
+      openFileEntry,
+      selectedIds,
+      tileSize,
+      toggleId,
+      viewMode,
+    ],
   );
 
   const contentContainerStyle = useMemo(
@@ -273,8 +288,16 @@ function fileEntryKeyExtractor(item: FileLibraryEntry) {
 }
 
 function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibraryEntry>) {
-  const { dateFormatter, isEditing, onStartSelection, onToggle, selectedIds, tileSize, viewMode } =
-    extraData as FileLibraryListExtraData;
+  const {
+    dateFormatter,
+    isEditing,
+    onOpen,
+    onStartSelection,
+    onToggle,
+    selectedIds,
+    tileSize,
+    viewMode,
+  } = extraData as FileLibraryListExtraData;
   const isSelected = selectedIds.has(item.entry.id);
 
   return viewMode === 'grid' ? (
@@ -282,6 +305,7 @@ function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibra
       isEditing={isEditing}
       isSelected={isSelected}
       item={item}
+      onOpen={onOpen}
       onStartSelection={onStartSelection}
       onToggle={onToggle}
       size={tileSize}
@@ -293,6 +317,7 @@ function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibra
         isSelected={isSelected}
         item={item}
         modifiedDate={dateFormatter.format(item.entry.updatedAt)}
+        onOpen={onOpen}
         onStartSelection={onStartSelection}
         onToggle={onToggle}
       />
@@ -306,6 +331,7 @@ const FileTile = memo(function FileTile({
   isEditing,
   isSelected,
   item,
+  onOpen,
   onStartSelection,
   onToggle,
   size,
@@ -313,12 +339,12 @@ const FileTile = memo(function FileTile({
   isEditing: boolean;
   isSelected: boolean;
   item: FileLibraryEntry;
+  onOpen: (file: ResolvedFile) => void;
   onStartSelection: (fileEntryId: string) => void;
   onToggle: (fileEntryId: string) => void;
   size: number;
 }) {
   const { t } = useTranslation();
-  const { openFileEntry } = useOpenFileEntry();
 
   return (
     <Pressable
@@ -339,7 +365,7 @@ const FileTile = memo(function FileTile({
         if (isEditing) {
           onToggle(item.entry.id);
         } else if (item.uri) {
-          openFileEntry({ entry: item.entry, uri: item.uri });
+          onOpen({ entry: item.entry, uri: item.uri });
         }
       }}
       style={{
