@@ -260,7 +260,7 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
 @AppStatePolicy('foreground-refresh')
 @DependsOn(['TraceStorageService'])
 export class McpRuntimeService extends BaseService implements McpModule {
-  readonly pluginAuthorizations = new PluginAuthorizationManager();
+  readonly pluginAuthorizations: PluginAuthorizationManager;
   private readonly oauth = new McpOAuthRuntime();
   private readonly oauthCompletions = new Map<string, Promise<McpServer>>();
   private foreground = AppState.currentState === 'active';
@@ -271,6 +271,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
 
   constructor(private readonly traces?: TraceRecorder) {
     super();
+    this.pluginAuthorizations = new PluginAuthorizationManager(undefined, undefined, traces);
   }
 
   async beginOAuth(input: McpOAuthStartInput) {
@@ -1016,6 +1017,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const generation = state.generation;
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.server.id': state.serverId,
+      'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
       'mcp.connection.generation': generation,
     });
     const initPromise: Promise<McpRuntimeClient> = createMcpClient(
@@ -1261,6 +1263,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
             : 'mcp_tool_call_failed',
           error.message,
           error.reason === 'network' || error.reason === 'quota',
+          { pluginReason: error.reason, statusCode: error.statusCode, providerCode: error.code },
         );
       }
       throw error;
@@ -1364,6 +1367,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const generation = state.generation;
     const trace = this.traces?.startTrace('mcp.list_tools', undefined, {
       'mcp.server.id': server.id,
+      'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
       'mcp.connection.generation': generation,
     });
     let rawTools: ListToolsResult['tools'];

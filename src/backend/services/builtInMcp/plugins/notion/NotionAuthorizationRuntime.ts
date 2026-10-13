@@ -12,6 +12,7 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
+import { withoutPluginDiagnostics, type RecordPluginOperation } from '../../pluginDiagnostics';
 import {
   NotionUserCredentialSchema,
   type NotionApplication,
@@ -53,7 +54,10 @@ export class NotionAuthorizationRuntime implements PluginAuthorizationRuntime {
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private readonly failures = new Map<string, PluginErrorReason>();
 
-  constructor(private readonly store: PluginAuthorizationStore) {}
+  constructor(
+    private readonly store: PluginAuthorizationStore,
+    private readonly diagnostics: RecordPluginOperation = withoutPluginDiagnostics,
+  ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operations
@@ -240,7 +244,9 @@ export class NotionAuthorizationRuntime implements PluginAuthorizationRuntime {
         credential.tokens.refreshExpiresAt <= Date.now())
     )
       throw new PluginError('authorization', 'Notion authorization expired.');
-    const tokens = await notionOauth.refresh(credential.application, credential.tokens, signal);
+    const tokens = await this.diagnostics('refresh', () =>
+      notionOauth.refresh(credential.application, credential.tokens, signal),
+    );
     signal.throwIfAborted();
     return { ...credential, tokens };
   }

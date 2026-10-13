@@ -1,4 +1,4 @@
-import { buildAgentSystemPrompt } from '../agentSystemPrompt';
+import { buildAgentSystemPrompt, buildInitialSkillInstructions } from '../agentSystemPrompt';
 import { EMPTY_SKILL_SCOPE, type SkillTurnEntry } from '../skillScope';
 import { EMPTY_TURN_SKILL_PLAN } from '../turnPreparation';
 
@@ -60,7 +60,7 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('omitted entries remain discoverable through search_local_skills');
   });
 
-  it('lists model-invocable Skills with ids and quotes explicit selections', () => {
+  it('lists model-invocable Skills and routes explicit selections to current system sections', () => {
     const prompt = buildAgentSystemPrompt({
       ...base,
       skills: {
@@ -83,10 +83,9 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('## Skills');
     expect(prompt).toContain('- a (skill_id: a): a description');
     expect(prompt).toContain('- b (skill_id: b): b description');
-    expect(prompt).not.toContain('- manual (skill_id');
     expect(prompt).toContain('### Selected Skills');
-    expect(prompt).toContain('#### manual (skill_id: manual; revision abcdef012345)');
-    expect(prompt).toContain('<skill_instructions>\nFollow the manual.\n</skill_instructions>');
+    expect(prompt).toContain('- manual (skill_id: manual)');
+    expect(prompt).not.toContain('Follow the manual.');
     expect(prompt).toContain('read the needed references or templates with `read_skill_file`');
     expect(prompt).toContain('repeat `load_skill` to recover a missing instruction body');
     expect(prompt).not.toContain('without another loading call, file lookup');
@@ -97,6 +96,23 @@ describe('agent system prompt Skills section', () => {
       prompt.indexOf('## Agent Instructions') === -1
         ? Infinity
         : prompt.indexOf('## Agent Instructions'),
+    );
+  });
+
+  it('seeds selected and active bodies as individually replaceable system sections', () => {
+    const selected = { entry: entry('selected'), instructions: 'Selected body.' };
+    const active = { entry: entry('active'), instructions: 'Active body.' };
+    const sections = buildInitialSkillInstructions({
+      scope: EMPTY_SKILL_SCOPE,
+      selected: [selected],
+      active: new Map([['active', active]]),
+    });
+    expect(sections.map(({ key }) => key)).toEqual(['skill:selected', 'skill:active']);
+    expect(sections[0]?.text).toContain(
+      '<skill_instructions>\nSelected body.\n</skill_instructions>',
+    );
+    expect(sections[1]?.text).toContain(
+      '<skill_instructions>\nActive body.\n</skill_instructions>',
     );
   });
 });

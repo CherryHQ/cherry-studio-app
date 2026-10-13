@@ -4,6 +4,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   WebSearchCapability,
   WebSearchProvider,
+  WebSearchProviderOverride,
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
   WebSearchExecutionConfig,
@@ -18,7 +19,7 @@ import { createWebSearchProvider } from './providers/factory';
 import { getProviderForCapability, getRuntimeConfig } from './utils/config';
 import { toWebSearchFailure } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
-import { ApiKeyRotationState } from './utils/provider';
+import { ApiKeyRotationState, assertProviderReady } from './utils/provider';
 import { WebSearchConfigError } from './WebSearchConfigError';
 
 const logger = loggerService.withContext('WebSearchService');
@@ -27,6 +28,8 @@ type RunCapabilityRequest = {
   providerId?: WebSearchProvider['id'];
   capability: WebSearchCapability;
   inputs: string[];
+  /** Unsaved provider settings under check. */
+  override?: WebSearchProviderOverride;
 };
 
 type PreparedWebSearchContext = {
@@ -72,7 +75,12 @@ export class WebSearchService extends BaseService {
 
   private async prepareContext(request: RunCapabilityRequest): Promise<PreparedWebSearchContext> {
     const [provider, runtimeConfig] = await Promise.all([
-      getProviderForCapability(request.providerId, request.capability, this.preferenceService),
+      getProviderForCapability(
+        request.providerId,
+        request.capability,
+        this.preferenceService,
+        request.override,
+      ),
       getRuntimeConfig(this.preferenceService),
     ]);
 
@@ -101,9 +109,16 @@ export class WebSearchService extends BaseService {
     }
 
     return Promise.allSettled(
-      context.inputs.map((input) =>
-        capabilityRunner.call(context.providerDriver, input, context.runtimeConfig, httpOptions),
-      ),
+      context.inputs.map(async (input) => {
+        // Rejects per input, so a missing key or host reads like any other failed lookup.
+        assertProviderReady(context.provider, context.capability);
+        return capabilityRunner.call(
+          context.providerDriver,
+          input,
+          context.runtimeConfig,
+          httpOptions,
+        );
+      }),
     );
   }
 
@@ -180,25 +195,20 @@ export class WebSearchService extends BaseService {
     );
   }
 
+  /** Runs one real lookup with the given settings, so a pass means the Agent's call would work. */
   async checkProvider(
     request: WebSearchCheckProviderRequest,
     httpOptions?: RequestInit,
   ): Promise<WebSearchCheckProviderResponse> {
-    const capability = request.capability ?? 'searchKeywords';
-
     try {
-      const driver = createWebSearchProvider(request.provider, this.apiKeyRotationState);
-      const runner = driver[capability];
-      if (!runner) {
-        return {
-          valid: false,
-          error: `Provider ${request.provider.id} does not implement capability ${capability}`,
-        };
-      }
-
-      const probe = capability === 'searchKeywords' ? 'test query' : 'https://example.com';
-      const runtimeConfig = await getRuntimeConfig(this.preferenceService);
-      await runner.call(driver, probe, runtimeConfig, httpOptions);
+      const context = await this.prepareContext({
+        providerId: request.providerId,
+        capability: request.capability,
+        inputs: [request.capability === 'searchKeywords' ? 'test query' : 'https://example.com'],
+        override: request.override,
+      });
+      const [result] = await this.executeCapability(context, httpOptions);
+      if (result.status === 'rejected') throw result.reason;
       return { valid: true };
     } catch (error) {
       return { valid: false, error: error instanceof Error ? error.message : String(error) };

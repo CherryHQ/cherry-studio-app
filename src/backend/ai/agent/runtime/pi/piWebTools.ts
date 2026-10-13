@@ -101,8 +101,10 @@ export function selectPiClientTools(
   );
 }
 
-/** A cap keeps Anthropic's server loop below its pause limit and bounds per-request search fees. */
+/** Bounds each request's search fees; a long server loop can still pause. */
 const ANTHROPIC_MAX_USES = 5;
+/** A fetched page returns with every later request, so it gets the external reader's page allowance. */
+const ANTHROPIC_FETCH_CONTENT_TOKENS = 4_000;
 
 /** Native tools are injected only into conversation calls that permit tool use. */
 export function applyPiWebTools(
@@ -140,7 +142,14 @@ export function applyPiWebTools(
             ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: ANTHROPIC_MAX_USES }]
             : []),
           ...(fetch
-            ? [{ type: 'web_fetch_20250910', name: 'web_fetch', max_uses: ANTHROPIC_MAX_USES }]
+            ? [
+                {
+                  type: 'web_fetch_20250910',
+                  name: 'web_fetch',
+                  max_uses: ANTHROPIC_MAX_USES,
+                  max_content_tokens: ANTHROPIC_FETCH_CONTENT_TOKENS,
+                },
+              ]
             : []),
         ),
         ...(fetch

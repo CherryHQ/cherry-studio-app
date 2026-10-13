@@ -1,3 +1,5 @@
+import './src/bootstrap/runtime/diagnosticRecording';
+
 /**
  * Expo entry point.
  *

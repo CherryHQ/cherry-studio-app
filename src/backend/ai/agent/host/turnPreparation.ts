@@ -24,8 +24,13 @@ import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseUniqueModelId } from '@/shared/data/types/model';
-import { SKILL_ACTIVE_MAX_CHARACTERS, type SkillActivation } from '@/shared/data/types/skill';
+import {
+  SKILL_ACTIVE_MAX_CHARACTERS,
+  SKILL_ACTIVE_MAX_ENTRIES,
+  type SkillActivation,
+} from '@/shared/data/types/skill';
 import { applyToolApprovalMode } from '@/shared/utils/agentToolApproval';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import {
   createTurnResourceLedger,
@@ -80,6 +85,7 @@ export type TurnPreparationDependencies = {
   agents: AgentDefinitionSource;
   /** The Host's `ask_user_question` response channel; calls correlate by turn id. */
   askUser: AskUserQuestion;
+  appLanguage?(): AppLanguage;
   documentParserMode(): DocumentParserMode;
   files: ManagedFileResolver;
   inferenceModel: AgentInferenceModelResolver;
@@ -440,7 +446,22 @@ export async function prepareResolvedTurn(
   if (parsed.imageGeneration) {
     fail('CAPABILITY_UNSUPPORTED', 'Image generation is unavailable for this Agent.');
   }
-  if ((parsed.skillIds?.length || parsed.skillAction) && !runtime.descriptor.capabilities.tools) {
+  let modelPreflight: RuntimeModelPreflight;
+  try {
+    modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
+  } catch {
+    signal.throwIfAborted();
+    fail(
+      'CAPABILITY_UNSUPPORTED',
+      'The selected model or provider endpoint cannot execute this turn.',
+    );
+  }
+  // Desktop skips the whole function-tool catalog when the model cannot consume it.
+  const canUseTools =
+    agent.mode === 'standard' &&
+    runtime.descriptor.capabilities.tools &&
+    modelPreflight.supportsTools;
+  if ((parsed.skillIds?.length || parsed.skillAction) && !canUseTools) {
     fail('CAPABILITY_UNSUPPORTED', 'Skills are not supported for this Agent.');
   }
 
@@ -457,7 +478,7 @@ export async function prepareResolvedTurn(
   let pluginGuides: TurnPlan['pluginGuides'] = [];
   let skills: TurnSkillPlan = EMPTY_TURN_SKILL_PLAN;
   const toolDiscoveryWarnings: string[] = [];
-  if (agent.mode === 'standard' && runtime.descriptor.capabilities.tools) {
+  if (canUseTools) {
     // Read prior Skill receipts only when this turn can use tools and Skills.
     const receipts = dependencies.skills
       ? latestSkillActivations(
@@ -531,6 +552,26 @@ export async function prepareResolvedTurn(
           (sum, { instructions }) => sum + [...instructions].length,
           0,
         ),
+        instructionLengths: new Map(
+          loaded.map(({ entry, instructions }) => [entry.id, [...instructions].length]),
+        ),
+        ...(dependencies.skillWorkflow && dependencies.skills
+          ? {
+              adaptation: {
+                workflow: dependencies.skillWorkflow,
+                source: dependencies.skills,
+                context: {
+                  agentId: agent.id,
+                  disabledCapabilities: agent.disabledCapabilities,
+                  model: agent.model,
+                  tools: [...systemTools, ...configuredTools],
+                },
+                askUser: dependencies.askUser,
+                language: dependencies.appLanguage?.() ?? 'en-US',
+                replace: expanding.replace,
+              },
+            }
+          : {}),
       });
     }
     if (dependencies.skillWorkflow && dependencies.skills) {
@@ -560,19 +601,6 @@ export async function prepareResolvedTurn(
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
       : undefined;
   const inferenceModel = await resolveInferenceModel();
-  let modelPreflight: RuntimeModelPreflight;
-  try {
-    modelPreflight = await raceAbort(runtime.preflightModel(agent.model), signal);
-  } catch {
-    signal.throwIfAborted();
-    fail(
-      'CAPABILITY_UNSUPPORTED',
-      'The selected model or provider endpoint cannot execute this turn.',
-    );
-  }
-  if (tools.length > 0 && !modelPreflight.supportsTools) {
-    fail('TOOL_CALLING_UNSUPPORTED', 'The selected model does not support native tool calling.');
-  }
   const inferenceSnapshot = createAgentInferenceSnapshot({
     model: inferenceModel,
     options: agent.options,
@@ -722,6 +750,7 @@ async function resolveTurnSkills(
   // removed or disabled Skill simply stops contributing instructions.
   const active = new Map<string, { entry: SkillTurnEntry; instructions: string }>();
   for (const activation of activations.toReversed()) {
+    if (selected.length + active.size >= SKILL_ACTIVE_MAX_ENTRIES) break;
     if (
       !isSkillActivationCurrent(activation, scope) ||
       selected.some(({ entry }) => entry.id === activation.skillId)

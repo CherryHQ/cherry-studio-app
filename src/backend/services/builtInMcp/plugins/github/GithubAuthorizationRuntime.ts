@@ -12,6 +12,7 @@ import type {
   PluginAuthorizationStore,
 } from '../../authorization/pluginAuthorization';
 import type { PluginCredential } from '../../authorization/pluginCredential';
+import { withoutPluginDiagnostics, type RecordPluginOperation } from '../../pluginDiagnostics';
 import { GithubUserCredentialSchema, type GithubUserCredential } from './githubCredentials';
 import { getGithubApplication, githubOauth, type GithubApplication } from './githubOauth';
 
@@ -49,7 +50,10 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
   private readonly resolutions = new Map<string, Promise<PluginCredential>>();
   private readonly failures = new Map<string, PluginErrorReason>();
 
-  constructor(private readonly store: PluginAuthorizationStore) {}
+  constructor(
+    private readonly store: PluginAuthorizationStore,
+    private readonly diagnostics: RecordPluginOperation = withoutPluginDiagnostics,
+  ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operations
@@ -238,7 +242,9 @@ export class GithubAuthorizationRuntime implements PluginAuthorizationRuntime {
         credential.tokens.refreshExpiresAt <= Date.now())
     )
       throw new PluginError('authorization', 'GitHub authorization expired.');
-    const tokens = await githubOauth.refresh(credential.application, credential.tokens, signal);
+    const tokens = await this.diagnostics('refresh', () =>
+      githubOauth.refresh(credential.application, credential.tokens, signal),
+    );
     signal.throwIfAborted();
     return { ...credential, tokens };
   }

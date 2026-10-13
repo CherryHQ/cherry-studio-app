@@ -11,6 +11,7 @@ import type {
 } from '@/backend/ai/agent';
 import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
+import type { PluginErrorReason } from '@/shared/contracts/plugins';
 
 import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
@@ -90,7 +91,16 @@ export class McpRuntimeToolError extends Error implements RuntimeError {
   readonly code: McpRuntimeToolErrorCode;
   readonly retryable: boolean;
 
-  constructor(code: McpRuntimeToolErrorCode, message: string, retryable: boolean) {
+  constructor(
+    code: McpRuntimeToolErrorCode,
+    message: string,
+    retryable: boolean,
+    public readonly context?: {
+      pluginReason: PluginErrorReason;
+      statusCode?: number;
+      providerCode?: number;
+    },
+  ) {
     super(message);
     this.name = 'McpRuntimeToolError';
     this.code = code;
@@ -203,6 +213,7 @@ export function createMcpRuntimeTools(
           call,
           app: descriptor.app,
           connectionKey: descriptor.connectionKey,
+          pluginId: descriptor.pluginId,
           effect,
           endpointUrl,
           generation,
@@ -223,6 +234,7 @@ async function executeMcpRuntimeTool(input: {
   connectionKey?: string;
   call: RuntimeToolCall;
   app?: McpExecutableToolDescriptor['app'];
+  pluginId?: string;
   effect: McpExecutableToolDescriptor['effect'];
   endpointUrl: string | null;
   generation: number;
@@ -235,6 +247,7 @@ async function executeMcpRuntimeTool(input: {
   const { call } = input;
   const trace = input.traces?.startTrace('mcp.call_tool', undefined, {
     'mcp.server.id': input.ref.serverId,
+    'plugin.id': input.pluginId,
     'mcp.connection.generation': input.generation,
     'tool.name': input.ref.rawToolName,
     'tool.call.id': call.toolCallId,

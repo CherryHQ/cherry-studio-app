@@ -6,15 +6,12 @@ import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types
 
 import { requestWebSearchJson, type WebSearchJsonRequester } from '../../http/requestWebSearchJson';
 import type { ApiKeyRotationState } from '../../utils/provider';
-import { resolveProviderApiHost } from '../../utils/provider';
+import { assertProviderReady, resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
-import { WebSearchConfigError } from '../../WebSearchConfigError';
 
 const MAX_HTTP_ERROR_TEXT_LENGTH = 500;
 
 export abstract class BaseWebSearchProvider {
-  protected readonly requiresApiKey: boolean = true;
-
   constructor(
     protected readonly provider: WebSearchProvider,
     private readonly apiKeyRotationState: ApiKeyRotationState,
@@ -23,13 +20,7 @@ export abstract class BaseWebSearchProvider {
 
   /** Configuration-only check: never consumes a key or makes a network request. */
   validateConfiguration(capability: WebSearchCapability): void {
-    resolveProviderApiHost(this.provider, capability);
-    if (this.requiresApiKey && !this.provider.apiKeys.some((key) => key.trim())) {
-      throw new WebSearchConfigError(
-        'api_key_missing',
-        `API key is required for provider ${this.provider.id}`,
-      );
-    }
+    assertProviderReady(this.provider, capability);
   }
 
   protected resolveApiUrl(capability: WebSearchCapability, path: string): string {

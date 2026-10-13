@@ -142,6 +142,8 @@ export type RuntimeToolResult = {
    * Never inferred from value, accepted from MCP, or duplicated in model-facing result JSON.
    */
   instructions?: { key: string; text: string };
+  /** Preserve an already committed effect's receipt if its system instruction update fails. */
+  instructionsFailureValue?: RuntimeJsonValue;
   /** Trusted callback metadata; never inferred from the JSON inside value. */
   failure?: {
     error: RuntimeError;

@@ -57,6 +57,10 @@ export const PiConfigurationSchema = z.object({
   kind: z.enum(['language', 'image']).default('language'),
   model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
   instructions: z.string(),
+  initialInstructions: z
+    .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+    .max(64)
+    .default([]),
   options: RuntimeOptionsSchema,
   tools: z.array(PiToolBlueprintSchema),
   webTools: z
@@ -189,6 +193,44 @@ export function piDurableUsage(usage: Usage): RuntimeUsage {
   };
 }
 
+const ContinuationUsageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  totalTokens: z.number(),
+  noCacheTokens: z.number(),
+  cacheReadTokens: z.number(),
+  cacheWriteTokens: z.number(),
+  reasoningTokens: z.number().optional(),
+});
+const CONTINUATION_USAGE_DIAGNOSTIC = 'cherry.continuation-usage';
+
+/** Pi budgets context from the last request, while Cherry counts every billed continuation. */
+export function withPiContinuationUsage(
+  message: AssistantMessage,
+  lastUsage: Usage,
+): AssistantMessage {
+  return {
+    ...message,
+    usage: lastUsage,
+    diagnostics: [
+      ...(message.diagnostics ?? []),
+      {
+        type: CONTINUATION_USAGE_DIAGNOSTIC,
+        timestamp: Date.now(),
+        details: piDurableUsage(message.usage) as JsonObject,
+      },
+    ],
+  };
+}
+
+function responseUsage(message: AssistantMessage): RuntimeUsage {
+  const details = message.diagnostics?.find(
+    ({ type }) => type === CONTINUATION_USAGE_DIAGNOSTIC,
+  )?.details;
+  const total = ContinuationUsageSchema.safeParse(details);
+  return total.success ? total.data : piDurableUsage(message.usage);
+}
+
 /** Bound previews of growing tool inputs; completed results settle into the Cherry transcript. */
 function toolInputPreview(
   fields: { textField: string; nameField?: string },
@@ -236,8 +278,9 @@ export function projectPiTurn(options: {
     if (!streaming) {
       const measured = piDurableUsage(message.usage);
       if ((measured.inputTokens ?? 0) > 0) contextTokens = measured.inputTokens;
-      for (const key of Object.keys(measured) as (keyof RuntimeUsage)[])
-        usage[key] = (usage[key] ?? 0) + (measured[key] ?? 0);
+      const billed = responseUsage(message);
+      for (const key of Object.keys(billed) as (keyof RuntimeUsage)[])
+        usage[key] = (usage[key] ?? 0) + (billed[key] ?? 0);
     }
     if (message.stopReason === 'error')
       error = {

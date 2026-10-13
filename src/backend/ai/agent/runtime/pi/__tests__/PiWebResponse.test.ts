@@ -285,6 +285,152 @@ test('keeps source facts ahead of a pending tool call', () => {
   expect(readPiWebResult(settled)?.replayIndex).toBe(1);
 });
 
+/** A fetch deferred behind a function call, as the request that returns the function result. */
+function deferredAnthropicFetch() {
+  const capture = new PiWebResponse('anthropic-replay', 'anthropic');
+  const blocks = [
+    { type: 'thinking', thinking: '', signature: '' },
+    { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_fetch', input: {} },
+    { type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} },
+  ];
+  blocks.forEach((content_block, index) =>
+    capture.observe({ type: 'content_block_start', index, content_block }),
+  );
+  capture.observe({
+    type: 'content_block_delta',
+    index: 0,
+    delta: { type: 'thinking_delta', thinking: 'Read the page.' },
+  });
+  capture.observe({
+    type: 'content_block_delta',
+    index: 0,
+    delta: { type: 'signature_delta', signature: 'signed-thinking' },
+  });
+  for (const partial_json of ['{"url":', '"https://example.com/page"}'])
+    capture.observe({
+      type: 'content_block_delta',
+      index: 1,
+      delta: { type: 'input_json_delta', partial_json },
+    });
+  capture.observe({ type: 'content_block_stop', index: 1 });
+  const settled = capture.settle({
+    ...message(''),
+    api: 'anthropic-messages',
+    content: [
+      { type: 'thinking', thinking: 'Read the page.', thinkingSignature: 'signed-thinking' },
+      { type: 'toolCall', id: 'toolu_1', name: 'run_js', arguments: {} },
+    ],
+  });
+  return {
+    settled,
+    wire: { api: 'anthropic-messages', id: 'test', provider: 'test' } as Model<Api>,
+    payload: {
+      tools: [{ type: 'web_fetch_20250910', name: 'web_fetch' }],
+      messages: [
+        { role: 'assistant', content: [settled.content.find((block) => block.type === 'text')] },
+        {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: 'done' }],
+        },
+      ] as unknown[],
+    },
+  };
+}
+
+test('restores streamed Anthropic tool input and signed thinking only for its original model', () => {
+  const { settled, wire, payload } = deferredAnthropicFetch();
+  expect(applyPiWebReplay(payload, wire, [settled])).toEqual({
+    ...payload,
+    messages: [
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'Read the page.', signature: 'signed-thinking' },
+          {
+            type: 'server_tool_use',
+            id: 'srvtoolu_1',
+            name: 'web_fetch',
+            input: { url: 'https://example.com/page' },
+          },
+          { type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} },
+        ],
+      },
+      payload.messages[1],
+    ],
+  });
+  expect(applyPiWebReplay(payload, { ...wire, id: 'other-model' }, [settled])).toEqual(payload);
+});
+
+test('omits a deferred Anthropic call that can no longer run and keeps one answered later', () => {
+  const { settled, wire, payload } = deferredAnthropicFetch();
+  const next = { role: 'user', content: [{ type: 'text', text: 'Next question' }] };
+  for (const stranded of [
+    // Web tools withdrawn: a tool-free final request, or a failed lookup earlier in the turn.
+    { ...payload, tools: [{ name: 'web_fetch', input_schema: {} }] },
+    // The turn ended before the function result was returned to the provider.
+    { ...payload, messages: [...payload.messages, next] },
+  ])
+    expect(applyPiWebReplay(stranded, wire, [settled])).toMatchObject({
+      messages: [
+        {
+          content: [
+            { type: 'thinking', thinking: 'Read the page.', signature: 'signed-thinking' },
+            { type: 'tool_use', id: 'toolu_1', name: 'run_js', input: {} },
+          ],
+        },
+        ...stranded.messages.slice(1),
+      ],
+    });
+
+  const resumed = new PiWebResponse('anthropic-resumed', 'anthropic');
+  const fetched = {
+    type: 'web_fetch_tool_result',
+    tool_use_id: 'srvtoolu_1',
+    content: { type: 'web_fetch_result', url: 'https://example.com/page', content: {} },
+  };
+  resumed.observe({ type: 'content_block_start', index: 0, content_block: fetched });
+  const answer = resumed.settle({ ...message('Read it.'), api: 'anthropic-messages' });
+  const history = {
+    messages: [
+      ...payload.messages,
+      { role: 'assistant', content: answer.content.filter((block) => block.type === 'text') },
+      next,
+    ],
+  };
+  const replayed = applyPiWebReplay(history, wire, [settled, answer]) as typeof history;
+  expect(JSON.stringify(replayed.messages[0])).toContain('srvtoolu_1');
+  expect(replayed.messages[2]).toMatchObject({ content: [fetched] });
+});
+
+test('keeps source facts when Anthropic output ends inside a tool call', () => {
+  const capture = new PiWebResponse('anthropic-truncated', 'anthropic');
+  capture.observe({
+    type: 'content_block_start',
+    index: 0,
+    content_block: {
+      type: 'web_search_tool_result',
+      tool_use_id: 'srvtoolu_1',
+      content: [{ type: 'web_search_result', url: 'https://example.com/a', title: 'A' }],
+    },
+  });
+  capture.observe({
+    type: 'content_block_start',
+    index: 1,
+    content_block: { type: 'tool_use', id: 'toolu_1', name: 'write_file', input: {} },
+  });
+  capture.observe({
+    type: 'content_block_delta',
+    index: 1,
+    delta: { type: 'input_json_delta', partial_json: '{"path":"a.md","content":"hel' },
+  });
+  capture.observe({ type: 'content_block_stop', index: 1 });
+  const web = readPiWebResult(
+    capture.settle({ ...message(''), api: 'anthropic-messages', stopReason: 'length' }),
+  );
+  expect(web?.sources).toHaveLength(1);
+  expect(web?.anthropicContent).toBeUndefined();
+});
+
 test.each(['char_location', 'page_location'])(
   'links Anthropic fetched-document %s citations to their source',
   (type) => {

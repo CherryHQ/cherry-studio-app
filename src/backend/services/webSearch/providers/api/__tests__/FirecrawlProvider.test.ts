@@ -77,8 +77,18 @@ describe('FirecrawlProvider', () => {
     const provider = new FirecrawlProvider(
       createProvider({
         capabilities: [
-          { feature: 'searchKeywords', apiHost: 'https://api.firecrawl.example' },
-          { feature: 'fetchUrls', apiHost: 'https://api.firecrawl.example' },
+          {
+            feature: 'searchKeywords',
+            requiresApiHost: true,
+            requiresApiKey: false,
+            apiHost: 'https://api.firecrawl.example',
+          },
+          {
+            feature: 'fetchUrls',
+            requiresApiHost: true,
+            requiresApiKey: false,
+            apiHost: 'https://api.firecrawl.example',
+          },
         ],
       }),
       new ApiKeyRotationState(),
@@ -160,7 +170,14 @@ function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchPr
     name: 'Firecrawl',
     type: 'api',
     apiKeys: ['firecrawl-key'],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.firecrawl.example' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.firecrawl.example',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

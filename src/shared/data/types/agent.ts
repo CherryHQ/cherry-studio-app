@@ -3,11 +3,11 @@ import * as z from 'zod';
 import { AgentCapabilitySchema } from '@/shared/data/types/agentCapability';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 
-/** Minimal Agents have a fixed chat-only capability boundary. */
+/** Minimal Agents exclude app tools; provider-native web tools follow the web policy. */
 export const AgentModeSchema = z
   .enum(['standard', 'minimal'])
   .describe(
-    'standard allows configured tools and plugins; minimal supports only chat and direct image understanding.',
+    'standard allows configured tools and plugins; minimal supports chat, direct image understanding and available provider-native web tools, without app tools, Skills or plugins.',
   );
 export type AgentMode = z.infer<typeof AgentModeSchema>;
 export const DEFAULT_AGENT_MODE: AgentMode = 'standard';

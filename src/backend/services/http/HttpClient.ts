@@ -34,14 +34,18 @@ export interface DecodedHttpError {
 export type HttpErrorDecoder = (response: HttpErrorResponse) => DecodedHttpError | undefined;
 
 interface HttpRequestBase {
-  /** Reject redirects for credential exchanges bound to one official endpoint. */
-  readonly redirect?: 'error';
+  /** Public page downloads must not inherit the native cookie jar. */
+  readonly credentials?: 'omit';
+  /** Reject redirects, or let a domain inspect and validate each hop itself. */
+  readonly redirect?: 'error' | 'manual';
   readonly errorDecoder?: HttpErrorDecoder;
   readonly headers?: HttpHeaders;
   /** Positive response-size limit in bytes. Omit when the domain has no explicit cap. */
   readonly maxResponseBytes?: number;
   /** Relative API path beginning with `/`. Absolute URLs are rejected. */
   readonly path: string;
+  /** Redacted route for logs when the real path contains a capability or other secret. */
+  readonly logPath?: string;
   readonly query?: HttpQuery;
   /** Omit for the default JSON-compatible Axios response handling. */
   readonly responseType?: HttpResponseType;
