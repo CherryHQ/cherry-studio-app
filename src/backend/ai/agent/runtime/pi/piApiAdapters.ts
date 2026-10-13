@@ -114,14 +114,28 @@ type PiStreamBinding = {
   sessionId?: string;
 };
 
+/** Native transport failures carry no code or status; an aborted request is not one. */
+function withTransportCode(error: unknown, init: RequestInit | undefined, code: string): unknown {
+  if (error instanceof Error && !init?.signal?.aborted && !('code' in error))
+    Object.assign(error, { code });
+  return error;
+}
+
 /**
  * A body that fails after its headers arrived is a dropped connection. The native message is
  * OS-localized and carries no status, so Pi's retry policy cannot classify it by text; mark it
- * here. An aborted request stays terminal through its stop reason.
+ * here. An aborted request stays terminal through its stop reason. A request that never receives
+ * headers keeps its existing retry classification and only gains a code, which Pi reads from the
+ * cause of the SDK's connection error.
  */
 function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
   return async (input, init) => {
-    const response = await fetch(input, init);
+    let response: Response;
+    try {
+      response = await fetch(input, init);
+    } catch (error) {
+      throw withTransportCode(error, init, 'connection_failed');
+    }
     const source = response.ok ? response.body : null;
     if (!source) return response;
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -134,8 +148,7 @@ function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
             if (done) controller.close();
             else controller.enqueue(value);
           } catch (error) {
-            if (error instanceof Error && !init?.signal?.aborted && !('code' in error))
-              Object.assign(error, { code: 'stream_disconnected' });
+            withTransportCode(error, init, 'stream_disconnected');
             controller.error(
               error instanceof Error ? Object.assign(error, { retryable: true }) : error,
             );

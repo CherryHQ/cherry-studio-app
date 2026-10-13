@@ -25,6 +25,7 @@ function errorCategory(facts: TraceAttributes): string {
   if (['stream_idle_timeout', 'etimedout', 'request_timeout'].includes(code)) return 'timeout';
   if (
     [
+      'connection_failed',
       'stream_disconnected',
       'econnreset',
       'econnrefused',
