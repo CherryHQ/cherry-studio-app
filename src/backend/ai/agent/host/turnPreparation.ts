@@ -521,14 +521,7 @@ export async function prepareResolvedTurn(
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
     }
-    skills = await resolveTurnSkills(
-      dependencies,
-      agent,
-      parsed.skillIds ?? [],
-      [...systemTools, ...configuredTools],
-      receipts,
-      signal,
-    );
+    skills = await resolveTurnSkills(dependencies, agent, parsed.skillIds ?? [], receipts, signal);
     const expanding = createExpandingSkillScope(skills.scope);
     skills = {
       ...skills,
@@ -560,12 +553,8 @@ export async function prepareResolvedTurn(
               adaptation: {
                 workflow: dependencies.skillWorkflow,
                 source: dependencies.skills,
-                context: {
-                  agentId: agent.id,
-                  disabledCapabilities: agent.disabledCapabilities,
-                  model: agent.model,
-                  tools: [...systemTools, ...configuredTools],
-                },
+                context: { agentId: agent.id },
+                tools: [...systemTools, ...configuredTools],
                 askUser: dependencies.askUser,
                 language: dependencies.appLanguage?.() ?? 'en-US',
                 replace: expanding.replace,
@@ -580,12 +569,7 @@ export async function prepareResolvedTurn(
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,
-          context: {
-            agentId: agent.id,
-            disabledCapabilities: agent.disabledCapabilities,
-            model: agent.model,
-            tools: [...systemTools, ...configuredTools],
-          },
+          context: { agentId: agent.id },
           installIntent: skills.findAndInstall === true,
           include: expanding.include,
         }),
@@ -697,7 +681,6 @@ async function resolveTurnSkills(
   dependencies: Pick<TurnPreparationDependencies, 'skills'>,
   agent: AgentDefinition,
   skillIds: readonly string[],
-  tools: readonly RuntimeTool[],
   activations: readonly SkillActivation[],
   signal: AbortSignal,
 ): Promise<TurnSkillPlan> {
@@ -709,16 +692,7 @@ async function resolveTurnSkills(
   }
   let scope: SkillTurnScope;
   try {
-    scope = await raceAbort(
-      dependencies.skills.resolve({
-        agentId: agent.id,
-        disabledCapabilities: agent.disabledCapabilities,
-        model: agent.model,
-        tools,
-        signal,
-      }),
-      signal,
-    );
+    scope = await raceAbort(dependencies.skills.resolve({ agentId: agent.id, signal }), signal);
   } catch (error) {
     signal.throwIfAborted();
     if (skillIds.length > 0) {

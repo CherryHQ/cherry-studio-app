@@ -36,6 +36,14 @@ export function rememberFeedback(reportId: string, description: string): void {
   ]);
 }
 
+export function forgetFeedback(reportId: string): void {
+  const records = feedbackHistoryRecords(cacheService.getPersist(FEEDBACK_HISTORY_KEY));
+  cacheService.setPersist(
+    FEEDBACK_HISTORY_KEY,
+    records.filter((entry) => entry.reportId !== reportId),
+  );
+}
+
 export function rememberFeedbackStatus(
   reportId: string,
   result: DiagnosticReportStatusResult,

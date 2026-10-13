@@ -3,12 +3,7 @@ import type { BundledSkillDefinition } from './index';
 export const structuredNotesSkill: BundledSkillDefinition = {
   name: 'structured-notes',
   revision: 2,
-  requirements: {
-    platforms: null,
-    execution: 'none',
-    builtInTools: [],
-    pluginTools: [],
-  },
+  requiredTools: [],
   workflowScope: 'Turns pasted or attached text into structured notes; instructions only.',
   files: {
     'SKILL.md': `---

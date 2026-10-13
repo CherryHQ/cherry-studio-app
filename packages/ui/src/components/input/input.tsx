@@ -56,6 +56,7 @@ function NativeInput({
   autoCapitalize = 'sentences',
   autoCorrect = true,
   autoFocus = false,
+  className,
   disabled,
   invalid,
   keyboardType,
@@ -97,6 +98,7 @@ function NativeInput({
       : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
     invalid &&
       'border-error ios:outline-error ios:focus:outline-error android:border-error android:focus:border-error',
+    className,
   );
 
   return (

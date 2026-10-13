@@ -3,12 +3,7 @@ import type { BundledSkillDefinition } from './index';
 export const researchBriefSkill: BundledSkillDefinition = {
   name: 'research-brief',
   revision: 2,
-  requirements: {
-    platforms: null,
-    execution: 'none',
-    builtInTools: ['web_search', 'web_fetch'],
-    pluginTools: [],
-  },
+  requiredTools: ['web_search', 'web_fetch'],
   workflowScope: 'Searches the web, reads the most relevant pages, and writes a sourced brief.',
   files: {
     'SKILL.md': `---

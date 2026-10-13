@@ -1,8 +1,6 @@
 import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-export { effectiveSkillStatus, mergeSkillReasons } from '@/frontend/utils/skillStatus';
-
 /** Overlay unsaved toggles on the current Agent list, including newly installed Skills. */
 export function createAgentSkillBindingDraft(
   skills: readonly SkillListItem[],
