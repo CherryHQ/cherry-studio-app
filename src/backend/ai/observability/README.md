@@ -19,8 +19,9 @@ handles prevent concurrent Sessions from adopting each other's spans.
 
 Current producers are:
 
-- `MobileAgentHost`: one `ai.turn` root per reserved turn, with Agent, Session, turn, and assistant
-  message ids and terminal outcome, including terminal persistence failures.
+- `DurableAgentHost`: one `pi.execute_tool` trace per tool execution, with Agent, Session, turn,
+  tool name and call ids. Returned failures and thrown errors retain safe error facts; cancellation
+  remains a distinct outcome. Export accepts these records as well as legacy `ai.turn` records.
 - Pi: conversation provider requests as `pi.generate_content`, including compaction. Observation
   uses the existing result promise and does not read, tee, or replace the response stream.
 - MCP: `mcp.connect` for each new connection, `mcp.list_tools` for each complete catalog request
@@ -42,9 +43,10 @@ Categories distinguish timeout, cancellation, HTTP rejection, protocol errors, s
 codes, and tool-reported `isError` results. Unknown failures remain unknown; messages are not parsed
 to guess a cause. Transport responses and caller-visible errors keep their existing behavior.
 
-Tool/approval timing remains in message runtime statistics, and token usage remains in the existing
-invocation ledger. Diagnostics do not duplicate those records or instrument generic text/image
-generation, model listing/checks, context preparation, approvals, or built-in tools. This is a
+Detailed tool/approval timing remains in message runtime statistics, and token usage remains in the
+existing invocation ledger. Tool traces record execution boundaries and outcomes, including built-in
+tools, without their arguments or results. Diagnostics do not instrument generic text/image
+generation, model listing/checks, context preparation, or approvals. This is a
 request-failure diagnostic surface, not a second analytics pipeline.
 
 Span records contain ids, timestamps, elapsed time, model/provider/tool identifiers, catalog counts,

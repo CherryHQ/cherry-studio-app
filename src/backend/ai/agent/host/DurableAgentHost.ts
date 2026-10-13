@@ -41,6 +41,7 @@ import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
+import { traceErrorAttributes } from '../../observability';
 import {
   raceAbort,
   type AgentRuntime,
@@ -917,14 +918,14 @@ export class DurableAgentHost implements AgentProtocol {
             sessionId: identity.sessionId,
             turnId: identity.turnId,
           },
-          { 'tool.name': tool.providerName },
+          { 'tool.name': tool.providerName, 'tool.call.id': call.toolCallId },
         );
         try {
           const output = await tool.execute(call);
-          span?.end(output.failure ? 'error' : 'ok');
+          span?.end(output.failure ? 'error' : 'ok', traceErrorAttributes(output.failure?.error));
           return output;
         } catch (error) {
-          span?.end(call.signal.aborted ? 'cancelled' : 'error');
+          span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           throw error;
         }
       },

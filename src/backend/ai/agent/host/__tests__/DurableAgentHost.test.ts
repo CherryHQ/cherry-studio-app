@@ -7,12 +7,15 @@ import type {
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
   FakeRuntime,
   type DurableAgentRuntime,
   type RuntimeConversationEvent,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
+  type RuntimeTool,
+  type RuntimeToolResult,
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import { DurableAgentHost } from '../DurableAgentHost';
@@ -271,6 +274,82 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     execution: () => execution,
   };
 }
+
+describe('durable tool diagnostics', () => {
+  test.each(['returned', 'thrown', 'cancelled'] as const)(
+    'retains safe facts for a %s tool failure without changing the result',
+    async (outcome) => {
+      const { traces, records } = createTraceRecorder();
+      const controller = new AbortController();
+      const failure: NonNullable<RuntimeToolResult['failure']> = {
+        scope: 'tool',
+        error: {
+          name: 'HttpError',
+          code: 'page_http_error',
+          message: 'private failure message',
+          retryable: false,
+          origin: 'tool',
+          context: { statusCode: 403, responseBody: 'private response body' },
+        },
+      };
+      const output: RuntimeToolResult = { value: 'private tool result', artifacts: [], failure };
+      const error = Object.assign(new Error(failure.error.message), failure.error);
+      const tool: RuntimeTool = {
+        ref: { source: 'builtin', capabilityId: 'fetch_url' },
+        providerName: 'fetch_url',
+        displayName: 'Fetch URL',
+        description: '',
+        inputSchema: { type: 'object' },
+        approval: 'auto',
+        execute: async () => {
+          if (outcome === 'cancelled') controller.abort();
+          if (outcome !== 'returned') throw error;
+          return output;
+        },
+      };
+      const state = fixture({
+        traces,
+        tools: { getTools: async () => [tool] },
+      });
+      const turn = await state.reserve('running');
+      await state.host.initialize();
+      try {
+        const resolved = await state
+          .execution()!
+          .resolveTool(turn.identity, tool.ref, controller.signal);
+        const result = resolved.execute({
+          input: { url: 'https://private.example' },
+          signal: controller.signal,
+          toolCallId: 'call-1',
+          turnId: turn.identity.turnId,
+        });
+        if (outcome === 'returned') await expect(result).resolves.toBe(output);
+        else await expect(result).rejects.toBe(error);
+        expect(records.at(-1)).toMatchObject({
+          name: 'pi.execute_tool',
+          status: outcome === 'cancelled' ? 'cancelled' : 'error',
+          context: {
+            agentId: state.agentId,
+            sessionId: state.sessionId,
+            turnId: turn.identity.turnId,
+          },
+          attributes: {
+            'tool.name': 'fetch_url',
+            'tool.call.id': 'call-1',
+            'error.type': 'HttpError',
+            'error.code': 'page_http_error',
+            'error.origin': 'tool',
+            'error.retryable': false,
+            'http.status_code': 403,
+          },
+        });
+        expect(JSON.stringify(records)).not.toMatch(/private|responseBody/);
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+});
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
   test('interrupts a reservation when observation fails before native admission', async () => {

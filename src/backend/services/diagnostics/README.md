@@ -62,9 +62,10 @@ and a stable WebView source prevent status writes from reloading the page.
 
 - Warning/error summaries: timestamp, module, fixed message templates and allowlisted error facts.
   Arbitrary messages, stacks, causes and nested payloads are excluded before writing to disk.
-- Model and MCP request metadata from the existing `TraceStorageService`: correlation identifiers,
-  operation, timing, outcome, status/error codes and plugin authorization steps. Capture runs
-  during ordinary use; there is no developer-mode setting or separate Agent event recorder.
+- Model, Agent tool execution and MCP request metadata from the existing `TraceStorageService`:
+  correlation identifiers, operation, timing, outcome, status/error codes and plugin authorization
+  steps. Capture runs during ordinary use; there is no developer-mode setting or separate Agent
+  event recorder.
 - System summary: app/build/runtime version, device model, OS and locale. No device name or unique
   hardware identifier is read. Plugin configuration includes server/plugin identifiers, enabled
   state, authorization method and disabled-tool count; no names, accounts, endpoints or credentials.

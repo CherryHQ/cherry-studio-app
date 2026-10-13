@@ -168,7 +168,7 @@ export function projectDiagnosticTrace(value: unknown) {
   if (!parsed.success) return undefined;
   const record = parsed.data;
   if (
-    !/^(?:ai\.turn|pi\.generate_content|mcp\.(?:connect|list_tools|call_tool)|plugin\.[a-z_]+)$/.test(
+    !/^(?:ai\.turn|pi\.(?:generate_content|execute_tool)|mcp\.(?:connect|list_tools|call_tool)|plugin\.[a-z_]+)$/.test(
       record.name,
     )
   )
