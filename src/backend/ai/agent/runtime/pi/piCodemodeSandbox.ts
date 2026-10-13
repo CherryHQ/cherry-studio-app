@@ -1,3 +1,4 @@
+import { fnv1a32 } from '@cherrystudio/universal/utils/fnv1a';
 import { CodemodeSandboxBase, PRELUDE_SOURCE } from '@earendil-works/pi-codemode/native';
 
 import type { RuntimeScriptSandbox } from '../durableTypes';
@@ -22,6 +23,14 @@ export const PI_CODEMODE_VM_SOURCE = `(function (emit, clock, input, engine) {
   delete globalThis.WeakRef;
   delete globalThis.FinalizationRegistry;
   function post(message) { emit(stringify(message)); }
+  // QuickJS stacks hold frames only; upstream reports a script error by its stack, so lead with the head.
+  function describe(error) {
+    if (!error || typeof error !== "object") return stringify({ message: String(error) });
+    const head = error.message ? error.name + ": " + error.message : String(error.name);
+    const stack = typeof error.stack === "string" ? error.stack.trimEnd() : "";
+    return stringify({ name: error.name, message: error.message,
+      stack: !stack || stack.startsWith(head) ? stack || head : head + "\\n" + stack });
+  }
   function bridge(kind, a, b, c) {
     if (finished) return;
     if (kind === "call" || kind === "global") {
@@ -51,9 +60,7 @@ export const PI_CODEMODE_VM_SOURCE = `(function (emit, clock, input, engine) {
     api.run(evaluate("(async (tools, console) => {" + data.code + "\\n})"));
   } catch (error) {
     finished = true;
-    post({ type: "done", ok: false, error: stringify({
-      name: error && error.name, message: String(error), stack: error && error.stack
-    }), during: { seq: current, issued } });
+    post({ type: "done", ok: false, error: describe(error), during: { seq: current, issued } });
   }
   return {
     deliver(json) {
@@ -84,16 +91,7 @@ export const PI_CODEMODE_VM_SOURCE = `(function (emit, clock, input, engine) {
   };
 })`;
 
-function sourceFingerprint() {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < PI_CODEMODE_VM_SOURCE.length; index++) {
-    hash ^= PI_CODEMODE_VM_SOURCE.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16);
-}
-
-const FINGERPRINT = sourceFingerprint();
+const FINGERPRINT = fnv1a32(PI_CODEMODE_VM_SOURCE).toString(16);
 const MEMORY_BYTES = 64 * 1024 * 1024;
 
 export function createPiCodemodeSandbox(
@@ -106,7 +104,6 @@ export function createPiCodemodeSandbox(
       throw new Error('The native Code Mode bridge requires a replayable run.');
     const controller = new AbortController();
     let channel: Awaited<ReturnType<RuntimeScriptSandbox['startBridge']>> | undefined;
-    const pending: string[] = [];
     const fail = (error: unknown) => {
       if (!controller.signal.aborted)
         events.failure({
@@ -118,7 +115,7 @@ export function createPiCodemodeSandbox(
       setup: PI_CODEMODE_VM_SOURCE,
       data: JSON.stringify({ ...data, fingerprint: `${FINGERPRINT} ${sandbox!.fingerprint}` }),
       clock: data.deterministic,
-      limits: { timeoutMs: 0, memoryBytes: MEMORY_BYTES, maxResultBytes: 0, maxLogBytes: 0 },
+      memoryBytes: MEMORY_BYTES,
       signal: controller.signal,
       onMessage(message) {
         try {
@@ -130,7 +127,6 @@ export function createPiCodemodeSandbox(
     })
       .then((opened) => {
         channel = opened;
-        for (const message of pending.splice(0)) opened.post(message);
         void opened.result.then((error) => {
           if (error) fail(error);
         }, fail);
@@ -138,15 +134,15 @@ export function createPiCodemodeSandbox(
       .catch(fail);
     return {
       post(message) {
-        const json = JSON.stringify(message);
-        if (channel) channel.post(json);
-        else pending.push(json);
+        // A reply answers a VM call, and the VM cannot call before its channel opened.
+        if (!channel) throw new Error('The Code Mode bridge received a reply before it started.');
+        channel.post(JSON.stringify(message));
       },
       async stop() {
+        // Aborting cancels the native run; its result settles only after native cleanup.
         controller.abort();
-        pending.length = 0;
         await starting;
-        await channel?.stop();
+        await channel?.result.catch(() => undefined);
       },
     };
   });

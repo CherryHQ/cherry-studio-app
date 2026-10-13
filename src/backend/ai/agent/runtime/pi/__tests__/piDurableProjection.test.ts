@@ -165,6 +165,73 @@ describe('Pi turn projection', () => {
     expect(turn.parts[1]).toMatchObject({ type: 'file', name: 'saved.txt' });
   });
 
+  test('a failed script keeps the JavaScript capability and reports the error its output ends with', () => {
+    const scriptText = `Script failed\nOutput:\n${'line\n'.repeat(100)}Script error:\nSyntaxError: unexpected token`;
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata: {
+        ...metadata,
+        tools: [
+          {
+            ...writeFile,
+            ref: { source: 'builtin', capabilityId: 'run_js' },
+            providerName: 'run_js',
+            displayName: 'Run JavaScript',
+          },
+        ],
+      },
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'script',
+                  name: 'codemode',
+                  arguments: { code: 'const = 1' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'script',
+              toolName: 'codemode',
+              content: [{ type: 'text', text: scriptText }],
+              isError: true,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    expect(part).toMatchObject({
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      providerName: 'codemode',
+      displayName: 'Run JavaScript',
+      state: 'error',
+    });
+    // The reason is a bounded tail, so the error survives long output ahead of it.
+    expect(part.error?.message.endsWith('Script error:\nSyntaxError: unexpected token')).toBe(true);
+    expect(part.error!.message.length).toBeLessThan(scriptText.length);
+  });
+
   test('live child status is progress, never a final tool output', () => {
     const turn = projectPiTurn({
       sessionId: 'session',

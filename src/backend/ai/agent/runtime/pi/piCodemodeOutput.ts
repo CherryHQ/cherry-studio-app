@@ -1,40 +1,22 @@
 import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
-import type { RuntimeArtifact } from '../types';
+// A UTF-16 code unit needs at most three UTF-8 bytes, so this many always fit.
+const MAX_CHARACTERS = Math.floor(MAX_TEXT_ATTACHMENT_BYTES / 3);
 
-/** Keep every generated text source within read_file's full-source limit. */
-export async function writePiCodemodeOutput(
-  name: string,
-  data: string | Uint8Array,
-  write: (name: string, data: string | Uint8Array) => Promise<RuntimeArtifact>,
-): Promise<RuntimeArtifact> {
-  // A UTF-16 code unit needs at most three UTF-8 bytes; paired surrogates need fewer.
-  const chunkCharacters = Math.floor(MAX_TEXT_ATTACHMENT_BYTES / 3);
+/**
+ * read_file refuses a source over its full-source limit, so a saved text output keeps only the
+ * start it can read back. The model already holds the output's start and end in the tool result.
+ */
+export function fitPiCodemodeOutput(data: string | Uint8Array): string | Uint8Array {
   if (
     typeof data !== 'string' ||
-    data.length <= chunkCharacters ||
+    data.length <= MAX_CHARACTERS ||
     new TextEncoder().encode(data).byteLength <= MAX_TEXT_ATTACHMENT_BYTES
   )
-    return write(name, data);
-
-  const parts: RuntimeArtifact[] = [];
-  for (let start = 0; start < data.length;) {
-    let end = Math.min(start + chunkCharacters, data.length);
-    const last = data.charCodeAt(end - 1);
-    const next = data.charCodeAt(end);
-    if (last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end--;
-    parts.push(await write(`${name}.part-${parts.length + 1}.txt`, data.slice(start, end)));
-    start = end;
-  }
-  return write(
-    `${name}.index.txt`,
-    [
-      'Full output is split into the following files in order, with no content omitted.',
-      'Use read_file with each file_entry_id and offset/max_characters to page through it.',
-      'Concatenate the contents in order without inserting separators.',
-      ...parts.map(
-        (part, index) => `${index + 1}. ${part.name}: file_entry_id=${part.ref.fileEntryId}`,
-      ),
-    ].join('\n'),
-  );
+    return data;
+  const note = `\n[Saved output cut: the first ${MAX_CHARACTERS} of ${data.length} characters are kept.]`;
+  let end = MAX_CHARACTERS - note.length;
+  const last = data.charCodeAt(end - 1);
+  if (last >= 0xd800 && last <= 0xdbff) end--;
+  return data.slice(0, end) + note;
 }

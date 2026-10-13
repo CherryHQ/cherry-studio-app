@@ -135,9 +135,9 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
-  test('invalid child calls consume the budget before task creation without corrupting task state', async () => {
+  test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
     let conversation!: Conversation;
-    let attempts = 0;
+    const codes: (string | undefined)[] = [];
     const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
     const extension = capabilityExtension({
       name: 'cherry',
@@ -156,14 +156,14 @@ describe('durable capability boundary', () => {
             description: 'Call with invalid arguments.',
             replay: 'safe',
             async execute(_args, api, context) {
-              for (let index = 0; index < 100; index++) {
-                attempts++;
+              for (let index = 0; index < 70; index++) {
                 const result = await api.executeTool('create_file', {}, context, {
                   key: `c${index}`,
                 });
                 expect(result.isError).toBe(true);
+                codes.push(result.diagnostics[0]?.code);
               }
-              return { output: [] };
+              return { output: [{ type: 'text', text: 'Partial result.' }] };
             },
           }),
         ],
@@ -178,20 +178,57 @@ describe('durable capability boundary', () => {
       const id = await toolTask(conversation, 'codemode', {});
       await harness.waitForTask(id, BACKGROUND_CONTEXT);
       expect((await harness.getTask(id, BACKGROUND_CONTEXT))?.state.status).toBe('terminal');
-      expect(attempts).toBe(64);
+      // The parent call holds one of the 64 admissions; invalid arguments still spend the rest.
+      expect(codes.slice(0, 63)).toEqual(Array(63).fill('invalid_arguments'));
+      expect(codes.slice(63)).toEqual(Array(7).fill('tool_call_limit_exceeded'));
       expect(execute).not.toHaveBeenCalled();
       expect(
         (await harness.snapshot(PiToolBudget, conversation.id, BACKGROUND_CONTEXT))?.nestedCalls,
       ).toHaveLength(63);
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
         role: 'toolResult',
-        isError: true,
-        details: { kind: 'cherry.tool-result' },
+        isError: false,
+        details: { kind: 'cherry.tool-result', output: { modelValue: 'Partial result.' } },
       });
     } finally {
       await harness.close(BACKGROUND_CONTEXT);
     }
   });
+
+  test.each([
+    ['enabled', 'auto' as const, ['create_file', 'codemode'], true],
+    ['denied', 'deny' as const, ['create_file'], false],
+    ['absent', undefined, ['create_file'], false],
+  ])(
+    'the JavaScript capability, when %s, decides whether Code Mode and its rules are offered',
+    (_case, approval, names, hasRules) => {
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          capability({ approval: 'auto' }),
+          ...(approval ? [capability({ providerName: 'run_js', approval })] : []),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              parameters: { type: 'object' } as TSchema,
+              description: 'Run a script.',
+              replay: 'safe',
+              execute: async () => ({ output: [] }),
+            }),
+          ],
+        }),
+      });
+      // The capability itself is never a model tool; Code Mode is its only executor.
+      expect(extension.tools?.map((tool) => tool.name)).toEqual(names);
+      expect(extension.sections?.some((section) => section.key === 'cherry-codemode')).toBe(
+        hasRules,
+      );
+    },
+  );
 
   test('completed child artifacts survive parent cancellation, task cleanup and reopening', async () => {
     const artifact: RuntimeArtifact = {
@@ -290,7 +327,7 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test('native child calls retain approval, structured results, caller restrictions and parent artifacts', async () => {
+  test('native child calls retain approval, structured results and parent artifacts', async () => {
     const artifact: RuntimeArtifact = {
       ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
       name: 'note.txt',
@@ -311,20 +348,19 @@ describe('durable capability boundary', () => {
           replay: 'safe',
           callers: ['model'],
           async execute(_args, api, context) {
-            const result = await api.executeTool('create_file', { name: 'note.txt' }, context);
+            const result = await api.executeTool('create_file', { name: 'note.txt' }, context, {
+              key: 'c1',
+            });
             expect(result.isError).toBe(false);
             expect(result.structuredOutput).toEqual({
               value: { created: true },
               artifacts: [artifact],
             });
-            const blocked = await api.executeTool('model_only', {}, context);
-            expect(blocked.isError).toBe(true);
             return { output: [{ type: 'text', text: 'File created.' }], details: { calls: [] } };
           },
         }),
       ],
     });
-    const forbidden = jest.fn(async () => ({ value: null, artifacts: [] }));
     const extension = capabilityExtension({
       name: 'cherry',
       approve,
@@ -336,12 +372,6 @@ describe('durable capability boundary', () => {
           providerName: 'run_js',
           approval: 'auto',
         }),
-        capability({
-          ref: { source: 'builtin', capabilityId: 'model_only' },
-          providerName: 'model_only',
-          callers: ['model'],
-          execute: forbidden,
-        }),
       ],
     });
     const harness = await open(new MemoryStorage(), extension);
@@ -351,7 +381,6 @@ describe('durable capability boundary', () => {
         BACKGROUND_CONTEXT,
       );
       await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
-      expect(forbidden).not.toHaveBeenCalled();
       expect(approve).toHaveBeenCalledTimes(1);
       expect(approve.mock.calls[0]?.[2]).toMatchObject({
         name: 'create_file',

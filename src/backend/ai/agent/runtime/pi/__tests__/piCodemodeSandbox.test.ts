@@ -1,4 +1,4 @@
-import { createContext, runInContext } from 'node:vm';
+import { constants, createContext, runInContext } from 'node:vm';
 
 import type { HostToWorkerMessage, WorkerToHostMessage } from '@earendil-works/pi-codemode/native';
 
@@ -7,7 +7,11 @@ import { createPiCodemodeSandbox, PI_CODEMODE_VM_SOURCE } from '../piCodemodeSan
 
 /** Exercise the exact bridge and upstream prelude in their own realm, without native execution. */
 function driver(code: string) {
-  const context = createContext({}, { microtaskMode: 'afterEvaluate' });
+  // An ordinary global: the prelude freezes globals, which a contextified sandbox object would
+  // turn into undefined shadows of the realm's built-ins.
+  const context = createContext(constants.DONT_CONTEXTIFY, { microtaskMode: 'afterEvaluate' });
+  // The native realm starts without a console; the prelude installs its own.
+  runInContext('delete globalThis.console', context);
   const messages: WorkerToHostMessage[] = [];
   const clock = jest.fn();
   const factory = runInContext(PI_CODEMODE_VM_SOURCE, context);
@@ -85,6 +89,16 @@ test('does not expose native callbacks or nondeterministic collection APIs to sc
   });
 });
 
+test('a script that does not compile reports its error text ahead of the stack frames', () => {
+  const vm = driver('const = 1;');
+  const done = vm.messages.at(-1);
+  if (done?.type !== 'done' || done.ok) throw new Error('Expected a failed script');
+  const error = JSON.parse(done.error) as { name: string; message: string; stack: string };
+  expect(error.name).toBe('SyntaxError');
+  expect(error.message).not.toBe('');
+  expect(error.stack.startsWith(`SyntaxError: ${error.message}`)).toBe(true);
+});
+
 test('cancellation during native admission waits for cleanup and never leaves the queued VM running', async () => {
   let input!: Parameters<RuntimeScriptSandbox['startBridge']>[0];
   let open!: (value: Awaited<ReturnType<RuntimeScriptSandbox['startBridge']>>) => void;
@@ -109,10 +123,24 @@ test('cancellation during native admission waits for cleanup and never leaves th
   });
   await Promise.resolve();
   controller.abort();
-  const stop = jest.fn(async () => {});
-  open({ post() {}, result: Promise.resolve(''), stop });
-  await expect(run.result).resolves.toMatchObject({ ok: false, error: { kind: 'aborted' } });
+  const cleanup = deferred();
+  open({ post() {}, result: cleanup.promise });
+  let settled = false;
+  void run.result.then(() => {
+    settled = true;
+  });
+  await new Promise((resolve) => setImmediate(resolve));
   expect(input.signal.aborted).toBe(true);
-  expect(stop).toHaveBeenCalledTimes(1);
+  expect(settled).toBe(false);
+  cleanup.resolve('');
+  await expect(run.result).resolves.toMatchObject({ ok: false, error: { kind: 'aborted' } });
   await sandbox.close();
 });
+
+function deferred() {
+  let resolve!: (value: string) => void;
+  const promise = new Promise<string>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}

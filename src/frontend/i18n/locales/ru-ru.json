@@ -465,7 +465,7 @@
   "chat.reasoning.xhigh": "Очень высокий",
   "chat.reasoningStatus.thinking": "Мышление",
   "chat.reasoningStatus.thought": "Продумал это",
-  "chat.runtime.failed": "Agent недоступен. Повторите попытку, чтобы продолжить.",
+  "chat.runtime.failed": "Агент недоступен. Повторите попытку, чтобы продолжить.",
   "chat.share.assistant": "Ассистент",
   "chat.share.cancelled": "Отменено",
   "chat.share.completed": "Завершено",

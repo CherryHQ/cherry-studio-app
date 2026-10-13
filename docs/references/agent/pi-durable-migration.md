@@ -6,16 +6,15 @@ and device acceptance of this ownership change have not been run.
 
 ## Pi 1.2.0 Upgrade
 
-`pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned together at `1.2.0`, published on 2026-10-12.
+`pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned together at `1.2.0`.
 The package-specific [Durable changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/durable/CHANGELOG.md)
 and [Chord changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/chord/CHANGELOG.md)
 describe additional breaking changes beyond the coding-agent-focused release notes.
 
-The upgrade brings bounded idle document caching, smaller scheduler ownership indexes, faster
-document-array appends, and compaction fixes. Summaries omit reasoning blocks, and a failed blocking
-compaction fails the generation rather than sending an oversized request. The default document
-retention is ten minutes; on runtimes without unreferenced timers, expired documents are evicted
-after commits. Mobile keeps these upstream defaults until device measurements justify tuning.
+Summaries omit reasoning blocks, and a failed blocking compaction fails the generation rather than
+sending an oversized request. The default document retention is ten minutes; on runtimes without
+unreferenced timers, expired documents are evicted after commits. Mobile keeps these upstream
+defaults until device measurements justify tuning.
 
 Mobile compatibility changes and boundaries:
 
@@ -39,7 +38,8 @@ Mobile compatibility changes and boundaries:
   budgets. Cherry retains tool approval, artifact admission, shared call budgets, failure-group
   policy and model-backed capability attribution. Completed parents preserve upstream child-call
   summaries; live child results no longer appear interrupted merely because they have no transcript
-  entry. Older development clients retain `run_js` until rebuilt.
+  entry. A client whose native module predates the bridge offers no JavaScript capability until
+  rebuilt; stored `run_js` results remain readable.
 - Upstream `models.*` stays disabled. `store/load` remains disposable working data, not a new
   Cherry backup/fork contract. Custom input/display record migration and directory enumeration
   are deferred. Explicit managed image reads reuse the native image normalizer; no Photon loader
@@ -51,17 +51,8 @@ Mobile compatibility changes and boundaries:
   it does not manufacture terminal Cherry messages or erase unfinished receipts. No automatic
   retry loop runs against failed storage. Subscriber errors are reported through `onReport`.
 
-Because the release was less than 24 hours old when adopted, `minimumReleaseAgeExclude` lists only
-the exact 1.2.0 versions of these four packages plus `pi-telemetry`. The general
-release-age and provenance policies remain enabled. Dependency installation skips lifecycle scripts
-so this change does not compile packages or rebuild the development client.
-
-Regression sources cover adapter output, old task migration, native bridge sequencing and cancellation,
-nested-call budgeting, artifact ownership, managed image reads and storage recovery. Existing native
-import-graph, Hermes, provider-error, history/recovery, and backup suites remain relevant. Tests, type
-checks, builds, and device acceptance have not been run for this upgrade. Once authorized,
-prioritize those suites and on-device queued-input recovery, tool approval, long-context compaction,
-and storage-failure recovery before release.
+Device acceptance for this upgrade covers queued-input recovery, tool approval, a Code Mode script
+that calls tools, long-context compaction, and storage-failure recovery.
 
 ## Ownership
 

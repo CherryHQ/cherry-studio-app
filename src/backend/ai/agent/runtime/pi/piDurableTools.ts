@@ -1,10 +1,10 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
-import { withCancel } from '@earendil-works/chord/context';
 import type { TSchema } from '@earendil-works/pi-ai';
 import {
   defineExtension,
   defineTool,
   hook,
+  section,
   ToolTask,
   type Extension,
   type HookApi,
@@ -13,6 +13,7 @@ import {
   type ToolHookCall,
   type ToolTaskInput,
 } from '@earendil-works/pi-durable';
+import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
@@ -21,7 +22,8 @@ import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { PiToolBudgetExceededError } from './piToolBudget';
+import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
+import { PI_TOOL_BUDGET } from './piToolBudget';
 import { retainToolInstructions, toolInstructionsSection } from './piToolInstructions';
 
 type PiDurableToolOptions = {
@@ -54,6 +56,15 @@ type PiDurableToolOptions = {
   ): Promise<boolean>;
 };
 
+const BUDGET_REFUSAL = `The turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget is exhausted.`;
+
+const codemodeRulesSection = section(
+  'cherry-codemode',
+  () =>
+    `Every tools.* call a Code Mode script makes counts toward the turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget. A call beyond it fails without running; return what the script has gathered instead of retrying. Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.`,
+  { tag: false },
+);
+
 /** Stored as native ToolResultMessage.details so the UI can read structured results and artifacts. */
 type PiToolDetails = {
   kind: 'cherry.tool-result';
@@ -70,12 +81,9 @@ type PiToolDetails = {
  */
 export function createPiDurableToolExtension(options: PiDurableToolOptions): Extension {
   const catalog = new Map(options.tools.map((tool) => [tool.providerName, tool]));
-  // Code Mode uses the existing JavaScript capability and approval setting. Older
-  // clients retain run_js; new clients expose only the upstream script tool.
+  const scriptCapability = catalog.get(PI_SCRIPT_CAPABILITY_NAME);
   const codemode =
-    catalog.get('run_js')?.approval !== 'deny' && catalog.has('run_js')
-      ? options.codemode
-      : undefined;
+    scriptCapability && scriptCapability.approval !== 'deny' ? options.codemode : undefined;
   const failedGroups = new Set<string>();
   let failedTurnId: string | undefined;
   let restoringFailures: Promise<void> = Promise.resolve();
@@ -169,7 +177,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
   }
 
   const tools = options.tools
-    .filter((tool) => tool.approval !== 'deny' && !(codemode && tool.providerName === 'run_js'))
+    .filter((tool) => tool.approval !== 'deny' && tool !== scriptCapability)
     .map((tool) =>
       defineTool({
         name: tool.providerName,
@@ -183,7 +191,6 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           },
           required: ['value', 'artifacts'],
         } as TSchema,
-        callers: tool.callers ?? ['model', 'tools'],
         ...(tool.ref.source === 'mcp' ? { deferred: true as const } : {}),
         replay: 'unsafe',
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
@@ -200,37 +207,50 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ...(codemode?.tools ?? []).map((tool) => ({
         ...tool,
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
-          const { tool: current } = await resolve(catalog.get('run_js')!, api, context);
+          const { tool: current } = await resolve(scriptCapability!, api, context);
           if (current.approval === 'deny') throw new Error('JavaScript execution is disabled.');
-          const script = withCancel(context);
-          let sequence = 0;
-          try {
-            return await tool.execute(
-              args,
-              {
-                ...api,
-                async executeTool(name, arguments_, callContext, nestedOptions) {
-                  const key = nestedOptions?.key ?? String(++sequence);
-                  const call: ToolHookCall = {
-                    type: 'toolCall',
-                    id: `${api.callId}/${key}`,
-                    name,
-                    arguments: arguments_,
-                    parent: { taskId: api.taskId, callId: api.callId },
+          // The ledger only grows within a turn, so one refusal settles every later call.
+          let exhausted = false;
+          return tool.execute(
+            args,
+            {
+              ...api,
+              // Admission precedes upstream argument validation and nested task creation, so a
+              // refused call costs no task. The script receives an error and keeps its output.
+              async executeTool(name, arguments_, callContext, nestedOptions) {
+                const key = nestedOptions?.key;
+                if (key === undefined) throw new Error('A nested tool call requires a stable key.');
+                exhausted ||=
+                  options.admitCall !== undefined &&
+                  !(await options.admitCall(
+                    {
+                      type: 'toolCall',
+                      // Upstream derives the nested task's call ID the same way.
+                      id: `${api.callId}/${key}`,
+                      name,
+                      arguments: arguments_,
+                      parent: { taskId: api.taskId, callId: api.callId },
+                    },
+                    api,
+                    callContext,
+                  ));
+                if (exhausted)
+                  return {
+                    taskId: api.taskId,
+                    isError: true,
+                    diagnostics: [
+                      {
+                        severity: 'error' as const,
+                        code: 'tool_call_limit_exceeded',
+                        message: BUDGET_REFUSAL,
+                      },
+                    ],
                   };
-                  if (options.admitCall && !(await options.admitCall(call, api, callContext))) {
-                    const error = new PiToolBudgetExceededError();
-                    script.cancel(error);
-                    throw error;
-                  }
-                  return api.executeTool(name, arguments_, callContext, nestedOptions);
-                },
+                return api.executeTool(name, arguments_, callContext, nestedOptions);
               },
-              script.context,
-            );
-          } finally {
-            script.cancel();
-          }
+            },
+            context,
+          );
         },
       })),
       ...(options.tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny')
@@ -241,16 +261,20 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
       ...(options.tools.some((tool) => tool.ref.source === 'builtin' && tool.approval !== 'deny')
         ? [toolInstructionsSection]
         : []),
-      ...(codemode?.sections ?? []),
+      ...(codemode ? [...(codemode.sections ?? []), codemodeRulesSection] : []),
     ],
     hooks: [
       hook(ToolTask, {
         async beforeTool(call, api, context) {
-          if (options.admitCall && !(await options.admitCall(call, api, context)))
-            return { block: 'The turn exceeded its 64 tool-call budget.' };
+          // A nested call was admitted by the Code Mode wrapper before its task existed.
+          if (!call.parent && options.admitCall && !(await options.admitCall(call, api, context)))
+            return { block: BUDGET_REFUSAL };
           const blocked = await options.beforeCall?.(call, api, context);
           if (blocked) return { block: blocked };
-          const template = catalog.get(call.name === 'codemode' && codemode ? 'run_js' : call.name);
+          const template =
+            call.name === CODEMODE_TOOL_NAME && codemode
+              ? scriptCapability
+              : catalog.get(call.name);
           // Upstream discovery and Code Mode have no application-side effect to approve.
           if (!template) return;
           const { tool: target } = await resolve(template, api, context);
@@ -263,7 +287,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             return { block: 'The user denied this tool call.' };
         },
         async afterTool(call, result, api, context) {
-          if (call.name !== 'codemode' || !codemode) return;
+          if (call.name !== CODEMODE_TOOL_NAME || !codemode) return;
           const files = await api.snapshot(PiCodemodeFiles, api.taskId, context);
           const text = (result.output ?? [])
             .flatMap((block) => (block.type === 'text' ? [block.text] : []))
@@ -277,15 +301,14 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             modelValue: text,
             artifacts: files?.artifacts ?? [],
           };
-          const tool = catalog.get('run_js')!;
           return {
             ...result,
             details: JSON.parse(
               JSON.stringify({
                 kind: 'cherry.tool-result',
-                ref: tool.ref,
-                providerName: 'codemode',
-                displayName: 'Code Mode',
+                ref: scriptCapability!.ref,
+                providerName: CODEMODE_TOOL_NAME,
+                displayName: scriptCapability!.displayName,
                 output,
               }),
             ),

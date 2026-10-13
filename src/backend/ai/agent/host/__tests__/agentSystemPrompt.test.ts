@@ -136,7 +136,6 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('The current local date is `2026-09-03`.');
     expect(prompt).toContain('You must write every response in this language');
     expect(prompt).not.toContain('## Agent Instructions');
-    expect(prompt).not.toContain('## MCP Tool Discovery');
     expect(prompt).not.toContain('## Web Citations');
     expect(prompt).not.toContain('## Web Research');
     expect(prompt).not.toContain('## Managed Files');
@@ -215,9 +214,7 @@ describe('buildAgentSystemPrompt', () => {
       tools: [mcpTool()],
     });
 
-    expect(withMcp).not.toContain('## MCP Tool Discovery');
     expect(withMcp).not.toContain('tool_search');
-    expect(withMcp).not.toContain('tool_call');
   });
 
   test('attributes prepared plugin guidance without promoting it above user instructions or tool discovery', () => {

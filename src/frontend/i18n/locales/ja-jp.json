@@ -453,7 +453,7 @@
   "chat.reasoning.xhigh": "エクストラハイ",
   "chat.reasoningStatus.thinking": "思考",
   "chat.reasoningStatus.thought": "考え抜いた",
-  "chat.runtime.failed": "Agent を利用できません。再試行して再開してください。",
+  "chat.runtime.failed": "エージェントを利用できません。再試行して再開してください。",
   "chat.share.assistant": "アシスタント",
   "chat.share.cancelled": "キャンセル",
   "chat.share.completed": "完了",

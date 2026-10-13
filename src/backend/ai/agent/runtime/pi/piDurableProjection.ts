@@ -5,6 +5,8 @@ import {
   type JsonObject,
   type SubmissionRecord,
 } from '@earendil-works/pi-durable';
+import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
+import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
 import { createTextPreview } from '@/shared/utils/textPreview';
@@ -28,6 +30,9 @@ import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
+/** The JavaScript capability. Code Mode is its only executor and inherits its approval setting. */
+export const PI_SCRIPT_CAPABILITY_NAME = 'run_js';
+
 const ToolRefSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('builtin'), capabilityId: z.string().min(1) }),
   z.object({
@@ -43,7 +48,6 @@ export const PiToolBlueprintSchema = z.object({
   displayName: z.string(),
   description: z.string(),
   inputSchema: RuntimeJsonValueSchema,
-  callers: z.array(z.enum(['model', 'tools'])).optional(),
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
   failureGroup: z.string().optional(),
@@ -327,7 +331,9 @@ export function projectPiTurn(options: {
         return;
       }
       const binding = stored.tools.find(
-        (tool) => tool.providerName === (block.name === 'codemode' ? 'run_js' : block.name),
+        (tool) =>
+          tool.providerName ===
+          (block.name === CODEMODE_TOOL_NAME ? PI_SCRIPT_CAPABILITY_NAME : block.name),
       );
       const target =
         block.name === 'tool_call' && typeof block.arguments.name === 'string'
@@ -345,8 +351,10 @@ export function projectPiTurn(options: {
         type: 'tool',
         toolCallId: block.id,
         toolRef: target?.ref ?? { source: 'meta', name: block.name },
-        providerName: block.name === 'codemode' ? block.name : (target?.providerName ?? block.name),
-        displayName: block.name === 'codemode' ? 'Code Mode' : (target?.displayName ?? block.name),
+        // Code Mode keeps its own name so the transcript tells it from stored run_js results.
+        providerName:
+          block.name === CODEMODE_TOOL_NAME ? block.name : (target?.providerName ?? block.name),
+        displayName: target?.displayName ?? block.name,
         state: streaming
           ? 'input-streaming'
           : (options.toolStates?.get(block.id) ?? 'input-available'),
@@ -423,7 +431,14 @@ export function projectPiTurn(options: {
         : undefined;
     const diagnostics = ToolResultEntry.is(entry) ? entry.data.diagnostics : [];
     const diagnostic = diagnostics.find((item) => item.severity === 'error');
-    const reason = diagnostic?.message ?? 'The tool did not complete.';
+    // An error result without a diagnostic states its reason in its own text, as a failed script
+    // does at the end of its output.
+    const text = message.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n');
+    const reason =
+      diagnostic?.message ??
+      (message.isError && text ? createTextPreview(text).text : 'The tool did not complete.');
     if (diagnostic?.code === 'interrupted' || diagnostic?.code === 'aborted') {
       part.state = 'interrupted';
       part.output = createInterruptedToolResult(reason);
@@ -444,7 +459,7 @@ export function projectPiTurn(options: {
       part.state = 'output-available';
       part.output = output ?? {
         value:
-          part.providerName === 'tool_search' && message.details !== undefined
+          part.providerName === TOOL_SEARCH_TOOL_NAME && message.details !== undefined
             ? RuntimeJsonValueSchema.parse(message.details)
             : message.content
                 .filter((block) => block.type === 'text')

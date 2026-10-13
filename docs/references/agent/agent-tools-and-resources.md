@@ -4,12 +4,13 @@
 
 The system catalog ships device calendar and reminders, location, web search and fetch, image
 generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
-`run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
+the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
+contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
 location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
-belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
+belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
@@ -468,8 +469,9 @@ whole turn. Implementation: `src/backend/ai/agent/tools/`.
 
 ### JavaScript Sandbox
 
-Clients with the interactive native bridge expose upstream `codemode` in place of `run_js`, under
-the existing JavaScript capability policy. Upstream owns script syntax, tool discovery, `text` and
+The `run_js` capability owns the setting, the approval policy and the transcript identity. Upstream
+`codemode` is its only executor: the Runtime registers that tool in the capability's place, and
+`run_js` itself is never a model tool. Upstream owns script syntax, tool discovery, `text` and
 `image` output, console capture, `store/load`, nested durable tasks and deterministic replay. Mobile
 adapts its transport to the existing native QuickJS-NG engine; no WASM runtime is loaded. Upstream
 `models.*` is disabled: model-backed capabilities such as `generate_image` retain Cherry's existing
@@ -479,13 +481,17 @@ A script receives structured tool results and can combine calls, but every neste
 same capability checks and approval as a direct model call. Parent and child calls share the
 sixty-four-call turn budget, including invalid child arguments. Admission happens before child-task
 creation and deduplicates resumed calls by their stable IDs; only model rounds count toward twenty
-steps. The live parent shows
+steps. A child call past the budget fails without creating a task; the script receives the error,
+keeps running and returns what it gathered, and the next model request is the tool-free final
+response. The Code Mode prompt section states this limit. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
 
 Each script has a fresh native VM, a 64 MiB heap and a dedicated 8 MiB thread stack with a 7 MiB
-QuickJS stack limit. The service shares at most two active VMs across turns. Cancellation removes
+QuickJS stack limit. Across turns the service runs at most two scripts and, in a separate pool, two
+bounded computations such as local page extraction; a script parked on a tool or an approval
+therefore never blocks the computation that tool needs. Cancellation removes
 queued runs and keeps running slots until native cleanup. The bridge also enforces a deterministic
 100,000-interrupt-poll compute budget, including periodic polls while draining promise jobs; waiting
 for tools consumes none of that budget. Upstream script timeout options still apply. These are
@@ -497,9 +503,10 @@ reject incompatible unfinished replay. The VM transports JSON and invokes only u
 its native message and clock callbacks are not globals available to scripts.
 
 Full output and script images become generated managed files. `managed-file:<id>` paths denote
-`read_file`'s `file_entry_id`; they are not device paths. Text exceeding the 5 MiB source limit is
-split at Unicode boundaries into readable files plus an index that lists their IDs in order.
-Each part has a deterministic replay receipt and receives the same file authorization checks.
+`read_file`'s `file_entry_id`; they are not device paths. A saved text over `read_file`'s 5 MiB
+source limit keeps its start and ends with a note of the cut; the tool result already holds the
+output's start and end. Each file has a deterministic replay receipt and receives the same file
+authorization checks.
 Confirmed nested artifacts also have data-only Pi entries, so they reach Cherry's file message
 parts even if the parent is cancelled or interrupted. They do not turn an interrupted tool into
 a successful result or add child outputs to model history. A crash between file creation and its
@@ -507,9 +514,8 @@ Pi receipt can leave an unreferenced managed file; this is not an exactly-once f
 `store/load` is temporary Pi working data: history rebuilds, Cherry forks and backup/restore may clear
 it. Lasting results belong in managed files. No parallel long-term store is maintained.
 
-An older development client without `runBridge` retains the existing pure-computation `run_js`
-tool (default five-second timeout, maximum thirty seconds, no host calls). A client without the
-native module offers neither tool. A new development build is required for the interactive bridge.
+A client without the native module, or whose native module predates the interactive bridge, offers
+no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
 `read_file` can explicitly read PNG, JPEG, WebP and GIF within the same conversation file ledger.
 It reuses native image normalization and the existing attachment byte limit. Vision-capable model
@@ -550,8 +556,8 @@ limits are application constants rather than user settings in Version 1.
 Cherry Desktop proves the useful semantics: Pi owns its tool loop, MCP tools are adapted into Pi,
 tools are disabled and approved by application policy, and skills are injected explicitly. Mobile
 ports those semantics but not the Electron/Node execution surface. Desktop workspaces, shell tools,
-tool-calling JavaScript execution, arbitrary filesystem paths, local MCP processes, and executable
-Skill trees are explicit mobile exclusions; `run_js` computes in isolation and calls nothing.
+arbitrary filesystem paths, local MCP processes, and executable Skill trees are explicit mobile
+exclusions; a script reaches the app only through the Agent's own tools.
 Streamable HTTP MCP and device/application capability adapters are semantic ports.
 
 The PC Agent Controller reuses the normalized application presentation of a tool or

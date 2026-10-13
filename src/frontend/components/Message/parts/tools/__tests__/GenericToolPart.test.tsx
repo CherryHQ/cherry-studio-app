@@ -11,6 +11,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     hasMessagePartValue: (value: unknown) => value !== undefined,
     MessagePart: {
+      TextSection: (props: object) => createElement('TextSection', props),
       Tool: (props: object) => createElement('Tool', props),
       ValueSection: (props: object) => createElement('ValueSection', props),
     },
@@ -36,9 +37,10 @@ test('shows child activity while the parent is running and updates its status', 
   });
   expect(JSON.stringify(renderer.toJSON())).toContain('mcp_lookup');
   expect(JSON.stringify(renderer.toJSON())).toContain('chat.tool.running');
-  expect(
-    renderer.root.findAllByType('ValueSection').map((section) => section.props.value),
-  ).toContain('{"query":"notes"}');
+  // Arguments arrive as cut JSON text, so they read as code instead of a parsed value.
+  expect(renderer.root.findAllByType('TextSection').map((section) => section.props.value)).toEqual([
+    '{"query":"notes"}',
+  ]);
   act(() => {
     renderer.update(
       <GenericToolPart

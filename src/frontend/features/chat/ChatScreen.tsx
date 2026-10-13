@@ -130,7 +130,6 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           <SessionReadReceipt sessionId={sessionId} />
         ) : null}
         {/* Native background taps yield to scrolling and excluded message content. */}
-        {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
         <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
           {sessionId && session.error ? (
             <View className="flex-1 justify-center px-8 py-16">
@@ -167,6 +166,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             <ChatEmptyState contentBottomInset={contentBottomInset} />
           )}
         </ComposerDismissArea>
+        {/* Below the transcript: the column's top edge sits under the header overlay. */}
+        {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
         {hasComposer ? (
           <ComposerDock layoutMode="flow">
             <View>

@@ -30,7 +30,10 @@ describe('createJsSandbox', () => {
     let deliverEvent!: (event: { runId: string; message: string }) => void;
     const native = {
       ...createNative(async () => JSON.stringify({ status: 'ok', ...DONE })),
-      runBridge: jest.fn(() => finished.promise),
+      runBridge: jest.fn(
+        (..._input: Parameters<NonNullable<JsSandboxNativeModule['runBridge']>>) =>
+          finished.promise,
+      ),
       deliver: jest.fn(),
       addListener: jest.fn((_name: 'onMessage', listener: typeof deliverEvent) => {
         deliverEvent = listener;
@@ -39,48 +42,58 @@ describe('createJsSandbox', () => {
     };
     const sandbox = createJsSandbox(native, () => 'bridge')!;
     const onMessage = jest.fn();
-    const bridge = await sandbox.startBridge!(bridgeInput({ onMessage }));
+    const controller = new AbortController();
+    const bridge = await sandbox.startBridge!(
+      bridgeInput({ onMessage, signal: controller.signal }),
+    );
+    // The bridge's caller owns its deadline and output limits; only the memory cap reaches native.
+    expect(native.runBridge.mock.calls[0]).toEqual([
+      'bridge',
+      '',
+      '{}',
+      { startedAt: 100, seed: 1 },
+      { timeoutMs: 0, memoryBytes: 1, maxResultBytes: 0, maxLogBytes: 0 },
+    ]);
     deliverEvent({ runId: 'other', message: 'ignored' });
     deliverEvent({ runId: 'bridge', message: 'done' });
     expect(onMessage.mock.calls).toEqual([['done']]);
     bridge.post('reply');
     expect(native.deliver).toHaveBeenCalledWith('bridge', 'reply');
-    const stopping = bridge.stop();
+    controller.abort();
     expect(native.cancel).toHaveBeenCalledWith('bridge');
     expect(remove).not.toHaveBeenCalled();
     finished.resolve('');
-    await stopping;
+    await bridge.result;
     expect(remove).toHaveBeenCalledTimes(1);
     bridge.post('too late');
     expect(native.deliver).toHaveBeenCalledTimes(1);
   });
 
-  test('a queued bridge shares pure-run slots and cancels before native admission', async () => {
-    const started = deferred<void>();
+  test('bridge runs queue among themselves, never behind or ahead of bounded computations', async () => {
     const finished = deferred<string>();
-    let count = 0;
     const native = {
-      ...createNative(() => {
-        if (++count === JS_SANDBOX_MAX_CONCURRENT_RUNS) started.resolve();
-        return finished.promise;
-      }),
-      runBridge: jest.fn(async () => ''),
+      ...createNative(async () => JSON.stringify({ status: 'ok', ...DONE })),
+      runBridge: jest.fn(() => finished.promise),
       deliver: jest.fn(),
       addListener: jest.fn(() => ({ remove() {} })),
     };
     const sandbox = createJsSandbox(native)!;
-    const active = Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS }, () =>
-      sandbox.run(runInput()),
+    const active = await Promise.all(
+      Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS }, () =>
+        sandbox.startBridge!(bridgeInput()),
+      ),
     );
-    await started.promise;
+    // A script parked on a tool or an approval leaves a computation free to start.
+    await expect(sandbox.run(runInput())).resolves.toMatchObject({ status: 'ok' });
+
     const controller = new AbortController();
     const queued = sandbox.startBridge!(bridgeInput({ signal: controller.signal }));
     controller.abort(new Error('queued bridge cancelled'));
     await expect(queued).rejects.toThrow('queued bridge cancelled');
-    expect(native.runBridge).not.toHaveBeenCalled();
+    expect(native.runBridge).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS);
     expect(native.cancel).not.toHaveBeenCalled();
-    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
-    await Promise.all(active);
+    finished.resolve('');
+    await Promise.all(active.map((bridge) => bridge.result));
   });
 
   test('passes one run id, code, and limits to the native run and parses its outcome', async () => {
@@ -287,7 +300,7 @@ function bridgeInput(overrides: Partial<JsSandboxBridgeInput> = {}): JsSandboxBr
     setup: '',
     data: '{}',
     clock: { startedAt: 100, seed: 1 },
-    limits: LIMITS,
+    memoryBytes: 1,
     signal: new AbortController().signal,
     onMessage() {},
     ...overrides,

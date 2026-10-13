@@ -65,7 +65,6 @@ export {
   AgentSessionStatusSchema,
   AgentToolRefSchema,
   AgentToolInputPreviewSchema,
-  AgentToolProgressSchema,
   AgentToolResultSchema,
   AgentTurnViewSchema,
   AgentViewSchema,

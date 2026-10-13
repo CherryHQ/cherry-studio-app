@@ -37,7 +37,7 @@ import type {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
-import { writePiCodemodeOutput } from './piCodemodeOutput';
+import { fitPiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -167,7 +167,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       void opened.closed
         .then((end) => {
           if (end.reason !== 'failed' || this.runtime !== opened) return;
-          logger.error('Pi storage session closed after a failure', end.error);
+          logger.error('Pi storage session closed after a failure', { error: end.error });
           ports.onFailure?.({
             code: 'runtime_storage_failed',
             message: 'Agent storage failed. Reopen the session to resume unfinished work.',
@@ -175,7 +175,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             origin: 'runtime',
           });
         })
-        .catch((error) => logger.warn('Could not report runtime closure', error));
+        .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const sessionId of await this.unfinishedSessions()) {
         const configuration = PiConfigurationSchema.parse(
@@ -576,30 +576,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 const identity = await this.taskIdentity(sessionId, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
                 try {
-                  const output = await writePiCodemodeOutput(name, data, async (name, data) => {
-                    const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
-                    const artifact =
-                      previous?.outputs[name] ?? (await writer(identity, { name, data }, signal));
-                    await api.commit(async (tx) => {
-                      (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
-                    }, context);
-                    // Replay retries authorization even when the file receipt already exists.
-                    await this.requirePorts().admitArtifacts(identity, [artifact], signal);
-                    await this.requireRuntime().grantFiles(
-                      sessionId,
-                      [artifact.ref.fileEntryId],
-                      context,
-                    );
-                    await retainPiCodemodeArtifacts(
-                      api,
-                      api.taskId,
-                      api.callId,
-                      [artifact],
-                      context,
-                    );
-                    return artifact;
-                  });
-                  return { path: `managed-file:${output.ref.fileEntryId}` };
+                  const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
+                  const artifact =
+                    previous?.outputs[name] ??
+                    (await writer(identity, { name, data: fitPiCodemodeOutput(data) }, signal));
+                  await api.commit(async (tx) => {
+                    (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
+                  }, context);
+                  // Replay retries authorization even when the file receipt already exists.
+                  await this.requirePorts().admitArtifacts(identity, [artifact], signal);
+                  await this.requireRuntime().grantFiles(
+                    sessionId,
+                    [artifact.ref.fileEntryId],
+                    context,
+                  );
+                  await retainPiCodemodeArtifacts(api, api.taskId, api.callId, [artifact], context);
+                  return { path: `managed-file:${artifact.ref.fileEntryId}` };
                 } catch {
                   signal.throwIfAborted();
                   return { error: 'Could not save the managed output file.' };
@@ -630,25 +622,18 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         if (inputs.length !== 1) return false;
         const conversation = await this.requireRuntime().conversation(sessionId, context);
         if (!conversation || conversation.id !== api.conversationId) return false;
-        const entries = await this.requireRuntime().turnEntries(
-          sessionId,
-          inputs[0]!.record,
-          context,
-        );
-        const calls = entries
-          .flatMap((entry) => entry.model ?? [])
-          .flatMap((message) =>
-            message.role === 'assistant'
-              ? message.content.filter((part) => part.type === 'toolCall')
-              : [],
-          );
-        return admitPiToolCall(
-          conversation,
-          context,
-          inputs[0]!.record.id,
-          call,
-          calls.map((part) => part.id),
-        );
+        // A script runs inside a tool round, so its calls meet no model call not yet admitted.
+        const modelCalls = call.parent
+          ? []
+          : (await this.requireRuntime().turnEntries(sessionId, inputs[0]!.record, context))
+              .flatMap((entry) => entry.model ?? [])
+              .flatMap((message) =>
+                message.role === 'assistant'
+                  ? message.content.filter((part) => part.type === 'toolCall')
+                  : [],
+              )
+              .map((part) => part.id);
+        return admitPiToolCall(conversation, context, inputs[0]!.record.id, call, modelCalls);
       },
       beforeCall: async (call, api, context) => {
         // A failed native lookup is known only from the transcript, never from a tool result.
@@ -783,11 +768,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         provider: configuration.model.providerId,
         modelId: piDurableModelKey(configuration.model, configuration.kind),
       },
-      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}${
-        this.codemodeSandbox
-          ? '\nCode Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.'
-          : ''
-      }`,
+      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}`,
       extensions: [extension],
     };
   }

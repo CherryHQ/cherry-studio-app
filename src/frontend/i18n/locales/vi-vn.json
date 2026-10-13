@@ -453,7 +453,7 @@
   "chat.reasoning.xhigh": "Cực cao",
   "chat.reasoningStatus.thinking": "Suy nghĩ",
   "chat.reasoningStatus.thought": "Đã nghĩ kỹ rồi",
-  "chat.runtime.failed": "Agent hiện không khả dụng. Hãy thử lại để tiếp tục.",
+  "chat.runtime.failed": "Tác nhân hiện không khả dụng. Hãy thử lại để tiếp tục.",
   "chat.share.assistant": "Trợ lý",
   "chat.share.cancelled": "Đã hủy",
   "chat.share.completed": "Hoàn thành",

@@ -161,6 +161,12 @@ markers stay visible as dashed separators before the process disclosure; in-loop
 between the corresponding tool steps inside it. Running markers show progress, completed markers
 show the estimated tokens saved when available, and skipped markers render nothing. The marker
 itself has no press target or detail disclosure. Summary text remains private to the Runtime.
+The local runtime adds no marker for its own compaction: a running or failed compaction is session
+status shown below the transcript, and stored completed markers still render.
+
+A script's tool calls render inside its tool part as a list of names, statuses and cut arguments:
+live while the script runs, and from the result's summaries once it finishes. Code Mode and stored
+`run_js` results share the JavaScript part, which shows the code as code.
 
 ### Detail Content Status
 

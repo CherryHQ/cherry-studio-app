@@ -45,13 +45,14 @@ export type RuntimeScriptSandbox = {
     setup: string;
     data: string;
     clock: { startedAt: number; seed: number };
-    limits: { timeoutMs: number; memoryBytes: number; maxResultBytes: number; maxLogBytes: number };
+    memoryBytes: number;
+    /** Aborting cancels the run; `result` settles after native cleanup. */
     signal: AbortSignal;
     onMessage(message: string): void;
   }): Promise<{
     post(message: string): void;
+    /** Empty on normal termination, otherwise a native error description. */
     result: Promise<string>;
-    stop(): Promise<void>;
   }>;
 };
 

@@ -2,7 +2,6 @@ import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { AgentToolProgress } from '@/shared/contracts/agent';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { getBuiltInToolDisplay } from './builtInTool/builtInToolDisplay';
@@ -12,6 +11,7 @@ import {
   getToolStatusTone,
   type ToolMessagePart,
 } from './toolPartState';
+import { ToolProgress } from './ToolProgress';
 import { textToolResultContent, type ToolResultContent } from './toolResultContent';
 import { ToolResultContentRenderer } from './ToolResultContentRenderer';
 
@@ -60,41 +60,6 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
       ) : null}
       <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
     </MessagePart.Tool>
-  );
-}
-
-function ToolProgress({ progress }: { progress: AgentToolProgress }) {
-  const { t } = useTranslation();
-  const labels = {
-    pending: t('chat.tool.inputReady'),
-    running: t('chat.tool.running'),
-    ok: t('common.done'),
-    error: t('chat.tool.callError'),
-    interrupted: t('chat.tool.unfinished'),
-  };
-  return (
-    <View className="gap-2">
-      {progress.calls.map((call) => {
-        const display = getBuiltInToolDisplay(call.name);
-        return (
-          <View key={call.id} className="gap-1">
-            <View className="flex-row flex-wrap items-center gap-2">
-              <Text className="text-foreground text-sm">
-                {display ? t(display.titleKey) : call.name}
-              </Text>
-              <Text
-                className={
-                  call.status === 'error' ? 'text-danger text-sm' : 'text-muted-foreground text-sm'
-                }
-              >
-                {labels[call.status]}
-              </Text>
-            </View>
-            <MessagePart.ValueSection title={t('chat.tool.arguments')} value={call.args} />
-          </View>
-        );
-      })}
-    </View>
   );
 }
 

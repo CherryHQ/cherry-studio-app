@@ -104,6 +104,11 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     iconName: 'code',
     titleKey: 'chat.builtinTool.code.runJs',
   },
+  // Pi's Code Mode executes the JavaScript capability.
+  codemode: {
+    iconName: 'code',
+    titleKey: 'chat.builtinTool.code.runJs',
+  },
   web_fetch: {
     iconName: 'web',
     titleKey: 'chat.builtinTool.web.fetch',

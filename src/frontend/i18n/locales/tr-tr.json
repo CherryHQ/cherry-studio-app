@@ -457,7 +457,7 @@
   "chat.reasoning.xhigh": "Ekstra yüksek",
   "chat.reasoningStatus.thinking": "Düşünme",
   "chat.reasoningStatus.thought": "Enine boyuna düşündüm",
-  "chat.runtime.failed": "Agent kullanılamıyor. Devam etmek için yeniden deneyin.",
+  "chat.runtime.failed": "Ajan kullanılamıyor. Devam etmek için yeniden deneyin.",
   "chat.share.assistant": "Asistan",
   "chat.share.cancelled": "İptal edildi",
   "chat.share.completed": "Tamamlandı",

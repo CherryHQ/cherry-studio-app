@@ -252,7 +252,6 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
-  callers?: readonly ('model' | 'tools')[];
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';

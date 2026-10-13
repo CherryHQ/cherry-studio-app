@@ -25,6 +25,11 @@ jest.mock('../GenericToolPart', () => {
   return { GenericToolPart: (props: object) => createElement('GenericToolPart', props) };
 });
 
+jest.mock('../ToolProgress', () => {
+  const { createElement } = jest.requireActual('react');
+  return { ToolProgress: (props: object) => createElement('ToolProgress', props) };
+});
+
 describe('RunJsToolPart', () => {
   it('shows the result, the code as code, and console output', () => {
     const renderer = render(
@@ -84,8 +89,61 @@ describe('RunJsToolPart', () => {
   it.each([
     ['a running call', { state: 'input-available', output: undefined }],
     ['an unrecognized output', { output: 'ok' }],
+    ['a running script', { toolName: 'codemode', state: 'input-available', output: undefined }],
+    [
+      'a script the app closed out',
+      {
+        toolName: 'codemode',
+        state: 'output-error',
+        errorText: 'The tool ended without a confirmed result.',
+        providerMetadata: { cherry: { settledByApp: true } },
+      },
+    ],
   ])('falls back to generic rendering for %s', (_case, overrides) => {
     expect(render(toolPart(overrides)).root.findByType('GenericToolPart')).toBeDefined();
+  });
+
+  it('shows a finished script with its output, the tool calls it made, and its code', () => {
+    const renderer = render(
+      toolPart({
+        toolName: 'codemode',
+        output: {
+          output: 'Script completed\nWall time 0.1 seconds\nOutput:\n42',
+          details: {
+            calls: [
+              { id: 1, name: 'web_fetch', args: '{"url":"https://a.test"}', status: 'ok' },
+              { id: 2, name: 'web_fetch', args: '{"url":"https://b.test"}', status: 'cancelled' },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(sections(renderer)).toEqual([
+      ['chat.tool.result', 'Script completed\nWall time 0.1 seconds\nOutput:\n42'],
+      ['chat.tool.code', 'return { total: 42 }'],
+    ]);
+    expect(renderer.root.findByType('ToolProgress').props.progress.calls).toEqual([
+      { id: '1', name: 'web_fetch', args: '{"url":"https://a.test"}', status: 'ok' },
+      { id: '2', name: 'web_fetch', args: '{"url":"https://b.test"}', status: 'interrupted' },
+    ]);
+  });
+
+  it('shows a failed script with its error text and its code', () => {
+    const renderer = render(
+      toolPart({
+        toolName: 'codemode',
+        state: 'output-error',
+        output: undefined,
+        errorText: 'Script error:\nSyntaxError: unexpected token',
+      }),
+    );
+
+    expect(renderer.root.findByType('Tool').props.statusTone).toBe('danger');
+    expect(sections(renderer)).toEqual([
+      ['chat.tool.error', 'Script error:\nSyntaxError: unexpected token'],
+      ['chat.tool.code', 'return { total: 42 }'],
+    ]);
   });
 });
 

@@ -125,6 +125,8 @@ jest.mock('../runtime', () => ({
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
+jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
+
 jest.mock('../components/ChatInput', () => ({
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;
