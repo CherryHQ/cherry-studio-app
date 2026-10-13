@@ -41,6 +41,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           : config.name!,
     slug: config.slug!,
     scheme: `cherrystudio${suffix.replace('.', '-')}`,
+    updates: {
+      ...config.updates,
+      enabled: profile !== 'development' && process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true',
+    },
     ios: {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,

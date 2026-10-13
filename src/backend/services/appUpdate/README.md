@@ -15,9 +15,11 @@ Tapping an unmarked row runs a fresh check and reports its result as a toast.
 
 `app.config.ts` parses `APK_UPDATES_ENABLED=true|false` into the boolean
 `extra.isApkUpdatesEnabled`. Only `true` on Android enables the feature. An absent setting defaults
-to `false`; any other build setting fails configuration. The module requires the runtime boolean
-`true`, hides the UI, skips network requests, and rejects download actions when disabled. GitCode
-is the fixed update source. There is no user or remote toggle.
+to `false`; any other build setting fails configuration. Packaged builds also require the immutable
+`expo-updates` build channel `production-apk`. An OTA manifest cannot enable APK checks on Google
+Play; unconfigured release builds fail closed. Development clients without a channel can explicitly
+opt in through the boolean flag. Disabled builds hide the UI, skip network requests, and reject
+download actions. GitCode is the fixed whole-APK update source; there is no user setting for it.
 
 | EAS profile | APK update behavior |
 | --- | --- |
@@ -34,9 +36,10 @@ this public APK. See [Local EAS Builds](../../../../docs/guides/local-builds.md)
 
 ## Version And Download Selection
 
-- Read the installed APK's bundled `expo.version` through `expo-constants`, matching About. This
-  project does not currently ship Expo OTA updates. Future OTA support must preserve the installed
-  binary version and distribution gate.
+- Read the installed APK's `nativeApplicationVersion` through `expo-application`, matching About.
+  A downloaded OTA manifest's `expo.version` does not affect whole-APK upgrade comparisons.
+  [EAS Update](../../../../docs/guides/app-updates.md) separately handles compatible code/assets;
+  this service handles native/public APK upgrades.
 - Request GitCode's public `/api/v5/repos/CherryHQ/cherry-studio-app/releases/latest?type=latest`
   endpoint through the shared HTTP client, with cancellation, a ten-second timeout, and a response
   size limit. No token is embedded or requested.

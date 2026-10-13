@@ -34,6 +34,11 @@ for app identities and production environment requirements.
 
 All three workflows pin EAS CLI to `24.4.2`; update them together when upgrading it.
 
+Native releases now embed the EAS Update client. Channels are platform-specific:
+`production-apk` for public APKs, `production-google-play` for Play, and `production-ios` for iOS.
+These workflows build native packages only; they do not publish OTA updates. See
+[Application Updates](./app-updates.md) for one-time channel setup, manual publication, and rollback.
+
 ## Artifact Names
 
 Use the release tag without its leading `v` as the filename version, including any prerelease

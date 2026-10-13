@@ -30,7 +30,7 @@ export function sentryIdentifier(value: unknown): string | undefined {
 function sourceFile(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const name = value.split(/[?#]/, 1)[0]?.split(/[/\\]/).pop();
-  return name && /^[a-zA-Z0-9_.-]+\.(?:bundle|js|jsx|ts|tsx|hbc|wasm)$/.test(name)
+  return name && /^[a-zA-Z0-9_.-]+\.(?:bundle|jsbundle|js|jsx|ts|tsx|hbc|wasm)$/.test(name)
     ? `app:///${name}`
     : undefined;
 }
@@ -91,6 +91,35 @@ function sanitizeDebugImage(image: DebugImage): DebugImage[] {
   return file ? [{ type: image.type, debug_id: image.debug_id, code_file: file }] : [];
 }
 
+function collectDebugImages(event: Event): DebugImage[] | undefined {
+  const images = event.debug_meta?.images?.flatMap(sanitizeDebugImage);
+  const codeFile = event.exception?.values
+    ?.flatMap((error) => error.stacktrace?.frames ?? [])
+    .find(
+      (frame) =>
+        (!frame.platform || frame.platform === 'javascript') &&
+        (frame.filename === 'app:///index.android.bundle' ||
+          frame.filename === 'app:///main.jsbundle'),
+    )?.filename;
+  if (
+    !codeFile ||
+    images?.some((image) => image.type === 'sourcemap' && image.code_file === codeFile)
+  )
+    return images;
+
+  // SDK 7.11 can miss Hermes premodule stacks. beforeSend runs after its processors,
+  // so preserve their matches and fill only the missing bundle metadata.
+  // https://github.com/getsentry/sentry-react-native/pull/6545
+  const debugIds = Object.values(
+    (globalThis as typeof globalThis & { _sentryDebugIds?: Record<string, string> })
+      ._sentryDebugIds ?? {},
+  );
+  // Multiple registered bundles are ambiguous; never guess which map fits this stack.
+  if (debugIds.length !== 1 || !debugIds[0]) return images;
+
+  return [...(images ?? []), { type: 'sourcemap', debug_id: debugIds[0], code_file: codeFile }];
+}
+
 /** Construct the payload from allowed fields. Free-form messages can contain complete AI responses. */
 export function sanitizeSentryEvent(event: Event, originalException?: unknown): ErrorEvent | null {
   const exceptions = event.exception?.values;
@@ -126,6 +155,7 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
         Object.entries(context).filter(([field]) => fields.includes(field)),
       );
   }
+  const debugImages = collectDebugImages(event);
 
   return {
     type: undefined,
@@ -161,10 +191,6 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
           : undefined,
       })),
     },
-    debug_meta: event.debug_meta
-      ? {
-          images: event.debug_meta.images?.flatMap(sanitizeDebugImage),
-        }
-      : undefined,
+    debug_meta: debugImages ? { images: debugImages } : undefined,
   };
 }
