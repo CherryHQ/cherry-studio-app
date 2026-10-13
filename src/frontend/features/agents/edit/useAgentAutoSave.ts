@@ -27,6 +27,9 @@ export function useAgentAutoSave(agentId: string | undefined) {
   const { replaceAgentSkills } = useSkillMutations();
   // Skill toggles arrive one at a time; coalesce them so a queued write carries every change.
   const pendingSkillUpdates = useRef(new Map<string, AgentSkillUpdate>());
+  const [skillBindingUpdates, setSkillBindingUpdates] = useState<
+    ReadonlyMap<string, AgentSkillUpdate>
+  >(() => new Map());
   const pending = useRef(new Map<SaveKey, SaveTask>());
   const deferred = useRef(new Map<SaveKey, SaveTask>());
   const failed = useRef(new Map<SaveKey, SaveTask>());
@@ -137,11 +140,24 @@ export function useAgentAutoSave(agentId: string | undefined) {
     (updates: readonly AgentSkillUpdate[]) => {
       if (!agentId) return;
       for (const update of updates) pendingSkillUpdates.current.set(update.skillId, update);
+      setSkillBindingUpdates((current) => {
+        const next = new Map(current);
+        for (const update of updates) next.set(update.skillId, update);
+        return next;
+      });
       schedule('skillBindings', async () => {
         const batch = [...pendingSkillUpdates.current.values()];
         pendingSkillUpdates.current.clear();
         try {
           await replaceAgentSkills(agentId, batch);
+          // The mutation waits for query refresh. Retain any newer toggle, even an ABA change.
+          setSkillBindingUpdates((current) => {
+            const next = new Map(current);
+            for (const update of batch) {
+              if (next.get(update.skillId) === update) next.delete(update.skillId);
+            }
+            return next.size === current.size ? current : next;
+          });
         } catch (error) {
           for (const update of batch) {
             if (!pendingSkillUpdates.current.has(update.skillId)) {
@@ -174,5 +190,13 @@ export function useAgentAutoSave(agentId: string | undefined) {
     return () => subscription.remove();
   }, [flush]);
 
-  return { flush, hasFailedSave, retry, saveField, saveSkillBindings, saveToolBindings };
+  return {
+    flush,
+    hasFailedSave,
+    retry,
+    saveField,
+    saveSkillBindings,
+    saveToolBindings,
+    skillBindingUpdates,
+  };
 }

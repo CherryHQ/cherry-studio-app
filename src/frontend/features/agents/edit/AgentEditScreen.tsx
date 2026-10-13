@@ -39,7 +39,6 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
-import type { AgentSkillUpdate } from '@/shared/data/api/schemas/skills';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -161,8 +160,15 @@ function AgentEditForm({
   const { createAgent, deleteAgents, isCreating, isSettingAvatar, setAgentAvatar } =
     useAgentMutations();
   const { replaceAgentToolBindings } = useAgentToolBindingMutations();
-  const { flush, hasFailedSave, retry, saveField, saveSkillBindings, saveToolBindings } =
-    useAgentAutoSave(agentId);
+  const {
+    flush,
+    hasFailedSave,
+    retry,
+    saveField,
+    saveSkillBindings,
+    saveToolBindings,
+    skillBindingUpdates,
+  } = useAgentAutoSave(agentId);
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const openProviderSetup = useOpenProviderSetup(
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
@@ -175,9 +181,7 @@ function AgentEditForm({
   const [toolBindings, setToolBindings] = useState<WriteAgentToolBinding[]>(() =>
     createAgentToolBindingDraft(originalToolBindings),
   );
-  const [skillBindings, setSkillBindings] = useState<Map<string, boolean>>(() =>
-    createAgentSkillBindingDraft(skills),
-  );
+  const skillBindings = createAgentSkillBindingDraft(skills, skillBindingUpdates);
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const safeAreaInsets = useSafeAreaInsets();
@@ -247,20 +251,6 @@ function AgentEditForm({
       saveToolBindings(bindings);
     },
     [saveToolBindings],
-  );
-  const handleSkillBindingsChange = useCallback(
-    (updates: AgentSkillUpdate[]) => {
-      setSkillBindings((current) => {
-        const next = new Map(current);
-        for (const update of updates) {
-          if (update.isEnabled === null) next.delete(update.skillId);
-          else next.set(update.skillId, update.isEnabled);
-        }
-        return next;
-      });
-      saveSkillBindings(updates);
-    },
-    [saveSkillBindings],
   );
   const openToolApprovalModePicker = useCallback(() => {
     Keyboard.dismiss();
@@ -550,7 +540,7 @@ function AgentEditForm({
           <AgentSkillsSection
             agentId={agentId}
             bindings={skillBindings}
-            onChange={handleSkillBindingsChange}
+            onChange={saveSkillBindings}
             skills={skills}
           />
         ) : null}
