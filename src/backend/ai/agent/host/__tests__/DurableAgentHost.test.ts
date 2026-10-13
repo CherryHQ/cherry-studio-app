@@ -7,6 +7,7 @@ import type {
 } from '@/shared/contracts/agent';
 import { createUniqueModelId } from '@/shared/data/types/model';
 
+import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
   FakeRuntime,
   type DurableAgentRuntime,
@@ -273,6 +274,56 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('records a failed recovery even when the durable database cannot open', async () => {
+    const { traces, records } = createTraceRecorder();
+    const state = fixture({
+      traces,
+      durableStorage: {
+        open: async () => {
+          throw Object.assign(new Error('private database path'), { code: 'SQLITE_CANTOPEN' });
+        },
+        notifyTranscript: () => {},
+      },
+    });
+    await expect(state.host.initialize()).rejects.toThrow('private database path');
+    expect(records.at(-1)).toMatchObject({
+      name: 'ai.recovery',
+      status: 'error',
+      attributes: { 'error.code': 'SQLITE_CANTOPEN' },
+    });
+    expect(JSON.stringify(records)).not.toContain('private');
+  });
+
+  test('retains preparation failures before any model request or durable admission', async () => {
+    const { traces, records } = createTraceRecorder();
+    const state = fixture({ traces });
+    await state.host.initialize();
+    jest
+      .spyOn(state.conversations, 'ensureConversation')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('private configuration'), { code: 'SQLITE_FULL' }),
+      );
+    try {
+      await expect(
+        state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'private question' }],
+        }),
+      ).rejects.toThrow('private configuration');
+      expect(records.findLast((record) => record.name === 'ai.admission')).toMatchObject({
+        status: 'error',
+        context: { sessionId: state.sessionId },
+        attributes: { 'error.code': 'SQLITE_FULL' },
+      });
+      expect(await state.store.listUnsettledAssistantMessages()).toHaveLength(0);
+      expect(JSON.stringify(records)).not.toContain('private');
+    } finally {
+      await state.host.close();
+    }
+  });
   test('interrupts a reservation when observation fails before native admission', async () => {
     const state = fixture();
     await state.host.initialize();
@@ -576,19 +627,29 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
   });
 
   test('a failed terminal write leaves a recoverable pending row and blocks premature completion', async () => {
-    const state = fixture();
+    const { traces, records } = createTraceRecorder();
+    const state = fixture({ traces });
     const running = await state.reserve('running');
     await state.host.initialize();
     const events: AgentEvent[] = [];
     await state.host.observeSession(state.sessionId, (event) => events.push(event));
     jest
       .spyOn(state.store, 'finalizeAssistantMessage')
-      .mockRejectedValueOnce(new Error('disk full'));
+      .mockRejectedValueOnce(Object.assign(new Error('disk full'), { code: 'SQLITE_FULL' }));
     state.emit({ ...running, status: 'completed' });
     await state.host.quiesce();
     expect(events.filter((event) => event.type === 'message.finalized')).toHaveLength(1);
     expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('success');
     expect(state.copies.has(state.sessionId)).toBe(true);
+    const writes = records.filter(
+      (record) => record.name === 'ai.settlement' && record.revision === 2,
+    );
+    expect(writes.map((record) => record.status)).toEqual(['error', 'ok']);
+    expect(writes[0]).toMatchObject({
+      context: { ...running.identity, messageId: running.assistantMessageId },
+      attributes: { 'error.code': 'SQLITE_FULL' },
+    });
+    expect(JSON.stringify(writes)).not.toContain('disk full');
     await state.host.close();
   });
 
