@@ -353,6 +353,55 @@ describe('DesktopSession', () => {
     }
   });
 
+  it('spreads request bursts so no second exceeds either desktop request budget', async () => {
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
+    try {
+      const listedAt: number[] = [];
+      const readAt: number[] = [];
+      const content = { contentId: 'content-1', revision: '1', offset: '0' };
+      const channel = fakeChannel({
+        'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),
+        'agent.agents.list': () => {
+          listedAt.push(Date.now());
+          return { items: [], nextCursor: null };
+        },
+        'agent.content.read': () => {
+          readAt.push(Date.now());
+          return { ...content, dataBase64: '', nextOffset: '0', eof: true, sha256: 'a'.repeat(64) };
+        },
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      const started = Date.now();
+      const burst = (count: number, send: () => Promise<unknown>) =>
+        Array.from({ length: 8 }, async () => {
+          for (let sent = 0; sent < count; sent++) await send();
+        });
+      const work = [
+        ...burst(15, () => session.request('agent.agents.list', {})),
+        ...burst(70, () =>
+          session.request('agent.content.read', { sessionId: 's1', ...content, maxBytes: 24_576 }),
+        ),
+      ];
+      await jest.advanceTimersByTimeAsync(10_000);
+      await Promise.all(work);
+
+      // The desktop drops the connection above 64 requests a second, or 512 content reads.
+      expect(listedAt).toHaveLength(120);
+      for (let index = 0; index + 48 < listedAt.length; index++)
+        expect(listedAt[index + 48] - listedAt[index]).toBeGreaterThanOrEqual(1000);
+      expect(listedAt[119] - started).toBeLessThanOrEqual(3000);
+      expect(readAt).toHaveLength(560);
+      for (let index = 0; index + 496 < readAt.length; index++)
+        expect(readAt[index + 496] - readAt[index]).toBeGreaterThanOrEqual(1000);
+      // Content reads spend their own budget, so history lists do not slow them down.
+      expect(readAt[479]).toBe(started);
+      expect(readAt[559] - started).toBe(1000);
+      session.close();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('treats a refused heartbeat as proof of life and a lost one as a dead channel', async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'nextTick'] });
     try {
