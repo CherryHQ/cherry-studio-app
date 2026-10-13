@@ -59,7 +59,14 @@ function createProvider(): WebSearchProvider {
     name: 'Tavily',
     type: 'api',
     apiKeys: ['key-a'],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.tavily.com' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.tavily.com',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

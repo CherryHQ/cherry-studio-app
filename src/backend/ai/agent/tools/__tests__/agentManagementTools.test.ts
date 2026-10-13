@@ -10,6 +10,7 @@ const agent: Agent = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Writer',
   instructions: 'Write clearly.',
+  mode: 'standard',
   model: null,
   modelName: null,
   avatar: null,

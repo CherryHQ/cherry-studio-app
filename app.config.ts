@@ -58,6 +58,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(profile === 'production' ? ['./scripts/withAndroidReleaseOptimization.js'] : []),
       ...(config.plugins ?? []),
       '@preeternal/react-native-file-hash',
+      './plugins/withDiagnostics',
       './modules/crash-reporting/app.plugin.js',
       './scripts/withReportingAutolinking.js',
     ]

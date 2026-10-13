@@ -6,7 +6,7 @@ import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types
 
 import { requestWebSearchJson, type WebSearchJsonRequester } from '../../http/requestWebSearchJson';
 import type { ApiKeyRotationState } from '../../utils/provider';
-import { resolveProviderApiHost } from '../../utils/provider';
+import { assertProviderReady, resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
 
 const MAX_HTTP_ERROR_TEXT_LENGTH = 500;
@@ -17,6 +17,11 @@ export abstract class BaseWebSearchProvider {
     private readonly apiKeyRotationState: ApiKeyRotationState,
     private readonly jsonRequester: WebSearchJsonRequester = requestWebSearchJson,
   ) {}
+
+  /** Configuration-only check: never consumes a key or makes a network request. */
+  validateConfiguration(capability: WebSearchCapability): void {
+    assertProviderReady(this.provider, capability);
+  }
 
   protected resolveApiUrl(capability: WebSearchCapability, path: string): string {
     const apiHost = resolveProviderApiHost(this.provider, capability);

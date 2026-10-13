@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   type ChatRouteParamsInput,
   chatHref,
+  createChatComposerHandoff,
   chatRouteParams,
   parseChatRoute,
 } from '@/frontend/appShell/navigation/chat';
@@ -16,7 +17,6 @@ import { useBackendModule } from '@/frontend/data';
 import { useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import type { SystemAction, SystemSharedFile } from '@/shared/contracts';
 
-import { createShareComposerHandoff } from './shareComposerHandoff';
 import { useSystemEntryClaims } from './useSystemEntryClaims';
 
 /** Hands an incoming system share to the chat composer, for the user to edit, retarget, and send. */
@@ -40,7 +40,7 @@ export function SystemEntryBridge() {
   const deliver = (action: SystemAction) => {
     // Without an Agent there is nowhere to put a share, so it waits for a later pass.
     if (!navigation?.key || !recentAgentId) return false;
-    const composerHandoff = createShareComposerHandoff({
+    const composerHandoff = createChatComposerHandoff({
       attachments: action.files.map(toShareAttachment),
       draft: action.text,
     });

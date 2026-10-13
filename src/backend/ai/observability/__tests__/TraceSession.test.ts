@@ -1,6 +1,6 @@
+import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { TraceSpanRecordSchema, type TraceSpanRecord } from '@/shared/data/types/trace';
 
-import { traceErrorAttributes } from '../traceAttributes';
 import { TraceSession } from '../TraceSession';
 
 function capture(traceId = 'a'.repeat(32)) {
@@ -89,7 +89,6 @@ describe('TraceSession', () => {
     });
     expect(records[1].attributes).toEqual({
       'gen_ai.usage.input_tokens': 9,
-      'gen_ai.request.model': 'x'.repeat(256),
       'error.type': 'Error',
       'error.code': 'rate_limit',
       'http.status_code': 429,

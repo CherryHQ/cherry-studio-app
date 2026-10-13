@@ -96,7 +96,12 @@ function createProvider(): WebSearchProvider {
     type: 'api',
     apiKeys: ['zhipu-key'],
     capabilities: [
-      { feature: 'searchKeywords', apiHost: 'https://open.bigmodel.cn/api/paas/v4/web_search' },
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://open.bigmodel.cn/api/paas/v4/web_search',
+      },
     ],
     engines: [],
     basicAuthUsername: '',

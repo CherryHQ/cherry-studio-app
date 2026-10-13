@@ -102,6 +102,13 @@ export type RuntimeOptions = {
   temperature?: number;
 };
 
+/** Host-authorized web access and local configuration, frozen for one turn. */
+export type RuntimeWebTools = {
+  modelToolsPreferred: boolean;
+  clientSearchAvailable: boolean;
+  clientFetchAvailable: boolean;
+};
+
 export type RuntimeToolRef =
   | { source: 'builtin'; capabilityId: string }
   | { source: 'mcp'; serverId: string; rawToolName: string };
@@ -121,6 +128,16 @@ export type RuntimeArtifact = {
 export type RuntimeToolResult = {
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
+  /** Compact built-in model value when the full display value is already supplied in instructions. */
+  modelValue?: RuntimeJsonValue;
+  /**
+   * Trusted built-in callback instructions for subsequent requests in this execution.
+   * Kept outside compactable messages; the Host replaces them when configuring the next turn.
+   * Never inferred from value, accepted from MCP, or duplicated in model-facing result JSON.
+   */
+  instructions?: { key: string; text: string };
+  /** Preserve an already committed effect's receipt if its system instruction update fails. */
+  instructionsFailureValue?: RuntimeJsonValue;
   /** Trusted callback metadata; never inferred from the JSON inside value. */
   failure?: {
     error: RuntimeError;
@@ -276,6 +293,15 @@ export type RuntimeExecutionRequest = {
 };
 
 export type RuntimeOutputPart =
+  | { id: string; type: 'error'; error: RuntimeError }
+  | { id: string; type: 'data-search-suggestions'; data: { html: string } }
+  | {
+      id: string;
+      type: 'source-url';
+      sourceId: string;
+      url: string;
+      title?: string;
+    }
   | {
       id: string;
       type: 'text' | 'reasoning';

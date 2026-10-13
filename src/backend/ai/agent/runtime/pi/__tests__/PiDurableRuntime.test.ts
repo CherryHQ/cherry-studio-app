@@ -11,6 +11,7 @@ import {
 } from '@earendil-works/pi-durable';
 
 import { PiDurableRuntime } from '../PiDurableRuntime';
+import { ToolInstructions } from '../piToolInstructions';
 
 function options() {
   return {
@@ -34,6 +35,41 @@ const seed = {
 };
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('seeds selected instructions and replaces the entire applicable set on the next configuration', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const initial = [
+        { key: 'skill:selected', text: 'Selected body.' },
+        { key: 'skill:previous', text: 'Previous body.' },
+      ];
+      const conversation = await runtime.ensureConversation({
+        ...seed,
+        initialInstructions: initial,
+      });
+      const read = () =>
+        conversation.commit(
+          async (tx) =>
+            (await tx.doc(ToolInstructions, conversation.id)).sections.map(({ key, text }) => ({
+              key,
+              text,
+            })),
+          BACKGROUND_CONTEXT,
+        );
+      expect(await read()).toEqual(initial);
+      const current = [{ key: 'skill:selected', text: 'Adapted body.' }];
+      await runtime.configure(
+        seed.sessionId,
+        seed.agent,
+        {},
+        BACKGROUND_CONTEXT,
+        undefined,
+        current,
+      );
+      expect(await read()).toEqual(current);
+    } finally {
+      await runtime.close();
+    }
+  });
   test('refuses the earlier authoritative binding and preserves its history for explicit migration', async () => {
     class ReopenableStorage extends MemoryStorage {
       override async close() {}

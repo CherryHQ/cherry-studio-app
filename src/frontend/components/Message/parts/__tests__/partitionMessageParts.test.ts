@@ -88,6 +88,17 @@ describe('groupMessageProcessItems', () => {
 });
 
 describe('partitionMessageParts', () => {
+  test('keeps adaptation receipts visible outside the collapsed process with or without model prose', () => {
+    const receipt = tool('adapt_skill');
+    for (const parts of [
+      [tool('read'), receipt],
+      [tool('read'), receipt, text('Your summary')],
+    ]) {
+      const partition = partitionMessageParts(parts);
+      expect(partition.body.some(({ part }) => part === receipt)).toBe(true);
+      expect(partition.process.some(({ part }) => part === receipt)).toBe(false);
+    }
+  });
   test('keeps turn-start markers visible and in-loop markers between their tools', () => {
     const boundary = {
       type: 'data-compaction-anchor',

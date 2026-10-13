@@ -104,3 +104,28 @@ test('bounds the model input and rejects ambiguous question or option identities
     }).success,
   ).toBe(false);
 });
+
+test('retains bounded before/after review content through the serialized question contract', () => {
+  const question = {
+    ...request.questions[0]!,
+    description: 'Changes affect the local Skill.',
+    textChanges: [
+      { before: 'Optional desktop copy', after: '', reason: 'Unavailable on this device' },
+    ],
+  };
+  expect(AgentUserQuestionsSchema.parse({ questions: [question] }).questions[0]).toEqual(question);
+  expect(
+    AgentUserQuestionsSchema.safeParse({
+      questions: [
+        { ...question, textChanges: Array.from({ length: 4 }, () => question.textChanges[0]) },
+      ],
+    }).success,
+  ).toBe(false);
+  expect(
+    AgentUserQuestionsSchema.safeParse({
+      questions: [
+        { ...question, textChanges: [{ ...question.textChanges[0], before: 'x'.repeat(4001) }] },
+      ],
+    }).success,
+  ).toBe(false);
+});

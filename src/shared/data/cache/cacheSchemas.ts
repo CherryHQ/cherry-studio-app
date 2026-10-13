@@ -12,6 +12,8 @@
 
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
+import type { DiagnosticFeedbackRecord } from '@/shared/contracts/diagnostics';
+
 // ============================================================================
 // Template Key Type Utilities
 // ============================================================================
@@ -82,6 +84,7 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
   // Last composer effort per Agent; clearing the cache restores model defaults.
   'chat.reasoning_efforts': Record<string, ReasoningEffortOption>;
@@ -91,6 +94,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
   'chat.reasoning_efforts': {},
   'internal.persist_probe': 0,

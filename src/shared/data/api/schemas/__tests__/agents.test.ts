@@ -1,6 +1,17 @@
 import { CreateAgentSchema, ListAgentsQuerySchema, UpdateAgentSchema } from '../agents';
 
 describe('agent api schemas', () => {
+  test.each([CreateAgentSchema, UpdateAgentSchema])('accepts only fixed Agent modes', (schema) => {
+    for (const mode of ['standard', 'minimal']) {
+      expect(schema.safeParse({ name: 'Agent', mode }).success).toBe(true);
+    }
+    expect(schema.safeParse({ name: 'Agent', mode: 'custom' }).success).toBe(false);
+  });
+
+  test('an unrelated update does not reset the stored mode', () => {
+    expect(UpdateAgentSchema.parse({ name: 'Renamed' })).toEqual({ name: 'Renamed' });
+  });
+
   test('fills agent list pagination defaults', () => {
     expect(ListAgentsQuerySchema.parse({})).toMatchObject({
       limit: 100,

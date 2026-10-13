@@ -1,5 +1,4 @@
-import { MobileRegistryLoader } from '@cherrystudio/provider-registry/mobile';
-
+import { MobileRegistryLoader } from '@/backend/data/services/MobileRegistryLoader';
 import { ProviderSetupError } from '@/shared/contracts';
 import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 

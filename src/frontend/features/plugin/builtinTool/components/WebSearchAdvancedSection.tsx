@@ -16,7 +16,10 @@ export function WebSearchAdvancedSection() {
 
   return (
     <>
-      <Section title={t('settings.websearch.advanced.title')}>
+      <Section
+        title={t('settings.websearch.advanced.title')}
+        footer={t('settings.websearch.advanced.externalOnly')}
+      >
         <Section.Item
           label={t('settings.websearch.maxResults')}
           trailing={

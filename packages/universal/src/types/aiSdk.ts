@@ -5,9 +5,12 @@ import {
 } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
 
-export type ReasoningEffortOption = ReasoningEffort | 'default';
+export type ReasoningEffortOption = Exclude<ReasoningEffort, 'ultra'> | 'default';
 
-export const ReasoningEffortOptionSchema = z.enum(['default', ...objectValues(REASONING_EFFORT)]);
+export const ReasoningEffortOptionSchema = z.enum([
+  'default',
+  ...objectValues(REASONING_EFFORT).filter((effort) => effort !== 'ultra'),
+]);
 
 const AiSdkParamsSchema = z.enum([
   'maxOutputTokens',

@@ -43,7 +43,7 @@ pnpm test:app -- path/to/file.test.ts --runInBand
 pnpm --filter @cherrystudio/ai-runtime test src/path/to/file.test.ts
 ```
 
-Use the owning package filter for `ai-runtime` and `provider-registry`. Jest owns app tests;
+Use the owning package filter for `ai-runtime`. Jest owns app tests;
 package scripts select their package test runner. The published AI and remote packages are
 covered by their upstream suites; Mobile tests cover its adapters and consumed behavior.
 
@@ -107,14 +107,17 @@ same commit as the change itself.
 
 Pull requests start as drafts. If the draft changed after its local gates, rerun the gates on the
 final head before marking it ready. [PR CI](../../.github/workflows/pr-ci.yml) runs the configured
-application/package tests, typecheck, lint, format, package build, UI-boundary, skill, and documentation
-link checks for non-draft PRs targeting `main`.
+application/package tests, typecheck, lint, format, translation, UI/AI-runtime boundary, design,
+skill, workflow lint, and documentation link checks for non-draft PRs targeting `main`.
+A new push cancels the PR's previous run. The `CI` job succeeds only when test, typecheck, and lint
+all succeed; use it as the required check on `main`. [Release](../../.github/workflows/release.yml)
+runs the same workflow on the tagged commit before building.
 
 ### Remote Coverage And Local Exceptions
 
 - Root `pnpm test` runs the `ai-runtime` package suite, then root Jest.
-- Root Jest includes `provider-registry` suites through `vitestJestShim.ts`. There is no root
-  `test:provider-registry` script; use the owning package filter for a focused local run.
+- Provider registry schemas and catalog generation are tested upstream in the published package.
+  Root Jest covers Mobile registry loading, compatibility projections, and consumed behavior.
 - With `PRCI` set, Jest includes `scripts/__tests__/architectureBoundaries.test.ts` to protect
   dependency rules on every PR, `scripts/__tests__/reactNativeTextCache.test.ts` to guard the
   React Native text cache patch, and `scripts/__tests__/androidWindowCompatibility.test.ts` to guard

@@ -12,6 +12,9 @@ configuration, not in repository rules.
 
 - Before using a project skill, read [Project Skills](.agents/skills/README.md) for repository usage
   rules and required dependencies. Keep upstream skill files unchanged.
+- Before installing, adding, patching, or rebuilding dependencies, read
+  [Dependencies](docs/guides/development.md#dependencies). Run one `pnpm install` at a time per
+  checkout, wait for hook-started installs to finish, and never run `pnpm rebuild`.
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read

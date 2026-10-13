@@ -141,13 +141,35 @@ function unwrapToolOutput(output: Extract<AgentMessagePart, { type: 'dynamic-too
 
 function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
   switch (part.type) {
+    case 'source-url':
+      return {
+        type: 'source-url',
+        sourceId: part.sourceId,
+        url: part.url,
+        providerMetadata: { cherry: { nativeWeb: true } },
+        ...(part.title ? { title: part.title } : {}),
+      };
+    case 'data-search-suggestions':
     case 'data-compaction-anchor':
       return part;
     case 'text':
-      return part.pluginReferences?.length
+      return part.pluginReferences?.length ||
+        part.skillReferences?.length ||
+        part.skillSelections?.length ||
+        part.skillAction
         ? withCherryMeta(
             { type: 'text', text: part.text, state: part.state },
-            { references: part.pluginReferences },
+            {
+              references: [
+                ...(part.pluginReferences ?? []),
+                ...(part.skillReferences ?? []),
+                ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
+                ...(part.skillSelections ?? []).map((activation) => ({
+                  type: 'skill',
+                  ...activation,
+                })),
+              ],
+            },
           )
         : { type: 'text', text: part.text, state: part.state };
     case 'reasoning':

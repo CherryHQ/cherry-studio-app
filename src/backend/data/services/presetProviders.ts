@@ -1,12 +1,12 @@
-import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
-import {
-  buildRuntimeEndpointConfigs,
-  ENDPOINT_TYPE,
-  projectLegacyApiFeatures,
-} from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 
+import type { MobileProviderConfig } from '@/backend/data/services/mobileProviderCatalog';
 import type { ApiFeatures, AuthConfig } from '@/shared/data/types/provider';
 
+import {
+  buildRuntimeEndpointConfigs,
+  projectLegacyApiFeatures,
+} from './providerRegistryProjection';
 import type { CreateProviderInput } from './ProviderService';
 
 /**
@@ -33,7 +33,7 @@ export function isRecommendedPresetProvider(providerId: string): boolean {
 
 function getDefaultChatEndpoint(
   providerId: string,
-  presetDefault: ProtoProviderConfig['defaultChatEndpoint'],
+  presetDefault: MobileProviderConfig['defaultChatEndpoint'],
 ) {
   if (providerId === 'vertexai') {
     return ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT;
@@ -62,11 +62,11 @@ function getAuthConfig(providerId: string): AuthConfig | null {
   return null;
 }
 
-function toApiFeatures(provider: ProtoProviderConfig): ApiFeatures | null {
+function toApiFeatures(provider: MobileProviderConfig): ApiFeatures | null {
   return projectLegacyApiFeatures(provider);
 }
 
-export function createPresetProviderInput(provider: ProtoProviderConfig): CreateProviderInput {
+export function createPresetProviderInput(provider: MobileProviderConfig): CreateProviderInput {
   return {
     apiFeatures: toApiFeatures(provider),
     authConfig: getAuthConfig(provider.id),

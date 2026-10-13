@@ -32,6 +32,7 @@ import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
@@ -133,6 +134,7 @@ export function createAppBootstrapRuntime(
     'DesktopConnectionManager',
   );
   const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
+  const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
@@ -150,14 +152,13 @@ export function createAppBootstrapRuntime(
     preference,
     webSearch,
   });
-  backup.configure(
-    () => agent.hasPendingStorageWork() || jobRuntime.hasPendingStorageWork(),
-    () => {
-      void jobRuntime.pump({ reason: 'timer' });
-    },
-    () => agent.quiesce(),
-  );
-  const { backend, dataApiDependencies, disposeSystemEntry } = createBackend(services, {
+  const {
+    backend,
+    dataApiDependencies,
+    disposeSystemEntry,
+    initializeSkills,
+    hasPendingSkillStorageWork,
+  } = createBackend(services, {
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
       replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
@@ -171,14 +172,26 @@ export function createAppBootstrapRuntime(
     desktopConnections,
     desktopConnectionManager,
     remoteAgent,
+    diagnostics,
     languageServing,
     providerRegistryUpdater,
   });
+  backup.configure(
+    () =>
+      agent.hasPendingStorageWork() ||
+      jobRuntime.hasPendingStorageWork() ||
+      hasPendingSkillStorageWork(),
+    () => {
+      void jobRuntime.pump({ reason: 'timer' });
+    },
+    () => agent.quiesce(),
+  );
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
+      agentGlobalSkills: services.agentGlobalSkill,
       agentToolBindings: services.agentToolBinding,
       agentSessionMessages: services.agentSessionMessage,
       agentSessionMutations: services.agent,
@@ -199,6 +212,8 @@ export function createAppBootstrapRuntime(
         listConnections: () => services.mcpRuntime.pluginAuthorizations.listConnections(),
       },
       providers: services.provider,
+      skillAdmissions: dataApiDependencies.skillAdmissions,
+      skillInstructions: dataApiDependencies.skillInstructions,
       providerAccounts,
       systemModelSupport: dataApiDependencies.systemModelSupport,
     }),
@@ -247,6 +262,7 @@ export function createAppBootstrapRuntime(
         }
         await application.install(host);
         await initializeAppRuntime(services);
+        await initializeSkills();
         commitStorageBoot();
         try {
           cleanupStorageAfterBoot();

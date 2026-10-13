@@ -1,6 +1,13 @@
 import * as z from 'zod';
 
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+import { isDeviceRegionMainlandChina } from '@/backend/services/device';
+import { HttpError } from '@/backend/services/http';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+import type {
+  WebSearchCapability,
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+} from '@/shared/data/types/webSearch';
 
 import { resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
@@ -49,9 +56,19 @@ const JinaSearchResponseSchema = z.looseObject({
     .optional(),
 });
 
+// Jina serves a mirror that stays reachable from mainland China, where the global hosts may not be.
+const JINA_MAINLAND_HOST: Record<string, string> = {
+  'https://s.jina.ai': 'https://s.jinaai.cn',
+  'https://r.jina.ai': 'https://r.jinaai.cn',
+};
+
+const logger = loggerService.withContext('JinaProvider');
+
 type JinaContext = BaseSearchContext & {
   apiKey: string;
   requestUrl: string;
+  /** The same request on Jina's other built-in host; absent when the user set their own address. */
+  alternateRequestUrl?: string;
 };
 
 export class JinaProvider extends BaseWebSearchProvider {
@@ -61,7 +78,9 @@ export class JinaProvider extends BaseWebSearchProvider {
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
     const context = this.prepareSearchKeywordsContext(query, config, httpOptions);
-    const payload = await this.executeSearchKeywords(context);
+    const payload = await this.requestOnEitherHost(context, (target) =>
+      this.executeSearchKeywords(target),
+    );
 
     return this.buildSearchKeywordsResponse(context, payload);
   }
@@ -72,9 +91,50 @@ export class JinaProvider extends BaseWebSearchProvider {
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
     const context = this.prepareFetchUrlsContext(query, config, httpOptions);
-    const payload = await this.executeFetchUrls(context);
+    const payload = await this.requestOnEitherHost(context, (target) =>
+      this.executeFetchUrls(target),
+    );
 
     return this.buildFetchUrlsResponse(context, payload);
+  }
+
+  /**
+   * The built-in address follows the device region, global or mainland mirror. A user's own
+   * address is used as entered and has no alternate.
+   */
+  private resolveRequestUrls(capability: WebSearchCapability, path: string) {
+    const configuredHost = withoutTrailingSlash(resolveProviderApiHost(this.provider, capability));
+    const mainlandHost = JINA_MAINLAND_HOST[configuredHost];
+    if (!mainlandHost) return { requestUrl: `${configuredHost}/${path}` };
+
+    const [host, alternateHost] = isDeviceRegionMainlandChina()
+      ? [mainlandHost, configuredHost]
+      : [configuredHost, mainlandHost];
+    return { requestUrl: `${host}/${path}`, alternateRequestUrl: `${alternateHost}/${path}` };
+  }
+
+  /**
+   * Device settings are only a guess at what the network can reach, so when a built-in host
+   * cannot be connected to, the request is sent once to the other. A timeout or an answer from
+   * the service is final: the other host would only repeat it.
+   */
+  private async requestOnEitherHost<TPayload>(
+    context: JinaContext,
+    execute: (context: JinaContext) => Promise<TPayload>,
+  ): Promise<TPayload> {
+    try {
+      return await execute(context);
+    } catch (error) {
+      const unreachable = error instanceof HttpError && error.kind === 'network';
+      if (!unreachable || !context.alternateRequestUrl || context.signal?.aborted) {
+        throw error;
+      }
+
+      logger.warn('Jina host unreachable; retrying its alternate built-in host', {
+        error: error.message,
+      });
+      return execute({ ...context, requestUrl: context.alternateRequestUrl });
+    }
   }
 
   private prepareSearchKeywordsContext(
@@ -85,18 +145,10 @@ export class JinaProvider extends BaseWebSearchProvider {
     const normalizedQuery = query.trim();
 
     return {
-      // Deliberate divergence: desktop requires a key here
-      // (JinaProvider.ts:118) and only lets the reader path run anonymously.
-      // s.jina.ai answers unauthenticated requests too, and mobile keeps that
-      // open so web search works on a fresh install with nothing configured --
-      // JinaProvider.test.ts pins the no-Authorization-header behaviour for
-      // both paths. Do not "fix" this back to resolveApiKey() on sync.
-      apiKey: this.resolveApiKey(false),
+      apiKey: this.resolveApiKey(),
       query: normalizedQuery,
       maxResults: config.maxResults,
-      requestUrl: `${withoutTrailingSlash(resolveProviderApiHost(this.provider, 'searchKeywords'))}/${encodeURIComponent(
-        normalizedQuery,
-      )}`,
+      ...this.resolveRequestUrls('searchKeywords', encodeURIComponent(normalizedQuery)),
       signal: httpOptions?.signal ?? undefined,
     };
   }
@@ -109,10 +161,12 @@ export class JinaProvider extends BaseWebSearchProvider {
     const url = query.trim();
 
     return {
+      // Jina Reader answers anonymous requests; a key only raises the limits.
       apiKey: this.resolveApiKey(false),
       query: url,
       maxResults: config.maxResults,
-      requestUrl: `${withoutTrailingSlash(resolveProviderApiHost(this.provider, 'fetchUrls'))}/${url}`,
+      // The reader expects the raw target URL after the host.
+      ...this.resolveRequestUrls('fetchUrls', url),
       signal: httpOptions?.signal ?? undefined,
     };
   }

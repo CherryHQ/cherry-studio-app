@@ -65,6 +65,32 @@ const question = message('a', 'user', [
   { id: 'question', type: 'text', text: 'Question?', state: 'done' },
 ]);
 
+test('exports native citations and preserves the final answer before source metadata', () => {
+  const native = message('native', 'assistant', [
+    { id: 'answer', type: 'text', text: 'Answer [cite:native-1]', state: 'done' },
+    {
+      id: 'source',
+      type: 'source-url',
+      sourceId: 'native-1',
+      title: 'A',
+      url: 'https://example.com/a',
+    },
+    {
+      id: 'suggestions',
+      type: 'data-search-suggestions',
+      data: { html: '<div>Suggestions</div>' },
+    },
+  ]);
+  expect(toChatExportDocument([native], options).sections[0].blocks).toEqual([
+    { kind: 'markdown', source: 'Answer [1](<https://example.com/a>)' },
+    {
+      kind: 'links',
+      summary: '1 sources',
+      items: [{ label: '1. A', url: 'https://example.com/a' }],
+    },
+  ]);
+});
+
 test('disabling process includes the final answer and files but excludes earlier process text', () => {
   const document = toChatExportDocument([question, answer], options);
   expect(document.sections.map((section) => section.heading)).toEqual(['You', 'Assistant']);

@@ -37,6 +37,7 @@ import {
   type AgentTurnView,
 } from '@/shared/contracts/agent';
 import { BackupError } from '@/shared/contracts/backup';
+import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -58,7 +59,7 @@ import {
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
-import { buildAgentSystemPrompt } from './agentSystemPrompt';
+import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
 import {
   durableRuntimeTiming,
   DurableTurnMetadataSchema,
@@ -130,6 +131,12 @@ export class DurableAgentHost implements AgentProtocol {
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: { release(): void } | undefined;
+
+  private skillWorkflow: SkillsModule | undefined;
+
+  configureSkills(workflow: SkillsModule): void {
+    this.skillWorkflow = workflow;
+  }
 
   get isReady() {
     return this.accepting;
@@ -518,11 +525,16 @@ export class DurableAgentHost implements AgentProtocol {
       model: plan.agent.model,
       options: plan.agent.options,
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
+      initialInstructions:
+        plan.agent.mode === 'standard' ? buildInitialSkillInstructions(plan.skills) : [],
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
+        mode: plan.agent.mode,
         appLanguage: this.ports.appLanguage(),
         tools: plan.tools,
         pluginGuides: plan.pluginGuides,
+        skills: plan.skills,
         toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
       }),
     };
@@ -572,6 +584,7 @@ export class DurableAgentHost implements AgentProtocol {
           : undefined;
       const choices = {
         parts: userInput(user.parts),
+        ...submittedSkills(user.parts),
         ...(assistant.modelId ? { modelId: assistant.modelId } : {}),
         ...submittedEffort(snapshot?.reasoningEffort),
         ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
@@ -812,6 +825,7 @@ export class DurableAgentHost implements AgentProtocol {
     return {
       agents: this.ports.agents,
       askUser: (question, call) => this.askUser(question, call),
+      appLanguage: () => this.ports.appLanguage(),
       documentParserMode: () => this.ports.documentParserMode(),
       files: this.ports.files,
       inferenceModel: this.ports.inferenceModel,
@@ -820,6 +834,9 @@ export class DurableAgentHost implements AgentProtocol {
       runtimeTools: this.ports.runtimeTools,
       store: this.store,
       systemCapabilities: this.ports.tools,
+      webTools: this.ports.webTools ? () => this.ports.webTools!() : undefined,
+      ...(this.ports.skills ? { skills: this.ports.skills } : {}),
+      ...(this.skillWorkflow ? { skillWorkflow: this.skillWorkflow } : {}),
     };
   }
 
@@ -854,6 +871,7 @@ export class DurableAgentHost implements AgentProtocol {
           userMessageId: turn.userMessageId,
           assistantMessageId: turn.assistantMessageId,
           parts: userInput(facts.userParts),
+          ...submittedSkills(facts.userParts),
           modelId: facts.inferenceSnapshot.model.uniqueModelId,
           ...submittedEffort(configuration.options.reasoningEffort),
           ...(facts.inferenceSnapshot.imageGeneration
@@ -1496,6 +1514,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
     kind: configuration.kind ?? 'language',
     model: configuration.model,
     instructions: configuration.instructions,
+    initialInstructions: configuration.initialInstructions ?? [],
     options: configuration.options,
     tools: configuration.tools.map((tool) => ({
       ref: tool.ref,
@@ -1508,6 +1527,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
     })),
+    webTools: configuration.webTools,
   };
   return JSON.stringify(facts, (_key, value: unknown) =>
     value && typeof value === 'object' && !Array.isArray(value)
@@ -1526,14 +1546,30 @@ function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
         left.rawToolName === right.rawToolName)
   );
 }
+/** Explicit Skill selections and the find-and-install action recorded on a submitted message. */
+function submittedSkills(parts: AgentMessageView['parts']) {
+  const text = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
+  const skillIds = text.flatMap((part) =>
+    (part.skillSelections ?? []).map(({ skillId }) => skillId),
+  );
+  const skillAction = text.find((part) => part.skillAction)?.skillAction;
+  return {
+    ...(skillIds.length ? { skillIds } : {}),
+    ...(skillAction ? { skillAction } : {}),
+  };
+}
+
 function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
   return parts.flatMap((part) => {
+    // A selection made without typed text is recorded on an empty text part.
+    if (part.type === 'text' && !part.text) return [];
     if (part.type === 'text')
       return [
         AgentInputPartSchema.parse({
           type: part.type,
           text: part.text,
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
+          ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
         }),
       ];
     if (part.type === 'file')

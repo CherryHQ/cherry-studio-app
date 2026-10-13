@@ -45,6 +45,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
     id: row.id,
     instructions: row.instructions,
+    mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,
     name: row.name,

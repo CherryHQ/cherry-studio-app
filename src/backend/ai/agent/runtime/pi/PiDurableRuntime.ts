@@ -26,6 +26,7 @@ import {
 
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
+import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
   conversationId: ConversationId | null;
@@ -124,6 +125,7 @@ type PiConversationSeed = {
   agent: AgentChange;
   options?: RuntimeOptions;
   configuration?: JsonObject;
+  initialInstructions?: readonly { key: string; text: string }[];
   resourceFileEntryIds?: readonly string[];
   entries?: readonly EntryDraft[];
 };
@@ -172,6 +174,8 @@ export class PiDurableRuntime {
       if (seed.configuration) await tx.doc(Configuration, seed.sessionId, seed.configuration);
       const conversation = await tx.createConversation({ ownership: { kind: 'ownerless' } });
       await configure(tx, conversation.id, seed.agent);
+      const instructions = await tx.doc(ToolInstructions, conversation.id);
+      instructions.sections = [...(seed.initialInstructions ?? [])];
       const provider = await tx.doc(ProviderDoc, conversation.id);
       await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? {}));
       const resources = await tx.doc(ResourceScope, conversation.id);
@@ -342,16 +346,19 @@ export class PiDurableRuntime {
     options: RuntimeOptions,
     context: Context = BACKGROUND_CONTEXT,
     configuration?: JsonObject,
+    initialInstructions: readonly { key: string; text: string }[] = [],
   ): Promise<void> {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.commit(async (tx) => {
       const provider = await tx.doc(ProviderDoc, conversation.id);
       const request = await tx.doc(RequestOptions, provider.sessionId, jsonOptions(options));
+      const toolInstructions = await tx.doc(ToolInstructions, conversation.id);
       if (configuration) {
         const blueprint = await tx.doc(Configuration, sessionId, configuration);
         blueprint.value = configuration;
       }
       request.value = jsonOptions(options);
+      toolInstructions.sections = [...initialInstructions];
       await configure(tx, conversation.id, agent);
     }, context);
   }
