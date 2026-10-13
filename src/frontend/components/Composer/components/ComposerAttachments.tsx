@@ -15,7 +15,7 @@ export function ComposerAttachments({
   transfer,
 }: { transfer?: (file: ComposerAttachmentDraft) => FilePreviewTransfer | undefined } = {}) {
   const { attachments } = useComposerState();
-  const { removeAttachment } = useComposerActions();
+  const { removeAttachment, replaceAttachment } = useComposerActions();
 
   // A collapsed row keeps its last frame mounted while it animates out. File
   // previews can keep that native frame visible after the composer state has
@@ -28,6 +28,7 @@ export function ComposerAttachments({
         transfer={transfer}
         attachments={attachments}
         onAttachmentRemove={removeAttachment}
+        onAttachmentReplace={replaceAttachment}
       />
     </Composer.Collapsible>
   );

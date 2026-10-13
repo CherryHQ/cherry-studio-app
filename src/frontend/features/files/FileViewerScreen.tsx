@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
@@ -17,7 +18,11 @@ import { FileTextViewer } from './components/FileTextViewer';
 
 export function FileViewerScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{ fileEntryId?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    fileEntryId?: string | string[];
+    imageEditRequestId?: string | string[];
+  }>();
+  const imageEditRequestId = getSingleRouteParam(params.imageEditRequestId);
   const entryId = FileEntryIdSchema.safeParse(getSingleRouteParam(params.fileEntryId));
 
   if (!entryId.success) {
@@ -30,33 +35,40 @@ export function FileViewerScreen() {
       </View>
     );
   }
-  return <FileViewerRoute entryId={entryId.data} key={entryId.data} />;
+  return (
+    <FileViewerRoute
+      entryId={entryId.data}
+      imageEditRequestId={imageEditRequestId}
+      key={`${entryId.data}:${imageEditRequestId ?? ''}`}
+    />
+  );
 }
 
-function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
+function FileViewerRoute({
+  entryId,
+  imageEditRequestId,
+}: {
+  entryId: FileEntryId;
+  imageEditRequestId?: string;
+}) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
-  const [background, foreground, black, white] = useThemeColor([
-    'background',
-    'foreground',
-    'constant-black',
-    'constant-white',
-  ]);
+  const [background, foreground] = useThemeColor(['background', 'foreground']);
+  const { theme } = useUniwind();
   const file = query.data;
   const kind = file ? fileEntryPreviewKind(file.entry) : 'document';
-  const isImage = kind === 'image';
 
   return (
-    <View className={isImage ? 'flex-1 bg-constant-black' : 'flex-1 bg-background'}>
+    <View className="flex-1 bg-background">
       <Stack.Screen
         options={{
-          contentStyle: { backgroundColor: isImage ? black : background },
-          headerStyle: { backgroundColor: isImage ? black : background },
-          headerTintColor: isImage ? white : foreground,
+          contentStyle: { backgroundColor: background },
+          headerStyle: { backgroundColor: background },
+          headerTintColor: foreground,
           headerTransparent: false,
         }}
       />
-      <StatusBar style={isImage ? 'light' : 'auto'} />
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       {!file ? (
         <>
           <RouteHeader
@@ -74,7 +86,11 @@ function FileViewerRoute({ entryId }: { entryId: FileEntryId }) {
           </View>
         </>
       ) : kind === 'image' ? (
-        <FileImageViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
+        <FileImageViewer
+          file={file}
+          imageEditRequestId={imageEditRequestId}
+          key={`${file.entry.updatedAt}:${file.uri}`}
+        />
       ) : kind === 'document' ? (
         <FileDocumentViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
       ) : (
