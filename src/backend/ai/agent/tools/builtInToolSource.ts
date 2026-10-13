@@ -47,6 +47,7 @@ import { createAgentManagementTools, type AgentManagementData } from './agentMan
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
   createCalendarTools,
+  createHealthTools,
   createLocationTools,
   createReminderTools,
   type DeviceToolDependencies,
@@ -199,7 +200,7 @@ export function resolveApproval(
       canUseDevicePermission(permission, scope.deviceAccess[permission]) ||
       canRequestDevicePermission(scope.deviceAccess[permission]),
   );
-  if (!available.every(Boolean)) {
+  if (descriptor.permissionMatch === 'any' ? !available.some(Boolean) : !available.every(Boolean)) {
     return null;
   }
   if (
@@ -254,6 +255,7 @@ function createCatalog(
     ...(deps.jsSandbox ? [createRunJsTool({ sandbox: deps.jsSandbox, files: fileContent })] : []),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
+    ...createHealthTools(deviceDeps),
     ...createLocationTools(deviceDeps),
     ...createWebTools({ webSearch: deps.webSearch }),
     createGenerateImageTool(deps.painting, scope.paintingModel, resources, resolveUsageAttribution),

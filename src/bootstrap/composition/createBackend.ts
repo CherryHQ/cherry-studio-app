@@ -37,6 +37,7 @@ import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
+import { createHealthModule } from '@/backend/services/device';
 import {
   createDocumentExportDependencies,
   type DocumentExportRuntime,
@@ -341,6 +342,7 @@ export function createBackend(
         subscribeChanges: services.fileContent.subscribeChanges,
       },
       mcp: services.mcpRuntime,
+      health: createHealthModule(services.devicePermissions),
       models,
       paintings,
       permissions: services.devicePermissions,

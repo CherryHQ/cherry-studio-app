@@ -160,12 +160,29 @@ export function createLocalConversationProjector(input: {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const isHealth =
+          approval.toolRef.source === 'builtin' &&
+          (approval.toolRef.capabilityId === 'health_get_summary' ||
+            approval.toolRef.capabilityId === 'health_list_workouts');
+        const inference = isHealth
+          ? state.liveMessages.find(
+              (message) => message.role === 'assistant' && message.turnId === approval.turnId,
+            )?.inferenceSnapshot
+          : undefined;
         return {
           id: approval.id,
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
           state: 'pending',
+          ...(isHealth
+            ? {
+                healthDataSharing: {
+                  providerId:
+                    inference?.status === 'supported' ? inference.snapshot.model.providerId : null,
+                },
+              }
+            : {}),
           input: { kind: 'inline', value: { kind: 'json', value: approval.input, complete: true } },
           respond: action<ConversationInteractionResponse, void>(state, false, async (decision) => {
             if (

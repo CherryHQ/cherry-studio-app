@@ -1,12 +1,18 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
 import MousePointerClickIcon from '@cherrystudio/app-icons/icons/mouse-pointer-click';
 import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView } from 'react-native';
+import {
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
@@ -84,7 +90,7 @@ function SidebarBodyContent({
   registerEndReachedHandler: RegisterEndReachedHandler;
 }) {
   const { t } = useTranslation();
-  const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
+  const { navigateAgents, openHealth, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
   const { source } = useChatSource();
   const { progress } = useSidebarSelection();
@@ -131,6 +137,15 @@ function SidebarBodyContent({
             testID="sidebar-library"
             disabled={disabled}
           />
+          {Platform.OS === 'ios' ? (
+            <SidebarNavRow
+              icon={HeartPulseIcon}
+              label={t('health.title')}
+              onPress={openHealth}
+              testID="sidebar-health"
+              disabled={disabled}
+            />
+          ) : null}
         </Animated.View>
       ) : null}
 

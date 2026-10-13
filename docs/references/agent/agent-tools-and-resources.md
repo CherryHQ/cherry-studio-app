@@ -2,13 +2,13 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, location, web search and fetch, image
+The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
 generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
 `run_js`, all using the settled `ToolRef` and `{ value, artifacts }` contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
 belong to every turn, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -73,7 +73,8 @@ own platform, permission, application-configuration, base approval, capability-g
 and auto-approval eligibility. The Agent editor enables or disables capability groups
 (`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota.
+auto-approval eligible: enabling the image group is not consent to spend provider quota. Health
+tools are also ineligible: each call requires explicit consent to share health data with AI.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
 installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
@@ -376,14 +377,32 @@ retry; cancellation still propagates without becoming a cached failure.
   batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
   until its native callback settles.
 
-### Retired Health Capability
+### Health And Fitness
 
-The first App Store release omits health access. The executable catalog, Agent capability groups,
-permission settings, native dependencies, entitlements, and usage descriptions contain no health
-capability. Persisted Agent deny-lists drop the retired `health` id on read using the existing
-unknown-capability guard. Existing conversations retain health tool result labels and icons for
-historical display; those entries do not register executable tools or request permissions.
-Restoring health access requires a separate native feature and App Store submission.
+The iOS-only `/health` page is a sidebar destination. It shows the last seven days of activity,
+sleep and heart-rate metrics without invoking AI or persisting its overview. Native queries run
+only for scopes whose authorization inquiry has completed; the page requests read access only
+after a user press. Android has no Health Connect bridge, native health module or health entry.
+
+`health_get_summary` and `health_list_workouts` belong to the `health` Agent capability.
+The Agent created during first-run onboarding enables health; manually created Agents start with
+it disabled. Existing Agents retain their stored capability preferences without a data migration.
+Both tools always require application approval, including in automatic approval mode.
+The approval sheet identifies the receiving model service and explains sharing and conversation
+retention. It blocks approval if the receiving service cannot be resolved; denial remains available.
+The data is for the user's health and fitness management, not medical diagnosis.
+
+`modules/health-access` owns read authorization for eight types and never requests writing,
+background delivery or extended history. HealthKit reports whether authorization was requested,
+not whether reading was granted. The `requested` status permits a read attempt without claiming
+access; missing records remain null rather than becoming zero. Summary tools can use a subset
+of available metrics. Native aggregate queries avoid unbounded raw quantity fetches, disable the
+library cache, and daily queries stop between days when the turn is cancelled. The dependency
+patch removes native logs of health values.
+
+The initial App Store release removed this integration after a Guideline 2.5.1 finding. Restoring
+it requires a new native binary and a new submission; review notes and store metadata must describe
+the visible Health & Fitness page. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 

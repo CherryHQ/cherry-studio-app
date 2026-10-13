@@ -55,6 +55,10 @@ export function Sidebar({ navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/library');
       },
+      openHealth: () => {
+        navigation.closeDrawer();
+        router.push('/health');
+      },
       openPaintings: () => {
         navigation.closeDrawer();
         router.push('/drawings');

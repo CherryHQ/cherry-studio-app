@@ -3,6 +3,7 @@ export * from './backend';
 export * from './desktopConnections';
 export * from './diagnostics';
 export * from './file';
+export * from './health';
 export * from './fileAttachment';
 export * from './mcp';
 export * from './models';
