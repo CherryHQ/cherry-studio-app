@@ -26,11 +26,7 @@ const installed: Skill = {
   contentHash: 'a'.repeat(64),
   manifest: [{ path: 'SKILL.md', size: 1, digest: 'e'.repeat(64) }],
   invocation: { modelInvocable: true, userInvocable: true },
-  profile: {
-    provenance: 'reviewed',
-    workflowScope: 'Notes',
-    requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
-  },
+  profile: { scripts: [], declaredTools: [] },
   isEnabled: true,
   createdAt: '2026-09-23T00:00:00.000Z',
   updatedAt: '2026-09-23T00:00:00.000Z',
@@ -49,7 +45,6 @@ const candidate: SkillCandidate = {
   version: null,
   tags: [],
   installedSkillId: null,
-  profileProvenance: 'reviewed',
 };
 const checked: SkillTurnScope = {
   entries: [
@@ -61,7 +56,7 @@ const checked: SkillTurnScope = {
       folderName: installed.folderName,
       invocation: installed.invocation,
       files: ['SKILL.md'],
-      admission: { status: 'ready', reasons: [] },
+      limitations: { scripts: [], unavailableTools: [] },
     },
   ],
   readInstructions: async () => 'Write notes.',
@@ -91,12 +86,7 @@ function fixture(installIntent = true, candidates: SkillCandidate[] = [candidate
       source,
       installIntent,
       include: expanding.include,
-      context: {
-        agentId: 'agent',
-        disabledCapabilities: [],
-        model: { providerId: 'p', modelId: 'm' },
-        tools: [],
-      },
+      context: { agentId: 'agent' },
     }),
   ];
   return { tools, workflow };
@@ -124,10 +114,11 @@ describe('conversation Skill installation', () => {
       { candidateId: 'issued', agentIds: ['agent'] },
       signal,
     );
-    expect(await run(f.tools, 'load_skill', { skill_id: installed.id })).toMatchObject({
-      status: 'ok',
-      instructions: 'Write notes.',
-    });
+    const loaded = await f.tools
+      .find((tool) => tool.providerName === 'load_skill')!
+      .execute({ input: { skill_id: installed.id }, signal, toolCallId: 'load', turnId: 'turn-1' });
+    expect(loaded.value).toMatchObject({ status: 'ok' });
+    expect(loaded.instructions?.text).toContain('Write notes.');
   });
 
   it('asks the model to choose when a URL holds several Skills', async () => {
@@ -164,7 +155,7 @@ describe('conversation Skill installation', () => {
         {
           ...checked.entries[0]!,
           id: 'blocked',
-          admission: { status: 'unsupported', reasons: [] },
+          limitations: { scripts: [], unavailableTools: [] },
         },
       ],
     };

@@ -2,30 +2,21 @@
  * Per-turn Skill scope for the Mobile Agent Host.
  *
  * The scope is the intersection the design defines: installed accepted
- * packages ∩ globally enabled ∩ this Agent's enabled bindings. Environment
- * diagnostics never prevent reading instructions. Reads use an accepted package
+ * packages ∩ globally enabled ∩ this Agent's enabled bindings. App
+ * limitations never prevent reading instructions. Reads use an accepted package
  * snapshot; installation can append an entry and consented adaptation can replace it.
  * It is the only thing the Skill tools can read.
  */
 
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
 import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
-import type { ModelService } from '@/backend/data/services/ModelService';
 import {
   decodeUtf8,
-  evaluateSkillAdmission,
+  evaluateSkillLimitations,
   parseSkillEntry,
-  type SkillAgentFacts,
-  type SkillEnvironmentReader,
   type SkillStorage,
 } from '@/backend/services/skill';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { AgentCapability } from '@/shared/data/types/agentCapability';
-import { createUniqueModelId } from '@/shared/data/types/model';
-import type { SkillAdmission, SkillInvocation } from '@/shared/data/types/skill';
-
-import type { RuntimeModel, RuntimeTool } from '../runtime';
+import type { SkillInvocation, SkillLimitations } from '@/shared/data/types/skill';
 
 const logger = loggerService.withContext('SkillScope');
 
@@ -39,7 +30,7 @@ export type SkillTurnEntry = {
   folderName: string;
   /** Package-relative paths, from the accepted manifest. */
   files: readonly string[];
-  admission: SkillAdmission;
+  limitations: SkillLimitations;
 };
 
 export type SkillTurnScope = {
@@ -57,41 +48,22 @@ export const EMPTY_SKILL_SCOPE: SkillTurnScope = Object.freeze({
 });
 
 export interface SkillScopeSource {
-  resolve(input: {
-    agentId: string;
-    disabledCapabilities: readonly AgentCapability[];
-    model: RuntimeModel;
-    tools: readonly RuntimeTool[];
-    signal: AbortSignal;
-  }): Promise<SkillTurnScope>;
+  resolve(input: { agentId: string; signal: AbortSignal }): Promise<SkillTurnScope>;
 }
 
 export type SkillScopeSourceDependencies = {
   skills: Pick<AgentGlobalSkillService, 'listUsableForAgent'>;
   storage: Pick<SkillStorage, 'hasRevision' | 'readFile'>;
-  environment: Pick<SkillEnvironmentReader, 'read'>;
-  models: Pick<ModelService, 'getById'>;
 };
 
 export function createSkillScopeSource(deps: SkillScopeSourceDependencies): SkillScopeSource {
   return {
-    async resolve({ agentId, disabledCapabilities, model, signal }) {
+    async resolve({ agentId, signal }) {
       const projections = await deps.skills.listUsableForAgent(agentId);
       signal.throwIfAborted();
       if (projections.length === 0) return EMPTY_SKILL_SCOPE;
-      const [environment, configuredModel] = await Promise.all([
-        deps.environment.read(),
-        deps.models.getById(createUniqueModelId(model.providerId, model.modelId)),
-      ]);
-      signal.throwIfAborted();
-      const agent: SkillAgentFacts = {
-        disabledCapabilities,
-        supportsToolCalling:
-          configuredModel?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false,
-      };
       const entries: SkillTurnEntry[] = [];
       for (const { skill } of projections) {
-        const admission = evaluateSkillAdmission(skill.profile, environment, agent);
         const ref = { folderName: skill.folderName, contentHash: skill.contentHash };
         if (!deps.storage.hasRevision(ref)) {
           logger.warn('Installed Skill package is missing; excluding it from the turn', {
@@ -107,7 +79,7 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           contentHash: skill.contentHash,
           folderName: skill.folderName,
           files: skill.manifest.map((entry) => entry.path),
-          admission,
+          limitations: evaluateSkillLimitations(skill.profile),
         });
       }
       const byId = new Map(entries.map((entry) => [entry.id, entry] as const));
@@ -129,13 +101,16 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           const parsed = parseSkillEntry(text);
           if (!parsed || !('body' in parsed)) return null;
           const compatibility = parsed.frontmatter.compatibility;
-          const reasons = byId.get(skillId)!.admission.reasons;
+          const { scripts, unavailableTools } = byId.get(skillId)!.limitations;
           return [
             typeof compatibility === 'string' && compatibility.trim()
               ? `Package environment requirements (not verified): ${compatibility.trim()}`
               : '',
-            reasons.length
-              ? `Known environment limitations: ${reasons.map(({ code, subject }) => (subject ? `${code} (${subject})` : code)).join(', ')}.`
+            scripts.length
+              ? `This app cannot run the package's scripts: ${scripts.join(', ')}. They can only be read.`
+              : '',
+            unavailableTools.length
+              ? `The package declares tools this app does not provide: ${unavailableTools.join(', ')}.`
               : '',
             parsed.body.trim(),
           ]

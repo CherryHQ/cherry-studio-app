@@ -2,17 +2,14 @@
  * Skill vocabulary shared by the Data API, the Skills workflow module, the
  * Agent Host, and the UI (docs/references/agent/agent-skills.md).
  *
- * A Skill is an installed `SKILL.md` package. Package validity, environment
- * admission, installation, global enablement, Agent binding, and per-turn
- * eligibility are distinct facts with distinct lifetimes; none of them is a
- * permanent "compatible" boolean.
+ * A Skill is an installed `SKILL.md` package. Package validity, the app
+ * limitations of its profile, installation, global enablement, Agent binding,
+ * and per-turn eligibility are distinct facts with distinct lifetimes.
  */
 
 import * as z from 'zod';
 
 import { AgentIdSchema } from './agent';
-import { BUILT_IN_TOOL_CAPABILITY_IDS } from './builtInTool';
-import { PluginIdSchema } from './plugin';
 
 export const SkillIdSchema = z.uuidv4();
 export type SkillId = z.infer<typeof SkillIdSchema>;
@@ -94,87 +91,32 @@ export const SkillSourceSchema = z.strictObject({
 });
 export type SkillSource = z.infer<typeof SkillSourceSchema>;
 
-export const SkillPlatformSchema = z.enum(['android', 'ios']);
-export type SkillPlatform = z.infer<typeof SkillPlatformSchema>;
-
-/** External execution a workflow needs; Cherry Mobile implements none of them. */
-export const SkillExecutionRequirementSchema = z.enum([
-  'none',
-  'shell',
-  'python',
-  'node',
-  'binary',
-]);
-export type SkillExecutionRequirement = z.infer<typeof SkillExecutionRequirementSchema>;
-
 /**
- * The application-owned compatibility profile, stored with the package it was
- * derived from. Profiles describe requirements; the capability owners decide
- * whether those requirements are met right now.
+ * What an accepted package asks of its host, read once from its bytes at
+ * installation and stored with the installation. These are facts about the
+ * package, never about the user's configuration.
  */
-export const SkillRequirementsSchema = z.strictObject({
-  /** `null` means every platform. */
-  platforms: z.array(SkillPlatformSchema).nullable(),
-  execution: SkillExecutionRequirementSchema,
-  builtInTools: z.array(z.enum(BUILT_IN_TOOL_CAPABILITY_IDS)),
-  pluginTools: z.array(
-    z.strictObject({ pluginId: PluginIdSchema, tools: z.array(z.string().min(1)) }),
-  ),
-});
-export type SkillRequirements = z.infer<typeof SkillRequirementsSchema>;
-
-/**
- * `reviewed` profiles ship with the curated catalog. External packages are
- * `unverified`; `analyzed` remains readable for earlier installations, but its
- * inferred requirements no longer determine availability.
- */
-export const SkillProfileProvenanceSchema = z.enum(['reviewed', 'unverified', 'analyzed']);
-export type SkillProfileProvenance = z.infer<typeof SkillProfileProvenanceSchema>;
-
 export const SkillProfileSchema = z.strictObject({
-  provenance: SkillProfileProvenanceSchema,
-  requirements: SkillRequirementsSchema,
-  /** Human summary of the reviewed workflow scope; null for external packages. */
-  workflowScope: z.string().nullable(),
+  /** Package-relative paths of files meant to be executed. */
+  scripts: z.array(z.string().min(1)),
+  /** Tool names from the `allowed-tools` frontmatter, without their argument patterns. */
+  declaredTools: z.array(z.string().min(1)),
 });
 export type SkillProfile = z.infer<typeof SkillProfileSchema>;
 
-export const SkillAdmissionStatusSchema = z.enum([
-  'ready',
-  'unverified',
-  'setup-required',
-  'unsupported',
-]);
-export type SkillAdmissionStatus = z.infer<typeof SkillAdmissionStatusSchema>;
+export const EMPTY_SKILL_PROFILE: SkillProfile = { scripts: [], declaredTools: [] };
 
-export const SkillAdmissionReasonCodeSchema = z.enum([
-  'platform-unsupported',
-  'execution-unsupported',
-  'package-unavailable',
-  'capability-unavailable',
-  'capability-disabled',
-  'web-search-unconfigured',
-  'drawing-model-unconfigured',
-  'permission-denied',
-  'plugin-not-connected',
-  'plugin-tool-unavailable',
-  'model-tool-calling-unsupported',
-]);
-export type SkillAdmissionReasonCode = z.infer<typeof SkillAdmissionReasonCodeSchema>;
-
-export const SkillAdmissionReasonSchema = z.strictObject({
-  code: SkillAdmissionReasonCodeSchema,
-  /** Stable identifier the reason is about: a tool id, plugin id, or permission scope. */
-  subject: z.string().nullable(),
+/**
+ * The part of a profile this app does not provide at all. Missing permissions,
+ * providers and plugin connections are the user's configuration and never appear.
+ */
+export const SkillLimitationsSchema = z.strictObject({
+  /** Package scripts; the app has no interpreter for them. */
+  scripts: z.array(z.string().min(1)),
+  /** Declared tools the app has no counterpart for. */
+  unavailableTools: z.array(z.string().min(1)),
 });
-export type SkillAdmissionReason = z.infer<typeof SkillAdmissionReasonSchema>;
-
-/** Environment guidance, not installation or instruction-loading authorization. */
-export const SkillAdmissionSchema = z.strictObject({
-  status: SkillAdmissionStatusSchema,
-  reasons: z.array(SkillAdmissionReasonSchema),
-});
-export type SkillAdmission = z.infer<typeof SkillAdmissionSchema>;
+export type SkillLimitations = z.infer<typeof SkillLimitationsSchema>;
 
 export const SkillManifestEntrySchema = z.strictObject({
   /** Package-relative POSIX path; never absolute. */
@@ -228,14 +170,15 @@ export const AgentSkillBindingSchema = z.strictObject({
 export type AgentSkillBinding = z.infer<typeof AgentSkillBindingSchema>;
 
 /**
- * Library projection: the installed record plus the current application-scope
- * admission, and, when evaluated for an Agent, that Agent's binding and scope.
+ * Library projection: the installed record, whether its accepted bytes are
+ * still on disk, its app limitations, and, when read for an Agent, that
+ * Agent's binding.
  */
 export const SkillListItemSchema = SkillSchema.extend({
-  admission: SkillAdmissionSchema,
-  /** Present only when the list was evaluated for one Agent. */
+  isPackageMissing: z.boolean(),
+  limitations: SkillLimitationsSchema,
+  /** Present only when the list was read for one Agent. */
   binding: AgentSkillBindingSchema.pick({ isEnabled: true }).nullable().optional(),
-  agentAdmission: SkillAdmissionSchema.optional(),
 });
 export type SkillListItem = z.infer<typeof SkillListItemSchema>;
 
@@ -248,8 +191,6 @@ export const SkillCandidateSchema = z.strictObject({
   author: z.string().nullable(),
   version: z.string().nullable(),
   tags: z.array(z.string().min(1)),
-  /** The evidence origin known at discovery or inspection time. */
-  profileProvenance: SkillProfileProvenanceSchema,
   /** The already-installed Skill for this locator, when any. */
   installedSkillId: SkillIdSchema.nullable(),
 });

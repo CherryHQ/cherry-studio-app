@@ -1,7 +1,5 @@
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-export { effectiveSkillStatus, mergeSkillReasons } from '@/frontend/utils/skillStatus';
-
 /** Seeds the editor's binding draft from the evaluated Agent list. */
 export function createAgentSkillBindingDraft(
   skills: readonly SkillListItem[],

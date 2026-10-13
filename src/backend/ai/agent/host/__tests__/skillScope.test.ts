@@ -1,33 +1,20 @@
 import type { AgentSkillProjection } from '@/backend/data/services/AgentGlobalSkillService';
-import type { SkillEnvironmentFacts } from '@/backend/services/skill/skillAdmission';
 import type { Skill } from '@/shared/data/types/skill';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import type { RuntimeTool } from '../../runtime';
 import { createSkillScopeSource } from '../skillScope';
 
 jest.mock('@/backend/services/skill/skillStorage', () => ({}));
 
 const encoder = new TextEncoder();
-const environment: SkillEnvironmentFacts = {
-  platform: 'ios',
-  permissions: {},
-  webSearchAvailability: { fetchUrls: true, searchKeywords: true },
-  hasPaintingModel: false,
-  connectedPlugins: new Map(),
-};
 
-function skill(
-  id: string,
-  requirements: Partial<Skill['profile']['requirements']> = {},
-  provenance: Skill['profile']['provenance'] = 'reviewed',
-): Skill {
+function skill(id: string, profile: Partial<Skill['profile']> = {}): Skill {
   return {
     id,
     name: id,
     description: `${id} description`,
     folderName: id,
-    source: 'builtin',
+    source: 'marketplace',
     sourceUrl: null,
     author: null,
     version: null,
@@ -40,17 +27,7 @@ function skill(
         digest: sha256HexOfText(`---\nname: ${id}\ndescription: d\n---\nBody of digest-${id}`),
       },
     ],
-    profile: {
-      provenance,
-      requirements: {
-        platforms: null,
-        execution: 'none',
-        builtInTools: [],
-        pluginTools: [],
-        ...requirements,
-      },
-      workflowScope: null,
-    },
+    profile: { scripts: [], declaredTools: [], ...profile },
     invocation: { modelInvocable: true, userInvocable: true },
     isEnabled: true,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -70,15 +47,16 @@ const projection = (s: Skill): AgentSkillProjection => ({
 });
 
 describe('createSkillScopeSource', () => {
-  it('keeps readable Skills with execution guidance, excludes missing packages, and pins revisions', async () => {
+  it('keeps readable Skills, states app limitations with their instructions, and excludes missing packages', async () => {
     const source = createSkillScopeSource({
       skills: {
         listUsableForAgent: async () =>
           [
-            skill('ready'),
-            skill('analyzed', {}, 'analyzed'),
-            skill('needs-image', { builtInTools: ['generate_image'] }),
-            skill('needs-python', { execution: 'python' }),
+            skill('plain'),
+            skill('scripted', {
+              scripts: ['scripts/run.py'],
+              declaredTools: ['Bash', 'Read', 'mcp__docs__search'],
+            }),
             skill('missing'),
           ].map(projection),
       },
@@ -91,58 +69,22 @@ describe('createSkillScopeSource', () => {
               )
             : null,
       },
-      environment: { read: async () => environment },
-      models: { getById: async () => ({ capabilities: ['function-call'] }) as never },
     });
     const scope = await source.resolve({
       agentId: 'agent',
-      tools: [],
-      disabledCapabilities: [],
-      model: { providerId: 'p', modelId: 'm' },
       signal: new AbortController().signal,
     });
-    expect(scope.entries.map((entry) => [entry.id, entry.admission.status])).toEqual([
-      ['ready', 'ready'],
-      ['analyzed', 'unverified'],
-      ['needs-image', 'setup-required'],
-      ['needs-python', 'unsupported'],
+    expect(scope.entries.map((entry) => [entry.id, entry.limitations])).toEqual([
+      ['plain', { scripts: [], unavailableTools: [] }],
+      ['scripted', { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] }],
     ]);
-    expect(await scope.readInstructions('ready')).toBe('Body of digest-ready');
-    expect(await scope.readInstructions('needs-python')).toContain(
-      'execution-unsupported (python)',
-    );
-    expect(await scope.readInstructions('needs-python')).toContain('Body of digest-needs-python');
-    expect(await scope.readFile('ready', 'SKILL.md')).toBeInstanceOf(Uint8Array);
+    expect(await scope.readInstructions('plain')).toBe('Body of digest-plain');
+    const scripted = await scope.readInstructions('scripted');
+    expect(scripted).toContain("cannot run the package's scripts: scripts/run.py");
+    expect(scripted).toContain('does not provide: Bash.');
+    expect(scripted).toContain('Body of digest-scripted');
+    expect(await scope.readFile('plain', 'SKILL.md')).toBeInstanceOf(Uint8Array);
     expect(await scope.readFile('missing', 'SKILL.md')).toBeNull();
-    expect(await scope.readFile('ready', 'unlisted.md')).toBeNull();
-  });
-
-  it('keeps instructions accessible when a required tool is absent or disabled', async () => {
-    const source = createSkillScopeSource({
-      skills: {
-        listUsableForAgent: async () => [
-          projection(skill('web', { builtInTools: ['web_search'] })),
-        ],
-      },
-      storage: { hasRevision: () => true, readFile: async () => null },
-      environment: { read: async () => environment },
-      models: { getById: async () => ({ capabilities: ['function-call'] }) as never },
-    });
-    const base = {
-      agentId: 'agent',
-      tools: [{ ref: { source: 'builtin', capabilityId: 'web_search' } }] as RuntimeTool[],
-      model: { providerId: 'p', modelId: 'm' },
-      signal: new AbortController().signal,
-    };
-    expect((await source.resolve({ ...base, disabledCapabilities: [] })).entries).toHaveLength(1);
-    expect(
-      (await source.resolve({ ...base, disabledCapabilities: [], tools: [] })).entries,
-    ).toHaveLength(1);
-    expect(
-      (await source.resolve({ ...base, disabledCapabilities: ['web'] })).entries[0]!.admission,
-    ).toMatchObject({
-      status: 'setup-required',
-      reasons: [{ code: 'capability-disabled', subject: 'web' }],
-    });
+    expect(await scope.readFile('plain', 'unlisted.md')).toBeNull();
   });
 });

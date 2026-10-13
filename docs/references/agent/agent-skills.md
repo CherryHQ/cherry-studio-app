@@ -9,7 +9,7 @@ standard-mode Agent, and opens the Agent list with setup guidance when none exis
 
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. Plugins and Skills have separate sidebar entries and pages.
-The Skills library provides installed search, details, environment guidance, update and uninstall.
+The Skills library provides installed search, details, update and uninstall.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
@@ -81,30 +81,43 @@ for inspection; declared compatibility notes also accompany loaded instructions.
   instructions. Every file contributes to the SHA-256 manifest and to the content hash, which uses
   desktop's `directory-sha256:` algorithm so one package has the same hash on both clients.
 
-## Package Acceptance And Environment Guidance
+## Package Acceptance And App Limitations
 
 Installation and updates validate the package format, paths, integrity and size. Missing tools,
 permissions, model tool calling or script interpreters do not block installation or instruction
 loading. Scripts, references, templates and other accepted resources are preserved together.
 
-Reviewed requirement profiles provide environment guidance. Their checks
-consult permission, web-search, painting-model and plugin owners; actual execution checks remain
-with the tools. External packages are `unverified`: the app does not infer dependencies from prose,
-script filenames or mentioned tool names. Older stored `analyzed` profiles remain readable and are
-also treated as unverified, without a database migration.
+Limitations compare two fixed things: what the package asks of its host, and what this build of the
+app provides. Neither side depends on the user's configuration. A missing permission, web-search
+provider, drawing model, plugin connection or Agent capability is the user's to configure, and the
+owning tool reports it when a step runs.
 
-| Status | Meaning |
-| --- | --- |
-| `ready` | No known limitation in the reviewed requirements; not a guarantee of execution |
-| `unverified` | The external workflow's execution requirements have not been verified |
-| `setup-required` | Known configuration or permission needs; also used for missing package bytes |
-| `unsupported` | A reviewed step needs an unavailable platform, tool or script runtime |
+- **The package's side** is its profile, read once from the accepted bytes at installation and again
+  on update, then stored in `agent_global_skill.profile`. It records two facts: the package's script
+  files, and the tool names in its `allowed-tools` frontmatter without their argument patterns.
+  Scripts are every file under `scripts/` plus shell and Python files anywhere; other source files are
+  usually templates and are not counted. Prose, mentioned commands and the free-text `compatibility`
+  note are never interpreted.
+- **The app's side** is a table in `skillCompatibility.ts`. The app runs no package script: `run_js`
+  evaluates only code the model writes. For declared tools, the table maps each known desktop tool
+  name to the built-in tool that covers it, or marks it as having no counterpart. Names outside the
+  table, such as MCP tools, are unknown and never reported.
 
-These statuses describe the environment rather than grant access. Binding, global enablement,
+Reads compare the stored profile with the table in memory and perform no I/O, so a newer app build
+that adds a capability corrects every installed Skill without touching stored data. Profiles written
+by the earlier environment evaluation are read as empty until the Skill's next update.
+
+The detail and candidate pages state the result as facts — the number of script files the app cannot
+run, and the declared tools it does not provide — beside the general execution hint. They never
+conclude whether a Skill is usable, and list rows stay free of it. The only other condition the
+library, candidate and Agent settings pages report is a missing package, with the instruction to
+check for updates.
+
+Limitations describe the app rather than grant or deny access. Binding, global enablement,
 invocation policy and readable package bytes determine instruction access. Missing package bytes
-exclude a Skill from loading and composer selection; execution limitations do not. The Agent sees
-known limitations with loaded instructions and must explain an unavailable capability before a step
-that needs it. Reading a script must never be reported as running it.
+exclude a Skill from loading and composer selection; limitations do not. The Agent receives the same
+facts with loaded instructions and must explain an unavailable capability before a step that needs
+it. Reading a script must never be reported as running it.
 
 ## Conversation Installation
 
@@ -184,7 +197,7 @@ as global enablement; new
 installations and conversation bindings are written enabled. Desktop's `namespace` is absent
 because app-owned system workflows live in Host instructions rather than user installations.
 Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
-`profile` holds reviewed environment guidance or unverified provenance, and
+`profile` holds what the package asks of its host, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
 Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding
 changes preserve unrelated bindings; global disablement preserves binding preferences.
@@ -255,14 +268,14 @@ automatic discovery and `load_skill` retain the manual-only invocation gate.
 
 Active entry instructions have a 48,000-character aggregate limit and at most 64 entries; oversized
 activation fails rather than truncating instructions. Explicit selections and previously active
-instructions seed individually replaceable Runtime system sections. A new automatic `load_skill` returns the full body and a
-trusted Runtime instruction contribution. The Pi adapter commits that contribution to a native
+instructions seed individually replaceable Runtime system sections. A new automatic `load_skill` returns a
+trusted Runtime instruction contribution carrying the full body. The Pi adapter commits that contribution to a native
 conversation document and renders it through a native prompt section before every model request,
 including after compaction or reopening the same working copy. This follows Pi Durable's
 [extension-state example](https://github.com/earendil-works/pi/blob/main/packages/durable/test/examples/11-extension-state.ts),
-not a dedicated upstream Skill API. The model-facing tool result is a compact receipt pointing to
-the system instructions; the full body stays in the persisted display result for inspection. MCP
-results cannot contribute these instructions or replace their model-facing value.
+not a dedicated upstream Skill API. The tool result is a compact receipt pointing to the system
+instructions; the body is never stored in the transcript. MCP results cannot contribute these
+instructions.
 
 The next Host configuration atomically replaces this per-execution document with rebuilt currently
 applicable instructions. Old or disabled Skills therefore cannot survive through native document
@@ -276,9 +289,10 @@ selection metadata from the Cherry transcript, so restoration also works after a
 rebuilt. It loads the Skill's current revision while the Skill stays bound, enabled, eligible and
 invocable in the same way; a Skill that no longer qualifies simply stops contributing instructions.
 Retry and regeneration resubmit the original message's selections and find-and-install action. The
-UI shows automatic loading as **Read Skill** with the Skill name. Opening its activity details shows
-the exact returned instruction body and revision, plus a separately labeled link to the current
-installed Skill details. The library's read-only instruction viewer reads the current installed
+UI shows automatic loading as **Read Skill** with the Skill name. Its activity details show only the
+Skill's name and description; an installation's show its name and source. Neither repeats the
+instruction body nor links into the library. The library's
+read-only instruction viewer reads the current installed
 revision through `GET /skills/:skillId/instructions`, without enabling or executing it. Explicit
 selection does not create a synthetic loading call; its inline composer reference already expresses
 the user's request.
@@ -290,6 +304,6 @@ Pi's native document/section extension mechanism within a running execution. Lat
 current installed revision; a running turn keeps its prepared package scope except for its own
 consented local adaptation. There is no separate
 application activation table, session-specific unload protocol, or archive of historical package
-files. Existing tool results retain their returned bodies for activity inspection; that snapshot is
-not permission to read removed package resources. Remote script execution remains out of scope.
+files. Tool results keep receipts, not instruction bodies. Remote script execution remains out of
+scope.
 Backups continue to include live installations and the existing conversation records.

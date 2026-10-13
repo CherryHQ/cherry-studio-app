@@ -12,7 +12,7 @@ function entry(id: string, overrides: Partial<SkillTurnEntry> = {}): SkillTurnEn
     contentHash: 'abcdef0123456789',
     folderName: id,
     files: ['SKILL.md'],
-    admission: { status: 'ready', reasons: [] },
+    limitations: { scripts: [], unavailableTools: [] },
     ...overrides,
   };
 }

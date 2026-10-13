@@ -605,7 +605,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           contentHash: 'directory-sha256:abc',
           folderName: 'outline',
           files: ['SKILL.md'],
-          admission: { status: 'ready', reasons: [] },
+          limitations: { scripts: [], unavailableTools: [] },
         },
       ],
       readInstructions: async () => 'Use a concise outline.',

@@ -44,6 +44,8 @@ export type SkillAdaptationToolOptions = {
   workflow: Pick<SkillsModule, 'previewAdaptation' | 'adapt'>;
   source: SkillScopeSource;
   context: Omit<Parameters<SkillScopeSource['resolve']>[0], 'signal'>;
+  /** Tools exposed in this turn; a replacement may only name one of them. */
+  tools: readonly RuntimeTool[];
   askUser: AskUserQuestion;
   language: AppLanguage;
   replace(scope: SkillTurnScope, skillId: string, digest: string): boolean;
@@ -75,9 +77,7 @@ export function createSkillAdaptationTool(
             'Read this available Skill before proposing an adaptation.',
           );
         const availableTools = new Set(
-          options.context.tools
-            .filter((tool) => tool.approval !== 'deny')
-            .map((tool) => tool.providerName),
+          options.tools.filter((tool) => tool.approval !== 'deny').map((tool) => tool.providerName),
         );
         for (const change of parsed.changes) {
           if (change.kind === 'remove-optional') {

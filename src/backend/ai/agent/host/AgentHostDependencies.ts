@@ -29,8 +29,7 @@ import { providerService } from '@/backend/data/services/ProviderService';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
 import { discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { devicePermissions } from '@/backend/services/permissions';
-import { createSkillEnvironmentReader, skillStorage } from '@/backend/services/skill';
+import { skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
@@ -130,13 +129,6 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     this.skills = createSkillScopeSource({
       skills: agentGlobalSkillService,
       storage: skillStorage,
-      environment: createSkillEnvironmentReader({
-        permissions: devicePermissions,
-        preference: preferenceService,
-        models: modelService,
-        plugins: mcpRuntime.pluginAuthorizations,
-      }),
-      models: modelService,
     });
   }
 
