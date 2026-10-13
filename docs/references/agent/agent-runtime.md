@@ -753,6 +753,12 @@ HTTP status, bounded response body, and explicit retryability. The Runtime ignor
 recovered transport attempts, then redacts and projects the terminal diagnostic into `RuntimeError`.
 This keeps the original terminal failure distinct from an earlier WebSocket or stream fallback.
 
+Pi's automatic retry reads the same diagnostic, so it does not depend on message wording. Quota and
+billing limits stay terminal; otherwise explicit retryability decides, then the HTTP status (408,
+409, 425, 429 and 5xx retry; other 4xx do not), and only then the message text. A response body that
+fails after its headers arrived is a dropped connection whose native message is OS-localized and
+carries no status, so the stream binding marks it retryable. A cancelled request is never retried.
+
 A `context.checkpoint` event is non-terminal. The Host retains only the latest valid candidate from
 the active execution and commits it atomically with a successful assistant terminal result. Failed,
 cancelled, or interrupted turns never persist a candidate, and oversized payloads are rejected

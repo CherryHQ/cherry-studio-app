@@ -114,11 +114,47 @@ type PiStreamBinding = {
   sessionId?: string;
 };
 
+/**
+ * A body that fails after its headers arrived is a dropped connection. The native message is
+ * OS-localized and carries no status, so Pi's retry policy cannot classify it by text; mark it
+ * here. An aborted request stays terminal through its stop reason.
+ */
+function withRetryableBodyFailure(fetch: FetchFunction): FetchFunction {
+  return async (input, init) => {
+    const response = await fetch(input, init);
+    const source = response.ok ? response.body : null;
+    if (!source) return response;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    const body = new ReadableStream<Uint8Array>(
+      {
+        async pull(controller) {
+          reader ??= source.getReader();
+          try {
+            const { done, value } = await reader.read();
+            if (done) controller.close();
+            else controller.enqueue(value);
+          } catch (error) {
+            controller.error(
+              error instanceof Error ? Object.assign(error, { retryable: true }) : error,
+            );
+          }
+        },
+        cancel: (reason) => (reader ? reader.cancel(reason) : source.cancel(reason)),
+      },
+      // Stay lazy: the source is locked only once the body is actually read.
+      { highWaterMark: 0 },
+    );
+    Object.defineProperty(response, 'body', { value: body });
+    return response;
+  };
+}
+
 export async function bindPiStream(
   adapter: PiApiAdapter,
   binding: PiStreamBinding,
 ): Promise<PiStreamFn> {
   const streamSimple = await adapter.loadStreamSimple();
+  const fetch = adapter.supportsCustomFetch ? withRetryableBodyFailure(binding.fetch) : undefined;
 
   return (model, context, options) => {
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
@@ -132,7 +168,7 @@ export async function bindPiStream(
       ...(adapter.api === 'azure-openai-responses' && binding.azureApiVersion
         ? { azureApiVersion: binding.azureApiVersion }
         : {}),
-      fetch: adapter.supportsCustomFetch ? binding.fetch : undefined,
+      fetch,
       headers: { ...options?.headers, ...binding.headers },
       maxRetries: binding.maxRetries,
       maxTokens,

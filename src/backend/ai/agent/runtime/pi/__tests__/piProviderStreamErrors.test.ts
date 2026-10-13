@@ -1,13 +1,23 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
-import { stream as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
+import {
+  stream as streamAnthropic,
+  streamSimple as streamSimpleAnthropic,
+} from '@earendil-works/pi-ai/api/anthropic-messages';
 import { stream as streamAzure } from '@earendil-works/pi-ai/api/azure-openai-responses';
-import { stream as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions';
+import {
+  stream as streamCompletions,
+  streamSimple as streamSimpleCompletions,
+} from '@earendil-works/pi-ai/api/openai-completions';
 import { stream as streamResponses } from '@earendil-works/pi-ai/api/openai-responses';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
+import { isRetryableAssistantError } from '@earendil-works/pi-ai/utils/retry';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
+import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { withPiApiKeyFallback } from '../piApiKeyFallback';
 import type { PiStreamFn as StreamFn } from '../piModelTypes';
+import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 
 function sse(event: string | undefined, data: unknown): string {
   return `${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`;
@@ -118,6 +128,77 @@ const success: StreamFn = (model) => {
 };
 
 describe('Pi provider stream errors', () => {
+  test.each([
+    { message: '网络连接已中断', retryable: true, expected: true },
+    { message: '503 service unavailable', retryable: false, expected: false },
+    { message: 'insufficient_quota', retryable: true, expected: false },
+  ])('uses structured retryability for $message', ({ message, retryable, expected }) => {
+    const event = providerErrorEvent(emptyAssistantMessage(model('openai-completions')), {
+      message,
+      retryable,
+    });
+    expect(isRetryableAssistantError(event.error)).toBe(expected);
+    expect(isRetryableAssistantError({ ...event.error, stopReason: 'aborted' })).toBe(false);
+  });
+
+  test.each([
+    { status: 503, expected: true },
+    { status: 429, expected: true },
+    { status: 401, expected: false },
+  ])('uses the provider status when its message is opaque: $status', ({ status, expected }) => {
+    const event = providerErrorEvent(emptyAssistantMessage(model('openai-completions')), {
+      message: '请求失败',
+      status,
+    });
+    expect(isRetryableAssistantError(event.error)).toBe(expected);
+  });
+
+  test.each([
+    {
+      endpointType: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      streamSimple: streamSimpleCompletions,
+      message: '网络连接已中断。',
+    },
+    {
+      endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      streamSimple: streamSimpleAnthropic,
+      message: 'Software caused connection abort',
+    },
+  ])(
+    'retries a $endpointType connection dropped mid-body: $message',
+    async ({ endpointType, streamSimple, message }) => {
+      const adapter = resolvePiApiAdapter(endpointType);
+      // Jest loads the same installed adapter through CommonJS; Metro uses its import entry.
+      const loadStream = jest
+        .spyOn(adapter, 'loadStreamSimple')
+        .mockResolvedValue(streamSimple as unknown as StreamFn);
+      const stream = await bindPiStream(adapter, {
+        apiKey: 'test-key',
+        // The native layer reports the drop as an OS-localized message without status or code.
+        fetch: async () =>
+          new Response(
+            new ReadableStream({
+              start: (controller) => controller.enqueue(new TextEncoder().encode(': ping\n\n')),
+              pull: (controller) => controller.error(new Error(message)),
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          ),
+        headers: {},
+        maxRetries: 0,
+        maxTokens: 256,
+      });
+      loadStream.mockRestore();
+      const source = await stream(
+        model(adapter.api),
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+        {},
+      );
+      const result = await source.result();
+      expect(result).toMatchObject({ stopReason: 'error', errorMessage: message });
+      expect(isRetryableAssistantError(result)).toBe(true);
+    },
+  );
+
   test.each(CASES)('switches keys for $name over HTTP 200', async (testCase) => {
     // Exercise the installed SDK/parser and its patch; no live provider requests.
     const fetch = jest.fn(
