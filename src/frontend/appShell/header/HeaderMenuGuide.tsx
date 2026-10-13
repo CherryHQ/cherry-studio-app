@@ -5,16 +5,16 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 const ARROW_WIDTH = 96;
 const ARROW_HEIGHT = 112;
-// The arrow tip sits this far from the viewer's trailing edge, below the header's overflow action on
+// The arrow tip sits this far from the page's trailing edge, below the header's overflow action on
 // both platforms. It is a pointer, not a hit target, so a near alignment is enough.
 const ARROW_TIP_INSET = 40;
 const ARROW_TIP_X = 72;
 
 /**
- * Points from the page body up to the header's overflow menu, where system opening lives. The
+ * Points from the full-width page body up to the header's overflow menu. The
  * caption carries the instruction for screen readers; the drawing is decorative.
  */
-export function FileMenuGuide({ hint, title }: { hint: string; title: string }) {
+export function HeaderMenuGuide({ hint, title }: { hint: string; title: string }) {
   const stroke = useThemeColor('muted-foreground');
 
   return (
