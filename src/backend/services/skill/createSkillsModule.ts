@@ -48,7 +48,6 @@ const CANDIDATE_TTL_MS = 30 * 60 * 1000;
 const CANDIDATE_MAX_BYTES = 64 * 1024 * 1024;
 
 export type SkillsModuleDependencies = {
-  translate: SkillsModule['translate'];
   marketplace: SkillMarketplace;
   db: { withWriteTx<T>(fn: (tx: Database) => Promise<T>): Promise<T> };
   skills: AgentGlobalSkillService;
@@ -242,7 +241,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         limitations: evaluateSkillLimitations(skill),
       }),
     },
-    translate: deps.translate,
     instructionReader: {
       async read(skill) {
         if (!skill.manifest.some(({ path }) => path === 'SKILL.md')) return null;

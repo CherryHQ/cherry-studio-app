@@ -2038,8 +2038,6 @@
   "skills.error.search-unavailable": "Không thể tìm kỹ năng. Hãy kiểm tra kết nối và thử lại.",
   "skills.error.source-invalid": "Cung cấp trang kỹ năng được hỗ trợ, kho GitHub, thư mục hoặc liên kết SKILL.md.",
   "skills.error.source-unreachable": "Không truy cập được nguồn kỹ năng.",
-  "skills.error.translation-failed": "Dịch thất bại. Vui lòng thử lại.",
-  "skills.error.translation-model-unavailable": "Đặt mô hình mặc định để sử dụng tính năng dịch bằng AI.",
   "skills.executionHint": "Cài đặt và đọc kỹ năng không có nghĩa là có thể thực hiện mọi bước. Việc thực hiện phụ thuộc vào các công cụ và môi trường chạy tập lệnh hiện có.",
   "skills.find.hint": "Mô tả tác vụ hoặc dán liên kết kỹ năng",
   "skills.find.installed": "Đã thêm cho tác tử hiện tại",
@@ -2088,5 +2086,7 @@
   "skills.translation.translate": "Dịch bằng AI",
   "skills.translation.translating": "Đang dịch…",
   "skills.working": "Đang xử lý…",
-  "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại."
+  "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại.",
+  "translation.error.failed": "Dịch thất bại. Vui lòng thử lại.",
+  "translation.error.modelUnavailable": "Chọn mô hình dịch hoặc mô hình mặc định khả dụng trong Cài đặt."
 }

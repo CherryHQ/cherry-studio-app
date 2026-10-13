@@ -134,3 +134,67 @@ describe('AiSdkGenerator tool request wiring', () => {
     });
   });
 });
+
+describe('AiSdkGenerator streamed text', () => {
+  function setup(parts: AsyncIterable<unknown>) {
+    const stream = jest.fn().mockResolvedValue({
+      fullStream: parts,
+      totalUsage: Promise.resolve(testUsage),
+      steps: Promise.resolve([]),
+    });
+    (createAgent as jest.Mock).mockResolvedValueOnce({ stream });
+    const generator = new AiSdkGenerator({
+      modelId: 'test-model',
+      providerId: 'openai-compatible',
+      providerSettings: { apiKey: 'test', baseURL: 'https://example.com', name: 'test' },
+    });
+    return { generator, stream };
+  }
+
+  test('publishes cumulative text, excluding reasoning, and returns final usage', async () => {
+    const { generator } = setup(
+      (async function* () {
+        yield { type: 'reasoning-delta', text: 'private' };
+        yield { type: 'text-delta', text: 'Hello' };
+        yield { type: 'text-delta', text: ' world' };
+      })(),
+    );
+    const onText = jest.fn();
+    await expect(generator.generate({ prompt: 'source' }, undefined, onText)).resolves.toEqual({
+      text: 'Hello world',
+      usage: testUsage,
+    });
+    expect(onText.mock.calls).toEqual([['Hello'], ['Hello world']]);
+  });
+
+  test('rejects a provider stream error instead of returning a partial translation', async () => {
+    const error = new Error('stream failed');
+    const { generator } = setup(
+      (async function* () {
+        yield { type: 'text-delta', text: 'partial' };
+        yield { type: 'error', error };
+      })(),
+    );
+    await expect(generator.generate({ prompt: 'source' }, undefined, jest.fn())).rejects.toBe(
+      error,
+    );
+  });
+
+  test('propagates cancellation and does not publish a late chunk', async () => {
+    const controller = new AbortController();
+    const error = new Error('closed');
+    const { generator, stream } = setup(
+      (async function* () {
+        yield { type: 'text-delta', text: 'first' };
+        controller.abort(error);
+        yield { type: 'text-delta', text: 'late' };
+      })(),
+    );
+    const onText = jest.fn();
+    await expect(generator.generate({ prompt: 'source' }, controller.signal, onText)).rejects.toBe(
+      error,
+    );
+    expect(onText.mock.calls).toEqual([['first']]);
+    expect(stream).toHaveBeenCalledWith({ prompt: 'source', abortSignal: controller.signal });
+  });
+});

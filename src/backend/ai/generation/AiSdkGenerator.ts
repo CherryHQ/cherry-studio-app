@@ -107,6 +107,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
   async generate(
     input: { messages: ModelMessage[] } | { prompt: string },
     signal?: AbortSignal,
+    onText?: (text: string) => void,
   ): Promise<{ text: string; usage: LanguageModelUsage }> {
     const hooks = this.composedHooks();
     try {
@@ -117,7 +118,22 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
         'prompt' in input
           ? { prompt: input.prompt, ...(signal ? { abortSignal: signal } : {}) }
           : { messages: input.messages, ...(signal ? { abortSignal: signal } : {}) };
-      const result = await aiAgent.generate(generateInput);
+      const result = await (async () => {
+        if (!onText) return aiAgent.generate(generateInput);
+        const stream = await aiAgent.stream(generateInput);
+        let text = '';
+        for await (const part of stream.fullStream) {
+          signal?.throwIfAborted();
+          if (part.type === 'error') throw part.error;
+          if (part.type === 'abort') throw new Error('Text generation was aborted.');
+          if (part.type === 'text-delta') {
+            text += part.text;
+            onText(text);
+          }
+        }
+        signal?.throwIfAborted();
+        return { text, usage: await stream.totalUsage, steps: await stream.steps };
+      })();
       signal?.throwIfAborted();
       const terminalError = resolveToolLoopTerminalError({
         steps: result.steps ?? [],

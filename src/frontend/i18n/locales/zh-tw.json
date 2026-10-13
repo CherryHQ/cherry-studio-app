@@ -2038,8 +2038,6 @@
   "skills.error.search-unavailable": "技能搜尋暫時無法使用，請檢查網路後重試。",
   "skills.error.source-invalid": "請提供支援的技能頁面、GitHub 儲存庫、目錄或 SKILL.md 連結。",
   "skills.error.source-unreachable": "無法存取技能來源。",
-  "skills.error.translation-failed": "翻譯失敗，請重試。",
-  "skills.error.translation-model-unavailable": "請先設定預設模型以使用 AI 翻譯。",
   "skills.executionHint": "安裝和讀取技能不代表所有步驟都能執行；實際執行取決於可用工具和指令碼執行環境。",
   "skills.find.hint": "描述需求或貼上技能連結",
   "skills.find.installed": "已新增至目前助手",
@@ -2088,5 +2086,7 @@
   "skills.translation.translate": "AI 翻譯",
   "skills.translation.translating": "正在翻譯…",
   "skills.working": "處理中…",
-  "systemEntry.failed": "無法開啟此分享，請重新分享內容。"
+  "systemEntry.failed": "無法開啟此分享，請重新分享內容。",
+  "translation.error.failed": "翻譯失敗，請重試。",
+  "translation.error.modelUnavailable": "請在設定中設定可用的翻譯模型或預設模型。"
 }

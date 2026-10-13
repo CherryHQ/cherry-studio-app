@@ -9,7 +9,7 @@ import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useBackendModule } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { isSkillsError } from '@/shared/contracts/skills';
+import { TranslationError } from '@/shared/contracts/translation';
 import { resolveAppLanguage, type AppLanguage } from '@/shared/utils/languages';
 
 import { SkillPage } from './SkillPage';
@@ -41,10 +41,10 @@ function DocumentContent({
 }: SkillDocumentPageProps & { language: AppLanguage }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const skills = useBackendModule('skills');
+  const translator = useBackendModule('translation');
   const markdown = `${description}\n\n${instructions}`;
   const translation = useQuery({
-    ...skillTranslationQueryOptions(skills, { contentHash, language, text: markdown }),
+    ...skillTranslationQueryOptions(translator, { contentHash, language, text: markdown }),
     enabled: false,
   });
   const [showTranslation, setShowTranslation] = useState(() => Boolean(translation.data));
@@ -60,9 +60,9 @@ function DocumentContent({
     } else if (result.error && !isCancelledError(result.error)) {
       toast.show({
         label: t(
-          isSkillsError(result.error) && result.error.code === 'translation-model-unavailable'
-            ? 'skills.error.translation-model-unavailable'
-            : 'skills.error.translation-failed',
+          result.error instanceof TranslationError && result.error.code === 'model-unavailable'
+            ? 'translation.error.modelUnavailable'
+            : 'translation.error.failed',
         ),
         variant: 'danger',
       });

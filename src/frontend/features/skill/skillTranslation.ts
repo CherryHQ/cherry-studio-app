@@ -1,9 +1,9 @@
 import { cacheService } from '@/frontend/data/CacheService';
-import type { SkillsModule } from '@/shared/contracts/skills';
+import type { TranslationModule } from '@/shared/contracts/translation';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 export function skillTranslationQueryOptions(
-  skills: Pick<SkillsModule, 'translate'>,
+  translation: TranslationModule,
   { contentHash, language, text }: { contentHash: string; language: AppLanguage; text: string },
 ) {
   const key = `${contentHash}:${language}`;
@@ -19,7 +19,7 @@ export function skillTranslationQueryOptions(
       const saved = read();
       if (saved) return saved;
 
-      const translated = await skills.translate({ text, language }, signal);
+      const translated = await translation.translate({ text, language }, { signal });
       signal.throwIfAborted();
       if (translated.trim()) {
         cacheService.setPersist('skills.translations', {

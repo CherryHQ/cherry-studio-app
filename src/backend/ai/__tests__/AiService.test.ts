@@ -226,7 +226,7 @@ describe('AiService.checkModel', () => {
     expect(mockGeneratorConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: model.modelId, system: 'test' }),
     );
-    expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal));
+    expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal), undefined);
     expect(mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers).not.toHaveProperty(
       'x-opencode-session',
     );

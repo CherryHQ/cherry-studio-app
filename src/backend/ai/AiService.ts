@@ -49,7 +49,7 @@ export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'message
 /** Read at call time by callers created before the attributed message exists. */
 export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
-/** Non-streaming text generation request — pure transport data. */
+/** Text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
   usageAttribution?: AiUsageAttribution;
   system?: string;
@@ -60,7 +60,7 @@ export interface AiGenerateRequest extends AiBaseRequest {
 
 // ── SDK extensions ─────────────────────────────────────────────────
 
-/** Result of non-streaming text generation. */
+/** Completed text generation result. */
 export interface AiGenerateResult {
   text: string;
   usage?: LanguageModelUsage;
@@ -214,9 +214,12 @@ export class AiService extends BaseService {
     return this.vertexAuthClient;
   }
 
-  // ── Non-streaming text generation (agent.generate) ──
+  // ── Text generation (optional cumulative streaming updates) ──
 
-  async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
+  async generateText(
+    request: AiGenerateRequest,
+    onText?: (text: string) => void,
+  ): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
@@ -259,6 +262,7 @@ export class AiService extends BaseService {
     return generator.generate(
       request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
       signal,
+      onText,
     );
   }
 

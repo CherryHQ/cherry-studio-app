@@ -162,7 +162,6 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
       }));
   return createSkillsModule({
     readAuthor: async () => 'Current user',
-    translate: jest.fn(),
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
@@ -211,7 +210,6 @@ describe('createSkillsModule', () => {
     const module = createSkillsModule({
       ...fakes,
       readAuthor: async () => 'Current user',
-      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
       sources: {
         bundled: createBundledSkillSource([]),
@@ -292,7 +290,6 @@ describe('createSkillsModule', () => {
     const bundled = createBundledSkillSource();
     const module = createSkillsModule({
       readAuthor: async () => 'Current user',
-      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
       db: fakes.db,
       skills: fakes.skills,
@@ -496,7 +493,6 @@ describe('createSkillsModule', () => {
     };
     const module = createSkillsModule({
       readAuthor: async () => 'Current user',
-      translate: jest.fn(),
       marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,

@@ -16,7 +16,8 @@ provenance rows stay out of the reading surface. Known static execution limitati
 and accompany instructions supplied to the Agent.
 The reading surface offers an explicit AI translation icon in the top-right navigation bar, before
 the overflow menu when present. It translates the description and document into the current app
-language using the configured default model, shows progress in place, and switches to an original-text
+language using the configured translation model (or the default model when unset), shows progress
+in place, and switches to an original-text
 action once translated. The user can return to the original
 text; translation never changes installed files or the instructions supplied to the Agent. Requests
 are cancellable and are not made on page load. Successful translations are saved in the existing
