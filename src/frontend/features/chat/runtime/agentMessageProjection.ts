@@ -82,6 +82,7 @@ function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): 
   const base = {
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
+    ...(part.progress ? { progress: part.progress } : {}),
     title: part.title,
     toolCallId: part.toolCallId,
     toolName: part.toolName,

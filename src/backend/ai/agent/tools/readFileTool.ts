@@ -127,7 +127,7 @@ export function createReadFileTool(
       documentParserMode === 'anydoc'
         ? 'Office, ODF, RTF, and EPUB return original AnyDoc IR JSON as explicit json-fragment windows. Use offset and max_characters, never line parameters; concatenate text windows in order to recover JSON.stringify(original IR). Continue with nextOffset until complete. Unknown fields and styles are retained. Embedded document assets are references only; they do not send image pixels.'
         : 'DOCX, PPTX, and XLSX return built-in extracted text. Legacy Office, ODF, RTF, and EPUB are unsupported by this parser.'
-    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again when its pixels are needed.`,
+    } PDF and ordinary text page by start_line and limit; lines start at 1, and when truncated, continue at startLine + lineCount. A line larger than one window is cut, flagged with lineTruncated, and continues with offset set to nextOffset. offset and max_characters read PDF and ordinary text as a raw code-point window instead of lines. sourceTruncated means the extractor reached its own limit. PNG, JPEG, WebP and GIF reads return bounded image pixels to vision models; omit paging parameters. Code Mode receives image metadata only: use a direct read_file call to inspect pixels. After history is rebuilt, read the image again if its pixels are no longer available.`,
     inputSchema: toRuntimeInputSchema(readFileInputSchema),
     approval: 'auto',
     async execute({ input, signal }): Promise<RuntimeToolResult> {
@@ -174,7 +174,7 @@ export function createReadFileTool(
               filename: source.name,
               mediaType: image.mediaType,
               delivery:
-                'image-to-model; scripts receive metadata only; read again after a history rebuild',
+                'image-to-model; scripts receive metadata only; read again if pixels are unavailable after rebuilding history',
             },
             modelImages: [image],
             artifacts: [],

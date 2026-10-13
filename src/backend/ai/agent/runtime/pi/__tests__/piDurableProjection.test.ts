@@ -137,6 +137,22 @@ describe('Pi turn projection', () => {
       } as unknown as SubmissionRecord,
       entries: [
         { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'cherry.codemode-artifacts',
+          data: {
+            callId: 'call',
+            artifacts: [
+              {
+                ref: { kind: 'managed-file', fileEntryId: 'file' },
+                name: 'saved.txt',
+                mediaType: 'text/plain',
+                kind: 'created',
+              },
+            ],
+          },
+        },
       ] as unknown as EntryRecord[],
     });
     expect(turn.status).toBe('interrupted');
@@ -146,6 +162,26 @@ describe('Pi turn projection', () => {
       input: { filename: 'notes.md', content: 'body' },
       output: { value: { status: 'interrupted' }, artifacts: [] },
     });
+    expect(turn.parts[1]).toMatchObject({ type: 'file', name: 'saved.txt' });
+  });
+
+  test('live child status is progress, never a final tool output', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata,
+      active: true,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2000)] },
+      ] as unknown as EntryRecord[],
+      nestedTools: new Map([
+        ['child', { parentCallId: 'call', name: 'read_file', args: '{}', status: 'running' }],
+      ]),
+    });
+    expect(turn.parts[0]).toMatchObject({
+      progress: { calls: [{ id: 'child', name: 'read_file', args: '{}', status: 'running' }] },
+    });
+    expect(turn.parts[0]).not.toHaveProperty('output');
   });
 
   test('streams a bounded file preview instead of the growing tool input', () => {

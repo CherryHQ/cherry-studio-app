@@ -37,6 +37,7 @@ import type {
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { writePiCodemodeOutput } from './piCodemodeOutput';
 import { createPiCodemodeSandbox } from './piCodemodeSandbox';
 import { createPiDurableModels, piDurableModelKey } from './piDurableModels';
 import { PiDurableObserver } from './PiDurableObserver';
@@ -574,28 +575,35 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 const signal = requireSignal(context);
                 const identity = await this.taskIdentity(sessionId, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
-                const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
-                let artifact = previous?.outputs[name];
-                if (!artifact) {
-                  try {
-                    artifact = await writer(identity, { name, data }, signal);
-                  } catch {
-                    signal.throwIfAborted();
-                    return { error: 'Could not save the managed output file.' };
-                  }
+                try {
+                  const output = await writePiCodemodeOutput(name, data, async (name, data) => {
+                    const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
+                    const artifact =
+                      previous?.outputs[name] ?? (await writer(identity, { name, data }, signal));
+                    await api.commit(async (tx) => {
+                      (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = artifact;
+                    }, context);
+                    // Replay retries authorization even when the file receipt already exists.
+                    await this.requirePorts().admitArtifacts(identity, [artifact], signal);
+                    await this.requireRuntime().grantFiles(
+                      sessionId,
+                      [artifact.ref.fileEntryId],
+                      context,
+                    );
+                    await retainPiCodemodeArtifacts(
+                      api,
+                      api.taskId,
+                      api.callId,
+                      [artifact],
+                      context,
+                    );
+                    return artifact;
+                  });
+                  return { path: `managed-file:${output.ref.fileEntryId}` };
+                } catch {
+                  signal.throwIfAborted();
+                  return { error: 'Could not save the managed output file.' };
                 }
-                const saved = artifact;
-                await api.commit(async (tx) => {
-                  (await tx.doc(PiCodemodeFiles, api.taskId)).outputs[name] = saved;
-                }, context);
-                await retainPiCodemodeArtifacts(api, api.taskId, [artifact], context);
-                await this.requirePorts().admitArtifacts(identity, [artifact], signal);
-                await this.requireRuntime().grantFiles(
-                  sessionId,
-                  [artifact.ref.fileEntryId],
-                  context,
-                );
-                return { path: `managed-file:${artifact.ref.fileEntryId}` };
               },
             }),
           }
@@ -617,9 +625,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             ]
           : [];
       },
-      beforeCall: async (call, api, context) => {
+      admitCall: async (call, api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
-        if (inputs.length !== 1) return 'This tool has no unambiguous owning input.';
+        if (inputs.length !== 1) return false;
+        const conversation = await this.requireRuntime().conversation(sessionId, context);
+        if (!conversation || conversation.id !== api.conversationId) return false;
         const entries = await this.requireRuntime().turnEntries(
           sessionId,
           inputs[0]!.record,
@@ -632,21 +642,20 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               ? message.content.filter((part) => part.type === 'toolCall')
               : [],
           );
-        if (
-          !(await admitPiToolCall(
-            api,
-            context,
-            inputs[0]!.record.id,
-            call,
-            calls.map((part) => part.id),
-          ))
-        )
-          return 'The turn exceeded its 64 tool-call budget.';
+        return admitPiToolCall(
+          conversation,
+          context,
+          inputs[0]!.record.id,
+          call,
+          calls.map((part) => part.id),
+        );
+      },
+      beforeCall: async (call, api, context) => {
         // A failed native lookup is known only from the transcript, never from a tool result.
         return nativeWeb &&
           configuration.tools.find((tool) => tool.providerName === call.name)?.failureGroup ===
             PI_WEB_FAILURE_GROUP &&
-          failedPiToolGroups(entries).includes(PI_WEB_FAILURE_GROUP)
+          (await this.webLookupFailed(sessionId, api, context))
           ? 'This tool group stopped after an earlier failure.'
           : undefined;
       },
@@ -750,7 +759,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
               return undefined;
             }
             this.toolFreeRequests.add(signal);
-            await api.commit(async (tx) => {
+            const conversation = await this.requireRuntime().conversation(sessionId, context);
+            if (!conversation || conversation.id !== api.conversationId)
+              throw new Error('The Pi conversation changed before budget settlement.');
+            await conversation.commit(async (tx) => {
               const current = await tx.doc(PiToolBudget, api.conversationId);
               if (current.inputId === inputs[0]?.record.id)
                 current.finalResponseModelCalls ??= modelCalls;

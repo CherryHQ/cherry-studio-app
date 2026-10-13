@@ -257,6 +257,8 @@ type AgentMessagePart =
         | 'error'
         | 'interrupted'
       input?: JsonValue
+      progress?: { calls: { id: string; name: string; args: string;
+        status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted' }[] }
       output?: JsonValue
       approvalId?: string
       error?: AgentErrorView

@@ -1,13 +1,7 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage, Message } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
-import {
-  createRegistry,
-  Harness,
-  MemoryStorage,
-  type HookApi,
-  type TaskId,
-} from '@earendil-works/pi-durable';
+import { createRegistry, Harness, MemoryStorage, type TaskId } from '@earendil-works/pi-durable';
 
 import { admitPiToolCall, PiToolBudget, piToolBudgetState } from '../piToolBudget';
 
@@ -81,10 +75,6 @@ describe('Pi tool budget', () => {
         { ownership: { kind: 'ownerless' } },
         BACKGROUND_CONTEXT,
       );
-      const api = {
-        conversationId: conversation.id,
-        commit: harness.commit.bind(harness),
-      } as HookApi;
       const child = (id: string) => ({
         id,
         name: 'lookup',
@@ -94,18 +84,20 @@ describe('Pi tool budget', () => {
       });
       const admitted = await Promise.all(
         Array.from({ length: 65 }, (_, index) =>
-          admitPiToolCall(api, BACKGROUND_CONTEXT, 1, child(`child-${index}`), ['parent']),
+          admitPiToolCall(conversation, BACKGROUND_CONTEXT, 1, child(`child-${index}`), ['parent']),
         ),
       );
       expect(admitted.filter(Boolean)).toHaveLength(63);
-      expect(await admitPiToolCall(api, BACKGROUND_CONTEXT, 1, child('child-0'), ['parent'])).toBe(
-        true,
-      );
+      expect(
+        await admitPiToolCall(conversation, BACKGROUND_CONTEXT, 1, child('child-0'), ['parent']),
+      ).toBe(true);
       expect(
         (await harness.snapshot(PiToolBudget, conversation.id, BACKGROUND_CONTEXT))?.nestedCalls,
       ).toHaveLength(63);
       expect(
-        await admitPiToolCall(api, BACKGROUND_CONTEXT, 2, child('new-child'), ['new-parent']),
+        await admitPiToolCall(conversation, BACKGROUND_CONTEXT, 2, child('new-child'), [
+          'new-parent',
+        ]),
       ).toBe(true);
       expect(
         await harness.snapshot(PiToolBudget, conversation.id, BACKGROUND_CONTEXT),

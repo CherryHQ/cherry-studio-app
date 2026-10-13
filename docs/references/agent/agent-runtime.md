@@ -151,6 +151,11 @@ text field and an optional display-name field. Pi coalesces partial input into
 display-only values, independent of `input` and tool execution. The latest preview accompanies the
 tool part for observation recovery and interruption; the full input is published on completion.
 
+Running Code Mode tools expose `progress.calls` with each child's stable `id`, `name`, bounded
+`args` preview (1000 characters), and `status` (`pending`, `running`, `ok`, `error`, or `interrupted`).
+The Host and frontend preserve this display-only field independently of the final tool `output`;
+it is cleared when the parent settles.
+
 `RuntimeModelPreflight` is a narrow, JSON-safe projection of input modalities, context/input/output
 limits, and native tool support. The Host calls it before reservation; provider SDK model objects,
 credentials, endpoints, and headers remain private to the Runtime adapter. Pi preflight and final
@@ -675,6 +680,8 @@ type RuntimeOutputPart =
         | 'error'
         | 'interrupted'
       input?: RuntimeJsonValue
+      progress?: { calls: { id: string; name: string; args: string;
+        status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted' }[] }
       output?: RuntimeToolResult
       approvalId?: string
       error?: RuntimeError

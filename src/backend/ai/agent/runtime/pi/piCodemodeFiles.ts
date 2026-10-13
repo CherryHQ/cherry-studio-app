@@ -1,9 +1,9 @@
 import type { Context } from '@earendil-works/chord';
-import { defineDoc, type HookApi, type ToolExecutionApi } from '@earendil-works/pi-durable';
+import { defineDoc, defineEntry, type ToolExecutionApi } from '@earendil-works/pi-durable';
 
 import type { RuntimeArtifact } from '../types';
 
-/** Output receipts belong to the parent task and disappear after its result is committed. */
+/** Replay receipts belong to the parent task; committed artifact entries outlive cancellation. */
 export const PiCodemodeFiles = defineDoc<{
   outputs: Record<string, RuntimeArtifact>;
   artifacts: RuntimeArtifact[];
@@ -14,21 +14,35 @@ export const PiCodemodeFiles = defineDoc<{
   initial: () => ({ outputs: {}, artifacts: [] }),
 });
 
+export const PiCodemodeArtifactsEntry = defineEntry<{
+  callId: string;
+  artifacts: RuntimeArtifact[];
+}>('cherry.codemode-artifacts');
+
 export async function retainPiCodemodeArtifacts(
-  api: HookApi | ToolExecutionApi,
-  taskId: HookApi['taskId'],
+  api: ToolExecutionApi,
+  taskId: ToolExecutionApi['taskId'],
+  callId: string,
   artifacts: readonly RuntimeArtifact[],
   context: Context,
 ) {
   if (!artifacts.length) return;
   await api.commit(async (tx) => {
     const files = await tx.doc(PiCodemodeFiles, taskId);
+    const changed: RuntimeArtifact[] = [];
     for (const artifact of artifacts) {
       const index = files.artifacts.findIndex(
         (item) => item.ref.fileEntryId === artifact.ref.fileEntryId,
       );
+      if (index >= 0 && JSON.stringify(files.artifacts[index]) === JSON.stringify(artifact))
+        continue;
       if (index < 0) files.artifacts.push(artifact);
       else files.artifacts[index] = artifact;
+      changed.push(artifact);
     }
+    if (changed.length)
+      await tx.appendEntry(PiCodemodeArtifactsEntry, api.conversationId, {
+        data: { callId, artifacts: changed },
+      });
   }, context);
 }

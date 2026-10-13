@@ -1,6 +1,6 @@
 import type { Context } from '@earendil-works/chord';
 import type { Message, SystemMessage } from '@earendil-works/pi-ai';
-import { defineDoc, type HookApi, type ToolHookCall } from '@earendil-works/pi-durable';
+import { defineDoc, type Conversation, type ToolHookCall } from '@earendil-works/pi-durable';
 
 /** Per-run tool budget. Exhaustion asks for one final tool-free answer instead of failing. */
 export const PI_TOOL_BUDGET = Object.freeze({ maxToolCalls: 64, maxToolSteps: 20 });
@@ -22,14 +22,14 @@ export const PiToolBudget = defineDoc<{
 });
 
 export function admitPiToolCall(
-  api: HookApi,
+  conversation: Pick<Conversation, 'id' | 'commit'>,
   context: Context,
   inputId: number,
   call: ToolHookCall,
   modelCalls: readonly string[],
 ) {
-  return api.commit(async (tx) => {
-    const budget = await tx.doc(PiToolBudget, api.conversationId);
+  return conversation.commit(async (tx) => {
+    const budget = await tx.doc(PiToolBudget, conversation.id);
     if (budget.inputId !== inputId) {
       budget.inputId = inputId;
       budget.modelCalls = [];

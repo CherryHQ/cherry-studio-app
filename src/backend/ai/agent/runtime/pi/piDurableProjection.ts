@@ -18,12 +18,13 @@ import {
 } from '../toolResults';
 import type {
   RuntimeError,
-  RuntimeJsonValue,
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolInputPreview,
+  RuntimeToolProgress,
   RuntimeUsage,
 } from '../types';
+import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -42,7 +43,6 @@ export const PiToolBlueprintSchema = z.object({
   displayName: z.string(),
   description: z.string(),
   inputSchema: RuntimeJsonValueSchema,
-  outputSchema: RuntimeJsonValueSchema.optional(),
   callers: z.array(z.enum(['model', 'tools'])).optional(),
   inputPreview: z.object({ textField: z.string(), nameField: z.string().optional() }).optional(),
   approval: z.enum(['auto', 'ask', 'deny']),
@@ -256,7 +256,7 @@ export function projectPiTurn(options: {
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
   nestedTools?: ReadonlyMap<
     string,
-    { parentCallId: string; name: string; args: string; status: string; error?: string }
+    { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
   >;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
@@ -355,20 +355,20 @@ export function projectPiTurn(options: {
       parts.push(part);
       toolsByCall.set(block.id, part);
       if (options.active && options.nestedTools) {
-        const calls: RuntimeJsonValue[] = [...options.nestedTools].flatMap(([callId, call]) =>
-          call.parentCallId === block.id
-            ? [
-                {
-                  id: callId,
-                  name: call.name,
-                  args: call.args,
-                  status: call.status,
-                  ...(call.error ? { error: call.error } : {}),
-                },
-              ]
-            : [],
+        const calls: RuntimeToolProgress['calls'] = [...options.nestedTools].flatMap(
+          ([callId, call]) =>
+            call.parentCallId === block.id
+              ? [
+                  {
+                    id: callId,
+                    name: call.name,
+                    args: call.args,
+                    status: call.status,
+                  },
+                ]
+              : [],
         );
-        if (calls.length) part.output = { value: { calls }, artifacts: [] };
+        if (calls.length) part.progress = { calls };
       }
       if (part.state === 'interrupted')
         part.output = createInterruptedToolResult('The tool ended without a confirmed result.');
@@ -407,6 +407,7 @@ export function projectPiTurn(options: {
         startedAt: message.timestamp - message.durationMs,
         completedAt: message.timestamp,
       });
+    delete part.progress;
     const details = ToolDetailsSchema.safeParse(message.details);
     const meta = MetaDetailsSchema.safeParse(message.details);
     if (details.success)
@@ -470,6 +471,32 @@ export function projectPiTurn(options: {
     }
   if (options.partial)
     assistant(options.partial, options.partialId ?? `pi:live:${record.id}`, true);
+  // These verified receipts survive parent cancellation and task-document retirement. Keep the
+  // interrupted tool-result contract intact while retaining its confirmed file attachments.
+  const files = new Map(
+    parts.flatMap((part) => (part.type === 'file' ? [[part.ref.fileEntryId, part] as const] : [])),
+  );
+  for (const entry of entries) {
+    if (!PiCodemodeArtifactsEntry.is(entry) || !toolsByCall.has(entry.data.callId)) continue;
+    for (const artifact of entry.data.artifacts) {
+      const existing = files.get(artifact.ref.fileEntryId);
+      if (existing) {
+        existing.name = artifact.name;
+        existing.mediaType = artifact.mediaType;
+      } else {
+        const part = {
+          id: `pi:${entry.id}:artifact:${artifact.ref.fileEntryId}`,
+          type: 'file' as const,
+          ref: artifact.ref,
+          mediaType: artifact.mediaType,
+          name: artifact.name,
+          purpose: 'artifact' as const,
+        };
+        files.set(artifact.ref.fileEntryId, part);
+        parts.push(part);
+      }
+    }
+  }
   const answerVisible =
     record.type === 'input' &&
     record.status === 'done' &&
@@ -508,13 +535,16 @@ export function projectPiTurn(options: {
   // Recovery can read a terminal input whose last tool never produced a result entry. Persist a
   // terminal pair, never a tool that appears to keep running in the Cherry transcript forever.
   if (status !== 'running' && status !== 'queued')
-    for (const part of parts)
-      if (part.type === 'tool' && !part.output) {
+    for (const part of parts) {
+      if (part.type !== 'tool') continue;
+      delete part.progress;
+      if (!part.output) {
         part.state = 'interrupted';
         part.output = createInterruptedToolResult(
           error?.message ?? 'The tool ended without a confirmed result.',
         );
       }
+    }
   return {
     identity: { sessionId: options.sessionId, turnId: stored.turnId, requestId: stored.requestId },
     userMessageId: stored.userMessageId,

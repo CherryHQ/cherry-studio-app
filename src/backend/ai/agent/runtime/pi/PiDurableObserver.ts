@@ -15,6 +15,7 @@ import type {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
+import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
 
@@ -29,13 +30,7 @@ export class PiDurableObserver {
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
   private readonly nestedTools = new Map<
     string,
-    {
-      parentCallId: string;
-      name: string;
-      args: string;
-      status: string;
-      error?: string;
-    }
+    { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
   >();
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
@@ -133,8 +128,13 @@ export class PiDurableObserver {
         parentCallId: tool.parentCallId,
         name: tool.name,
         args: JSON.stringify(tool.arguments).slice(0, 1000),
-        status: tool.summary ? (tool.summary.isError ? 'error' : 'ok') : tool.status,
-        ...(tool.summary?.error ? { error: tool.summary.error } : {}),
+        status: tool.summary
+          ? tool.summary.isError
+            ? 'error'
+            : 'ok'
+          : tool.status === 'done'
+            ? 'interrupted'
+            : tool.status,
       });
   }
 
@@ -230,10 +230,6 @@ export class PiDurableObserver {
                   ? 'error'
                   : 'ok'
                 : 'interrupted';
-              const error = event.result?.diagnostics.find(
-                (item) => item.severity === 'error',
-              )?.message;
-              if (error) nested.error = error.slice(0, 500);
             }
             break;
           }

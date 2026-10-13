@@ -477,7 +477,9 @@ approval, provider selection and usage attribution.
 
 A script receives structured tool results and can combine calls, but every nested call passes the
 same capability checks and approval as a direct model call. Parent and child calls share the
-sixty-four-call turn budget; only model rounds count toward twenty steps. The live parent shows
+sixty-four-call turn budget, including invalid child arguments. Admission happens before child-task
+creation and deduplicates resumed calls by their stable IDs; only model rounds count toward twenty
+steps. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
@@ -495,8 +497,12 @@ reject incompatible unfinished replay. The VM transports JSON and invokes only u
 its native message and clock callbacks are not globals available to scripts.
 
 Full output and script images become generated managed files. `managed-file:<id>` paths denote
-`read_file`'s `file_entry_id`; they are not device paths. File receipts and nested artifacts survive
-normal task replay and reach Cherry with the parent result. A crash between file creation and its
+`read_file`'s `file_entry_id`; they are not device paths. Text exceeding the 5 MiB source limit is
+split at Unicode boundaries into readable files plus an index that lists their IDs in order.
+Each part has a deterministic replay receipt and receives the same file authorization checks.
+Confirmed nested artifacts also have data-only Pi entries, so they reach Cherry's file message
+parts even if the parent is cancelled or interrupted. They do not turn an interrupted tool into
+a successful result or add child outputs to model history. A crash between file creation and its
 Pi receipt can leave an unreferenced managed file; this is not an exactly-once file transaction.
 `store/load` is temporary Pi working data: history rebuilds, Cherry forks and backup/restore may clear
 it. Lasting results belong in managed files. No parallel long-term store is maintained.
@@ -507,8 +513,9 @@ native module offers neither tool. A new development build is required for the i
 
 `read_file` can explicitly read PNG, JPEG, WebP and GIF within the same conversation file ledger.
 It reuses native image normalization and the existing attachment byte limit. Vision-capable model
-calls receive bounded pixels; scripts receive metadata. Pixels stay in Pi's working context and
-are omitted from Cherry history, so a rebuilt conversation must read the image again. Arbitrary
+calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
+details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
+When rebuilding from transcript alone, read the image again if its pixels are needed. Arbitrary
 paths and directory enumeration remain unavailable.
 
 ### Skill Boundary

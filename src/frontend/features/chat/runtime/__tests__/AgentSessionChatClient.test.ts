@@ -139,9 +139,9 @@ describe('AgentSessionChatClient', () => {
     expect(protocol.observeSession).toHaveBeenCalledTimes(2);
     expect(client.getState('session-1')).toMatchObject({
       status: 'ready',
-      error: null,
       contextStatus: 'compacting',
     });
+    expect(client.getState('session-1').error).toBeUndefined();
     release();
     client.dispose();
   });

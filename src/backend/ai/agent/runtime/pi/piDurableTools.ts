@@ -1,4 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
+import { withCancel } from '@earendil-works/chord/context';
 import type { TSchema } from '@earendil-works/pi-ai';
 import {
   defineExtension,
@@ -10,6 +11,7 @@ import {
   type ToolExecutionApi,
   type ToolExecutionResult,
   type ToolHookCall,
+  type ToolTaskInput,
 } from '@earendil-works/pi-durable';
 import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search';
 
@@ -19,6 +21,7 @@ import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { PiToolBudgetExceededError } from './piToolBudget';
 import { retainToolInstructions, toolInstructionsSection } from './piToolInstructions';
 
 type PiDurableToolOptions = {
@@ -26,6 +29,7 @@ type PiDurableToolOptions = {
   tools: readonly RuntimeTool[];
   codemode?: Extension;
   previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
+  admitCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<boolean>;
   beforeCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
   resolve(
@@ -141,6 +145,18 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         }
       }
       await options.onResult?.(tool, stored, api, context);
+      if (stored.artifacts.length) {
+        const task = await api.getTask(api.taskId, context);
+        const input = task?.input as ToolTaskInput | undefined;
+        if (input?.kind === 'nested')
+          await retainPiCodemodeArtifacts(
+            api,
+            input.parent,
+            input.parentCallId,
+            stored.artifacts,
+            context,
+          );
+      }
       return tool.ref.source === 'builtin' && modelImages ? { ...stored, modelImages } : stored;
     } catch (error) {
       signal.throwIfAborted();
@@ -162,7 +178,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         structuredOutputSchema: {
           type: 'object',
           properties: {
-            value: tool.outputSchema ?? {},
+            value: {},
             artifacts: { type: 'array', items: {} },
           },
           required: ['value', 'artifacts'],
@@ -186,7 +202,35 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
           const { tool: current } = await resolve(catalog.get('run_js')!, api, context);
           if (current.approval === 'deny') throw new Error('JavaScript execution is disabled.');
-          return tool.execute(args, api, context);
+          const script = withCancel(context);
+          let sequence = 0;
+          try {
+            return await tool.execute(
+              args,
+              {
+                ...api,
+                async executeTool(name, arguments_, callContext, nestedOptions) {
+                  const key = nestedOptions?.key ?? String(++sequence);
+                  const call: ToolHookCall = {
+                    type: 'toolCall',
+                    id: `${api.callId}/${key}`,
+                    name,
+                    arguments: arguments_,
+                    parent: { taskId: api.taskId, callId: api.callId },
+                  };
+                  if (options.admitCall && !(await options.admitCall(call, api, callContext))) {
+                    const error = new PiToolBudgetExceededError();
+                    script.cancel(error);
+                    throw error;
+                  }
+                  return api.executeTool(name, arguments_, callContext, nestedOptions);
+                },
+              },
+              script.context,
+            );
+          } finally {
+            script.cancel();
+          }
         },
       })),
       ...(options.tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny')
@@ -202,6 +246,8 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     hooks: [
       hook(ToolTask, {
         async beforeTool(call, api, context) {
+          if (options.admitCall && !(await options.admitCall(call, api, context)))
+            return { block: 'The turn exceeded its 64 tool-call budget.' };
           const blocked = await options.beforeCall?.(call, api, context);
           if (blocked) return { block: blocked };
           const template = catalog.get(call.name === 'codemode' && codemode ? 'run_js' : call.name);
@@ -217,21 +263,6 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             return { block: 'The user denied this tool call.' };
         },
         async afterTool(call, result, api, context) {
-          if (
-            call.parent &&
-            result.details &&
-            typeof result.details === 'object' &&
-            !Array.isArray(result.details)
-          ) {
-            const details = result.details as PiToolDetails;
-            if (details.kind === 'cherry.tool-result')
-              await retainPiCodemodeArtifacts(
-                api,
-                call.parent.taskId,
-                details.output.artifacts,
-                context,
-              );
-          }
           if (call.name !== 'codemode' || !codemode) return;
           const files = await api.snapshot(PiCodemodeFiles, api.taskId, context);
           const text = (result.output ?? [])

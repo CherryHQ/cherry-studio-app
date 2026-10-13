@@ -121,7 +121,9 @@ not an upstream entry id. This preserves partial-turn compaction and reset witho
 entry boundaries. Payloads above 256 KiB produce no checkpoint; the complete transcript remains
 available. Old `pi-context-compaction` summaries remain importable; a split offset they recorded
 against a native replay retains the whole turn instead. Malformed checkpoint payloads are never
-silently treated as empty history.
+silently treated as empty history. Retained messages may include image pixels when the checkpoint
+fits the limit; visible transcript file parts retain references only, so reconstruction without
+a usable checkpoint requires another `read_file` call when those pixels are needed.
 
 Settlement reads context at the completed answer. Before backup, the Host also captures current
 context to include background compaction that completed after the answer. There is no stored model

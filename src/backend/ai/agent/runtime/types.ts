@@ -130,7 +130,7 @@ export type RuntimeToolResult = {
   artifacts: RuntimeArtifact[];
   /** Compact built-in model value when the full display value is already supplied in instructions. */
   modelValue?: RuntimeJsonValue;
-  /** Transient built-in vision output. Pi may retain pixels in its working copy; Cherry keeps file IDs. */
+  /** Built-in vision output. Transcript parts keep file IDs; Pi context checkpoints may retain pixels. */
   modelImages?: { data: string; mediaType: string }[];
   /**
    * Trusted built-in callback instructions for subsequent requests in this execution.
@@ -252,8 +252,6 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
-  /** Schema of the result value consumed by scripts; omitted values remain unknown. */
-  outputSchema?: RuntimeJsonValue;
   callers?: readonly ('model' | 'tools')[];
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
@@ -295,6 +293,15 @@ export type RuntimeExecutionRequest = {
   options: RuntimeOptions;
   /** Optional, best-effort instrumentation; the Host owns collection and storage. */
   trace?: TraceSpan;
+};
+
+export type RuntimeToolProgress = {
+  calls: {
+    id: string;
+    name: string;
+    args: string;
+    status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted';
+  }[];
 };
 
 export type RuntimeOutputPart =
@@ -339,6 +346,7 @@ export type RuntimeOutputPart =
         | 'interrupted';
       input?: RuntimeJsonValue;
       inputPreview?: RuntimeToolInputPreview;
+      progress?: RuntimeToolProgress;
       output?: RuntimeToolResult;
       approvalId?: string;
       error?: RuntimeError;
