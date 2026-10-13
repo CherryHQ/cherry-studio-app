@@ -120,20 +120,21 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
  import { registerSessionResourceCleanup } from "../session-resources.js";
  import { combineAbortSignals } from "../utils/abort-signals.js";
  import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
-@@ -299,7 +299,11 @@
+@@ -299,7 +299,12 @@
                          statusText: response.statusText,
                      });
                      const info = await parseErrorResponse(fakeResponse);
 -                    throw new Error(info.friendlyMessage || info.message);
 +                    throw Object.assign(new Error(info.friendlyMessage || info.message), {
 +                        status: response.status,
++                        code: info.code,
 +                        // Subscription usage limits remain terminal, even when reported as HTTP 429.
 +                        retryable: info.friendlyMessage ? false : undefined,
 +                    });
                  }
                  catch (error) {
                      if (error instanceof Error) {
-@@ -344,7 +348,13 @@
+@@ -344,7 +349,13 @@
                  delete block.customInput;
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
@@ -148,6 +149,31 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
+@@ -1241,12 +1252,13 @@
+     const raw = await response.text();
+     let message = raw || response.statusText || "Request failed";
+     let friendlyMessage;
++    let code;
+     try {
+         const parsed = JSON.parse(raw);
+         const err = parsed?.error;
+         if (err) {
+-            const code = err.code || err.type || "";
+-            if (/usage_limit_reached|usage_not_included|rate_limit_exceeded/i.test(code) || response.status === 429) {
++            code = err.code || err.type || "";
++            if (/^(usage_limit_reached|usage_not_included|subscription_sharing_usage_limit_exceeded)$/i.test(code)) {
+                 const plan = err.plan_type ? ` (${err.plan_type.toLowerCase()} plan)` : "";
+                 const mins = err.resets_at
+                     ? Math.max(0, Math.round((err.resets_at * 1000 - Date.now()) / 60000))
+@@ -1258,7 +1270,7 @@
+         }
+     }
+     catch { }
+-    return { message, friendlyMessage };
++    return { message, friendlyMessage, code };
+ }
+ // ============================================================================
+ // Auth & Headers
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js

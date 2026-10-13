@@ -270,6 +270,41 @@ describe('Pi provider stream errors', () => {
     expect(isRetryableAssistantError(result)).toBe(testCase.retryable);
   });
 
+  test.each([
+    { error: { code: 'rate_limit_exceeded', message: 'Retry in one second' }, retryable: true },
+    { error: { type: 'rate_limit_exceeded', message: 'Retry in one second' }, retryable: true },
+    { error: { message: '请求过于频繁，请稍后重试' }, retryable: true },
+    { error: { code: 'usage_limit_reached', message: '请求失败' }, retryable: false },
+    { error: { type: 'usage_not_included', message: '请求失败' }, retryable: false },
+    {
+      error: { code: 'subscription_sharing_usage_limit_exceeded', message: '请求失败' },
+      retryable: false,
+    },
+    { error: { code: 'insufficient_quota', message: '请求失败' }, retryable: false },
+    { error: { code: 'billing_not_active', message: '请求失败' }, retryable: false },
+  ])('distinguishes Codex JSON throttling from quota exhaustion: $error', async (testCase) => {
+    const body = JSON.stringify({ error: testCase.error });
+    const stream = streamCodex(
+      model('openai-codex-responses') as Model<'openai-codex-responses'>,
+      normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+      {
+        apiKey: CODEX_API_KEY,
+        transport: 'sse',
+        maxRetries: 0,
+        fetch: async () => new Response(body, { status: 429 }),
+      },
+    );
+    const result = await stream.result();
+    expect(result.stopReason).toBe('error');
+    expect(result.diagnostics?.at(-1)).toMatchObject({
+      type: 'provider_response_failure',
+      error: { code: testCase.error.code ?? testCase.error.type ?? '' },
+      details: { status: 429 },
+    });
+    expect(isRetryableAssistantError(result)).toBe(testCase.retryable);
+    if (testCase.retryable) expect(result.errorMessage).toBe(testCase.error.message);
+  });
+
   test('retains Codex stream error codes over HTTP 200', async () => {
     const stream = streamCodex(
       model('openai-codex-responses') as Model<'openai-codex-responses'>,
