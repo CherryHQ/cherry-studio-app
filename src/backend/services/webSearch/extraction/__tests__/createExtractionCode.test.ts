@@ -55,6 +55,27 @@ test('preserves code blocks and table values in Markdown', async () => {
   expect(result.content).toContain('| Example | 42 |');
 });
 
+test.each([
+  { name: 'html', wrappers: /<\/?html>/g },
+  { name: 'body', wrappers: /<\/?body>/g },
+  { name: 'html, head and body', wrappers: /<\/?(?:html|head|body)>/g },
+])('extracts pages with omitted $name wrappers', async ({ wrappers }) => {
+  const html = article(`<p>${paragraph.repeat(6)}<a href="guide">Guide</a></p>`)
+    .replace('</head>', '<base href="https://example.com/docs/"></head>')
+    .replace(wrappers, '');
+  const result = await extract(html);
+  expect(result.status).toBe('ok');
+  expect(result.title).toBe('Local reading');
+  expect(result.content).toContain(paragraph.trim());
+  expect(result.content).toContain('https://example.com/docs/guide');
+});
+
+test('extracts a bare article fragment without nesting an empty body inside it', async () => {
+  const result = await extract(`<article><h1>Fragment</h1><p>${paragraph.repeat(6)}</p></article>`);
+  expect(result.status).toBe('ok');
+  expect(result.content).toContain(paragraph.trim());
+});
+
 test('bounds native output before serialization and marks the missing tail', async () => {
   const result = await extract(article(`<p>${paragraph.repeat(200)}</p>`));
   expect(result.content).toHaveLength(24_000);
@@ -72,8 +93,9 @@ test('treats scripts and source-like text as data', async () => {
   expect(result.content).not.toContain('page script executed');
 });
 
-test('reports pages with no body content as empty', async () => {
-  await expect(
-    extract('<html><head><title>Empty</title></head><body></body></html>'),
-  ).resolves.toMatchObject({ status: 'empty' });
+test.each([
+  '<html><head><title>Empty</title></head><body></body></html>',
+  '<!doctype html><!-- No document content -->',
+])('reports pages with no body content as empty: %s', async (html) => {
+  await expect(extract(html)).resolves.toMatchObject({ status: 'empty' });
 });

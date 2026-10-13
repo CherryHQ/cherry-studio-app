@@ -4,6 +4,7 @@ import type {
   AgentProtocol,
   AgentSessionObservation,
   AgentSessionSnapshot,
+  AgentTurnView,
 } from '@/shared/contracts/agent';
 import { AgentProtocolError } from '@/shared/contracts/agent';
 
@@ -625,14 +626,23 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1')).toMatchObject({ liveMessages: [], status: 'idle' });
   });
 
-  test('coalesces consecutive text deltas into one live-message notification', async () => {
+  test('coalesces text deltas without duplicate turn updates notifying session subscribers', async () => {
     jest.useFakeTimers();
     let release = () => {};
     try {
       let listener: ((event: AgentEvent) => void) | undefined;
+      const activeTurn: AgentTurnView = {
+        id: 'turn-1',
+        sessionId: 'session-1',
+        status: 'running',
+        assistantMessageId: 'assistant-1',
+        startedAt: '2026-08-25T00:00:00.000Z',
+        endedAt: null,
+        error: null,
+      };
       const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
         listener = nextListener;
-        return { snapshot: snapshot(), unsubscribe: jest.fn() };
+        return { snapshot: { ...snapshot(), activeTurn }, unsubscribe: jest.fn() };
       });
       const client = new AgentSessionChatClient(protocol);
       await client.observe('session-1');
@@ -640,18 +650,22 @@ describe('AgentSessionChatClient', () => {
       release = client.subscribe('session-1', onChange);
       listener?.({ type: 'message.created', message: assistantMessage() });
       onChange.mockClear();
+      const before = client.getState('session-1');
 
       listener?.({
         type: 'message.delta',
         messageId: 'assistant-1',
         delta: { op: 'text.append', partId: 'text-1', text: 'Hello' },
       });
+      listener?.({ type: 'turn.updated', turn: { ...activeTurn } });
       listener?.({
         type: 'message.delta',
         messageId: 'assistant-1',
         delta: { op: 'text.append', partId: 'text-1', text: ' world' },
       });
 
+      listener?.({ type: 'turn.updated', turn: { ...activeTurn } });
+      expect(client.getState('session-1')).toBe(before);
       expect(onChange).not.toHaveBeenCalled();
       jest.advanceTimersByTime(100);
       expect(onChange).toHaveBeenCalledTimes(1);
@@ -662,6 +676,47 @@ describe('AgentSessionChatClient', () => {
       release();
       jest.useRealTimers();
     }
+  });
+
+  test.each<Partial<AgentTurnView>>([
+    { id: 'turn-2' },
+    { sessionId: 'session-2' },
+    { assistantMessageId: 'assistant-2' },
+    { startedAt: '2026-08-25T00:01:00.000Z' },
+    { endedAt: '2026-08-25T00:02:00.000Z' },
+    { error: { code: 'EXECUTION_FAILED', message: 'Failed', retryable: true } },
+    { status: 'awaiting-approval' },
+    { status: 'awaiting-input' },
+    { status: 'cancelling' },
+    { status: 'completed' },
+    { status: 'cancelled' },
+    { status: 'interrupted' },
+    { status: 'failed' },
+  ])('immediately publishes a changed turn field: %j', async (patch) => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const activeTurn: AgentTurnView = {
+      id: 'turn-1',
+      sessionId: 'session-1',
+      status: 'running',
+      assistantMessageId: 'assistant-1',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: { ...snapshot(), activeTurn }, unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const onChange = jest.fn();
+    const release = client.subscribe('session-1', onChange);
+    const turn = { ...activeTurn, ...patch };
+    listener?.({ type: 'turn.updated', turn });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(client.getState('session-1').activeTurn).toEqual(turn);
+    release();
+    client.dispose();
   });
 
   test.each([

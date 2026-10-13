@@ -20,10 +20,12 @@ for format behavior, limits, selection evidence and pending acceptance.
 - `FileImageViewer` reuses `ArtifactImageViewer`, including zoom and preview failure recovery. Its
   bottom toolbar offers sharing and saving to Photos; the header retains system opening. A
   caller-owned image editing request also supplies Edit. Cropping, rotation, mirroring,
-  straightening and perspective adjustments happen before sending and create a new managed image
-  through `Backend.file.editImage`. Only an accepted source-matching
-  callback replaces the caller's attachment. The source file and existing messages retain their
-  original bytes. Cancellation and failed saves retain the current draft image.
+  straightening and perspective adjustments create a new managed image through
+  `Backend.file.editImage`. Only an accepted source-matching callback replaces the caller's
+  attachment. The source file and existing messages retain their
+  original bytes. The library's grid and list also enable editing, retaining each saved result as
+  a new library entry and displaying it in the same viewer. Cancellation and failed saves retain
+  the current image.
 - `FileTextViewer` reads at most 1 MiB plus one truncation-detection byte. Truncated HTML stays
   in source view. `FileTextBody` renders plain text and source as a virtualized list of bounded
   blocks from `splitTextBlocks`. Copy uses the displayed source text and explicitly says when it is partial;

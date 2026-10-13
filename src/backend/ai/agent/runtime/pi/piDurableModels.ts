@@ -92,10 +92,17 @@ export function createPiDurableModels(
         let secrets: readonly string[] = [];
         let trace: TraceSpan | undefined;
         try {
+          // Include configuration/permission failures before a provider stream exists.
+          if (model.api !== 'cherry-image') {
+            trace = await traceRequest?.(options?.sessionId, options?.signal);
+            trace?.setAttributes({
+              'gen_ai.request.model': model.id,
+              'gen_ai.provider.id': model.provider,
+            });
+          }
           const selected = await configuration(options?.sessionId, options?.signal);
           if (model.api === 'cherry-image') return imageModelStream(model, context);
           const reportUsage = await captureUsage?.(options?.sessionId, options?.signal);
-          trace = await traceRequest?.(options?.sessionId, options?.signal);
           options?.signal?.throwIfAborted();
           const resolved = await dependencies.resolveModel(
             { providerId: model.provider, modelId: model.id },

@@ -70,6 +70,7 @@ const itemDensityStyles: Record<SectionItemDensity, string> = {
 };
 
 function SectionItem({
+  accessibilityActions,
   accessibilityHint,
   accessibilityLabel,
   accessibilityRole,
@@ -81,6 +82,7 @@ function SectionItem({
   disabled = false,
   label,
   leading,
+  onAccessibilityAction,
   onPress,
   onPressIn,
   onPressOut,
@@ -135,12 +137,14 @@ function SectionItem({
   if (onPress) {
     return (
       <Pressable
+        accessibilityActions={accessibilityActions}
         accessibilityHint={accessibilityHint}
         accessibilityLabel={resolvedAccessibilityLabel}
         accessibilityRole={accessibilityRole ?? 'button'}
         accessibilityState={resolvedAccessibilityState}
         className={cn(rowClassName, 'active:bg-foreground/5')}
         disabled={disabled}
+        onAccessibilityAction={onAccessibilityAction}
         onPress={onPress}
         onPressIn={(event) => {
           onPressedChange?.(true);

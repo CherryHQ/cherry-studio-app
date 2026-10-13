@@ -1,3 +1,5 @@
+import { Directory, File } from 'expo-file-system';
+
 import { TRACE_RETENTION, traceFileStorage } from '../traceFileStorage';
 
 jest.mock('expo-crypto', () => {
@@ -111,6 +113,31 @@ jest.mock('expo-file-system', () => {
   };
 });
 
+jest.mock('expo-file-system/legacy', () => {
+  const { testState } = jest.requireMock<{
+    testState: { directories: Set<string>; files: Map<string, string> };
+  }>('expo-file-system');
+  return {
+    async readDirectoryAsync(uri: string) {
+      return [...testState.files.keys(), ...testState.directories]
+        .filter((path) => path.startsWith(uri) && path !== uri)
+        .map((path) => path.slice(uri.length).replace(/\/$/, ''))
+        .filter((name) => !name.includes('/'));
+    },
+    async getInfoAsync(uri: string) {
+      if (testState.directories.has(uri) || testState.directories.has(`${uri}/`))
+        return { exists: true, isDirectory: true };
+      const content = testState.files.get(uri);
+      return content === undefined
+        ? { exists: false }
+        : { exists: true, isDirectory: false, size: new TextEncoder().encode(content).byteLength };
+    },
+    async deleteAsync(uri: string) {
+      testState.files.delete(uri);
+    },
+  };
+});
+
 const { testState } = jest.requireMock<{
   testState: { directories: Set<string>; files: Map<string, string> };
 }>('expo-file-system');
@@ -126,6 +153,30 @@ beforeEach(() => {
 });
 
 describe('traceFileStorage', () => {
+  it('appends and prunes retained history without synchronous directory scans or file stats', async () => {
+    testState.directories.add(directory);
+    const current = `${directory}${name(now)}`;
+    const expired = `${directory}${name(now - TRACE_RETENTION.maxAgeMs - 1)}`;
+    testState.files.set(current, '{"revision":1}\n');
+    testState.files.set(expired, 'expired');
+    const list = jest.spyOn(Directory.prototype, 'list').mockImplementation(() => {
+      throw new Error('Synchronous history traversal blocks chat interactions');
+    });
+    const size = jest.spyOn(File.prototype, 'size', 'get').mockImplementation(() => {
+      throw new Error('Synchronous history metadata blocks chat interactions');
+    });
+    try {
+      await traceFileStorage.writeBatch(['{"revision":2}'], now + 1);
+      await traceFileStorage.prune(now + 1);
+      expect([...testState.files.entries()]).toEqual([
+        [current, '{"revision":1}\n{"revision":2}\n'],
+      ]);
+    } finally {
+      list.mockRestore();
+      size.mockRestore();
+    }
+  });
+
   it('keeps the committed JSONL batch after the native move mutates the source URI', async () => {
     await traceFileStorage.writeBatch(['{"revision":1}', '{"revision":2}'], now);
     expect([...testState.files.values()]).toEqual(['{"revision":1}\n{"revision":2}\n']);

@@ -1,5 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
+import { deleteAsync, getInfoAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
 import type { TraceFileStorage } from './types';
 
@@ -19,15 +20,29 @@ function traceDirectory(): Directory {
   return new Directory(Paths.document, 'Runtime', 'trace', 'v1');
 }
 
-function historyFiles(): { file: File; timestamp: number; size: number }[] {
+// Directory.list() and File.size synchronously inspect native files. Use the
+// legacy asynchronous APIs to keep full history scans off the chat JS thread.
+async function traceEntries(): Promise<string[]> {
   const directory = traceDirectory();
-  if (!directory.exists) return [];
-  return directory.list().flatMap((entry) => {
-    const match = TRACE_FILE_NAME.exec(entry.name);
-    return entry instanceof File && match
-      ? [{ file: entry, timestamp: Number(match[1]), size: entry.size }]
-      : [];
-  });
+  return (await getInfoAsync(directory.uri)).exists ? readDirectoryAsync(directory.uri) : [];
+}
+
+async function historyFiles(
+  entries: readonly string[],
+): Promise<{ name: string; uri: string; timestamp: number; size: number }[]> {
+  const directoryUri = traceDirectory().uri;
+  const files = await Promise.all(
+    entries.map(async (name) => {
+      const match = TRACE_FILE_NAME.exec(name);
+      if (!match) return [];
+      const uri = `${directoryUri}${name}`;
+      const info = await getInfoAsync(uri);
+      return info.exists && !info.isDirectory
+        ? [{ name, uri, timestamp: Number(match[1]), size: info.size }]
+        : [];
+    }),
+  );
+  return files.flat();
 }
 
 /** The service queue serializes appends, retention and snapshot copies. */
@@ -37,14 +52,13 @@ export const traceFileStorage: TraceFileStorage = {
     const directory = traceDirectory();
     directory.create({ intermediates: true, idempotent: true });
     const bytes = encoder.encode(`${lines.join('\n')}\n`);
-    const latest = historyFiles()
+    const latest = (await historyFiles(await readDirectoryAsync(directory.uri)))
       .filter(({ timestamp }) => Math.floor(timestamp / DAY_MS) === Math.floor(now / DAY_MS))
       .sort(
-        (left, right) =>
-          right.timestamp - left.timestamp || right.file.name.localeCompare(left.file.name),
+        (left, right) => right.timestamp - left.timestamp || right.name.localeCompare(left.name),
       )[0];
     if (latest && latest.size + bytes.length + 1 <= MAX_FILE_BYTES) {
-      const handle = latest.file.open(FileMode.ReadWrite);
+      const handle = new File(latest.uri).open(FileMode.ReadWrite);
       try {
         // Isolate an interrupted final line so it cannot consume the next valid record.
         if (latest.size) {
@@ -75,23 +89,25 @@ export const traceFileStorage: TraceFileStorage = {
 
   async prune(now) {
     const directory = traceDirectory();
-    if (!directory.exists) return;
-    for (const entry of directory.list()) {
-      if (entry instanceof File && TRACE_TEMP_FILE_NAME.test(entry.name)) entry.delete();
+    const entries = await traceEntries();
+    for (const name of entries) {
+      if (!TRACE_TEMP_FILE_NAME.test(name)) continue;
+      const uri = `${directory.uri}${name}`;
+      const info = await getInfoAsync(uri);
+      if (info.exists && !info.isDirectory) await deleteAsync(uri, { idempotent: true });
     }
-    const files = historyFiles().sort(
-      (left, right) =>
-        right.timestamp - left.timestamp || right.file.name.localeCompare(left.file.name),
+    const files = (await historyFiles(entries)).sort(
+      (left, right) => right.timestamp - left.timestamp || right.name.localeCompare(left.name),
     );
     let retainedBytes = 0;
     let retainedFiles = 0;
-    for (const { file, timestamp, size } of files) {
+    for (const { uri, timestamp, size } of files) {
       if (
         timestamp < now - TRACE_RETENTION.maxAgeMs ||
         retainedBytes + size > TRACE_RETENTION.maxBytes ||
         retainedFiles >= TRACE_RETENTION.maxFiles
       ) {
-        file.delete();
+        await deleteAsync(uri, { idempotent: true });
       } else {
         retainedBytes += size;
         retainedFiles += 1;
@@ -104,15 +120,14 @@ export const traceFileStorage: TraceFileStorage = {
     const directory = new Directory(Paths.cache, 'Diagnostics', `trace-${randomUUID()}`);
     directory.create({ intermediates: true });
     try {
-      const sources = historyFiles().sort(
-        (left, right) =>
-          left.timestamp - right.timestamp || left.file.name.localeCompare(right.file.name),
+      const sources = (await historyFiles(await traceEntries())).sort(
+        (left, right) => left.timestamp - right.timestamp || left.name.localeCompare(right.name),
       );
       const files: { name: string; uri: string; size: number }[] = [];
-      for (const { file } of sources) {
-        const copy = new File(directory, file.name);
-        await file.copy(copy);
-        files.push({ name: copy.name, uri: copy.uri, size: copy.size });
+      for (const { name, uri, size } of sources) {
+        const copy = new File(directory, name);
+        await new File(uri).copy(copy);
+        files.push({ name, uri: copy.uri, size });
       }
       const manifest = new File(directory, 'manifest.json');
       manifest.create();

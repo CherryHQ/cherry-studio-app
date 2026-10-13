@@ -3,10 +3,12 @@ import { ActionMenu, ContentState, type MenuItem, useToast } from '@cherrystudio
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 
 import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
 
+import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarConversationList } from './SidebarConversationList';
 import { SidebarDesktopSource } from './SidebarDesktopSource';
 
@@ -18,6 +20,8 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   const { t } = useTranslation();
   const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
   const { toast } = useToast();
+  const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
+  const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
   const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
@@ -55,19 +59,24 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
     [handleModeChange, isSessionMode, t],
   );
 
-  const header = (
-    <ActionMenu items={menuItems}>
-      <View
-        accessibilityLabel={t('navigation.chooseSidebarView')}
-        accessibilityRole="button"
-        className="min-h-10 flex-row items-center gap-1.5"
-        testID="sidebar-recents-mode-toggle"
-      >
-        <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
-        <ChevronDownIcon className="size-4 text-muted-foreground" />
-      </View>
-    </ActionMenu>
+  const modeTrigger = (
+    <View
+      accessibilityLabel={t('navigation.chooseSidebarView')}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isSelecting || isDeleting }}
+      className="min-h-10 flex-row items-center gap-1.5"
+      testID="sidebar-recents-mode-toggle"
+    >
+      <Text className="text-muted-foreground text-sm">{modeLabel}</Text>
+      <ChevronDownIcon className="size-4 text-muted-foreground" />
+    </View>
   );
+  const header =
+    isSelecting || isDeleting ? (
+      modeTrigger
+    ) : (
+      <ActionMenu items={menuItems}>{modeTrigger}</ActionMenu>
+    );
   const content = (
     <SidebarConversationList
       key={mode}
@@ -85,7 +94,9 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   return (
     <>
       {/* The whole break below the navigation rows, which add no trailing space of their own. */}
-      <View className="px-5 pt-2 pb-1">{header}</View>
+      <View className="flex-row items-center justify-between gap-2 px-5 pt-2 pb-1">
+        {isSelecting ? <SidebarSelectionHeader /> : header}
+      </View>
       <ConversationSourceBoundary
         source={{ kind: 'local' }}
         fallback={(state) =>
@@ -104,6 +115,45 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
       >
         {content}
       </ConversationSourceBoundary>
+    </>
+  );
+}
+
+function SidebarSelectionHeader() {
+  const { t } = useTranslation();
+  const selection = useSidebarSelection();
+  const selectedCount = useSidebarSelectionSnapshot((state) => state.selectedIds.size);
+  const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
+  const allSelected = useSidebarSelectionSnapshot(() => selection.allSelected());
+  const selectableCount = useSidebarSelectionSnapshot(() => selection.shownIds().length);
+  const disabled = isDeleting || !selectableCount;
+
+  return (
+    <>
+      <Text
+        className="min-w-0 flex-1 text-muted-foreground text-sm"
+        accessibilityLiveRegion="polite"
+      >
+        {t('common.selection.count', { count: selectedCount })}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled }}
+        disabled={disabled}
+        hitSlop={4}
+        onPress={selection.toggleAll}
+        style={({ pressed }) => ({
+          justifyContent: 'center',
+          maxWidth: '60%',
+          minHeight: 44,
+          opacity: disabled ? 0.4 : pressed ? 0.6 : 1,
+        })}
+        testID="sidebar-select-all"
+      >
+        <Text className="text-right text-sidebar-foreground text-sm">
+          {t(allSelected ? 'session.selection.deselectAll' : 'common.selection.selectAll')}
+        </Text>
+      </Pressable>
     </>
   );
 }

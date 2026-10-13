@@ -86,15 +86,19 @@ page render a retry state without losing sharing or system opening. Optional chi
 caller-owned controls below the image. The painting viewer retains
 its own route and painting-specific actions.
 
-Composer images opt into Edit through `FileEntryPreview.onImageReplace`. Static JPEG, PNG and WebP
-images support freeform and fixed-ratio cropping, clockwise quarter-turn rotation, mirroring,
+Composer images opt into Edit through `FileEntryPreview.onImageReplace`. The file library's grid
+and list opt in through a request owned by their list container, so recycling a tile cannot cancel
+an edit. Static JPEG, PNG and WebP images support freeform and fixed-ratio cropping, clockwise
+quarter-turn rotation, mirroring,
 straightening and horizontal/vertical perspective in CherryUI's `ImageEditor`. Undo, redo,
 hold-to-compare and reset keep adjustments local until Done. Preview and Skia pixel export share
 the same transform and safe crop bounds. GIF, vector images and images reported as animated retain
 ordinary preview actions.
-Done creates a new managed file and replaces the same draft attachment, preserving its position
-and the text draft. The source file and sent messages are unchanged. Cancel discards only local
-edit state; a failed or stale save cannot replace the source. Backend storage owns pixel writes
+Done creates a new managed file. In the composer it replaces the same draft attachment, preserving
+its position and the text draft. In the library it adds a new version and advances the viewer to
+that result; file change subscriptions refresh the list. The source file and sent messages are
+unchanged. Cancel discards only local edit state; a failed or stale save cannot replace the source.
+Backend storage owns pixel writes
 and derivative cleanup. The viewer blocks leaving during a save and first cancels an active edit
 on back. Gesture, orientation, save/cancel and theme acceptance remain pending device verification.
 

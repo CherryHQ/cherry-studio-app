@@ -724,7 +724,7 @@ describe('Skill turn preparation', () => {
         folderName: 'notes',
         files: ['SKILL.md'],
         invocation: { modelInvocable: true, userInvocable: true },
-        admission: { status: 'ready', reasons: [] },
+        limitations: { scripts: [], unavailableTools: [] },
       },
     ],
     readInstructions: async () => 'Use a concise outline.',
