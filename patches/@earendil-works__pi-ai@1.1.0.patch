@@ -120,6 +120,34 @@ diff --git a/dist/api/openai-codex-responses.js b/dist/api/openai-codex-response
  import { registerSessionResourceCleanup } from "../session-resources.js";
  import { combineAbortSignals } from "../utils/abort-signals.js";
  import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic, formatThrownValue, } from "../utils/diagnostics.js";
+@@ -299,7 +299,11 @@
+                         statusText: response.statusText,
+                     });
+                     const info = await parseErrorResponse(fakeResponse);
+-                    throw new Error(info.friendlyMessage || info.message);
++                    throw Object.assign(new Error(info.friendlyMessage || info.message), {
++                        status: response.status,
++                        // Subscription usage limits remain terminal, even when reported as HTTP 429.
++                        retryable: info.friendlyMessage ? false : undefined,
++                    });
+                 }
+                 catch (error) {
+                     if (error instanceof Error) {
+@@ -344,7 +348,13 @@
+                 delete block.customInput;
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+-            output.errorMessage = formatProviderError(normalizeProviderError(error));
++            const normalizedError = normalizeProviderError(error);
++            output.errorMessage = formatProviderError(normalizedError);
++            appendAssistantMessageDiagnostic(output, createAssistantMessageDiagnostic("provider_response_failure", error, {
++                status: normalizedError.status,
++                body: normalizedError.body,
++                retryable: normalizedError.retryable,
++            }));
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
@@ -608,7 +636,7 @@ diff --git a/dist/utils/retry.js b/dist/utils/retry.js
 index 738a6f0db0ed42d257eefa7a7eb2d355ae784f65..dd262400c585e12ef6ef84a74264144c352a05b1 100644
 --- a/dist/utils/retry.js
 +++ b/dist/utils/retry.js
-@@ -186,11 +186,20 @@ export async function retryAssistantCall(produce, policy, signal, callbacks) {
+@@ -186,11 +186,21 @@ export async function retryAssistantCall(produce, policy, signal, callbacks) {
   * before restarting the assistant turn.
   */
  export function isRetryableAssistantError(message) {
@@ -616,11 +644,12 @@ index 738a6f0db0ed42d257eefa7a7eb2d355ae784f65..dd262400c585e12ef6ef84a74264144c
 +    if (message.stopReason !== "error")
          return false;
 -    const errorMessage = message.errorMessage;
-+    const errorMessage = message.errorMessage ?? "";
++    const failure = message.diagnostics?.findLast((entry) => entry.type === "provider_response_failure");
++    const errorMessage = [message.errorMessage, failure?.error?.code].filter((value) => typeof value === "string" || typeof value === "number").join("\n");
      if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage))
          return false;
 +    // Mobile adapters preserve provider status and retryability independently of localized text.
-+    const failure = message.diagnostics?.findLast((entry) => entry.type === "provider_response_failure");
++    // Stable provider codes also classify opaque errors delivered over HTTP 200.
 +    const retryable = failure?.details?.retryable;
 +    if (typeof retryable === "boolean")
 +        return retryable;

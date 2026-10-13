@@ -755,9 +755,13 @@ This keeps the original terminal failure distinct from an earlier WebSocket or s
 
 Pi's automatic retry reads the same diagnostic, so it does not depend on message wording. Quota and
 billing limits stay terminal; otherwise explicit retryability decides, then the HTTP status (408,
-409, 425, 429 and 5xx retry; other 4xx do not), and only then the message text. A response body that
-fails after its headers arrived is a dropped connection whose native message is OS-localized and
+409, 425, 429 and 5xx retry; other 4xx do not), and only then known patterns in the message or stable
+provider error code. A response body that fails after its headers arrived is a dropped connection
+whose native message is OS-localized and
 carries no status, so the stream binding marks it retryable. A cancelled request is never retried.
+The Codex Responses adapter preserves these same terminal facts, including HTTP rejections before
+streaming starts and errors delivered over HTTP 200. Its subscription usage-limit responses remain
+explicitly non-retryable even when the server returns HTTP 429.
 
 A `context.checkpoint` event is non-terminal. The Host retains only the latest valid candidate from
 the active execution and commits it atomically with a successful assistant terminal result. Failed,
