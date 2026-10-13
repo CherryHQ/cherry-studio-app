@@ -103,6 +103,21 @@ test('survives row unsubscription and preserves hidden state while streaming com
   expect(translate.mock.calls[0][1]?.signal?.aborted).toBe(false);
 });
 
+test('regenerates legacy cached text whose completion was never checked', async () => {
+  const { cache, store, translate } = setup();
+  cache.setPersist('chat.translations', {
+    [JSON.stringify(['local', 'session', source.messageId, 'zh-CN'])]: {
+      contentHash: source.contentHash,
+      content: 'old partial translation',
+    },
+  });
+
+  expect(store.get(source).status).toBe('idle');
+  await store.start(source);
+  expect(translate).toHaveBeenCalledTimes(1);
+  expect(store.get(source)).toMatchObject({ content: '译文', status: 'success' });
+});
+
 test('cancellation discards late chunks and final results, and retry starts cleanly', async () => {
   const { store, translate, cache } = setup();
   const done = deferred<string>();

@@ -84,9 +84,12 @@ retry, copy, and hide actions. The block is excluded from the enclosing message 
 press target, so holding its Markdown selects translated text; scrolling and control taps remain
 owned by the existing list and CherryUI controls. Leaving the screen cancels in-flight requests. A changed, retried,
 removed, or incomplete source cannot accept a late result.
+Changing the app language replaces only the translation store and cancels its old requests; the
+transcript stays mounted so reading positions and message expansion state are retained.
 
 Successful results are reading aids in the existing persistent UI cache, keyed by source scope,
 Session, message and target language, and checked against the source content hash. The cache retains
-the latest 100 generated translations. Partial, failed and cancelled translations are not saved.
+the latest 100 generated translations. Truncated, failed and cancelled translations are not saved;
+legacy cache entries created before completion checking are regenerated on demand.
 Reopening a conversation restores a matching result. Translation neither adds a turn nor changes
 message parts, model history, original-message copy or conversation export.

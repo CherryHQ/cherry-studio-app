@@ -34,7 +34,7 @@ export function MessageTranslationProvider(props: ProviderProps) {
   const language = resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language);
   return (
     <SessionTranslationProvider
-      key={JSON.stringify([props.scope, props.sessionId, language])}
+      key={JSON.stringify([props.scope, props.sessionId])}
       {...props}
       language={language}
     />
@@ -49,9 +49,15 @@ function SessionTranslationProvider({
   messages,
 }: ProviderProps & { language: AppLanguage }) {
   const translator = useBackendModule('translation');
-  const [store] = useState(
+  const [ownedStore, setOwnedStore] = useState(
     () => new MessageTranslationStore(translator, cacheService, scope, sessionId, language),
   );
+  // Replace only the translation owner; the transcript keeps its reading and row state.
+  let store = ownedStore;
+  if (store.language !== language) {
+    store = new MessageTranslationStore(translator, cacheService, scope, sessionId, language);
+    setOwnedStore(store);
+  }
   useFocusEffect(useCallback(() => () => store.cancelAll(), [store]));
   useLayoutEffect(() => {
     store.reconcile(messages);

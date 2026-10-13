@@ -43,7 +43,8 @@ export class MessageTranslationStore {
   ) {}
 
   private cacheKey(messageId: string) {
-    return JSON.stringify([this.scope, this.sessionId, messageId, this.language]);
+    // Earlier entries may contain output saved before truncation was checked.
+    return JSON.stringify([2, this.scope, this.sessionId, messageId, this.language]);
   }
 
   get(source: MessageTranslationSource): MessageTranslationState {
