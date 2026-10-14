@@ -20,7 +20,7 @@ export async function captureFeedbackScreenshot(): Promise<FeedbackScreenshot> {
     if (source.size <= 0 || source.size > DIAGNOSTIC_SCREENSHOT_MAX_BYTES)
       throw new Error('Feedback screenshot exceeds attachment limit');
     directory.create({ intermediates: true, idempotent: true });
-    source.copy(file);
+    await source.copy(file);
     return { id, uri: file.uri };
   } catch (error) {
     removeFeedbackScreenshot({ id, uri: file.uri });

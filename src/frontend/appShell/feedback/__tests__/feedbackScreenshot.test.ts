@@ -22,7 +22,7 @@ jest.mock('expo-file-system', () => {
     }
     create() {}
     copy(destination: Entry) {
-      mockCopy(this.uri, destination.uri);
+      return mockCopy(this.uri, destination.uri);
     }
     delete() {
       mockDelete(this.uri);
@@ -51,6 +51,22 @@ test('adopts the native screenshot into the private draft directory and releases
   expect(mockDelete).toHaveBeenCalledWith(image.uri);
 });
 
+test('keeps the native screenshot until the asynchronous copy finishes', async () => {
+  let finishCopy!: () => void;
+  mockCopy.mockReturnValueOnce(
+    new Promise<void>((resolve) => {
+      finishCopy = resolve;
+    }),
+  );
+  const capture = captureFeedbackScreenshot();
+  await Promise.resolve();
+  expect(mockCopy).toHaveBeenCalled();
+  expect(releaseCapture).not.toHaveBeenCalled();
+  finishCopy();
+  await capture;
+  expect(releaseCapture).toHaveBeenCalledWith('file:///native.png');
+});
+
 test.each([0, 8 * 1024 * 1024 + 1])(
   'rejects invalid capture size %i and releases temporary pixels',
   async (size) => {
@@ -62,9 +78,7 @@ test.each([0, 8 * 1024 * 1024 + 1])(
 );
 
 test('cleans a partial draft if copying fails', async () => {
-  mockCopy.mockImplementationOnce(() => {
-    throw new Error('disk full');
-  });
+  mockCopy.mockRejectedValueOnce(new Error('disk full'));
   await expect(captureFeedbackScreenshot()).rejects.toThrow('disk full');
   expect(mockDelete).toHaveBeenCalledWith('file:///cache/FeedbackScreenshots/capture-id.png');
   expect(releaseCapture).toHaveBeenCalledWith('file:///native.png');
