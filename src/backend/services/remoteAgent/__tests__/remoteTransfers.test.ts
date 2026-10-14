@@ -224,9 +224,15 @@ it('closing one consumer does not cancel a shared download, while closing all re
   rmSync(path.dirname(uri), { recursive: true, force: true });
 });
 
-it.each([false, true])(
-  'uploads selected bytes before send and recovers with reordered response fields: %s',
-  async (reorder) => {
+it.each([
+  { checksumAlgorithm: 'sha256' as const, reorder: false },
+  { checksumAlgorithm: 'sha256' as const, reorder: true },
+  { checksumAlgorithm: undefined, reorder: false },
+  { checksumAlgorithm: undefined, reorder: true },
+])(
+  'uploads selected bytes and restores readiness with checksum $checksumAlgorithm and reordered fields $reorder',
+  async ({ checksumAlgorithm: initialChecksumAlgorithm, reorder }) => {
+    let checksumAlgorithm = initialChecksumAlgorithm;
     const uri = path.join(root, 'selected.zip');
     const bytes = Buffer.from('selected before Send');
     writeFileSync(uri, bytes);
@@ -242,7 +248,9 @@ it.each([false, true])(
     let draft: any;
     let upload: AgentUploadState | undefined;
     const received: Buffer[] = [];
+    const cancelled: string[] = [];
     const request = (async (method: string, params: any) => {
+      params = JSON.parse(JSON.stringify(params));
       if (method === 'agent.attachments.present') {
         draft = params;
         return { accepted: true };
@@ -251,24 +259,35 @@ it.each([false, true])(
         if (!upload) throw new RemoteAgentError('NOT_FOUND');
         return upload;
       }
+      if (method === 'agent.uploads.cancel') {
+        cancelled.push(params.uploadId);
+        upload = undefined;
+        received.length = 0;
+        return { cancelled: true };
+      }
       if (method === 'agent.uploads.prepare') {
         expect(draft.items[0].uploadId).toBe(params.uploadId);
         expect(params.draftId).toBeUndefined();
+        expect(params.checksumAlgorithm).toBe(checksumAlgorithm);
+        if (!checksumAlgorithm) expect(params).not.toHaveProperty('checksumAlgorithm');
         upload = {
           uploadId: params.uploadId,
           state: 'receiving',
-          checksumAlgorithm: 'sha256',
+          ...(checksumAlgorithm ? { checksumAlgorithm } : {}),
           committedOffset: '0',
           writerEpoch: '0',
           expiresAt: new Date(Date.now() + 60000).toISOString(),
         };
       } else if (method === 'agent.uploads.resume') upload = { ...upload!, writerEpoch: '1' };
-      else if (method === 'agent.uploads.complete')
-        upload = { ...upload!, state: 'ready', sha256: params.expectedSha256 };
-      else throw new Error(`Selection must not send a message: ${method}`);
+      else if (method === 'agent.uploads.complete') {
+        if (checksumAlgorithm) expect(params.expectedSha256).toBe(integrity.sha256(bytes));
+        else expect(params).not.toHaveProperty('expectedSha256');
+        upload = { ...upload!, state: 'ready', sha256: integrity.sha256(Buffer.concat(received)) };
+      } else throw new Error(`Selection must not send a message: ${method}`);
       return reorder ? Object.fromEntries(Object.entries(upload!).toReversed()) : upload;
     }) as AgentRequest;
     const transport = async () => ({
+      checksumAlgorithm,
       write: async (input: any) => {
         received.push(Buffer.from(input.bytes));
         upload = { ...upload!, committedOffset: String(Buffer.concat(received).length) };
@@ -276,7 +295,7 @@ it.each([false, true])(
       },
     });
     const files = {
-      hashFile: async () => integrity.sha256(readFileSync(uri)),
+      hashFile: jest.fn(async () => integrity.sha256(readFileSync(uri))),
       resolve: async () => ({ uri, entry: { id: attachment.fileEntryId, provenance: 'imported' } }),
       prepareUploadSource: async () => ({
         uri,
@@ -312,6 +331,26 @@ it.each([false, true])(
     await tasks.drain();
     expect(tasks.ready('session:session', [attachment])).toEqual(ready);
     expect(Buffer.concat(received).equals(bytes)).toBe(true);
+    expect(jest.mocked(files.hashFile)).toHaveBeenCalledTimes(checksumAlgorithm ? 2 : 0);
+    tasks.stop();
+    checksumAlgorithm = checksumAlgorithm ? undefined : 'sha256';
+    tasks = new RemoteAttachmentDrafts(
+      'phone:grant:attachments',
+      journal,
+      files,
+      request,
+      new AbortController().signal,
+      () => {},
+      transport,
+    );
+    tasks.recover();
+    await tasks.drain();
+    const migrated = tasks.ready('session:session', [attachment]);
+    expect(migrated.selectionId).toBe(ready.selectionId);
+    expect(migrated.uploaded[0].uploadId).not.toBe(ready.uploaded[0].uploadId);
+    expect(cancelled).toEqual([ready.uploaded[0].uploadId]);
+    expect(Buffer.concat(received).equals(bytes)).toBe(true);
+    expect(jest.mocked(files.hashFile)).toHaveBeenCalledTimes(initialChecksumAlgorithm ? 2 : 1);
     tasks.reconcile(new Set([ready.selectionId]));
     tasks.stop();
     const admitted = new RemoteAttachmentDrafts(
@@ -380,6 +419,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
     }
   }) as AgentRequest;
   const transport = async () => ({
+    checksumAlgorithm: 'sha256' as const,
     write: async (input: any) => {
       started();
       await pending;
@@ -431,88 +471,100 @@ it('persists removal before abort and cannot revive the attachment from a late w
   tasks.stop();
 });
 
-it('uploads MiB binary blocks without a pre-scan and resumes the persisted snapshot after a lost ACK', async () => {
-  mockNativeReads.length = 0;
-  const bytes = Buffer.alloc(2 * 1024 * 1024 + 19, 63);
-  const uri = path.join(root, 'snapshot.bin');
-  writeFileSync(uri, bytes);
-  const snapshotId = '12345678-1234-4234-8234-123456789def';
-  const files = {
-    hashFile: async () => integrity.sha256(readFileSync(uri)),
-    prepareUploadSource: jest.fn(async () => ({
-      uri,
-      entry: { id: snapshotId, provenance: 'imported' },
-    })),
-    resolve: async (id: string) => {
-      if (id !== snapshotId) throw new Error('Original source must not be reopened');
-      return { uri, entry: { id: snapshotId, provenance: 'imported' } };
-    },
-  } as unknown as RemoteUploadFiles;
-  let saved: SavedUpload[] = [];
-  let state: AgentUploadState | undefined;
-  const received: Uint8Array[] = [];
-  let disconnect = true;
-  const request = (async (method: string, input: any) => {
-    if (method === 'agent.uploads.get') {
-      if (!state) throw new RemoteAgentError('NOT_FOUND');
-      return state;
-    }
-    if (method === 'agent.uploads.prepare') {
-      expect(input).not.toHaveProperty('sha256');
-      expect(mockNativeReads).toEqual([]);
-      state = {
-        uploadId: input.uploadId,
-        state: 'receiving',
-        checksumAlgorithm: 'sha256',
-        committedOffset: '0',
-        writerEpoch: '0',
-        expiresAt: new Date().toISOString(),
-      };
-    } else if (method === 'agent.uploads.resume') {
-      state = { ...state!, writerEpoch: String(Number(state!.writerEpoch) + 1) };
-    } else if (method === 'agent.uploads.complete')
-      state = { ...state!, state: 'ready', sha256: input.expectedSha256 };
-    else throw new Error('Unexpected upload request: ' + method);
-    return state;
-  }) as AgentRequest;
-  const run = () =>
-    uploadAttachments(
-      [attachment],
-      files,
-      request,
-      new AbortController().signal,
-      () => {},
-      saved,
-      (value) => {
-        saved = JSON.parse(JSON.stringify(value));
+it.each([undefined, 'sha256'] as const)(
+  'resumes exact binary bytes from the persisted snapshot after a lost ACK with checksum %s',
+  async (checksumAlgorithm) => {
+    mockNativeReads.length = 0;
+    const bytes = Buffer.alloc(2 * 1024 * 1024 + 19, 63);
+    const uri = path.join(root, 'snapshot.bin');
+    writeFileSync(uri, bytes);
+    const snapshotId = '12345678-1234-4234-8234-123456789def';
+    const files = {
+      hashFile: jest.fn(async () => integrity.sha256(readFileSync(uri))),
+      prepareUploadSource: jest.fn(async () => ({
+        uri,
+        entry: { id: snapshotId, provenance: 'imported' },
+      })),
+      resolve: async (id: string) => {
+        if (id !== snapshotId) throw new Error('Original source must not be reopened');
+        return { uri, entry: { id: snapshotId, provenance: 'imported' } };
       },
-      async () => ({
-        write: async (input) => {
-          expect(Number(input.offset)).toBe(Number(state!.committedOffset));
-          expect(input.bytes.length).toBeLessThanOrEqual(1024 * 1024);
-          received.push(input.bytes);
-          state = { ...state!, committedOffset: String(Number(input.offset) + input.bytes.length) };
-          if (disconnect) throw new RemoteAgentError('CONNECTION_LOST', true);
-          return {
-            ok: true,
-            requestId: 'ack',
-            uploadId: input.uploadId,
-            writerEpoch: input.writerEpoch,
-            committedOffset: state.committedOffset,
-          };
+    } as unknown as RemoteUploadFiles;
+    let saved: SavedUpload[] = [];
+    let state: AgentUploadState | undefined;
+    const received: Uint8Array[] = [];
+    let disconnect = true;
+    const request = (async (method: string, input: any) => {
+      if (method === 'agent.uploads.get') {
+        if (!state) throw new RemoteAgentError('NOT_FOUND');
+        return state;
+      }
+      if (method === 'agent.uploads.prepare') {
+        expect(input).not.toHaveProperty('sha256');
+        expect(input.checksumAlgorithm).toBe(checksumAlgorithm);
+        if (!checksumAlgorithm) expect(input).not.toHaveProperty('checksumAlgorithm');
+        expect(mockNativeReads).toEqual([]);
+        state = {
+          uploadId: input.uploadId,
+          state: 'receiving',
+          ...(checksumAlgorithm ? { checksumAlgorithm } : {}),
+          committedOffset: '0',
+          writerEpoch: '0',
+          expiresAt: new Date().toISOString(),
+        };
+      } else if (method === 'agent.uploads.resume') {
+        state = { ...state!, writerEpoch: String(Number(state!.writerEpoch) + 1) };
+      } else if (method === 'agent.uploads.complete') {
+        if (checksumAlgorithm) expect(input.expectedSha256).toBe(integrity.sha256(bytes));
+        else expect(input).not.toHaveProperty('expectedSha256');
+        state = { ...state!, state: 'ready', sha256: integrity.sha256(Buffer.concat(received)) };
+      } else throw new Error('Unexpected upload request: ' + method);
+      return state;
+    }) as AgentRequest;
+    const run = () =>
+      uploadAttachments(
+        [attachment],
+        files,
+        request,
+        new AbortController().signal,
+        () => {},
+        saved,
+        (value) => {
+          saved = JSON.parse(JSON.stringify(value));
         },
-      }),
-      'upload',
-    );
-  await expect(run()).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
-  expect(saved[0].sourceFileEntryId).toBe(snapshotId);
-  expect(state!.committedOffset).toBe(String(2 * 1024 * 1024));
-  disconnect = false;
-  await expect(run()).resolves.toEqual([{ uploadId: 'upload' }]);
-  expect(Buffer.concat(received).equals(bytes)).toBe(true);
-  expect(received.map((chunk) => chunk.length)).toEqual([1048576, 1048576, 19]);
-  expect(files.prepareUploadSource).toHaveBeenCalledTimes(1);
-});
+        async () => ({
+          checksumAlgorithm,
+          write: async (input) => {
+            expect(Number(input.offset)).toBe(Number(state!.committedOffset));
+            expect(input.bytes.length).toBeLessThanOrEqual(1024 * 1024);
+            received.push(input.bytes);
+            state = {
+              ...state!,
+              committedOffset: String(Number(input.offset) + input.bytes.length),
+            };
+            if (disconnect) throw new RemoteAgentError('CONNECTION_LOST', true);
+            return {
+              ok: true,
+              requestId: 'ack',
+              uploadId: input.uploadId,
+              writerEpoch: input.writerEpoch,
+              committedOffset: state.committedOffset,
+            };
+          },
+        }),
+        'upload',
+      );
+    await expect(run()).rejects.toMatchObject({ code: 'CONNECTION_LOST' });
+    expect(saved[0].sourceFileEntryId).toBe(snapshotId);
+    expect(state!.committedOffset).toBe(String(2 * 1024 * 1024));
+    disconnect = false;
+    await expect(run()).resolves.toEqual([{ uploadId: 'upload' }]);
+    expect(Buffer.concat(received).equals(bytes)).toBe(true);
+    expect(received.map((chunk) => chunk.length)).toEqual([1048576, 1048576, 19]);
+    expect(files.prepareUploadSource).toHaveBeenCalledTimes(1);
+    if (!checksumAlgorithm) expect(files.hashFile).not.toHaveBeenCalled();
+  },
+);
 
 function verifiedUpload() {
   const uri = path.join(root, 'verified.bin');
@@ -570,7 +622,7 @@ function verifiedUpload() {
       (value) => {
         saved = structuredClone(value);
       },
-      async () => ({ write }),
+      async () => ({ checksumAlgorithm: 'sha256', write }),
     );
   return { uri, files, request, write, progress, run, completions, writes, saved: () => saved };
 }

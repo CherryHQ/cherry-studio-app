@@ -43,10 +43,14 @@ Check desktop checksum capability
   resumed writes; same-size mutation is `UPLOAD_SOURCE_CHANGED`. If no digest survived, resume
   only with a guaranteed unchanged retained immutable source. A missing source must fail rather
   than substitute another file. Hashing restarts at zero; transfer resumes at the desktop ACK offset.
-- `DesktopSession.ts` retains the negotiated capability; `RemoteAgentScope` requires `agentUploadChecksum: 'sha256'` alongside upload capability 1 for
-  new attachments. Prepare includes `checksumAlgorithm: 'sha256'`; complete includes the digest.
-  Old desktops keep text chat, with upgrade-required attachment UI. Never silently downgrade.
-- `RemoteAttachmentDrafts.ts` clears legacy unsent readiness and starts a fresh verified upload,
+- `DesktopSession.ts` retains the negotiated capability. Upload capability 1 plus attachment
+  selections enables the composer attachment menu. When the desktop advertises
+  `agentUploadChecksum: 'sha256'`, prepare includes `checksumAlgorithm: 'sha256'`, complete includes
+  the native source digest, and readiness requires an exact digest match. Desktops without that
+  capability use the original binary upload protocol: no native hashing or checksum-only request
+  fields, with readiness validated by upload identity and byte length. This fallback preserves file
+  sending without an independent source-to-desktop checksum comparison.
+- `RemoteAttachmentDrafts.ts` starts a fresh upload when an unsent draft's checksum mode changes,
   retaining the source and cleaning old staging. `RemoteAgentActions.ts` preserves already frozen
   or uncertain command bodies and receipts exactly; upgrading must not repeat Agent execution.
 - Project verification phase through existing draft snapshots and common attachment cards.
