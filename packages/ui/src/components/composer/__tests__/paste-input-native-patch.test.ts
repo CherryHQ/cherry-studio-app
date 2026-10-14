@@ -6,6 +6,40 @@ const source = readFileSync(
   'utf8',
 );
 
+// Installed-source upgrade guards. They establish layout ownership, not whether
+// the reported HarmonyOS/Gboard jitter and selection failure recover on a device.
+describe('expo-paste-input Android layout patch', () => {
+  const androidSource = readFileSync(
+    join(
+      dirname(require.resolve('expo-paste-input/package.json')),
+      'android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt',
+    ),
+    'utf8',
+  );
+
+  test('accepts Fabric bounds without measuring the editor at an intermediate size', () => {
+    const measure = androidSource
+      .split('override fun onMeasure(')[1]
+      ?.split('override fun onLayout(')[0];
+
+    expect(measure).toMatch(
+      /setMeasuredDimension\(\s*MeasureSpec\.getSize\(widthMeasureSpec\),\s*MeasureSpec\.getSize\(heightMeasureSpec\)\s*\)/,
+    );
+    expect(measure).not.toContain('super.onMeasure(');
+    expect(measure).not.toMatch(/\.measure\(/);
+  });
+
+  test('leaves editor frames to Fabric instead of filling the paste wrapper', () => {
+    const layout = androidSource
+      .split('override fun onLayout(')[1]
+      ?.split('override fun onViewAdded(')[0];
+
+    expect(layout).toBeDefined();
+    expect(layout).not.toContain('super.onLayout(');
+    expect(layout).not.toMatch(/\.layout\(/);
+  });
+});
+
 // Installed-source upgrade guards. Jest cannot replay UIKit clipboard-service
 // stalls; these protect the native loading policy, not device responsiveness.
 describe('expo-paste-input iOS clipboard patch', () => {

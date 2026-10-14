@@ -1,3 +1,52 @@
+diff --git a/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt b/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
+index 99b0fa68814e57404d4c7f97c7fb47ced5ca59f1..7140b0895e8406a3f42f5d4fa58ec4c57a11dad5 100644
+--- a/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
++++ b/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
+@@ -61,36 +61,17 @@ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(co
+   }
+ 
+   override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+-    // Let the wrapper resolve its own size first, then size children to the
+-    // resolved content box so wrapped RN inputs can fill like a normal container.
+-    super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+-
+-    val availableWidth = (measuredWidth - paddingLeft - paddingRight).coerceAtLeast(0)
+-    val availableHeight = (measuredHeight - paddingTop - paddingBottom).coerceAtLeast(0)
+-
+-    val childWidthSpec = MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY)
+-    val childHeightSpec = MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.EXACTLY)
+-
+-    for (i in 0 until childCount) {
+-      val child = getChildAt(i)
+-      if (child.visibility != View.GONE) {
+-        child.measure(childWidthSpec, childHeightSpec)
+-      }
+-    }
++    // Fabric supplies exact bounds and measures each React child separately.
++    // Do not run LinearLayout's child measure pass: the editor must keep its
++    // own Fabric constraints instead of being forced into this viewport.
++    setMeasuredDimension(
++      MeasureSpec.getSize(widthMeasureSpec),
++      MeasureSpec.getSize(heightMeasureSpec)
++    )
+   }
+ 
+   override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+-    val left = paddingLeft
+-    val top = paddingTop
+-    val right = (r - l - paddingRight).coerceAtLeast(left)
+-    val bottom = (b - t - paddingBottom).coerceAtLeast(top)
+-
+-    for (i in 0 until childCount) {
+-      val child = getChildAt(i)
+-      if (child.visibility != View.GONE) {
+-        child.layout(left, top, right, bottom)
+-      }
+-    }
++    // Fabric owns child frames. This wrapper only observes paste events.
+   }
+ 
+   override fun onViewAdded(child: View?) {
 diff --git a/ios/ExpoPasteInputView.swift b/ios/ExpoPasteInputView.swift
 index 39b2302ed42bdd56db6084e333b9581e08c18689..cdc243628d475c24d45fca026d6c251b12adc4e6 100644
 --- a/ios/ExpoPasteInputView.swift

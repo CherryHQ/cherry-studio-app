@@ -754,6 +754,14 @@ reports its own content height back to Fabric. On Android, `replaceTextInRange` 
 watcher during edits, so it reports the updated height after formatting is applied. This covers
 markdown paste and programmatic inserts without extending measurement to formatting-only commands.
 
+The Android paste wrapper also leaves child measurement and frames to Fabric, matching React
+Native's `ReactViewGroup` layout contract. Its previous `LinearLayout` pass measured the editor
+before forcing it into the wrapper's bounds, competing with the editor's capped Fabric layout.
+The patch removes that second layout owner while retaining paste monitoring. It requires a new
+installation package. The installed-source guards protect this ownership; recovery from the
+reported long-input jitter and unusable selection toolbar on HarmonyOS/Gboard still needs device
+acceptance. See [the jitter report](https://github.com/CherryHQ/cherry-studio-app/issues/1272).
+
 The Android field also clamps scroll offsets outside the content range when its size changes.
 Native scroll-to-caret can run before Fabric applies the new height, but Android's pre-draw pass
 also adjusts scrolling. The size-change clamp is a defensive measure; its effect on the reported
