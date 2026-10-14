@@ -41,6 +41,8 @@ jest.mock('../translation/MessageTranslationProvider', () => ({
   useMessageTranslation: () => undefined,
 }));
 
+jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => null }));
+
 jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
   useIsScreenReaderEnabled: () => false,
 }));
