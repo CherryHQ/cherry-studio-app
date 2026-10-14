@@ -17,8 +17,12 @@ code; incomplete downloads do not become runnable updates.
 configuration, and config plugins. A changed fingerprint requires a new native package before
 that runtime can receive updates. Never override a runtime to force compatibility.
 `fingerprint.config.js` excludes Expo version/build-number fields because EAS assigns native build
-numbers remotely; these numbers do not change the JS/native interface. Permissions, widgets,
-extensions, reporting policy, native dependencies, and plugins remain compatibility inputs.
+numbers remotely; these numbers do not change the JS/native interface. It also excludes AnyDoc's
+version-pinned `ios/AnydocCore.xcframework` download, which exists only after installation on macOS
+but is included in Android's package-directory hash. This keeps Android fingerprints consistent
+across macOS and Linux; AnyDoc's package version and native sources remain compatibility inputs.
+Permissions, widgets, extensions, reporting policy, native dependencies, and plugins remain
+compatibility inputs.
 Other conservative fingerprint inputs, including package versions, `eas.json`, `patches/`, and files
 imported by `app.config.ts`, can also require a new package. Only edits confined to application
 source, translations, and ordinary assets are OTA candidates; `pnpm update:check <target>` gives
@@ -111,8 +115,9 @@ rollout or rollback. Fix a bad update by publishing a corrected one. Reverting G
 running clients; only a newly published update does.
 
 If a publish job fails after its update was published (for example, the Sentry upload), re-run
-that job: it republishes identical code as a new group and retries the upload. Inspect adoption
-and failed installs on the EAS update page.
+that job: it republishes identical code as a new group and retries the upload. Export artifact
+names include the run attempt, preserving each publication's files without collisions on retries.
+Inspect adoption and failed installs on the EAS update page.
 
 `scripts/publishUpdate.ts` implements both steps and refuses to publish release channels outside
 GitHub Actions. Its fixed targets reject overriding channel, branch, environment, input directory,
