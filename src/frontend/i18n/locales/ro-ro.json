@@ -2062,8 +2062,6 @@
   "skills.error.search-unavailable": "Căutarea abilităților nu este disponibilă. Verifică conexiunea și încearcă din nou.",
   "skills.error.source-invalid": "Furnizează o pagină de abilitate acceptată, un depozit sau director GitHub ori un link SKILL.md.",
   "skills.error.source-unreachable": "Sursa skill-ului nu a putut fi accesată.",
-  "skills.error.translation-failed": "Traducerea a eșuat. Încearcă din nou.",
-  "skills.error.translation-model-unavailable": "Setează un model implicit pentru a folosi traducerea AI.",
   "skills.executionHint": "Instalarea și citirea unei abilități nu înseamnă că fiecare pas poate fi executat. Execuția depinde de instrumentele și mediul de rulare a scripturilor disponibile.",
   "skills.find.hint": "Descrie o sarcină sau lipește un link către o abilitate",
   "skills.find.installed": "Adăugată acestui agent",
@@ -2114,5 +2112,7 @@
   "skills.translation.translate": "Traducere AI",
   "skills.translation.translating": "Se traduce…",
   "skills.working": "Se procesează…",
-  "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul."
+  "systemEntry.failed": "Această partajare nu a putut fi deschisă. Partajați din nou conținutul.",
+  "translation.error.failed": "Traducerea a eșuat. Încearcă din nou.",
+  "translation.error.modelUnavailable": "Alege un model de traducere sau un model implicit disponibil în Setări."
 }

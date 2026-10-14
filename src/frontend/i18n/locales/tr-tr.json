@@ -2050,8 +2050,6 @@
   "skills.error.search-unavailable": "Beceri araması kullanılamıyor. Bağlantınızı kontrol edip tekrar deneyin.",
   "skills.error.source-invalid": "Desteklenen bir beceri sayfası, GitHub deposu, dizin veya SKILL.md bağlantısı girin.",
   "skills.error.source-unreachable": "Beceri kaynağına ulaşılamadı.",
-  "skills.error.translation-failed": "Çeviri başarısız oldu. Lütfen tekrar deneyin.",
-  "skills.error.translation-model-unavailable": "Yapay zekâ çevirisi için varsayılan bir model ayarlayın.",
   "skills.executionHint": "Bir beceriyi yüklemek ve okumak, her adımın yürütülebileceği anlamına gelmez. Yürütme, mevcut araçlara ve betik çalışma ortamına bağlıdır.",
   "skills.find.hint": "Bir görev açıklayın veya beceri bağlantısı yapıştırın",
   "skills.find.installed": "Bu ajana eklendi",
@@ -2101,5 +2099,7 @@
   "skills.translation.translate": "Yapay zekâ çevirisi",
   "skills.translation.translating": "Çevriliyor…",
   "skills.working": "İşleniyor…",
-  "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın."
+  "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın.",
+  "translation.error.failed": "Çeviri başarısız oldu. Lütfen tekrar deneyin.",
+  "translation.error.modelUnavailable": "Ayarlarda kullanılabilir bir çeviri modeli veya varsayılan model seçin."
 }

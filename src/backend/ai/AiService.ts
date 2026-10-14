@@ -13,7 +13,7 @@ import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { LanguageModelUsage, ModelMessage } from 'ai';
+import type { FinishReason, LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -49,7 +49,7 @@ export type AiUsageAttribution = Pick<AiUsageCaptureContext, 'source' | 'message
 /** Read at call time by callers created before the attributed message exists. */
 export type AiUsageAttributionResolver = () => AiUsageAttribution;
 
-/** Non-streaming text generation request — pure transport data. */
+/** Text generation request — pure transport data. */
 export interface AiGenerateRequest extends AiBaseRequest {
   usageAttribution?: AiUsageAttribution;
   system?: string;
@@ -60,8 +60,9 @@ export interface AiGenerateRequest extends AiBaseRequest {
 
 // ── SDK extensions ─────────────────────────────────────────────────
 
-/** Result of non-streaming text generation. */
+/** Text generation result; callers decide which finish reasons are usable. */
 export interface AiGenerateResult {
+  finishReason: FinishReason;
   text: string;
   usage?: LanguageModelUsage;
 }
@@ -214,9 +215,12 @@ export class AiService extends BaseService {
     return this.vertexAuthClient;
   }
 
-  // ── Non-streaming text generation (agent.generate) ──
+  // ── Text generation (optional cumulative streaming updates) ──
 
-  async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
+  async generateText(
+    request: AiGenerateRequest,
+    onText?: (text: string) => void,
+  ): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
@@ -259,6 +263,7 @@ export class AiService extends BaseService {
     return generator.generate(
       request.prompt ? { prompt: request.prompt } : { messages: request.messages ?? [] },
       signal,
+      onText,
     );
   }
 

@@ -1,25 +1,26 @@
 import { cacheService } from '@/frontend/data/CacheService';
-import type { SkillsModule } from '@/shared/contracts/skills';
+import type { TranslationModule } from '@/shared/contracts/translation';
 import type { AppLanguage } from '@/shared/utils/languages';
 
 export function skillTranslationQueryOptions(
-  skills: Pick<SkillsModule, 'translate'>,
+  translation: TranslationModule,
   { contentHash, language, text }: { contentHash: string; language: AppLanguage; text: string },
 ) {
-  const key = `${contentHash}:${language}`;
+  // Earlier results were saved without checking whether generation was truncated.
+  const key = `v2:${contentHash}:${language}`;
   const read = () => {
     const saved = cacheService.getPersist('skills.translations')?.[key];
     return typeof saved === 'string' && saved.trim() ? saved : undefined;
   };
 
   return {
-    queryKey: ['skillTranslation', contentHash, language],
+    queryKey: ['skillTranslation', key],
     initialData: read,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const saved = read();
       if (saved) return saved;
 
-      const translated = await skills.translate({ text, language }, signal);
+      const translated = await translation.translate({ text, language }, { signal });
       signal.throwIfAborted();
       if (translated.trim()) {
         cacheService.setPersist('skills.translations', {

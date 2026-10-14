@@ -70,10 +70,10 @@ import {
   createCherryinSkillClient,
   createCherryinSkillSource,
   createSkillsModule,
-  createSkillTranslator,
   skillStorage,
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
+import { createTranslationModule } from '@/backend/services/translation';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -274,7 +274,6 @@ export function createBackend(
   const cherryinSkills = createCherryinSkillSource(cherryinClient);
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
-    translate: createSkillTranslator({ ai: services.ai, preference: services.preference }),
     marketplace: createSkillMarketplace(githubSkills, {
       client: cherryinClient,
       source: cherryinSkills,
@@ -347,6 +346,11 @@ export function createBackend(
       profile,
       providers,
       skills,
+      translation: createTranslationModule({
+        ai: services.ai,
+        preference: services.preference,
+        models: services.model,
+      }),
       webSearch: services.webSearch,
     },
     dataApiDependencies: {

@@ -2038,8 +2038,6 @@
   "skills.error.search-unavailable": "技能搜索暂不可用，请检查网络后重试。",
   "skills.error.source-invalid": "请提供支持的技能页面、GitHub 仓库、目录或 SKILL.md 链接。",
   "skills.error.source-unreachable": "无法访问技能来源。",
-  "skills.error.translation-failed": "翻译失败，请重试。",
-  "skills.error.translation-model-unavailable": "请先配置默认模型以使用 AI 翻译。",
   "skills.executionHint": "安装和读取技能不代表所有步骤都能执行；实际执行取决于可用工具和脚本运行环境。",
   "skills.find.hint": "描述需求或粘贴技能链接",
   "skills.find.installed": "已添加到当前助手",
@@ -2088,5 +2086,7 @@
   "skills.translation.translate": "AI 翻译",
   "skills.translation.translating": "正在翻译…",
   "skills.working": "处理中…",
-  "systemEntry.failed": "无法打开此分享，请重新分享内容。"
+  "systemEntry.failed": "无法打开此分享，请重新分享内容。",
+  "translation.error.failed": "翻译失败，请重试。",
+  "translation.error.modelUnavailable": "请在设置中配置可用的翻译模型或默认模型。"
 }

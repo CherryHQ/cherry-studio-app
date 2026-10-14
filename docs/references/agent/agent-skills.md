@@ -16,13 +16,15 @@ provenance rows stay out of the reading surface. Known static execution limitati
 and accompany instructions supplied to the Agent.
 The reading surface offers an explicit AI translation icon in the top-right navigation bar, before
 the overflow menu when present. It translates the description and document into the current app
-language using the configured default model, shows progress in place, and switches to an original-text
+language using the configured translation model (or the default model when unset), shows progress
+in place, and switches to an original-text
 action once translated. The user can return to the original
 text; translation never changes installed files or the instructions supplied to the Agent. Requests
 are cancellable and are not made on page load. Successful translations are saved in the existing
 local persistent UI cache by package content hash and language, and appear immediately when the
 same document is reopened, including after an app restart. A changed package or another language
-uses its own translation; failed and cancelled requests are not saved. The existing update action is
+uses its own translation; truncated, failed and cancelled requests are not saved. Cached results
+from before completion checking are regenerated on demand. The existing update action is
 labeled **Update skill** because it applies the upstream content directly.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
