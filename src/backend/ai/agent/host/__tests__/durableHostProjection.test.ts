@@ -36,6 +36,52 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
 }
 
 describe('durable message timing', () => {
+  test.each(['queued', 'running', 'completed'] as const)(
+    'a %s answer does not display a provider attempt as a terminal failure',
+    (status) => {
+      const projected = projectDurableHostTurn(
+        turn({
+          status,
+          error: {
+            code: 'provider_error',
+            message: 'Request timed out',
+            retryable: true,
+            origin: 'provider',
+          },
+        }),
+      );
+      expect(projected.turn.error).toBeNull();
+      expect(projected.assistant?.parts).toEqual([
+        expect.objectContaining({ type: 'text', text: 'Done' }),
+      ]);
+      expect(projected.assistant?.status).toBe(
+        status === 'running' ? 'streaming' : status === 'queued' ? 'pending' : 'success',
+      );
+    },
+  );
+
+  test.each(['failed', 'interrupted'] as const)(
+    'a %s answer displays the final provider failure',
+    (status) => {
+      const projected = projectDurableHostTurn(
+        turn({
+          status,
+          error: {
+            code: 'provider_error',
+            message: 'Request timed out',
+            retryable: true,
+            origin: 'provider',
+          },
+        }),
+      );
+      expect(projected.turn.error).toMatchObject({ code: 'EXECUTION_FAILED', retryable: true });
+      expect(projected.assistant?.parts.at(-1)).toMatchObject({
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', retryable: true },
+      });
+    },
+  );
+
   test('a stopped answer retains its output and retryable status without an execution error', () => {
     const projected = projectDurableHostTurn(
       turn({

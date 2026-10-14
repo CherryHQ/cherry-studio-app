@@ -88,7 +88,7 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  contextStatus: 'compacting' | 'compaction-failed' | null;
+  contextStatus: 'compacting' | 'compacting-background' | 'compaction-failed' | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;

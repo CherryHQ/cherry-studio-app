@@ -10,7 +10,10 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
   const { client } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const failed = state.status === 'error';
-  if (!failed && !state.contextStatus) return null;
+  const showContextStatus =
+    state.contextStatus === 'compacting' || state.contextStatus === 'compaction-failed';
+  // Background compaction can outlive the answer; it must not look like a blocked reply.
+  if (!failed && !showContextStatus) return null;
   return (
     <View className="px-4 py-2">
       {failed ? (

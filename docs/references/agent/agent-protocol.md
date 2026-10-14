@@ -544,7 +544,7 @@ with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 
 ```ts
 type AgentEvent =
-  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | { type: 'context.updated'; status: 'compacting' | 'compacting-background' | 'compaction-failed' | null }
   | { type: 'runtime.failed' }
   | { type: 'question.updated'; question: AgentPendingQuestion | null }
   | { type: 'session.updated'; session: AgentSessionView }
@@ -620,7 +620,7 @@ type AgentSessionSnapshot = {
   streamingMessage: AgentMessageView | null
   pendingApprovals: AgentApprovalView[]
   pendingQuestion: AgentPendingQuestion | null
-  contextStatus?: 'compacting' | 'compaction-failed' | null
+  contextStatus?: 'compacting' | 'compacting-background' | 'compaction-failed' | null
 }
 ```
 
@@ -628,6 +628,11 @@ Persisted transcript pagination remains a normal data read and is not duplicated
 snapshot. The snapshot contains only live state that must be composed over persisted messages. An
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
+
+`compacting` means the reply is waiting for context compaction. `compacting-background` records
+non-blocking work that may continue after the answer; it does not show the composer's waiting
+banner. Provider attempts that fail during automatic retry do not produce a transcript error until
+the run ends with a failure or interruption.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished

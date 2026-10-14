@@ -35,7 +35,7 @@ export class PiDurableObserver {
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
   private generationAttempt = 0;
-  private readonly compactions = new Set<number>();
+  private readonly compactions = new Map<number, boolean>();
   private compactionFailed = false;
 
   constructor(
@@ -82,7 +82,8 @@ export class PiDurableObserver {
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
     this.compactions.clear();
-    for (const compaction of snapshot.compactions) this.compactions.add(compaction.taskId);
+    for (const compaction of snapshot.compactions)
+      this.compactions.set(compaction.taskId, compaction.blocking);
     this.compactionFailed = snapshot.compactionFailure !== undefined;
     const queued = new Set(snapshot.inbox.map((item) => item.id));
     const through = snapshot.entries.at(-1)?.id;
@@ -191,7 +192,7 @@ export class PiDurableObserver {
           if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
           break;
         case 'compaction_start':
-          this.compactions.add(event.taskId);
+          this.compactions.set(event.taskId, event.blocking);
           break;
         case 'compaction_end':
           this.compactions.delete(event.taskId);
@@ -288,12 +289,10 @@ export class PiDurableObserver {
     };
   }
 
-  private contextStatus(): 'compacting' | 'compaction-failed' | null {
-    return this.compactions.size
-      ? 'compacting'
-      : this.compactionFailed
-        ? 'compaction-failed'
-        : null;
+  private contextStatus(): 'compacting' | 'compacting-background' | 'compaction-failed' | null {
+    for (const blocking of this.compactions.values()) if (blocking) return 'compacting';
+    if (this.compactions.size) return 'compacting-background';
+    return this.compactionFailed ? 'compaction-failed' : null;
   }
 
   private diagnosticContext() {

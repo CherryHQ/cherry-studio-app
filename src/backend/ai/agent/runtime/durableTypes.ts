@@ -170,13 +170,16 @@ export type RuntimeDurableTurn = {
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  contextStatus?: 'compacting' | 'compaction-failed' | null;
+  contextStatus?: 'compacting' | 'compacting-background' | 'compaction-failed' | null;
 };
 
 export type RuntimeConversationEvent =
   | { type: 'snapshot'; snapshot: RuntimeConversationSnapshot }
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
-  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | {
+      type: 'context.updated';
+      status: 'compacting' | 'compacting-background' | 'compaction-failed' | null;
+    }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */

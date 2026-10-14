@@ -26,6 +26,7 @@ const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search
 test('transient context and runtime events round-trip without diagnostic payloads', () => {
   for (const event of [
     { type: 'context.updated', status: 'compacting' },
+    { type: 'context.updated', status: 'compacting-background' },
     { type: 'context.updated', status: 'compaction-failed' },
     { type: 'context.updated', status: null },
     { type: 'runtime.failed' },
@@ -363,6 +364,10 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentSessionSnapshotSchema.parse(roundTrip(snapshot))).toEqual(snapshot);
+    const backgroundCompaction = { ...snapshot, contextStatus: 'compacting-background' };
+    expect(AgentSessionSnapshotSchema.parse(roundTrip(backgroundCompaction))).toEqual(
+      backgroundCompaction,
+    );
   });
 
   test('round-trips the versioned inference snapshot and preserves unsupported versions', () => {

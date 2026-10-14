@@ -151,3 +151,44 @@ test('restores compaction failure, shows progress, and clears failure only after
   expect(events.at(-1)).toEqual({ type: 'context.updated', status: null });
   await observer.stop();
 });
+
+test('restores background compaction and reports blocking progress only while a reply waits', async () => {
+  const backgroundId = 5 as TaskId<CompactionResult>;
+  const blockingId = 6 as TaskId<CompactionResult>;
+  const snapshot: SnapshotEvent = {
+    type: 'snapshot',
+    entries: [],
+    tools: [],
+    nestedTools: [],
+    compactions: [{ taskId: backgroundId, reason: 'threshold', blocking: false, attempt: 1 }],
+    inbox: [],
+    agent: {},
+    usage: { models: {}, tools: {} },
+  };
+  let advance!: (events: readonly AgentEvent[]) => Promise<void>;
+  const runtime = {
+    watch: async () => ({
+      snapshot,
+      start: (listener: typeof advance) => {
+        advance = listener;
+      },
+      stop: async () => {},
+    }),
+    submissions: async () => [],
+  } as unknown as PiDurableRuntime;
+  const events: RuntimeConversationEvent[] = [];
+  const observer = new PiDurableObserver(runtime, 'session', (event) => events.push(event));
+  try {
+    expect((await observer.start()).contextStatus).toBe('compacting-background');
+    await advance([
+      { type: 'compaction_start', taskId: blockingId, reason: 'threshold', blocking: true },
+    ]);
+    expect(events.at(-1)).toEqual({ type: 'context.updated', status: 'compacting' });
+    await advance([{ type: 'compaction_end', taskId: blockingId, reason: 'threshold' }]);
+    expect(events.at(-1)).toEqual({ type: 'context.updated', status: 'compacting-background' });
+    await advance([{ type: 'compaction_end', taskId: backgroundId, reason: 'threshold' }]);
+    expect(events.at(-1)).toEqual({ type: 'context.updated', status: null });
+  } finally {
+    await observer.stop();
+  }
+});
