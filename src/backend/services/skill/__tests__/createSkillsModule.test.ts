@@ -3,6 +3,7 @@ import type {
   SkillInstallRecord,
 } from '@/backend/data/services/AgentGlobalSkillService';
 import type { Skill } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
@@ -131,6 +132,11 @@ const marketplace = {
   popular: async () => [],
   resolveUrl: async () => [],
   search: async () => [],
+  searchSkillsSh: async () => [],
+  listCherryin: async () => ({ items: [], nextOffset: null }),
+  getCherryin: async (): Promise<never> => {
+    throw new Error('unused');
+  },
 };
 
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
@@ -176,6 +182,69 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
+  it('preserves a CherryIN installation when an upstream update changes its declared name', async () => {
+    const fakes = createFakes();
+    let name = 'notes';
+    const candidate = (): SkillSourceCandidate => ({
+      candidateId: `cherryin:${name}`,
+      name,
+      description: 'Take notes',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'cherryin',
+        locator: cherryinSkillLocator('notes', 'SKILL.md'),
+        url: cherryinSkillUrl('notes', 'SKILL.md'),
+        revision: name,
+      },
+    });
+    const module = createSkillsModule({
+      ...fakes,
+      marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
+      sources: {
+        bundled: createBundledSkillSource([]),
+        github: {
+          registry: 'github',
+          resolve: async () => {
+            throw new Error('unused');
+          },
+          resolveUrl: async () => {
+            throw new Error('unused');
+          },
+          acquire: async () => {
+            throw new Error('unused');
+          },
+        },
+        cherryin: {
+          registry: 'cherryin',
+          resolve: async () => candidate(),
+          acquire: async () => ({
+            expectedName: name,
+            files: new Map([
+              [
+                'SKILL.md',
+                new TextEncoder().encode(
+                  `---\nname: ${name}\ndescription: Take notes\n---\nWrite notes.`,
+                ),
+              ],
+            ]),
+          }),
+        },
+      },
+      agentExists: async () => true,
+    });
+    const [resolved] = await module.resolve(cherryinSkillUrl('notes'));
+    const installed = await module.install({ candidateId: resolved!.candidateId });
+    name = 'renamed-notes';
+    await expect(module.update(installed.id)).resolves.toMatchObject({
+      outcome: 'rejected',
+      inspection: { issues: [{ code: 'name-mismatch' }] },
+    });
+    expect(await fakes.skills.getById(installed.id)).toEqual(installed);
+    expect(fakes.published).toHaveLength(1);
+  });
+
   it('refuses to expose system workflows as installable candidates', async () => {
     const fakes = createFakes();
     const bundled = createBundledSkillSource();

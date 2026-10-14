@@ -7,6 +7,12 @@ import type {
   SkillPackageIssue,
 } from '@/shared/data/types/skill';
 
+import type {
+  CherryinSkillLibraryDetail,
+  CherryinSkillPage,
+  CherryinSkillQuery,
+} from './skillMarketplace';
+
 /** Validated package facts from staging; absent when validation failed. */
 export type SkillInspectedPackage = {
   name: string;
@@ -91,7 +97,7 @@ export function isSkillsError(error: unknown): error is SkillsError {
 /** One registry search result. Nothing is downloaded until its URL is resolved. */
 export type SkillListing = {
   name: string;
-  /** Publishing repository, `<owner>/<repo>`. */
+  /** Publishing registry or repository. */
   source: string;
   url: string;
   /** Registry install count, when the registry reports one. */
@@ -103,11 +109,14 @@ export type SkillListing = {
  * Library reads and Agent bindings are ordinary Data API endpoints.
  */
 export interface SkillsModule {
-  /** Search skills.sh by keywords; returns listings without downloading packages. */
+  /** Search CherryIN first, then skills.sh when no listing matches. Never downloads packages. */
   search(query: string, signal?: AbortSignal): Promise<SkillListing[]>;
+  searchSkillsSh(query: string, signal?: AbortSignal): Promise<SkillListing[]>;
+  listCherryin(input: CherryinSkillQuery, signal?: AbortSignal): Promise<CherryinSkillPage>;
+  getCherryin(id: string, signal?: AbortSignal): Promise<CherryinSkillLibraryDetail>;
   /** skills.sh's most installed Skills; returns listings without downloading packages. */
   popular(signal?: AbortSignal): Promise<SkillListing[]>;
-  /** Resolve a skills.sh page or a public GitHub repository, directory, or `SKILL.md` URL. */
+  /** Resolve a CherryIN listing, skills.sh page, or public GitHub package URL. */
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
   /** Download, validate, and report the app's limitations; never installs. */
   inspect(candidateId: string, signal?: AbortSignal): Promise<SkillInspection>;

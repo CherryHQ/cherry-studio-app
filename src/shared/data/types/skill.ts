@@ -69,17 +69,17 @@ export function skillContentHashHex(contentHash: string): string {
 
 /**
  * Desktop `agent_global_skill.source` vocabulary. User installations are
- * GitHub-hosted packages (`marketplace`); `builtin` remains readable for legacy data.
+ * external packages (`marketplace`); `builtin` remains readable for legacy data.
  */
 export const SkillSourceKindSchema = z.enum(['builtin', 'marketplace']);
 export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>;
 
-export const SkillSourceRegistrySchema = z.enum(['bundled', 'github']);
+export const SkillSourceRegistrySchema = z.enum(['bundled', 'github', 'cherryin']);
 export type SkillSourceRegistry = z.infer<typeof SkillSourceRegistrySchema>;
 
 /**
  * Where a discovered candidate comes from. `locator` is its origin identity
- * (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); an installed
+ * (`bundled:<name>`, `github:<owner>/<repo>/<skill root>`, or a CherryIN package entry); an installed
  * Skill derives the same identity from its source and URL.
  */
 export const SkillSourceSchema = z.strictObject({

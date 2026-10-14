@@ -7,14 +7,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
 import { FormContentFrame } from '@/frontend/appShell/layout';
 
+import { SkillNavigation } from './SkillNavigation';
+
 export function SkillPage({
   children,
   headerProps,
   testID,
+  navigation,
 }: {
   children: ReactNode;
   headerProps: RouteHeaderProps;
   testID?: string;
+  navigation?: 'library' | 'discover';
 }) {
   const headerHeight = useHeaderHeight();
   const { bottom } = useSafeAreaInsets();
@@ -37,6 +41,7 @@ export function SkillPage({
             keyboardShouldPersistTaps="handled"
             testID={testID}
           >
+            {navigation ? <SkillNavigation value={navigation} /> : null}
             {children}
           </ScrollView>
         </KeyboardAvoidingView>

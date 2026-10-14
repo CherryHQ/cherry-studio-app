@@ -88,6 +88,9 @@ describe('turn preparation', () => {
       harness.dependencies.skills = { resolve: jest.fn(unavailable) };
       harness.dependencies.skillWorkflow = {
         search: unavailable,
+        searchSkillsSh: unavailable,
+        listCherryin: unavailable,
+        getCherryin: unavailable,
         popular: unavailable,
         resolve: unavailable,
         inspect: unavailable,
