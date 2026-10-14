@@ -2,6 +2,7 @@ import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activit
 import { File } from 'expo-file-system';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { BackgroundActivityActionResponse } from '@/shared/backgroundActivity/actions';
 import type { ForegroundActivityAttention } from '@/shared/backgroundActivity/attention';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
@@ -24,11 +25,12 @@ export type BackgroundActivityEnvironmentConfig = {
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
   /** Whether finishing chat replies may raise a system notification. */
   isReplyCompletionNotificationEnabled: () => boolean;
-  /** iOS reply completion notices; absent means the platform owns another channel. */
+  /** iOS completion and decision notices; absent means the platform owns another channel. */
   replyNotifications?: ReplyCompletionNotifier;
   /** Deep link of the focused, foreground task surface. Absent sources never report one. */
   subscribeVisibleTask?: (listener: (deepLinkUrl: string | undefined) => void) => () => void;
   translate: BackgroundActivityTranslate;
+  subscribeActions?: (listener: (response: BackgroundActivityActionResponse) => void) => () => void;
 };
 
 const defaultConfig = (): BackgroundActivityEnvironmentConfig => ({
@@ -53,9 +55,16 @@ const noSubscription = () => () => {};
 @ServicePhase(Phase.PostReady)
 export class BackgroundActivityEnvironment extends BaseService {
   private config: BackgroundActivityEnvironmentConfig = defaultConfig();
+  private readonly actionListeners = new Set<
+    (response: BackgroundActivityActionResponse) => void
+  >();
+  private unsubscribeActions?: () => void;
 
   configure(config: BackgroundActivityEnvironmentConfig): void {
+    this.unsubscribeActions?.();
+    this.unsubscribeActions = undefined;
     this.config = config;
+    if (this.actionListeners.size) this.observeActions();
   }
 
   get assistantPresenter(): BackgroundActivityPresenter<BackgroundReplyActivityProps> {
@@ -74,6 +83,38 @@ export class BackgroundActivityEnvironment extends BaseService {
   }
 
   translate = (key: string): string => this.config.translate(key);
+  subscribeActions = (
+    listener: (response: BackgroundActivityActionResponse) => void,
+  ): (() => void) => {
+    this.actionListeners.add(listener);
+    this.observeActions();
+    return () => {
+      this.actionListeners.delete(listener);
+      if (!this.actionListeners.size) {
+        this.unsubscribeActions?.();
+        this.unsubscribeActions = undefined;
+      }
+    };
+  };
+
+  private observeActions(): void {
+    // The Android inbox drains destructively; all host consumers share one transport subscription.
+    this.unsubscribeActions ??= this.config.subscribeActions?.((response) => {
+      for (const listener of this.actionListeners) {
+        try {
+          listener(response);
+        } catch (error) {
+          logger.warn('System action delivery failed', error as Error);
+        }
+      }
+    });
+  }
+
+  protected onStop(): void {
+    this.unsubscribeActions?.();
+    this.unsubscribeActions = undefined;
+    this.actionListeners.clear();
+  }
 
   /**
    * Subscribes to the task surface the user is currently looking at. The

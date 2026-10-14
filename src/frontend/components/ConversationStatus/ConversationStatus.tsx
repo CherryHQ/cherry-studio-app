@@ -17,10 +17,12 @@ export function ConversationStatus({
   availability,
   onRepair,
   onOpenDeviceSettings,
+  onReconnect,
 }: {
   availability: Availability;
   onRepair(): void;
   onOpenDeviceSettings?: () => void;
+  onReconnect?: () => void;
 }) {
   const { t } = useTranslation();
   if (availability.state === 'enabled') return null;
@@ -45,6 +47,11 @@ export function ConversationStatus({
       {repair ? (
         <Button size="sm" variant="ghost" onPress={onRepair}>
           {t('remoteAgent.repair')}
+        </Button>
+      ) : null}
+      {availability.reason === 'disconnected' && onReconnect ? (
+        <Button size="sm" variant="ghost" onPress={onReconnect}>
+          {t('remoteAgent.reconnect')}
         </Button>
       ) : null}
       {openDeviceSettings ? (

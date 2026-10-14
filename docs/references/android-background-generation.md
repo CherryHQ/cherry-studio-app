@@ -8,7 +8,8 @@ and legacy-notification handling.
 The app owns task counting, content, cancellation, and route selection. A scoped
 [`react-native-background-actions` patch](../../patches/react-native-background-actions@4.1.0.patch)
 adds native admission, identity reuse, and protection reporting to the library's existing service. The library still owns Headless
-JS and wake locks; the app adds no service or notification receiver. An
+JS and wake locks; SystemIntegration adds only a non-exported receiver for explicit notification
+decisions, without another execution service. An
 [`expo-notifications` patch](../../patches/expo-notifications@57.0.17.patch) exposes Android's
 post-presentation event so a focused task screen can dismiss asynchronously delivered notifications.
 
@@ -19,6 +20,36 @@ leases through this facade. Conversation protection is unconditional during prep
 questions/approvals, persistence, and final delivery. Foreground and background work share one
 `dataSync` foreground service; the last released lease stops it. Notification preferences and
 permission do not govern execution demand.
+
+Android remote Agent connections additionally hold user-started connection demand through
+`RemoteConnectionNotificationRuntime`. Each PC has an ordinary, silent ongoing connection notice
+with a **Disconnect** action; the first connection anchors the same foreground service, while
+session cards remain separate Live Updates. The connection notice is its PC's notification-group
+summary. That PC's progress, approvals, questions (including the ordinary text-reply notice), and
+completed results share the group, while local tasks and other PCs remain separate. Only child
+notices alert; the summary stays silent and never requests Live Update promotion. Before removing
+the summary, the bridge detaches its children so delivered results survive disconnect/service
+teardown; reconnect silently regroups retained results. Leaving the page or finishing a task does not release
+the connection. Configuration import, pairing checks, and endpoint checks do not create this demand.
+
+Disconnect closes only the phone's transport, cancels its redials and withdraws its live task
+surfaces. It never sends a desktop execution-cancel request or removes pairing/grants. The local
+disconnect intent survives process replacement; foreground entry and discovery do not override it.
+The remote conversation status offers **Reconnect**, which resumes the paired connection and creates
+a new notification action token. Stale tokens cannot disconnect the replacement connection. All
+system actions share one native inbox subscription before being dispatched to their owning runtime.
+Platform service expiry also disconnects remote transports. The connection notice does not extend
+the documented `dataSync` time limit and does not enable indefinite background execution on iOS.
+
+Android's nested-group renderer can hide the summary's content and actions. A silent connection
+control card is therefore kept first inside the group, ahead of task cards, using the same current
+disconnect token. It is removed with the connection summary, while delivered task results survive.
+Android can omit a summary with only one child. Disconnect validates against the visible control
+card, and group cleanup can recover the group from that card when the summary is absent.
+The connection card shows **Running** while that PC has an observed unfinished session, including
+one awaiting a decision. Once its last session settles or retires, the card returns to the current
+connection state. Idle history, local tasks, and another PC's sessions do not affect it. These
+aggregate status transitions are silent and retain the connection's existing disconnect token.
 
 `react-native-background-actions` owns Headless JS and its partial wake lock. Its native patch
 admits a service while visible, retains foreground status across visibility transitions, and
@@ -75,8 +106,8 @@ First-use guidance is remembered; vendor settings are not represented as automat
 ## Shared Lifecycle
 
 Both presenters retain an existing execution lease through final delivery. iOS creates its Live
-Activity during foreground preparation and retains it across visibility changes; the current audio
-strategy is reported as limited. The iOS background-actions module remains excluded from autolinking.
+Activity during foreground preparation and retains it across visibility changes; its finite UIKit
+execution window is reported as limited. The iOS background-actions module remains excluded from autolinking.
 Notification permission and presentation preferences never authorize or cancel model work.
 
 `RemoteAgentRuntime` declares its reply runtime dependency, allowing the lifecycle graph to bring
@@ -95,7 +126,8 @@ immediately and remains active across AndroidX `ProcessLifecycleOwner` visibilit
 content updates use the existing instance, retain notification IDs, and never restart execution.
 
 There are no timer-triggered background restarts, direct battery-exemption requests, boot restarts,
-exact alarms, full-screen intents, or promoted Live Updates. Android's ongoing notifications may be
+exact alarms, or full-screen intents. Android 16+ cards request standard promoted Live Updates.
+Android's ongoing notifications may be
 dismissed or hidden by system policy; the service is not a guarantee against force-stop or vendor
 process termination. Settings guidance asks the user to adjust restrictions explicitly.
 

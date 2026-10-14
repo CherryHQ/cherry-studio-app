@@ -9,6 +9,13 @@ export type BackgroundActivityIcon =
   | 'wrench'
   | 'x-circle';
 
+export type BackgroundActivityActions = {
+  token: string;
+  prompt: string;
+  buttons: { id: string; label: string }[];
+  reply?: { label: string; placeholder: string; choices: string[] };
+};
+
 /**
  * Closed presentation model for a system background-activity surface.
  *
@@ -22,6 +29,7 @@ export type BackgroundActivityBasePresentation = {
 };
 
 export type BackgroundActivityPresentation = BackgroundActivityBasePresentation & {
+  actions?: BackgroundActivityActions;
   /** Optional short attribution shown opposite the title on roomy surfaces. */
   attribution?: string;
   compactIcon: BackgroundActivityIcon;

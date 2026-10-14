@@ -20,6 +20,10 @@ import type {
   KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type {
+  BackgroundActivityActions,
+  BackgroundActivityActionResponse,
+} from '@/shared/backgroundActivity/actions';
+import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
   BackgroundReplyPhase,
@@ -27,8 +31,13 @@ import type {
 import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import {
+  createBackgroundReplyActions,
+  respondBackgroundReplyInteraction,
+} from './backgroundReplyActions';
 import type {
   BackgroundReplyLifecycle,
+  BackgroundReplyInteraction,
   BackgroundReplyMessage,
   BackgroundReplyOutcome,
   BackgroundReplyTurn,
@@ -61,6 +70,10 @@ type TurnRecord = {
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   updateTimer?: ReturnType<typeof setTimeout>;
+  interaction?: BackgroundReplyInteraction;
+  actions?: BackgroundActivityActions;
+  interactionKey?: string;
+  responding?: boolean;
 };
 
 type BackgroundActivityPort = {
@@ -72,9 +85,10 @@ type BackgroundActivityPort = {
 
 type EnvironmentPort = {
   assistantPresenter: BackgroundActivityEnvironment['assistantPresenter'];
-  /** Optional iOS completion-notice channel; absent means no delivery. */
+  /** Optional iOS completion and decision channel; Android delivers through its presenter. */
   replyNotifications?: ReplyCompletionNotifier;
   translate: BackgroundReplyTranslate;
+  subscribeActions?: (listener: (response: BackgroundActivityActionResponse) => void) => () => void;
 };
 
 /**
@@ -104,10 +118,46 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     super();
   }
 
+  protected onInit(): void {
+    const unsubscribe = this.environment.subscribeActions?.((response) => {
+      void this.respondToAction(response).catch((error: unknown) =>
+        logger.warn('Background decision failed', { error }),
+      );
+    });
+    if (unsubscribe) this.registerDisposable(unsubscribe);
+  }
+
+  async respondToAction(response: BackgroundActivityActionResponse): Promise<boolean> {
+    const record = [...this.turns.values()].find((turn) => turn.actions?.token === response.token);
+    if (
+      !record ||
+      !this.isRecordCurrent(record) ||
+      !record.interaction ||
+      record.responding ||
+      !replyAttentionKey(record.content) ||
+      record.content.attentionId !== record.interaction.id
+    )
+      return false;
+    record.responding = true;
+    try {
+      const applied = await respondBackgroundReplyInteraction(record.interaction, response);
+      if (applied && this.isRecordCurrent(record) && record.actions?.token === response.token) {
+        record.interaction = undefined;
+        record.actions = undefined;
+        this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
+        record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+      }
+      return applied;
+    } finally {
+      record.responding = false;
+    }
+  }
+
   private cancelSessions(): void {
     for (const lease of this.preparationLeases) lease.release();
     this.preparationLeases.clear();
     for (const record of this.turns.values()) {
+      this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
       this.clearUpdateTimer(record);
       record.session?.cancel();
       record.session = undefined;
@@ -181,19 +231,34 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
     this.ensureSession(record);
 
     return {
+      setInteraction: (interaction) => {
+        if (!this.isCurrent(record.key, generation)) return;
+        const key = interaction
+          ? JSON.stringify([
+              interaction.kind,
+              interaction.id,
+              interaction.kind === 'question' ? interaction.question : interaction.title,
+            ])
+          : undefined;
+        record.interaction = interaction;
+        if (key === record.interactionKey) return;
+        record.interactionKey = key;
+        record.actions = interaction
+          ? createBackgroundReplyActions(interaction, this.environment.translate)
+          : undefined;
+        if (!interaction) this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
+        record.session?.update(this.toActivityProps(record), { keepAlive: true, urgent: true });
+        if (record.actions && record.content.attentionId === interaction?.id)
+          this.deliverAttention(record, false);
+      },
       updateContent: (content) =>
         this.runTurnCallback(record.key, 'update remote turn', () => {
           if (!this.isCurrent(record.key, generation)) return;
           const current = this.turns.get(record.key);
           if (!current) return;
-          const phaseChanged = current.content.phase !== content.phase;
-          current.content = content;
-          current.session?.update(this.toActivityProps(current), {
-            keepAlive: true,
-            urgent: phaseChanged,
-          });
+          this.setContent(current, content);
         }),
-      awaitApproval: (message, reason) =>
+      awaitApproval: (message, reason, requestId) =>
         this.runTurnCallback(record.key, 'mark approval pending', () => {
           if (!this.isCurrent(record.key, generation)) return;
           const current = this.turns.get(record.key);
@@ -203,18 +268,15 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
           const latest = current.latestMessage
             ? deriveBackgroundReplyContent(current.latestMessage, this.environment.translate)
             : current.content;
-          current.content = {
+          this.setContent(current, {
             detail: this.environment.translate(
               reason === 'question'
                 ? 'chat.question.waiting'
                 : 'chat.backgroundReply.awaitingApproval',
             ),
-            phase: 'awaiting-approval',
+            phase: reason === 'question' ? 'awaiting-answer' : 'awaiting-approval',
+            attentionId: requestId ?? latest.attentionId,
             ...(latest.preview ? { preview: latest.preview } : {}),
-          };
-          current.session?.update(this.toActivityProps(current), {
-            keepAlive: true,
-            urgent: true,
           });
         }),
       finish: (outcome, options) => {
@@ -230,6 +292,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
         this.runTurnCallback(record.key, 'retire turn', () => {
           if (!this.isCurrent(record.key, generation)) return;
           this.turns.delete(record.key);
+          this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
           this.clearUpdateTimer(record);
           // Cancellation leaves no settled card behind.
           record.session?.cancel();
@@ -317,11 +380,67 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       record.latestMessage,
       this.environment.translate,
     );
-    const phaseChanged = nextContent.phase !== record.content.phase;
-    record.content = nextContent;
+    this.setContent(record, nextContent);
+  }
+
+  private setContent(record: TurnRecord, content: BackgroundReplyContent): void {
+    // The Host/source's bound pending request takes precedence over a streamed
+    // tool part that may still show another parallel approval or stale phase.
+    if (record.interaction)
+      content = {
+        ...content,
+        phase: record.interaction.kind === 'approval' ? 'awaiting-approval' : 'awaiting-answer',
+        attentionId: record.interaction.id,
+        detail: this.environment.translate(
+          record.interaction.kind === 'approval'
+            ? 'chat.backgroundReply.awaitingApproval'
+            : 'chat.question.waiting',
+        ),
+      };
+    const previousAttention = replyAttentionKey(record.content);
+    const attention = replyAttentionKey(content);
+    const urgent = record.content.phase !== content.phase || previousAttention !== attention;
+    record.content = content;
     record.session?.update(this.toActivityProps(record), {
       keepAlive: true,
-      urgent: phaseChanged,
+      urgent,
+    });
+    const notifications = this.environment.replyNotifications;
+    if (!notifications || attention === previousAttention) return;
+    if (!attention) {
+      notifications.dismissAttention(record.deepLinkUrl);
+      return;
+    }
+    if (content.phase !== 'awaiting-approval' && content.phase !== 'awaiting-answer') return;
+    this.deliverAttention(record);
+  }
+
+  private deliverAttention(record: TurnRecord, alert = true): void {
+    const notifications = this.environment.replyNotifications;
+    const content = record.content;
+    const attention = replyAttentionKey(content);
+    if (
+      !notifications ||
+      !attention ||
+      (content.phase !== 'awaiting-approval' && content.phase !== 'awaiting-answer')
+    )
+      return;
+    const phase = content.phase;
+    void this.enqueue(async () => {
+      try {
+        await notifications.notifyAttention({
+          deepLinkUrl: record.deepLinkUrl,
+          detail: content.detail,
+          phase,
+          ...(alert ? {} : { alert: false }),
+          title: record.conversationTitle || record.actorName,
+          ...(record.actions ? { actions: record.actions } : {}),
+          isCurrent: () =>
+            this.isRecordCurrent(record) && replyAttentionKey(record.content) === attention,
+        });
+      } catch (error) {
+        logger.warn('Could not deliver session attention', error as Error);
+      }
     });
   }
 
@@ -361,6 +480,7 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
       outcome === 'completed' && hasDeferredPreview && record.latestMessage
         ? deriveBackgroundReplyContent(record.latestMessage, this.environment.translate).preview
         : record.content.preview;
+    this.environment.replyNotifications?.dismissAttention(record.deepLinkUrl);
     record.content = getTerminalBackgroundReplyContent(
       outcome,
       preview,
@@ -468,9 +588,14 @@ export class BackgroundReplyRuntime extends BaseService implements BackgroundRep
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
+      ...(replyAttentionKey(record.content) &&
+      record.content.attentionId === record.interaction?.id &&
+      record.actions
+        ? { actions: record.actions }
+        : {}),
       ...(record.conversationTitle ? { attribution: record.actorName } : {}),
-      compactIcon: 'bubble-ellipsis',
-      ...(record.content.phase === 'awaiting-approval'
+      compactIcon: replyAttentionKey(record.content) ? 'bubble-exclamation' : 'bubble-ellipsis',
+      ...(replyAttentionKey(record.content)
         ? { compactLabel: record.content.detail }
         : record.content.phase === 'completed'
           ? { compactLabel: this.environment.translate('backgroundActivity.completed') }
@@ -536,6 +661,7 @@ function sessionTaskUrl(sessionId: string): string {
 }
 
 const noOpTurn: BackgroundReplyTurn = {
+  setInteraction: () => {},
   updateContent: () => {},
   awaitApproval: () => {},
   finish: () => {},
@@ -550,6 +676,7 @@ function hasReplyText(message: BackgroundReplyMessage): boolean {
 function backgroundReplyIcon(phase: BackgroundReplyPhase): BackgroundActivityIcon {
   switch (phase) {
     case 'awaiting-approval':
+    case 'awaiting-answer':
       return 'bubble-exclamation';
     case 'cancelled':
       return 'x-circle';
@@ -566,4 +693,10 @@ function backgroundReplyIcon(phase: BackgroundReplyPhase): BackgroundActivityIco
     case 'using-tool':
       return 'wrench';
   }
+}
+
+function replyAttentionKey(content: BackgroundReplyContent): string | undefined {
+  return content.phase === 'awaiting-approval' || content.phase === 'awaiting-answer'
+    ? JSON.stringify([content.phase, content.attentionId ?? ''])
+    : undefined;
 }

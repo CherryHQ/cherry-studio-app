@@ -131,7 +131,14 @@ export function createBackend(
   const desktopStore = new DesktopConnectionService(dbService, (provider) =>
     infrastructure.providerAccounts.getCapabilities(provider),
   );
-  infrastructure.desktopConnectionManager.configure(desktopStore);
+  const connectionIntents = createMMKV({ id: 'cherry-desktop-connection-intents' });
+  infrastructure.desktopConnectionManager.configure(desktopStore, {
+    isDisconnected: (id) => connectionIntents.getBoolean(id) ?? false,
+    setDisconnected: (id, disconnected) => {
+      if (disconnected) connectionIntents.set(id, true);
+      else connectionIntents.remove(id);
+    },
+  });
   infrastructure.desktopConnections.configure(
     desktopStore,
     () => infrastructure.providerRegistryUpdater.ensureReady(),

@@ -55,6 +55,38 @@ test('ongoing notification updates stay silent and route taps to the existing ap
   expect(service).toContain('Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP');
 });
 
+test('service updates preserve promoted task content until its ongoing state changes', () => {
+  const sameAnchor = service.slice(
+    service.indexOf('if (foreground && notificationId == nextId)'),
+    service.indexOf('else if (foreground && !anchorOngoing'),
+  );
+  expect(sameAnchor).toMatch(
+    /if \(anchorOngoing != currentOptions\.isOngoing\(\)\)\s*\{\s*getSystemService\(NotificationManager\.class\)\.notify/,
+  );
+  expect(service).toContain('nextId, anchorNotification(),');
+  expect(service).toContain('getActiveNotifications()');
+  expect(service).toContain('entry.getId() == currentOptions.getNotificationId()');
+});
+
+test('native decisions stay scoped to a current card and do not foreground or restart model work', () => {
+  const receiver = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundTaskActions.kt',
+    ),
+    'utf8',
+  );
+  const manifest = readFileSync(
+    join(process.cwd(), 'modules/system-integration/android/src/main/AndroidManifest.xml'),
+    'utf8',
+  );
+  expect(manifest).toMatch(/BackgroundTaskActionReceiver" android:exported="false"/);
+  expect(receiver).toContain('notification.extras.getString("actionToken") != token');
+  expect(receiver).toContain('RemoteInput.getResultsFromIntent(intent)');
+  expect(receiver).not.toContain('startActivity');
+  expect(receiver).not.toContain('startService');
+});
+
 test('native destruction reports the admitted task name instead of changing notification options', () => {
   expect(service).toContain('taskName = extras.getString("taskName")');
   expect(service).toMatch(/void onDestroy\(\)[\s\S]*?\.emit\("stopped", taskName\)/);
@@ -96,4 +128,107 @@ test('native task identities survive restart and cold acknowledgement only remov
   expect(notifications).toContain('putInt(key, id).putInt("next-id", id + 1).commit()');
   expect(notifications).toContain('it.id == id && it.notification.extras.getBoolean("terminal")');
   expect(notifications).toContain('!entry.notification.extras.getBoolean("terminal")');
+});
+
+test('Android 16 text replies use an ordinary notice and retire with the owning card', () => {
+  const notifications = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
+    ),
+    'utf8',
+  );
+  // Promoted Live Updates hide RemoteInput; ordinary actions remain on the chip.
+  expect(notifications).toContain('if (Build.VERSION.SDK_INT < 36) builder.addAction(replyAction)');
+  expect(notifications).toContain('putBoolean("android.requestPromotedOngoing", false)');
+  expect(notifications).toContain('builder.clearActions()');
+  expect(notifications).toContain('.setSilent(true).setOnlyAlertOnce(true)');
+  expect(notifications).toContain('else dismissReply(context, id)');
+  expect(notifications).toMatch(
+    /fun dismiss\(context: Context, id: Int\) \{\s*dismissReply\(context, id\)/,
+  );
+  // A direct-reply notice must be updated before cancellation, or Android can
+  // keep its obsolete input alive through a system lifetime extension.
+  const retirement = notifications.slice(
+    notifications.indexOf('private fun cancelNotification('),
+    notifications.indexOf('private fun actionIntent('),
+  );
+  expect(retirement).toContain('Notification.Builder.recoverBuilder(context, current)');
+  expect(retirement).toContain('.setActions().setRemoteInputHistory(null)');
+  expect(retirement).toContain('remove("actionToken")');
+  expect(retirement.indexOf('manager.notify(id, retired)')).toBeGreaterThan(-1);
+  expect(retirement.indexOf('manager.notify(id, retired)')).toBeLessThan(
+    retirement.indexOf('manager.cancel(id)'),
+  );
+});
+
+test('connection cards remain ordinary ongoing notifications with immutable background disconnect actions', () => {
+  const bridge = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
+    ),
+    'utf8',
+  );
+  expect(bridge).toContain('val promoted = ongoing && actions?.get("promoted") != false');
+  expect(bridge).toContain('putBoolean("android.requestPromotedOngoing", promoted)');
+  expect(bridge).toContain('if (promoted) putString("android.shortCriticalText"');
+  expect(bridge).toContain(
+    'if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE',
+  );
+});
+
+test('remote task and reply cards group by PC while only the connection card is a silent summary', () => {
+  const bridge = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
+    ),
+    'utf8',
+  );
+  expect(bridge).toContain('if (uri.host != "remote") return null');
+  expect(bridge).toContain('uri.getQueryParameter("connectionId")');
+  expect(bridge).toContain('return "${context.packageName}:remote:$connectionId"');
+  expect(bridge).toContain('builder.setGroup(group).setGroupSummary(isGroupSummary)');
+  expect(bridge).toContain('NotificationCompat.GROUP_ALERT_CHILDREN');
+  expect(bridge).toContain('actions?.get("promoted") != false && !isGroupSummary');
+  // The Android 16 ordinary text-input notice is cloned from this grouped builder.
+  expect(bridge).toContain('builder.clearActions()');
+});
+
+test('removing a PC summary retains results and reconnect silently regroups them', () => {
+  const bridge = readFileSync(
+    join(
+      process.cwd(),
+      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
+    ),
+    'utf8',
+  );
+  const cancellation = bridge.slice(
+    bridge.indexOf('private fun cancelNotification('),
+    bridge.indexOf('private fun actionIntent('),
+  );
+  expect(cancellation.indexOf('detachGroup(context, id)')).toBeLessThan(
+    cancellation.indexOf('manager.cancel(id)'),
+  );
+  expect(bridge).toContain(
+    'entry.id == id || entry.id == connectionId || entry.notification.group != group',
+  );
+  expect(bridge).toContain('.setGroup(null).setOnlyAlertOnce(true)');
+  expect(bridge).toContain('notification.extras.getString("deviceGroup") != group');
+  expect(bridge).toContain('if (isGroupSummary) regroupNotifications(context, group!!)');
+  expect(bridge).toContain(
+    '.setGroup(group).setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)',
+  );
+  // System group rendering may hide summary actions; connection control is the first child.
+  expect(bridge).toContain('notificationId(context, connectionKey(id))');
+  expect(bridge).toContain('.setGroupSummary(false).setSortKey("0_connection")');
+  expect(bridge).toContain('builder.setSortKey("1_task")');
+  expect(bridge).toContain('if (connectionId != -1) manager.cancel(connectionId)');
+  expect(bridge).toContain('if (isGroupSummary) this.actions = null');
+  expect(bridge).toContain(
+    'val actionNotificationId = if (isGroupSummary) notificationId(context, connectionKey(id)) else id',
+  );
+  expect(bridge).toContain('actionIntent(context, actionNotificationId, token, button["id"]');
+  expect(bridge).toContain('val group = summary?.group ?: control?.group ?: return');
 });

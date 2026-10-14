@@ -17,6 +17,7 @@ import { BackupRuntime } from '@/backend/services/backup';
 import {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
+  RemoteConnectionNotificationRuntime,
 } from '@/backend/services/desktopConnections';
 import { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
@@ -63,6 +64,7 @@ export const services = {
   AndroidBackgroundActivityRuntime,
   IosBackgroundExecutionSource,
   KeepAliveCoordinator,
+  RemoteConnectionNotificationRuntime,
   BackgroundActivityManager,
   BackgroundReplyRuntime,
   WebSearchService,

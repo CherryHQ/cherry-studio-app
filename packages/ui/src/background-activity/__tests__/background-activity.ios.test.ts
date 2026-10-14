@@ -1,12 +1,12 @@
+import { createLiveActivity } from 'expo-widgets';
+
+import { renderBackgroundActivity } from '../background-activity.ios';
+
 jest.mock('@expo/ui/swift-ui', () => ({}));
 jest.mock('@expo/ui/swift-ui/modifiers', () => ({}));
 jest.mock('expo-widgets', () => ({
   createLiveActivity: jest.fn((name: string, layout: string) => ({ layout, name })),
 }));
-
-import { createLiveActivity } from 'expo-widgets';
-
-import { renderBackgroundActivity } from '../background-activity.ios';
 
 describe('background activity iOS layout', () => {
   test('serializes compact status and elapsed-time variants into the native layout', () => {
@@ -23,8 +23,8 @@ describe('background activity iOS layout', () => {
     expect(layout).toContain('props.preview');
     // These modifiers must survive widget serialization; the system supplies
     // the privacy redaction reason according to the person's Lock Screen settings.
-    expect(layout.match(/privacySensitive\(/g)).toHaveLength(4);
-    expect(layout).toContain('privacySensitive(!!props.preview&&!isSimplified)');
+    expect(layout.match(/privacySensitive\(/g)).toHaveLength(6);
+    expect(layout).toContain('privacySensitive(!!props.actions||!!props.preview&&!isSimplified)');
     expect(layout).toContain('bannerSmall');
     expect(layout.match(/activityBackgroundTint\(null\)/g)).toHaveLength(2);
     expect(layout.match(/style:['"]primary['"]/g)).toHaveLength(2);

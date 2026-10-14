@@ -129,7 +129,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/cherry-studio-logo.png"
+          "icon": "./assets/notification-icon.png"
         }
       ],
       "./scripts/withAndroidBackgroundGeneration.js",

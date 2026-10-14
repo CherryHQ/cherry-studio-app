@@ -3,6 +3,7 @@ import {
   getPermissionsAsync,
   requestPermissionsAsync,
   scheduleNotificationAsync,
+  setNotificationCategoryAsync,
   type NotificationPermissionsStatus,
 } from 'expo-notifications';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -11,6 +12,7 @@ import type { ReplyCompletionNotificationEvent } from '../replyCompletionNotific
 import { createReplyCompletionNotifier } from '../replyCompletionNotifications';
 
 jest.mock('expo-notifications', () => ({
+  setNotificationCategoryAsync: jest.fn(async () => {}),
   dismissNotificationAsync: jest.fn(async () => {}),
   getPermissionsAsync: jest.fn(async () => ({ granted: true })),
   requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
@@ -57,6 +59,47 @@ afterEach(() => {
 });
 
 describe('createReplyCompletionNotifier', () => {
+  it('registers background approval and text reply controls with their request token', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    const actions = {
+      token: 'request-token',
+      prompt: 'Which topic?',
+      buttons: [{ id: 'option:snow', label: 'Snow' }],
+      reply: { label: 'Reply', placeholder: 'Your answer', choices: ['Snow'] },
+    };
+    await notifier.notifyAttention({
+      deepLinkUrl: event().deepLinkUrl,
+      detail: 'Waiting',
+      phase: 'awaiting-answer',
+      title: 'Question',
+      isCurrent: () => true,
+      actions,
+    });
+    expect(setNotificationCategoryAsync).toHaveBeenCalledWith(expect.any(String), [
+      {
+        identifier: 'option:snow',
+        buttonTitle: 'Snow',
+        options: { opensAppToForeground: false, isAuthenticationRequired: true },
+      },
+      {
+        identifier: 'reply',
+        buttonTitle: 'Reply',
+        textInput: { submitButtonTitle: 'Reply', placeholder: 'Your answer' },
+        options: { opensAppToForeground: false, isAuthenticationRequired: true },
+      },
+    ]);
+    expect(notices).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          body: 'Waiting\nWhich topic?',
+          categoryIdentifier: expect.any(String),
+          data: expect.objectContaining({ actionToken: 'request-token' }),
+        }),
+      }),
+    );
+  });
   it('delivers one notification for a background completion', async () => {
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,
@@ -179,7 +222,7 @@ describe('createReplyCompletionNotifier', () => {
 
     // Every delivery first retires the destination's previous notice, by
     // the same deterministic identifier.
-    expect(dismissals).toHaveBeenCalledTimes(2);
+    expect(dismissals).toHaveBeenCalledTimes(4);
     expect(dismissals).toHaveBeenCalledWith('cherry-reply-cherrystudio_____sessionId_session_1');
     expect(notices).toHaveBeenCalledTimes(2);
   });
@@ -199,7 +242,7 @@ describe('createReplyCompletionNotifier', () => {
     expect(dismissals).toHaveBeenCalledWith('cherry-reply-cherrystudio_____sessionId_session_2');
   });
 
-  it('requests permission once, only in the foreground and only while enabled', async () => {
+  it('requests permission for decisions even when completion alerts are disabled', async () => {
     const notifier = createReplyCompletionNotifier({
       isReplyCompletionNotificationEnabled: enabled,
     });
@@ -211,11 +254,89 @@ describe('createReplyCompletionNotifier', () => {
     setAppState('active');
     enabled.mockReturnValue(false);
     notifier.requestPermissionOnce();
-    expect(permissionRequest).not.toHaveBeenCalled();
+    expect(permissionRequest).toHaveBeenCalledTimes(1);
 
     enabled.mockReturnValue(true);
     notifier.requestPermissionOnce();
     notifier.requestPermissionOnce();
     expect(permissionRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('session attention delivery', () => {
+  const attention = () => ({
+    deepLinkUrl: 'cherrystudio://remote?connectionId=pc&sessionId=s',
+    detail: 'Waiting for your answer',
+    phase: 'awaiting-answer' as const,
+    title: 'Session',
+    isCurrent: () => true,
+  });
+
+  it('delivers decisions with completion alerts disabled and preserves the session destination', async () => {
+    enabled.mockReturnValue(false);
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    await expect(notifier.notifyAttention(attention())).resolves.toBe(true);
+    expect(notices).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: expect.objectContaining({
+          body: 'Waiting for your answer',
+          sound: 'default',
+          data: {
+            owner: 'cherry-background-activity',
+            attention: true,
+            url: attention().deepLinkUrl,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('uses foreground attention without a system alert and honors denied permission in background', async () => {
+    const onForegroundAttention = jest.fn();
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+      onForegroundAttention,
+    });
+    setAppState('active');
+    await notifier.notifyAttention(attention());
+    expect(onForegroundAttention).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'awaiting-answer', url: attention().deepLinkUrl }),
+    );
+    setAppState('background');
+    permissions.mockResolvedValue({ granted: false } as NotificationPermissionsStatus);
+    await expect(notifier.notifyAttention(attention())).resolves.toBe(false);
+    expect(notices).not.toHaveBeenCalled();
+  });
+
+  it('suppresses resolved requests while permission is loading', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    let current = true;
+    permissions.mockImplementationOnce(async () => {
+      current = false;
+      return { granted: true } as NotificationPermissionsStatus;
+    });
+    await expect(
+      notifier.notifyAttention({ ...attention(), isCurrent: () => current }),
+    ).resolves.toBe(false);
+    expect(notices).not.toHaveBeenCalled();
+  });
+
+  it('retires a notification that becomes obsolete during native delivery', async () => {
+    const notifier = createReplyCompletionNotifier({
+      isReplyCompletionNotificationEnabled: enabled,
+    });
+    let current = true;
+    notices.mockImplementationOnce(async ({ identifier }) => {
+      current = false;
+      return identifier ?? '';
+    });
+    await expect(
+      notifier.notifyAttention({ ...attention(), isCurrent: () => current }),
+    ).resolves.toBe(false);
+    expect(dismissals).toHaveBeenCalledWith(notices.mock.calls[0]?.[0].identifier);
   });
 });

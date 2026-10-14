@@ -43,7 +43,10 @@ export function deriveBackgroundReplyContent(
   const approval = findLastToolPart(parts, (part) => part.state === 'awaiting-approval');
 
   if (approval) {
-    return createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview);
+    return {
+      ...createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview),
+      attentionId: approval.approvalId ?? approval.toolCallId,
+    };
   }
 
   const question = findLastToolPart(
@@ -54,8 +57,10 @@ export function deriveBackgroundReplyContent(
       part.toolRef.capabilityId === 'ask_user_question',
   );
   if (question) {
-    // Waiting for a question uses the same attention phase and execution lease.
-    return createContent('awaiting-approval', t('chat.question.waiting'), preview);
+    return {
+      ...createContent('awaiting-answer', t('chat.question.waiting'), preview),
+      attentionId: question.toolCallId,
+    };
   }
   const activeTool = findLastToolPart(parts, isActiveToolPart);
   if (activeTool) {

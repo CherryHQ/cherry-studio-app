@@ -22,6 +22,7 @@ import {
   getStorageBoot,
   rejectStorageCandidate,
 } from '@/backend/data/storage/storagePaths';
+import { subscribeBackgroundActivityActions } from '@/backend/services/backgroundActivity/actionTransport';
 import type { AndroidBackgroundActivityRuntime } from '@/backend/services/backgroundActivity/AndroidBackgroundActivityRuntime';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
@@ -86,13 +87,17 @@ export function createAppBootstrapRuntime(
       : undefined;
   const isReplyCompletionNotificationEnabled = () =>
     preference.readCached('chat.completion_notifications.enabled');
-  // iOS delivers completion notices from the reply runtime's logical terminal
-  // events; Android raises them inside its own attention runtime.
+  // iOS delivers completion and decision notices from logical reply events;
+  // Android raises them inside its own attention runtime.
   const replyCompletionNotifications =
     Platform.OS === 'ios'
-      ? createReplyCompletionNotifier({ isReplyCompletionNotificationEnabled })
+      ? createReplyCompletionNotifier({
+          isReplyCompletionNotificationEnabled,
+          onForegroundAttention: publishForegroundActivityAttention,
+        })
       : undefined;
   backgroundActivityEnvironment.configure({
+    subscribeActions: subscribeBackgroundActivityActions,
     assistantPresenter:
       androidActivities?.createPresenter() ?? createLiveActivityPresenter(AssistantActivity),
     getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),

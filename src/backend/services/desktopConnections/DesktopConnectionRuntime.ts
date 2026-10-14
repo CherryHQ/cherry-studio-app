@@ -204,6 +204,10 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     });
   }
 
+  reconnect(id: string): void {
+    this.connections?.reconnect(id);
+  }
+
   getEndpoints(id: string, signal: AbortSignal) {
     return this.run('endpoints', signal, async (store, signal) => {
       const row = await store.getRow(id);

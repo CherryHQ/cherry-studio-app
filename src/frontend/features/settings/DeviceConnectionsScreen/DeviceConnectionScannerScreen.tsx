@@ -3,7 +3,7 @@ import { CameraView } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
@@ -11,12 +11,11 @@ import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
-import {
-  type DesktopPairingQr,
-  DesktopPairingQrSchema,
-} from '@/shared/data/api/schemas/desktopConnections';
+import type { DesktopPairingQr } from '@/shared/data/api/schemas/desktopConnections';
 
+import { DesktopPairingCodeForm } from './DesktopPairingCodeForm';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { parseDesktopPairingCode } from './parseDesktopPairingCode';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
@@ -61,6 +60,9 @@ export function DeviceConnectionScannerScreen({
 
   const submit = useCallback(
     (qr: DesktopPairingQr) => {
+      if (!canSubmit() || scanInFlight.current) return;
+      scanInFlight.current = true;
+      setHasScanned(true);
       setInput({
         ...qr,
         capabilities: ['configuration', 'agent'],
@@ -72,22 +74,18 @@ export function DeviceConnectionScannerScreen({
           : '/settings/device-connections/pair',
       );
     },
-    [connectionId, router, setInput, setupIntent],
+    [canSubmit, connectionId, router, setInput, setupIntent],
   );
 
   const parseAndSubmit = useCallback(
     (value: string) => {
       if (!canSubmit() || scanInFlight.current) return;
-      // Native scan events can arrive before React commits loading state.
-      scanInFlight.current = true;
-      setHasScanned(true);
-      try {
-        const parsed = DesktopPairingQrSchema.safeParse(JSON.parse(value));
-        if (!parsed.success) {
-          throw new Error('invalid QR');
-        }
-        submit(parsed.data);
-      } catch {
+      const invitation = parseDesktopPairingCode(value);
+      if (invitation) {
+        submit(invitation);
+      } else {
+        scanInFlight.current = true;
+        setHasScanned(true);
         setScanError(t('settings.deviceConnections.scan.invalidQr'));
       }
     },
@@ -104,7 +102,12 @@ export function DeviceConnectionScannerScreen({
             : 'settings.deviceConnections.scan.title',
         )}
       />
-      <View className="flex-1 gap-5 px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerClassName="gap-5 px-4 pt-3"
+        contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <View
           className={
             showCamera
@@ -170,7 +173,8 @@ export function DeviceConnectionScannerScreen({
               : 'settings.deviceConnections.scan.guidance',
           )}
         </Text>
-      </View>
+        <DesktopPairingCodeForm disabled={!isReady || hasScanned} onSubmit={submit} />
+      </ScrollView>
     </View>
   );
 }
