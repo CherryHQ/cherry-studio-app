@@ -221,6 +221,8 @@ export const AgentTurnViewSchema = z.strictObject({
   ]),
   assistantMessageId: z.string().min(1),
   error: AgentErrorViewSchema.nullable(),
+  /** A provider attempt failed and is being retried; its error is not final. */
+  isRetrying: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });

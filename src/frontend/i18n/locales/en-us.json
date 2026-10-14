@@ -457,6 +457,7 @@
   "chat.reasoningStatus.thinking": "Thinking",
   "chat.reasoningStatus.thought": "Thought it through",
   "chat.runtime.failed": "Agent is unavailable. Retry to resume.",
+  "chat.runtime.retrying": "Request failed. Retrying automatically…",
   "chat.share.assistant": "Assistant",
   "chat.share.cancelled": "Cancelled",
   "chat.share.completed": "Completed",

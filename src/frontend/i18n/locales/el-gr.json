@@ -457,6 +457,7 @@
   "chat.reasoningStatus.thinking": "Σκέψη",
   "chat.reasoningStatus.thought": "Το σκέφτηκα καλά",
   "chat.runtime.failed": "Ο πράκτορας δεν είναι διαθέσιμος. Δοκιμάστε ξανά για να συνεχίσετε.",
+  "chat.runtime.retrying": "Το αίτημα απέτυχε. Γίνεται αυτόματη επανάληψη…",
   "chat.share.assistant": "Βοηθός",
   "chat.share.cancelled": "Ακυρώθηκε",
   "chat.share.completed": "Ολοκληρώθηκε",
