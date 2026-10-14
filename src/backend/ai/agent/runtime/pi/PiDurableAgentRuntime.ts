@@ -569,6 +569,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             codemode: createCodemodeExtension({
               sandbox: this.codemodeSandbox,
               models: false,
+              // MCP provider names share this prefix. Earlier tool_search results also named the
+              // group "mcp", so scripts in migrated conversations filter by it.
+              namespaces: [
+                { name: 'mcp', prefix: 'mcp_', description: 'Tools of the connected MCP servers.' },
+              ],
               writeOutput: async (name, data, api, context) => {
                 const writer = this.requirePorts().writeToolOutput;
                 if (!writer) return { error: 'Managed output storage is unavailable.' };

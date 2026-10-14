@@ -111,7 +111,13 @@ describe('RunJsToolPart', () => {
           output: 'Script completed\nWall time 0.1 seconds\nOutput:\n42',
           details: {
             calls: [
-              { id: 1, name: 'web_fetch', args: '{"url":"https://a.test"}', status: 'ok' },
+              {
+                id: 1,
+                name: 'mcp_lookup_0ab12cd',
+                title: 'lookup',
+                args: '{"url":"https://a.test"}',
+                status: 'ok',
+              },
               { id: 2, name: 'web_fetch', args: '{"url":"https://b.test"}', status: 'cancelled' },
             ],
           },
@@ -124,7 +130,13 @@ describe('RunJsToolPart', () => {
       ['chat.tool.code', 'return { total: 42 }'],
     ]);
     expect(renderer.root.findByType('ToolProgress').props.progress.calls).toEqual([
-      { id: '1', name: 'web_fetch', args: '{"url":"https://a.test"}', status: 'ok' },
+      {
+        id: '1',
+        name: 'mcp_lookup_0ab12cd',
+        title: 'lookup',
+        args: '{"url":"https://a.test"}',
+        status: 'ok',
+      },
       { id: '2', name: 'web_fetch', args: '{"url":"https://b.test"}', status: 'interrupted' },
     ]);
   });

@@ -347,7 +347,15 @@ describe('durable capability boundary', () => {
       const outcomes: unknown[] = [];
       const extension = capabilityExtension({
         name: 'cherry',
-        tools: [scriptCapability('auto', outcomes)],
+        tools: [
+          scriptCapability('auto', outcomes),
+          capability(),
+          capability({
+            ref: { source: 'mcp', serverId: 'server', rawToolName: 'lookup' },
+            providerName: 'mcp_lookup_0ab12cd',
+            displayName: 'lookup',
+          }),
+        ],
         approve: async () => true,
         codemode: defineExtension({
           name: 'test-codemode',
@@ -357,7 +365,16 @@ describe('durable capability boundary', () => {
               parameters: { type: 'object' } as TSchema,
               description: 'Run a script.',
               replay: 'safe',
-              execute: async () => ({ output: [{ type: 'text', text: 'Script text.' }], isError }),
+              execute: async () => ({
+                output: [{ type: 'text', text: 'Script text.' }],
+                details: {
+                  calls: [
+                    { id: 1, name: 'mcp_lookup_0ab12cd', args: '{}', status: 'ok' },
+                    { id: 2, name: 'create_file', args: '{}', status: 'ok' },
+                  ],
+                },
+                isError,
+              }),
             }),
           ],
         }),
@@ -374,7 +391,26 @@ describe('durable capability boundary', () => {
         expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
           role: 'toolResult',
           isError,
-          details: { output: { modelValue: 'Script text.' } },
+          details: {
+            output: {
+              modelValue: 'Script text.',
+              // An MCP alias gains its display name; the client translates built-in names.
+              value: {
+                details: {
+                  calls: [
+                    {
+                      id: 1,
+                      name: 'mcp_lookup_0ab12cd',
+                      title: 'lookup',
+                      args: '{}',
+                      status: 'ok',
+                    },
+                    { id: 2, name: 'create_file', args: '{}', status: 'ok' },
+                  ],
+                },
+              },
+            },
+          },
         });
       } finally {
         await harness.close(BACKGROUND_CONTEXT);

@@ -364,17 +364,20 @@ export function projectPiTurn(options: {
       toolsByCall.set(block.id, part);
       if (options.active && options.nestedTools) {
         const calls: RuntimeToolProgress['calls'] = [...options.nestedTools].flatMap(
-          ([callId, call]) =>
-            call.parentCallId === block.id
-              ? [
-                  {
-                    id: callId,
-                    name: call.name,
-                    args: call.args,
-                    status: call.status,
-                  },
-                ]
-              : [],
+          ([callId, call]) => {
+            if (call.parentCallId !== block.id) return [];
+            const tool = stored.tools.find((item) => item.providerName === call.name);
+            return [
+              {
+                id: callId,
+                name: call.name,
+                // The client translates built-in names; an MCP alias needs its display name.
+                ...(tool?.ref.source === 'mcp' ? { title: tool.displayName } : {}),
+                args: call.args,
+                status: call.status,
+              },
+            ];
+          },
         );
         if (calls.length) part.progress = { calls };
       }

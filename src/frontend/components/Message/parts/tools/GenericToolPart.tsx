@@ -26,7 +26,12 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
   const title = getToolLabel(part, toolDisplay?.titleKey, t);
   // The app closed this call out when the turn ended; that is not a tool failure.
   const isSettledByApp = readCherryMeta(part)?.settledByApp === true;
-  const statusText = isSettledByApp ? t('chat.tool.unfinished') : getToolStatusText(part, t);
+  const statusText = isSettledByApp
+    ? t('chat.tool.unfinished')
+    : // Live calls mean the tool is executing, not waiting on its input.
+      part.state === 'input-available' && part.progress
+      ? t('chat.tool.running')
+      : getToolStatusText(part, t);
 
   return (
     <MessagePart.Tool

@@ -98,6 +98,7 @@ function parseScript(part: ToolMessagePart): Run | null {
               {
                 id: String(call.id),
                 name: call.name,
+                ...(typeof call.title === 'string' ? { title: call.title } : {}),
                 args: call.args,
                 // A call still running when its script ended was cancelled.
                 status:

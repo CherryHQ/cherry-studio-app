@@ -15,6 +15,7 @@ import {
 } from '@earendil-works/pi-durable';
 import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search';
+import { z } from 'zod';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
@@ -312,9 +313,23 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           const text = (result.output ?? [])
             .flatMap((block) => (block.type === 'text' ? [block.text] : []))
             .join('\n');
+          // Upstream lists each call under its provider name; an MCP alias needs its display name.
+          const details = z
+            .looseObject({ calls: z.array(z.looseObject({ name: z.string() })) })
+            .safeParse(result.details);
           const value = RuntimeJsonValueSchema.parse({
             output: text,
-            details: result.details ?? null,
+            details: details.success
+              ? {
+                  ...details.data,
+                  calls: details.data.calls.map((item) => {
+                    const called = catalog.get(item.name);
+                    return called?.ref.source === 'mcp'
+                      ? { ...item, title: called.displayName }
+                      : item;
+                  }),
+                }
+              : (result.details ?? null),
           });
           const output: RuntimeToolResult = {
             value,

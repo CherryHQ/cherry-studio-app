@@ -27,7 +27,13 @@ test('shows child activity while the parent is running and updates its status', 
     input: {},
     progress: {
       calls: [
-        { id: 'parent/c1', name: 'mcp_lookup', args: '{"query":"notes"}', status: 'running' },
+        {
+          id: 'parent/c1',
+          name: 'mcp_lookup_0ab12cd',
+          title: 'lookup',
+          args: '{"query":"notes"}',
+          status: 'running',
+        },
       ],
     },
   };
@@ -35,8 +41,10 @@ test('shows child activity while the parent is running and updates its status', 
   act(() => {
     renderer = create(<GenericToolPart part={part} />);
   });
-  expect(JSON.stringify(renderer.toJSON())).toContain('mcp_lookup');
-  expect(JSON.stringify(renderer.toJSON())).toContain('chat.tool.running');
+  // An MCP call shows its display name, and live calls mark the parent as running.
+  expect(JSON.stringify(renderer.toJSON())).toContain('"lookup"');
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('mcp_lookup_0ab12cd');
+  expect(renderer.root.findByType('Tool').props.statusText).toBe('chat.tool.running');
   // Arguments arrive as cut JSON text, so they read as code instead of a parsed value.
   expect(renderer.root.findAllByType('TextSection').map((section) => section.props.value)).toEqual([
     '{"query":"notes"}',
@@ -54,6 +62,5 @@ test('shows child activity while the parent is running and updates its status', 
     );
   });
   expect(JSON.stringify(renderer.toJSON())).toContain('common.done');
-  expect(JSON.stringify(renderer.toJSON())).not.toContain('chat.tool.running');
   act(() => renderer.unmount());
 });

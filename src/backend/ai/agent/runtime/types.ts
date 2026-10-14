@@ -173,17 +173,26 @@ export type RuntimeDocumentAttachmentPart = Omit<
   attachmentReport?: FileAttachmentReport;
 };
 
+/** A managed image as pixels. `fileEntryId` lets the model read it again once they leave context. */
+export type RuntimeImagePart = {
+  type: 'file';
+  fileEntryId?: string;
+  mediaType: string;
+  name?: string;
+  uri: string;
+};
+
 export type RuntimeInputPart =
   | { type: 'text'; text: string }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
-  | { type: 'file'; mediaType: string; name?: string; uri: string };
+  | RuntimeImagePart;
 
 export type RuntimeMessagePart =
   | { type: 'text' | 'reasoning'; text: string }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
-  | { type: 'file'; mediaType: string; name?: string; uri: string }
+  | RuntimeImagePart
   | {
       type: 'tool-call';
       toolCallId: string;
@@ -300,6 +309,7 @@ export type RuntimeToolProgress = {
   calls: {
     id: string;
     name: string;
+    title?: string;
     args: string;
     status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted';
   }[];

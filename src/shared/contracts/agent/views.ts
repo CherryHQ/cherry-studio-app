@@ -279,6 +279,8 @@ export const AgentToolProgressSchema = z.strictObject({
     z.strictObject({
       id: z.string(),
       name: z.string(),
+      /** Display name of a tool the app has no translated title for, such as an MCP tool. */
+      title: z.string().optional(),
       args: z.string().max(1000),
       status: z.enum(['pending', 'running', 'ok', 'error', 'interrupted']),
     }),

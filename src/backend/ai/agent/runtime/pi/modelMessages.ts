@@ -123,7 +123,17 @@ function collectUserContent(
     if (part.type === 'file') {
       const note = unsupportedMediaNote(part.mediaType, mediaCapabilities);
       if (note) return [{ type: 'text' as const, text: note }];
-      return [toPiImage(part)];
+      return [
+        ...(part.fileEntryId
+          ? [
+              {
+                type: 'text' as const,
+                text: `Cherry managed image: ${JSON.stringify({ fileEntryId: part.fileEntryId, name: part.name })}`,
+              },
+            ]
+          : []),
+        toPiImage(part),
+      ];
     }
     return [];
   });

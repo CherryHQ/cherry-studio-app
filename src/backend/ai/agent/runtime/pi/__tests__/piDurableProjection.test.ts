@@ -253,18 +253,36 @@ describe('Pi turn projection', () => {
   test('live child status is progress, never a final tool output', () => {
     const turn = projectPiTurn({
       sessionId: 'session',
-      metadata,
+      metadata: {
+        ...metadata,
+        tools: [
+          writeFile,
+          {
+            ...writeFile,
+            ref: { source: 'mcp' as const, serverId: 'server', rawToolName: 'lookup' },
+            providerName: 'mcp_lookup_0ab12cd',
+            displayName: 'lookup',
+          },
+        ],
+      },
       active: true,
       record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
       entries: [
         { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2000)] },
       ] as unknown as EntryRecord[],
       nestedTools: new Map([
-        ['child', { parentCallId: 'call', name: 'read_file', args: '{}', status: 'running' }],
+        ['child', { parentCallId: 'call', name: 'write_file', args: '{}', status: 'running' }],
+        ['remote', { parentCallId: 'call', name: 'mcp_lookup_0ab12cd', args: '{}', status: 'ok' }],
       ]),
     });
-    expect(turn.parts[0]).toMatchObject({
-      progress: { calls: [{ id: 'child', name: 'read_file', args: '{}', status: 'running' }] },
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    // The client translates built-in names; an MCP alias carries its display name.
+    expect(part.progress).toEqual({
+      calls: [
+        { id: 'child', name: 'write_file', args: '{}', status: 'running' },
+        { id: 'remote', name: 'mcp_lookup_0ab12cd', title: 'lookup', args: '{}', status: 'ok' },
+      ],
     });
     expect(turn.parts[0]).not.toHaveProperty('output');
   });

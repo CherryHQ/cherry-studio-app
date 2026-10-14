@@ -24,7 +24,7 @@ export function ToolProgress({ progress }: { progress: AgentToolProgress }) {
           <View key={call.id} className="gap-1">
             <View className="flex-row flex-wrap items-center gap-2">
               <Text className="text-foreground text-sm">
-                {display ? t(display.titleKey) : call.name}
+                {display ? t(display.titleKey) : (call.title ?? call.name)}
               </Text>
               <Text
                 className={
