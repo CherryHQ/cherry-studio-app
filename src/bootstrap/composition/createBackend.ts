@@ -282,6 +282,7 @@ export function createBackend(
       },
     },
     skills: services.agentGlobalSkill,
+    readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
     sources: {
       bundled: createBundledSkillSource(),

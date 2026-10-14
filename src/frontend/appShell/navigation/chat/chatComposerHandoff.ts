@@ -1,11 +1,12 @@
 import { randomUUID } from 'expo-crypto';
 
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { SkillAction } from '@/shared/data/types/skill';
 
 export type ChatComposerHandoff = {
   attachments: readonly ComposerInitialAttachment[];
   draft: string;
-  skillAction?: 'find-and-install';
+  skillAction?: SkillAction;
 };
 
 /**

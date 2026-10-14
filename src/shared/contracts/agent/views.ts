@@ -10,7 +10,11 @@ import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
-import { SkillActivationSchema, SkillTextReferenceSchema } from '@/shared/data/types/skill';
+import {
+  SkillActionSchema,
+  SkillActivationSchema,
+  SkillTextReferenceSchema,
+} from '@/shared/data/types/skill';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -361,7 +365,7 @@ export const AgentMessagePartSchema = z.union([
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
-    skillAction: z.literal('find-and-install').optional(),
+    skillAction: SkillActionSchema.optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({

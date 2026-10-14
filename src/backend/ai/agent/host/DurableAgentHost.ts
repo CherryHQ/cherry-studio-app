@@ -1733,7 +1733,7 @@ function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
         left.rawToolName === right.rawToolName)
   );
 }
-/** Explicit Skill selections and the find-and-install action recorded on a submitted message. */
+/** Explicit Skill selections and app-owned Skill actions recorded on a submitted message. */
 function submittedSkills(parts: AgentMessageView['parts']) {
   const text = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
   const skillIds = text.flatMap((part) =>

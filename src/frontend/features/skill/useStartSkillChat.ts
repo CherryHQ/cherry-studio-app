@@ -11,6 +11,7 @@ import {
 } from '@/frontend/appShell/navigation/chat';
 import { useAgentApiById, useAgentSession, useAgentsApi } from '@/frontend/hooks/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { SkillAction } from '@/shared/data/types/skill';
 
 const logger = loggerService.withContext('StartSkillChat');
 
@@ -33,7 +34,7 @@ export function useStartSkillChat() {
   const opening = useRef(false);
   const [isOpening, setIsOpening] = useState(false);
 
-  async function open() {
+  async function open(action: SkillAction = 'find-and-install') {
     if (opening.current || !isAvailable) return;
     opening.current = true;
     setIsOpening(true);
@@ -56,7 +57,7 @@ export function useStartSkillChat() {
       const composerHandoff = createChatComposerHandoff({
         attachments: [],
         draft: '',
-        skillAction: 'find-and-install',
+        skillAction: action,
       });
       const href = chatHref({ agentId, composerHandoff, kind: 'draft' });
       if (router.canDismiss()) router.dismissTo(href);

@@ -15,6 +15,7 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },

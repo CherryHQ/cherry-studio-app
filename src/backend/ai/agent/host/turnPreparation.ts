@@ -52,7 +52,11 @@ import type {
 import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
-import { createSkillTools, createSkillManagementTools } from '../tools/skill';
+import {
+  createSkillTools,
+  createSkillManagementTools,
+  createSkillCreationTool,
+} from '../tools/skill';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
@@ -141,6 +145,7 @@ export type TurnPlan = {
 export type TurnSkillPlan = {
   scope: SkillTurnScope;
   findAndInstall?: boolean;
+  create?: boolean;
   /** Explicitly selected Skills with their instructions already loaded. */
   selected: readonly { entry: SkillTurnEntry; instructions: string }[];
   /** Instructions restored from earlier turns' receipts; they ride with the system prompt. */
@@ -466,7 +471,7 @@ export async function prepareResolvedTurn(
   }
 
   if (parsed.skillAction && (!dependencies.skillWorkflow || !dependencies.skills))
-    fail('CAPABILITY_UNSUPPORTED', 'Skill discovery is unavailable in this environment.');
+    fail('CAPABILITY_UNSUPPORTED', 'Skill management is unavailable in this environment.');
 
   // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
@@ -527,6 +532,7 @@ export async function prepareResolvedTurn(
       ...skills,
       scope: expanding.scope,
       findAndInstall: parsed.skillAction === 'find-and-install',
+      create: parsed.skillAction === 'create',
     };
     if (skills.scope.entries.length > 0 || dependencies.skillWorkflow) {
       const loaded = [...skills.selected, ...(skills.active?.values() ?? [])];
@@ -566,6 +572,7 @@ export async function prepareResolvedTurn(
     if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
+        createSkillCreationTool(dependencies.skillWorkflow),
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,

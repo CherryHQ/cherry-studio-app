@@ -11,6 +11,7 @@ import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
+import { buildCreateSkillInstructions } from './createSkillInstructions';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
 import { skillInstructionSection } from './skillInstructions';
 import type { TurnSkillPlan } from './turnPreparation';
@@ -198,6 +199,21 @@ ${systemSkills.join('\n\n')}`);
   }
 
   if (
+    tools.some(
+      (tool) =>
+        tool.ref.source === 'builtin' &&
+        tool.ref.capabilityId === 'create_skill' &&
+        tool.approval !== 'deny',
+    )
+  ) {
+    sections.push(buildCreateSkillInstructions(tools));
+    if (skills?.create)
+      sections.push(
+        'The user selected the built-in create-skill workflow. Create a reusable Skill from their request and save it in the Skill library.',
+      );
+  }
+
+  if (
     skills &&
     (skills.scope.entries.length > 0 ||
       tools.some(
@@ -225,7 +241,7 @@ function buildSkillsSection(skills: TurnSkillPlan): string {
 
 Skills are instruction packages. Enabling a Skill for this Agent makes it available for you to choose when relevant; it does not require you to use every enabled Skill. The user's explicit selections below request use for this turn.
 
-At the start of this turn, this Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills. The remaining packages cannot be loaded automatically. These are not the total installed in the app: unbound, disabled and unreadable packages are excluded. Explicitly selected Skills are listed separately and are already included in the package count. The app-owned System Skills and the built-in find-and-install workflow are separate from this installed package inventory.
+At the start of this turn, this Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills. The remaining packages cannot be loaded automatically. These are not the total installed in the app: unbound, disabled and unreadable packages are excluded. Explicitly selected Skills are listed separately and are already included in the package count. The app-owned System Skills and built-in discovery and creation workflows are separate from this installed package inventory.
 
 For a question about your current Skill count or complete list, call \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` with \`query: "", include_manual: true\`. Use its \`total\` for the count, not \`returned\` or the number of entries shown below. Distinguish that complete inventory from \`automaticTotal\`; do not report zero Skills merely because none can be invoked automatically. For a complete list, continue the same empty query and include_manual option with each returned cursor until \`nextCursor\` is null; do not describe one page as the full list. A keyword search's \`matched\` counts only that query. The catalog below is a starting snapshot; installation during this turn can change it. Listing or counting Skills does not require loading their instructions. Manual-only metadata does not activate instructions: use such a Skill only when its instructions are already explicitly selected or active in this turn.
 
