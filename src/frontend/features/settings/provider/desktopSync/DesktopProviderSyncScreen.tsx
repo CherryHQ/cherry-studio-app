@@ -126,8 +126,9 @@ function DesktopProviderSync({
   }, [availableConnections, isLoading, loadPreview, loadedPreview, previewError]);
 
   const openDeviceConnections = useCallback(() => {
-    if (setupIntent === 'chat') router.dismissTo('/onboarding/device-connections');
-    else router.push('/settings/device-connections');
+    router.replace(
+      setupIntent === 'chat' ? '/onboarding/device-connections' : '/settings/device-connections',
+    );
   }, [router, setupIntent]);
   const continueWithSelectedConnection = useCallback(() => {
     const connection = availableConnections.find((item) => item.id === selectedConnectionId);
@@ -180,7 +181,7 @@ function DesktopProviderSync({
           pathname: '/onboarding/model',
         });
       } else {
-        router.dismissTo('/settings/provider');
+        router.replace('/settings/provider');
       }
     } catch (syncError) {
       alert.show({ title: desktopConnectionErrorMessage(syncError, t) });
@@ -190,7 +191,10 @@ function DesktopProviderSync({
   return (
     <SettingsScrollPage
       contentClassName="flex-grow gap-4"
-      headerProps={{ title: t('settings.provider.desktopSync.title') }}
+      headerProps={{
+        onBack: () => router.replace(setupIntent === 'chat' ? '/onboarding' : '/settings/provider'),
+        title: t('settings.provider.desktopSync.title'),
+      }}
     >
       {setupIntent === 'chat' ? (
         <Text className="px-3 text-xs text-muted-foreground">
@@ -269,7 +273,7 @@ function DesktopProviderSync({
         <View className="min-h-12 items-center justify-center">
           <Button
             disabled={isImporting}
-            onPress={() => router.dismissTo('/onboarding')}
+            onPress={() => router.replace('/onboarding')}
             size="xs"
             variant="ghost"
           >
