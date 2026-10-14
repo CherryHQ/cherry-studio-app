@@ -529,6 +529,8 @@ describe('ChatWorkspace message rendering integration', () => {
     const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
     const streaming = (text: string): AgentMessageView => ({
       ...createMessage('assistant-2', 'assistant', 'streaming'),
+      createdAt: '2026-08-09T00:00:01.000Z',
+      turnId: 'turn-2',
       parts: [{ id: 'assistant-2-text', state: 'streaming', text, type: 'text' }],
     });
     mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('a')] };

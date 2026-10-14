@@ -49,7 +49,7 @@ export function useLocalConversation(input: {
   const { messages: history } = window;
   useEffect(() => {
     if (sessionId) client.reconcilePersistedMessages(sessionId, history);
-  }, [client, history, sessionId]);
+  }, [client, history, sessionId, state.liveMessages]);
   const snapshot = useMemo<ConversationSnapshot>(
     () =>
       projector
