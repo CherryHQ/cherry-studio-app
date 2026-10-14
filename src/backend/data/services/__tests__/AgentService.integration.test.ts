@@ -10,6 +10,7 @@ import { installProviderRegistryTestSnapshot } from '@/backend/data/services/pro
 
 import { subscribeDataApiChanges } from '../../dataApiChanges';
 import type { PreferenceService } from '../../PreferenceService';
+import { agentGlobalSkillService } from '../AgentGlobalSkillService';
 import { agentService } from '../AgentService';
 import { applyMigrations } from './_testDb';
 
@@ -117,6 +118,106 @@ describe('AgentService persistence', () => {
         name: 'Renamed',
         instructions: 'Original',
       });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('updates only requested Skill bindings together with the Agent definition', async () => {
+    const agent = await agentService.create({ name: 'Writer' });
+    const install = (name: string) =>
+      dbService.withWriteTx((tx) =>
+        agentGlobalSkillService.createTx(tx, {
+          name,
+          description: 'Take notes',
+          source: 'marketplace',
+          sourceUrl: null,
+          author: 'Current user',
+          version: null,
+          tags: [],
+          contentHash: 'test-hash',
+          manifest: [],
+          profile: { declaredTools: [] },
+          invocation: { modelInvocable: true, userInvocable: true },
+        }),
+      );
+    const first = await install('first-notes');
+    const other = await install('other-notes');
+    await agentGlobalSkillService.replaceBindings(agent.id, {
+      updates: [{ skillId: other.id, isEnabled: true }],
+    });
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      const updated = await agentService.update(
+        agent.id,
+        { name: 'Notes writer' },
+        {
+          expectedUpdatedAt: agent.updatedAt,
+          skillUpdates: [{ skillId: first.id, isEnabled: true }],
+        },
+      );
+      expect(updated.name).toBe('Notes writer');
+      expect(updated.updatedAt).not.toBe(agent.updatedAt);
+      expect((await agentService.listSkillBindings(agent.id)).items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ skillId: first.id, isEnabled: true }),
+          expect.objectContaining({ skillId: other.id, isEnabled: true }),
+        ]),
+      );
+      expect(changed).toHaveBeenLastCalledWith([
+        '/agents',
+        `/agents/${agent.id}`,
+        '/skills',
+        `/agents/${agent.id}/skills`,
+      ]);
+      await agentService.update(
+        agent.id,
+        {},
+        {
+          expectedUpdatedAt: updated.updatedAt,
+          skillUpdates: [
+            { skillId: first.id, isEnabled: false },
+            { skillId: other.id, isEnabled: null },
+          ],
+        },
+      );
+      expect((await agentService.listSkillBindings(agent.id)).items).toEqual([
+        expect.objectContaining({ skillId: first.id, isEnabled: false }),
+      ]);
+      await expect(
+        agentService.update(
+          agent.id,
+          {},
+          {
+            expectedUpdatedAt: updated.updatedAt,
+            skillUpdates: [{ skillId: first.id, isEnabled: true }],
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('rolls back definition edits and notifications when a referenced Skill is missing', async () => {
+    const agent = await agentService.create({ name: 'Writer' });
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      await expect(
+        agentService.update(
+          agent.id,
+          { name: 'Should roll back' },
+          {
+            expectedUpdatedAt: agent.updatedAt,
+            skillUpdates: [{ skillId: mockRandomUUID(), isEnabled: true }],
+          },
+        ),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(await agentService.getById(agent.id)).toEqual(agent);
+      expect((await agentService.listSkillBindings(agent.id)).items).toEqual([]);
+      expect(changed).not.toHaveBeenCalled();
     } finally {
       unsubscribe();
     }

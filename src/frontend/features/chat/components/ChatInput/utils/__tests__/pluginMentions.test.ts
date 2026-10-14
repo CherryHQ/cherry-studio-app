@@ -3,14 +3,14 @@ import {
   createPluginMentionUrl,
   readPluginMentions,
 } from '../pluginMentions';
-import { createFindSkillsMention, readSkillMentions } from '../skillMentions';
+import { createSkillActionMention, readSkillMentions } from '../skillMentions';
 
 const SERVER_A = '00000000-0000-4000-8000-000000000001';
 const SERVER_B = '00000000-0000-4000-8000-000000000002';
 
 describe('composer plugin references', () => {
   test('plugin offsets address the final text when a Skill reference precedes the plugin', () => {
-    const draft = `📄 ${createFindSkillsMention('找技能')} 用 [${createPluginMentionLabel('飞书')}](${createPluginMentionUrl(SERVER_A, 'feishu')}) 搜索`;
+    const draft = `📄 ${createSkillActionMention('find-and-install', '找技能')} 用 [${createPluginMentionLabel('飞书')}](${createPluginMentionUrl(SERVER_A, 'feishu')}) 搜索`;
     const skillDraft = readSkillMentions(draft);
     expect(skillDraft.skillAction).toBe('find-and-install');
     expect(readPluginMentions(skillDraft.text)).toEqual({

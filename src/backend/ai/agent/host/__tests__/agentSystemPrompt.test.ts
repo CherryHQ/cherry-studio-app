@@ -248,6 +248,34 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
   });
 
+  test('grounds Skill authoring in offered tools without exposing internal or denied names as callable tools', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [
+        tool('create_skill'),
+        tool('calendar_list_events'),
+        tool('run_js'),
+        { ...tool('calendar_delete_event'), approval: 'deny' },
+      ],
+    });
+    expect(prompt).toContain(
+      'Cherry built-in tools offered in this turn: create_skill, calendar_list_events.',
+    );
+    expect(prompt).toContain(
+      'run_js is an internal capability identifier, not a callable model tool',
+    );
+    expect(prompt).toContain('metadata.version as 1.0');
+    expect(prompt).not.toContain('calendar_delete_event');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [tool('calendar_list_events')],
+      }),
+    ).not.toContain('## Create Skills');
+  });
+
   test('asks for sandboxed computation only when run_js is in the turn', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

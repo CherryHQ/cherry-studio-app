@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react-native';
 import { getCrashReporting, type CrashReportingStatus } from '../../../../modules/crash-reporting';
 import policy from '../../../../modules/crash-reporting/reportingPolicy.json';
 import { getReportingPolicy } from './reportingPolicy';
+import { debugMetaIntegration } from './sentryDebugMeta';
 import {
   isExpectedSentryError,
   sanitizeSentryBreadcrumb,
@@ -182,8 +183,12 @@ function initializeJavaScriptReporting() {
         Sentry.dedupeIntegration(),
         Sentry.nativeReleaseIntegration(),
         Sentry.deviceContextIntegration(),
+        // Attributes events to the running OTA group; also copied to the native scope.
+        Sentry.expoContextIntegration(),
         Sentry.sdkInfoIntegration(),
         Sentry.createReactNativeRewriteFrames(),
+        // Must follow the rewrite so the canonical bundle filename is in place.
+        debugMetaIntegration(),
       ],
       beforeSend: (event, hint) =>
         status.active && !isExpectedSentryError(hint.originalException)

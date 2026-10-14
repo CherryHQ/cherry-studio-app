@@ -35,6 +35,10 @@ function setup() {
     list: jest.fn<ReturnType<AgentManagementData['list']>, Parameters<AgentManagementData['list']>>(
       async () => ({ items: [agent], page: 1, total: 1 }),
     ),
+    listSkillBindings: jest.fn<
+      ReturnType<AgentManagementData['listSkillBindings']>,
+      Parameters<AgentManagementData['listSkillBindings']>
+    >(async () => ({ items: [] })),
     update: jest.fn<
       ReturnType<AgentManagementData['update']>,
       Parameters<AgentManagementData['update']>
@@ -82,6 +86,48 @@ describe('Agent management tools', () => {
     expect(data.create).not.toHaveBeenCalled();
   });
 
+  test('reads bindings and passes only requested Skill changes to the guarded update', async () => {
+    const { data, invoke } = setup();
+    const skillId = '00000000-0000-4000-8000-000000000002';
+    data.listSkillBindings.mockResolvedValue({
+      items: [
+        {
+          agentId: agent.id,
+          skillId,
+          isEnabled: false,
+          createdAt: agent.createdAt,
+          updatedAt: agent.updatedAt,
+        },
+      ],
+    });
+    expect((await invoke('agent_get', { agent_id: 'current' })).value).toMatchObject({
+      skills: [{ skillId, isEnabled: false }],
+    });
+    for (const isEnabled of [true, false, null]) {
+      const skills = [{ skillId, isEnabled }];
+      await invoke('agent_update', {
+        agent_id: 'current',
+        expected_updated_at: agent.updatedAt,
+        changes: { skills },
+      });
+      expect(data.update).toHaveBeenLastCalledWith(
+        agent.id,
+        {},
+        {
+          expectedUpdatedAt: agent.updatedAt,
+          skillUpdates: skills,
+        },
+      );
+    }
+    const empty = await invoke('agent_update', {
+      agent_id: 'current',
+      expected_updated_at: agent.updatedAt,
+      changes: { skills: [] },
+    });
+    expect(empty).toHaveProperty('failure');
+    expect(data.update).toHaveBeenCalledTimes(3);
+  });
+
   test('reports conflicts as failed tool calls so the model must read before retrying', async () => {
     const { data, invoke } = setup();
     data.update.mockRejectedValueOnce(DataApiErrorFactory.conflict('Changed'));
@@ -120,6 +166,7 @@ describe('Agent management tools', () => {
     data.getById.mockResolvedValueOnce({ ...agent, avatarUri: '/private/avatar' });
     expect((await invoke('agent_get', { agent_id: 'current' })).value).toEqual({
       agent: AgentToolRecordSchema.parse(agent),
+      skills: [],
     });
     expect((await invoke('agent_list', { search: 'Writer', page: 2 })).value).toEqual({
       items: [

@@ -165,6 +165,8 @@ export type RuntimeDurableTurn = {
   timing?: RuntimeTurnTiming;
   /** A history fork cut at the user input has no synthesized assistant placeholder. */
   hasAssistant: boolean;
+  /** A provider attempt failed and the engine is retrying it automatically. */
+  isRetrying?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {

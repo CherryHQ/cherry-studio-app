@@ -1,15 +1,15 @@
 # Agent Skills
 
-Standard mode exposes Skill discovery, installation and reading only when the selected model
+Standard mode exposes Skill discovery, installation, authoring and reading only when the selected model
 supports native function calling, matching Desktop's tool-catalog gate. Models without function
 calling still support ordinary chat and supported direct images; explicit Skill selections and
-installation requests fail before discovery. Minimal mode does not use Skills. **Add in chat**
-is offered only while the current Agent is in standard mode; without a current Agent it uses a
+management requests fail before discovery. Minimal mode does not use Skills. **Add in chat** and **Create Skill**
+are offered only while the current Agent is in standard mode; without a current Agent it uses a
 standard-mode Agent, and opens the Agent list with setup guidance when none exists.
 
 Cherry Mobile owns Skill discovery, package validation, installation, Agent bindings and per-turn
 instruction context. Plugins and Skills have separate sidebar entries and pages.
-The Skills library provides installed search, details, update and uninstall.
+The Skills library provides installed search, details, creation, update and uninstall.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
@@ -161,6 +161,52 @@ reason codes so the Agent can explain them. The built-in reference expresses ins
 `install_skill` approval automatic; otherwise it asks. Agent approval policy still applies, and
 search-only requests do not authorize installation. An existing installation from the same origin
 is reused for a new Agent without republishing its files, preserving local adaptations.
+
+## Conversation Authoring
+
+**Sidebar → Skills → More → Create Skill** opens a fresh, unsent draft with a removable
+`create-skill` reference. Its structured `create` action uses the same submit, history and retry
+contract as discovery. Natural requests to create a reusable Skill or extract a workflow from the
+available conversation also use the app-owned authoring instructions. There is no creator package
+to install or bind. The workflow uses relevant current context, replaces one-off facts with inputs,
+and asks only for consequential missing requirements.
+
+`create_skill` accepts a name, trigger description and complete Markdown body, plus relevant tags,
+tool names, additional environment requirements and a user-specified license. The app writes
+standard YAML frontmatter: `name`, `description`, `compatibility`, optional `allowed-tools` and
+`license`, and string-valued `metadata.author`, `metadata.version` (`1.0` on creation), and optional
+`metadata.tags`. The configured user name supplies the author; an unset name is not fabricated.
+The full compatibility field stays within 500 characters, including its app-owned statement that
+the Skill targets Cherry Studio App in standard mode with a tool-capable model. Version and tags
+are also projected into the existing library record. There is no separate preview, save-option
+sheet, editor or trial flow. The ordinary Agent tool approval policy applies.
+
+The authoring prompt derives its built-in tool inventory from the executable turn snapshot and
+uses the offered descriptions and schemas for arguments and behavior. Code Mode uses its offered
+model-facing name, not the internal `run_js` capability name. For MCP/plugin workflows the model
+uses existing discovery to inspect tool definitions and records required services in compatibility.
+It selects only tools needed by the workflow for `allowed-tools`, and writes concrete steps,
+inputs, result handling, output requirements and checks into the body. Saving validates structure,
+not the correctness or execution of model-authored steps. It creates one `SKILL.md`; references to
+uncreated support files, fabricated tools and desktop execution assumptions are not part of the
+creation contract. The format follows the [Agent Skills specification](https://agentskills.io/specification).
+
+Loading includes the package's environment requirements and declared tool names with its body.
+The Agent can then call those tools through its normal execution path when they are available;
+`allowed-tools` never enables a disabled capability or bypasses approval. Missing configuration is
+reported as a prerequisite rather than solved by widening the Skill's authority.
+
+Generated packages use the existing user-library storage category (`marketplace`) with
+`sourceUrl: null`; no new source classification or UI badge is introduced. Their creator is part
+of `SKILL.md`. Publication precedes the record transaction, and normal library notifications make
+the saved Skill visible. Duplicate names are rejected without overwriting. A retry after a lost
+success response therefore cannot create a second package with the same name. Details offer
+upstream updates only for packages with a source URL.
+
+Creation never writes Agent bindings or activates the generated instructions. When the user asks
+to add a Skill to an Agent, `agent_get` exposes its current bindings and `agent_update` can enable,
+disable or remove the requested bindings. Unmentioned bindings remain intact. The normal global
+and per-Agent eligibility rules still apply; saving or binding does not add tools or permissions.
 
 ## Local Adaptation
 

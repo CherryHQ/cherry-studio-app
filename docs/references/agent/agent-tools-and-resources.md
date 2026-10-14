@@ -654,11 +654,16 @@ but cannot start chatting. The model derives instructions from the conversation 
 `ask_user_question` for material missing requirements.
 
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+bindings (`skillId` and `isEnabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
 writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
-latest definition. Changes to the active Agent apply to future turns only.
+latest definition. `changes.skills` applies only the listed bindings: `isEnabled: true` binds and
+enables, `false` binds and disables, and `null` removes a binding. Unlisted bindings are preserved;
+this does not change the Skill library's global enablement. Definition edits and requested binding
+changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
+apply to future turns only.
 
 Create/update publish committed Data API cache invalidations, including when a turn has no visible
 chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is

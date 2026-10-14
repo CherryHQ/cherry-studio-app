@@ -29,6 +29,7 @@ import { usePluginCatalog, usePluginConnections } from '@/frontend/hooks/plugin'
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
@@ -77,8 +78,7 @@ export function ChatInput({
   const latestImageResult = useAgentChatImageResult(sessionId, imageResult);
   const { agent } = useAgentApiById(agentId);
   const mode = agent?.mode ?? DEFAULT_AGENT_MODE;
-  const findSkills =
-    mode === 'standard' && readSkillMentions(draft).skillAction === 'find-and-install';
+  const skillAction = mode === 'standard' ? readSkillMentions(draft).skillAction : undefined;
   const { updateAgent } = useAgentMutations();
   const modelPickerData = useModelPickerData({ modelType: 'all' });
   const providerSetupReturnTo = sessionId
@@ -138,7 +138,7 @@ export function ChatInput({
       {mode === 'standard' &&
       selectedModelItem &&
       isImageGenerationModel(selectedModelItem.model) &&
-      !findSkills ? (
+      !skillAction ? (
         <PaintingInput
           canSend={canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
@@ -151,7 +151,7 @@ export function ChatInput({
         <TextChatInput
           mode={mode}
           agentId={agentId}
-          findSkills={findSkills}
+          skillAction={skillAction}
           controls={controls}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           providerSetupReturnTo={providerSetupReturnTo}
@@ -169,7 +169,7 @@ export function ChatInput({
 function TextChatInput({
   mode,
   agentId,
-  findSkills,
+  skillAction,
   controls,
   dismissKeyboardOnSend,
   providerSetupReturnTo,
@@ -180,7 +180,7 @@ function TextChatInput({
   selectModel,
 }: Omit<ChatInputProps, 'sessionId'> & {
   mode: AgentMode;
-  findSkills: boolean;
+  skillAction?: SkillAction;
   providerSetupReturnTo: string;
   reasoningEfforts: ReturnType<typeof useChatInputReasoningEfforts>;
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
@@ -344,7 +344,11 @@ function TextChatInput({
                   </View>
                   <ChatInputSurface
                     streaming={isBusy}
-                    placeholder={findSkills ? t('skills.find.hint') : undefined}
+                    placeholder={
+                      skillAction
+                        ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
+                        : undefined
+                    }
                     onStop={() => void cancel()}
                     fieldStyle={isPickerVisible ? compactInputStyle : undefined}
                     leadingAction={

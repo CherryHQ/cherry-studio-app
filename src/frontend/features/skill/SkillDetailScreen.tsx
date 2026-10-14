@@ -110,13 +110,13 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
             disabled: isBusy,
             icon: EllipsisIcon,
             items: [
-              {
-                id: 'skill-update',
-                label: t('skills.detail.checkUpdates'),
-                onPress: () => void checkForUpdates(),
-              },
               ...(skill.sourceUrl
                 ? [
+                    {
+                      id: 'skill-update',
+                      label: t('skills.detail.checkUpdates'),
+                      onPress: () => void checkForUpdates(),
+                    },
                     {
                       id: 'skill-source',
                       label: t('skills.detail.openSource'),

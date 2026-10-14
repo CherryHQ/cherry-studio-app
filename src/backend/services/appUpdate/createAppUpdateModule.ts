@@ -1,3 +1,4 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import { Linking, Platform } from 'react-native';
 import { z } from 'zod';
@@ -6,6 +7,7 @@ import { createHttpClient, HttpError } from '@/backend/services/http';
 import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
 import { compareReleaseVersions, parseReleaseVersion } from './releaseVersion';
+import { runningUpdate } from './runningUpdate';
 
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
 const ReleaseSchema = z.object({
@@ -19,7 +21,12 @@ const ReleaseSchema = z.object({
 
 export function createAppUpdateModule(): AppUpdateModule {
   const isEnabled =
-    Platform.OS === 'android' && Constants.expoConfig?.extra?.isApkUpdatesEnabled === true;
+    Platform.OS === 'android' &&
+    // The embedded channel cannot be changed by an OTA manifest. Unconfigured release builds fail closed.
+    (runningUpdate.channel === 'production-apk' ||
+      (__DEV__ &&
+        runningUpdate.channel === null &&
+        Constants.expoConfig?.extra?.isApkUpdatesEnabled === true));
   const gitcode = createHttpClient({
     baseUrl: 'https://api.gitcode.com/api/v5',
     headers: { Accept: 'application/json' },
@@ -30,7 +37,7 @@ export function createAppUpdateModule(): AppUpdateModule {
     isEnabled,
     async check(signal): Promise<AppUpdateResult> {
       if (!isEnabled) return { status: 'unavailable', reason: 'unsupported' };
-      const currentVersion = Constants.expoConfig?.version?.trim();
+      const currentVersion = Application.nativeApplicationVersion?.trim();
       if (!currentVersion) return { status: 'unavailable', reason: 'unknownVersion' };
       // Reject an unparseable installed version before the request; never infer "up to date" from bad data.
       parseReleaseVersion(currentVersion);

@@ -1,6 +1,7 @@
 import type {
   Skill,
   SkillCandidate,
+  CreateSkillInput,
   SkillInvocation,
   SkillLimitations,
   SkillManifestEntry,
@@ -114,6 +115,8 @@ export interface SkillsModule {
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;
   /** Re-acquire the accepted source; a rejected revision leaves the installation intact. */
   update(skillId: string, signal?: AbortSignal): Promise<SkillUpdateResult>;
+  /** Saves one generated SKILL.md in the library, without binding it to any Agent. */
+  create(input: CreateSkillInput, signal?: AbortSignal): Promise<Skill>;
   previewAdaptation(input: AdaptSkillInput, signal?: AbortSignal): Promise<SkillAdaptationPreview>;
   /** Caller must obtain consent for these exact changes before saving. */
   adapt(input: AdaptSkillInput, signal?: AbortSignal): Promise<Skill>;

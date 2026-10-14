@@ -29,7 +29,7 @@ import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
-import { createFindSkillsMention } from './components/ChatInput/utils/skillMentions';
+import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
@@ -100,10 +100,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     !isPreview && Boolean(agent.agent) && (isSessionAvailable || isNewAgentAvailable);
   // Entry actions seed the rich draft; only the user's send creates a message.
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
-  const initialDraft =
-    composerHandoff?.skillAction === 'find-and-install'
-      ? `${createFindSkillsMention(t('skills.find.name'))} ${composerHandoff.draft}`
-      : composerHandoff?.draft;
+  const initialDraft = composerHandoff?.skillAction
+    ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
+    : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
