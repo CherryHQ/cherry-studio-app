@@ -45,11 +45,11 @@ it('requests upstream-supported mobile Skills for the default catalog', async ()
   });
 });
 
-it('preserves mobile filtering with search, sorting and pagination', async () => {
+it('preserves mobile filtering with search, popularity order and pagination', async () => {
   mockRequest.mockResolvedValueOnce(page([listing], 0, true));
   mockRequest.mockResolvedValueOnce(page([listing], 20));
   const client = createCherryinSkillClient();
-  const query = { query: ' notes ', sort: 'newest' as const };
+  const query = { query: ' notes ' };
   const first = await client.list(query);
   expect(first.nextOffset).toBe(20);
   const result = await client.list({ ...query, offset: first.nextOffset! });
@@ -57,7 +57,7 @@ it('preserves mobile filtering with search, sorting and pagination', async () =>
   expect(mockRequest.mock.calls[1]![0]).toMatchObject({
     query: {
       q: 'notes',
-      sort: 'newest',
+      sort: 'popular',
       mobileSupport: 'supported',
       offset: 20,
       limit: 20,

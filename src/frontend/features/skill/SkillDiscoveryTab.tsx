@@ -1,13 +1,12 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import {
   Button,
   ContentState,
   OptionPickerBottomSheet,
   Section,
 } from '@cherrystudio/ui/components';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,13 +15,12 @@ import { Text, View } from 'react-native';
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useBackendModule } from '@/frontend/data';
 import { formatCompactNumber } from '@/frontend/utils/compactNumber';
-import type { CherryinSkill, CherryinSkillQuery } from '@/shared/contracts/skillMarketplace';
-import type { SkillListing } from '@/shared/contracts/skills';
+import type { CherryinSkill } from '@/shared/contracts/skillMarketplace';
+import type { SkillListing, SkillsModule } from '@/shared/contracts/skills';
 import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { marketplaceText, type SkillDiscoverySource } from './discover/skillDiscovery';
 import { SkillSourceFilter } from './discover/SkillSourceFilter';
-import { SkillPage } from './SkillPage';
 
 type DiscoveryResult = {
   name: string;
@@ -41,20 +39,17 @@ const fromListing = (listing: SkillListing): DiscoveryResult => ({
   installs: listing.installs,
 });
 
-const sortLabelKeys = {
-  popular: 'skills.discover.popular',
-  newest: 'skills.marketplace.newest',
-  name_asc: 'skills.marketplace.nameSort',
-} as const;
+const popularSkillsQuery = (skills: SkillsModule) =>
+  queryOptions({
+    queryKey: ['skills', 'popular'],
+    queryFn: ({ signal }) => skills.popular(signal),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
 
-export function SkillDiscoveryScreen() {
-  const { t, i18n } = useTranslation();
+function useDiscoveryResult() {
+  const { i18n } = useTranslation();
   const router = useRouter();
-  const { open: openSearch } = useAppSearch();
-  const skills = useBackendModule('skills');
-  const [source, setSource] = useState<SkillDiscoverySource>('cherryin');
-  const [sort, setSort] = useState<NonNullable<CherryinSkillQuery['sort']>>('popular');
-  const [picker, setPicker] = useState<'source' | 'sort' | null>(null);
   const language = i18n.resolvedLanguage ?? i18n.language;
 
   const fromCherryin = (item: CherryinSkill): DiscoveryResult => ({
@@ -65,31 +60,6 @@ export function SkillDiscoveryScreen() {
     installs: item.downloads,
     collection: item.tags.includes('collection'),
   });
-  const catalog = useInfiniteQuery({
-    queryKey: ['skills', 'cherryin', sort],
-    initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) => skills.listCherryin({ sort, offset: pageParam }, signal),
-    getNextPageParam: (page) => page.nextOffset ?? undefined,
-    enabled: source === 'cherryin',
-    retry: false,
-    staleTime: 5 * 60_000,
-  });
-  const popular = useQuery({
-    queryKey: ['skills', 'popular'],
-    queryFn: ({ signal }) => skills.popular(signal),
-    enabled: source === 'skills-sh',
-    retry: false,
-    staleTime: 5 * 60_000,
-  });
-  const results =
-    source === 'cherryin'
-      ? [
-          ...new Map<string, CherryinSkill>(
-            catalog.data?.pages.flatMap((page) => page.items).map((item) => [item.id, item]),
-          ).values(),
-        ].map(fromCherryin)
-      : (popular.data ?? []).map(fromListing);
-  const current = source === 'cherryin' ? catalog : popular;
 
   function open(result: DiscoveryResult) {
     if (result.marketplaceId) {
@@ -109,7 +79,17 @@ export function SkillDiscoveryScreen() {
     }
   }
 
-  function search() {
+  return { fromCherryin, open };
+}
+
+export function useSkillDiscoverySearch(source: SkillDiscoverySource) {
+  const { t } = useTranslation();
+  const { open: openSearch } = useAppSearch();
+  const queryClient = useQueryClient();
+  const skills = useBackendModule('skills');
+  const { fromCherryin, open } = useDiscoveryResult();
+
+  return () =>
     void openSearch<DiscoveryResult, SkillDiscoverySource>({
       debounceMs: 300,
       filter: { component: SkillSourceFilter, context: undefined, initialValue: source },
@@ -131,14 +111,11 @@ export function SkillDiscoveryScreen() {
             groups: [
               {
                 key: 'popular',
-                items: (popular.data ?? (await skills.popular(signal))).map(fromListing),
+                items: (await queryClient.fetchQuery(popularSkillsQuery(skills))).map(fromListing),
               },
             ],
           };
-        const page = await skills.listCherryin(
-          { sort, offset: cursor ? Number(cursor) : 0 },
-          signal,
-        );
+        const page = await skills.listCherryin({ offset: cursor ? Number(cursor) : 0 }, signal);
         return {
           groups: [{ key: 'cherryin', items: page.items.map(fromCherryin) }],
           nextCursor: page.nextOffset === null ? undefined : String(page.nextOffset),
@@ -183,7 +160,7 @@ export function SkillDiscoveryScreen() {
             ],
           };
         const page = await skills.listCherryin(
-          { query, sort, offset: cursor ? Number(cursor) : 0 },
+          { query, offset: cursor ? Number(cursor) : 0 },
           signal,
         );
         return {
@@ -194,39 +171,51 @@ export function SkillDiscoveryScreen() {
     }).then((outcome) => {
       if (outcome.type === 'selected') open(outcome.item);
     });
-  }
+}
+
+export function SkillDiscoveryTab({
+  source,
+  onSourceChange,
+}: {
+  source: SkillDiscoverySource;
+  onSourceChange: (source: SkillDiscoverySource) => void;
+}) {
+  const { t } = useTranslation();
+  const skills = useBackendModule('skills');
+  const { fromCherryin, open } = useDiscoveryResult();
+  const [isSourcePickerOpen, setSourcePickerOpen] = useState(false);
+
+  const catalog = useInfiniteQuery({
+    queryKey: ['skills', 'cherryin'],
+    initialPageParam: 0,
+    queryFn: ({ pageParam, signal }) => skills.listCherryin({ offset: pageParam }, signal),
+    getNextPageParam: (page) => page.nextOffset ?? undefined,
+    enabled: source === 'cherryin',
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const popular = useQuery({ ...popularSkillsQuery(skills), enabled: source === 'skills-sh' });
+  const results =
+    source === 'cherryin'
+      ? [
+          ...new Map<string, CherryinSkill>(
+            catalog.data?.pages.flatMap((page) => page.items).map((item) => [item.id, item]),
+          ).values(),
+        ].map(fromCherryin)
+      : (popular.data ?? []).map(fromListing);
+  const current = source === 'cherryin' ? catalog : popular;
 
   return (
-    <SkillPage
-      navigation="discover"
-      headerProps={{
-        title: t('skills.title'),
-        rightActions: [
-          {
-            accessibilityLabel: t('skills.discover.search'),
-            icon: SearchIcon,
-            key: 'skill-discovery-search',
-            onPress: search,
-            type: 'icon',
-          },
-        ],
-      }}
-    >
-      <View className="flex-row items-center justify-between gap-2">
+    <>
+      <View className="flex-row">
         <Button
           accessibilityLabel={t('skills.marketplace.source')}
-          onPress={() => setPicker('source')}
+          onPress={() => setSourcePickerOpen(true)}
           variant="ghost"
         >
           <Button.Label>{source === 'cherryin' ? 'CherryIN' : 'skills.sh'}</Button.Label>
           <ChevronDownIcon className="size-4 text-muted-foreground" />
         </Button>
-        {source === 'cherryin' ? (
-          <Button onPress={() => setPicker('sort')} variant="ghost">
-            <Button.Label>{t(sortLabelKeys[sort])}</Button.Label>
-            <ChevronDownIcon className="size-4 text-muted-foreground" />
-          </Button>
-        ) : null}
       </View>
       {current.isLoading ? (
         <ContentState.Loading title={t('skills.loading')} />
@@ -272,7 +261,7 @@ export function SkillDiscoveryScreen() {
           title={t('skills.discover.empty')}
           primaryAction={
             source === 'cherryin'
-              ? { children: 'skills.sh', onPress: () => setSource('skills-sh') }
+              ? { children: 'skills.sh', onPress: () => onSourceChange('skills-sh') }
               : undefined
           }
         />
@@ -287,9 +276,9 @@ export function SkillDiscoveryScreen() {
         </Button>
       ) : null}
       <OptionPickerBottomSheet
-        open={picker === 'source'}
-        onClose={() => setPicker(null)}
-        onValueChange={setSource}
+        open={isSourcePickerOpen}
+        onClose={() => setSourcePickerOpen(false)}
+        onValueChange={onSourceChange}
         options={[
           { value: 'cherryin', label: 'CherryIN' },
           { value: 'skills-sh', label: 'skills.sh' },
@@ -298,18 +287,6 @@ export function SkillDiscoveryScreen() {
         size="compact"
         title={t('skills.marketplace.source')}
       />
-      <OptionPickerBottomSheet
-        open={picker === 'sort'}
-        onClose={() => setPicker(null)}
-        onValueChange={setSort}
-        options={(Object.keys(sortLabelKeys) as (keyof typeof sortLabelKeys)[]).map((value) => ({
-          value,
-          label: t(sortLabelKeys[value]),
-        }))}
-        selectedValue={sort}
-        size="compact"
-        title={t('skills.marketplace.sort')}
-      />
-    </SkillPage>
+    </>
   );
 }

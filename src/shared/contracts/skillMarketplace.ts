@@ -20,7 +20,6 @@ export type CherryinSkillLibraryDetail = CherryinSkillDetail & {
 };
 export type CherryinSkillQuery = {
   query?: string;
-  sort?: 'popular' | 'newest' | 'name_asc';
   offset?: number;
 };
 export type CherryinSkillPage = {
