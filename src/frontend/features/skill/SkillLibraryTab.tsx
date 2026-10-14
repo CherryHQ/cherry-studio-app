@@ -1,37 +1,27 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { useSkillTabNavigation } from './SkillNavigation';
-import { SkillPage } from './SkillPage';
-import { useStartSkillChat } from './useStartSkillChat';
-
-export function SkillListScreen() {
-  const { t } = useTranslation();
+function useOpenSkill() {
   const router = useRouter();
-  const navigateTab = useSkillTabNavigation();
-  const { isAvailable: canAddInChat, isOpening, open } = useStartSkillChat();
+  return (skill: SkillListItem) =>
+    router.push({ pathname: '/skills/[skillId]', params: { skillId: skill.id } });
+}
+
+export function useSkillLibrarySearch() {
+  const { t } = useTranslation();
   const { open: openSearch } = useAppSearch();
   const apiClient = useApiClient();
-  const { error, isLoading, refetch, skills, hasNext, loadNext, isLoadingMore } = useSkillsApi({
-    scope: 'library',
-  });
+  const openSkill = useOpenSkill();
 
-  function openSkill(skill: SkillListItem) {
-    router.push({ pathname: '/skills/[skillId]', params: { skillId: skill.id } });
-  }
-
-  function searchSkills() {
+  return () =>
     void openSearch<SkillListItem>({
       emptyText: t('skills.searchEmpty'),
       getAccessibilityLabel: (skill) => skill.name,
@@ -62,53 +52,17 @@ export function SkillListScreen() {
     }).then((outcome) => {
       if (outcome.type === 'selected') openSkill(outcome.item);
     });
-  }
+}
 
-  const headerProps: RouteHeaderProps = {
-    title: t('skills.title'),
-    rightActions: [
-      {
-        accessibilityLabel: t('skills.search'),
-        icon: SearchIcon,
-        key: 'skill-search',
-        onPress: searchSkills,
-        testID: 'skills-search',
-        type: 'icon',
-      },
-      {
-        accessibilityLabel: t('common.more'),
-        disabled: isOpening,
-        icon: EllipsisIcon,
-        key: 'skill-actions',
-        testID: 'skills-more',
-        type: 'menu',
-        items: [
-          ...(canAddInChat
-            ? [
-                {
-                  id: 'skill-create',
-                  label: t('skills.create.name'),
-                  onPress: () => void open('create'),
-                },
-                {
-                  id: 'skill-add-chat',
-                  label: t('skills.addInChat'),
-                  onPress: () => void open(),
-                },
-              ]
-            : []),
-          {
-            id: 'skill-discover',
-            label: t('skills.discover.title'),
-            onPress: () => navigateTab('discover'),
-          },
-        ],
-      },
-    ],
-  };
+export function SkillLibraryTab({ onDiscover }: { onDiscover: () => void }) {
+  const { t } = useTranslation();
+  const openSkill = useOpenSkill();
+  const { error, isLoading, refetch, skills, hasNext, loadNext, isLoadingMore } = useSkillsApi({
+    scope: 'library',
+  });
 
   return (
-    <SkillPage headerProps={headerProps} navigation="library" testID="skills-list">
+    <>
       {isLoading ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading title={t('skills.loading')} />
@@ -124,10 +78,7 @@ export function SkillListScreen() {
         <View className="flex-1 justify-center">
           <ContentState.Empty
             title={t('skills.installedEmpty')}
-            primaryAction={{
-              children: t('skills.discover.title'),
-              onPress: () => navigateTab('discover'),
-            }}
+            primaryAction={{ children: t('skills.discover.title'), onPress: onDiscover }}
           />
         </View>
       ) : (
@@ -142,7 +93,7 @@ export function SkillListScreen() {
           {t('skills.loadMore')}
         </Button>
       ) : null}
-    </SkillPage>
+    </>
   );
 }
 

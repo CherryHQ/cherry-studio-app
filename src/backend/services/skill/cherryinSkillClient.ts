@@ -45,7 +45,7 @@ export function createCherryinSkillClient() {
         query: {
           q: input.query?.trim() || undefined,
           mobileSupport: 'supported',
-          sort: input.sort ?? 'popular',
+          sort: 'popular',
           offset,
           limit: 20,
         },
