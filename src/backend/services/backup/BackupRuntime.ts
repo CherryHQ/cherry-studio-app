@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -123,7 +123,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           formatVersion: 1,
           id: randomUUID(),
           createdAt: new Date().toISOString(),
-          appVersion: Constants.expoConfig?.version ?? 'unknown',
+          appVersion: Application.nativeApplicationVersion ?? 'unknown',
           platform: Platform.OS,
           ...version,
           entries,

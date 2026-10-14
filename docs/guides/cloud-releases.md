@@ -32,7 +32,14 @@ production bundle identifier in `app.json`. Set up its submission API key with
 `eas credentials --platform ios` before the first unattended submission. See [local build configuration](./local-builds.md)
 for app identities and production environment requirements.
 
-All three workflows pin EAS CLI to `24.4.2`; update them together when upgrading it.
+All three workflows and `scripts/publishUpdate.ts` (used by the OTA Update workflow) pin EAS CLI to
+`24.4.2`; update them together when upgrading it.
+
+Native releases now embed the EAS Update client. Channels are platform-specific:
+`production-apk` for public APKs, `production-google-play` for Play, and `production-ios` for iOS.
+These workflows build native packages only. JavaScript-only fixes between tags are published by the
+manual [OTA Update](../../.github/workflows/ota-update.yml) workflow; see
+[Application Updates](./app-updates.md#publishing).
 
 ## Artifact Names
 

@@ -16,6 +16,15 @@ func sanitizeCrashBreadcrumb(_ crumb: Breadcrumb) -> Breadcrumb? {
   return clean
 }
 
+// Copied from the JS scope by expoContextIntegration. Matches the JS event filter.
+private let otaUpdateFields = [
+  "is_enabled", "is_embedded_launch", "is_emergency_launch", "update_id", "channel", "runtime_version",
+]
+
+private func matches(_ value: String, _ pattern: String) -> Bool {
+  value.range(of: pattern, options: .regularExpression) != nil
+}
+
 private func cleanStack(_ stack: SentryStacktrace?) {
   for frame in stack?.frames ?? [] {
     frame.vars = nil
@@ -53,12 +62,26 @@ func sanitizeCrashEvent(_ event: Event) -> Event? {
   for (key, fields) in [
     "os": ["name", "version", "build", "kernel_version"],
     "device": ["family", "model", "model_id", "arch", "simulator", "memory_size"],
+    "ota_updates": otaUpdateFields,
   ] {
     if let original = event.context?[key] {
       context[key] = original.filter { fields.contains($0.key) }
     }
   }
   event.context = context
+  if let updates = context["ota_updates"] {
+    if let id = updates["update_id"] as? String,
+      matches(id, "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$") {
+      event.tags?["ota.update_id"] = id
+    }
+    if let channel = updates["channel"] as? String,
+      matches(channel, "^[a-zA-Z_$][a-zA-Z0-9_$.-]{0,99}$") {
+      event.tags?["ota.channel"] = channel
+    }
+    if let embedded = updates["is_embedded_launch"] as? Bool {
+      event.tags?["ota.embedded"] = String(embedded)
+    }
+  }
 
   for exception in event.exceptions ?? [] {
     // RCTFatal embeds the JS message in its NSException name, not only in the reason.

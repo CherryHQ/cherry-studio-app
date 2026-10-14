@@ -46,7 +46,8 @@ Use a newly built native client after changing this module; Metro/OTA cannot ins
 
 Both native filters delete free-form fields from the structured event in place: messages, request
 data, user identity, extras, arbitrary breadcrumbs, modules, fingerprints, source context, locals, thread
-names, and every context except selected OS/device fields. Exception types, stack symbols,
+names, and every context except selected OS/device fields and the OTA update identity (`ota_updates`
+without its free-form emergency reason), which also becomes `ota.*` tags as in the JS filter. Exception types, stack symbols,
 release/environment, and debug images stay as the SDK produced them. Fatal exceptions emitted by
 React Native's native bridge remain as a fallback when JS delivery is missing. iOS exception names
 that embed the JS message are replaced with `ReactNativeFatal`.
