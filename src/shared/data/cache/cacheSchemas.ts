@@ -84,6 +84,8 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  /** Message reading aids scoped by source, Session, message and target language. */
+  'chat.translations': Record<string, { contentHash: string; content: string }>;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
@@ -96,6 +98,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'chat.translations': {},
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},

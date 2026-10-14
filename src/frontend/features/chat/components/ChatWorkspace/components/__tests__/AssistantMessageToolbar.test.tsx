@@ -49,6 +49,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
+jest.mock('../../translation/MessageTranslation', () => ({
+  MessageTranslationAction: () => null,
+}));
+
 jest.mock('../../utils/copyAssistantMessageText', () => {
   const actual = jest.requireActual('../../utils/copyAssistantMessageText');
   return { ...actual, copyAssistantMessageText: jest.fn(actual.copyAssistantMessageText) };

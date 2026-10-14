@@ -36,6 +36,13 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('../translation/MessageTranslationProvider', () => ({
+  MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
+  useMessageTranslation: () => undefined,
+}));
+
+jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => null }));
+
 jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
   useIsScreenReaderEnabled: () => false,
 }));
