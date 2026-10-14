@@ -149,3 +149,84 @@ describe('Sentry event privacy', () => {
     ).not.toHaveProperty('error.code');
   });
 });
+
+describe('Sentry OTA attribution', () => {
+  const updateId = 'ab671690-420a-4f74-b664-a9619263183b';
+
+  function bundleError(filename: string): Event {
+    return {
+      release: 'com.cherryai.app@0.2.0+42',
+      dist: '42',
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            value: 'PRIVATE_CHAT_CONTENT',
+            stacktrace: { frames: [{ filename, lineno: 1, colno: 12345 }] },
+          },
+        ],
+      },
+    };
+  }
+
+  test('keeps the OTA group fields and tags while preserving the native release', () => {
+    const event = bundleError('app:///index.android.bundle');
+    event.contexts = {
+      ota_updates: {
+        is_enabled: true,
+        is_embedded_launch: false,
+        is_emergency_launch: false,
+        update_id: updateId,
+        channel: 'production-apk',
+        runtime_version: 'b0d6a7c1e2',
+        emergency_launch_reason: 'PRIVATE_/data/user/0/path',
+        created_at: '2026-10-14T00:00:00.000Z',
+      },
+    };
+    const sanitized = sanitizeSentryEvent(event);
+    expect(sanitized?.contexts?.ota_updates).toEqual({
+      is_enabled: true,
+      is_embedded_launch: false,
+      is_emergency_launch: false,
+      update_id: updateId,
+      channel: 'production-apk',
+      runtime_version: 'b0d6a7c1e2',
+    });
+    expect(sanitized?.tags).toMatchObject({
+      'ota.update_id': updateId,
+      'ota.channel': 'production-apk',
+      'ota.embedded': 'false',
+    });
+    expect(sanitized).toMatchObject({ release: event.release, dist: event.dist });
+    expect(JSON.stringify(sanitized)).not.toContain('PRIVATE_');
+  });
+
+  test('omits OTA tags with unexpected values', () => {
+    const event = bundleError('app:///main.jsbundle');
+    event.contexts = { ota_updates: { update_id: 'PRIVATE id', channel: 'PRIVATE channel' } };
+    expect(sanitizeSentryEvent(event)?.tags).not.toHaveProperty('ota.update_id');
+    expect(sanitizeSentryEvent(event)?.tags).not.toHaveProperty('ota.channel');
+  });
+
+  test.each(['app:///index.android.bundle', 'app:///main.jsbundle'])(
+    'keeps source-map images and the matching frame filename: %s',
+    (filename) => {
+      const event = bundleError(filename);
+      const nativeImage = {
+        type: 'macho' as const,
+        debug_id: '1a4cb2bb-ae99-4af1-ac49-4af95c4b62ae',
+        image_addr: '0x100000000',
+        image_size: 4096,
+      };
+      const sourceMap = { type: 'sourcemap' as const, debug_id: updateId, code_file: filename };
+      event.debug_meta = { images: [nativeImage, sourceMap] };
+      const sanitized = sanitizeSentryEvent(event);
+      expect(sanitized?.debug_meta?.images).toEqual([nativeImage, sourceMap]);
+      expect(sanitized?.exception?.values?.[0]?.stacktrace?.frames?.[0]).toMatchObject({
+        filename,
+        lineno: 1,
+        colno: 12345,
+      });
+    },
+  );
+});

@@ -16,6 +16,13 @@ internal fun sanitizeCrashBreadcrumb(crumb: Breadcrumb): Breadcrumb? {
   }
 }
 
+// Copied from the JS scope by expoContextIntegration. Matches the JS event filter.
+private val otaUpdateFields = setOf(
+  "is_enabled", "is_embedded_launch", "is_emergency_launch", "update_id", "channel", "runtime_version",
+)
+private val updateIdPattern = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+private val channelPattern = Regex("^[a-zA-Z_$][a-zA-Z0-9_$.-]{0,99}$")
+
 private fun cleanStack(stack: SentryStackTrace?) {
   stack?.frames?.forEach { frame ->
     frame.vars = null
@@ -64,9 +71,17 @@ internal fun sanitizeCrashEvent(event: SentryEvent): SentryEvent? {
       isSimulator = original.isSimulator
     }
   }
+  val updates = (event.contexts.get("ota_updates") as? Map<*, *>)
+    ?.filterKeys { it is String && it in otaUpdateFields }
   event.contexts.keys().toList().forEach { event.contexts.remove(it) }
   os?.let { event.contexts.setOperatingSystem(it) }
   device?.let { event.contexts.setDevice(it) }
+  updates?.let { event.contexts.put("ota_updates", it) }
+  (updates?.get("update_id") as? String)?.takeIf { updateIdPattern.matches(it) }
+    ?.let { event.setTag("ota.update_id", it) }
+  (updates?.get("channel") as? String)?.takeIf { channelPattern.matches(it) }
+    ?.let { event.setTag("ota.channel", it) }
+  (updates?.get("is_embedded_launch") as? Boolean)?.let { event.setTag("ota.embedded", it.toString()) }
 
   event.exceptions?.forEach { exception ->
     exception.value = "Error details omitted for privacy"

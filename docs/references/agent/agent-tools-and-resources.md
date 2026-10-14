@@ -177,7 +177,8 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities register as upstream `deferred` tools. Upstream `tool_search` ranks names,
+MCP capabilities and low-frequency Skill installation/adaptation tools register as upstream `deferred`
+tools. Upstream `tool_search` ranks names,
 descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
@@ -194,6 +195,15 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
 `callers` independently controls model and script access. Application callbacks provide structured
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
+Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
+carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
+rest through the discovery helpers.
+The initial prompt retains plugin capability overviews, critical constraints, and shared operation
+rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
+connection's tools are refused before approval until its guide is present. Loading ends its tool
+round; dependent actions are planned only after the next request supplies the complete instructions.
+Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
+their full routing descriptions retain the existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and

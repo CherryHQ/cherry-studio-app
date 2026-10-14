@@ -78,8 +78,12 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
           })
           .flatMap(([serverId, { pluginId, names }]) => {
             const guide = plugins.get(pluginId)!.guide!;
-            const content = guide.sections
-              .filter((section) => section.requiredTools.every((name) => names.has(name)))
+            const sections = guide.sections.filter((section) =>
+              section.requiredTools.every((name) => names.has(name)),
+            );
+            const content = sections.map((section) => section.content.trim()).join('\n\n');
+            const overview = sections
+              .filter((section) => section.alwaysInclude)
               .map((section) => section.content.trim())
               .join('\n\n');
             if (!content) return [];
@@ -89,6 +93,7 @@ export function createPluginRegistry(definitions: readonly PluginDefinition[]) {
                 serverId,
                 revision: guide.revision,
                 content,
+                ...(overview ? { overview } : {}),
               }),
             ];
           }),

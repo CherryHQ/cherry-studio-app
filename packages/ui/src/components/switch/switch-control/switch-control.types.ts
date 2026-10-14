@@ -1,6 +1,6 @@
 import type { AccessibilityProps, StyleProp, ViewProps, ViewStyle } from 'react-native';
 
-import type { SwitchSize } from './switch.types';
+import type { SwitchSize } from '../switch.types';
 
 export type SwitchControlProps = {
   accessibilityElementsHidden?: boolean;

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-import { SliderControl } from './slider-control';
+import { SliderControl } from './slider-control/slider-control';
 import type { SliderProps } from './slider.types';
 
 const flexibleControlStyle = { flex: 1, minWidth: 0 } as const;

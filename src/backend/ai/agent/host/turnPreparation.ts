@@ -57,6 +57,12 @@ import {
   createSkillManagementTools,
   createSkillCreationTool,
 } from '../tools/skill';
+import {
+  createLoadWorkflowTool,
+  getPluginWorkflows,
+  requireLoadedWorkflows,
+  restoreLoadedWorkflows,
+} from '../tools/workflowTool';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
@@ -102,7 +108,11 @@ export type TurnPreparationDependencies = {
   skillWorkflow?: SkillsModule;
   store: Pick<
     AgentSessionStore,
-    'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext' | 'loadSkillActivations'
+    | 'getLatestContextCheckpoint'
+    | 'getSession'
+    | 'loadRuntimeTurnContext'
+    | 'loadSkillActivations'
+    | 'loadWorkflowLoads'
   >;
   systemCapabilities: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
@@ -133,6 +143,8 @@ export type TurnPlan = {
   tools: readonly RuntimeTool[];
   webTools?: RuntimeWebTools;
   pluginGuides: readonly PluginGuideSnapshot[];
+  /** Plugin guides loaded earlier in the Session whose connection is still in this turn. */
+  workflowInstructions: readonly { key: string; text: string }[];
   /** The Skills usable in this turn, with their pinned revisions. */
   skills: TurnSkillPlan;
   toolDiscoveryWarnings: readonly string[];
@@ -428,6 +440,7 @@ export async function prepareResolvedTurn(
       sessionTitle: session.name,
       tools: [],
       pluginGuides: [],
+      workflowInstructions: [],
       skills: EMPTY_TURN_SKILL_PLAN,
       toolDiscoveryWarnings: [],
       userParts: parts.map(
@@ -583,10 +596,19 @@ export async function prepareResolvedTurn(
       ];
     }
   }
-  const tools = applyAgentToolApprovalMode(
+  let tools = applyAgentToolApprovalMode(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
+  let workflowInstructions: TurnPlan['workflowInstructions'] = [];
+  if (pluginGuides.length > 0) {
+    const workflows = getPluginWorkflows(pluginGuides);
+    tools = [...requireLoadedWorkflows(tools, workflows), createLoadWorkflowTool(workflows)];
+    workflowInstructions = restoreLoadedWorkflows(
+      workflows,
+      await raceAbort(dependencies.store.loadWorkflowLoads(parsed.sessionId), signal),
+    );
+  }
   const webTools =
     runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
@@ -674,6 +696,7 @@ export async function prepareResolvedTurn(
     toolDiscoveryWarnings,
     userParts,
     pluginGuides,
+    workflowInstructions,
     skills,
     usageAttribution,
   };

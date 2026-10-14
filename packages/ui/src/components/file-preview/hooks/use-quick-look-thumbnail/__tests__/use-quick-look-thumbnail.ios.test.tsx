@@ -1,11 +1,11 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { FilePreviewFile, FilePreviewOperation } from '../file-preview.types';
-import { useQuickLookThumbnail } from '../hooks/use-quick-look-thumbnail.ios';
+import type { FilePreviewFile, FilePreviewOperation } from '../../../file-preview.types';
+import { useQuickLookThumbnail } from '../use-quick-look-thumbnail.ios';
 
 const mockGetQuickLookThumbnail = jest.fn();
 
-jest.mock('../utils/quick-look-thumbnail-cache.ios', () => ({
+jest.mock('../../../utils/quick-look-thumbnail-cache/quick-look-thumbnail-cache.ios', () => ({
   getQuickLookThumbnail: (input: unknown) => mockGetQuickLookThumbnail(input),
   quickLookThumbnailCacheKey: () => 'thumbnail-key',
 }));

@@ -110,6 +110,12 @@ export function MessageUsageDetail({
               <Text className="text-muted-foreground text-xs">{unavailable}</Text>
             ) : null}
           </View>
+          <MessageUsageRow
+            label={t('chat.messageUsage.requests')}
+            value={
+              detail.requestCount === undefined ? unavailable : numbers.format(detail.requestCount)
+            }
+          />
           <View className="gap-4">
             {hasTokenDistribution ? (
               <View
