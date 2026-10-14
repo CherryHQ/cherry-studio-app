@@ -123,7 +123,7 @@ export function toRuntimeHistory(
                               {
                                 fileEntryId: block.fileEntryId,
                                 data: image.uri.slice(prefix.length),
-                                mimeType: block.mimeType,
+                                mediaType: block.mimeType,
                               },
                             ]
                           : [];

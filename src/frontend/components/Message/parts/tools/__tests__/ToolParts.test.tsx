@@ -558,16 +558,19 @@ describe('tool message detail sheets', () => {
     expect(findText(errorText)).toHaveLength(0);
   });
 
-  it('renders tool_search matches as separate rows', async () => {
+  it.each([
+    { loaded: ['open_url', 'screenshot'] },
+    {
+      matchedNamespaces: [
+        { namespace: 'browser', tools: [{ name: 'open_url' }, { name: 'screenshot' }] },
+      ],
+    },
+  ])('renders current and historical tool_search matches as separate rows: %j', async (output) => {
     await render(
       <MetaToolPartRenderer
         part={makeToolPart({
           input: { namespace: 'browser', query: 'open url' },
-          output: {
-            matchedNamespaces: [
-              { namespace: 'browser', tools: [{ name: 'open_url' }, { name: 'screenshot' }] },
-            ],
-          },
+          output,
           toolName: 'tool_search',
         })}
       />,
@@ -582,6 +585,7 @@ describe('tool message detail sheets', () => {
         .findAllByType(View)
         .filter((node) => node.props.testID === 'meta-tool-search-result'),
     ).toHaveLength(2);
+    expect(findText('chat.metaToolSearch.noResults')).toHaveLength(0);
   });
 
   it('uses code typography for a structured tool_invoke response', async () => {

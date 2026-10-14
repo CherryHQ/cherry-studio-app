@@ -1,11 +1,14 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const dingtalkGuide = {
-  revision: 4,
+  revision: 5,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# DingTalk / 钉钉
+Tools may cover documents, tables, messages, mail, approvals, meeting records, reports, attendance,
+tasks and calendars; availability follows the current catalog and grants.
 Services depend on organization access and user grants. An organization-only account label does not
 prove employee identity. Additional authorization belongs on the plugin connection page, never in
 chat; the user must explicitly retry afterward. Inspect business result fields as well as isError.`,

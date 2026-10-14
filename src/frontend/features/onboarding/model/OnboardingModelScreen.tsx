@@ -48,7 +48,7 @@ function OnboardingModelSelection({
   const data = useOnboardingModels(providerId);
   const { complete, phase, cancel } = useCompleteOnboarding();
   const isBusy = phase !== 'idle';
-  const openProviderSetup = () => router.push('/onboarding/provider');
+  const openProviderSetup = () => router.replace('/onboarding/provider');
   const syncAgain = () =>
     router.replace({ pathname: '/onboarding/provider-sync', params: { connectionId } });
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -69,17 +69,10 @@ function OnboardingModelSelection({
 
   const editConnection = () => {
     cancel();
-    if (connectionId && selectedModel) {
-      router.push({
-        pathname: '/onboarding/connection',
-        params: { providerId: selectedModel.providerId },
-      });
-    } else if (router.canGoBack()) router.back();
-    else
-      router.replace({
-        pathname: '/onboarding/connection',
-        params: { providerId },
-      });
+    router.replace({
+      pathname: '/onboarding/connection',
+      params: { providerId: selectedModel?.providerId ?? providerId, connectionId },
+    });
   };
   const start = () => {
     if (!canStart || isBusy || data.isLoading || data.error) return;
@@ -105,6 +98,7 @@ function OnboardingModelSelection({
   return (
     <>
       <RouteHeader
+        onBack={() => router.replace('/onboarding')}
         title={t('onboarding.model.title')}
         rightActions={
           (providerId || (connectionId && selectedModel)) &&

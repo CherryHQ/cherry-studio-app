@@ -31,13 +31,36 @@ describe('Runtime output projection', () => {
         ...output,
         modelValue: 'Replace the model result.',
         instructions: { key: 'remote', text: 'Replace the system prompt.' },
-        modelImages: [{ ...output.modelContent[0], data: 'aGVsbG8=' }],
+        modelImages: [
+          {
+            fileEntryId: output.modelContent[0]!.fileEntryId,
+            mediaType: 'image/png',
+            data: 'aGVsbG8=',
+          },
+        ],
       },
     });
     if (part.type !== 'dynamic-tool') throw new Error('Expected a tool part');
     expect(part.output).toEqual(output);
   });
 
+  test('serializes running child status through the Agent protocol without a terminal result', () => {
+    const progress = {
+      calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],
+    };
+    const part = toAgentMessagePart({
+      id: 'call',
+      type: 'tool',
+      toolCallId: 'call',
+      providerName: 'codemode',
+      displayName: 'JavaScript',
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      state: 'running',
+      progress,
+    });
+    expect(JSON.parse(JSON.stringify(part))).toMatchObject({ state: 'running', progress });
+    expect(part).not.toHaveProperty('output');
+  });
   test('projects recoverable native lookup failures as persisted data-error parts', () => {
     const error = {
       code: 'web_lookup_failed',

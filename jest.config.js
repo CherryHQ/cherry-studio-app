@@ -64,6 +64,8 @@ module.exports = {
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
     '^@earendil-works/pi-durable/storage/(.*)$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/storage/$1/index.js',
+    '^@earendil-works/pi-codemode/(.*)$':
+      '<rootDir>/node_modules/@earendil-works/pi-codemode/dist/$1.js',
     '^@earendil-works/pi-telemetry$': piDependencyFile('pi-telemetry', 'index.js'),
     '^@earendil-works/pi-ai$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/index.js',
     '^@earendil-works/pi-ai/models$': '<rootDir>/node_modules/@earendil-works/pi-ai/dist/models.js',

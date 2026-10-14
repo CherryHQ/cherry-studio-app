@@ -571,6 +571,47 @@ describe.each([
     expect(transcript[0]?.turnId).not.toBe(transcript[2]?.turnId);
   });
 
+  test('loads successful workflow receipts across settled turns in order', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const receipt = (id: string, workflowId: string, status = 'ok') => ({
+      id,
+      type: 'dynamic-tool' as const,
+      toolCallId: id,
+      toolRef: { source: 'builtin' as const, capabilityId: 'load_workflow' },
+      toolName: 'load_workflow',
+      title: 'Load workflow',
+      state: 'output-available' as const,
+      input: { workflow_id: workflowId },
+      output: { value: { status, workflow_id: workflowId }, artifacts: [] },
+    });
+    for (const parts of [
+      [receipt('a', 'plugin:github'), receipt('b', 'plugin:feishu', 'error')],
+      [receipt('c', 'plugin:notion'), receipt('d', 'plugin:github')],
+    ]) {
+      const reserved = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId: session.id,
+        userParts: [{ id: 'input-0', type: 'text', text: 'Continue.', state: 'done' }],
+      });
+      await store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'success',
+        parts,
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+    }
+
+    expect(await store.loadWorkflowLoads(session.id)).toEqual([
+      'plugin:github',
+      'plugin:notion',
+      'plugin:github',
+    ]);
+  });
+
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {
     const source = await harness.createEmptySession({ agentId, name: 'Maths' });
     for (const text of ['one', 'two', 'three']) {

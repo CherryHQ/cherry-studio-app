@@ -209,6 +209,73 @@ These are future implementation acceptance criteria, not evidence that checks ha
 status as capabilities land. No preparation command or machine-local setting is installed by this
 design.
 
+## Agent Device Workflow
+
+Use `agent-device >= 0.21.27` and read `agent-device help workflow` before planning commands.
+Use `help batch`, `help scripting`, or `help debugging` for the relevant operation. The installed
+CLI owns command syntax; keep the upstream skill unchanged. The CLI is a machine tool, not an app
+dependency.
+
+Give each workspace its own daemon state directory:
+
+```bash
+export AGENT_DEVICE_STATE_DIR="$PWD/.context/agent-device"
+```
+
+Repeat this export in every new shell, or pass `--state-dir "$PWD/.context/agent-device"` on every
+command. This isolates daemon versions and session logs while host-global device claims still
+prevent two workspaces from controlling the same device. `session list` only lists sessions in the
+selected state directory. If an upgrade reports `daemon_registration_unproven` in the old global
+directory, use the workspace directory; do not delete its locks or stop another workspace's daemon.
+
+### Observe, Act, And Verify
+
+- Read `snapshot -i` when discovering controls. Prefer stable `testID`/id selectors for known
+  controls; use refs only from the current snapshot. After a mutation, a known selector can resolve
+  the next control without another full snapshot.
+- Use `press`/`fill`/`back --settle` when the next step needs the settled UI. Reuse the returned diff
+  as the next observation. `--settle` is best-effort: an unsettled result needs a bounded wait or
+  another snapshot. It does not prove that a delayed request succeeded.
+- Wait for the exact expected text or selector for asynchronous results. Avoid fixed sleeps and
+  repeated snapshot polling. Do not add `wait stable` after a settled diff already shows the result.
+- Answer narrow questions with `get`, `is`, or `find`; use scoped snapshots for a particular
+  container. Scope/depth and compact text reduce output, not a guaranteed native capture cost.
+- Take screenshots for visual assertions or failure evidence, not after every ordinary tap. Use
+  JSON/raw output only when structured diagnostics or geometry are required.
+
+### Known Sequences
+
+Write a short scenario-specific batch under `.context/agent-self-testing/`, using the structured
+`command`/`input` shape from `help batch`:
+
+```bash
+agent-device batch --steps-file .context/agent-self-testing/steps.json --on-error stop --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios
+```
+
+Batch only steps whose targets and intermediate states are already known. Use stable selectors,
+not refs carried across mutations, and stop at the first error. Split at an unknown screen,
+ambiguous target, permission prompt, or external result that needs a new decision. Verify the exact
+scenario outcome with a targeted wait/read; successful dispatch or a quiet screen is insufficient.
+Keep commands serial within one session, including batch steps.
+
+For a known destination, prefer its targeted wait over settling every mutation. A selector wait's
+input uses `kind: "selector"` with `selector`; a strict absence wait uses `kind: "absent"` with
+`absent`, not `selector`. A round trip should verify the destination before returning, then verify
+its disappearance and the original screen's landmark so retained navigation views cannot falsely
+satisfy the final check.
+
+For a repeated route, `help scripting` describes recording an open-to-destination `.ad` script
+with a selector guard and publishing it with `session save-script` without closing the session.
+Store local scripts and evidence under `.context/agent-self-testing/`; parameterize credentials as
+the scripting guide requires. In 0.21, batch files use `--steps-file` and structured `input`;
+performance commands use explicit `perf frames`, `perf memory`, `perf cpu`, or `perf trace`, not
+the retired `perf metrics` form.
+
+When measuring an authorized run, separate device boot, first tool setup, app/Metro readiness,
+warm reads/actions, and total scenario time. Session `events` supplies bounded command durations.
+Measure app frames/memory separately when the symptom is rendering jank; command latency alone
+does not establish app performance. Record failures and retries as well as successful timings.
+
 ## Workspace Resources
 
 Conductor assigns each workspace ten ports: `$CONDUCTOR_PORT` through
@@ -228,21 +295,22 @@ The resident device keeps its app data and configuration across tasks and is nev
 does not exist, report it; create it only with device-creation authorization. Never use a physical
 device or the user's primary installation.
 
-The device is occupied while another `agent-device` session is bound to it. Before using the
-resident device, inspect sessions:
+Before using the resident device, inspect host-global ownership and this workspace's sessions:
 
 ```bash
+agent-device device status --platform ios --udid "<resident UDID>" --json
 agent-device session list --json
 ```
 
-- No other session on it: use it with session `$CONDUCTOR_WORKSPACE_NAME` (iOS) or
-  `${CONDUCTOR_WORKSPACE_NAME}-android`.
-- Another session on it with no activity for 60 minutes: close that session with
-  `agent-device close --session <name>` and take over. Activity is the modification time of the
-  `requests` directory under that session's `sessionStateDir`.
-- Another session active within 60 minutes: do not wait and do not take it over. Create this
+On Android use `device status --platform android --serial "<resident serial>"`.
+
+- No other owner: use session `$CONDUCTOR_WORKSPACE_NAME` (iOS) or
+  `${CONDUCTOR_WORKSPACE_NAME}-android`. Reuse an already-bound workspace session.
+- A provably stale claim is reclaimed automatically by `open`. Do not infer that a live owner is
+  abandoned from a request-directory timestamp or close another workspace's session.
+- A live or uncertain owner blocks reuse. With device-creation/startup authorization, create this
   workspace's temporary device with the resident device's device type (iOS) or system image
-  (Android, `image.sysdir.1` in the resident AVD's `config.ini`):
+  (Android, `image.sysdir.1` in the resident AVD's `config.ini`); otherwise report the occupied device:
 
 ```bash
 xcrun simctl create "Cherry Temp ($CONDUCTOR_WORKSPACE_NAME)" "<resident device type>"
@@ -275,24 +343,31 @@ physical-device builds are not interchangeable.
 
 ## Metro And App Session
 
-Keep Metro running across ordinary iterations and preserve its cache. `dev:clear` is for explicit
-cache troubleshooting, not the default self-test startup. Conductor's Run script starts Metro on the
-base port; otherwise start it yourself:
+Keep the selected device, workspace session, and Metro running across consecutive authorized
+scenarios and ordinary code/test iterations in the same active task. Reuse the installed client and
+preserve Metro's cache. `dev:clear` is for explicit cache troubleshooting, not default startup.
+Conductor's Run script starts Metro on the base port; otherwise start it yourself:
 
 ```bash
 pnpm dev --port "$CONDUCTOR_PORT"
 ```
 
-Relaunch the development client on the selected device, then open the exact development-client URL
-printed by this workspace's Metro process. Do not derive or reuse a URL from another workspace.
+On the first attachment, open the development client on the selected device, then the exact
+development-client URL printed by this workspace's Metro process. Do not derive or reuse a URL from
+another workspace. A normal `open` foregrounds an already-running app without restarting it:
 
 ```bash
-agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>" --relaunch
+agent-device open com.cherryai.cherrystudio-app.dev --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>"
 agent-device open "$DEV_CLIENT_URL" --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "<selected device>"
 ```
 
 On Android use `com.cherryai.cherrystudio_app.dev`, session `${CONDUCTOR_WORKSPACE_NAME}-android` and
 `--serial` of the running emulator. Keep commands for one session serial.
+
+Once the correct app and workspace URL are bound, continue in that session without repeating
+`open`, installation, or Metro startup. Use `--relaunch` after import/install, for native/startup
+scenarios, before persistence acceptance after Fast Refresh, or to investigate a stale runtime;
+ordinary navigation and JS-only visual iterations do not require it.
 
 The resident device's data may have been left by another workspace's branch, including a newer
 database schema. Uninstall and reinstall the development client only when the scenario needs empty
@@ -309,8 +384,9 @@ connection reports no active transaction. The same app process may then hold two
 Before changing UI or persistence code in response to this failure:
 
 1. Capture the app log and confirm that the failure occurs at `BEGIN IMMEDIATE`.
-2. Fully relaunch the app with the `agent-device open ... --relaunch` command
-   above. A Metro reload is not a valid control experiment for this failure.
+2. Fully relaunch the app with `agent-device open com.cherryai.cherrystudio-app.dev --relaunch`
+   and the same workspace/device flags (use the Android app id on Android), then reconnect to the
+   workspace URL if needed. A Metro reload is not a valid control experiment for this failure.
 3. Repeat the exact save action. If it succeeds, classify the failure as a stale development
    runtime connection and remove any temporary diagnostic logging before committing.
 4. If it still fails after the full relaunch, investigate transaction ownership and competing
@@ -323,7 +399,8 @@ real transaction-lifecycle bug.
 
 ## Cleanup
 
-After self-testing, and before waiting for review or at PR creation:
+Clean up when active task work ends, before waiting for review, or at PR creation. Do not clean up
+between scenarios or code/test iterations while actively continuing the same authorized task:
 
 1. Close the session and shut the device down:
    `agent-device close --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --shutdown` (Android:

@@ -3,7 +3,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { buildAgentsSkillsGitignore, buildClaudeSkillsGitignore } from '../skills-common';
+import { buildAgentsSkillsGitignore, buildClaudeSkillsGitignore } from '../skillsCommon';
 
 const temporaryRoots: string[] = [];
 const tsxCli = require.resolve('tsx/cli');
@@ -28,7 +28,7 @@ function createFixture(files: Record<string, string> = {}) {
   });
   symlinkSync('../../.agents/skills/example', join(root, '.claude/skills/example'));
   mkdirSync(join(root, 'scripts'));
-  for (const file of ['skills-common.ts', 'skills-check.ts', 'check-doc-links.ts']) {
+  for (const file of ['skillsCommon.ts', 'skillsCheck.ts', 'checkDocLinks.ts']) {
     copyFileSync(join(__dirname, '..', file), join(root, 'scripts', file));
   }
   execFileSync('git', ['init', '--quiet', root]);
@@ -54,13 +54,13 @@ afterAll(() => {
 describe('public skill entry points', () => {
   test('accepts an installed public skill with its generated symlink', () => {
     const root = createFixture();
-    expect(runCheck(root, 'skills-check.ts')).toMatchObject({ status: 0 });
+    expect(runCheck(root, 'skillsCheck.ts')).toMatchObject({ status: 0 });
   });
 
   test('rejects a skill directory whose entry point was removed', () => {
     const root = createFixture();
     rmSync(join(root, '.agents/skills/example/SKILL.md'));
-    expect(runCheck(root, 'skills-check.ts')).toEqual({
+    expect(runCheck(root, 'skillsCheck.ts')).toEqual({
       status: 1,
       output: expect.stringContaining('example/SKILL.md is missing or not a file'),
     });
@@ -68,7 +68,7 @@ describe('public skill entry points', () => {
 
   test('rejects an empty entry point', () => {
     const root = createFixture({ '.agents/skills/example/SKILL.md': ' \n' });
-    expect(runCheck(root, 'skills-check.ts')).toEqual({
+    expect(runCheck(root, 'skillsCheck.ts')).toEqual({
       status: 1,
       output: expect.stringContaining('example/SKILL.md is empty'),
     });
@@ -80,7 +80,7 @@ describe('public skill reference links', () => {
     const root = createFixture({
       '.agents/skills/README.md': '[Required diagnosis](diagnose/SKILL.md)\n',
     });
-    expect(runCheck(root, 'check-doc-links.ts')).toEqual({
+    expect(runCheck(root, 'checkDocLinks.ts')).toEqual({
       status: 1,
       output: expect.stringContaining('.agents/skills/README.md:1'),
     });
@@ -110,7 +110,7 @@ describe('public skill reference links', () => {
       '.agents/skills/public-skills.txt': 'example\nreact-native-best-practices\n',
       [`.agents/skills/react-native-best-practices/references/${file}`]: `[Reference](${target})\n`,
     });
-    const result = runCheck(root, 'check-doc-links.ts');
+    const result = runCheck(root, 'checkDocLinks.ts');
     expect(result.status).toBe(status);
     if (status !== 0) {
       expect(result.output).toContain(
@@ -123,7 +123,7 @@ describe('public skill reference links', () => {
     const root = createFixture({
       '.agents/skills/example/references/workflow.md': '[Required skill](../../missing/SKILL.md)\n',
     });
-    expect(runCheck(root, 'check-doc-links.ts')).toEqual({
+    expect(runCheck(root, 'checkDocLinks.ts')).toEqual({
       status: 1,
       output: expect.stringContaining('.agents/skills/example/references/workflow.md:1'),
     });
@@ -133,7 +133,7 @@ describe('public skill reference links', () => {
     const root = createFixture({
       'docs/guides/workflow.md': '[Required skill](../../.agents/skills/missing/SKILL.md)\n',
     });
-    expect(runCheck(root, 'check-doc-links.ts')).toEqual({
+    expect(runCheck(root, 'checkDocLinks.ts')).toEqual({
       status: 1,
       output: expect.stringContaining('docs/guides/workflow.md:1'),
     });
@@ -144,6 +144,6 @@ describe('public skill reference links', () => {
       '.agents/skills/example/references/workflow.md': '[Entry](../SKILL.md)\n',
       '.agents/skills/personal/SKILL.md': '[Private reference](missing.md)\n',
     });
-    expect(runCheck(root, 'check-doc-links.ts')).toMatchObject({ status: 0 });
+    expect(runCheck(root, 'checkDocLinks.ts')).toMatchObject({ status: 0 });
   });
 });

@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <condition_variable>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -13,6 +15,8 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+
+extern "C" void cherry_js_clock(int enabled, int64_t realtimeUs, int64_t monotonicUs);
 
 #if defined(__APPLE__)
 #include <malloc/malloc.h>
@@ -33,6 +37,7 @@ constexpr size_t kMaxMessageBytes = 4000;
 constexpr size_t kMaxStackBytes = 7u << 20;
 /// Cancels that arrive before their run starts; the oldest are forgotten.
 constexpr size_t kMaxPendingCancels = 64;
+constexpr size_t kBridgeInterruptBudget = 100000;
 
 /// Installs `console` and returns `observe(promise)`,
 /// which reports the settled value through `settle`, plus `describe(error)`.
@@ -120,6 +125,9 @@ constexpr const char *kPrelude = R"JS((function (log, settle) {
 
 struct RunState {
   std::atomic<bool> cancelled{false};
+  std::mutex mutex;
+  std::condition_variable wake;
+  std::deque<std::string> replies;
 };
 
 std::mutex gRunsMutex;
@@ -156,6 +164,9 @@ struct Session {
   const char *interrupt = nullptr;
   Heap heap{limits.memoryBytes};
   Output output{};
+  std::optional<size_t> interruptBudget;
+  const std::function<void(const std::string &)> *post = nullptr;
+  double clockStart = 0;
 
   int64_t elapsedMs() const {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start).count();
@@ -407,8 +418,11 @@ int interruptHandler(JSRuntime *, void *opaque) {
       session.interrupt = "cancelled";
     } else if (session.deadline && Clock::now() >= *session.deadline) {
       session.interrupt = "timeout";
+    } else if (session.interruptBudget && *session.interruptBudget == 0) {
+      session.interrupt = "budget";
     }
   }
+  if (session.interruptBudget && *session.interruptBudget > 0) --*session.interruptBudget;
   return session.interrupt ? 1 : 0;
 }
 
@@ -470,12 +484,15 @@ std::string failure(JSContext *ctx, const Session &session, const char *kind,
 
 /// Runs promise jobs until none remain or the script is stopped. A job that
 /// fails here was interrupted or ran out of memory; the outcome reports both.
-void drainJobs(JSRuntime *rt, const Session &session) {
+void drainJobs(JSRuntime *rt, Session &session) {
+  size_t jobs = 0;
   while (!session.interrupt && JS_IsJobPending(rt)) {
     JSContext *jobContext = nullptr;
     if (JS_ExecutePendingJob(rt, &jobContext) < 0 && jobContext) {
       JS_FreeValue(jobContext, JS_GetException(jobContext));
     }
+    // Short, endlessly chained promises may never reach the engine's opcode poll.
+    if (++jobs % 50 == 0 && interruptHandler(rt, &session)) break;
   }
 }
 
@@ -569,6 +586,112 @@ std::string execute(const std::string &code, Session &session) {
   return outcome(session);
 }
 
+JSValue bridgePost(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  auto &session = sessionOf(ctx);
+  try {
+    if (argc > 0 && JS_IsString(argv[0])) (*session.post)(toUtf8(ctx, argv[0]));
+  } catch (const std::exception &) {
+    session.interrupt = "transport";
+    return JS_ThrowInternalError(ctx, "Native message delivery failed");
+  }
+  return JS_UNDEFINED;
+}
+
+JSValue bridgeClock(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  double now = 0;
+  if (argc == 0 || JS_ToFloat64(ctx, &now, argv[0]) < 0 || !std::isfinite(now) ||
+      std::abs(now) > 8640000000000000.0) {
+    return JS_ThrowRangeError(ctx, "Invalid deterministic clock");
+  }
+  cherry_js_clock(1, static_cast<int64_t>(std::round(now * 1000)),
+                  static_cast<int64_t>(std::round((now - sessionOf(ctx).clockStart) * 1000)));
+  return JS_UNDEFINED;
+}
+
+std::string bridgeFailure(JSContext *ctx, const Session &session) {
+  Value exception(ctx, JS_GetException(ctx));
+  if (session.interrupt) return std::string("Sandbox stopped: ") + session.interrupt;
+  if (session.heap.exceeded) return "The script exceeded its native memory limit.";
+  return truncateUtf8(toUtf8(ctx, exception.get()), kMaxMessageBytes);
+}
+
+std::string executeBridge(const std::string &setup, const std::string &data,
+                          uint32_t seed, Session &session, RunState &state) {
+  struct ClockScope {
+    ~ClockScope() { cherry_js_clock(0, 0, 0); }
+  } clockScope;
+  // QuickJS seeds both its hash table and Math.random from this first clock read.
+  cherry_js_clock(1, static_cast<int64_t>(seed) + 1, 0);
+  std::unique_ptr<JSRuntime, RuntimeDeleter> runtime(JS_NewRuntime2(&kHeapFunctions, &session.heap));
+  if (!runtime) return "Could not start the native sandbox.";
+  JSRuntime *rt = runtime.get();
+  JS_SetMaxStackSize(rt, kMaxStackBytes);
+  JS_SetInterruptHandler(rt, interruptHandler, &session);
+  std::unique_ptr<JSContext, ContextDeleter> context(JS_NewContext(rt));
+  if (!context) return "Could not start the native sandbox context.";
+  JSContext *ctx = context.get();
+  JS_SetContextOpaque(ctx, &session);
+  cherry_js_clock(1, static_cast<int64_t>(std::round(session.clockStart * 1000)), 0);
+
+  Value factory(ctx, JS_Eval(ctx, setup.c_str(), setup.size(), "codemode-bridge.js", JS_EVAL_TYPE_GLOBAL));
+  if (factory.isException()) return bridgeFailure(ctx, session);
+  Value post(ctx, JS_NewCFunction(ctx, bridgePost, "post", 1));
+  Value clock(ctx, JS_NewCFunction(ctx, bridgeClock, "clock", 1));
+  Value input(ctx, JS_NewStringLen(ctx, data.data(), data.size()));
+  // Bump native-1 if bridge/clock behavior changes. The JS driver and upstream prelude
+  // add their source hash; mismatched engines must refuse an unfinished replay.
+  const std::string fingerprint = std::string("quickjs-ng ") + JS_GetVersion() +
+      ", native-1, pointer " + std::to_string(sizeof(void *)) +
+      ", stack " + std::to_string(kMaxStackBytes) +
+      ", heap " + std::to_string(session.limits.memoryBytes) +
+      ", budget " + std::to_string(kBridgeInterruptBudget);
+  Value identity(ctx, JS_NewStringLen(ctx, fingerprint.data(), fingerprint.size()));
+  JSValue args[] = {post.get(), clock.get(), input.get(), identity.get()};
+  Value hooks(ctx, JS_Call(ctx, factory.get(), JS_UNDEFINED, 4, args));
+  if (hooks.isException()) return bridgeFailure(ctx, session);
+  Value onReply(ctx, JS_GetPropertyStr(ctx, hooks.get(), "deliver"));
+  Value drained(ctx, JS_GetPropertyStr(ctx, hooks.get(), "drained"));
+  if (!JS_IsFunction(ctx, onReply.get()) || !JS_IsFunction(ctx, drained.get()))
+    return "The native bridge setup returned invalid hooks.";
+
+  while (!session.interrupt && !state.cancelled) {
+    drainJobs(rt, session);
+    if (session.interrupt) break;
+    Value status(ctx, JS_Call(ctx, drained.get(), hooks.get(), 0, nullptr));
+    if (status.isException()) return bridgeFailure(ctx, session);
+    const auto next = toUtf8(ctx, status.get());
+    if (next == "done") {
+      // Keep the event subscription alive until the host receives `done` and stops
+      // this channel. Expo events and promise resolution use different queues.
+      std::unique_lock<std::mutex> lock(state.mutex);
+      state.wake.wait(lock, [&] { return state.cancelled.load(); });
+      return {};
+    }
+    if (next == "again") continue;
+    if (next != "idle") return "The native bridge returned an invalid drain state.";
+
+    std::string reply;
+    {
+      std::unique_lock<std::mutex> lock(state.mutex);
+      const auto ready = [&] { return state.cancelled || !state.replies.empty(); };
+      if (session.deadline) {
+        if (!state.wake.wait_until(lock, *session.deadline, ready)) {
+          session.interrupt = "timeout";
+          break;
+        }
+      } else state.wake.wait(lock, ready);
+      if (state.cancelled) break;
+      reply = std::move(state.replies.front());
+      state.replies.pop_front();
+    }
+    Value json(ctx, JS_NewStringLen(ctx, reply.data(), reply.size()));
+    JSValue replyArgs[] = {json.get()};
+    Value delivered(ctx, JS_Call(ctx, onReply.get(), hooks.get(), 1, replyArgs));
+    if (delivered.isException()) return bridgeFailure(ctx, session);
+  }
+  return state.cancelled ? "Sandbox stopped: cancelled" : bridgeFailure(ctx, session);
+}
+
 } // namespace
 
 std::string run(const std::string &runId,
@@ -607,7 +730,11 @@ void cancel(const std::string &runId) {
   std::lock_guard<std::mutex> lock(gRunsMutex);
   auto found = gRuns.find(runId);
   if (found != gRuns.end()) {
-    found->second->cancelled = true;
+    {
+      std::lock_guard<std::mutex> stateLock(found->second->mutex);
+      found->second->cancelled = true;
+    }
+    found->second->wake.notify_one();
     return;
   }
   // The run has not registered yet, or has already finished; the latter leaves
@@ -619,6 +746,47 @@ void cancel(const std::string &runId) {
       gPendingCancelOrder.pop_front();
     }
   }
+}
+
+std::string runBridge(const std::string &runId, const std::string &setup,
+                      const std::string &data, double startedAt, uint32_t seed,
+                      const Limits &limits,
+                      const std::function<void(const std::string &)> &post) {
+  auto state = std::make_shared<RunState>();
+  {
+    std::lock_guard<std::mutex> lock(gRunsMutex);
+    gRuns[runId] = state;
+    if (gPendingCancels.erase(runId) > 0) state->cancelled = true;
+  }
+  const auto start = Clock::now();
+  Session session{limits, *state, start};
+  session.interruptBudget = kBridgeInterruptBudget;
+  session.post = &post;
+  session.clockStart = startedAt;
+  if (limits.timeoutMs > 0) session.deadline = start + std::chrono::milliseconds(limits.timeoutMs);
+  std::string error;
+  try {
+    error = executeBridge(setup, data, seed, session, *state);
+  } catch (const std::exception &exception) {
+    error = exception.what();
+  }
+  {
+    std::lock_guard<std::mutex> lock(gRunsMutex);
+    auto found = gRuns.find(runId);
+    if (found != gRuns.end() && found->second == state) gRuns.erase(found);
+  }
+  return error;
+}
+
+void deliver(const std::string &runId, const std::string &message) {
+  std::lock_guard<std::mutex> lock(gRunsMutex);
+  auto found = gRuns.find(runId);
+  if (found == gRuns.end() || found->second->cancelled) return;
+  {
+    std::lock_guard<std::mutex> stateLock(found->second->mutex);
+    found->second->replies.push_back(message);
+  }
+  found->second->wake.notify_one();
 }
 
 } // namespace cherry::jssandbox

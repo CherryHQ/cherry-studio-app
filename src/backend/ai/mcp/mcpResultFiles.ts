@@ -4,7 +4,8 @@ import { mcpModelTextOverflow } from '@/shared/contracts/mcpContent';
 import { fileEntryUrl, type FileEntry } from '@/shared/data/types/file';
 import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
-import type { RuntimeArtifact, RuntimeToolResult } from '../agent/runtime/types';
+import type { RuntimeArtifact } from '../agent/runtime/types';
+import type { McpRetainedImage } from './mcpRuntimeAdapter';
 
 const FULL_TEXT_FILENAME = 'mcp-result.txt';
 
@@ -18,11 +19,11 @@ export async function storeMcpResultFiles(
 ): Promise<{
   value: unknown;
   artifacts: RuntimeArtifact[];
-  images?: RuntimeToolResult['modelImages'];
+  images?: McpRetainedImage[];
   fullTextFileEntryId?: string;
 }> {
   const entries: FileEntry[] = [];
-  const images: NonNullable<RuntimeToolResult['modelImages']> = [];
+  const images: McpRetainedImage[] = [];
   let value = result;
   let fullTextFileEntryId: string | undefined;
   try {
@@ -64,8 +65,7 @@ export async function storeMcpResultFiles(
             signal,
           );
           entries.push(entry);
-          if (item.type === 'image')
-            images.push({ fileEntryId: entry.id, mimeType: mediaType, data });
+          if (item.type === 'image') images.push({ fileEntryId: entry.id, mediaType, data });
           content.push({
             type: 'resource_link',
             uri: fileEntryUrl(entry.id),

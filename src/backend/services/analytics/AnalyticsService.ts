@@ -1,6 +1,6 @@
 import { AnalyticsClient, type TokenUsageData } from '@cherrystudio/analytics-client';
 import { loggerService } from '@logger';
-import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { Platform, type AppStateStatus } from 'react-native';
 
 import { application } from '@/backend/core/application/Application';
@@ -37,7 +37,8 @@ const CONSENT_PREFERENCE_KEYS = {
 } as const;
 
 function appVersion(): string {
-  return Constants.expoConfig?.version?.trim() || '0.0.0';
+  // The installed binary version; an OTA manifest's `expo.version` can differ.
+  return Application.nativeApplicationVersion?.trim() || '0.0.0';
 }
 
 /**

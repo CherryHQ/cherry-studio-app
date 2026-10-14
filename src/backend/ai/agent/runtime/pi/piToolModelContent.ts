@@ -11,26 +11,27 @@ export function piToolModelContent(
   isMcp = false,
   acceptsImages = true,
 ): ToolResultMessage['content'] {
-  if (output.modelContent)
-    return output.modelContent.map((block) => {
-      if (block.type === 'text') return block;
-      const image = output.modelImages?.find(
-        (item) => item.fileEntryId === block.fileEntryId && item.mimeType === block.mimeType,
-      );
-      return image && acceptsImages
-        ? { type: 'image', data: image.data, mimeType: image.mimeType }
-        : { type: 'text', text: `[MCP image attachment: ${block.fileEntryId}]` };
-    });
-  return isMcp
-    ? projectMcpModelContent(output.value).map((block) =>
+  if (!output.modelContent && !isMcp)
+    return [{ type: 'text', text: JSON.stringify(toModelToolResult(output)) }];
+  const content: ToolResultMessage['content'] = output.modelContent
+    ? output.modelContent.map((block) => {
+        if (block.type === 'text') return block;
+        const image = output.modelImages?.find(
+          (item) => item.fileEntryId === block.fileEntryId && item.mediaType === block.mimeType,
+        );
+        return image && acceptsImages
+          ? { type: 'image', data: image.data, mimeType: image.mediaType }
+          : { type: 'text', text: `[MCP image attachment: ${block.fileEntryId}]` };
+      })
+    : projectMcpModelContent(output.value).map((block) =>
         block.type === 'image' && !acceptsImages
-          ? {
-              type: 'text' as const,
-              text: '[MCP image omitted: this model does not accept images]',
-            }
+          ? { type: 'text', text: '[MCP image omitted: this model does not accept images]' }
           : block,
-      )
-    : [{ type: 'text', text: JSON.stringify(toModelToolResult(output)) }];
+      );
+  // Files the importer saved stay reachable by a follow-up call; remote JSON never names them.
+  return output.artifacts.length
+    ? [...content, { type: 'text', text: JSON.stringify({ artifacts: output.artifacts }) }]
+    : content;
 }
 
 export function persistentToolResult(

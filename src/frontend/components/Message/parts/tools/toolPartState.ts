@@ -1,4 +1,4 @@
-import type { AgentToolInputPreview } from '@/shared/contracts/agent';
+import type { AgentToolInputPreview, AgentToolProgress } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 export type ToolMessagePart = Extract<
@@ -9,6 +9,7 @@ export type ToolMessagePart = Extract<
   /** Host-issued Apps linkage from the canonical tool result, never remote result JSON. */
   mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
   mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
+  progress?: AgentToolProgress;
   /** Original failure code retained by the chat's presentation projection. */
   errorCode?: string;
 };

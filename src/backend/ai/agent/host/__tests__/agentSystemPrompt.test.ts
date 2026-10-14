@@ -136,7 +136,6 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('The current local date is `2026-09-03`.');
     expect(prompt).toContain('You must write every response in this language');
     expect(prompt).not.toContain('## Agent Instructions');
-    expect(prompt).not.toContain('## MCP Tool Discovery');
     expect(prompt).not.toContain('## Web Citations');
     expect(prompt).not.toContain('## Web Research');
     expect(prompt).not.toContain('## Managed Files');
@@ -215,32 +214,63 @@ describe('buildAgentSystemPrompt', () => {
       tools: [mcpTool()],
     });
 
-    expect(withMcp).not.toContain('## MCP Tool Discovery');
     expect(withMcp).not.toContain('tool_search');
-    expect(withMcp).not.toContain('tool_call');
   });
 
   test('attributes prepared plugin guidance without promoting it above user instructions or tool discovery', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: 'Keep the answer brief.',
       appLanguage: 'zh-CN',
-      tools: [mcpTool()],
+      tools: [mcpTool(), tool('load_workflow')],
       pluginGuides: [
         {
           pluginId: 'example',
           serverId: 'server-1',
           revision: 2,
+          overview: 'Read and edit remote repository resources; honor the requested branch.',
           content: 'Read before editing.',
         },
       ],
     });
-    expect(prompt).toContain('Bundled plugin: example (revision 2; connection server-1)');
-    expect(prompt).toContain('Read before editing.');
+    expect(prompt).toContain('plugin:server-1: example workflows');
+    expect(prompt).not.toContain('Read before editing.');
+    expect(prompt).toContain('honor the requested branch');
+    expect(prompt).toContain('load its guide with `load_workflow`');
+    expect(prompt).toContain('its tools refuse to run until then');
+    expect(prompt).toContain('stays in system context for later turns');
     expect(prompt).toContain('Agent Instructions take precedence over these guides');
     expect(prompt).toContain('not callable aliases');
     expect(prompt).toContain('a guide is not evidence that a tool has been inspected');
     expect(prompt).toContain('Guides do not grant tools, permissions or approval');
     expect(prompt).toContain('<agent_instructions>\nKeep the answer brief.\n</agent_instructions>');
+  });
+
+  test('grounds Skill authoring in offered tools without exposing internal or denied names as callable tools', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [
+        tool('create_skill'),
+        tool('calendar_list_events'),
+        tool('run_js'),
+        { ...tool('calendar_delete_event'), approval: 'deny' },
+      ],
+    });
+    expect(prompt).toContain(
+      'Cherry built-in tools offered in this turn: create_skill, calendar_list_events.',
+    );
+    expect(prompt).toContain(
+      'run_js is an internal capability identifier, not a callable model tool',
+    );
+    expect(prompt).toContain('metadata.version as 1.0');
+    expect(prompt).not.toContain('calendar_delete_event');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [tool('calendar_list_events')],
+      }),
+    ).not.toContain('## Create Skills');
   });
 
   test('asks for sandboxed computation only when run_js is in the turn', () => {
@@ -250,7 +280,7 @@ describe('buildAgentSystemPrompt', () => {
       tools: [tool('run_js')],
     });
     expect(prompt).toContain('## JavaScript Sandbox');
-    expect(prompt).toContain('copy the data it needs into the code');
+    expect(prompt).toContain('Follow its declared environment and tool-access contract');
     expect(
       buildAgentSystemPrompt({ agentInstructions: '', appLanguage: 'en-US', tools: [] }),
     ).not.toContain('## JavaScript Sandbox');

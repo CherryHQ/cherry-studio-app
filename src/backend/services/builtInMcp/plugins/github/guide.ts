@@ -1,10 +1,11 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const githubGuide = {
-  revision: 3,
+  revision: 4,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# GitHub
 
 For GitHub repository, Issue and Pull Request tasks, derive owner, repository and item number from the

@@ -5,6 +5,8 @@ import {
   type JsonObject,
   type SubmissionRecord,
 } from '@earendil-works/pi-durable';
+import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
+import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
@@ -23,11 +25,15 @@ import type {
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeToolInputPreview,
+  RuntimeToolProgress,
   RuntimeUsage,
 } from '../types';
-import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
+import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
+
+/** The JavaScript capability. Code Mode is its only executor and inherits its approval setting. */
+export const PI_SCRIPT_CAPABILITY_NAME = 'run_js';
 
 const ToolRefSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('builtin'), capabilityId: z.string().min(1) }),
@@ -257,6 +263,10 @@ export function projectPiTurn(options: {
   active?: boolean;
   inherited?: boolean;
   toolStates?: ReadonlyMap<string, 'running' | 'input-available' | 'interrupted'>;
+  nestedTools?: ReadonlyMap<
+    string,
+    { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
+  >;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
   const { record, entries } = options;
@@ -317,25 +327,31 @@ export function projectPiTurn(options: {
       }
       answer = undefined;
       if (block.type === 'thinking') {
-        parts.push({
-          id,
-          type: 'reasoning',
-          text: block.thinking,
-          state: streaming ? 'streaming' : 'done',
-        });
+        const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
+        const previous = parts.at(-1);
+        // Adjacent summaries remain one phase, including across provider retries.
+        // Opaque items stay in model history and keep a growing phase active without an empty row.
+        if (previous?.type === 'reasoning') {
+          if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
+          previous.state = state;
+        } else if (block.thinking.trim()) {
+          parts.push({ id, type: 'reasoning', text: block.thinking, state });
+        }
         return;
       }
-      const binding = stored.tools.find((tool) => tool.providerName === block.name);
+      const binding = stored.tools.find(
+        (tool) =>
+          tool.providerName ===
+          (block.name === CODEMODE_TOOL_NAME ? PI_SCRIPT_CAPABILITY_NAME : block.name),
+      );
       const target =
-        block.name === PI_TOOL_CALL_TOOL_NAME && typeof block.arguments.name === 'string'
+        block.name === 'tool_call' && typeof block.arguments.name === 'string'
           ? stored.tools.find(
               (tool) => tool.ref.source === 'mcp' && tool.providerName === block.arguments.name,
             )
           : binding;
       const args =
-        target && block.name === PI_TOOL_CALL_TOOL_NAME
-          ? (block.arguments.params ?? null)
-          : block.arguments;
+        target && block.name === 'tool_call' ? (block.arguments.params ?? null) : block.arguments;
       // A growing file body streams as a bounded preview instead of its full partial input.
       const inputPreview =
         streaming && target?.inputPreview ? toolInputPreview(target.inputPreview, args) : undefined;
@@ -344,7 +360,9 @@ export function projectPiTurn(options: {
         type: 'tool',
         toolCallId: block.id,
         toolRef: target?.ref ?? { source: 'meta', name: block.name },
-        providerName: target?.providerName ?? block.name,
+        // Code Mode keeps its own name so the transcript tells it from stored run_js results.
+        providerName:
+          block.name === CODEMODE_TOOL_NAME ? block.name : (target?.providerName ?? block.name),
         displayName: target?.displayName ?? block.name,
         state: streaming
           ? 'input-streaming'
@@ -353,6 +371,25 @@ export function projectPiTurn(options: {
       };
       parts.push(part);
       toolsByCall.set(block.id, part);
+      if (options.active && options.nestedTools) {
+        const calls: RuntimeToolProgress['calls'] = [...options.nestedTools].flatMap(
+          ([callId, call]) => {
+            if (call.parentCallId !== block.id) return [];
+            const tool = stored.tools.find((item) => item.providerName === call.name);
+            return [
+              {
+                id: callId,
+                name: call.name,
+                // The client translates built-in names; an MCP alias needs its display name.
+                ...(tool?.ref.source === 'mcp' ? { title: tool.displayName } : {}),
+                args: call.args,
+                status: call.status,
+              },
+            ];
+          },
+        );
+        if (calls.length) part.progress = { calls };
+      }
       if (part.state === 'interrupted')
         part.output = createInterruptedToolResult('The tool ended without a confirmed result.');
     });
@@ -390,6 +427,7 @@ export function projectPiTurn(options: {
         startedAt: message.timestamp - message.durationMs,
         completedAt: message.timestamp,
       });
+    delete part.progress;
     const details = ToolDetailsSchema.safeParse(message.details);
     const meta = MetaDetailsSchema.safeParse(message.details);
     if (details.success)
@@ -405,7 +443,14 @@ export function projectPiTurn(options: {
         : undefined;
     const diagnostics = ToolResultEntry.is(entry) ? entry.data.diagnostics : [];
     const diagnostic = diagnostics.find((item) => item.severity === 'error');
-    const reason = diagnostic?.message ?? 'The tool did not complete.';
+    // An error result without a diagnostic states its reason in its own text, as a failed script
+    // does at the end of its output.
+    const text = message.content
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n');
+    const reason =
+      diagnostic?.message ??
+      (message.isError && text ? createTextPreview(text).text : 'The tool did not complete.');
     if (diagnostic?.code === 'interrupted' || diagnostic?.code === 'aborted') {
       part.state = 'interrupted';
       part.output = createInterruptedToolResult(reason);
@@ -421,14 +466,19 @@ export function projectPiTurn(options: {
       };
       part.state = 'error';
       part.error = failure;
-      part.output = output ?? createErrorToolResult(failure);
+      // A result that failed without the application's failure envelope, such as a failed
+      // script, still carries display details; the error contract admits only the error.
+      part.output = output?.failure ? output : createErrorToolResult(failure);
     } else {
       part.state = 'output-available';
       part.output = output ?? {
-        value: message.content
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join('\n'),
+        value:
+          part.providerName === TOOL_SEARCH_TOOL_NAME && message.details !== undefined
+            ? RuntimeJsonValueSchema.parse(message.details)
+            : message.content
+                .filter((block) => block.type === 'text')
+                .map((block) => block.text)
+                .join('\n'),
         artifacts: [],
       };
     }
@@ -450,6 +500,32 @@ export function projectPiTurn(options: {
     }
   if (options.partial)
     assistant(options.partial, options.partialId ?? `pi:live:${record.id}`, true);
+  // These verified receipts survive parent cancellation and task-document retirement. Keep the
+  // interrupted tool-result contract intact while retaining its confirmed file attachments.
+  const files = new Map(
+    parts.flatMap((part) => (part.type === 'file' ? [[part.ref.fileEntryId, part] as const] : [])),
+  );
+  for (const entry of entries) {
+    if (!PiCodemodeArtifactsEntry.is(entry) || !toolsByCall.has(entry.data.callId)) continue;
+    for (const artifact of entry.data.artifacts) {
+      const existing = files.get(artifact.ref.fileEntryId);
+      if (existing) {
+        existing.name = artifact.name;
+        existing.mediaType = artifact.mediaType;
+      } else {
+        const part = {
+          id: `pi:${entry.id}:artifact:${artifact.ref.fileEntryId}`,
+          type: 'file' as const,
+          ref: artifact.ref,
+          mediaType: artifact.mediaType,
+          name: artifact.name,
+          purpose: 'artifact' as const,
+        };
+        files.set(artifact.ref.fileEntryId, part);
+        parts.push(part);
+      }
+    }
+  }
   const answerVisible =
     record.type === 'input' &&
     record.status === 'done' &&
@@ -488,13 +564,16 @@ export function projectPiTurn(options: {
   // Recovery can read a terminal input whose last tool never produced a result entry. Persist a
   // terminal pair, never a tool that appears to keep running in the Cherry transcript forever.
   if (status !== 'running' && status !== 'queued')
-    for (const part of parts)
-      if (part.type === 'tool' && !part.output) {
+    for (const part of parts) {
+      if (part.type !== 'tool') continue;
+      delete part.progress;
+      if (!part.output) {
         part.state = 'interrupted';
         part.output = createInterruptedToolResult(
           error?.message ?? 'The tool ended without a confirmed result.',
         );
       }
+    }
   return {
     identity: { sessionId: options.sessionId, turnId: stored.turnId, requestId: stored.requestId },
     userMessageId: stored.userMessageId,

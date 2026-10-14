@@ -12,7 +12,11 @@ import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
-import { SkillActivationSchema, SkillTextReferenceSchema } from '@/shared/data/types/skill';
+import {
+  SkillActionSchema,
+  SkillActivationSchema,
+  SkillTextReferenceSchema,
+} from '@/shared/data/types/skill';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -219,6 +223,8 @@ export const AgentTurnViewSchema = z.strictObject({
   ]),
   assistantMessageId: z.string().min(1),
   error: AgentErrorViewSchema.nullable(),
+  /** A provider attempt failed and is being retried; its error is not final. */
+  isRetrying: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });
@@ -279,6 +285,20 @@ export const AgentToolInputPreviewSchema = z.strictObject({
 });
 export type AgentToolInputPreview = z.infer<typeof AgentToolInputPreviewSchema>;
 
+export const AgentToolProgressSchema = z.strictObject({
+  calls: z.array(
+    z.strictObject({
+      id: z.string(),
+      name: z.string(),
+      /** Display name of a tool the app has no translated title for, such as an MCP tool. */
+      title: z.string().optional(),
+      args: z.string().max(1000),
+      status: z.enum(['pending', 'running', 'ok', 'error', 'interrupted']),
+    }),
+  ),
+});
+export type AgentToolProgress = z.infer<typeof AgentToolProgressSchema>;
+
 const AgentToolMessagePartSchema = z
   .strictObject({
     id: z.string().min(1),
@@ -299,6 +319,7 @@ const AgentToolMessagePartSchema = z
     ]),
     input: JsonValueSchema.optional(),
     inputPreview: AgentToolInputPreviewSchema.optional(),
+    progress: AgentToolProgressSchema.optional(),
     output: JsonValueSchema.optional(),
     approvalId: z.string().optional(),
     error: AgentErrorViewSchema.optional(),
@@ -349,7 +370,7 @@ export const AgentMessagePartSchema = z.union([
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
-    skillAction: z.literal('find-and-install').optional(),
+    skillAction: SkillActionSchema.optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({

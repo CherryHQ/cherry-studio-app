@@ -7,7 +7,7 @@ const output = {
   value: { content: [{ type: 'text', text: 'summary' }], _meta: { privateState: 'ui-only' } },
   artifacts: [],
   modelContent: [{ type: 'image' as const, fileEntryId, mimeType: 'image/png' as const }],
-  modelImages: [{ fileEntryId, mimeType: 'image/png', data: 'aGVsbG8=' }],
+  modelImages: [{ fileEntryId, mediaType: 'image/png', data: 'aGVsbG8=' }],
 };
 
 describe('MCP model and persisted result channels', () => {

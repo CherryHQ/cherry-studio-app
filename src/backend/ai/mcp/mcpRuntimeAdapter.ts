@@ -61,6 +61,9 @@ export type McpRuntimeToolSelection = {
   approval: 'ask' | 'deny';
 };
 
+/** An image the importer saved as a managed file, with the bytes for the current request. */
+export type McpRetainedImage = { data: string; mediaType: string; fileEntryId: string };
+
 /** What an invocation reports back while it runs. */
 export type McpInvocationProgress = {
   /** The request is about to leave the device; a later failure no longer proves it did not run. */
@@ -77,7 +80,7 @@ export type McpToolInvocationCapability = {
   ): Promise<{
     value: unknown;
     artifacts: import('../agent/runtime/types').RuntimeArtifact[];
-    images?: NonNullable<RuntimeToolResult['modelImages']>;
+    images?: McpRetainedImage[];
     /** Managed file holding model text that exceeded the model budget. */
     fullTextFileEntryId?: string;
   }>;
@@ -300,7 +303,7 @@ async function executeMcpRuntimeTool(input: {
     const stored: {
       value: unknown;
       artifacts: RuntimeToolResult['artifacts'];
-      images?: RuntimeToolResult['modelImages'];
+      images?: McpRetainedImage[];
       fullTextFileEntryId?: string;
     } = (await input.storeResult?.(remoteResult, call.signal)) ?? {
       value: remoteResult,
@@ -327,7 +330,7 @@ async function executeMcpRuntimeTool(input: {
       ).flatMap((block): NonNullable<RuntimeToolResult['modelContent']> => {
         if (block.type === 'text') return [block];
         const image = stored.images?.find(
-          (item) => item.data === block.data && item.mimeType === block.mimeType,
+          (item) => item.data === block.data && item.mediaType === block.mimeType,
         );
         return image
           ? [{ type: 'image', fileEntryId: image.fileEntryId, mimeType: block.mimeType }]

@@ -1,10 +1,11 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const feishuGuide = {
-  revision: 4,
+  revision: 5,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# Feishu / 飞书
 
 Search Feishu tools by domain: documents, people, Base, tasks or calendar. Only some domains may be

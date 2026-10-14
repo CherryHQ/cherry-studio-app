@@ -5,6 +5,8 @@ export {
   useAgentChatControls,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
+  useAgentChatClient,
+  useAgentSessionState,
 } from './ChatProvider';
 export { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';
 export { useLocalConversation } from './useLocalConversation';

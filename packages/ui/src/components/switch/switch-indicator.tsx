@@ -1,6 +1,6 @@
 import { type StyleProp, View, type ViewStyle } from 'react-native';
 
-import { SwitchControl } from './switch-control';
+import { SwitchControl } from './switch-control/switch-control';
 import type { SwitchSize } from './switch.types';
 
 type SwitchIndicatorProps = {

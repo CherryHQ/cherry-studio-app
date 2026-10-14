@@ -19,8 +19,8 @@ import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAcces
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { Painting } from '@/shared/data/types/painting';
 
-import { PaintingViewerChrome } from './components/PaintingViewerChrome';
-import { PaintingViewerImage } from './components/PaintingViewerImage';
+import { PaintingViewerChrome } from './components/PaintingViewerChrome/PaintingViewerChrome';
+import { PaintingViewerImage } from './components/PaintingViewerImage/PaintingViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {

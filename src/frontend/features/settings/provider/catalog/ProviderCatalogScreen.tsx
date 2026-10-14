@@ -207,14 +207,13 @@ export default function ProviderCatalogScreen({
           returnTo,
         },
       };
-      if (intent === 'chat') router.push(href);
-      else router.replace(href);
+      router.replace(href);
     },
     [intent, returnTo, router],
   );
   const openCustomProvider = useCallback(() => {
     if (intent === 'chat')
-      router.push({ pathname: '/onboarding/connection', params: { returnTo } });
+      router.replace({ pathname: '/onboarding/connection', params: { returnTo } });
     else router.replace({ pathname: '/settings/provider/new', params: { returnTo } });
   }, [intent, returnTo, router]);
   const importMutation = useMutation({
@@ -356,6 +355,7 @@ export default function ProviderCatalogScreen({
   return (
     <>
       <RouteHeader
+        onBack={intent === 'chat' ? () => router.replace('/onboarding') : undefined}
         title={t(
           intent === 'chat' ? 'onboarding.provider.title' : 'settings.provider.catalog.title',
         )}

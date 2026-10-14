@@ -11,6 +11,9 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
+- Device pairing, desktop provider import, and first-use setup replace their entry page and each
+  subsequent step. Completion replaces the current step with its destination; cancellation and
+  retry use explicit replacement targets. Completed steps do not belong in back history.
 - The target priority and cancellation rules between system gestures, scrolling, app-defined pan,
   long press, tap, and text selection are in
   [Interaction And Gesture Arbitration](./interaction-and-gesture-arbitration.md) (`Status: design`).
@@ -72,7 +75,8 @@ Before enabling it, verify:
   Their root headers lead with back; popping returns to the exact chat route that opened them. A cold-start
   deep link with no back history replaces to `/` when that leading action is pressed.
 - Settings is a normal root-stack card with its own nested Stack, not a modal or form sheet. Its
-  root and child screens use back navigation like every other non-chat page flow.
+  management and detail pages use back navigation. Its one-time pairing and import workflows use
+  replacement navigation, including opening desktop chat from device details.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
   provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes

@@ -18,6 +18,9 @@ export const SKILL_INSTRUCTIONS_MAX_CHARACTERS = 24_000;
 export const SKILL_ACTIVE_MAX_CHARACTERS = 48_000;
 export const SKILL_ACTIVE_MAX_ENTRIES = 64;
 
+export const SkillActionSchema = z.enum(['find-and-install', 'create']);
+export type SkillAction = z.infer<typeof SkillActionSchema>;
+
 /** App-issued receipt, never accepted from a model or submit-message input. */
 export const SkillActivationSchema = z.strictObject({
   skillId: SkillIdSchema,
@@ -37,7 +40,7 @@ export const SkillTextReferenceSchema = z.union([
   }),
   z.strictObject({
     type: z.literal('skill-action'),
-    action: z.literal('find-and-install'),
+    action: SkillActionSchema,
     label: z.string().min(1),
     offset: z.number().int().nonnegative(),
   }),
@@ -68,18 +71,75 @@ export function skillContentHashHex(contentHash: string): string {
 }
 
 /**
- * Desktop `agent_global_skill.source` vocabulary. User installations are
- * GitHub-hosted packages (`marketplace`); `builtin` remains readable for legacy data.
+ * Existing persisted source vocabulary. `marketplace` is the user library;
+ * packages created in chat have no upstream URL. `builtin` is legacy backup data.
  */
 export const SkillSourceKindSchema = z.enum(['builtin', 'marketplace']);
 export type SkillSourceKind = z.infer<typeof SkillSourceKindSchema>;
 
-export const SkillSourceRegistrySchema = z.enum(['bundled', 'github']);
+export const CHERRY_SKILL_COMPATIBILITY =
+  'Designed for Cherry Studio App in standard mode with a model that supports tool calling.';
+
+/** Authoring data, never an instruction activation or a grant of tools. */
+export const CreateSkillInputSchema = z.strictObject({
+  name: SkillNameSchema,
+  description: z.string().trim().min(1).max(SKILL_DESCRIPTION_MAX_LENGTH),
+  compatibility: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SKILL_COMPATIBILITY_MAX_LENGTH - CHERRY_SKILL_COMPATIBILITY.length - 1)
+    .optional()
+    .describe(
+      'Additional environment requirements, such as iOS, configured providers or connected plugins. The app adds the Cherry Studio App requirement.',
+    ),
+  allowedTools: z
+    .array(z.string().regex(/^[\w.:-]{1,64}$/))
+    .max(64)
+    .optional()
+    .describe(
+      'Exact model-facing tool names used by the workflow, selected from tools actually offered or discovered in this turn. Omit for a text-only Skill. Never list internal capability aliases or invent tools.',
+    ),
+  tags: z
+    .array(
+      z
+        .string()
+        .trim()
+        .min(1)
+        .max(64)
+        .regex(/^[^\s,]+$/),
+    )
+    .max(16)
+    .optional()
+    .describe(
+      'Concise topic tags, without spaces or commas. Include only tags useful for this Skill.',
+    ),
+  license: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1024)
+    .optional()
+    .describe(
+      'License supplied or explicitly chosen by the user. Omit when unspecified; do not invent a license.',
+    ),
+  instructions: z
+    .string()
+    .trim()
+    .min(1)
+    .max(SKILL_INSTRUCTIONS_MAX_CHARACTERS * 2)
+    .refine((text) => [...text].length <= SKILL_INSTRUCTIONS_MAX_CHARACTERS, {
+      message: 'Skill instructions exceed the character limit.',
+    }),
+});
+export type CreateSkillInput = z.infer<typeof CreateSkillInputSchema>;
+
+export const SkillSourceRegistrySchema = z.enum(['bundled', 'github', 'cherryin']);
 export type SkillSourceRegistry = z.infer<typeof SkillSourceRegistrySchema>;
 
 /**
  * Where a discovered candidate comes from. `locator` is its origin identity
- * (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); an installed
+ * (`bundled:<name>`, `github:<owner>/<repo>/<skill root>`, or a CherryIN package entry); an installed
  * Skill derives the same identity from its source and URL.
  */
 export const SkillSourceSchema = z.strictObject({
@@ -142,7 +202,7 @@ export const SkillSchema = z.strictObject({
   /** Storage directory name, equal to the package name and unique like desktop. */
   folderName: z.string().min(1),
   source: SkillSourceKindSchema,
-  /** URL the package is re-resolved from for updates; null for built-in packages. */
+  /** URL the package is re-resolved from for updates; null when there is no upstream source. */
   sourceUrl: z.string().nullable(),
   author: z.string().nullable(),
   version: z.string().nullable(),

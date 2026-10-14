@@ -38,8 +38,34 @@ export type RuntimeUsageOwner =
   | RuntimeExecutionIdentity
   | { sessionId: string; turnId: null; requestId: null };
 
+/** Isolated script transport supplied by the Host; no platform or engine imports cross this port. */
+export type RuntimeScriptSandbox = {
+  fingerprint: string;
+  startBridge(input: {
+    setup: string;
+    data: string;
+    clock: { startedAt: number; seed: number };
+    memoryBytes: number;
+    /** Aborting cancels the run; `result` settles after native cleanup. */
+    signal: AbortSignal;
+    onMessage(message: string): void;
+  }): Promise<{
+    post(message: string): void;
+    /** Empty on normal termination, otherwise a native error description. */
+    result: Promise<string>;
+  }>;
+};
+
 /** Callbacks are reconstructed for the current process; never serialized with a conversation. */
 export type RuntimeExecutionPorts = {
+  scriptSandbox?: RuntimeScriptSandbox;
+  writeToolOutput?(
+    identity: RuntimeExecutionIdentity,
+    output: { name: string; data: string | Uint8Array },
+    signal: AbortSignal,
+  ): Promise<RuntimeArtifact>;
+  /** The shared storage session closed itself; reopen its working copies before accepting work. */
+  onFailure?(error: RuntimeError): void;
   traceModel?(owner: RuntimeUsageOwner): Promise<TraceSpan | undefined>;
   assertExecutionAllowed(owner: RuntimeUsageOwner, signal: AbortSignal): Promise<void>;
   resolveTool(
@@ -139,16 +165,20 @@ export type RuntimeDurableTurn = {
   timing?: RuntimeTurnTiming;
   /** A history fork cut at the user input has no synthesized assistant placeholder. */
   hasAssistant: boolean;
+  /** A provider attempt failed and the engine is retrying it automatically. */
+  isRetrying?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
+  contextStatus?: 'compacting' | 'compaction-failed' | null;
 };
 
 export type RuntimeConversationEvent =
   | { type: 'snapshot'; snapshot: RuntimeConversationSnapshot }
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
+  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */

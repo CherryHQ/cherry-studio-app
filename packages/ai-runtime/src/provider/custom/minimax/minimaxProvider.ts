@@ -6,7 +6,7 @@ import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
 
-import { MinimaxImageModel } from './minimaxImageModel';
+import { MinimaxImageModel } from './MinimaxImageModel';
 
 export const MINIMAX_PROVIDER_NAME = 'minimax' as const;
 

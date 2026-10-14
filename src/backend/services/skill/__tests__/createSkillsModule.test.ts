@@ -3,9 +3,11 @@ import type {
   SkillInstallRecord,
 } from '@/backend/data/services/AgentGlobalSkillService';
 import type { Skill } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
+import type { SkillPackageFiles } from '../skillPackage';
 import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
@@ -45,6 +47,8 @@ function createFakes() {
   const rows = new Map<string, Skill>();
   const published: string[] = [];
   const staged = new Set<string>();
+  const stageFiles = new Map<string, SkillPackageFiles>();
+  const revisionFiles = new Map<string, SkillPackageFiles>();
   let nextId = 1;
   const toSkill = (record: SkillInstallRecord, id: string, folderName: string): Skill => ({
     ...record,
@@ -92,18 +96,22 @@ function createFakes() {
       [...rows.values()].map((s) => ({ folderName: s.folderName, contentHash: s.contentHash })),
   } as unknown as AgentGlobalSkillService;
   const storage: SkillStorage = {
-    stage: async () => {
+    stage: async (files) => {
       const handle = `stage-${staged.size + 1}`;
       staged.add(handle);
+      stageFiles.set(handle, files);
       return handle;
     },
     discardStaging: (handle) => void staged.delete(handle),
     publish: async (handle, ref) => {
       if (!staged.delete(handle)) throw new Error('missing staging');
       published.push(`${ref.folderName}/${ref.contentHash}`);
+      revisionFiles.set(`${ref.folderName}/${ref.contentHash}`, stageFiles.get(handle)!);
+      stageFiles.delete(handle);
     },
     hasRevision: () => true,
-    readFile: async () => null,
+    readFile: async (ref, path) =>
+      revisionFiles.get(`${ref.folderName}/${ref.contentHash}`)?.get(path) ?? null,
     listFiles: () => [],
     removeSkill: (folderName) =>
       void published.splice(
@@ -131,6 +139,11 @@ const marketplace = {
   popular: async () => [],
   resolveUrl: async () => [],
   search: async () => [],
+  searchSkillsSh: async () => [],
+  listCherryin: async () => ({ items: [], nextOffset: null }),
+  getCherryin: async (): Promise<never> => {
+    throw new Error('unused');
+  },
 };
 
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
@@ -148,6 +161,7 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
         },
       }));
   return createSkillsModule({
+    readAuthor: async () => 'Current user',
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
@@ -176,10 +190,106 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
+  it('preserves a CherryIN installation when an upstream update changes its declared name', async () => {
+    const fakes = createFakes();
+    let name = 'notes';
+    const candidate = (): SkillSourceCandidate => ({
+      candidateId: `cherryin:${name}`,
+      name,
+      description: 'Take notes',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'cherryin',
+        locator: cherryinSkillLocator('notes', 'SKILL.md'),
+        url: cherryinSkillUrl('notes', 'SKILL.md'),
+        revision: name,
+      },
+    });
+    const module = createSkillsModule({
+      ...fakes,
+      readAuthor: async () => 'Current user',
+      marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
+      sources: {
+        bundled: createBundledSkillSource([]),
+        github: {
+          registry: 'github',
+          resolve: async () => {
+            throw new Error('unused');
+          },
+          resolveUrl: async () => {
+            throw new Error('unused');
+          },
+          acquire: async () => {
+            throw new Error('unused');
+          },
+        },
+        cherryin: {
+          registry: 'cherryin',
+          resolve: async () => candidate(),
+          acquire: async () => ({
+            expectedName: name,
+            files: new Map([
+              [
+                'SKILL.md',
+                new TextEncoder().encode(
+                  `---\nname: ${name}\ndescription: Take notes\n---\nWrite notes.`,
+                ),
+              ],
+            ]),
+          }),
+        },
+      },
+      agentExists: async () => true,
+    });
+    const [resolved] = await module.resolve(cherryinSkillUrl('notes'));
+    const installed = await module.install({ candidateId: resolved!.candidateId });
+    name = 'renamed-notes';
+    await expect(module.update(installed.id)).resolves.toMatchObject({
+      outcome: 'rejected',
+      inspection: { issues: [{ code: 'name-mismatch' }] },
+    });
+    expect(await fakes.skills.getById(installed.id)).toEqual(installed);
+    expect(fakes.published).toHaveLength(1);
+  });
+
+  it('saves generated content with the current author and no Agent binding', async () => {
+    const fakes = createFakes();
+    const module = createModule(fakes, []);
+    const changed = jest.fn();
+    module.subscribeChanges(changed);
+    const input = {
+      name: 'my-notes',
+      description: 'When asked for notes',
+      instructions: 'Keep notes concise.',
+      allowedTools: ['write_file'],
+      tags: ['notes'],
+    };
+    const saved = await module.create(input);
+    expect(saved).toMatchObject({
+      source: 'marketplace',
+      sourceUrl: null,
+      name: input.name,
+      author: 'Current user',
+      version: '1.0',
+      tags: ['notes'],
+      profile: { declaredTools: ['write_file'] },
+    });
+    expect(await module.instructionReader.read(saved)).toBe(input.instructions);
+    expect(fakes.bound).toEqual([]);
+    expect(changed).toHaveBeenCalledTimes(1);
+    await expect(module.create(input)).rejects.toMatchObject({ code: 'already-installed' });
+    expect(fakes.rows.size).toBe(1);
+    expect(fakes.bound).toEqual([]);
+    await expect(module.update(saved.id)).rejects.toMatchObject({ code: 'source-invalid' });
+  });
+
   it('refuses to expose system workflows as installable candidates', async () => {
     const fakes = createFakes();
     const bundled = createBundledSkillSource();
     const module = createSkillsModule({
+      readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
       db: fakes.db,
       skills: fakes.skills,
@@ -378,6 +488,7 @@ describe('createSkillsModule', () => {
       },
     };
     const module = createSkillsModule({
+      readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,

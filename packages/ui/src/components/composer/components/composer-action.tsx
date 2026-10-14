@@ -1,7 +1,7 @@
 import { Pressable } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
-import { SurfaceFrame } from '../../surface/surface-frame';
+import { SurfaceFrame } from '../../surface/surface-frame/surface-frame';
 import type { ComposerActionProps } from '../composer.types';
 import { actionHitSlop, actionStyle, composerActionSize } from '../utils/composer-layout';
 

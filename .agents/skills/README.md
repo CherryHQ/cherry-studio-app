@@ -24,6 +24,10 @@ without claiming completion.
   invocation. Outside that dependency, `diagnose` remains explicit opt-in. Both skills are required
   project copies. If either is missing, restore the repository installation instead of substituting
   a same-named personal skill.
+- **Device acceptance:** Follow [Parallel Device Testing](../../docs/guides/parallel-device-testing.md)
+  with `agent-device >= 0.21.27`. Read the installed CLI's `help workflow` before planning commands;
+  it owns the version-specific syntax. Reuse the workspace session across active iterations and
+  batch known steps; the guide owns device claims, state directories, evidence, and cleanup.
 - **React audit:** [improve-react](improve-react/SKILL.md) writes reports and plans under
   `.context/react-plans/`, or a user-specified artifact directory consistent with
   [Code Organization](../../docs/references/code-organization.md). Its audit does not edit source

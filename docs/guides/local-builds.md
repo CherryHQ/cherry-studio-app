@@ -71,19 +71,23 @@ in `eas.json` points to an App Store Connect app matching the new production bun
 
 ## APK Update Distribution
 
-Only Android builds with `APK_UPDATES_ENABLED=true` show Check for updates in Settings and About.
-The app checks in the background after startup. The row reads that result and shows `NEW` for a newer
-APK, with no description; tapping it asks for confirmation before opening the browser download.
-`production` sets this flag, while `production-google-play` explicitly overrides
-it with `false`. Development and preview default to disabled. iOS always
-hides the feature, regardless of the flag. Disabled builds also reject detection and download calls.
+Preview and production packages also include the EAS Update client for compatible code and asset
+changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`, and
+iOS production uses `production-ios`; preview uses `preview`. Existing installations need one new
+native package first. Development and Storybook do not automatically fetch OTA updates. See
+[Application Updates](./app-updates.md) for publication and runtime compatibility.
 
-The value is parsed into the boolean `extra.isApkUpdatesEnabled` by `app.config.ts`; it is not a user
-preference or remote toggle. Only `true` and `false` are accepted; an unset value defaults to `false`.
-GitCode is the fixed update source. Keep store profiles disabled and never upload the public APK as
-a store artifact. Future Android store profiles must explicitly set `APK_UPDATES_ENABLED=false`, as
-`production-google-play` does. For an explicitly authorized Android development session exercising
-this feature, supply `APK_UPDATES_ENABLED=true` to Metro.
+Only packaged Android builds on the native update channel `production-apk` (the `production`
+profile) show Check for updates in Settings and About. The app checks in the background after
+startup. The row reads that result and shows `NEW` for a newer APK, with no description; tapping it
+asks for confirmation before opening the browser download. Google Play, preview, and iOS builds use
+other channels and stay disabled; a downloaded manifest cannot change the channel. Disabled builds
+also reject detection and download calls.
+
+GitCode is the fixed update source. Never give a store profile the `production-apk` channel or
+upload the public APK as a store artifact. For an explicitly authorized Android development session
+exercising this feature, supply `APK_UPDATES_ENABLED=true` to Metro; `app.config.ts` reads it into
+`extra.isApkUpdatesEnabled` only for the development profile, and accepts only `true` or `false`.
 The local build wrapper's default remains development.
 
 ## Sentry Environment Variables

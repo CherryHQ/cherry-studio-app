@@ -30,6 +30,7 @@ type ChatWorkspaceProps = {
   onPendingSendDisplayed: (userMessageId: string) => void;
   assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
+  assistantEmoji?: string;
   assistantName?: string;
   isAssistantToolbarEnabled: boolean;
   contentBottomInset: number;
@@ -56,6 +57,7 @@ export function ChatWorkspace({
   onPendingSendDisplayed,
   assistantAvatar,
   assistantAvatarUri,
+  assistantEmoji,
   assistantName,
   contentBottomInset,
   forkBoundaryMessageId,
@@ -162,9 +164,10 @@ export function ChatWorkspace({
     () => ({
       avatar: assistantAvatar,
       avatarUri: assistantAvatarUri,
+      emoji: assistantEmoji,
       name: assistantName?.trim() || t('chat.backgroundReply.assistant'),
     }),
-    [assistantAvatar, assistantAvatarUri, assistantName, t],
+    [assistantAvatar, assistantAvatarUri, assistantEmoji, assistantName, t],
   );
   // Row-specific conversation state (tools, attachments, timestamps) reaches
   // each row through its keyed subscription, so this renderer and `extraData`
@@ -213,6 +216,7 @@ export function ChatWorkspace({
       <ChatDraftState
         assistantAvatar={assistantAvatar}
         assistantAvatarUri={assistantAvatarUri}
+        assistantEmoji={assistantEmoji}
         assistantName={assistantName}
         contentBottomInset={contentBottomInset}
       />

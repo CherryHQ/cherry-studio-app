@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { ViewProps } from 'react-native';
 
-import { BackgroundPressAdapter } from './background-press-adapter';
+import { BackgroundPressAdapter } from './background-press-adapter/background-press-adapter';
 import type { BackgroundPressAreaProps } from './background-press.types';
 
 const ignorePress = () => {};
