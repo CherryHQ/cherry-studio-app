@@ -59,6 +59,8 @@ type PiDurableToolOptions = {
 
 const BUDGET_REFUSAL = `The turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget is exhausted.`;
 
+const DEFERRED_SKILL_TOOLS = new Set(['find_skills', 'install_skill', 'adapt_skill']);
+
 const codemodeRulesSection = section(
   'cherry-codemode',
   () =>
@@ -192,7 +194,9 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           },
           required: ['value', 'artifacts'],
         } as TSchema,
-        ...(tool.ref.source === 'mcp' ? { deferred: true as const } : {}),
+        ...(tool.ref.source === 'mcp' || DEFERRED_SKILL_TOOLS.has(tool.ref.capabilityId)
+          ? { deferred: true as const }
+          : {}),
         replay: 'unsafe',
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
           const output = await execute(tool, RuntimeJsonValueSchema.parse(args), api, context);
@@ -274,9 +278,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           return result;
         },
       })),
-      ...(options.tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny')
-        ? [createToolSearchTool()]
-        : []),
+      ...(tools.some((tool) => tool.deferred) ? [createToolSearchTool()] : []),
     ],
     sections: [
       ...(options.tools.some((tool) => tool.ref.source === 'builtin' && tool.approval !== 'deny')

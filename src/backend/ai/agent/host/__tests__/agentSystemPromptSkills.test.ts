@@ -116,6 +116,7 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('- manual (skill_id: manual)');
     expect(prompt).not.toContain('Follow the manual.');
     expect(prompt).toContain('read the needed references or templates with `read_skill_file`');
+    expect(prompt).toContain('through tool_search by exact name when needed');
     expect(prompt).toContain('repeat `load_skill` to recover a missing instruction body');
     expect(prompt).not.toContain('without another loading call, file lookup');
     expect(prompt).toContain('built-in tools exposed directly to you');

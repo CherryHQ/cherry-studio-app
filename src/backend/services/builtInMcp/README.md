@@ -34,14 +34,16 @@ observation, browser actions and form state; backend observers own polling and c
 Bundled providers each own a plain TypeScript guide module at `plugins/<id>/guide.ts` beside
 their plugin definition. `PluginDefinition.guide` references its exported
 data directly. Each guide contains a positive integer `revision` and ordered `sections`; each section
-has a `content` string and a `requiredTools` array of raw MCP names. Template strings can retain
+has a `content` string and a `requiredTools` array of raw MCP names. `alwaysInclude: true` marks
+capability routing and critical constraints needed before loading a detailed workflow. Every guide
+must include at least one such section. Template strings can retain
 Markdown formatting in the Agent instructions. For example:
 
 ```ts
 export const feishuGuide = {
   revision: 1,
   sections: [
-    { requiredTools: [], content: `Use this plugin for Feishu documents.` },
+    { requiredTools: [], alwaysInclude: true, content: `Use this plugin for Feishu documents.` },
     {
       requiredTools: ['fetch-doc', 'update-doc'],
       content: `Read the current document before making a targeted update.`,
@@ -53,6 +55,8 @@ export const feishuGuide = {
 An empty `requiredTools` array supplies common context; other sections require **all** named tools on
 the same connection. Registration validates the revision, 1–32 nonempty sections, admitted and unique
 prerequisites, and an 8,192-byte UTF-8 limit for the combined trimmed text including section separators.
+Always-included sections share a separate 2,048-byte UTF-8 budget per plugin. This budget bounds
+first-request context, not the detail body: preserve required guidance in the complete guide.
 A missing guide is optional and does not disable tools; invalid guide data is rejected with the other
 registration errors. A connection with no eligible sections contributes no guide.
 
@@ -65,7 +69,8 @@ resolver selects guides from each connected plugin's executable descriptors afte
 filtering. Plugin tools and guides are available across Agents without bindings or composer mentions.
 Remote names and descriptions cannot identify a plugin.
 Each connection produces at most one frozen guide snapshot with `pluginId`, `serverId`, `revision`
-and selected text. Connections are ordered by plugin id and server id; sections retain authored order.
+and selected text, plus the eligible always-included `overview`. Connections are ordered by plugin
+id and server id; sections retain authored order.
 Tools from different connections cannot collectively satisfy a workflow's prerequisites.
 
 Keep guides focused on cross-tool workflows and provider-specific pitfalls, not one section per tool.
@@ -77,12 +82,21 @@ Sections retain their own prerequisites so partial grants keep usable workflows.
 fails or one schema is unsupported, surviving tools still select their guides; the Host also retains
 the existing discovery warnings for the same turn.
 
-The Host keeps these snapshots in `TurnPlan` beside the executable tools and includes them once in
-the application prompt. Pi receives prepared text only. Guides do not change saved Agent instructions,
-chat history, persisted inference metadata, permissions, approval or resource grants. Their text is
-counted in the existing live context budget; it is not silently truncated. Runtime rules and the user's
-request and Agent instructions take precedence over guide workflows. Raw names are discovery hints;
-the model must still inspect each tool's current signature before calling its exact catalog alias.
+The Host keeps these snapshots in `TurnPlan` beside the executable tools. The initial application
+prompt lists each connection's workflow id, capability overview and critical constraints, plus shared
+operation rules. This contract applies to every bundled plugin, including future registrations.
+Before using a plugin, the model calls the read-only built-in `load_workflow` with `plugin:<serverId>`
+in a separate tool round, then reads the supplied instructions before planning dependent calls.
+Its callback supplies the complete selected guide as a trusted instruction contribution; Pi retains
+it in its native conversation document and renders it before subsequent requests, including after
+compaction or reopening the working copy. The tool result is a receipt, so it does not duplicate the
+body. The complete guide preserves its overview when loaded; only short routing context is always
+present in the first request.
+The next Host configuration resets these contributions and builds a catalog from current grants.
+Guides do not change saved Agent instructions, permissions, approval or resource grants. Loaded text
+counts in the live context budget and is not truncated. Runtime rules, the user's request and Agent
+instructions take precedence. Raw names remain discovery hints; inspect the current tool signature
+before calling its exact catalog alias. The same loader serves app-owned system workflows.
 
 Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also

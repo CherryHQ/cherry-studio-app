@@ -53,6 +53,7 @@ import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askU
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { createSkillTools, createSkillManagementTools } from '../tools/skill';
+import { createLoadWorkflowTool, getAvailableWorkflows } from '../tools/workflowTool';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
@@ -580,6 +581,10 @@ export async function prepareResolvedTurn(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
+  if (canUseTools) {
+    const workflows = getAvailableWorkflows(tools, pluginGuides);
+    if (workflows.length > 0) tools.push(createLoadWorkflowTool(workflows));
+  }
   const webTools =
     runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)

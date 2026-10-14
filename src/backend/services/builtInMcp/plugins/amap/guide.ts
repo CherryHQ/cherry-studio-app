@@ -1,10 +1,11 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const amapGuide = {
-  revision: 3,
+  revision: 4,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# Amap / 高德地图
 
 Search Amap tools for places, nearby search, routes or weather. Coordinates use GCJ-02 longitude,latitude;

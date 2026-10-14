@@ -530,7 +530,7 @@ describe('turn preparation', () => {
       truncated: false,
       trust: 'untrusted-user-content',
     });
-    expect(plan.tools.map((tool) => tool.approval)).toEqual(['auto', 'deny']);
+    expect(plan.tools.map((tool) => tool.approval)).toEqual(['auto', 'deny', 'auto']);
     expect(harness.systemTool.approval).toBe('ask');
     expect(harness.configuredTool.approval).toBe('deny');
     expect(plan.inferenceSnapshot).toMatchObject({
@@ -539,7 +539,7 @@ describe('turn preparation', () => {
         uniqueModelId: createUniqueModelId(OVERRIDE_MODEL.providerId, OVERRIDE_MODEL.modelId),
       },
       parameters: { maxOutputTokens: 512, temperature: 0.2 },
-      tools: [{ approval: 'auto' }, { approval: 'deny' }],
+      tools: [{ approval: 'auto' }, { approval: 'deny' }, { approval: 'auto' }],
     });
     expect(plan.hasMessages).toBe(false);
     expect(plan.runtimeContextCheckpoint).toBeNull();
@@ -554,7 +554,7 @@ describe('turn preparation', () => {
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
 
     // The Agent runs in auto mode, but a consent-bearing ask must survive it.
-    expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny']);
+    expect(plan.tools.map((tool) => tool.approval)).toEqual(['ask', 'deny', 'auto']);
   });
 
   test('withholds ask_user_question only under the auto approval mode', async () => {
@@ -572,11 +572,12 @@ describe('turn preparation', () => {
     };
 
     // Auto mode never blocks on the user, so missing decisions go into the reply.
-    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool']);
+    expect(await prepare('auto')).toEqual(['system_tool', 'configured_tool', 'load_workflow']);
     expect(await prepare('default')).toEqual([
       'ask_user_question',
       'system_tool',
       'configured_tool',
+      'load_workflow',
     ]);
   });
 
@@ -605,9 +606,14 @@ describe('turn preparation', () => {
         parts: [{ type: 'text', text: '飞书 查找文档', pluginReferences }],
       });
       const unselected = await prepare(textInput());
-      expect(selected.tools).toEqual([harness.configuredTool]);
-      expect(selected.inferenceSnapshot.tools).toHaveLength(1);
-      expect(unselected.tools).toEqual(selected.tools);
+      expect(selected.tools.map((tool) => tool.providerName)).toEqual([
+        'configured_tool',
+        'load_workflow',
+      ]);
+      expect(selected.inferenceSnapshot.tools).toHaveLength(2);
+      expect(unselected.tools.map((tool) => tool.providerName)).toEqual(
+        selected.tools.map((tool) => tool.providerName),
+      );
       expect(unselected.inferenceSnapshot.tools).toEqual(selected.inferenceSnapshot.tools);
       expect(selected.agent).toEqual(AGENT);
       expect(selected.userParts).toEqual([
@@ -670,7 +676,7 @@ describe('turn preparation', () => {
       return { tools: [], pluginGuides: [] };
     });
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
-    expect(plan.tools).toHaveLength(1);
+    expect(plan.tools.map((tool) => tool.providerName)).toEqual(['system_tool', 'load_workflow']);
     expect(plan.toolDiscoveryWarnings).toEqual([
       'Feishu document tools could not be loaded (network).',
     ]);

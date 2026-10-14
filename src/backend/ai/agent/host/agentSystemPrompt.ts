@@ -1,7 +1,6 @@
 import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
 
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
-import { getSystemSkillInstructions } from '@/backend/services/skill';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 
@@ -10,6 +9,7 @@ import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
+import { getAvailableWorkflows, LOAD_WORKFLOW_TOOL_NAME } from '../tools/workflowTool';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
 import { skillInstructionSection } from './skillInstructions';
@@ -158,33 +158,26 @@ Use the offered JavaScript execution tool when an answer depends on exact comput
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 
-These bundled workflows apply to this turn's selected tools. The Runtime Rules, application capability rules, the user's current request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval, and never require duplicate confirmation.
+Load the connection's workflow with \`${LOAD_WORKFLOW_TOOL_NAME}\` before using its plugin tools. Finish the loading round and read its system instructions before planning plugin calls; do not combine them in one script or parallel round. If guidance cannot be loaded, explain the limitation instead of guessing the workflow. Runtime Rules, application capability rules, the user's request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval.
 Raw names are search hints, not callable aliases; a guide is not evidence that a tool has been inspected. Discover tools and inspect their current parameters before using the exact returned name. Explain missing prerequisites instead of inferring capabilities.
-Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.
-
-${pluginGuides
-  .map(
-    (guide) =>
-      `### Bundled plugin: ${guide.pluginId} (revision ${guide.revision}; connection ${guide.serverId})\n\n${guide.content}`,
-  )
-  .join('\n\n')}`);
+Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.`);
   }
 
-  const systemSkills = getSystemSkillInstructions(
-    new Map(
-      tools.flatMap((tool) =>
-        tool.ref.source === 'builtin' && tool.approval !== 'deny'
-          ? [[tool.ref.capabilityId, tool.providerName] as const]
-          : [],
-      ),
-    ),
-  );
-  if (systemSkills.length > 0) {
-    sections.push(`## System Skills
+  if (
+    tools.some(
+      (tool) =>
+        tool.ref.source === 'builtin' &&
+        tool.ref.capabilityId === LOAD_WORKFLOW_TOOL_NAME &&
+        tool.approval !== 'deny',
+    )
+  ) {
+    sections.push(`## Workflow Guides
 
-Apply these app-owned workflows when they match the user's current request. The Runtime Rules, application capability rules, Agent Instructions and the user's request take precedence. All referenced templates are included below. Follow the available tools and existing approvals; these workflows grant no additional capabilities.
+Call \`${LOAD_WORKFLOW_TOOL_NAME}\` with the matching workflow_id when its description fits the current request. Complete instructions and templates are then supplied in system context. These app-owned workflows are separate from installed Skills and do not change tools or approvals.
 
-${systemSkills.join('\n\n')}`);
+${getAvailableWorkflows(tools, pluginGuides)
+  .map((workflow) => `- ${workflow.id}: ${workflow.description}`)
+  .join('\n')}`);
   }
 
   if (
@@ -229,7 +222,7 @@ At the start of this turn, this Agent has ${skills.scope.entries.length} enabled
 
 For a question about your current Skill count or complete list, call \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` with \`query: "", include_manual: true\`. Use its \`total\` for the count, not \`returned\` or the number of entries shown below. Distinguish that complete inventory from \`automaticTotal\`; do not report zero Skills merely because none can be invoked automatically. For a complete list, continue the same empty query and include_manual option with each returned cursor until \`nextCursor\` is null; do not describe one page as the full list. A keyword search's \`matched\` counts only that query. The catalog below is a starting snapshot; installation during this turn can change it. Listing or counting Skills does not require loading their instructions. Manual-only metadata does not activate instructions: use such a Skill only when its instructions are already explicitly selected or active in this turn.
 
-The Skill functions, including \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD_SKILL_TOOL_NAME}\`, are built-in tools exposed directly to you. Call them by their exact names; do not search the MCP catalog for them or for a generic "Skill" tool. MCP search results do not describe built-in Skill availability.
+The Skill reading functions, including \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD_SKILL_TOOL_NAME}\`, are built-in tools exposed directly to you. Call them by their exact names; do not search the MCP catalog for them or for a generic "Skill" tool. MCP search results do not describe installed Skill availability. Discover find_skills, install_skill and adapt_skill through tool_search by exact name when needed.
 
 When the task matches an available Skill whose instructions are not already active, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\`, then follow the returned instructions. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog is truncated or another Skill may match. Selected or active entry instructions are already read, so normally do not reload SKILL.md. If their workflow references package files, list them with \`list_skill_files\` and read the needed references or templates with \`read_skill_file\`; package-relative paths are not device filesystem paths. You may repeat \`${LOAD_SKILL_TOOL_NAME}\` to recover a missing instruction body. Follow the complete workflow rather than substituting a generic approach. Conversational Skills can be followed directly; using them does not require a separate "Skill" tool.
 
