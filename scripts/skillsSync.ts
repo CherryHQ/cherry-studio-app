@@ -10,7 +10,7 @@ import {
   CLAUDE_SKILLS_GITIGNORE,
   listSkillNames,
   writeFileIfChanged,
-} from './skills-common';
+} from './skillsCommon';
 
 /**
  * Ensures `.claude/skills/<skillName>` is a symlink pointing to

@@ -9,8 +9,8 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { useResolveClassNames, useUniwind } from 'uniwind';
 
+import type { SwitchSize } from '../switch.types';
 import type { SwitchControlProps } from './switch-control.types';
-import type { SwitchSize } from './switch.types';
 
 const controlSizes: Record<SwitchSize, 'large' | 'regular' | 'small'> = {
   default: 'regular',

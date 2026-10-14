@@ -12,6 +12,7 @@ import {
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
+import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
@@ -218,20 +219,23 @@ describe('Persistent Agent facade', () => {
         scope,
         selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
       };
+      const pluginGuides = [
+        {
+          pluginId: 'github',
+          revision: 3,
+          serverId: 'github',
+          content: '# GitHub\nUse get_me for account context.',
+          overview: 'GitHub repository and PR context; honor the requested branch.',
+        },
+      ];
+      tools.push(createLoadWorkflowTool(getPluginWorkflows(pluginGuides)));
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
         skills,
-        pluginGuides: [
-          {
-            pluginId: 'github',
-            revision: 3,
-            serverId: 'github',
-            content: '# GitHub\nUse get_me for account context.',
-          },
-        ],
+        pluginGuides,
       });
       const adapter = resolvePiApiAdapter(
         api === 'openai-completions' ? 'openai-chat-completions' : 'openai-responses',
@@ -291,7 +295,9 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
         expect(serialized).toContain('## Reading Attachments');
-        expect(serialized).toContain('# GitHub');
+        expect(serialized).toContain('plugin:github: github workflows');
+        expect(serialized).toContain('honor the requested branch');
+        expect(serialized).not.toContain('Use get_me for account context.');
         expect(serialized).toContain('# Tool discovery');
         expect(serialized).toContain('grill-me');
         expect(serialized).toContain(selectedInstructions);
@@ -308,6 +314,7 @@ describe('Persistent Agent facade', () => {
           'load_skill',
           'list_skill_files',
           'read_skill_file',
+          'load_workflow',
           'tool_search',
         ]);
         expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([

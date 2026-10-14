@@ -579,7 +579,9 @@ export class DurableAgentHost implements AgentProtocol {
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
-        plan.agent.mode === 'standard' ? buildInitialSkillInstructions(plan.skills) : [],
+        plan.agent.mode === 'standard'
+          ? [...buildInitialSkillInstructions(plan.skills), ...plan.workflowInstructions]
+          : [],
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,

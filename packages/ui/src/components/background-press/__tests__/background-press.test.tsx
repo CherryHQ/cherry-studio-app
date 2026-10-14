@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackgroundPressArea, BackgroundPressExclusion } from '../background-press';
 
-jest.mock('../background-press-adapter', () => ({
+jest.mock('../background-press-adapter/background-press-adapter', () => ({
   BackgroundPressAdapter: ({ children, ...props }: { children?: React.ReactNode }) =>
     jest.requireActual('react').createElement('NativeBackgroundPress', props, children),
 }));

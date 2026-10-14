@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 
-import type { BackgroundPressAdapterProps } from './background-press.types';
+import type { BackgroundPressAdapterProps } from '../background-press.types';
 
 const ignoreLongPress = () => {};
 

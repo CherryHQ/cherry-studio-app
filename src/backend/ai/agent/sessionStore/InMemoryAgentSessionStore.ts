@@ -504,6 +504,31 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     );
   }
 
+  async loadWorkflowLoads(sessionId: string) {
+    return (this.messages.get(sessionId) ?? []).flatMap(({ view }) =>
+      view.role === 'assistant'
+        ? view.parts.flatMap((part) => {
+            if (
+              part.type !== 'dynamic-tool' ||
+              part.state !== 'output-available' ||
+              part.toolRef.source !== 'builtin' ||
+              part.toolRef.capabilityId !== 'load_workflow'
+            )
+              return [];
+            const value = (part.output as { value?: unknown } | undefined)?.value;
+            return value &&
+              typeof value === 'object' &&
+              'status' in value &&
+              value.status === 'ok' &&
+              'workflow_id' in value &&
+              typeof value.workflow_id === 'string'
+              ? [value.workflow_id]
+              : [];
+          })
+        : [],
+    );
+  }
+
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const transcript = this.messages.get(sessionId) ?? [];
     for (let index = transcript.length - 1; index >= 0; index -= 1) {

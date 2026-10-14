@@ -152,6 +152,78 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('defers Skill installation and adaptation without MCP while retaining all readers and call permissions', async () => {
+    const names = [
+      'load_skill',
+      'search_local_skills',
+      'find_skills',
+      'install_skill',
+      'adapt_skill',
+      'list_skill_files',
+      'read_skill_file',
+      'load_workflow',
+    ];
+    const execute = jest.fn(async () => ({ value: 'Adapted', artifacts: [] }));
+    const approve = jest.fn(async () => true);
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: names.map((name) =>
+        capability({
+          ref: { source: 'builtin', capabilityId: name },
+          providerName: name,
+          execute,
+        }),
+      ),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      expect(agent.tools.map((tool) => tool.name)).toEqual([
+        'load_skill',
+        'search_local_skills',
+        'list_skill_files',
+        'read_skill_file',
+        'load_workflow',
+        'tool_search',
+      ]);
+      expect(agent.deferred.map((tool) => tool.name)).toEqual([
+        'find_skills',
+        'install_skill',
+        'adapt_skill',
+      ]);
+      expect(agent.callable.map((tool) => tool.name)).toEqual(names);
+      await harness.waitForTask(
+        await toolTask(conversation, 'tool_search', { query: 'adapt_skill', limit: 1 }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        content: [expect.objectContaining({ text: expect.stringContaining('adapt_skill') })],
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(approve).not.toHaveBeenCalled();
+      await conversation.commit(
+        (tx) =>
+          configure(tx, conversation.id, {
+            modelTools: { add: [extension.tools!.find((tool) => tool.name === 'adapt_skill')!] },
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect(
+        (await conversation.agent(BACKGROUND_CONTEXT)).tools.map((tool) => tool.name),
+      ).toContain('adapt_skill');
+      await harness.waitForTask(await toolTask(conversation, 'adapt_skill'), BACKGROUND_CONTEXT);
+      expect(approve).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn' }));
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
     let conversation!: Conversation;
     const codes: (string | undefined)[] = [];
@@ -676,6 +748,59 @@ describe('durable capability boundary', () => {
       await reopened.close(BACKGROUND_CONTEXT);
     }
   });
+  test('a tool requiring a guide is refused before approval until a trusted loader retains it', async () => {
+    const approve = jest.fn(async () => true);
+    const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
+    const refusal = 'Load the plugin guide first.';
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: [
+        capability({ requiredInstructions: { key: 'workflow:plugin:server', refusal }, execute }),
+        capability({
+          ref: { source: 'builtin', capabilityId: 'load_workflow' },
+          providerName: 'load_workflow',
+          approval: 'auto',
+          execute: async () => ({
+            value: { status: 'ok' },
+            instructions: { key: 'workflow:plugin:server', text: 'Read before writing.' },
+            artifacts: [],
+          }),
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'early'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        isError: true,
+        content: [expect.objectContaining({ text: expect.stringContaining(refusal) })],
+      });
+      await harness.waitForTask(
+        await toolTask(conversation, 'load_workflow', { name: 'plugin:server' }, 'load'),
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'after'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('native MCP discovery preserves approval, artifact admission and untrusted result boundaries', async () => {
     const result = {
       value: 'Created',

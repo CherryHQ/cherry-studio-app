@@ -1,9 +1,9 @@
 import { Text, View } from 'react-native';
 
-import { Image } from '../../image';
-import type { FilePreviewFile, FilePreviewOperation } from '../file-preview.types';
-import { useQuickLookThumbnail } from '../hooks/use-quick-look-thumbnail.ios';
-import { FallbackPreview } from './fallback-preview';
+import { Image } from '../../../image';
+import type { FilePreviewFile, FilePreviewOperation } from '../../file-preview.types';
+import { useQuickLookThumbnail } from '../../hooks/use-quick-look-thumbnail/use-quick-look-thumbnail.ios';
+import { FallbackPreview } from '../fallback-preview';
 
 export function QuickLookPreview({
   file,

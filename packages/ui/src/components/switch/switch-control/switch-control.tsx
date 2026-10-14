@@ -1,8 +1,8 @@
 import { Pressable, View } from 'react-native';
 
-import { cn } from '../../utils';
+import { cn } from '../../../utils';
+import type { SwitchSize } from '../switch.types';
 import type { SwitchControlProps } from './switch-control.types';
-import type { SwitchSize } from './switch.types';
 
 const sizeStyles: Record<SwitchSize, { root: string; thumb: string }> = {
   default: { root: 'h-6 w-11', thumb: 'size-5' },
