@@ -280,16 +280,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
-      const retainedBytes = resolved.reduce(
-        (total, item) =>
-          total +
-          (item.acquisition
-            ? [...item.acquisition.files.values()].reduce((sum, file) => sum + file.byteLength, 0)
-            : 0),
-        0,
-      );
-      if (retainedBytes > CANDIDATE_MAX_BYTES)
-        throw new SkillsError('package-too-large', 'Choose a smaller collection.');
       if (resolved.some((candidate) => candidate.source.registry === 'bundled'))
         throw new SkillsError(
           'source-invalid',

@@ -12,7 +12,6 @@ const skillSchema = z.object({
   description: localizedText,
   author: z.string(),
   version: z.string(),
-  domain: z.string(),
   tags: z.array(z.string()),
   mobileSupport: z.enum(['supported', 'unsupported']),
   downloads: z.number().int().nonnegative(),
@@ -45,7 +44,6 @@ export function createCherryinSkillClient() {
         path: '/api/skills',
         query: {
           q: input.query?.trim() || undefined,
-          domain: input.domain || undefined,
           mobileSupport: 'supported',
           sort: input.sort ?? 'popular',
           offset,

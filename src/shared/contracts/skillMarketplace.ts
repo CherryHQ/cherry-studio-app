@@ -6,7 +6,6 @@ export type CherryinSkill = {
   description: MarketplaceText;
   author: string;
   version: string;
-  domain: string;
   tags: string[];
   mobileSupport: 'supported' | 'unsupported';
   downloads: number;
@@ -21,7 +20,6 @@ export type CherryinSkillLibraryDetail = CherryinSkillDetail & {
 };
 export type CherryinSkillQuery = {
   query?: string;
-  domain?: string;
   sort?: 'popular' | 'newest' | 'name_asc';
   offset?: number;
 };

@@ -49,10 +49,10 @@ plugin connection ownership and per-turn tool filtering.
 ## Sources And Package Format
 
 Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
-search, domain filters and popular/newest/name sorting. Catalog and detail reads never download
+search and popular/newest/name sorting. Catalog and detail reads never download
 packages or require credentials. All CherryIN list requests send `mobileSupport=supported`;
 upstream owns this classification through the `mobileSupport` field (`supported` or `unsupported`).
-Search, domain filters, sorting and pagination use the same server-filtered list. Pasted CherryIN
+Search, sorting and pagination use the same server-filtered list. Pasted CherryIN
 links and market detail pages also hide entries whose `mobileSupport` is not `supported`. This is a
 discovery UI policy: backend detail resolution, installation and updates remain available regardless
 of that field, and installed Skills remain manageable in the library. The app does not maintain a
@@ -65,7 +65,7 @@ URL includes its package-relative entry path in the fragment, so later updates s
 member. Multi-skill packages require explicit member selection; successful installations survive
 other members' failures. Candidate handles expire after 30 minutes and retain at most 64 MiB.
 
-Agent keyword search prefers CherryIN and falls back to skills.sh when no listing matches. The
+Agent keyword search prefers CherryIN and falls back to skills.sh when no installable listing matches. The
 discovery source picker also exposes skills.sh explicitly. Its all-time leaderboard is bounded to
 50 listings with install counts. Listings from publishers other than a GitHub `<owner>/<repo>`
 cannot resolve to a package and are omitted from skills.sh results. skills.sh pages and

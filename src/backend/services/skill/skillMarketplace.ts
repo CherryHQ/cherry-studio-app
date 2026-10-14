@@ -119,9 +119,12 @@ export function createSkillMarketplace(
       listings({ path: '/api/search', query: { q: query, limit: String(SEARCH_LIMIT) } }, signal),
     async search(query: string, signal?: AbortSignal): Promise<SkillListing[]> {
       if (cherryin) {
-        const page = await cherryin.client.list({ query }, signal);
-        if (page.items.length)
-          return page.items.map((skill) => ({
+        // Listings without a package cannot be installed, so they never hide skills.sh results.
+        const installable = (await cherryin.client.list({ query }, signal)).items.filter(
+          (skill) => skill.hasPackage,
+        );
+        if (installable.length)
+          return installable.map((skill) => ({
             name: skill.name.en || skill.name.zh || skill.id,
             source: `CherryIN · ${skill.author}`,
             url: cherryinSkillUrl(skill.id),

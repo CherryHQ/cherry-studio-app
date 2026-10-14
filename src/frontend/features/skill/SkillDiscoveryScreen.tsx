@@ -3,7 +3,6 @@ import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import {
   Button,
-  Chip,
   ContentState,
   OptionPickerBottomSheet,
   Section,
@@ -12,7 +11,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useBackendModule } from '@/frontend/data';
@@ -21,11 +20,7 @@ import type { CherryinSkill, CherryinSkillQuery } from '@/shared/contracts/skill
 import type { SkillListing } from '@/shared/contracts/skills';
 import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
-import {
-  MARKETPLACE_DOMAINS,
-  marketplaceText,
-  type SkillDiscoverySource,
-} from './discover/skillDiscovery';
+import { marketplaceText, type SkillDiscoverySource } from './discover/skillDiscovery';
 import { SkillSourceFilter } from './discover/SkillSourceFilter';
 import { SkillPage } from './SkillPage';
 
@@ -58,7 +53,6 @@ export function SkillDiscoveryScreen() {
   const { open: openSearch } = useAppSearch();
   const skills = useBackendModule('skills');
   const [source, setSource] = useState<SkillDiscoverySource>('cherryin');
-  const [domain, setDomain] = useState('');
   const [sort, setSort] = useState<NonNullable<CherryinSkillQuery['sort']>>('popular');
   const [picker, setPicker] = useState<'source' | 'sort' | null>(null);
   const language = i18n.resolvedLanguage ?? i18n.language;
@@ -72,10 +66,9 @@ export function SkillDiscoveryScreen() {
     collection: item.tags.includes('collection'),
   });
   const catalog = useInfiniteQuery({
-    queryKey: ['skills', 'cherryin', domain, sort],
+    queryKey: ['skills', 'cherryin', sort],
     initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) =>
-      skills.listCherryin({ domain, sort, offset: pageParam }, signal),
+    queryFn: ({ pageParam, signal }) => skills.listCherryin({ sort, offset: pageParam }, signal),
     getNextPageParam: (page) => page.nextOffset ?? undefined,
     enabled: source === 'cherryin',
     retry: false,
@@ -143,7 +136,7 @@ export function SkillDiscoveryScreen() {
             ],
           };
         const page = await skills.listCherryin(
-          { domain, sort, offset: cursor ? Number(cursor) : 0 },
+          { sort, offset: cursor ? Number(cursor) : 0 },
           signal,
         );
         return {
@@ -190,7 +183,7 @@ export function SkillDiscoveryScreen() {
             ],
           };
         const page = await skills.listCherryin(
-          { query, domain, sort, offset: cursor ? Number(cursor) : 0 },
+          { query, sort, offset: cursor ? Number(cursor) : 0 },
           signal,
         );
         return {
@@ -235,23 +228,6 @@ export function SkillDiscoveryScreen() {
           </Button>
         ) : null}
       </View>
-      {source === 'cherryin' ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerClassName="gap-2"
-        >
-          {['', ...MARKETPLACE_DOMAINS].map((item) => (
-            <Chip.Selectable
-              key={item}
-              selected={domain === item}
-              onSelectedChange={() => setDomain(item)}
-            >
-              {t(item ? `skills.marketplace.domain.${item}` : 'skills.marketplace.all')}
-            </Chip.Selectable>
-          ))}
-        </ScrollView>
-      ) : null}
       {current.isLoading ? (
         <ContentState.Loading title={t('skills.loading')} />
       ) : current.isError && !current.data ? (

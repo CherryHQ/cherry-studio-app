@@ -19,7 +19,6 @@ const listing = {
   longDescription: { en: 'More notes', zh: null },
   author: 'CherryIN',
   version: '1',
-  domain: 'Productivity',
   tags: ['collection'],
   mobileSupport: 'supported',
   downloads: 1,
@@ -46,11 +45,11 @@ it('requests upstream-supported mobile Skills for the default catalog', async ()
   });
 });
 
-it('preserves mobile filtering with search, categories, sorting and pagination', async () => {
+it('preserves mobile filtering with search, sorting and pagination', async () => {
   mockRequest.mockResolvedValueOnce(page([listing], 0, true));
   mockRequest.mockResolvedValueOnce(page([listing], 20));
   const client = createCherryinSkillClient();
-  const query = { query: ' notes ', domain: 'Productivity', sort: 'newest' as const };
+  const query = { query: ' notes ', sort: 'newest' as const };
   const first = await client.list(query);
   expect(first.nextOffset).toBe(20);
   const result = await client.list({ ...query, offset: first.nextOffset! });
@@ -58,7 +57,6 @@ it('preserves mobile filtering with search, categories, sorting and pagination',
   expect(mockRequest.mock.calls[1]![0]).toMatchObject({
     query: {
       q: 'notes',
-      domain: 'Productivity',
       sort: 'newest',
       mobileSupport: 'supported',
       offset: 20,
@@ -92,11 +90,13 @@ it('prefers CherryIN for Agent discovery and only falls back when the catalog ha
   mockRequest.mockResolvedValueOnce(page([listing]));
   expect((await marketplace.search('notes'))[0]?.url).toBe(cherryinSkillUrl(listing.id));
   expect(mockRequest).toHaveBeenCalledTimes(1);
-  mockRequest.mockResolvedValueOnce(page([]));
-  mockRequest.mockResolvedValueOnce({
-    data: { skills: [{ source: 'o/r', skillId: 'notes', name: 'notes' }] },
-  });
-  expect((await marketplace.search('notes'))[0]?.url).toBe('https://skills.sh/o/r/notes');
+  for (const items of [[], [{ ...listing, hasPackage: false }]]) {
+    mockRequest.mockResolvedValueOnce(page(items));
+    mockRequest.mockResolvedValueOnce({
+      data: { skills: [{ source: 'o/r', skillId: 'notes', name: 'notes' }] },
+    });
+    expect((await marketplace.search('notes'))[0]?.url).toBe('https://skills.sh/o/r/notes');
+  }
 });
 
 it('pins collection bytes and distinct member identities during resolution', async () => {
