@@ -30,6 +30,13 @@ Check desktop checksum capability
   → desktop compares actual bytes before managed publication
   → validate ready + checksum mode + returned digest
   → enable Send for the current attachment generation
+
+Without desktop checksum capability
+  → retain stable source; persist upload/source identity
+  → existing 1 MiB binary upload, no native hashing
+  → complete(uploadId, writerEpoch)
+  → validate ready + upload identity + byte length
+  → enable Send for the current attachment generation
 ```
 
 - The file module exposes `fileContent.hashFile(fileEntryId, signal)`. Extend the existing

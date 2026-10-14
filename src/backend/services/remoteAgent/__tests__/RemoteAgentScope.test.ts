@@ -179,7 +179,7 @@ it.each([{ agentAttachmentSelections: false }, { agentUploadsVersion: 0 }])(
   },
 );
 
-it('does not notify capability subscribers repeatedly for a checksum-incapable desktop', async () => {
+it('does not notify capability subscribers when only the checksum mode changes', async () => {
   const test = fixture();
   Object.assign(test.connection, {
     agentAttachmentSelections: true,
