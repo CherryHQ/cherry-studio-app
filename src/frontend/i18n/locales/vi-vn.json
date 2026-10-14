@@ -2022,6 +2022,7 @@
   "skills.detail.uninstall": "Gỡ cài đặt",
   "skills.detail.uninstallMessage": "Kỹ năng sẽ bị gỡ khỏi mọi tác nhân. Các tệp nó đã giúp tạo ra vẫn nằm trong thư viện của bạn.",
   "skills.detail.uninstallTitle": "Gỡ cài đặt {{name}}?",
+  "skills.detail.update": "Cập nhật kỹ năng",
   "skills.detail.version": "Phiên bản",
   "skills.discover.empty": "Không tìm thấy kỹ năng phù hợp",
   "skills.discover.search": "Tìm kỹ năng",
@@ -2037,6 +2038,8 @@
   "skills.error.search-unavailable": "Không thể tìm kỹ năng. Hãy kiểm tra kết nối và thử lại.",
   "skills.error.source-invalid": "Cung cấp trang kỹ năng được hỗ trợ, kho GitHub, thư mục hoặc liên kết SKILL.md.",
   "skills.error.source-unreachable": "Không truy cập được nguồn kỹ năng.",
+  "skills.error.translation-failed": "Dịch thất bại. Vui lòng thử lại.",
+  "skills.error.translation-model-unavailable": "Đặt mô hình mặc định để sử dụng tính năng dịch bằng AI.",
   "skills.executionHint": "Cài đặt và đọc kỹ năng không có nghĩa là có thể thực hiện mọi bước. Việc thực hiện phụ thuộc vào các công cụ và môi trường chạy tập lệnh hiện có.",
   "skills.find.hint": "Mô tả tác vụ hoặc dán liên kết kỹ năng",
   "skills.find.installed": "Đã thêm cho tác tử hiện tại",
@@ -2081,6 +2084,9 @@
   "skills.toast.update.rejected": "Gói mới không vượt qua bước xác thực; phiên bản đã cài đặt được giữ lại.",
   "skills.toast.update.unchanged": "Đã là phiên bản mới nhất",
   "skills.toast.update.updated": "Đã cập nhật kỹ năng",
+  "skills.translation.original": "Bản gốc",
+  "skills.translation.translate": "Dịch bằng AI",
+  "skills.translation.translating": "Đang dịch…",
   "skills.working": "Đang xử lý…",
   "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại."
 }

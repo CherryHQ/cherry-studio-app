@@ -2022,6 +2022,7 @@
   "skills.detail.uninstall": "アンインストール",
   "skills.detail.uninstallMessage": "スキルはすべてのエージェントから削除されます。スキルの助けで作成したファイルはライブラリに残ります。",
   "skills.detail.uninstallTitle": "{{name}} をアンインストールしますか?",
+  "skills.detail.update": "スキルを更新",
   "skills.detail.version": "バージョン",
   "skills.discover.empty": "一致するスキルが見つかりません",
   "skills.discover.search": "スキルを検索",
@@ -2037,6 +2038,8 @@
   "skills.error.search-unavailable": "スキルを検索できません。接続を確認して再試行してください。",
   "skills.error.source-invalid": "対応するスキルページ、GitHub リポジトリ、ディレクトリ、または SKILL.md のリンクを入力してください。",
   "skills.error.source-unreachable": "スキルの提供元に接続できません。",
+  "skills.error.translation-failed": "翻訳に失敗しました。もう一度お試しください。",
+  "skills.error.translation-model-unavailable": "AI 翻訳を使用するには、デフォルトモデルを設定してください。",
   "skills.executionHint": "スキルをインストールして読み込んでも、すべての手順を実行できるとは限りません。実行には、利用可能なツールとスクリプトの実行環境が必要です。",
   "skills.find.hint": "目的を入力するかスキルのリンクを貼り付け",
   "skills.find.installed": "現在のエージェントに追加済み",
@@ -2081,6 +2084,9 @@
   "skills.toast.update.rejected": "新しいパッケージの検証に失敗しました。インストール済みのバージョンを保持しました。",
   "skills.toast.update.unchanged": "すでに最新です",
   "skills.toast.update.updated": "スキルを更新しました",
+  "skills.translation.original": "原文",
+  "skills.translation.translate": "AI 翻訳",
+  "skills.translation.translating": "翻訳中…",
   "skills.working": "処理中…",
   "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。"
 }

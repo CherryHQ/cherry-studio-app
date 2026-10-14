@@ -70,6 +70,7 @@ import {
   createCherryinSkillClient,
   createCherryinSkillSource,
   createSkillsModule,
+  createSkillTranslator,
   skillStorage,
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
@@ -273,6 +274,7 @@ export function createBackend(
   const cherryinSkills = createCherryinSkillSource(cherryinClient);
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
+    translate: createSkillTranslator({ ai: services.ai, preference: services.preference }),
     marketplace: createSkillMarketplace(githubSkills, {
       client: cherryinClient,
       source: cherryinSkills,

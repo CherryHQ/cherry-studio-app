@@ -95,6 +95,7 @@ describe('turn preparation', () => {
         popular: unavailable,
         resolve: unavailable,
         inspect: unavailable,
+        translate: unavailable,
         install: unavailable,
         update: unavailable,
         create: unavailable,

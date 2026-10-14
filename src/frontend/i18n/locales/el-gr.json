@@ -2034,6 +2034,7 @@
   "skills.detail.uninstall": "Απεγκατάσταση",
   "skills.detail.uninstallMessage": "Η δεξιότητα αφαιρείται από όλους τους πράκτορες. Τα αρχεία που βοήθησε να δημιουργηθούν παραμένουν στη βιβλιοθήκη σας.",
   "skills.detail.uninstallTitle": "Απεγκατάσταση του {{name}};",
+  "skills.detail.update": "Ενημέρωση δεξιότητας",
   "skills.detail.version": "Έκδοση",
   "skills.discover.empty": "Δεν βρέθηκαν σχετικές δεξιότητες",
   "skills.discover.search": "Εύρεση Skills",
@@ -2049,6 +2050,8 @@
   "skills.error.search-unavailable": "Η αναζήτηση δεξιοτήτων δεν είναι διαθέσιμη. Ελέγξτε τη σύνδεση και δοκιμάστε ξανά.",
   "skills.error.source-invalid": "Δώστε υποστηριζόμενη σελίδα δεξιότητας, αποθετήριο GitHub, κατάλογο ή σύνδεσμο SKILL.md.",
   "skills.error.source-unreachable": "Δεν ήταν δυνατή η πρόσβαση στην πηγή της δεξιότητας.",
+  "skills.error.translation-failed": "Η μετάφραση απέτυχε. Δοκιμάστε ξανά.",
+  "skills.error.translation-model-unavailable": "Ορίστε ένα προεπιλεγμένο μοντέλο για μετάφραση με AI.",
   "skills.executionHint": "Η εγκατάσταση και η ανάγνωση μιας δεξιότητας δεν σημαίνει ότι μπορεί να εκτελεστεί κάθε βήμα. Η εκτέλεση εξαρτάται από τα διαθέσιμα εργαλεία και το περιβάλλον εκτέλεσης σεναρίων.",
   "skills.find.hint": "Περιγράψτε μια εργασία ή επικολλήστε σύνδεσμο δεξιότητας",
   "skills.find.installed": "Προστέθηκε στον τρέχοντα πράκτορα",
@@ -2094,6 +2097,9 @@
   "skills.toast.update.rejected": "Το νέο πακέτο δεν πέρασε την επικύρωση. Διατηρήθηκε η εγκατεστημένη έκδοση.",
   "skills.toast.update.unchanged": "Είναι ήδη ενημερωμένη",
   "skills.toast.update.updated": "Η δεξιότητα ενημερώθηκε",
+  "skills.translation.original": "Πρωτότυπο",
+  "skills.translation.translate": "Μετάφραση AI",
+  "skills.translation.translating": "Μετάφραση…",
   "skills.working": "Σε εξέλιξη…",
   "systemEntry.failed": "Δεν ήταν δυνατό το άνοιγμα αυτής της κοινοποίησης. Κοινοποιήστε ξανά το περιεχόμενο."
 }

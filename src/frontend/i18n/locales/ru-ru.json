@@ -2058,6 +2058,7 @@
   "skills.detail.uninstall": "Удалить",
   "skills.detail.uninstallMessage": "Навык будет удалён у всех агентов. Файлы, созданные с его помощью, останутся в библиотеке.",
   "skills.detail.uninstallTitle": "Удалить {{name}}?",
+  "skills.detail.update": "Обновить навык",
   "skills.detail.version": "Версия",
   "skills.discover.empty": "Подходящие навыки не найдены",
   "skills.discover.search": "Найти навыки",
@@ -2073,6 +2074,8 @@
   "skills.error.search-unavailable": "Поиск навыков недоступен. Проверьте соединение и повторите попытку.",
   "skills.error.source-invalid": "Укажите поддерживаемую страницу навыка, репозиторий или каталог GitHub либо ссылку на SKILL.md.",
   "skills.error.source-unreachable": "Источник навыка недоступен.",
+  "skills.error.translation-failed": "Не удалось перевести. Попробуйте ещё раз.",
+  "skills.error.translation-model-unavailable": "Выберите модель по умолчанию для перевода с помощью ИИ.",
   "skills.executionHint": "Установка и чтение навыка не означают, что каждый шаг можно выполнить. Выполнение зависит от доступных инструментов и среды запуска скриптов.",
   "skills.find.hint": "Опишите задачу или вставьте ссылку на навык",
   "skills.find.installed": "Добавлен текущему агенту",
@@ -2120,6 +2123,9 @@
   "skills.toast.update.rejected": "Новый пакет не прошёл проверку; установленная версия сохранена.",
   "skills.toast.update.unchanged": "Уже актуальная версия",
   "skills.toast.update.updated": "Навык обновлён",
+  "skills.translation.original": "Оригинал",
+  "skills.translation.translate": "ИИ-перевод",
+  "skills.translation.translating": "Перевод…",
   "skills.working": "Выполняется…",
   "systemEntry.failed": "Не удалось открыть этот материал. Поделитесь содержимым ещё раз."
 }

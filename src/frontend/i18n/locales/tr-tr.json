@@ -2034,6 +2034,7 @@
   "skills.detail.uninstall": "Kaldır",
   "skills.detail.uninstallMessage": "Beceri tüm ajanlardan kaldırılır. Oluşturulmasına yardım ettiği dosyalar kitaplığınızda kalır.",
   "skills.detail.uninstallTitle": "{{name}} kaldırılsın mı?",
+  "skills.detail.update": "Beceriyi güncelle",
   "skills.detail.version": "Sürüm",
   "skills.discover.empty": "Eşleşen beceri bulunamadı",
   "skills.discover.search": "Skills ara",
@@ -2049,6 +2050,8 @@
   "skills.error.search-unavailable": "Beceri araması kullanılamıyor. Bağlantınızı kontrol edip tekrar deneyin.",
   "skills.error.source-invalid": "Desteklenen bir beceri sayfası, GitHub deposu, dizin veya SKILL.md bağlantısı girin.",
   "skills.error.source-unreachable": "Beceri kaynağına ulaşılamadı.",
+  "skills.error.translation-failed": "Çeviri başarısız oldu. Lütfen tekrar deneyin.",
+  "skills.error.translation-model-unavailable": "Yapay zekâ çevirisi için varsayılan bir model ayarlayın.",
   "skills.executionHint": "Bir beceriyi yüklemek ve okumak, her adımın yürütülebileceği anlamına gelmez. Yürütme, mevcut araçlara ve betik çalışma ortamına bağlıdır.",
   "skills.find.hint": "Bir görev açıklayın veya beceri bağlantısı yapıştırın",
   "skills.find.installed": "Bu ajana eklendi",
@@ -2094,6 +2097,9 @@
   "skills.toast.update.rejected": "Yeni paket doğrulamayı geçemedi; yüklü sürüm korundu.",
   "skills.toast.update.unchanged": "Zaten güncel",
   "skills.toast.update.updated": "Beceri güncellendi",
+  "skills.translation.original": "Özgün metin",
+  "skills.translation.translate": "Yapay zekâ çevirisi",
+  "skills.translation.translating": "Çevriliyor…",
   "skills.working": "İşleniyor…",
   "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın."
 }

@@ -2046,6 +2046,7 @@
   "skills.detail.uninstall": "Desinstalar",
   "skills.detail.uninstallMessage": "La skill se eliminará de todos los agentes. Los archivos que ayudó a crear permanecen en tu biblioteca.",
   "skills.detail.uninstallTitle": "¿Desinstalar {{name}}?",
+  "skills.detail.update": "Actualizar habilidad",
   "skills.detail.version": "Versión",
   "skills.discover.empty": "No se encontraron habilidades coincidentes",
   "skills.discover.search": "Buscar Skills",
@@ -2061,6 +2062,8 @@
   "skills.error.search-unavailable": "La búsqueda de habilidades no está disponible. Comprueba tu conexión e inténtalo de nuevo.",
   "skills.error.source-invalid": "Introduce una página de habilidad compatible, un repositorio o directorio de GitHub, o un enlace a SKILL.md.",
   "skills.error.source-unreachable": "No se pudo acceder al origen de la skill.",
+  "skills.error.translation-failed": "No se pudo traducir. Inténtalo de nuevo.",
+  "skills.error.translation-model-unavailable": "Configura un modelo predeterminado para traducir con IA.",
   "skills.executionHint": "Instalar y leer una habilidad no significa que todos sus pasos se puedan ejecutar. La ejecución depende de las herramientas y del entorno de scripts disponibles.",
   "skills.find.hint": "Describe una tarea o pega un enlace a una habilidad",
   "skills.find.installed": "Añadida a este agente",
@@ -2107,6 +2110,9 @@
   "skills.toast.update.rejected": "El nuevo paquete no superó la validación; se conservó la versión instalada.",
   "skills.toast.update.unchanged": "Ya está actualizada",
   "skills.toast.update.updated": "Skill actualizada",
+  "skills.translation.original": "Original",
+  "skills.translation.translate": "Traducción con IA",
+  "skills.translation.translating": "Traduciendo…",
   "skills.working": "Procesando…",
   "systemEntry.failed": "No se pudo abrir este contenido compartido. Vuelve a compartirlo."
 }

@@ -1,5 +1,5 @@
-import { Button, ContentState, Section, useToast } from '@cherrystudio/ui/components';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
+import { useQuery } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { isSkillsError, SkillsError, type SkillInspection } from '@/shared/contracts/skills';
 
+import { SkillDocumentPage } from './SkillDocumentPage';
 import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
 
@@ -70,52 +71,22 @@ export function SkillCandidateScreen() {
       </SkillPage>
     );
   }
-  return <SkillCandidate inspection={inspection.data} queryKey={queryKey} />;
+  return <SkillCandidate inspection={inspection.data} />;
 }
 
-function SkillCandidate({
-  inspection,
-  queryKey,
-}: {
-  inspection: SkillInspection;
-  queryKey: readonly string[];
-}) {
+function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
   const skillsModule = useBackendModule('skills');
   const [isInstalling, setIsInstalling] = useState(false);
-  const queryClient = useQueryClient();
-
   const { candidate, issues, limitations, package: pkg } = inspection;
-  // The same value an installation stores, so the row reads the same before and after installing.
-  const version = pkg?.version ?? candidate.version;
-  const isInstalled = candidate.installedSkillId !== null;
-  const canInstall = !isInstalled && pkg !== null;
 
   async function install() {
     setIsInstalling(true);
     try {
-      const result = candidate.installedSkillId
-        ? await skillsModule.update(candidate.installedSkillId)
-        : {
-            outcome: 'updated' as const,
-            skill: await skillsModule.install({ candidateId: candidate.candidateId }),
-          };
-      if (result.outcome === 'rejected') {
-        queryClient.setQueryData(queryKey, result.inspection);
-        toast.show({ label: t('skills.toast.update.rejected'), variant: 'danger' });
-        return;
-      }
-      const skill = result.skill;
-      toast.show({
-        label: t(
-          candidate.installedSkillId
-            ? `skills.toast.update.${result.outcome}`
-            : 'skills.toast.installed',
-        ),
-        variant: 'success',
-      });
+      const skill = await skillsModule.install({ candidateId: candidate.candidateId });
+      toast.show({ label: t('skills.toast.installed'), variant: 'success' });
       router.replace({ pathname: '/skills/[skillId]', params: { skillId: skill.id } });
     } catch (error) {
       const code = isSkillsError(error) ? error.code : 'source-unreachable';
@@ -125,86 +96,55 @@ function SkillCandidate({
     }
   }
 
-  return (
-    <SkillPage headerProps={{ title: pkg?.name ?? candidate.name }}>
-      <View className="gap-2">
-        <Text className="text-base text-foreground" selectable>
-          {pkg?.description ?? candidate.description}
-        </Text>
-        {pkg ? null : (
-          <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>
-        )}
+  const headerProps = { title: pkg?.name ?? candidate.name };
+  const installAction = candidate.installedSkillId ? (
+    <Button
+      onPress={() =>
+        router.replace({
+          pathname: '/skills/[skillId]',
+          params: { skillId: candidate.installedSkillId! },
+        })
+      }
+      size="lg"
+      variant="secondary"
+    >
+      {t('skills.candidate.openInstalled')}
+    </Button>
+  ) : pkg ? (
+    <Button disabled={isInstalling} onPress={() => void install()} size="lg">
+      {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
+    </Button>
+  ) : null;
+
+  if (pkg) {
+    return (
+      <SkillDocumentPage
+        contentHash={pkg.contentHash}
+        description={pkg.description}
+        headerProps={headerProps}
+        instructions={pkg.instructions}
+      >
+        {installAction}
         {limitations ? <SkillLimitationList limitations={limitations} /> : null}
-        {pkg?.compatibility ? (
-          <Text className="text-sm text-muted-foreground" selectable>
-            {pkg.compatibility}
+      </SkillDocumentPage>
+    );
+  }
+
+  return (
+    <SkillPage headerProps={headerProps}>
+      {installAction}
+      <View className="gap-3">
+        <Text className="text-base text-foreground">{candidate.description}</Text>
+        <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>
+        {issues.map((issue) => (
+          <Text
+            className="text-sm text-muted-foreground"
+            key={`${issue.code}:${issue.subject ?? ''}`}
+          >
+            {t(`skills.issue.${issue.code}`, { subject: issue.subject ?? '' })}
           </Text>
-        ) : null}
-        {issues.length > 0 ? (
-          <View className="gap-1">
-            {issues.map((issue) => (
-              <Text
-                className="text-sm text-error"
-                key={`${issue.code}:${issue.subject ?? ''}`}
-                selectable
-              >
-                {t(`skills.issue.${issue.code}`, { subject: issue.subject ?? '' })}
-              </Text>
-            ))}
-          </View>
-        ) : null}
+        ))}
       </View>
-      {candidate.author || version ? (
-        <Section title={t('skills.detail.about')}>
-          {candidate.author ? (
-            <Section.Item
-              label={t('skills.detail.author')}
-              trailing={<Text className="text-sm text-muted-foreground">{candidate.author}</Text>}
-            />
-          ) : null}
-          {version ? (
-            <Section.Item
-              label={t('skills.detail.version')}
-              trailing={<Text className="text-sm text-muted-foreground">{version}</Text>}
-            />
-          ) : null}
-        </Section>
-      ) : null}
-      {pkg?.instructionsPreview ? (
-        <Section title={t('skills.candidate.preview')}>
-          <Section.Item>
-            <Text className="text-sm text-muted-foreground" selectable>
-              {pkg.instructionsPreview}
-            </Text>
-          </Section.Item>
-        </Section>
-      ) : null}
-      {isInstalled && pkg !== null ? (
-        <Button disabled={isInstalling} onPress={() => void install()}>
-          {t('skills.candidate.applyUpdate')}
-        </Button>
-      ) : null}
-      {isInstalled ? (
-        <Button
-          onPress={() =>
-            router.replace({
-              pathname: '/skills/[skillId]',
-              params: { skillId: candidate.installedSkillId! },
-            })
-          }
-          size="lg"
-          variant="secondary"
-        >
-          {t('skills.candidate.openInstalled')}
-        </Button>
-      ) : (
-        <Button disabled={!canInstall || isInstalling} onPress={() => void install()} size="lg">
-          {isInstalling ? t('skills.candidate.installing') : t('skills.candidate.install')}
-        </Button>
-      )}
-      {pkg ? (
-        <Text className="px-1 text-muted-foreground text-xs">{t('skills.executionHint')}</Text>
-      ) : null}
     </SkillPage>
   );
 }

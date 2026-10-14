@@ -84,6 +84,8 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  /** Skill document translations indexed by content hash and target language. */
+  'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
   // Last composer effort per Agent; clearing the cache restores model defaults.
@@ -94,6 +96,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
   'chat.reasoning_efforts': {},

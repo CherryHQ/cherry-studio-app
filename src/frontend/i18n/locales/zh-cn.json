@@ -2022,6 +2022,7 @@
   "skills.detail.uninstall": "卸载",
   "skills.detail.uninstallMessage": "该技能将从所有智能体移除。它协助生成的文件会保留在文件库中。",
   "skills.detail.uninstallTitle": "卸载 {{name}}?",
+  "skills.detail.update": "更新技能",
   "skills.detail.version": "版本",
   "skills.discover.empty": "未找到匹配的技能",
   "skills.discover.search": "查找技能",
@@ -2037,6 +2038,8 @@
   "skills.error.search-unavailable": "技能搜索暂不可用，请检查网络后重试。",
   "skills.error.source-invalid": "请提供支持的技能页面、GitHub 仓库、目录或 SKILL.md 链接。",
   "skills.error.source-unreachable": "无法访问技能来源。",
+  "skills.error.translation-failed": "翻译失败，请重试。",
+  "skills.error.translation-model-unavailable": "请先配置默认模型以使用 AI 翻译。",
   "skills.executionHint": "安装和读取技能不代表所有步骤都能执行；实际执行取决于可用工具和脚本运行环境。",
   "skills.find.hint": "描述需求或粘贴技能链接",
   "skills.find.installed": "已添加到当前助手",
@@ -2081,6 +2084,9 @@
   "skills.toast.update.rejected": "新版本的技能包未通过校验，已保留当前安装版本。",
   "skills.toast.update.unchanged": "已是最新版本",
   "skills.toast.update.updated": "技能已更新",
+  "skills.translation.original": "原文",
+  "skills.translation.translate": "AI 翻译",
+  "skills.translation.translating": "正在翻译…",
   "skills.working": "处理中…",
   "systemEntry.failed": "无法打开此分享，请重新分享内容。"
 }
