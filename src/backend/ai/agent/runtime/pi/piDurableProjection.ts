@@ -322,12 +322,16 @@ export function projectPiTurn(options: {
       }
       answer = undefined;
       if (block.type === 'thinking') {
-        parts.push({
-          id,
-          type: 'reasoning',
-          text: block.thinking,
-          state: streaming ? 'streaming' : 'done',
-        });
+        const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
+        const previous = parts.at(-1);
+        // Adjacent summaries remain one phase, including across provider retries.
+        // Opaque items stay in model history and keep a growing phase active without an empty row.
+        if (previous?.type === 'reasoning') {
+          if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
+          previous.state = state;
+        } else if (block.thinking.trim()) {
+          parts.push({ id, type: 'reasoning', text: block.thinking, state });
+        }
         return;
       }
       const binding = stored.tools.find(

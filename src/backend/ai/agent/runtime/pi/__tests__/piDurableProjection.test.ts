@@ -125,6 +125,180 @@ describe('Pi turn projection', () => {
     });
   });
 
+  const placed = {
+    id: 1,
+    type: 'input',
+    status: 'placed',
+    entry: 1,
+  } as unknown as SubmissionRecord;
+
+  function projectMessage(message: AssistantMessage, streaming: boolean) {
+    return projectPiTurn({
+      sessionId: 'session',
+      record: placed,
+      metadata,
+      active: true,
+      entries: streaming
+        ? []
+        : ([
+            { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+          ] as unknown as EntryRecord[]),
+      ...(streaming ? { partial: message } : {}),
+    });
+  }
+
+  test.each([true, false])(
+    'joins consecutive reasoning summaries without truncating content while streaming=%s',
+    (streaming) => {
+      const message: AssistantMessage = {
+        ...call('body', 2_000),
+        api: 'openai-responses',
+        content: [
+          { type: 'thinking', thinking: 'Inspecting screenshot names' },
+          { type: 'thinking', thinking: '正在核对截图中的玩家名称' },
+          { type: 'thinking', thinking: '我按总伤害划分选手档位' },
+          { type: 'text', text: 'The complete answer.' },
+        ],
+      };
+      const turn = projectMessage(message, streaming);
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          type: 'reasoning',
+          text: 'Inspecting screenshot names\n\n正在核对截图中的玩家名称\n\n我按总伤害划分选手档位',
+          state: 'done',
+        }),
+        expect.objectContaining({ type: 'text', text: 'The complete answer.' }),
+      ]);
+      expect(message.content).toHaveLength(4);
+    },
+  );
+
+  test.each([true, false])(
+    'omits empty reasoning disclosures while retaining provider replay content, streaming=%s',
+    (streaming) => {
+      const message: AssistantMessage = {
+        ...call('body', 2_000),
+        api: 'openai-responses',
+        content: [
+          { type: 'thinking', thinking: '' },
+          { type: 'thinking', thinking: '', thinkingSignature: 'opaque-provider-replay' },
+          { type: 'thinking', thinking: '\n \t' },
+          { type: 'toolCall', id: 'js-call', name: 'javascript', arguments: { code: '1 + 1' } },
+        ],
+      };
+      const turn = projectMessage(message, streaming);
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: 'js-call',
+          providerName: 'javascript',
+        }),
+      ]);
+      expect(message.content[1]).toEqual({
+        type: 'thinking',
+        thinking: '',
+        thinkingSignature: 'opaque-provider-replay',
+      });
+      expect(message.content).toHaveLength(4);
+    },
+  );
+
+  test('keeps reasoning phases separated by tools and marks only the growing phase as streaming', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [
+        { type: 'thinking', thinking: 'Before the tool.' },
+        call('body', 2_000).content[0]!,
+        { type: 'thinking', thinking: 'After the tool.' },
+        { type: 'thinking', thinking: 'More reasoning.' },
+      ],
+    };
+    const turn = projectMessage(message, true);
+
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Before the tool.', state: 'done' }),
+      expect.objectContaining({ type: 'tool', toolCallId: 'call' }),
+      expect.objectContaining({
+        type: 'reasoning',
+        text: 'After the tool.\n\nMore reasoning.',
+        state: 'streaming',
+      }),
+    ]);
+  });
+
+  test('keeps the pending assistant when reasoning has not produced visible text yet', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [{ type: 'thinking', thinking: '' }],
+    };
+    const turn = projectMessage(message, true);
+
+    expect(turn.hasAssistant).toBe(true);
+    expect(turn.parts).toEqual([]);
+  });
+
+  test.each([true, false])(
+    'keeps consecutive retry summaries in one phase while streaming=%s',
+    (streaming) => {
+      const earlier: AssistantMessage = {
+        ...call('body', 2_000),
+        content: [{ type: 'thinking', thinking: 'Earlier summary.' }],
+        stopReason: 'error',
+        errorMessage: 'The provider request failed.',
+      };
+      const retry: AssistantMessage = {
+        ...call('body', 3_000),
+        content: [
+          { type: 'thinking', thinking: 'Retry summary.' },
+          call('body', 3_000).content[0]!,
+        ],
+      };
+      const turn = projectPiTurn({
+        sessionId: 'session',
+        record: placed,
+        metadata,
+        active: true,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [earlier] },
+          ...(streaming
+            ? []
+            : [{ id: 3, conversationId: 1, kind: 'pi.assistant', model: [retry] }]),
+        ] as unknown as EntryRecord[],
+        ...(streaming ? { partial: retry } : {}),
+      });
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          id: 'pi:2:block:0',
+          type: 'reasoning',
+          text: 'Earlier summary.\n\nRetry summary.',
+          state: 'done',
+        }),
+        expect.objectContaining({ type: 'tool', toolCallId: 'call' }),
+      ]);
+      expect(earlier.content[0]).toEqual({ type: 'thinking', thinking: 'Earlier summary.' });
+      expect(retry.content[0]).toEqual({ type: 'thinking', thinking: 'Retry summary.' });
+    },
+  );
+
+  test('keeps a visible reasoning phase active while its next summary is still empty', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [
+        { type: 'thinking', thinking: 'Received summary.' },
+        { type: 'thinking', thinking: '' },
+      ],
+    };
+    expect(projectMessage(message, true).parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'streaming' }),
+    ]);
+    expect(projectMessage(message, false).parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'done' }),
+    ]);
+  });
+
   test('recovered terminal inputs settle tool calls that have no result entry', () => {
     const turn = projectPiTurn({
       sessionId: 'session',
