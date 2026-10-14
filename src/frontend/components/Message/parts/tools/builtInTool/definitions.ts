@@ -20,7 +20,7 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
   search_local_skills: { iconName: 'fileText', titleKey: 'skills.search' },
   load_skill: { iconName: 'fileText', titleKey: 'skills.activity.load' },
-  list_skill_files: { iconName: 'fileText', titleKey: 'skills.detail.files' },
+  list_skill_files: { iconName: 'fileText', titleKey: 'skills.activity.listFiles' },
   read_skill_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.file.read' },
   agent_create: { iconName: 'fileEdit', titleKey: 'chat.agentTool.create' },
   agent_update: { iconName: 'fileEdit', titleKey: 'chat.agentTool.update' },
@@ -101,6 +101,11 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     titleKey: 'chat.builtinTool.web.search',
   },
   run_js: {
+    iconName: 'code',
+    titleKey: 'chat.builtinTool.code.runJs',
+  },
+  // Pi's Code Mode executes the JavaScript capability.
+  codemode: {
     iconName: 'code',
     titleKey: 'chat.builtinTool.code.runJs',
   },

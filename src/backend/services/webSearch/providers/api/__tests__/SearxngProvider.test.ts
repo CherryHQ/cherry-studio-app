@@ -85,7 +85,14 @@ function createProvider(): WebSearchProvider {
     name: 'Searxng',
     type: 'api',
     apiKeys: [],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'http://localhost:8080' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'http://localhost:8080',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

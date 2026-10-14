@@ -19,7 +19,6 @@ import type {
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
-import { PI_TOOL_CALL_TOOL_NAME } from './piDeferredToolDiscovery';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
@@ -124,7 +123,17 @@ function collectUserContent(
     if (part.type === 'file') {
       const note = unsupportedMediaNote(part.mediaType, mediaCapabilities);
       if (note) return [{ type: 'text' as const, text: note }];
-      return [toPiImage(part)];
+      return [
+        ...(part.fileEntryId
+          ? [
+              {
+                type: 'text' as const,
+                text: `Cherry managed image: ${JSON.stringify({ fileEntryId: part.fileEntryId, name: part.name })}`,
+              },
+            ]
+          : []),
+        toPiImage(part),
+      ];
     }
     return [];
   });
@@ -202,12 +211,12 @@ function toPiImage(part: { mediaType: string; uri: string }): ImageContent {
 function collectProviderNames(request: RuntimeExecutionRequest): Map<string, string> {
   const result = new Map<string, string>();
   for (const part of request.resume ?? []) {
-    if (part.type === 'tool-call') result.set(part.toolCallId, piToolName(part));
+    if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
   }
   for (const turn of request.history) {
     for (const message of turn.messages) {
       for (const part of message.parts) {
-        if (part.type === 'tool-call') result.set(part.toolCallId, piToolName(part));
+        if (part.type === 'tool-call') result.set(part.toolCallId, part.providerName);
       }
     }
   }
@@ -260,11 +269,8 @@ function appendAssistantHistory(
         content.push({
           type: 'toolCall',
           id: part.toolCallId,
-          name: piToolName(part),
-          arguments:
-            part.toolRef.source === 'mcp'
-              ? { name: part.providerName, params: part.input }
-              : (part.input as JsonObject),
+          name: part.providerName,
+          arguments: part.input as JsonObject,
         });
         break;
       case 'tool-result': {
@@ -293,8 +299,4 @@ function appendAssistantHistory(
   if (lastAssistant && contextTokens !== undefined) {
     lastAssistant.usage = { ...EMPTY_PI_USAGE, input: contextTokens, totalTokens: contextTokens };
   }
-}
-
-function piToolName(part: Extract<RuntimeMessagePart, { type: 'tool-call' }>): string {
-  return part.toolRef.source === 'mcp' ? PI_TOOL_CALL_TOOL_NAME : part.providerName;
 }

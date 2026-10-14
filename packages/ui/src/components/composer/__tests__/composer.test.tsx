@@ -1,4 +1,4 @@
-import { createRef } from 'react';
+import { createRef, useLayoutEffect } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -259,23 +259,36 @@ describe('Composer', () => {
 
   // The field owns its own buffer, so a caller-side value has to be pushed into
   // it. Send clearing the draft is the case this exists for.
-  it('pushes a value the caller changed into the field', () => {
+  it('pushes a caller-side clear into the native field during the same commit', async () => {
     const inputRef = createRef<ComposerInputHandle>();
     const onChangeText = jest.fn();
     const onSend = jest.fn();
-    const children = <Composer.Input ref={inputRef} testID="composer-input" />;
-    const tree = render({ children, onChangeText, onSend, value: 'draw a cat' });
+    const draftsAtCommit: Promise<string>[] = [];
+
+    function ControlledComposer({ value }: { value: string }) {
+      useLayoutEffect(() => {
+        if (inputRef.current) draftsAtCommit.push(inputRef.current.getMarkdown());
+      }, [value]);
+
+      return (
+        <Composer onChangeText={onChangeText} onSend={onSend} value={value}>
+          <Composer.Input ref={inputRef} testID="composer-input" />
+        </Composer>
+      );
+    }
 
     act(() => {
-      tree.update(
-        <Composer onChangeText={onChangeText} onSend={onSend} value="">
-          {children}
-        </Composer>,
-      );
+      renderer = create(<ControlledComposer value="draw a cat" />);
+    });
+    act(() => {
+      renderer!.update(<ControlledComposer value="" />);
     });
 
+    // A parent sees the same cleared draft as the submitted-message UI, before
+    // passive effects or other post-commit work can delay the native command.
+    expect(await Promise.all(draftsAtCommit)).toEqual(['draw a cat', '']);
     expect(inputRef.current?.setValue).toHaveBeenCalledWith('');
-    expect(tree.root.findByType(TextInput).props.value).toBe('');
+    expect(renderer!.root.findByType(TextInput).props.value).toBe('');
   });
 
   // Round-tripping a keystroke would put the caret back where the field had

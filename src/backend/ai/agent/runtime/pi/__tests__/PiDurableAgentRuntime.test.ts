@@ -22,7 +22,7 @@ import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
-import { emptyAssistantMessage } from '../piStreamEvents';
+import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 import type { PiNativeWebTools } from '../piWebTools';
 
@@ -175,7 +175,7 @@ describe('Persistent Agent facade', () => {
         contentHash: 'abcdef0123456789',
         folderName: 'grill-me',
         files: ['SKILL.md'],
-        admission: { status: 'ready', reasons: [] },
+        limitations: { scripts: [], unavailableTools: [] },
       };
       const selectedInstructions =
         'Ask one question at a time. Recommend an answer for each question.';
@@ -195,10 +195,10 @@ describe('Persistent Agent facade', () => {
       };
       const tools: RuntimeTool[] = [
         {
-          ref: { source: 'builtin', capabilityId: 'run_js' },
-          providerName: 'run_js',
-          displayName: 'Run JavaScript',
-          description: 'Run a local calculation.',
+          ref: { source: 'builtin', capabilityId: 'read_file' },
+          providerName: 'read_file',
+          displayName: 'Read file',
+          description: 'Read a local file.',
           inputSchema: { type: 'object', properties: {} },
           approval: 'auto',
           execute,
@@ -290,9 +290,9 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain('2026-10-09');
         expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
-        expect(serialized).toContain('## JavaScript Sandbox');
+        expect(serialized).toContain('## Reading Attachments');
         expect(serialized).toContain('# GitHub');
-        expect(serialized).toContain('## MCP Tool Discovery');
+        expect(serialized).toContain('# Tool discovery');
         expect(serialized).toContain('grill-me');
         expect(serialized).toContain(selectedInstructions);
         expect(serialized).toContain('launch-checklist');
@@ -303,14 +303,12 @@ describe('Persistent Agent facade', () => {
           input?: { role?: string }[];
         };
         expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
-          'run_js',
+          'read_file',
           'search_local_skills',
           'load_skill',
           'list_skill_files',
           'read_skill_file',
           'tool_search',
-          'tool_describe',
-          'tool_call',
         ]);
         expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([
           'system',
@@ -323,6 +321,75 @@ describe('Persistent Agent facade', () => {
       }
     },
   );
+
+  test('recovers a structured transient failure after a tool without repeating its action', async () => {
+    const state = fixture();
+    const execute = jest.fn(async () => ({ value: { saved: true }, artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'write_file' },
+      providerName: 'write_file',
+      displayName: 'Write file',
+      description: 'Save a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute,
+    };
+    state.ports.resolveTool = async () => tool;
+    const resolveModel = state.dependencies.resolveModel;
+    let requests = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        const stream = new AssistantMessageEventStream();
+        requests += 1;
+        if (requests === 2) {
+          stream.push(
+            providerErrorEvent(emptyAssistantMessage(wire), {
+              message: '网络连接已中断',
+              retryable: true,
+            }),
+          );
+        } else {
+          const reason = requests === 1 ? 'toolUse' : 'stop';
+          stream.push({
+            type: 'done',
+            reason,
+            message: {
+              ...emptyAssistantMessage(wire),
+              stopReason: reason,
+              content:
+                requests === 1
+                  ? [{ type: 'toolCall', id: 'save', name: 'write_file', arguments: {} }]
+                  : [{ type: 'text', text: 'Saved.' }],
+            },
+          });
+        }
+        stream.end();
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    const terminal = deferred<string>();
+    const observation = await runtime.observe('session', (event) => {
+      if (event.type === 'turn.updated' && ['completed', 'failed'].includes(event.turn.status))
+        terminal.resolve(event.turn.status);
+    });
+    try {
+      await runtime.submit('session', input('recovery'));
+      expect(await terminal.promise).toBe('completed');
+      expect(requests).toBe(3);
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect((await runtime.message('session', 'answer-recovery'))?.turn.error).toBeNull();
+    } finally {
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
 
   test('stopping a streamed partial settles the task and preserves the answer across reopen', async () => {
     const state = fixture();
@@ -536,7 +603,7 @@ describe('Native web tools', () => {
     ...(name.startsWith('web_') ? { failureGroup: 'web' } : {}),
     execute: jest.fn(async () => ({ value: null, artifacts: [] })),
   });
-  const tools = [webTool('web_search'), webTool('web_fetch'), webTool('run_js')];
+  const tools = [webTool('web_search'), webTool('web_fetch'), webTool('read_file')];
   const configuration = {
     ...seed.configuration,
     tools,
@@ -733,7 +800,7 @@ describe('Native web tools', () => {
         name: 'web_fetch',
         input: { url: 'https://example.com/page' },
       },
-      { type: 'tool_use', id: 'toolu_js', name: 'run_js', input: {} },
+      { type: 'tool_use', id: 'toolu_js', name: 'read_file', input: {} },
     ];
     const fetched = {
       type: 'web_fetch_tool_result',
@@ -835,7 +902,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
       // The external search function and the native tool never reach the model together.
-      expect(toolNames(state.payloads[0]!)).toEqual(['web_fetch', 'run_js', 'web_search']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['web_fetch', 'read_file', 'web_search']);
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
@@ -889,7 +956,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
       expect(state.payloads).toHaveLength(2);
-      expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'run_js']);
+      expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'read_file']);
       expect(tools[1]!.execute).not.toHaveBeenCalled();
       const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
       expect(parts).toEqual(
@@ -916,7 +983,7 @@ describe('Native web tools', () => {
         configuration: { ...configuration, webTools: undefined },
       });
       await submitAndWait(runtime, input('first'));
-      expect(toolNames(state.payloads[0]!)).toEqual(['web_search', 'web_fetch', 'run_js']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['web_search', 'web_fetch', 'read_file']);
     } finally {
       await runtime.close();
     }
@@ -987,7 +1054,7 @@ describe('Native web tools', () => {
     try {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
-      expect(toolNames(state.payloads[0]!)).toEqual(['run_js', 'web_search', 'web_fetch']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['read_file', 'web_search', 'web_fetch']);
       expect(state.payloads[0]!.tools.slice(1).map((tool) => tool.type)).toEqual([
         'web_search_20250305',
         'web_fetch_20250910',

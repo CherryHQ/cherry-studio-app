@@ -6,7 +6,6 @@ import type { Skill } from '@/shared/data/types/skill';
 
 import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
-import type { SkillEnvironmentFacts } from '../skillAdmission';
 import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
@@ -15,18 +14,10 @@ jest.mock('@/backend/services/http', () => ({
   isHttpError: () => false,
 }));
 
-const environment: SkillEnvironmentFacts = {
-  platform: 'ios',
-  permissions: {},
-  webSearchAvailability: { fetchUrls: false, searchKeywords: false },
-  hasPaintingModel: false,
-  connectedPlugins: new Map(),
-};
-
 const reviewed: BundledSkillDefinition = {
   name: 'notes',
   revision: 1,
-  requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
+  requiredTools: [],
   workflowScope: 'Notes',
   files: {
     'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nWrite notes.',
@@ -36,19 +27,17 @@ const reviewed: BundledSkillDefinition = {
 const needsWeb: BundledSkillDefinition = {
   ...reviewed,
   name: 'web-notes',
-  requirements: {
-    platforms: null,
-    execution: 'none',
-    builtInTools: ['web_search'],
-    pluginTools: [],
-  },
+  requiredTools: ['web_search'],
   files: { 'SKILL.md': '---\nname: web-notes\ndescription: Web notes\n---\nSearch first.' },
 };
 const needsPython: BundledSkillDefinition = {
   ...reviewed,
   name: 'py-notes',
-  requirements: { platforms: null, execution: 'python', builtInTools: [], pluginTools: [] },
-  files: { 'SKILL.md': '---\nname: py-notes\ndescription: Py notes\n---\nRun python.' },
+  files: {
+    'SKILL.md':
+      '---\nname: py-notes\ndescription: Py notes\nallowed-tools: Bash(python:*) Read\n---\nRun python.',
+    'scripts/run.py': 'print(1)',
+  },
 };
 
 type Fakes = ReturnType<typeof createFakes>;
@@ -163,7 +152,6 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
-    environment: { read: async () => environment },
     sources: {
       bundled: createBundledSkillSource([]),
       github: {
@@ -183,7 +171,7 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
         },
       },
     },
-    agentFacts: async () => ({ disabledCapabilities: [], supportsToolCalling: true }),
+    agentExists: async () => true,
   });
 }
 
@@ -196,7 +184,6 @@ describe('createSkillsModule', () => {
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      environment: { read: async () => environment },
       sources: {
         bundled,
         github: {
@@ -207,7 +194,7 @@ describe('createSkillsModule', () => {
           },
         },
       },
-      agentFacts: async () => ({ disabledCapabilities: [], supportsToolCalling: true }),
+      agentExists: async () => true,
     });
     await expect(module.resolve('https://github.com/owner/repo')).rejects.toMatchObject({
       code: 'source-invalid',
@@ -250,7 +237,7 @@ describe('createSkillsModule', () => {
     expect(fakes.bound).toEqual([`first:${installed.id}`, `second:${installed.id}`]);
   });
 
-  it('inspects, binds explicitly, and installs packages despite environment limitations', async () => {
+  it('inspects, binds explicitly, and installs packages despite app limitations', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed, needsWeb, needsPython]);
     const changes = jest.fn();
@@ -258,21 +245,17 @@ describe('createSkillsModule', () => {
     const [notes, web, py] = await module.resolve('https://github.com/owner/repo');
     expect(notes).toMatchObject({
       name: 'notes',
-      profileProvenance: 'reviewed',
       installedSkillId: null,
     });
 
     const inspection = await module.inspect(notes!.candidateId);
     expect(inspection).toMatchObject({
       issues: [],
-      admission: { status: 'ready', reasons: [] },
+      limitations: { scripts: [], unavailableTools: [] },
       package: { name: 'notes', manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }] },
     });
-    expect(await module.inspect(web!.candidateId)).toMatchObject({
-      admission: { status: 'setup-required' },
-    });
     expect(await module.inspect(py!.candidateId)).toMatchObject({
-      admission: { status: 'unsupported' },
+      limitations: { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] },
     });
     expect(fakes.staged.size).toBe(0);
 
@@ -283,7 +266,7 @@ describe('createSkillsModule', () => {
     expect(installed).toMatchObject({
       name: 'notes',
       folderName: 'notes',
-      profile: { provenance: 'reviewed' },
+      profile: { declaredTools: [] },
     });
     expect(fakes.published).toEqual([`notes/${installed.contentHash}`]);
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
@@ -372,7 +355,7 @@ describe('createSkillsModule', () => {
     expect(fakes.storage.reconcile).toHaveBeenCalledWith([]);
   });
 
-  it('installs and updates complete external packages without inferring execution support', async () => {
+  it('records what a package asks of the app at installation and again on update', async () => {
     const fakes = createFakes();
     let files: Record<string, string> = {
       'SKILL.md':
@@ -387,7 +370,6 @@ describe('createSkillsModule', () => {
       author: null,
       version: null,
       tags: [],
-      reviewed: null,
       source: {
         registry: 'github',
         locator: 'github:owner/repo/notes',
@@ -400,7 +382,6 @@ describe('createSkillsModule', () => {
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      environment: { read: async () => environment },
       sources: {
         bundled: createBundledSkillSource([]),
         github: {
@@ -415,15 +396,12 @@ describe('createSkillsModule', () => {
           resolveUrl: async () => candidate,
         },
       },
-      agentFacts: async () => ({ disabledCapabilities: ['web'], supportsToolCalling: false }),
+      agentExists: async () => true,
     });
     const [resolved] = await module.resolve(candidate.source.url!);
+    // Prose mentioning Python is not read; the script file is a fact of the package.
     expect(await module.inspect(resolved!.candidateId)).toMatchObject({
-      profile: {
-        provenance: 'unverified',
-        requirements: { execution: 'none', builtInTools: [], pluginTools: [] },
-      },
-      admission: { status: 'unverified', reasons: [] },
+      limitations: { scripts: ['scripts/fill.py'], unavailableTools: [] },
     });
     const installed = await module.install({
       candidateId: resolved!.candidateId,
@@ -434,16 +412,18 @@ describe('createSkillsModule', () => {
       'references/outline.md',
       'scripts/fill.py',
     ]);
+    expect(installed.profile).toEqual({ declaredTools: [] });
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
     expect((await module.update(installed.id)).outcome).toBe('unchanged');
     files = {
-      'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun `python scripts/fill.py`.',
+      'SKILL.md':
+        '---\nname: notes\ndescription: Take notes\nallowed-tools: Bash Read\n---\nRun `python scripts/fill.py`.',
       'scripts/fill.py': 'print(1)',
     };
     expect(await module.update(installed.id)).toMatchObject({
       outcome: 'updated',
       skill: {
-        profile: { provenance: 'unverified' },
+        profile: { declaredTools: ['Bash', 'Read'] },
         manifest: [{ path: 'SKILL.md' }, { path: 'scripts/fill.py' }],
       },
     });

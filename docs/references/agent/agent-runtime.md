@@ -1,6 +1,6 @@
 # Cherry Agent Runtime
 
-> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.1.0.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.2.0.
 
 The experimental branch has replaced this per-turn production contract with upstream-owned durable
 history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
@@ -150,6 +150,11 @@ text field and an optional display-name field. Pi coalesces partial input into
 `{ type: 'tool.input.preview', partId, preview: { text, truncated, name? } }` events. These are
 display-only values, independent of `input` and tool execution. The latest preview accompanies the
 tool part for observation recovery and interruption; the full input is published on completion.
+
+Running Code Mode tools expose `progress.calls` with each child's stable `id`, `name`, bounded
+`args` preview (1000 characters), and `status` (`pending`, `running`, `ok`, `error`, or `interrupted`).
+The Host and frontend preserve this display-only field independently of the final tool `output`;
+it is cleared when the parent settles.
 
 `RuntimeModelPreflight` is a narrow, JSON-safe projection of input modalities, context/input/output
 limits, and native tool support. The Host calls it before reservation; provider SDK model objects,
@@ -675,6 +680,8 @@ type RuntimeOutputPart =
         | 'error'
         | 'interrupted'
       input?: RuntimeJsonValue
+      progress?: { calls: { id: string; name: string; args: string;
+        status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted' }[] }
       output?: RuntimeToolResult
       approvalId?: string
       error?: RuntimeError
@@ -752,6 +759,16 @@ assistant error reaches the Runtime. That diagnostic preserves only the original
 HTTP status, bounded response body, and explicit retryability. The Runtime ignores diagnostics from
 recovered transport attempts, then redacts and projects the terminal diagnostic into `RuntimeError`.
 This keeps the original terminal failure distinct from an earlier WebSocket or stream fallback.
+
+Pi's automatic retry reads the same diagnostic, so it does not depend on message wording. Quota and
+billing limits stay terminal; otherwise explicit retryability decides, then the HTTP status (408,
+409, 425, 429 and 5xx retry; other 4xx do not), and only then known patterns in the message or stable
+provider error code. A response body that fails after its headers arrived is a dropped connection
+whose native message is OS-localized and
+carries no status, so the stream binding marks it retryable. A cancelled request is never retried.
+The Codex Responses adapter preserves these same terminal facts, including HTTP rejections before
+streaming starts and errors delivered over HTTP 200. Its subscription usage-limit responses remain
+explicitly non-retryable even when the server returns HTTP 429.
 
 A `context.checkpoint` event is non-terminal. The Host retains only the latest valid candidate from
 the active execution and commits it atomically with a successful assistant terminal result. Failed,

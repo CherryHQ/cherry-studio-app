@@ -1,6 +1,5 @@
 export { createSkillsModule, type SkillsBackend } from './createSkillsModule';
-export { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
-export { createSkillEnvironmentReader, type SkillEnvironmentReader } from './skillEnvironment';
+export { evaluateSkillLimitations } from './skillCompatibility';
 export { createSkillMarketplace } from './skillMarketplace';
 export { decodeUtf8, parseSkillEntry } from './skillPackage';
 export {

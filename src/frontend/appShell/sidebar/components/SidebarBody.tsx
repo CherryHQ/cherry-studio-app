@@ -7,6 +7,7 @@ import { ScrollInteractionBoundary, ScrollShadow } from '@cherrystudio/ui/compon
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type NativeScrollEvent, type NativeSyntheticEvent, ScrollView } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
@@ -16,6 +17,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../hooks/useDockMetrics';
+import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarRecents } from './SidebarRecents';
 
@@ -85,43 +87,51 @@ function SidebarBodyContent({
   const { navigateAgents, openLibrary, openPaintings, openPlugins, openSkills } =
     useSidebarActions('SidebarBody');
   const { source } = useChatSource();
+  const { progress } = useSidebarSelection();
+  const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
+  const navigationStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.get() * 0.45 }));
 
   return (
     <>
       {/* No home row: that surface moves under settings. These destinations only manage this phone. */}
       {source === 'local' ? (
-        <>
+        <Animated.View style={navigationStyle}>
           <SidebarNavRow
             icon={MousePointerClickIcon}
             label={t('navigation.agents')}
             onPress={navigateAgents}
             testID="sidebar-agents"
+            disabled={disabled}
           />
           <SidebarNavRow
             icon={PaletteIcon}
             label={t('navigation.paintings')}
             onPress={openPaintings}
             testID="sidebar-paintings"
+            disabled={disabled}
           />
           <SidebarNavRow
             icon={BoxesIcon}
             label={t('plugins.title')}
             onPress={openPlugins}
             testID="sidebar-plugins"
+            disabled={disabled}
           />
           <SidebarNavRow
             icon={ToolCaseIcon}
             label={t('skills.title')}
             onPress={openSkills}
             testID="sidebar-skills"
+            disabled={disabled}
           />
           <SidebarNavRow
             icon={FolderIcon}
             label={t('navigation.library')}
             onPress={openLibrary}
             testID="sidebar-library"
+            disabled={disabled}
           />
-        </>
+        </Animated.View>
       ) : null}
 
       <SidebarRecents registerEndReachedHandler={registerEndReachedHandler} />

@@ -167,27 +167,77 @@ Runtime behavior:
 - executes one request per normalized keyword or URL using only the selected provider;
 - returns successful results alongside failed inputs, retaining error kind, message, and available
   status/code even when every input fails;
-- logs failures with their provider and capability; it never retries or switches providers;
+- logs failures with their provider and capability; it never retries a failed lookup or switches
+  providers;
 - bounds fetched page content and applies configured search-result compression;
 - propagates caller aborts.
 
 ## Provider Registry
 
-Current mobile provider ids are `zhipu`, `tavily`, `exa`, `exa-mcp`, `bocha`, `querit`, `jina`,
-and `firecrawl`. SearXNG remains data-compatible but hidden from mobile settings and selectors.
-The direct `fetch` provider is unsupported on mobile; old stored selections fail with an
-unsupported-provider error rather than being silently rewritten.
+The provider set is closed. Each id has a preset, one hand-written adapter in the registry, and
+settings derived from the preset; users choose among them and supply credentials. Provider ids,
+preset shape, and preference keys are vocabulary shared with Cherry Studio desktop.
+
+| Provider | Search | Page reading | Credentials |
+| --- | --- | --- | --- |
+| `zhipu` | yes | | Zhipu model provider key |
+| `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
+| `querit` | yes | yes | API key required |
+| `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
+| `jina` | yes | yes | API key required to search, optional to read pages |
+| `firecrawl` | yes | yes | API key optional |
+| `searxng` | yes | | self-hosted address; optional basic auth |
+| `crawl4ai` | | yes | self-hosted address; optional token |
+| `fetch` | | yes | none; see [Local Extraction](#local-extraction) |
+
+Each preset capability declares `requiresApiHost` and `requiresApiKey`. Configuration readiness
+and request execution use the same check, so a hostless local reader is available immediately
+and Jina requires a key only for keyword search. `WebSearchService` enforces the requirements
+before any request, so a missing key or address is the same configuration failure for every
+provider. SearXNG has no default address, unlike desktop, because a phone has no local instance
+to reach.
 
 Fresh installations retain hosted Exa MCP for keyword search (`web_search_exa`) and Jina Reader
 for page reading, both without requiring a user API key. Exa MCP also supports page reading
-(`web_fetch_exa`) when explicitly selected; its optional configured key uses `x-api-key`.
-Both services handle page extraction remotely; mobile does not parse arbitrary HTML. The Exa adapter
-accepts MCP JSON and SSE responses, preserves both `Highlights` and `Text` search content, and treats
-protocol/tool errors as failures rather than empty successful searches.
+(`web_fetch_exa`) when explicitly selected; its optional key uses `x-api-key`.
+Both services handle page extraction remotely. The Exa adapter is a fixed HTTP adapter for that
+one hosted service, not a general MCP client: it accepts MCP JSON and SSE responses, preserves
+both `Highlights` and `Text` search content, and treats protocol/tool errors as failures rather
+than empty successful searches.
+
+Jina's built-in addresses follow the device: a device whose region is mainland China, or whose
+time zone is Shanghai or Urumqi, uses Jina's mainland mirror (`s.jinaai.cn`, `r.jinaai.cn`), and
+any other device uses the global hosts. Device settings only guess at what the network can reach,
+so when the chosen host cannot be connected to, the request is sent once to the other. A timeout
+or an answer from the service is not retried, and an address the user entered is used as is.
+
+SearXNG returns the instance's result snippets and sends the configured engine list only when one
+is stored; it does not read each result page. Several API keys rotate per provider across lookups,
+over distinct keys.
+
+## Provider Settings
+
+The **Web search** and **URL fetch** pages each show the selected provider followed by the settings
+that provider has for that capability:
+
+- **API key** for keyed services. Zhipu instead links to its model provider, and Exa MCP has no
+  field of its own.
+- **API address** for every provider that calls a service. The field holds only the user's own
+  address; left empty, the built-in address applies and shows as the placeholder. A self-hosted
+  provider has no built-in address and cannot run until one is entered. Only HTTP(S) addresses are
+  saved.
+- **Basic auth** username and password for SearXNG.
+
+Search and page reading keep separate addresses for a provider that serves both. Fields save when
+editing ends. One **Check** button sits beside the setting the check depends on: the address for a
+self-hosted provider or one without a key field, otherwise the key. It runs one real lookup through
+the same resolution an Agent call uses, including values not yet saved, and shows the provider's
+own error on failure. Local extraction has nothing to configure or check.
 
 Stored provider selections remain unchanged. A selected provider is the only request destination,
-including when it uses a custom host. Exa and Jina reader calls allow 60 seconds each; Exa keyword
-search retains its 25-second limit. Caller cancellation propagates without becoming a lookup error.
+including when it uses a custom host; Jina's two built-in hosts are the same provider. Exa and
+Jina reader calls allow 60 seconds each; Exa keyword search retains its 25-second limit. Caller
+cancellation propagates without becoming a lookup error.
 
 Any lookup failure, including a failed URL in an otherwise successful batch, stops new calls to
 both `web_search` and `web_fetch` for the current turn. The tools share the Runtime's `web` failure
@@ -201,6 +251,35 @@ failure if no content was obtained. The Host persists these details in the ordin
 the frontend retains successful sources for citation even when the tool part reports an error.
 Network failures ask the user to check connectivity without drawing conclusions about a provider's
 pricing or extraction capability. Other, non-web tools remain available.
+
+## Local Extraction
+
+The `fetch` provider reads a page on the device and is shown in settings as **Local extraction**.
+It needs no account, key, or host, and sends the URL to no third party. It serves `web_fetch` only
+and is never selected by default.
+
+- **Download.** One `GET` without credentials to a public HTTP(S) hostname. URLs carrying
+  credentials, IP literals, single-label hosts, and `localhost`, `.local`, or `.internal` names are
+  rejected before any request. Redirects are followed manually, at most five, and each destination
+  passes the same check. The whole chain shares 30 seconds and the body is capped at 1 MiB.
+- **Accepted content.** HTML, XHTML, plain text, and Markdown, in UTF-8 only. A different charset
+  declared by the response header or an early `<meta>` tag is a failure, not a best-effort decode.
+- **Extraction.** HTML runs through linkedom, Readability, and Turndown with GFM tables inside the
+  native JavaScript sandbox, limited to 5 seconds and 64 MB. Page HTML enters as a JSON value and
+  is never evaluated; scripts, frames, forms, event handlers, and non-HTTP(S) links are removed
+  from the result. Plain text and Markdown skip extraction.
+- **Output.** At most 24,000 characters of Markdown per page, marked `truncated` beyond that,
+  before the shared `web_fetch` limits below apply.
+- **Concurrency.** One page is downloaded and extracted at a time across the app, so complete
+  HTML documents do not accumulate in memory behind the sandbox.
+
+Pages that build their content with client-side JavaScript have no main content in the downloaded
+HTML and fail as an empty extraction; a remote reader is the choice for those. A client built
+without the native sandbox reports the provider as unsupported on the platform. Both are ordinary
+lookup failures under the stop policy above.
+
+The bundled libraries live under `src/backend/services/webSearch/extraction/vendor`, each recorded
+with its version, registry source, checksum, and license.
 
 ## Preferences
 
@@ -245,5 +324,7 @@ one call's budget in a turn. Previously stored content is not rewritten.
 
 ## Reopen When
 
-- Mobile implements one of the currently unsupported external providers.
+- Users need a provider outside the closed set. Decide the contract with desktop first; the
+  provider vocabulary is shared.
+- Mobile adopts desktop's provider fallback or excluded-domain list.
 - Additional native adapters or model IDs are reviewed, including a client-executed route for Kimi.

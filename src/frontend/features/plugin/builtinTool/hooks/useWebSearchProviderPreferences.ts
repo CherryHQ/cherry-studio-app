@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import {
-  getMobileSupportedWebSearchProvidersByCapability,
+  getWebSearchProviderPresetsByCapability,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
 import type {
@@ -26,10 +26,10 @@ const preferenceMapping = {
 } as const;
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
+  getWebSearchProviderPresetsByCapability('searchKeywords'),
 );
-const fetchUrlsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('fetchUrls'),
+const fetchUrlsOptions = createWebSearchProviderOptions(
+  getWebSearchProviderPresetsByCapability('fetchUrls'),
 );
 
 function createWebSearchProviderOptions(
@@ -44,6 +44,16 @@ function createWebSearchProviderOptions(
 export function useWebSearchProviderPreferences() {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
+
+  const fetchUrlsProviderOptions = useMemo(
+    () =>
+      fetchUrlsOptions.map((option) =>
+        option.value === 'fetch'
+          ? { ...option, label: t('settings.websearch.provider.localExtraction') }
+          : option,
+      ),
+    [t],
+  );
 
   const compressionMethodOptions = useMemo<SettingOption<WebSearchCompressionMethod>[]>(
     () => [

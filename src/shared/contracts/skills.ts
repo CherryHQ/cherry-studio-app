@@ -1,11 +1,10 @@
 import type {
   Skill,
-  SkillAdmission,
   SkillCandidate,
   SkillInvocation,
+  SkillLimitations,
   SkillManifestEntry,
   SkillPackageIssue,
-  SkillProfile,
 } from '@/shared/data/types/skill';
 
 /** Validated package facts from staging; absent when validation failed. */
@@ -25,15 +24,14 @@ export type SkillInspectedPackage = {
 };
 
 /**
- * Package validation determines installation. The profile and environment
- * guidance describe known execution limitations without blocking installation.
+ * Package validation determines installation. Limitations describe what the
+ * app does not provide for the package, without blocking installation.
  */
 export type SkillInspection = {
   candidate: SkillCandidate;
   package: SkillInspectedPackage | null;
   issues: SkillPackageIssue[];
-  profile: SkillProfile | null;
-  admission: SkillAdmission | null;
+  limitations: SkillLimitations | null;
 };
 
 export type InstallSkillInput = {
@@ -101,7 +99,7 @@ export type SkillListing = {
 };
 
 /**
- * Package acquisition, admission, installation, update, and removal.
+ * Package acquisition, inspection, installation, update, and removal.
  * Library reads and Agent bindings are ordinary Data API endpoints.
  */
 export interface SkillsModule {
@@ -111,7 +109,7 @@ export interface SkillsModule {
   popular(signal?: AbortSignal): Promise<SkillListing[]>;
   /** Resolve a skills.sh page or a public GitHub repository, directory, or `SKILL.md` URL. */
   resolve(url: string, signal?: AbortSignal): Promise<SkillCandidate[]>;
-  /** Download, validate, and report environment guidance; never installs. */
+  /** Download, validate, and report the app's limitations; never installs. */
   inspect(candidateId: string, signal?: AbortSignal): Promise<SkillInspection>;
   install(input: InstallSkillInput, signal?: AbortSignal): Promise<Skill>;
   /** Re-acquire the accepted source; a rejected revision leaves the installation intact. */

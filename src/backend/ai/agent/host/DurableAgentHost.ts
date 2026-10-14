@@ -6,6 +6,7 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
+import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import {
   AgentCancelSubmissionInputSchema,
   AgentCancelTurnInputSchema,
@@ -40,6 +41,7 @@ import { BackupError } from '@/shared/contracts/backup';
 import type { SkillsModule } from '@/shared/contracts/skills';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { TraceContext } from '@/shared/data/types/trace';
 
 import {
   raceAbort,
@@ -66,6 +68,7 @@ import {
   projectDurableHostTurn,
 } from './durableHostProjection';
 import { toAgentApprovalView } from './runtimeProjection';
+import { toolResultDiagnostics } from './toolResultDiagnostics';
 import { materializeRuntimeAttachments } from './turnAttachments';
 import {
   prepareDurableTurn,
@@ -85,6 +88,7 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
+  contextStatus: 'compacting' | 'compaction-failed' | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
@@ -128,6 +132,7 @@ export class DurableAgentHost implements AgentProtocol {
   private accepting = false;
   private closing: Promise<void> | undefined;
   private suspension: Promise<void> | undefined;
+  private resuming: Promise<void> | undefined;
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: { release(): void } | undefined;
@@ -182,6 +187,21 @@ export class DurableAgentHost implements AgentProtocol {
     if (!this.ports.durableStorage || !this.ports.recordDurableUsage)
       throw new Error('Persistent Agent storage and usage ports are required.');
     const execution: RuntimeExecutionPorts = {
+      scriptSandbox: this.ports.scriptSandbox?.(),
+      writeToolOutput: this.ports.writeToolOutput
+        ? async (identity, output, signal) => {
+            await this.prepareExecution(identity, signal);
+            return this.ports.writeToolOutput!(output, signal);
+          }
+        : undefined,
+      onFailure: (error) => {
+        logger.error('Durable Agent storage failed', new Error(error.message));
+        for (const sessionId of this.listeners.keys())
+          this.publish(sessionId, { type: 'runtime.failed' });
+        void this.suspend(new Error(error.message)).catch((failure) =>
+          logger.warn('Failed to suspend the Agent after storage failure', failure),
+        );
+      },
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
@@ -193,6 +213,7 @@ export class DurableAgentHost implements AgentProtocol {
             agentId: prepared?.plan.agent.id ?? session?.agentId,
             sessionId: identity.sessionId,
             ...(identity.turnId ? { turnId: identity.turnId } : {}),
+            ...(identity.requestId ? { requestId: identity.requestId } : {}),
           },
           { 'runtime.name': this.conversations.descriptor.id },
         );
@@ -253,11 +274,18 @@ export class DurableAgentHost implements AgentProtocol {
         });
       },
     };
-    await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
+    const recovery = this.ports.traces?.startTrace('ai.recovery');
     try {
+      this.controller.signal.throwIfAborted();
+      await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
       const copies = await this.conversations.sessions();
       // Upstream abort enables scheduling too. Attach current owners before retiring stale copies.
-      for (const sessionId of await this.conversations.unfinishedSessions())
+      const unfinished = await this.conversations.unfinishedSessions();
+      recovery?.setAttributes({
+        'agent.recovery.session_count': copies.length,
+        'agent.recovery.unfinished_count': unfinished.length,
+      });
+      for (const sessionId of unfinished)
         if (await this.isCurrentConversation(sessionId)) await this.attach(sessionId);
       for (const { sessionId } of copies)
         if (!(await this.isCurrentConversation(sessionId)))
@@ -268,10 +296,15 @@ export class DurableAgentHost implements AgentProtocol {
       const work = await this.conversations.watchWork((active) => this.protectWork(active));
       this.workWatch = work;
       this.protectWork(work.active);
+      this.controller.signal.throwIfAborted();
       this.accepting = true;
       this.conversations.resume();
+      recovery?.end('ok');
     } catch (error) {
-      await this.close();
+      recovery?.end('error', traceErrorAttributes(error));
+      logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
+      if (!this.controller.signal.aborted)
+        await this.suspend(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -286,22 +319,26 @@ export class DurableAgentHost implements AgentProtocol {
     this.controller.abort(new Error('The Agent Host generation is closing.'));
     for (const admission of this.admissions.values())
       admission.controller.abort(this.controller.signal.reason);
-    await this.suspension;
+    await this.suspension?.catch((error) => logger.warn('Previous runtime cleanup failed', error));
+    await this.resuming?.catch((error) => logger.warn('Runtime reopening failed', error));
     await this.workWatch?.unsubscribe();
     this.workWatch = undefined;
     await Promise.allSettled([...this.admissions.values()].map((admission) => admission.promise));
     await Promise.allSettled([...this.attachments.values()]);
     await Promise.allSettled([...this.live.values()].map((state) => state.unsubscribe()));
     await Promise.allSettled([...this.pendingWrites]);
-    await this.conversations.close();
-    await this.naming.drain();
-    for (const state of this.live.values()) state.background?.retire();
-    this.live.clear();
-    this.prepared.clear();
-    this.preparing.clear();
-    this.listeners.clear();
-    this.executionLease?.release();
-    this.executionLease = undefined;
+    try {
+      await this.conversations.close();
+      await this.naming.drain();
+    } finally {
+      for (const state of this.live.values()) state.background?.retire();
+      this.live.clear();
+      this.prepared.clear();
+      this.preparing.clear();
+      this.listeners.clear();
+      this.executionLease?.release();
+      this.executionLease = undefined;
+    }
   }
 
   private protectWork(active: boolean) {
@@ -314,36 +351,51 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
-  private suspend(): Promise<void> {
+  private suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
-    return (this.suspension ??= (async () => {
+    return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
       this.suspended = true;
-      for (const admission of this.admissions.values())
-        admission.controller.abort(new Error('Background execution expired.'));
+      for (const admission of this.admissions.values()) admission.controller.abort(reason);
       await Promise.allSettled([...this.admissions.values()].map((entry) => entry.promise));
       await this.workWatch?.unsubscribe();
       this.workWatch = undefined;
       await Promise.allSettled([...this.attachments.values()]);
       await Promise.allSettled([...this.live.values()].map((state) => state.unsubscribe()));
       await Promise.allSettled([...this.pendingWrites]);
-      await this.conversations.close();
-      for (const state of this.live.values()) state.background?.retire();
-      this.live.clear();
-      this.prepared.clear();
-      this.preparing.clear();
-      this.executionLease?.release();
-      this.executionLease = undefined;
-    })());
+      try {
+        await this.conversations.close();
+      } finally {
+        for (const state of this.live.values()) state.background?.retire();
+        this.live.clear();
+        this.prepared.clear();
+        this.preparing.clear();
+        this.executionLease?.release();
+        this.executionLease = undefined;
+      }
+    }));
   }
 
   async resumeSuspended() {
+    if (this.resuming) return this.resuming;
     if (!this.suspended || this.controller.signal.aborted) return;
-    await this.suspension;
-    if (this.controller.signal.aborted || !this.suspended) return;
-    this.suspended = false;
-    this.suspension = undefined;
-    await this.initialize();
+    this.resuming = (async () => {
+      await this.suspension?.catch((error) =>
+        logger.warn('Previous runtime cleanup failed', error),
+      );
+      if (this.controller.signal.aborted) return;
+      this.suspended = false;
+      this.suspension = undefined;
+      try {
+        await this.initialize();
+      } catch (error) {
+        this.suspended = true;
+        throw error;
+      }
+    })().finally(() => {
+      this.resuming = undefined;
+    });
+    return this.resuming;
   }
 
   getSessionStatus(sessionId: string) {
@@ -787,6 +839,7 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
+    await this.resumeSuspended();
     const session = await this.requireSession(sessionId);
     const agent = await this.ports.agents.getAgent(session.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
@@ -807,6 +860,7 @@ export class DurableAgentHost implements AgentProtocol {
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
       pendingQuestion: state?.question ?? null,
+      contextStatus: state?.contextStatus ?? null,
       pendingApprovals: [...(state?.approvals.values() ?? [])].map((entry) => entry.view),
     });
     const listeners = this.listeners.get(sessionId) ?? new Set();
@@ -849,46 +903,51 @@ export class DurableAgentHost implements AgentProtocol {
     if (cached) return cached;
     const existing = this.preparing.get(key);
     if (existing) return raceAbort(existing, signal);
-    const operation = (async () => {
-      const state = await this.attach(identity.sessionId);
-      const turn =
-        state.active?.identity.requestId === identity.requestId
-          ? state.active
-          : (
-              await this.conversations.history(identity.sessionId, {
-                limit: 1,
-                requestIds: [identity.requestId],
-              })
-            ).turns[0];
-      if (!turn || turn.identity.turnId !== identity.turnId)
-        throw new Error('The durable tool has no current owning input.');
-      const facts = DurableTurnMetadataSchema.parse(turn.metadata);
-      const configuration = await this.conversations.configuration(identity.sessionId);
-      const plan = await prepareDurableTurn(
-        this.preparation,
-        {
-          sessionId: identity.sessionId,
-          userMessageId: turn.userMessageId,
-          assistantMessageId: turn.assistantMessageId,
-          parts: userInput(facts.userParts),
-          ...submittedSkills(facts.userParts),
-          modelId: facts.inferenceSnapshot.model.uniqueModelId,
-          ...submittedEffort(configuration.options.reasoningEffort),
-          ...(facts.inferenceSnapshot.imageGeneration
-            ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
-            : {}),
-        },
-        await this.conversations.resourceFileEntryIds(identity.sessionId),
-        signal,
-      );
-      plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
-      for (const part of turn.parts)
-        if (part.type === 'file')
-          plan.resources.grantFile(FileEntryIdSchema.parse(part.ref.fileEntryId));
-      const prepared = { turnId: identity.turnId, plan };
-      this.prepared.set(key, prepared);
-      return prepared;
-    })();
+    const operation = this.traceOperation(
+      'ai.prepare',
+      identity,
+      async () => {
+        const state = await this.attach(identity.sessionId);
+        const turn =
+          state.active?.identity.requestId === identity.requestId
+            ? state.active
+            : (
+                await this.conversations.history(identity.sessionId, {
+                  limit: 1,
+                  requestIds: [identity.requestId],
+                })
+              ).turns[0];
+        if (!turn || turn.identity.turnId !== identity.turnId)
+          throw new Error('The durable tool has no current owning input.');
+        const facts = DurableTurnMetadataSchema.parse(turn.metadata);
+        const configuration = await this.conversations.configuration(identity.sessionId);
+        const plan = await prepareDurableTurn(
+          this.preparation,
+          {
+            sessionId: identity.sessionId,
+            userMessageId: turn.userMessageId,
+            assistantMessageId: turn.assistantMessageId,
+            parts: userInput(facts.userParts),
+            ...submittedSkills(facts.userParts),
+            modelId: facts.inferenceSnapshot.model.uniqueModelId,
+            ...submittedEffort(configuration.options.reasoningEffort),
+            ...(facts.inferenceSnapshot.imageGeneration
+              ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
+              : {}),
+          },
+          await this.conversations.resourceFileEntryIds(identity.sessionId),
+          signal,
+        );
+        plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
+        for (const part of turn.parts)
+          if (part.type === 'file')
+            plan.resources.grantFile(FileEntryIdSchema.parse(part.ref.fileEntryId));
+        const prepared = { turnId: identity.turnId, plan };
+        this.prepared.set(key, prepared);
+        return prepared;
+      },
+      signal,
+    );
     this.preparing.set(key, operation);
     try {
       return await operation;
@@ -912,19 +971,18 @@ export class DurableAgentHost implements AgentProtocol {
       execute: async (call) => {
         const span = this.ports.traces?.startTrace(
           'pi.execute_tool',
-          {
-            agentId: plan.agent.id,
-            sessionId: identity.sessionId,
-            turnId: identity.turnId,
-          },
-          { 'tool.name': tool.providerName },
+          { ...identity, agentId: plan.agent.id },
+          { 'tool.name': tool.providerName, 'tool.call.id': call.toolCallId },
         );
         try {
           const output = await tool.execute(call);
-          span?.end(output.failure ? 'error' : 'ok');
+          if (span) {
+            const diagnostic = toolResultDiagnostics(tool.ref, output);
+            span.end(diagnostic.status, diagnostic.attributes);
+          }
           return output;
         } catch (error) {
-          span?.end(call.signal.aborted ? 'cancelled' : 'error');
+          span?.end(call.signal.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
           throw error;
         }
       },
@@ -1091,6 +1149,13 @@ export class DurableAgentHost implements AgentProtocol {
         },
       });
       this.ports.durableStorage?.notifyTranscript(row.sessionId);
+      logger.warn('Agent reservation recovered as interrupted', {
+        sessionId: row.sessionId,
+        turnId: row.turnId,
+        assistantMessageId: row.assistantMessageId,
+        operation: 'ai.reconcile',
+        reasonCode: 'not_admitted',
+      });
     }
   }
 
@@ -1100,46 +1165,56 @@ export class DurableAgentHost implements AgentProtocol {
       if (!(await this.isCurrentConversation(sessionId))) continue;
       const latest = (await this.conversations.history(sessionId, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
-      const { contextCheckpoint } = await this.conversations.exportTurn(
-        sessionId,
-        latest.identity.requestId,
-        { currentContext: true },
-      );
-      if (contextCheckpoint)
-        await this.store.saveContextCheckpoint(
-          latest.assistantMessageId,
-          latest.identity.turnId,
-          contextCheckpoint,
+      await this.traceOperation('ai.checkpoint', latest.identity, async () => {
+        const { contextCheckpoint } = await this.conversations.exportTurn(
+          sessionId,
+          latest.identity.requestId,
+          { currentContext: true },
         );
+        if (contextCheckpoint)
+          await this.store.saveContextCheckpoint(
+            latest.assistantMessageId,
+            latest.identity.turnId,
+            contextCheckpoint,
+          );
+      });
     }
   }
 
   private async persistTurn(turn: RuntimeDurableTurn) {
     const { assistant, turn: view } = projectDurableHostTurn(turn);
-    if (!assistant || turn.status === 'running' || turn.status === 'queued') return;
-    const artifacts = await this.conversations.exportTurn(
-      turn.identity.sessionId,
-      turn.identity.requestId,
-    );
-    const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
-    await this.store.finalizeAssistantMessage({
-      assistantMessageId: assistant.id,
-      turnId: turn.identity.turnId,
-      status:
-        turn.status === 'completed' ? 'success' : turn.status === 'failed' ? 'error' : turn.status,
-      parts: assistant.parts,
-      usage: turn.usage,
-      error: view.error,
-      ...artifacts,
-      runtimeStats: {
-        ...(turn.contextTokens !== undefined ? { contextTokens: turn.contextTokens } : {}),
-        runtimeTiming: {
-          ...timing,
-          completedAt: Math.max(timing.startedAt, timing.completedAt ?? turn.updatedAt),
-        },
+    const status = turn.status;
+    if (!assistant || status === 'running' || status === 'queued') return;
+    await this.traceOperation(
+      'ai.settlement',
+      { ...turn.identity, messageId: assistant.id },
+      async () => {
+        const artifacts = await this.conversations.exportTurn(
+          turn.identity.sessionId,
+          turn.identity.requestId,
+        );
+        const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
+        await this.store.finalizeAssistantMessage({
+          assistantMessageId: assistant.id,
+          turnId: turn.identity.turnId,
+          status: status === 'completed' ? 'success' : status === 'failed' ? 'error' : status,
+          parts: assistant.parts,
+          usage: turn.usage,
+          error: view.error,
+          ...artifacts,
+          runtimeStats: {
+            ...(turn.contextTokens !== undefined ? { contextTokens: turn.contextTokens } : {}),
+            runtimeTiming: {
+              ...timing,
+              completedAt: Math.max(timing.startedAt, timing.completedAt ?? turn.updatedAt),
+            },
+          },
+        });
+        this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
       },
-    });
-    this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
+    );
+    // Settlement can outlive the current UI turn, including recovery without an observer.
+    this.recordTurnState({ ...turn.identity, messageId: assistant.id }, view.status, view.error);
   }
 
   private settle(turn: RuntimeDurableTurn) {
@@ -1153,6 +1228,11 @@ export class DurableAgentHost implements AgentProtocol {
         logger.warn(
           'Agent result remains in Pi until Cherry settlement can be retried',
           error as Error,
+          {
+            ...turn.identity,
+            assistantMessageId: turn.assistantMessageId,
+            operation: 'ai.settlement',
+          },
         );
       });
     this.settlements.set(sessionId, operation);
@@ -1168,13 +1248,14 @@ export class DurableAgentHost implements AgentProtocol {
     if (existing) return existing;
     const pending = this.attachments.get(sessionId);
     if (pending) return pending;
-    const operation = (async () => {
+    const operation = this.traceOperation('ai.observe', { sessionId }, async () => {
       const state: LiveSession = {
         waiters: new Set(),
         users: new Set(),
         assistant: null,
         active: null,
         queue: [],
+        contextStatus: null,
         unsubscribe: async () => {},
         background: null,
         backgroundRequestId: null,
@@ -1191,13 +1272,15 @@ export class DurableAgentHost implements AgentProtocol {
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
       state.queue = observed.snapshot.queue;
+      state.contextStatus = observed.snapshot.contextStatus ?? null;
+      this.recordQueue(sessionId, state.queue, []);
       state.unsubscribe = observed.unsubscribe;
       this.live.set(sessionId, state);
       if (state.active) this.present(state.active);
       installed = true;
       for (const event of pending) this.consume(sessionId, state, event);
       return state;
-    })();
+    });
     this.attachments.set(sessionId, operation);
     try {
       return await operation;
@@ -1209,9 +1292,16 @@ export class DurableAgentHost implements AgentProtocol {
   private consume(sessionId: string, state: LiveSession, event: RuntimeConversationEvent) {
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
+      this.recordQueue(sessionId, event.snapshot.queue, state.queue);
       state.queue = event.snapshot.queue;
+      state.contextStatus = event.snapshot.contextStatus ?? null;
+      this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
       if (state.active) this.present(state.active);
+    } else if (event.type === 'context.updated') {
+      state.contextStatus = event.status;
+      this.publish(sessionId, event);
     } else if (event.type === 'queue.updated') {
+      this.recordQueue(sessionId, event.queue, state.queue);
       state.queue = event.queue;
       for (const turn of event.queue) this.publishRows(turn);
     } else {
@@ -1419,20 +1509,51 @@ export class DurableAgentHost implements AgentProtocol {
       try {
         listener(value);
       } catch (error) {
-        logger.warn('Agent listener failed', error as Error);
+        logger.warn('Agent listener failed', error as Error, {
+          sessionId,
+          operation: 'agent.listener',
+        });
       }
   }
   private setStatus(sessionId: string, status: AgentSessionStatus | null) {
     const previous = this.statuses.get(sessionId);
     if (previous?.turnId === status?.turnId && previous?.status === status?.status) return;
+    // Terminal outcomes are recorded by persistence, independently of the current UI status.
+    if (
+      status &&
+      ['running', 'awaiting-approval', 'awaiting-input', 'cancelling'].includes(status.status)
+    )
+      this.recordTurnState({ sessionId, turnId: status.turnId }, status.status);
     if (status) this.statuses.set(sessionId, Object.freeze(status));
     else this.statuses.delete(sessionId);
     for (const listener of this.statusListeners.get(sessionId) ?? [])
       try {
         listener();
       } catch (error) {
-        logger.warn('Agent status listener failed', error as Error);
+        logger.warn('Agent status listener failed', error as Error, {
+          sessionId,
+          operation: 'agent.status_listener',
+        });
       }
+  }
+  private recordTurnState(
+    context: TraceContext,
+    status: AgentSessionStatus['status'],
+    error?: AgentErrorView | null,
+  ) {
+    const span = this.ports.traces?.startTrace('ai.turn_state', context, {
+      'agent.turn.status': status,
+      ...traceErrorAttributes(error),
+    });
+    span?.end(
+      status === 'failed'
+        ? 'error'
+        : status === 'cancelled'
+          ? 'cancelled'
+          : status === 'interrupted'
+            ? 'interrupted'
+            : 'ok',
+    );
   }
   private renameFrom(operation: Promise<AgentSessionView | null>) {
     this.track(
@@ -1446,7 +1567,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
   private track(operation: Promise<unknown>) {
     const tracked = operation.catch((error) =>
-      logger.warn('Agent projection failed', error as Error),
+      logger.warn('Agent projection failed', error as Error, { operation: 'agent.projection' }),
     );
     this.pendingWrites.add(tracked);
     void tracked.finally(() => this.pendingWrites.delete(tracked));
@@ -1471,6 +1592,10 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     operation: (signal: AbortSignal) => Promise<Result>,
   ): Promise<Result> {
+    // A submission reopens a suspended engine, as observing a session does: a new chat has no
+    // session on screen to carry the retry action.
+    if (this.suspended && !this.controller.signal.aborted)
+      return this.resumeSuspended().then(() => this.admit(sessionId, operation));
     if (!this.accepting)
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not accepting submissions.');
     storageMutationGate.assertWritable();
@@ -1481,7 +1606,14 @@ export class DurableAgentHost implements AgentProtocol {
       controller.abort(reason),
     );
     const promise = Promise.resolve()
-      .then(() => operation(controller.signal))
+      .then(() =>
+        this.traceOperation(
+          'ai.admission',
+          { sessionId },
+          () => operation(controller.signal),
+          controller.signal,
+        ),
+      )
       .catch((error: unknown) => {
         if (controller.signal.reason instanceof AgentProtocolError) throw controller.signal.reason;
         throw error;
@@ -1492,6 +1624,61 @@ export class DurableAgentHost implements AgentProtocol {
       });
     this.admissions.set(sessionId, { controller, promise });
     return promise;
+  }
+
+  private recordQueue(
+    sessionId: string,
+    queue: readonly RuntimeDurableTurn[],
+    previous: readonly RuntimeDurableTurn[],
+  ) {
+    // Queue events describe membership changes, not streamed content updates.
+    if (!queue.length && !previous.length) return;
+    const span = this.ports.traces?.startTrace(
+      'ai.queue',
+      { sessionId },
+      { 'agent.queue.length': queue.length },
+    );
+    span?.end('ok');
+    for (const turn of queue) {
+      if (previous.some((item) => item.identity.requestId === turn.identity.requestId)) continue;
+      this.ports.traces
+        ?.startTrace(
+          'ai.turn_state',
+          { ...turn.identity, messageId: turn.assistantMessageId },
+          { 'agent.turn.status': 'queued' },
+        )
+        ?.end('ok');
+    }
+  }
+
+  private async traceOperation<Value>(
+    name:
+      | 'ai.admission'
+      | 'ai.suspend'
+      | 'ai.prepare'
+      | 'ai.observe'
+      | 'ai.settlement'
+      | 'ai.checkpoint',
+    context: TraceContext,
+    operation: () => Promise<Value>,
+    signal?: AbortSignal,
+  ): Promise<Value> {
+    const span = this.ports.traces?.startTrace(name, context);
+    try {
+      const result = await operation();
+      span?.end('ok');
+      return result;
+    } catch (error) {
+      span?.end(signal?.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
+      if (!signal?.aborted)
+        logger.error('Agent operation failed', {
+          ...context,
+          assistantMessageId: context.messageId,
+          operation: name,
+          error,
+        });
+      throw error;
+    }
   }
 }
 

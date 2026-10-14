@@ -93,6 +93,8 @@ describe('turn preparation', () => {
         inspect: unavailable,
         install: unavailable,
         update: unavailable,
+        previewAdaptation: unavailable,
+        adapt: unavailable,
         uninstall: unavailable,
         subscribeChanges: () => () => undefined,
       };
@@ -722,7 +724,7 @@ describe('Skill turn preparation', () => {
         folderName: 'notes',
         files: ['SKILL.md'],
         invocation: { modelInvocable: true, userInvocable: true },
-        admission: { status: 'ready', reasons: [] },
+        limitations: { scripts: [], unavailableTools: [] },
       },
     ],
     readInstructions: async () => 'Use a concise outline.',

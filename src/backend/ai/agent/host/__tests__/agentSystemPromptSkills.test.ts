@@ -1,3 +1,4 @@
+import { createSkillTools } from '../../tools/skill/skillTools';
 import { buildAgentSystemPrompt, buildInitialSkillInstructions } from '../agentSystemPrompt';
 import { EMPTY_SKILL_SCOPE, type SkillTurnEntry } from '../skillScope';
 import { EMPTY_TURN_SKILL_PLAN } from '../turnPreparation';
@@ -11,7 +12,7 @@ function entry(id: string, overrides: Partial<SkillTurnEntry> = {}): SkillTurnEn
     contentHash: 'abcdef0123456789',
     folderName: id,
     files: ['SKILL.md'],
-    admission: { status: 'ready', reasons: [] },
+    limitations: { scripts: [], unavailableTools: [] },
     ...overrides,
   };
 }
@@ -28,6 +29,32 @@ describe('agent system prompt Skills section', () => {
     expect(buildAgentSystemPrompt({ ...base, skills: EMPTY_TURN_SKILL_PLAN })).not.toContain(
       '## Skills',
     );
+  });
+
+  it('reports an empty Agent inventory when Skill discovery is available', () => {
+    const prompt = buildAgentSystemPrompt({
+      ...base,
+      tools: createSkillTools(EMPTY_SKILL_SCOPE),
+      skills: EMPTY_TURN_SKILL_PLAN,
+    });
+    expect(prompt).toContain('0 automatically discoverable Skills');
+    expect(prompt).toContain('not the total installed in the app');
+    expect(prompt).toContain('app-owned System Skills');
+  });
+
+  it('gives an authoritative count and pagination rules for a complete inventory', () => {
+    const entries = Array.from({ length: 45 }, (_, index) => entry(`skill-${index}`));
+    const prompt = buildAgentSystemPrompt({
+      ...base,
+      skills: { selected: [], scope: { ...EMPTY_SKILL_SCOPE, entries } },
+    });
+    expect(prompt).toContain('45 automatically discoverable Skills');
+    expect(prompt).toContain('45 enabled, bound and readable Skill packages');
+    expect(prompt).toContain('query: ""');
+    expect(prompt).toContain('include_manual: true');
+    expect(prompt).toContain('`total` for the count');
+    expect(prompt).toContain('until `nextCursor` is null');
+    expect(prompt).toContain('installation during this turn can change it');
   });
 
   it('preserves routing conditions at the end of long descriptions without loading bodies', () => {
@@ -81,6 +108,8 @@ describe('agent system prompt Skills section', () => {
       },
     });
     expect(prompt).toContain('## Skills');
+    expect(prompt).toContain('3 enabled, bound and readable Skill packages');
+    expect(prompt).toContain('2 automatically discoverable Skills');
     expect(prompt).toContain('- a (skill_id: a): a description');
     expect(prompt).toContain('- b (skill_id: b): b description');
     expect(prompt).toContain('### Selected Skills');

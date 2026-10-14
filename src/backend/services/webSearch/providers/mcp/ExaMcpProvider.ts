@@ -31,8 +31,6 @@ const logger = loggerService.withContext('ExaMcpProvider');
 type ExaResult = Pick<WebSearchResult, 'title' | 'url' | 'content'>;
 
 export class ExaMcpProvider extends BaseWebSearchProvider {
-  protected readonly requiresApiKey = false;
-
   async searchKeywords(
     query: string,
     config: WebSearchExecutionConfig,

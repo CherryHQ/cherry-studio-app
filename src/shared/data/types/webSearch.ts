@@ -17,6 +17,9 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'fetch',
   'jina',
   'firecrawl',
+  'crawl4ai',
+  'parallel',
+  'serply',
 ] as const;
 
 export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
@@ -24,6 +27,16 @@ export type WebSearchProviderId = (typeof WEB_SEARCH_PROVIDER_IDS)[number];
 export const WEB_SEARCH_CAPABILITIES = ['searchKeywords', 'fetchUrls'] as const;
 
 export type WebSearchCapability = (typeof WEB_SEARCH_CAPABILITIES)[number];
+
+export type WebSearchProviderFeatureCapability = {
+  feature: WebSearchCapability;
+  /** The capability cannot run until a valid HTTP(S) host is set. */
+  requiresApiHost: boolean;
+  /** The capability cannot run without an API key; `false` means a key is optional or unused. */
+  requiresApiKey: boolean;
+  /** Absent for hostless providers; empty when the user must supply their own instance. */
+  apiHost?: string;
+};
 
 export type WebSearchProviderCapabilityOverride = {
   apiHost?: string;
@@ -59,11 +72,7 @@ export interface WebSearchProvider {
   /** API keys (from user overrides) */
   apiKeys: string[];
   /** Capability API settings (user override merged into preset capabilities) */
-  capabilities: {
-    feature: WebSearchCapability;
-    /** Can be empty for self-hosted or hostless providers; resolve and validate via resolveProviderApiHost. */
-    apiHost?: string;
-  }[];
+  capabilities: WebSearchProviderFeatureCapability[];
   /** Search engines (from user overrides) */
   engines: string[];
   /** Basic auth username (from user overrides) */
@@ -128,8 +137,10 @@ export type WebSearchFetchUrlsRequest = {
 };
 
 export type WebSearchCheckProviderRequest = {
-  provider: WebSearchProvider;
-  capability?: WebSearchCapability;
+  providerId: WebSearchProviderId;
+  capability: WebSearchCapability;
+  /** Unsaved settings to check in place of the stored override. */
+  override?: WebSearchProviderOverride;
 };
 
 export type WebSearchCheckProviderResponse = {

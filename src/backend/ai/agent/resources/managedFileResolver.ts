@@ -8,6 +8,11 @@ import {
   imageUriToDataUrl,
   readFileUriBytes,
 } from '@/backend/services/file/fileStorage';
+import {
+  discardNormalizedImage,
+  IMPORTED_IMAGE_MAX_BYTES,
+  normalizeImportedImage,
+} from '@/backend/services/file/importedImageNormalization';
 import type { FileAttachmentFact } from '@/shared/contracts/fileAttachment';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
@@ -50,6 +55,11 @@ export type TurnToolResources = Pick<
 
 /** Host-only managed-file boundary. It never exposes a device path to Pi. */
 export interface ManagedFileResolver {
+  /** Bounded pixels for explicit read_file calls; never changes the managed original. */
+  readImage?(
+    file: ManagedFileFact,
+    signal: AbortSignal,
+  ): Promise<{ data: string; mediaType: string } | undefined>;
   resolveAvailable(
     fileEntryIds: readonly FileEntryId[],
   ): Promise<ReadonlyMap<string, ManagedFileFact>>;
@@ -190,3 +200,26 @@ export const managedFileResolver = createManagedFileResolver(
   imageUriToDataUrl,
   readFileUriBytes,
 );
+
+managedFileResolver.readImage = async (file, signal) => {
+  signal.throwIfAborted();
+  const uri = getInternalFileUri({ filename: file.name, id: file.fileEntryId });
+  if (!uri) return undefined;
+  const normalized = await normalizeImportedImage({
+    uri,
+    mediaType: file.mediaType,
+    name: file.name,
+  });
+  try {
+    signal.throwIfAborted();
+    const mediaType = normalized?.mediaType ?? file.mediaType;
+    const dataUrl = await imageUriToDataUrl(normalized?.uri ?? uri, mediaType, signal);
+    const prefix = `data:${mediaType};base64,`;
+    if (!dataUrl.startsWith(prefix)) return undefined;
+    const data = dataUrl.slice(prefix.length);
+    if (!data || data.length > Math.ceil(IMPORTED_IMAGE_MAX_BYTES / 3) * 4) return undefined;
+    return { data, mediaType };
+  } finally {
+    if (normalized) discardNormalizedImage(normalized);
+  }
+};

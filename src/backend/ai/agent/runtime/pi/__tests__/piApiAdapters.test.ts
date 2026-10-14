@@ -80,6 +80,7 @@ describe('Pi API adapters', () => {
   beforeEach(() => {
     jest.restoreAllMocks();
     for (const testCase of CASES) testCase.streamSimple.mockReturnValue(mockStreamResult);
+    jest.mocked(mockFetch).mockReset().mockResolvedValue(new Response(null));
   });
 
   test.each(CASES)('binds $endpointType to $api', async (testCase) => {
@@ -121,7 +122,6 @@ describe('Pi API adapters', () => {
       context,
       expect.objectContaining({
         apiKey: 'secret-key',
-        fetch: testCase.expectedFetch,
         headers: { 'X-App': 'Cherry', 'X-Request': 'request' },
         maxRetries: 0,
         maxTokens: 32,
@@ -131,6 +131,12 @@ describe('Pi API adapters', () => {
         cacheRetention: 'none',
         sessionId: 'stable-conversation',
       }),
+    );
+    // The adapter reaches the binding's transport, never the per-request one.
+    const { fetch } = testCase.streamSimple.mock.calls[0][2] as { fetch?: FetchFunction };
+    await fetch?.('https://provider.test');
+    expect(jest.mocked(mockFetch).mock.calls).toEqual(
+      testCase.expectedFetch ? [['https://provider.test', undefined]] : [],
     );
   });
 

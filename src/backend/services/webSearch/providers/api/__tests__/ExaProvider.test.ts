@@ -87,7 +87,14 @@ function createProvider(): WebSearchProvider {
     name: 'Exa',
     type: 'api',
     apiKeys: ['exa-key'],
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.exa.ai' }],
+    capabilities: [
+      {
+        feature: 'searchKeywords',
+        requiresApiHost: true,
+        requiresApiKey: false,
+        apiHost: 'https://api.exa.ai',
+      },
+    ],
     engines: [],
     basicAuthUsername: '',
     basicAuthPassword: '',

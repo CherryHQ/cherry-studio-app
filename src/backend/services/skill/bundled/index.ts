@@ -4,7 +4,7 @@
  * remain readable for installations and backups from earlier builds.
  */
 
-import type { SkillRequirements } from '@/shared/data/types/skill';
+import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
 
 import { parseSkillEntry } from '../skillPackage';
 import { dailyAgendaSkill } from './dailyAgenda';
@@ -18,7 +18,8 @@ export type BundledSkillDefinition = {
   readonly revision: number;
   /** Package-relative path to UTF-8 text. */
   readonly files: Readonly<Record<string, string>>;
-  readonly requirements: SkillRequirements;
+  /** Built-in tools the workflow calls; it is offered only when all are present in the turn. */
+  readonly requiredTools: readonly BuiltInToolCapabilityId[];
   readonly workflowScope: string;
 };
 
@@ -35,7 +36,7 @@ export function bundledSkillLocator(name: string): string {
 /** Inline the complete workflow and its resources only when its tools are present. */
 export function getSystemSkillInstructions(availableTools: ReadonlyMap<string, string>): string[] {
   return BUNDLED_SKILLS.flatMap((definition) => {
-    if (!definition.requirements.builtInTools.every((name) => availableTools.has(name))) return [];
+    if (!definition.requiredTools.every((name) => availableTools.has(name))) return [];
     const entry = parseSkillEntry(definition.files['SKILL.md'] ?? '');
     if (!entry || !('body' in entry)) return [];
     const resources = Object.entries(definition.files)
@@ -46,7 +47,7 @@ export function getSystemSkillInstructions(availableTools: ReadonlyMap<string, s
       entry.body.trim(),
       ...resources,
     ].join('\n\n');
-    for (const name of definition.requirements.builtInTools)
+    for (const name of definition.requiredTools)
       instructions = instructions.replaceAll(`\`${name}\``, `\`${availableTools.get(name)}\``);
     return [instructions];
   });

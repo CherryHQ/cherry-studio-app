@@ -11,11 +11,16 @@ import type {
 import { lazyStream } from '@earendil-works/pi-ai/api/lazy';
 import { createModels, createProvider } from '@earendil-works/pi-ai/models';
 
-import { traceErrorAttributes, type TraceSpan } from '../../../observability';
+import type { TraceSpan } from '../../../observability';
 import type { RuntimeModel, RuntimeOptions, RuntimeUsageReport } from '../types';
 import { imageModelStream } from './piDurableImageModel';
 import { piDurableUsage, withPiContinuationUsage } from './piDurableProjection';
 import { piDurableSetupError, protectPiDurableStream } from './piDurableStream';
+import {
+  piModelErrorAttributes,
+  piModelTerminalErrorAttributes,
+  type PiModelFailureStage,
+} from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import { providerErrorEvent } from './piStreamEvents';
 import { disablePiToolCalls } from './piToolChoice';
@@ -91,12 +96,21 @@ export function createPiDurableModels(
       lazyStream(model, async () => {
         let secrets: readonly string[] = [];
         let trace: TraceSpan | undefined;
+        let failureStage: PiModelFailureStage = 'configuration';
         try {
+          // Include configuration/permission failures before a provider stream exists.
+          if (model.api !== 'cherry-image') {
+            trace = await traceRequest?.(options?.sessionId, options?.signal);
+            trace?.setAttributes({
+              'gen_ai.request.model': model.id,
+              'gen_ai.provider.id': model.provider,
+            });
+          }
           const selected = await configuration(options?.sessionId, options?.signal);
           if (model.api === 'cherry-image') return imageModelStream(model, context);
           const reportUsage = await captureUsage?.(options?.sessionId, options?.signal);
-          trace = await traceRequest?.(options?.sessionId, options?.signal);
           options?.signal?.throwIfAborted();
+          failureStage = 'model_resolution';
           const resolved = await dependencies.resolveModel(
             { providerId: model.provider, modelId: model.id },
             selected,
@@ -189,6 +203,7 @@ export function createPiDurableModels(
             );
           };
           // Redaction rewrites diagnostic strings, so web facts join the message after it.
+          failureStage = 'stream';
           const protectedStream = webStream(
             await createStream(),
             web,
@@ -208,7 +223,10 @@ export function createPiDurableModels(
           );
           return tracedStream(protectedStream, trace, options?.signal);
         } catch (error) {
-          trace?.end(options?.signal?.aborted ? 'cancelled' : 'error', traceErrorAttributes(error));
+          trace?.end(
+            options?.signal?.aborted ? 'cancelled' : 'error',
+            options?.signal?.aborted ? undefined : piModelErrorAttributes(error, failureStage),
+          );
           return piDurableSetupError(model, error, secrets, options?.signal?.aborted);
         }
       });
@@ -239,27 +257,6 @@ export function createPiDurableModels(
 
 export function piDurableModelKey(reference: RuntimeModel, kind: 'language' | 'image') {
   return kind === 'image' ? `cherry:image:${reference.modelId}` : reference.modelId;
-}
-
-function terminalErrorFacts(message: AssistantMessage) {
-  if (message.stopReason !== 'error') return {};
-  const diagnostics = message.diagnostics ?? [];
-  for (let index = diagnostics.length - 1; index >= 0; index -= 1) {
-    const diagnostic = diagnostics[index];
-    if (
-      !diagnostic?.error ||
-      (diagnostic.type !== 'pi_messages_response_failure' &&
-        diagnostic.type !== 'provider_response_failure')
-    )
-      continue;
-    return traceErrorAttributes({
-      name: diagnostic.error.name,
-      code: diagnostic.error.code,
-      statusCode: diagnostic.details?.statusCode ?? diagnostic.details?.status,
-      retryable: diagnostic.details?.retryable,
-    });
-  }
-  return {};
 }
 
 async function* webStream(
@@ -362,15 +359,28 @@ async function* tracedStream(
           event.type === 'done' ? 'ok' : message.stopReason === 'aborted' ? 'cancelled' : 'error',
           {
             'gen_ai.response.finish_reason': message.stopReason,
-            ...terminalErrorFacts(message),
+            ...piModelTerminalErrorAttributes(message),
           },
         );
         ended = true;
       }
       yield event;
     }
+  } catch (error) {
+    trace?.end(
+      signal?.aborted ? 'cancelled' : 'error',
+      signal?.aborted ? undefined : piModelErrorAttributes(error, 'stream'),
+    );
+    ended = true;
+    throw error;
   } finally {
-    if (!ended) trace?.end(signal?.aborted ? 'cancelled' : 'error');
+    if (!ended)
+      trace?.end(
+        signal?.aborted ? 'cancelled' : 'error',
+        signal?.aborted
+          ? undefined
+          : piModelErrorAttributes({ code: 'stream_incomplete' }, 'stream'),
+      );
   }
 }
 

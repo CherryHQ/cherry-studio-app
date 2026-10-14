@@ -1,4 +1,4 @@
-import type { AgentToolInputPreview } from '@/shared/contracts/agent';
+import type { AgentToolInputPreview, AgentToolProgress } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 export type ToolMessagePart = Extract<
@@ -6,6 +6,7 @@ export type ToolMessagePart = Extract<
   { type: 'dynamic-tool' | `tool-${string}` }
 > & {
   inputPreview?: AgentToolInputPreview;
+  progress?: AgentToolProgress;
   /** Original failure code retained by the chat's presentation projection. */
   errorCode?: string;
 };

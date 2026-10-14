@@ -1,5 +1,10 @@
 import type { JsSandboxNativeModule } from '../../../../../modules/js-sandbox';
-import { createJsSandbox, JS_SANDBOX_MAX_CONCURRENT_RUNS, type JsSandboxRun } from '../jsSandbox';
+import {
+  createJsSandbox,
+  JS_SANDBOX_MAX_CONCURRENT_RUNS,
+  type JsSandboxRun,
+  type JsSandboxBridgeInput,
+} from '../jsSandbox';
 
 const LIMITS = {
   timeoutMs: 1000,
@@ -13,6 +18,82 @@ const DONE = { durationMs: 1, logs: '', logsTruncated: false };
 describe('createJsSandbox', () => {
   test('is absent on clients built without the native module', () => {
     expect(createJsSandbox(null)).toBeNull();
+  });
+
+  test('keeps the bridge absent on older clients', () => {
+    expect(createJsSandbox(createNative(async () => '{}'))!.startBridge).toBeUndefined();
+  });
+
+  test('routes bridge messages by run and keeps its listener until native cleanup', async () => {
+    const finished = deferred<string>();
+    const remove = jest.fn();
+    let deliverEvent!: (event: { runId: string; message: string }) => void;
+    const native = {
+      ...createNative(async () => JSON.stringify({ status: 'ok', ...DONE })),
+      runBridge: jest.fn(
+        (..._input: Parameters<NonNullable<JsSandboxNativeModule['runBridge']>>) =>
+          finished.promise,
+      ),
+      deliver: jest.fn(),
+      addListener: jest.fn((_name: 'onMessage', listener: typeof deliverEvent) => {
+        deliverEvent = listener;
+        return { remove };
+      }),
+    };
+    const sandbox = createJsSandbox(native, () => 'bridge')!;
+    const onMessage = jest.fn();
+    const controller = new AbortController();
+    const bridge = await sandbox.startBridge!(
+      bridgeInput({ onMessage, signal: controller.signal }),
+    );
+    // The bridge's caller owns its deadline and output limits; only the memory cap reaches native.
+    expect(native.runBridge.mock.calls[0]).toEqual([
+      'bridge',
+      '',
+      '{}',
+      { startedAt: 100, seed: 1 },
+      { timeoutMs: 0, memoryBytes: 1, maxResultBytes: 0, maxLogBytes: 0 },
+    ]);
+    deliverEvent({ runId: 'other', message: 'ignored' });
+    deliverEvent({ runId: 'bridge', message: 'done' });
+    expect(onMessage.mock.calls).toEqual([['done']]);
+    bridge.post('reply');
+    expect(native.deliver).toHaveBeenCalledWith('bridge', 'reply');
+    controller.abort();
+    expect(native.cancel).toHaveBeenCalledWith('bridge');
+    expect(remove).not.toHaveBeenCalled();
+    finished.resolve('');
+    await bridge.result;
+    expect(remove).toHaveBeenCalledTimes(1);
+    bridge.post('too late');
+    expect(native.deliver).toHaveBeenCalledTimes(1);
+  });
+
+  test('bridge runs queue among themselves, never behind or ahead of bounded computations', async () => {
+    const finished = deferred<string>();
+    const native = {
+      ...createNative(async () => JSON.stringify({ status: 'ok', ...DONE })),
+      runBridge: jest.fn(() => finished.promise),
+      deliver: jest.fn(),
+      addListener: jest.fn(() => ({ remove() {} })),
+    };
+    const sandbox = createJsSandbox(native)!;
+    const active = await Promise.all(
+      Array.from({ length: JS_SANDBOX_MAX_CONCURRENT_RUNS }, () =>
+        sandbox.startBridge!(bridgeInput()),
+      ),
+    );
+    // A script parked on a tool or an approval leaves a computation free to start.
+    await expect(sandbox.run(runInput())).resolves.toMatchObject({ status: 'ok' });
+
+    const controller = new AbortController();
+    const queued = sandbox.startBridge!(bridgeInput({ signal: controller.signal }));
+    controller.abort(new Error('queued bridge cancelled'));
+    await expect(queued).rejects.toThrow('queued bridge cancelled');
+    expect(native.runBridge).toHaveBeenCalledTimes(JS_SANDBOX_MAX_CONCURRENT_RUNS);
+    expect(native.cancel).not.toHaveBeenCalled();
+    finished.resolve('');
+    await Promise.all(active.map((bridge) => bridge.result));
   });
 
   test('passes one run id, code, and limits to the native run and parses its outcome', async () => {
@@ -57,6 +138,40 @@ describe('createJsSandbox', () => {
       createJsSandbox(native)!.run(runInput({ signal: controller.signal })),
     ).rejects.toThrow('cancelled');
     expect(native.run).not.toHaveBeenCalled();
+  });
+
+  test('notifies resource owners only after cancelled native work finishes', async () => {
+    const started = deferred<void>();
+    const finished = deferred<string>();
+    const native = createNative(() => {
+      started.resolve();
+      return finished.promise;
+    });
+    const onSettled = jest.fn();
+    const controller = new AbortController();
+    const running = createJsSandbox(native)!.run(
+      runInput({ signal: controller.signal, onSettled }),
+    );
+    await started.promise;
+    controller.abort(new Error('cancelled'));
+    await expect(running).rejects.toThrow('cancelled');
+    expect(onSettled).not.toHaveBeenCalled();
+    finished.resolve(JSON.stringify({ status: 'ok', ...DONE }));
+    await finished.promise;
+    await Promise.resolve();
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  test('releases resource owners when cancellation prevents any native work', async () => {
+    const controller = new AbortController();
+    controller.abort(new Error('cancelled'));
+    const onSettled = jest.fn();
+    await expect(
+      createJsSandbox(createNative(async () => '{}'))!.run(
+        runInput({ signal: controller.signal, onSettled }),
+      ),
+    ).rejects.toThrow('cancelled');
+    expect(onSettled).toHaveBeenCalledTimes(1);
   });
 
   test('reports an unreadable native outcome as an internal error', async () => {
@@ -176,6 +291,18 @@ function runInput(overrides: Partial<JsSandboxRun> = {}): JsSandboxRun {
     code: 'return 1',
     limits: LIMITS,
     signal: new AbortController().signal,
+    ...overrides,
+  };
+}
+
+function bridgeInput(overrides: Partial<JsSandboxBridgeInput> = {}): JsSandboxBridgeInput {
+  return {
+    setup: '',
+    data: '{}',
+    clock: { startedAt: 100, seed: 1 },
+    memoryBytes: 1,
+    signal: new AbortController().signal,
+    onMessage() {},
     ...overrides,
   };
 }

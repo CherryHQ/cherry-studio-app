@@ -5,6 +5,7 @@ import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'r
 
 import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
 
+import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
   type ComposerAttachmentDraft,
   type ComposerAttachmentReady,
@@ -14,6 +15,7 @@ type ComposerAttachmentStripProps = {
   transfer?: (file: ComposerAttachmentDraft) => FilePreviewTransfer | undefined;
   attachments: readonly ComposerAttachmentDraft[];
   onAttachmentRemove: (attachmentId: string) => void;
+  onAttachmentReplace?: ComposerAttachmentStore['replaceAttachment'];
 };
 
 /**
@@ -25,6 +27,7 @@ export function ComposerAttachmentStrip({
   attachments,
   transfer,
   onAttachmentRemove,
+  onAttachmentReplace,
 }: ComposerAttachmentStripProps) {
   return (
     <ScrollView
@@ -41,6 +44,7 @@ export function ComposerAttachmentStrip({
             transfer={transfer?.(attachment)}
             key={attachment.id}
             onRemove={() => onAttachmentRemove(attachment.id)}
+            onReplace={onAttachmentReplace}
           />
         ) : (
           <ImportingAttachmentTile
@@ -59,14 +63,35 @@ function ManagedAttachmentTile({
   attachment,
   transfer,
   onRemove,
+  onReplace,
 }: {
   transfer?: FilePreviewTransfer;
   attachment: ComposerAttachmentReady;
   onRemove: () => void;
+  onReplace?: ComposerAttachmentStore['replaceAttachment'];
 }) {
   return (
     <View accessibilityLabel={attachment.name}>
-      <FileEntryPreview entryId={attachment.fileEntryId} variant="attachment" transfer={transfer} />
+      <FileEntryPreview
+        entryId={attachment.fileEntryId}
+        variant="attachment"
+        transfer={transfer}
+        onImageReplace={
+          onReplace
+            ? (sourceId, file) =>
+                onReplace(attachment.id, sourceId, {
+                  id: attachment.id,
+                  fileEntryId: file.entry.id,
+                  kind: 'image',
+                  mediaType: file.entry.mediaType,
+                  name: file.entry.filename,
+                  size: file.entry.size,
+                  status: 'ready',
+                  uri: file.uri,
+                })
+            : undefined
+        }
+      />
       <RemoveBadge onPress={onRemove} />
     </View>
   );

@@ -65,6 +65,14 @@ and a stable WebView source prevent status writes from reloading the page.
 - Model and MCP request metadata from the existing `TraceStorageService`: correlation identifiers,
   operation, timing, outcome, status/error codes and plugin authorization steps. Capture runs
   during ordinary use; there is no developer-mode setting or separate Agent event recorder.
+- Durable Agent operation metadata: preparation/admission, recovery and background suspension,
+  observation, queue membership/counts, changed turn states, capability execution, transcript and
+  checkpoint writes. Pi failure summaries include automatic retry attempts, failed/blocked tasks,
+  interrupted tools, extension reports and asynchronous usage delivery failures. Only existing
+  observers/inspection/report callbacks supply these facts; the engine database and full event
+  payloads are not diagnostic sources. See [AI Diagnostic Tracing](../../ai/observability/README.md).
+  Export retains model failure stage/category/retryability and fixed tool business outcomes, so
+  returned errors, partial failures and requests for user choice remain distinguishable.
 - System summary: app/build/runtime version, device model, OS and locale. No device name or unique
   hardware identifier is read. Plugin configuration includes server/plugin identifiers, enabled
   state, authorization method and disabled-tool count; no names, accounts, endpoints or credentials.

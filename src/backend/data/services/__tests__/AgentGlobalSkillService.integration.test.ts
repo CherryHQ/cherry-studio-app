@@ -21,11 +21,7 @@ function record(name: string, description = 'Draft a short brief'): SkillInstall
     tags: [],
     contentHash: `directory-sha256:${name}`,
     manifest: [{ path: 'SKILL.md', size: 10, digest: 'd' }],
-    profile: {
-      provenance: 'unverified',
-      requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
-      workflowScope: null,
-    },
+    profile: { declaredTools: ['Bash'] },
     invocation: { modelInvocable: true, userInvocable: true },
   };
 }
@@ -88,7 +84,17 @@ describe('AgentGlobalSkillService', () => {
     const first = await install(record('brief'));
     const second = await install(record('status', 'Weekly status summary'));
     expect(first).toMatchObject({ folderName: 'brief', source: 'marketplace', isEnabled: true });
-    expect((await service.getById(first.id)).profile.provenance).toBe('unverified');
+    expect((await service.getById(first.id)).profile).toEqual(record('brief').profile);
+    // A row written before profiles held package facts stays readable and reports none.
+    sqlite.prepare('UPDATE agent_global_skill SET profile = ? WHERE id = ?').run(
+      JSON.stringify({
+        provenance: 'unverified',
+        requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
+        workflowScope: null,
+      }),
+      first.id,
+    );
+    expect((await service.getById(first.id)).profile).toEqual({ declaredTools: [] });
     await expect(install(record('brief'))).rejects.toMatchObject({ code: 'CONFLICT' });
 
     const page = await service.list({ search: 'status', scope: 'library' });

@@ -1,5 +1,5 @@
 import { TextInputWrapper } from 'expo-paste-input';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { useCSSVariable, useResolveClassNames } from 'uniwind';
@@ -72,8 +72,9 @@ export function ComposerInput({
   // Pushes a caller-side change — send clearing the draft, a failed send
   // restoring it — down into the field. Guarded on `emitted`, or every
   // keystroke would round-trip through here and fight the native input for the
-  // caret.
-  useEffect(() => {
+  // caret. Dispatch during the same commit as the caller's UI update so sent
+  // messages cannot leave the native draft waiting for passive effects to clear.
+  useLayoutEffect(() => {
     if (value === emitted.current) {
       return;
     }

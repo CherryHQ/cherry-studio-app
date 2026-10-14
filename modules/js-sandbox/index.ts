@@ -15,6 +15,19 @@ export type JsSandboxNativeModule = {
   run(runId: string, code: string, limits: JsSandboxLimits): Promise<string>;
   /** Interrupts a run, including one that has not started yet. */
   cancel(runId: string): void;
+  /** Optional on older development clients. The setup is trusted host code, never model code. */
+  runBridge?(
+    runId: string,
+    setup: string,
+    data: string,
+    clock: { startedAt: number; seed: number },
+    limits: JsSandboxLimits,
+  ): Promise<string>;
+  deliver?(runId: string, message: string): void;
+  addListener?(
+    event: 'onMessage',
+    listener: (event: { runId: string; message: string }) => void,
+  ): { remove(): void };
 };
 
 /** Null on web and on clients built before this module existed. */

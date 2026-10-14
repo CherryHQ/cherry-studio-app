@@ -44,8 +44,6 @@ function encodeBasicAuth(username: string, password: string): string {
 }
 
 export class SearxngProvider extends BaseWebSearchProvider {
-  protected readonly requiresApiKey = false;
-
   private getBasicAuthHeaders(): Record<string, string> {
     const basicAuthUsername = this.provider.basicAuthUsername.trim();
     if (!basicAuthUsername) {

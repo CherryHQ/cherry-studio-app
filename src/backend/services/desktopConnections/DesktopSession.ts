@@ -30,6 +30,12 @@ const REFRESH_MARGIN_MS = 60_000;
 const LOCAL_ERROR_CODE = 0;
 const TIMEOUT_MESSAGE = 'Request timeout';
 const CLOSED_MESSAGE = 'Connection closed';
+// Desktop 2.1.5 and later close the connection above 512 content reads or 64 other requests a
+// second. Each margin covers the in-flight requests a network stall can deliver at once; the
+// heartbeat is never held back and fits in the margin too.
+const CONTENT_READS_PER_SECOND = 480;
+const REQUESTS_PER_SECOND = 40;
+type SendBudget = { readonly limit: number; readonly times: number[] };
 
 export const desktopMethods = {
   ...connectionMethods(remoteAuthorizationSchema),
@@ -75,6 +81,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 export class DesktopSession {
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
+  agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
   connectionEndpointsVersion?: number;
   static async connect(options: DesktopSessionOptions): Promise<DesktopSession> {
@@ -98,6 +105,7 @@ export class DesktopSession {
       );
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
+      session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;
       session.connectionEndpointsVersion = hello.connectionEndpointsVersion;
       options.signal.throwIfAborted();
@@ -166,6 +174,8 @@ export class DesktopSession {
   private readonly heartbeat: ReturnType<typeof setInterval>;
   private closed = false;
   private inFlight = 0;
+  private readonly contentReads: SendBudget = { limit: CONTENT_READS_PER_SECOND, times: [] };
+  private readonly requests: SendBudget = { limit: REQUESTS_PER_SECOND, times: [] };
   readonly done: Promise<void>;
 
   constructor(
@@ -229,6 +239,11 @@ export class DesktopSession {
     const schema = desktopMethods[method];
     this.inFlight++;
     try {
+      if (method !== 'connection.ping')
+        await this.pace(
+          method === 'agent.content.read' ? this.contentReads : this.requests,
+          signal,
+        );
       const result = await withAbort(
         Promise.resolve(
           this.client
@@ -264,6 +279,18 @@ export class DesktopSession {
       throw error;
     } finally {
       this.inFlight--;
+    }
+  }
+
+  /** Holds a send until its slot, so no one-second span carries more than its budget. */
+  private async pace({ limit, times }: SendBudget, signal: AbortSignal | undefined): Promise<void> {
+    const now = performance.now();
+    const at = times.length < limit ? now : Math.max(now, times[0] + 1000);
+    times.push(at);
+    if (times.length > limit) times.shift();
+    if (at > now) {
+      await withAbort(new Promise<void>((resolve) => setTimeout(resolve, at - now)), signal);
+      if (this.closed) throw new DesktopUnreachableError(['connection closed']);
     }
   }
 

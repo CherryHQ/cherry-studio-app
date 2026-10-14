@@ -23,6 +23,19 @@ import {
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
 
+test('transient context and runtime events round-trip without diagnostic payloads', () => {
+  for (const event of [
+    { type: 'context.updated', status: 'compacting' },
+    { type: 'context.updated', status: 'compaction-failed' },
+    { type: 'context.updated', status: null },
+    { type: 'runtime.failed' },
+  ])
+    expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
+  expect(AgentEventSchema.safeParse({ type: 'runtime.failed', error: 'device path' }).success).toBe(
+    false,
+  );
+});
+
 function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }
@@ -446,6 +459,32 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+  });
+
+  test('running child progress round-trips with bounded arguments and closed statuses', () => {
+    const part = {
+      id: 'parent',
+      type: 'dynamic-tool',
+      toolCallId: 'parent',
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      toolName: 'codemode',
+      title: 'JavaScript',
+      state: 'running',
+      progress: { calls: [{ id: 'parent/c1', name: 'read_file', args: '{}', status: 'running' }] },
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        progress: { calls: [{ ...part.progress.calls[0], args: 'x'.repeat(1001) }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        progress: { calls: [{ ...part.progress.calls[0], status: 'unknown' }] },
+      }).success,
+    ).toBe(false);
   });
 
   test('accepts managed file ids and rejects raw file URIs', () => {

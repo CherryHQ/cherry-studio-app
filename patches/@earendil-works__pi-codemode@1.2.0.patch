@@ -1,0 +1,33 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -35,6 +35,10 @@
+ 			"source": "./src/runtime/worker.ts",
+ 			"types": "./dist/runtime/worker.d.ts",
+ 			"import": "./dist/runtime/worker.js"
++		},
++		"./native": {
++			"types": "./dist/native.d.ts",
++			"import": "./dist/native.js"
+ 		}
+ 	},
+ 	"files": [
+diff --git a/dist/native.js b/dist/native.js
+new file mode 100644
+--- /dev/null
++++ b/dist/native.js
+@@ -0,0 +1,3 @@
++/** Native engines reuse the host protocol and prelude without loading quickjs-wasi. */
++export { CodemodeSandboxBase } from "./runtime/execution.js";
++export { PRELUDE_SOURCE } from "./runtime/prelude-source.js";
+diff --git a/dist/native.d.ts b/dist/native.d.ts
+new file mode 100644
+--- /dev/null
++++ b/dist/native.d.ts
+@@ -0,0 +1,6 @@
++/** Native engines reuse the host protocol and prelude without loading quickjs-wasi. */
++export { CodemodeSandboxBase } from "./runtime/execution.ts";
++export { PRELUDE_SOURCE } from "./runtime/prelude-source.ts";
++export type { VmLauncher, VmEvents, VmChannel } from "./runtime/execution.ts";
++export type { VmStartData, HostToWorkerMessage, WorkerToHostMessage } from "./runtime/protocol.ts";
++export type { CodemodeRun, CodemodeRunOptions, CodemodeResult } from "./types.ts";

@@ -37,9 +37,10 @@ export function ChatInputSkillPopover({
   const initialFocusRef = useRef<View>(null);
   const selectionAccepted = useRef(false);
   const [shouldRestoreFocus, setShouldRestoreFocus] = useState(true);
+  // Keep the list subscribed so installations refresh it before the menu opens.
   const { skills, error, isLoading, refetch, hasNext, loadNext, isLoadingMore } = useSkillsApi(
     { agentId, scope: 'composer' },
-    { enabled: open && Boolean(agentId) },
+    { enabled: Boolean(agentId) },
   );
   useEffect(() => {
     if (open) selectionAccepted.current = false;

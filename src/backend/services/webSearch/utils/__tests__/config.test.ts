@@ -34,7 +34,14 @@ describe('web search config', () => {
           id: 'tavily',
           name: 'Tavily',
           type: 'api',
-          capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.tavily.com' }],
+          capabilities: [
+            {
+              feature: 'searchKeywords',
+              requiresApiHost: true,
+              requiresApiKey: false,
+              apiHost: 'https://api.tavily.com',
+            },
+          ],
         },
         {
           apiKeys: [' key-a ', '', 'key-b'],
@@ -51,7 +58,14 @@ describe('web search config', () => {
       name: 'Tavily',
       type: 'api',
       apiKeys: ['key-a', 'key-b'],
-      capabilities: [{ feature: 'searchKeywords', apiHost: 'https://example.com/' }],
+      capabilities: [
+        {
+          feature: 'searchKeywords',
+          requiresApiHost: true,
+          requiresApiKey: false,
+          apiHost: 'https://example.com/',
+        },
+      ],
       engines: ['google'],
       basicAuthUsername: 'user',
       basicAuthPassword: 'pass',
@@ -114,6 +128,43 @@ describe('web search config', () => {
     await expect(getProviderById('zhipu', preferences)).resolves.toMatchObject({
       id: 'zhipu',
       apiKeys: [],
+    });
+  });
+
+  test('lets Exa MCP authenticate with the Exa keys until it has its own', async () => {
+    const overrides = { exa: { apiKeys: [' exa-key '] } };
+
+    await expect(
+      getProviderById(
+        'exa-mcp',
+        createPreferenceReader({ 'chat.web_search.provider_overrides': overrides }),
+      ),
+    ).resolves.toMatchObject({ apiKeys: ['exa-key'] });
+    await expect(
+      getProviderById(
+        'exa-mcp',
+        createPreferenceReader({
+          'chat.web_search.provider_overrides': { ...overrides, 'exa-mcp': { apiKeys: ['own'] } },
+        }),
+      ),
+    ).resolves.toMatchObject({ apiKeys: ['own'] });
+  });
+
+  test('resolves unsaved settings in place of the stored override', async () => {
+    const preferences = createPreferenceReader({
+      'chat.web_search.provider_overrides': {
+        crawl4ai: { capabilities: { fetchUrls: { apiHost: 'http://stored:11235' } } },
+      },
+    });
+
+    await expect(
+      getProviderForCapability('crawl4ai', 'fetchUrls', preferences, {
+        apiKeys: ['token'],
+        capabilities: { fetchUrls: { apiHost: 'http://draft:11235' } },
+      }),
+    ).resolves.toMatchObject({
+      apiKeys: ['token'],
+      capabilities: [expect.objectContaining({ apiHost: 'http://draft:11235' })],
     });
   });
 

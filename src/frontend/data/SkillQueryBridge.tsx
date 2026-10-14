@@ -12,20 +12,25 @@ export function SkillQueryBridge() {
   const dataApi = useApiClient();
   const queryClient = useQueryClient();
   useEffect(() => {
-    const refresh = () => {
-      void queryClient.invalidateQueries({ predicate: ({ queryKey }) => isSkillQuery(queryKey) });
+    const filters = {
+      predicate: ({ queryKey }: { queryKey: readonly unknown[] }) => isSkillQuery(queryKey),
     };
-    const unsubscribe = skills.subscribeChanges(refresh);
+    const refresh = async () => {
+      // Invalidation alone reuses an in-flight first read, which may predate the commit.
+      await queryClient.cancelQueries(filters);
+      await queryClient.invalidateQueries(filters);
+    };
+    const unsubscribe = skills.subscribeChanges(() => void refresh());
     const unsubscribeData = dataApi.subscribeChanges?.((paths) => {
       if (
         paths.some((path) =>
           /^\/(skills|agents|models|providers|plugins|mcp-servers)(\/|$)/.test(path),
         )
       )
-        refresh();
+        void refresh();
     });
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
+      if (state === 'active') void refresh();
     });
     return () => {
       unsubscribe();

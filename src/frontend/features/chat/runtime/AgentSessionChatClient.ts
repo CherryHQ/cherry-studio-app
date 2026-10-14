@@ -33,6 +33,7 @@ export type AgentSessionChatState = {
   pendingQuestion: AgentPendingQuestion | null;
   sessionId: string;
   snapshot?: AgentSessionSnapshot;
+  contextStatus?: AgentSessionSnapshot['contextStatus'];
   status: AgentSessionChatStatus;
 };
 
@@ -521,6 +522,7 @@ export class AgentSessionChatClient {
       liveMessages: [...entry.liveMessages.values()],
       pendingApprovals: snapshot.pendingApprovals,
       pendingQuestion: snapshot.pendingQuestion,
+      contextStatus: snapshot.contextStatus,
       sessionId: snapshot.session.id,
       snapshot,
       status: 'ready',
@@ -529,6 +531,23 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'context.updated':
+        this.updateState(entry, { ...entry.state, contextStatus: event.status });
+        return;
+      case 'runtime.failed':
+        this.updateState(entry, {
+          ...entry.state,
+          contextStatus: null,
+          pendingApprovals: [],
+          pendingQuestion: null,
+          status: 'error',
+          error: new AgentProtocolError({
+            code: 'EXECUTION_UNAVAILABLE',
+            message: 'Agent storage failed. Reopen the session to resume unfinished work.',
+            retryable: true,
+          }),
+        });
+        return;
       case 'question.updated':
         this.updateState(entry, { ...entry.state, pendingQuestion: event.question });
         return;
@@ -546,21 +565,31 @@ export class AgentSessionChatClient {
         });
         this.options.onSessionChanged?.(event.session.id);
         return;
-      case 'turn.updated':
+      case 'turn.updated': {
+        const terminal = TERMINAL_TURN_STATUSES.has(event.turn.status);
+        const previous = entry.state.activeTurn;
+        // Streaming deltas repeat the same turn status. Preserve the external
+        // store snapshot so those events cannot bypass the text flush interval.
+        if (
+          !terminal &&
+          previous &&
+          (Object.keys(event.turn) as (keyof AgentTurnView)[]).every(
+            (key) => previous[key] === event.turn[key],
+          )
+        ) {
+          return;
+        }
         this.updateState(entry, {
           ...entry.state,
           activeTurn: event.turn,
-          pendingQuestion: TERMINAL_TURN_STATUSES.has(event.turn.status)
-            ? null
-            : entry.state.pendingQuestion,
-          pendingApprovals: TERMINAL_TURN_STATUSES.has(event.turn.status)
-            ? []
-            : entry.state.pendingApprovals,
+          pendingQuestion: terminal ? null : entry.state.pendingQuestion,
+          pendingApprovals: terminal ? [] : entry.state.pendingApprovals,
         });
-        if (TERMINAL_TURN_STATUSES.has(event.turn.status)) {
+        if (terminal) {
           this.options.onSessionChanged?.(entry.state.sessionId);
         }
         return;
+      }
       case 'message.created':
         entry.liveMessages.set(event.message.id, event.message);
         this.installToolInputPreviews(event.message);

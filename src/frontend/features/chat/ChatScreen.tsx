@@ -33,6 +33,7 @@ import { createFindSkillsMention } from './components/ChatInput/utils/skillMenti
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
 import {
@@ -165,6 +166,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             <ChatEmptyState contentBottomInset={contentBottomInset} />
           )}
         </ComposerDismissArea>
+        {/* Below the transcript: the column's top edge sits under the header overlay. */}
+        {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
         {hasComposer ? (
           <ComposerDock layoutMode="flow">
             <View>

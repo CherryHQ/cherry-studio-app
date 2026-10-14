@@ -1,13 +1,21 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { ContentState, Spinner, useAlert, useToast } from '@cherrystudio/ui/components';
+import {
+  ContentState,
+  SelectionIndicator,
+  Spinner,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { cn } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
+import Animated, { FadeIn, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
 
 import {
   type AgentRef,
@@ -28,9 +36,20 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
 import { useSidebarActions } from '../context';
+import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarAgentIconSlot, SidebarRowContent, SIDEBAR_LEADING_SIZE } from './SidebarRowContent';
 
 type RegisterEndReached = (handler?: () => void) => void;
+
+const rowLayout = LinearTransition.duration(duration.base)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
+const selectionEntrance = FadeIn.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
+const rowExit = FadeOut.duration(duration.fast)
+  .easing(easing.settle)
+  .reduceMotion(ReduceMotion.System);
 
 /** One catalog presentation for every conversation source. */
 export function SidebarConversationList({
@@ -198,6 +217,17 @@ function SidebarSessions({
   const [limit, setLimit] = useState<number>(appSidebar.recentSessionLimit);
   const leading = agentRef ? <SidebarAgentIconSlot /> : undefined;
   const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
+  const { registerList } = useSidebarSelection();
+  useEffect(
+    () =>
+      registerList(
+        `${source.scope}:${agentRef ?? ''}`,
+        source,
+        sessions.slice(0, limit),
+        query.refetch,
+      ),
+    [agentRef, limit, query.refetch, registerList, sessions, source],
+  );
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;
     const next = limit + appSidebar.recentSessionLimit;
@@ -236,6 +266,7 @@ function SidebarSessions({
         <SidebarSessionRow
           key={session.ref.sessionId}
           session={session}
+          selectionKey={JSON.stringify([source.scope, session.ref.sessionId])}
           leading={leading}
           selected={session.ref.sessionId === navigation.sessionId}
         />
@@ -268,10 +299,12 @@ function SidebarSessions({
 
 function SidebarSessionRow({
   session,
+  selectionKey,
   leading,
   selected,
 }: {
   session: ConversationSummary;
+  selectionKey: string;
   leading?: ReactNode;
   selected: boolean;
 }) {
@@ -280,6 +313,12 @@ function SidebarSessionRow({
   const { toast } = useToast();
   const { closeDrawer } = useSidebarActions('Sidebar session');
   const { rename, remove, status } = useConversationPreview(session.ref);
+  const selection = useSidebarSelection();
+  const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
+  const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
+  const checked = useSidebarSelectionSnapshot((state) => state.selectedIds.has(selectionKey));
+  const deleted = useSidebarSelectionSnapshot((state) => state.deletedIds.has(selectionKey));
+  if (deleted) return null;
   const menu: ContextMenuLinkItem[] = [];
   if (rename)
     menu.push({
@@ -311,7 +350,13 @@ function SidebarSessionRow({
         });
       },
     });
-  if (remove)
+  if (remove) {
+    menu.push({
+      id: 'select-multiple',
+      label: t('session.selection.start'),
+      disabled: isDeleting || remove.availability.state !== 'enabled',
+      onPress: () => selection.enter(selectionKey),
+    });
     menu.push({
       id: 'delete',
       destructive: true,
@@ -335,33 +380,61 @@ function SidebarSessionRow({
         });
       },
     });
-  return (
-    <ContextMenuLink href={conversationHref(session.ref)} items={menu}>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityState={{ selected }}
-        onPress={closeDrawer}
-        testID={`sidebar-session-${session.ref.sessionId}`}
-      >
-        {({ pressed }) => (
-          <SidebarRowContent
-            leading={leading}
-            className={cn('w-full', selected && 'bg-secondary/70', pressed && 'bg-sidebar-accent')}
+  }
+  const row = (
+    <Pressable
+      accessibilityLabel={session.title || t('session.list.untitled')}
+      accessibilityRole={isSelecting ? 'checkbox' : 'link'}
+      accessibilityState={
+        isSelecting
+          ? { checked, disabled: isDeleting || remove?.availability.state !== 'enabled' }
+          : { selected, disabled: isDeleting }
+      }
+      disabled={isDeleting || (isSelecting && remove?.availability.state !== 'enabled')}
+      onPress={isSelecting ? () => selection.toggle(selectionKey) : closeDrawer}
+      testID={`sidebar-session-${session.ref.sessionId}`}
+    >
+      {({ pressed }) => (
+        <SidebarRowContent
+          leading={leading}
+          className={cn(
+            'w-full',
+            !isSelecting && selected && 'bg-secondary/70',
+            pressed && 'bg-sidebar-accent',
+          )}
+        >
+          <Text
+            className={cn(
+              'min-w-0 flex-1 text-base text-sidebar-foreground',
+              !isSelecting && selected && 'font-medium',
+            )}
+            numberOfLines={1}
           >
-            <Text
-              className={cn(
-                'min-w-0 flex-1 text-base text-sidebar-foreground',
-                selected && 'font-medium',
-              )}
-              numberOfLines={1}
-            >
-              {session.title || t('session.list.untitled')}
-            </Text>
-            <SidebarSessionStatus status={status} />
-          </SidebarRowContent>
-        )}
-      </Pressable>
-    </ContextMenuLink>
+            {session.title || t('session.list.untitled')}
+          </Text>
+          <SidebarSessionStatus status={status} />
+          {isSelecting ? (
+            <Animated.View entering={selectionEntrance} exiting={rowExit}>
+              <SelectionIndicator
+                disabled={isDeleting || remove?.availability.state !== 'enabled'}
+                selected={checked}
+              />
+            </Animated.View>
+          ) : null}
+        </SidebarRowContent>
+      )}
+    </Pressable>
+  );
+  return (
+    <Animated.View layout={rowLayout} exiting={rowExit}>
+      {isSelecting ? (
+        row
+      ) : (
+        <ContextMenuLink href={conversationHref(session.ref)} items={isDeleting ? [] : menu}>
+          {row}
+        </ContextMenuLink>
+      )}
+    </Animated.View>
   );
 }
 

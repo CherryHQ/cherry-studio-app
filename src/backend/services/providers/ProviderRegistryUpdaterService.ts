@@ -1,5 +1,4 @@
 import { loggerService } from '@logger';
-import { getCalendars, getLocales } from 'expo-localization';
 import { Platform } from 'react-native';
 
 import {
@@ -19,6 +18,7 @@ import {
   type RemoteRegistryFileName,
 } from '@/backend/data/services/MobileRegistryLoader';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { isDeviceRegionMainlandChina } from '@/backend/services/device';
 import { createHttpClient, isHttpError } from '@/backend/services/http';
 import type { ProviderRegistryUpdateResult } from '@/shared/contracts';
 
@@ -392,11 +392,7 @@ export class ProviderRegistryUpdaterService extends BaseService {
   }
 
   private getSourceOrder(): RegistryNetworkSource[] {
-    const regionCode = getLocales()[0]?.regionCode?.toUpperCase();
-    const timeZone = getCalendars()[0]?.timeZone;
-    const isChina =
-      regionCode === 'CN' || timeZone === 'Asia/Shanghai' || timeZone === 'Asia/Urumqi';
-    return isChina ? ['gitcode', 'github'] : ['github', 'gitcode'];
+    return isDeviceRegionMainlandChina() ? ['gitcode', 'github'] : ['github', 'gitcode'];
   }
 }
 
