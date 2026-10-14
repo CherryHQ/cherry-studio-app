@@ -303,7 +303,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 
 | Tool | Contract |
 | --- | --- |
-| `search_local_skills` | Scoped automatic-invocation metadata, 20 results per page; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
+| `list_local_skills` | Unfiltered scoped automatic-invocation metadata, 20 results per page; the model judges task fit from names and complete descriptions; `include_manual` includes manual-only metadata for an explicit inventory request without granting instruction access |
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
@@ -314,26 +314,29 @@ limited to paths in the accepted manifest. The model-facing tools are:
 These are application built-ins. Skill metadata, instruction and package file readers are directly
 exposed; discovery, installation and adaptation tools are deferred and found with
 `tool_search` by exact name. A search for a generic Skill tool does not describe installed package
-availability: use `search_local_skills` for that inventory. Pi Durable does not need a desktop
+availability: use `list_local_skills` for that inventory. Pi Durable does not need a desktop
 filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
 sections while `load_skill` returns a receipt.
 
 The initial catalog retains at most 40 whole name/ID/description entries within a 12,000-character
 metadata budget. Descriptions are not individually truncated: their trailing usage conditions must
-remain available for model routing. When either bound omits entries, the prompt directs the model to
-search before concluding that no Skill fits. Search covers the remaining eligible
-scope, including eligible additions installed during the turn. A new installation still uses
-`load_skill` to activate instructions and create the ordinary loading receipt. Manual-only packages
-cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
+remain available for model routing. The model compares task meaning with names and complete
+descriptions, including across languages, then loads a suitable Skill. A complete catalog is used
+directly: listing would return the same entries, so a turn that needs no Skill makes no listing call.
+When either bound omits entries, the prompt directs the model to list from the cursor after the shown
+entries and follow `nextCursor` until null before concluding that no Skill fits. Listing has no query
+or keyword filter and uses the catalog's order, with eligible additions installed during the turn
+appended. A new installation still uses `load_skill` to activate instructions and create the
+ordinary loading receipt. Manual-only packages cannot be guessed into automatic loading. The composer accepts up to eight eligible Skills and does
 not silently create bindings.
 
 The prompt reports the Agent's complete bound/readable package count and its automatic-invocation
 subset, even when either is zero, and distinguishes them from the app's installed library, explicit
-selections and app-owned system workflows. Current inventory questions use `search_local_skills`
-with an empty query and `include_manual: true`: `total` is the requested scoped inventory count,
-`automaticTotal` is its automatically invocable subset, `matched` is the query count, and `returned`
-is one page. Complete lists follow `nextCursor` until null with the same options. This also refreshes
-inventory after a conversation installation without loading every package's instructions. Default
+selections and app-owned system workflows. Current inventory questions use `list_local_skills`
+with `include_manual: true`: `total` is the requested scoped inventory count, `automaticTotal` is its
+automatically invocable subset, and `returned` is one page. Complete lists follow `nextCursor` until
+null with the same options. This also refreshes inventory after a conversation installation without
+loading every package's instructions. Default
 automatic discovery and `load_skill` retain the manual-only invocation gate.
 
 Active entry instructions have a 48,000-character aggregate limit and at most 64 entries; oversized

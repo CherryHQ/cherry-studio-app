@@ -1992,6 +1992,7 @@
   "settings.websearch.provider.title": "搜索供應商",
   "settings.websearch.source.description": "關閉時優先已設定的外部服務。全域適用於連網搜尋和網頁讀取；首選不可用時使用另一種可用服務。模型內建工具可能由供應商計費。",
   "settings.websearch.source.model": "優先使用模型內建連網服務",
+  "skills.activity.list": "列出技能",
   "skills.activity.listFiles": "檢視技能檔案",
   "skills.activity.load": "讀取技能",
   "skills.adaptation.reloadFailed": "修改已儲存，但指令未能重新載入。請傳送新訊息繼續。",

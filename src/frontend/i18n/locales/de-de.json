@@ -2004,6 +2004,7 @@
   "settings.websearch.provider.title": "Suchanbieter",
   "settings.websearch.source.description": "Wenn ausgeschaltet, werden konfigurierte externe Dienste bevorzugt. Gilt für Websuche und das Lesen von Webseiten in allen Chats. Ist der bevorzugte Dienst nicht verfügbar, wird der andere verfügbare Dienst verwendet. Für Modellwerkzeuge können Gebühren des Anbieters anfallen.",
   "settings.websearch.source.model": "Integrierte Webtools des Modells bevorzugen",
+  "skills.activity.list": "Skills auflisten",
   "skills.activity.listFiles": "Skill-Dateien auflisten",
   "skills.activity.load": "Skill lesen",
   "skills.adaptation.reloadFailed": "Änderungen gespeichert. Die Anweisungen konnten nicht neu geladen werden; senden Sie eine neue Nachricht, um fortzufahren.",

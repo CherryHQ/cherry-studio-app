@@ -19,6 +19,8 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
+  list_local_skills: { iconName: 'fileText', titleKey: 'skills.activity.list' },
+  // Historical transcript display only; local discovery now uses list_local_skills.
   search_local_skills: { iconName: 'fileText', titleKey: 'skills.search' },
   load_skill: { iconName: 'fileText', titleKey: 'skills.activity.load' },
   list_skill_files: { iconName: 'fileText', titleKey: 'skills.activity.listFiles' },

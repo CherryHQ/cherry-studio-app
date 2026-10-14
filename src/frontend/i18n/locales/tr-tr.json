@@ -2004,6 +2004,7 @@
   "settings.websearch.provider.title": "Arama sağlayıcısı",
   "settings.websearch.source.description": "Kapalıyken yapılandırılmış harici hizmetler tercih edilir. Tüm sohbetlerde web araması ve sayfa okuma için geçerlidir. Tercih edilen hizmet kullanılamıyorsa diğer kullanılabilir hizmet kullanılır. Sağlayıcı, model araçları için ücret talep edebilir.",
   "settings.websearch.source.model": "Modelin yerleşik web araçlarını tercih et",
+  "skills.activity.list": "Skill'leri listele",
   "skills.activity.listFiles": "Skill dosyalarını listele",
   "skills.activity.load": "Skill oku",
   "skills.adaptation.reloadFailed": "Değişiklikler kaydedildi ancak talimatlar yeniden yüklenemedi. Devam etmek için yeni bir mesaj gönderin.",

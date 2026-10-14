@@ -1992,6 +1992,7 @@
   "settings.websearch.provider.title": "検索プロバイダー",
   "settings.websearch.source.description": "オフの場合は、設定済みの外部サービスを優先します。すべてのチャットのウェブ検索とページ閲覧に適用されます。優先サービスが利用できない場合は、もう一方の利用可能なサービスを使用します。モデル内蔵ツールはプロバイダーから料金が請求される場合があります。",
   "settings.websearch.source.model": "モデル内蔵のウェブツールを優先",
+  "skills.activity.list": "スキルを一覧表示",
   "skills.activity.listFiles": "スキルのファイルを一覧表示",
   "skills.activity.load": "スキルを読み込む",
   "skills.adaptation.reloadFailed": "変更は保存されましたが、指示を再読み込みできませんでした。新しいメッセージを送信して続行してください。",
