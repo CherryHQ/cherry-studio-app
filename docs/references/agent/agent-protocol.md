@@ -193,10 +193,15 @@ type AgentTurnView = {
     | 'interrupted'
   assistantMessageId: string
   error: AgentErrorView | null
+  isRetrying?: boolean
   startedAt: string
   endedAt: string | null
 }
 ```
+
+`isRetrying` marks a running turn whose provider attempt failed and is being retried
+automatically. A failed attempt does not produce `error` or a transcript error until the run ends
+with a failure or interruption.
 
 Version 1 has one execution per turn and at most one active turn per Session. It has no execution
 entity, follow-up queue, steering, autonomous turn, or background task.
@@ -628,6 +633,9 @@ Persisted transcript pagination remains a normal data read and is not duplicated
 snapshot. The snapshot contains only live state that must be composed over persisted messages. An
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
+
+`contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
+runs ahead of the threshold in the background does not delay the reply and is not reported.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished

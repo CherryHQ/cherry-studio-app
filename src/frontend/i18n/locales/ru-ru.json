@@ -465,6 +465,7 @@
   "chat.reasoningStatus.thinking": "Мышление",
   "chat.reasoningStatus.thought": "Продумал это",
   "chat.runtime.failed": "Агент недоступен. Повторите попытку, чтобы продолжить.",
+  "chat.runtime.retrying": "Запрос не выполнен. Выполняется автоматическая повторная попытка…",
   "chat.share.assistant": "Ассистент",
   "chat.share.cancelled": "Отменено",
   "chat.share.completed": "Завершено",
