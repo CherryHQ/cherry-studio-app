@@ -1,17 +1,17 @@
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 import { Linking, Platform } from 'react-native';
 
 import { HttpError } from '@/backend/services/http';
 
 import { createAppUpdateModule } from '../createAppUpdateModule';
+import { runningUpdate } from '../runningUpdate';
 
 jest.mock('expo-application', () => ({
   __esModule: true,
   nativeApplicationVersion: '1.9.0',
 }));
-jest.mock('expo-updates', () => ({ __esModule: true, channel: 'production-apk' }));
+jest.mock('../runningUpdate', () => ({ runningUpdate: { channel: 'production-apk' } }));
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { version: '1.9.0', extra: { isApkUpdatesEnabled: true } } },
@@ -171,7 +171,7 @@ test.each(['production-google-play', 'production-ios', 'preview', null])(
   'channel %s cannot enable APK downloads through an OTA flag',
   async (channel) => {
     jest.replaceProperty(globalThis, '__DEV__', false);
-    jest.replaceProperty(Updates, 'channel', channel);
+    jest.replaceProperty(runningUpdate, 'channel', channel);
     const updates = createAppUpdateModule();
     expect(updates.isEnabled).toBe(false);
     await expect(updates.check()).resolves.toEqual({
@@ -184,9 +184,15 @@ test.each(['production-google-play', 'production-ios', 'preview', null])(
   },
 );
 
+test('the production-apk channel enables checks without the development flag', () => {
+  jest.replaceProperty(globalThis, '__DEV__', false);
+  jest.replaceProperty(Constants.expoConfig!, 'extra', {});
+  expect(createAppUpdateModule().isEnabled).toBe(true);
+});
+
 test('an unconfigured development client can explicitly opt into APK checks', async () => {
   jest.replaceProperty(globalThis, '__DEV__', true);
-  jest.replaceProperty(Updates, 'channel', null);
+  jest.replaceProperty(runningUpdate, 'channel', null);
   expect(createAppUpdateModule().isEnabled).toBe(true);
   jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: false });
   expect(createAppUpdateModule().isEnabled).toBe(false);
@@ -200,16 +206,24 @@ test.each([
   ['android', 1],
   ['ios', true],
   ['web', true],
-] as const)('%s with flag %s cannot check or open an APK download', async (platform, flag) => {
-  jest.replaceProperty(Platform, 'OS', platform);
-  jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: flag });
-  const updates = createAppUpdateModule();
-  expect(updates.isEnabled).toBe(false);
-  await expect(updates.check()).resolves.toEqual({ status: 'unavailable', reason: 'unsupported' });
-  await expect(updates.openDownload(downloadUrl)).rejects.toThrow('disabled');
-  expect(mockRequest).not.toHaveBeenCalled();
-  expect(Linking.openURL).not.toHaveBeenCalled();
-});
+] as const)(
+  '%s development client with flag %s cannot check or open an APK download',
+  async (platform, flag) => {
+    jest.replaceProperty(globalThis, '__DEV__', true);
+    jest.replaceProperty(runningUpdate, 'channel', null);
+    jest.replaceProperty(Platform, 'OS', platform);
+    jest.replaceProperty(Constants.expoConfig!, 'extra', { isApkUpdatesEnabled: flag });
+    const updates = createAppUpdateModule();
+    expect(updates.isEnabled).toBe(false);
+    await expect(updates.check()).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'unsupported',
+    });
+    await expect(updates.openDownload(downloadUrl)).rejects.toThrow('disabled');
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(Linking.openURL).not.toHaveBeenCalled();
+  },
+);
 
 test('only an explicit download action opens the APK in the system browser', async () => {
   const updates = createAppUpdateModule();

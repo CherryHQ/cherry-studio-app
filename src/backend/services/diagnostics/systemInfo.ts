@@ -2,8 +2,9 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { getLocales } from 'expo-localization';
-import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
+
+import { runningUpdate } from '@/backend/services/appUpdate';
 
 import type { DiagnosticWarning } from './types';
 
@@ -43,10 +44,10 @@ export function collectDiagnosticSystemInfo(warnings: Set<DiagnosticWarning>) {
     },
     runtime: {
       expo: Constants.expoConfig?.sdkVersion,
-      runtimeVersion: Updates.runtimeVersion,
-      updateId: Updates.updateId,
-      updateChannel: Updates.channel,
-      isEmbeddedLaunch: Updates.isEmbeddedLaunch,
+      runtimeVersion: runningUpdate.runtimeVersion,
+      updateId: runningUpdate.updateId,
+      updateChannel: runningUpdate.channel,
+      isEmbeddedLaunch: runningUpdate.isEmbeddedLaunch,
       reactNative: Platform.constants.reactNativeVersion,
       hermes: 'HermesInternal' in globalThis,
     },

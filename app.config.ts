@@ -103,7 +103,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
-      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
+      // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
+      // Keeping it out of packaged configs keeps it out of their runtime fingerprints.
+      isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,
       eas: {

@@ -150,20 +150,8 @@ describe('Sentry event privacy', () => {
   });
 });
 
-describe('Sentry OTA source-map matching', () => {
-  const runtime = globalThis as typeof globalThis & { _sentryDebugIds?: Record<string, string> };
-  const originalDebugIds = runtime._sentryDebugIds;
-  const otaDebugId = 'ab671690-420a-4f74-b664-a9619263183b';
-  const nativeDebugId = '1a4cb2bb-ae99-4af1-ac49-4af95c4b62ae';
-
-  beforeEach(() => {
-    runtime._sentryDebugIds = { PRIVATE_PREMODULE_STACK_WITHOUT_A_PARSEABLE_FILENAME: otaDebugId };
-  });
-
-  afterEach(() => {
-    if (originalDebugIds === undefined) delete runtime._sentryDebugIds;
-    else runtime._sentryDebugIds = originalDebugIds;
-  });
+describe('Sentry OTA attribution', () => {
+  const updateId = 'ab671690-420a-4f74-b664-a9619263183b';
 
   function bundleError(filename: string): Event {
     return {
@@ -181,72 +169,64 @@ describe('Sentry OTA source-map matching', () => {
     };
   }
 
+  test('keeps the OTA group fields and tags while preserving the native release', () => {
+    const event = bundleError('app:///index.android.bundle');
+    event.contexts = {
+      ota_updates: {
+        is_enabled: true,
+        is_embedded_launch: false,
+        is_emergency_launch: false,
+        update_id: updateId,
+        channel: 'production-apk',
+        runtime_version: 'b0d6a7c1e2',
+        emergency_launch_reason: 'PRIVATE_/data/user/0/path',
+        created_at: '2026-10-14T00:00:00.000Z',
+      },
+    };
+    const sanitized = sanitizeSentryEvent(event);
+    expect(sanitized?.contexts?.ota_updates).toEqual({
+      is_enabled: true,
+      is_embedded_launch: false,
+      is_emergency_launch: false,
+      update_id: updateId,
+      channel: 'production-apk',
+      runtime_version: 'b0d6a7c1e2',
+    });
+    expect(sanitized?.tags).toMatchObject({
+      'ota.update_id': updateId,
+      'ota.channel': 'production-apk',
+      'ota.embedded': 'false',
+    });
+    expect(sanitized).toMatchObject({ release: event.release, dist: event.dist });
+    expect(JSON.stringify(sanitized)).not.toContain('PRIVATE_');
+  });
+
+  test('omits OTA tags with unexpected values', () => {
+    const event = bundleError('app:///main.jsbundle');
+    event.contexts = { ota_updates: { update_id: 'PRIVATE id', channel: 'PRIVATE channel' } };
+    expect(sanitizeSentryEvent(event)?.tags).not.toHaveProperty('ota.update_id');
+    expect(sanitizeSentryEvent(event)?.tags).not.toHaveProperty('ota.channel');
+  });
+
   test.each(['app:///index.android.bundle', 'app:///main.jsbundle'])(
-    'fills a missing OTA debug ID and retains the matching frame filename: %s',
+    'keeps source-map images and the matching frame filename: %s',
     (filename) => {
       const event = bundleError(filename);
-      expect(sanitizeSentryEvent(event)?.debug_meta?.images).toEqual([
-        { type: 'sourcemap', debug_id: otaDebugId, code_file: filename },
-      ]);
       const nativeImage = {
         type: 'macho' as const,
-        debug_id: nativeDebugId,
+        debug_id: '1a4cb2bb-ae99-4af1-ac49-4af95c4b62ae',
         image_addr: '0x100000000',
         image_size: 4096,
       };
-      event.debug_meta = { images: [nativeImage] };
-
+      const sourceMap = { type: 'sourcemap' as const, debug_id: updateId, code_file: filename };
+      event.debug_meta = { images: [nativeImage, sourceMap] };
       const sanitized = sanitizeSentryEvent(event);
-      expect(sanitized?.debug_meta?.images).toEqual([
-        nativeImage,
-        { type: 'sourcemap', debug_id: otaDebugId, code_file: filename },
-      ]);
+      expect(sanitized?.debug_meta?.images).toEqual([nativeImage, sourceMap]);
       expect(sanitized?.exception?.values?.[0]?.stacktrace?.frames?.[0]).toMatchObject({
         filename,
         lineno: 1,
         colno: 12345,
       });
-      expect(sanitized).toMatchObject({ release: event.release, dist: event.dist });
-      expect(JSON.stringify(sanitized)).not.toContain('PRIVATE_');
-      expect(event.debug_meta.images).toEqual([nativeImage]);
-      expect(sanitizeSentryEvent(sanitized!)).toEqual(sanitized);
     },
   );
-
-  test.each(['app:///index.android.bundle', 'app:///main.jsbundle'])(
-    'preserves the SDK match without adding another source map: %s',
-    (filename) => {
-      const event = bundleError(filename);
-      const matchedImage = {
-        type: 'sourcemap' as const,
-        debug_id: nativeDebugId,
-        code_file: filename,
-      };
-      event.debug_meta = { images: [matchedImage] };
-      expect(sanitizeSentryEvent(event)?.debug_meta?.images).toEqual([matchedImage]);
-    },
-  );
-
-  test.each<Record<string, string> | undefined>([
-    undefined,
-    {},
-    { first: '' },
-    { first: otaDebugId, second: nativeDebugId },
-  ])(
-    'does not invent a map when the injected bundle ID is missing or ambiguous: %j',
-    (debugIds) => {
-      runtime._sentryDebugIds = debugIds;
-      expect(
-        sanitizeSentryEvent(bundleError('app:///index.android.bundle'))?.debug_meta,
-      ).toBeUndefined();
-    },
-  );
-
-  test('does not attach the app bundle to native-only or unrelated stacks', () => {
-    const event = bundleError('app:///index.android.bundle');
-    event.exception!.values![0]!.stacktrace!.frames![0]!.platform = 'java';
-    expect(sanitizeSentryEvent(event)?.debug_meta).toBeUndefined();
-    expect(sanitizeSentryEvent(bundleError('app:///other.js'))?.debug_meta).toBeUndefined();
-    expect(sanitizeSentryEvent({ type: 'transaction' })).toBeNull();
-  });
 });

@@ -1,6 +1,5 @@
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
-import * as Updates from 'expo-updates';
 import { Linking, Platform } from 'react-native';
 import { z } from 'zod';
 
@@ -8,6 +7,7 @@ import { createHttpClient, HttpError } from '@/backend/services/http';
 import type { AppUpdateModule, AppUpdateResult } from '@/shared/contracts/appUpdate';
 
 import { compareReleaseVersions, parseReleaseVersion } from './releaseVersion';
+import { runningUpdate } from './runningUpdate';
 
 const REPOSITORY = 'CherryHQ/cherry-studio-app';
 const ReleaseSchema = z.object({
@@ -22,9 +22,11 @@ const ReleaseSchema = z.object({
 export function createAppUpdateModule(): AppUpdateModule {
   const isEnabled =
     Platform.OS === 'android' &&
-    Constants.expoConfig?.extra?.isApkUpdatesEnabled === true &&
     // The embedded channel cannot be changed by an OTA manifest. Unconfigured release builds fail closed.
-    (Updates.channel === 'production-apk' || (__DEV__ && Updates.channel === null));
+    (runningUpdate.channel === 'production-apk' ||
+      (__DEV__ &&
+        runningUpdate.channel === null &&
+        Constants.expoConfig?.extra?.isApkUpdatesEnabled === true));
   const gitcode = createHttpClient({
     baseUrl: 'https://api.gitcode.com/api/v5',
     headers: { Accept: 'application/json' },

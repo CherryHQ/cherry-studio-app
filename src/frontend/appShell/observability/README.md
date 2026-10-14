@@ -143,10 +143,15 @@ Production EAS Update exports also require uploading their exact source maps wit
 bundle. Preserve native release/dist values and match each export by its debug IDs; see
 [Application Updates](../../../../docs/guides/app-updates.md#publishing).
 
-For SDK 7.11's Hermes stack-matching gap, `sentryEvent.ts` fills missing source-map metadata
-from the single Metro-injected bundle debug ID during `beforeSend`, after SDK event processing.
-It preserves existing matches and native debug images, retains both platforms' canonical bundle
-filenames through privacy filtering, and skips ambiguous multiple-bundle registrations.
+`sentryDebugMeta.ts` backports SDK 8's `debugMetaIntegration` for SDK 7.11's Hermes
+stack-matching gap: it stamps the single Metro-injected bundle debug ID when core found no match,
+and skips ambiguous multiple-bundle registrations. Replace it with the SDK integration when
+upgrading. The privacy filter retains both platforms' canonical bundle filenames.
+
+`expoContextIntegration` attaches the running update's `ota_updates` context, which the JS and
+native filters keep (minus the free-form emergency reason) and expose as `ota.update_id`,
+`ota.channel`, and `ota.embedded` tags. Release/dist stay the native binary's, so filter OTA groups by
+these tags.
 
 Production Android builds enable R8. The Sentry Expo plugin also enables its Android Gradle plugin
 with mapping, JVM source-context, and native-symbol uploads. It keeps SDK auto-installation and

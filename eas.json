@@ -50,8 +50,7 @@
       "node": "24.19.0",
       "pnpm": "12.2.1",
       "env": {
-        "PROFILE": "production",
-        "APK_UPDATES_ENABLED": "true"
+        "PROFILE": "production"
       },
       "android": {
         "channel": "production-apk",
@@ -67,7 +66,6 @@
     "production-google-play": {
       "extends": "production",
       "env": {
-        "APK_UPDATES_ENABLED": "false",
         "ANDROID_COMPRESS_NATIVE_LIBS": "false"
       },
       "android": {

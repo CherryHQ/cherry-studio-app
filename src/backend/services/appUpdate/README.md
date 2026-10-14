@@ -13,20 +13,24 @@ Tapping an unmarked row runs a fresh check and reports its result as a toast.
 
 ## Distribution Gate
 
-`app.config.ts` parses `APK_UPDATES_ENABLED=true|false` into the boolean
-`extra.isApkUpdatesEnabled`. Only `true` on Android enables the feature. An absent setting defaults
-to `false`; any other build setting fails configuration. Packaged builds also require the immutable
-`expo-updates` build channel `production-apk`. An OTA manifest cannot enable APK checks on Google
-Play; unconfigured release builds fail closed. Development clients without a channel can explicitly
-opt in through the boolean flag. Disabled builds hide the UI, skip network requests, and reject
-download actions. GitCode is the fixed whole-APK update source; there is no user setting for it.
+Packaged Android builds enable the feature only on the immutable `expo-updates` build channel
+`production-apk`, read through `runningUpdate`. An OTA manifest cannot change the channel, so it
+cannot enable APK checks on Google Play; unconfigured release builds fail closed. Development
+clients have no channel and opt in through `APK_UPDATES_ENABLED=true`, which `app.config.ts` parses
+into `extra.isApkUpdatesEnabled` for the development profile only; packaged configs omit it so it
+stays out of their runtime fingerprints. Disabled builds hide the UI, skip network requests, and
+reject download actions. GitCode is the fixed whole-APK update source; there is no user setting.
+
+`runningUpdate` reads the `ExpoUpdates` native module optionally. Development clients built before
+`expo-updates` was added still start, with no channel.
 
 | EAS profile | APK update behavior |
 | --- | --- |
-| `production` | Enabled on Android |
-| `production-google-play` | Explicitly disabled |
-| `development` / `preview` | Disabled by default |
-| Any iOS build | Disabled regardless of the setting |
+| `production`, Android (`production-apk`) | Enabled |
+| `production-google-play` | Disabled |
+| `preview` | Disabled |
+| `development` | Disabled unless `APK_UPDATES_ENABLED=true` |
+| Any iOS build | Disabled |
 
 The [Android release workflow](../../../../.github/workflows/android-release.yml) builds with
 the existing `production` profile. Its APK is published to GitHub and manually mirrored to GitCode using the

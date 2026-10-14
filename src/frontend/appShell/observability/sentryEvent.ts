@@ -15,6 +15,20 @@ const ERROR_CODES = new Set([
   'NOT_FOUND',
   'VALIDATION_ERROR',
 ]);
+const UPDATE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CONTEXT_FIELDS: Record<string, string[]> = {
+  os: ['name', 'version', 'build', 'kernel_version'],
+  device: ['family', 'model', 'model_id', 'arch', 'simulator', 'memory_size'],
+  // Set by expoContextIntegration. `emergency_launch_reason` is a free-form native error message.
+  ota_updates: [
+    'is_enabled',
+    'is_embedded_launch',
+    'is_emergency_launch',
+    'update_id',
+    'channel',
+    'runtime_version',
+  ],
+};
 type DebugImage = NonNullable<NonNullable<ErrorEvent['debug_meta']>['images']>[number];
 
 export function isExpectedSentryError(error: unknown): boolean {
@@ -91,35 +105,6 @@ function sanitizeDebugImage(image: DebugImage): DebugImage[] {
   return file ? [{ type: image.type, debug_id: image.debug_id, code_file: file }] : [];
 }
 
-function collectDebugImages(event: Event): DebugImage[] | undefined {
-  const images = event.debug_meta?.images?.flatMap(sanitizeDebugImage);
-  const codeFile = event.exception?.values
-    ?.flatMap((error) => error.stacktrace?.frames ?? [])
-    .find(
-      (frame) =>
-        (!frame.platform || frame.platform === 'javascript') &&
-        (frame.filename === 'app:///index.android.bundle' ||
-          frame.filename === 'app:///main.jsbundle'),
-    )?.filename;
-  if (
-    !codeFile ||
-    images?.some((image) => image.type === 'sourcemap' && image.code_file === codeFile)
-  )
-    return images;
-
-  // SDK 7.11 can miss Hermes premodule stacks. beforeSend runs after its processors,
-  // so preserve their matches and fill only the missing bundle metadata.
-  // https://github.com/getsentry/sentry-react-native/pull/6545
-  const debugIds = Object.values(
-    (globalThis as typeof globalThis & { _sentryDebugIds?: Record<string, string> })
-      ._sentryDebugIds ?? {},
-  );
-  // Multiple registered bundles are ambiguous; never guess which map fits this stack.
-  if (debugIds.length !== 1 || !debugIds[0]) return images;
-
-  return [...(images ?? []), { type: 'sourcemap', debug_id: debugIds[0], code_file: codeFile }];
-}
-
 /** Construct the payload from allowed fields. Free-form messages can contain complete AI responses. */
 export function sanitizeSentryEvent(event: Event, originalException?: unknown): ErrorEvent | null {
   const exceptions = event.exception?.values;
@@ -145,17 +130,24 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
   if (typeof code === 'string' && ERROR_CODES.has(code)) tags['error.code'] = code;
 
   const contexts: ErrorEvent['contexts'] = {};
-  for (const [key, fields] of Object.entries({
-    os: ['name', 'version', 'build', 'kernel_version'],
-    device: ['family', 'model', 'model_id', 'arch', 'simulator', 'memory_size'],
-  })) {
+  for (const [key, fields] of Object.entries(CONTEXT_FIELDS)) {
     const context = event.contexts?.[key];
     if (context)
       contexts[key] = Object.fromEntries(
         Object.entries(context).filter(([field]) => fields.includes(field)),
       );
   }
-  const debugImages = collectDebugImages(event);
+  // Tags make OTA groups searchable; release/dist stay those of the native binary.
+  const updates = contexts.ota_updates;
+  if (updates) {
+    if (typeof updates.update_id === 'string' && UPDATE_ID.test(updates.update_id))
+      tags['ota.update_id'] = updates.update_id;
+    const channel = sentryIdentifier(updates.channel);
+    if (channel) tags['ota.channel'] = channel;
+    if (typeof updates.is_embedded_launch === 'boolean')
+      tags['ota.embedded'] = String(updates.is_embedded_launch);
+  }
+  const debugImages = event.debug_meta?.images?.flatMap(sanitizeDebugImage);
 
   return {
     type: undefined,
