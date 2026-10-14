@@ -33,8 +33,8 @@ export function bundledSkillLocator(name: string): string {
   return `bundled:${name}`;
 }
 
-/** Keep routing metadata separate from instructions loaded when the workflow is needed. */
-export function getSystemSkillWorkflows(availableTools: ReadonlyMap<string, string>) {
+/** Inline the complete workflow and its resources only when its tools are present. */
+export function getSystemSkillInstructions(availableTools: ReadonlyMap<string, string>): string[] {
   return BUNDLED_SKILLS.flatMap((definition) => {
     if (!definition.requiredTools.every((name) => availableTools.has(name))) return [];
     const entry = parseSkillEntry(definition.files['SKILL.md'] ?? '');
@@ -49,12 +49,6 @@ export function getSystemSkillWorkflows(availableTools: ReadonlyMap<string, stri
     ].join('\n\n');
     for (const name of definition.requiredTools)
       instructions = instructions.replaceAll(`\`${name}\``, `\`${availableTools.get(name)}\``);
-    return [
-      {
-        id: `system:${definition.name}`,
-        description: entry.frontmatter.description,
-        instructions,
-      },
-    ];
+    return [instructions];
   });
 }

@@ -59,7 +59,6 @@ describe('buildAgentSystemPrompt', () => {
       'Tool Availability',
       'Answer Recovery',
       'System Skills',
-      'Workflow Guides',
       'Skills',
     ]) {
       expect(prompt).not.toContain(`## ${heading}`);
@@ -68,49 +67,45 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).not.toContain('Discovery failed.');
   });
 
-  test('lists applicable system workflows without sending their instructions or templates', () => {
+  test('provides system workflows without installation and only with their available built-in tools', () => {
     const base = { agentInstructions: '', appLanguage: 'en-US' as const };
-    const textOnly = buildAgentSystemPrompt({ ...base, tools: [tool('load_workflow')] });
-    expect(textOnly).toContain('system:structured-notes');
-    expect(textOnly).not.toContain('## Action items');
-    expect(textOnly).not.toContain('system:daily-agenda');
-    expect(textOnly).not.toContain('system:research-brief');
+    const textOnly = buildAgentSystemPrompt({ ...base, tools: [] });
+    expect(textOnly).toContain('### structured-notes');
+    expect(textOnly).toContain('## Action items');
+    expect(textOnly).not.toContain('### daily-agenda');
+    expect(textOnly).not.toContain('### research-brief');
     expect(textOnly).not.toContain('### Available Skills');
 
     const complete = buildAgentSystemPrompt({
       ...base,
       tools: [
-        tool('load_workflow'),
         tool('calendar_list_collections', 'mobile_calendar_collections'),
         tool('calendar_list_events', 'mobile_calendar_events'),
         tool('web_search', 'mobile_web_search'),
         tool('web_fetch', 'mobile_web_fetch'),
       ],
     });
-    expect(complete).toContain('system:daily-agenda');
-    expect(complete).toContain('system:research-brief');
-    expect(complete).toContain('`load_workflow`');
-    expect(complete).not.toContain('travel gaps under 15 minutes');
-    expect(complete).not.toContain('at most five bullets');
+    expect(complete).toContain('### daily-agenda');
+    expect(complete).toContain('`mobile_calendar_collections`');
+    expect(complete).toContain('`mobile_calendar_events`');
+    expect(complete).toContain('travel gaps under 15 minutes');
+    expect(complete).toContain('### research-brief');
+    expect(complete).toContain('`mobile_web_fetch`');
+    expect(complete).toContain('at most five bullets');
     expect(complete).not.toContain('Read `references/');
 
     const incomplete = buildAgentSystemPrompt({
       ...base,
-      tools: [tool('load_workflow'), tool('calendar_list_events'), tool('web_search')],
+      tools: [tool('calendar_list_events'), tool('web_search')],
     });
-    expect(incomplete).not.toContain('system:daily-agenda');
-    expect(incomplete).not.toContain('system:research-brief');
+    expect(incomplete).not.toContain('### daily-agenda');
+    expect(incomplete).not.toContain('### research-brief');
 
     const denied = buildAgentSystemPrompt({
       ...base,
-      tools: [
-        tool('load_workflow'),
-        tool('web_search'),
-        { ...tool('web_fetch'), approval: 'deny' },
-      ],
+      tools: [tool('web_search'), { ...tool('web_fetch'), approval: 'deny' }],
     });
-    expect(denied).not.toContain('system:research-brief');
-    expect(buildAgentSystemPrompt({ ...base, tools: [] })).not.toContain('## Workflow Guides');
+    expect(denied).not.toContain('### research-brief');
   });
 
   test('explains discovery failures even when no MCP tool reached the turn catalog', () => {
@@ -240,7 +235,9 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('plugin:server-1: example workflows');
     expect(prompt).not.toContain('Read before editing.');
     expect(prompt).toContain('honor the requested branch');
-    expect(prompt).toContain('`load_workflow` before using its plugin tools');
+    expect(prompt).toContain('load its guide with `load_workflow`');
+    expect(prompt).toContain('its tools refuse to run until then');
+    expect(prompt).toContain('stays in system context for later turns');
     expect(prompt).toContain('Agent Instructions take precedence over these guides');
     expect(prompt).toContain('not callable aliases');
     expect(prompt).toContain('a guide is not evidence that a tool has been inspected');

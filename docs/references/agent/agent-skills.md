@@ -16,12 +16,12 @@ An Agent toggle makes a Skill available for the model to choose when relevant. A
 requests its use and supplies its full instructions for that turn; it is not a request to install
 the Skill or open a file viewer.
 
-Structured notes, research brief and daily agenda are app-owned system workflows. The Host lists
-their routing metadata independently of installed packages or Agent bindings. `load_workflow`
-supplies a matching workflow's complete instructions and templates through Pi's trusted instruction
-sections; its result contains only a receipt. Calendar and research workflows are available only when
-all required built-in tools are present in the current turn. They are not recommended, installable
-or selectable in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
+Structured notes, research brief and daily agenda are app-owned system workflows. The Host includes
+their instructions and templates in internal system context, independently of installed packages or
+Agent bindings. They are short enough to stay resident, so a matching request never depends on the
+model loading them first. Calendar and research workflows are included only when all their required
+built-in tools are present in the current turn. They are not listed, recommended, installable or
+selectable in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
 backups, but are excluded from user reads, binding updates and installed runtime scope. Installing a
 user package with the same folder name replaces that hidden legacy record and its bindings; its old
 bytes follow ordinary storage reconciliation.

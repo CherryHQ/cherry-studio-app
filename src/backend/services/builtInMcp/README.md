@@ -92,11 +92,15 @@ it in its native conversation document and renders it before subsequent requests
 compaction or reopening the working copy. The tool result is a receipt, so it does not duplicate the
 body. The complete guide preserves its overview when loaded; only short routing context is always
 present in the first request.
-The next Host configuration resets these contributions and builds a catalog from current grants.
+Until that section is present, every tool on the connection is refused before approval with an
+instruction to load the guide, so a skipped load costs one round instead of an unguided call.
+Each later turn restores the guides loaded earlier in the Session from successful `load_workflow`
+receipts, using the current revision and only while the connection still contributes a guide, so the
+model does not mistake an old receipt for loaded instructions and the system prefix stays stable.
 Guides do not change saved Agent instructions, permissions, approval or resource grants. Loaded text
 counts in the live context budget and is not truncated. Runtime rules, the user's request and Agent
 instructions take precedence. Raw names remain discovery hints; inspect the current tool signature
-before calling its exact catalog alias. The same loader serves app-owned system workflows.
+before calling its exact catalog alias.
 
 Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also

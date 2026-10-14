@@ -12,7 +12,7 @@ import {
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
-import { createLoadWorkflowTool, getAvailableWorkflows } from '../../../tools/workflowTool';
+import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
@@ -228,7 +228,7 @@ describe('Persistent Agent facade', () => {
           overview: 'GitHub repository and PR context; honor the requested branch.',
         },
       ];
-      tools.push(createLoadWorkflowTool(getAvailableWorkflows(tools, pluginGuides)));
+      tools.push(createLoadWorkflowTool(getPluginWorkflows(pluginGuides)));
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',

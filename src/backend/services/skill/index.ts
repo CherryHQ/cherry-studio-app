@@ -8,4 +8,4 @@ export {
   createGithubSkillSource,
 } from './skillSources';
 export { skillStorage, type SkillStorage } from './skillStorage';
-export { getSystemSkillWorkflows } from './bundled';
+export { getSystemSkillInstructions } from './bundled';

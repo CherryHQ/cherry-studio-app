@@ -748,6 +748,59 @@ describe('durable capability boundary', () => {
       await reopened.close(BACKGROUND_CONTEXT);
     }
   });
+  test('a tool requiring a guide is refused before approval until a trusted loader retains it', async () => {
+    const approve = jest.fn(async () => true);
+    const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
+    const refusal = 'Load the plugin guide first.';
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: [
+        capability({ requiredInstructions: { key: 'workflow:plugin:server', refusal }, execute }),
+        capability({
+          ref: { source: 'builtin', capabilityId: 'load_workflow' },
+          providerName: 'load_workflow',
+          approval: 'auto',
+          execute: async () => ({
+            value: { status: 'ok' },
+            instructions: { key: 'workflow:plugin:server', text: 'Read before writing.' },
+            artifacts: [],
+          }),
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'early'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        isError: true,
+        content: [expect.objectContaining({ text: expect.stringContaining(refusal) })],
+      });
+      await harness.waitForTask(
+        await toolTask(conversation, 'load_workflow', { name: 'plugin:server' }, 'load'),
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'after'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('native MCP discovery preserves approval, artifact admission and untrusted result boundaries', async () => {
     const result = {
       value: 'Created',

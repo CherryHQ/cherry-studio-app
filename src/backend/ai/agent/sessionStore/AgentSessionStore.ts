@@ -207,6 +207,9 @@ export interface AgentSessionStore {
   /** Skill load receipts and explicit selections across the complete transcript, oldest first. */
   loadSkillActivations(sessionId: string): Promise<StoredSkillActivation[]>;
 
+  /** Workflow ids from successful load receipts across the complete transcript, oldest first. */
+  loadWorkflowLoads(sessionId: string): Promise<string[]>;
+
   /**
    * Returns the newest assistant row carrying an opaque checkpoint candidate.
    * `excludeAssistantMessageId` skips one answer, so a retry does not resume

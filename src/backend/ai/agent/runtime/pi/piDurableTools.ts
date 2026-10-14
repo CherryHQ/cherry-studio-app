@@ -25,7 +25,11 @@ import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types'
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
 import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
 import { PI_TOOL_BUDGET } from './piToolBudget';
-import { retainToolInstructions, toolInstructionsSection } from './piToolInstructions';
+import {
+  hasToolInstructions,
+  retainToolInstructions,
+  toolInstructionsSection,
+} from './piToolInstructions';
 
 type PiDurableToolOptions = {
   name: string;
@@ -304,6 +308,11 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
           if (target.approval === 'deny') return { block: 'This tool is disabled.' };
           if (target.failureGroup && failedGroups.has(target.failureGroup))
             return { block: 'This tool group stopped after an earlier failure.' };
+          if (
+            target.requiredInstructions &&
+            !(await hasToolInstructions(target.requiredInstructions.key, api, context))
+          )
+            return { block: target.requiredInstructions.refusal };
           if (target.approval === 'auto') return;
           const input = RuntimeJsonValueSchema.parse(call.arguments);
           if (!(await options.approve(target, input, call, api, context)))

@@ -1,6 +1,7 @@
 import { WEB_FETCH_TOOL_NAME, WEB_SEARCH_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
 
 import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
+import { getSystemSkillInstructions } from '@/backend/services/skill';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 
@@ -9,7 +10,7 @@ import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
-import { getAvailableWorkflows, LOAD_WORKFLOW_TOOL_NAME } from '../tools/workflowTool';
+import { getPluginWorkflows, LOAD_WORKFLOW_TOOL_NAME } from '../tools/workflowTool';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
 import { buildCreateSkillInstructions } from './createSkillInstructions';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
@@ -159,26 +160,30 @@ Use the offered JavaScript execution tool when an answer depends on exact comput
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 
-Load the connection's workflow with \`${LOAD_WORKFLOW_TOOL_NAME}\` before using its plugin tools. Finish the loading round and read its system instructions before planning plugin calls; do not combine them in one script or parallel round. If guidance cannot be loaded, explain the limitation instead of guessing the workflow. Runtime Rules, application capability rules, the user's request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval.
+Before using a connection's plugin tools, load its guide with \`${LOAD_WORKFLOW_TOOL_NAME}\` unless it is already under Current workflow instructions; its tools refuse to run until then. A loaded guide stays in system context for later turns. Finish the loading round and read its instructions before planning plugin calls; do not combine them in one script or parallel round. If guidance cannot be loaded, explain the limitation instead of guessing the workflow. Runtime Rules, application capability rules, the user's request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval.
 Raw names are search hints, not callable aliases; a guide is not evidence that a tool has been inspected. Discover tools and inspect their current parameters before using the exact returned name. Explain missing prerequisites instead of inferring capabilities.
-Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.`);
-  }
+Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.
 
-  if (
-    tools.some(
-      (tool) =>
-        tool.ref.source === 'builtin' &&
-        tool.ref.capabilityId === LOAD_WORKFLOW_TOOL_NAME &&
-        tool.approval !== 'deny',
-    )
-  ) {
-    sections.push(`## Workflow Guides
-
-Call \`${LOAD_WORKFLOW_TOOL_NAME}\` with the matching workflow_id when its description fits the current request. Complete instructions and templates are then supplied in system context. These app-owned workflows are separate from installed Skills and do not change tools or approvals.
-
-${getAvailableWorkflows(tools, pluginGuides)
+${getPluginWorkflows(pluginGuides)
   .map((workflow) => `- ${workflow.id}: ${workflow.description}`)
   .join('\n')}`);
+  }
+
+  const systemSkills = getSystemSkillInstructions(
+    new Map(
+      tools.flatMap((tool) =>
+        tool.ref.source === 'builtin' && tool.approval !== 'deny'
+          ? [[tool.ref.capabilityId, tool.providerName] as const]
+          : [],
+      ),
+    ),
+  );
+  if (systemSkills.length > 0) {
+    sections.push(`## System Skills
+
+Apply these app-owned workflows when they match the user's current request. The Runtime Rules, application capability rules, Agent Instructions and the user's request take precedence. All referenced templates are included below. Follow the available tools and existing approvals; these workflows grant no additional capabilities.
+
+${systemSkills.join('\n\n')}`);
   }
 
   if (

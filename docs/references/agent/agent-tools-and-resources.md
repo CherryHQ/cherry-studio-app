@@ -195,12 +195,14 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
 `callers` independently controls model and script access. Application callbacks provide structured
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
-Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens, retaining a small set
-of useful signatures while scripts inspect additional signatures through the discovery helpers.
+Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
+carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
+rest through the discovery helpers.
 The initial prompt retains plugin capability overviews, critical constraints, and shared operation
-rules. Complete plugin guides and app-owned workflow templates enter trusted system context through
-read-only `load_workflow`. Loading ends its tool round; dependent actions are planned only after
-the next request supplies the complete instructions. Skill readers remain directly exposed and
+rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
+connection's tools are refused before approval until its guide is present. Loading ends its tool
+round; dependent actions are planned only after the next request supplies the complete instructions.
+Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
 their full routing descriptions retain the existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
