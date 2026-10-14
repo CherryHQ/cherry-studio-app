@@ -2016,6 +2016,7 @@
   "settings.websearch.provider.title": "Fournisseur de recherche",
   "settings.websearch.source.description": "Lorsque cette option est désactivée, les services externes configurés sont privilégiés. S’applique à la recherche web et à la lecture de pages dans toutes les conversations. Si le service privilégié est indisponible, l’autre service disponible est utilisé. Le fournisseur peut facturer les outils du modèle.",
   "settings.websearch.source.model": "Privilégier les outils web intégrés du modèle",
+  "skills.activity.list": "Lister les Skills",
   "skills.activity.listFiles": "Lister les fichiers du Skill",
   "skills.activity.load": "Lire le Skill",
   "skills.adaptation.reloadFailed": "Modifications enregistrées. Les instructions n’ont pas pu être rechargées ; envoyez un nouveau message pour continuer.",

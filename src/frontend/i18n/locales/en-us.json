@@ -2004,6 +2004,7 @@
   "settings.websearch.provider.title": "Search provider",
   "settings.websearch.source.description": "When off, prefer configured external services. Applies to web search and page reading in all chats. If the preferred service is unavailable, use the other available service. Model tools may incur provider charges.",
   "settings.websearch.source.model": "Prefer the model's built-in web tools",
+  "skills.activity.list": "List Skills",
   "skills.activity.listFiles": "List Skill files",
   "skills.activity.load": "Read Skill",
   "skills.adaptation.reloadFailed": "Changes saved. Instructions could not be reloaded; start a new message to continue.",

@@ -2016,6 +2016,7 @@
   "settings.websearch.provider.title": "Proveedor de búsqueda",
   "settings.websearch.source.description": "Al desactivarlo, se prefieren los servicios externos configurados. Se aplica a la búsqueda web y la lectura de páginas en todos los chats. Si el servicio preferido no está disponible, se utiliza el otro servicio disponible. El proveedor puede cobrar por las herramientas del modelo.",
   "settings.websearch.source.model": "Preferir las herramientas web integradas del modelo",
+  "skills.activity.list": "Listar Skills",
   "skills.activity.listFiles": "Listar archivos del Skill",
   "skills.activity.load": "Leer Skill",
   "skills.adaptation.reloadFailed": "Cambios guardados. No se pudieron recargar las instrucciones; envía un nuevo mensaje para continuar.",

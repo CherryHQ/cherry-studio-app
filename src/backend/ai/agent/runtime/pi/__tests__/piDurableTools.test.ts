@@ -155,7 +155,7 @@ describe('durable capability boundary', () => {
   test('defers Skill installation and adaptation without MCP while retaining all readers and call permissions', async () => {
     const names = [
       'load_skill',
-      'search_local_skills',
+      'list_local_skills',
       'find_skills',
       'install_skill',
       'adapt_skill',
@@ -185,7 +185,7 @@ describe('durable capability boundary', () => {
       const agent = await conversation.agent(BACKGROUND_CONTEXT);
       expect(agent.tools.map((tool) => tool.name)).toEqual([
         'load_skill',
-        'search_local_skills',
+        'list_local_skills',
         'list_skill_files',
         'read_skill_file',
         'load_workflow',

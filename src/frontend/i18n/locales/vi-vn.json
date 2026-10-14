@@ -1992,6 +1992,7 @@
   "settings.websearch.provider.title": "Nhà cung cấp dịch vụ tìm kiếm",
   "settings.websearch.source.description": "Khi tắt, ưu tiên các dịch vụ bên ngoài đã cấu hình. Áp dụng cho tìm kiếm web và đọc trang trong mọi cuộc trò chuyện. Nếu dịch vụ ưu tiên không khả dụng, sử dụng dịch vụ khả dụng còn lại. Nhà cung cấp có thể tính phí sử dụng công cụ của mô hình.",
   "settings.websearch.source.model": "Ưu tiên công cụ web tích hợp của mô hình",
+  "skills.activity.list": "Liệt kê kỹ năng",
   "skills.activity.listFiles": "Liệt kê tệp của Skill",
   "skills.activity.load": "Đọc Skill",
   "skills.adaptation.reloadFailed": "Đã lưu thay đổi nhưng không thể tải lại hướng dẫn. Hãy gửi tin nhắn mới để tiếp tục.",

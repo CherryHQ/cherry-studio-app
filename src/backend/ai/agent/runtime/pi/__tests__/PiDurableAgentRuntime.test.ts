@@ -310,7 +310,7 @@ describe('Persistent Agent facade', () => {
         };
         expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
           'read_file',
-          'search_local_skills',
+          'list_local_skills',
           'load_skill',
           'list_skill_files',
           'read_skill_file',
