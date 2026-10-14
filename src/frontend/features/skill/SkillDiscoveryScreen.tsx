@@ -1,147 +1,264 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import SearchIcon from '@cherrystudio/app-icons/icons/search';
-import { ContentState, Section } from '@cherrystudio/ui/components';
-import { useQuery } from '@tanstack/react-query';
+import {
+  Button,
+  ContentState,
+  OptionPickerBottomSheet,
+  Section,
+} from '@cherrystudio/ui/components';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useBackendModule } from '@/frontend/data';
 import { formatCompactNumber } from '@/frontend/utils/compactNumber';
+import type { CherryinSkill, CherryinSkillQuery } from '@/shared/contracts/skillMarketplace';
 import type { SkillListing } from '@/shared/contracts/skills';
-import type { SkillCandidate } from '@/shared/data/types/skill';
+import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
+import { marketplaceText, type SkillDiscoverySource } from './discover/skillDiscovery';
+import { SkillSourceFilter } from './discover/SkillSourceFilter';
 import { SkillPage } from './SkillPage';
 
 type DiscoveryResult = {
-  key: string;
   name: string;
   description: string;
-  url: string | null;
-  candidate: SkillCandidate | null;
+  url: string;
+  marketplaceId?: string;
+  candidateId?: string;
   installs?: number;
+  collection?: boolean;
 };
 
-const fromCandidate = (candidate: SkillCandidate): DiscoveryResult => ({
-  key: candidate.candidateId,
-  name: candidate.name,
-  description: candidate.description,
-  url: null,
-  candidate,
-});
-
 const fromListing = (listing: SkillListing): DiscoveryResult => ({
-  key: listing.url,
   name: listing.name,
   description: listing.source,
   url: listing.url,
-  candidate: null,
   installs: listing.installs,
 });
 
+const sortLabelKeys = {
+  popular: 'skills.discover.popular',
+  newest: 'skills.marketplace.newest',
+  name_asc: 'skills.marketplace.nameSort',
+} as const;
+
 export function SkillDiscoveryScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const router = useRouter();
   const { open: openSearch } = useAppSearch();
-  const skillsModule = useBackendModule('skills');
-  const popular = useQuery({
-    queryFn: async ({ signal }) => (await skillsModule.popular(signal)).map(fromListing),
-    queryKey: ['skills', 'popular'],
+  const skills = useBackendModule('skills');
+  const [source, setSource] = useState<SkillDiscoverySource>('cherryin');
+  const [sort, setSort] = useState<NonNullable<CherryinSkillQuery['sort']>>('popular');
+  const [picker, setPicker] = useState<'source' | 'sort' | null>(null);
+  const language = i18n.resolvedLanguage ?? i18n.language;
+
+  const fromCherryin = (item: CherryinSkill): DiscoveryResult => ({
+    name: marketplaceText(item.name, language),
+    description: marketplaceText(item.description, language),
+    url: cherryinSkillUrl(item.id),
+    marketplaceId: item.id,
+    installs: item.downloads,
+    collection: item.tags.includes('collection'),
+  });
+  const catalog = useInfiniteQuery({
+    queryKey: ['skills', 'cherryin', sort],
+    initialPageParam: 0,
+    queryFn: ({ pageParam, signal }) => skills.listCherryin({ sort, offset: pageParam }, signal),
+    getNextPageParam: (page) => page.nextOffset ?? undefined,
+    enabled: source === 'cherryin',
     retry: false,
     staleTime: 5 * 60_000,
   });
-  const popularSkills = popular.data ?? [];
+  const popular = useQuery({
+    queryKey: ['skills', 'popular'],
+    queryFn: ({ signal }) => skills.popular(signal),
+    enabled: source === 'skills-sh',
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const results =
+    source === 'cherryin'
+      ? [
+          ...new Map<string, CherryinSkill>(
+            catalog.data?.pages.flatMap((page) => page.items).map((item) => [item.id, item]),
+          ).values(),
+        ].map(fromCherryin)
+      : (popular.data ?? []).map(fromListing);
+  const current = source === 'cherryin' ? catalog : popular;
 
   function open(result: DiscoveryResult) {
-    router.push({
-      pathname: '/skills/candidate',
-      params: {
-        ...(result.candidate
-          ? { candidateId: result.candidate.candidateId }
-          : { url: result.url! }),
-        name: result.name,
-        description: result.description,
-      },
-    });
+    if (result.marketplaceId) {
+      router.push({
+        pathname: '/skills/marketplace/[marketplaceId]',
+        params: { marketplaceId: result.marketplaceId },
+      });
+    } else {
+      router.push({
+        pathname: '/skills/candidate',
+        params: {
+          ...(result.candidateId ? { candidateId: result.candidateId } : { url: result.url }),
+          name: result.name,
+          description: result.description,
+        },
+      });
+    }
   }
 
-  function searchSkills() {
-    void openSearch<DiscoveryResult>({
+  function search() {
+    void openSearch<DiscoveryResult, SkillDiscoverySource>({
       debounceMs: 300,
+      filter: { component: SkillSourceFilter, context: undefined, initialValue: source },
       emptyText: t('skills.discover.empty'),
-      getAccessibilityLabel: (result) => result.name,
-      keyExtractor: (result) => result.key,
-      // Without a loaded list the empty query waits for input instead of reporting no matches.
-      loadRecent: popularSkills.length
-        ? () => ({ groups: [{ key: 'popular', items: popularSkills }] })
-        : undefined,
-      placeholder: t('skills.discover.query'),
-      renderItem: (result) => (
+      getAccessibilityLabel: (item) => item.name,
+      keyExtractor: (item) => item.url,
+      placeholder: t('skills.marketplace.searchPlaceholder'),
+      renderItem: (item) => (
         <View className="gap-0.5 py-3">
-          <Text className="text-base text-foreground">{result.name}</Text>
+          <Text className="text-base text-foreground">{item.name}</Text>
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-            {result.description}
+            {item.description}
           </Text>
         </View>
       ),
-      search: async ({ query, signal }) => {
+      loadRecent: async ({ filters, signal, cursor }) => {
+        if (filters === 'skills-sh')
+          return {
+            groups: [
+              {
+                key: 'popular',
+                items: (popular.data ?? (await skills.popular(signal))).map(fromListing),
+              },
+            ],
+          };
+        const page = await skills.listCherryin(
+          { sort, offset: cursor ? Number(cursor) : 0 },
+          signal,
+        );
+        return {
+          groups: [{ key: 'cherryin', items: page.items.map(fromCherryin) }],
+          nextCursor: page.nextOffset === null ? undefined : String(page.nextOffset),
+        };
+      },
+      search: async ({ query, signal, cursor, filters }) => {
         if (/^https:\/\//i.test(query)) {
-          const candidates = await skillsModule.resolve(query, signal);
-          return { groups: [{ key: 'source', items: candidates.map(fromCandidate) }] };
+          const cherryin = parseCherryinSkillUrl(query);
+          if (cherryin) {
+            const detail = await skills.getCherryin(cherryin.id, signal);
+            return {
+              groups: [
+                {
+                  key: 'url',
+                  items: detail.mobileSupport === 'supported' ? [fromCherryin(detail)] : [],
+                },
+              ],
+            };
+          }
+          const candidates = await skills.resolve(query, signal);
+          return {
+            groups: [
+              {
+                key: 'url',
+                items: candidates.map((candidate) => ({
+                  name: candidate.name,
+                  description: candidate.description,
+                  url: candidate.source.url!,
+                  candidateId: candidate.candidateId,
+                })),
+              },
+            ],
+          };
         }
-        const listings = await skillsModule.search(query, signal);
-        return { groups: [{ key: 'discovered', items: listings.map(fromListing) }] };
+        if (filters === 'skills-sh')
+          return {
+            groups: [
+              {
+                key: 'skills-sh',
+                items: (await skills.searchSkillsSh(query, signal)).map(fromListing),
+              },
+            ],
+          };
+        const page = await skills.listCherryin(
+          { query, sort, offset: cursor ? Number(cursor) : 0 },
+          signal,
+        );
+        return {
+          groups: [{ key: 'cherryin', items: page.items.map(fromCherryin) }],
+          nextCursor: page.nextOffset === null ? undefined : String(page.nextOffset),
+        };
       },
     }).then((outcome) => {
-      // Resolving and inspecting a selected listing belongs to its detail page.
       if (outcome.type === 'selected') open(outcome.item);
     });
   }
 
   return (
     <SkillPage
+      navigation="discover"
       headerProps={{
-        title: t('skills.discover.title'),
+        title: t('skills.title'),
         rightActions: [
           {
             accessibilityLabel: t('skills.discover.search'),
             icon: SearchIcon,
             key: 'skill-discovery-search',
-            onPress: searchSkills,
-            testID: 'skills-discover-search',
+            onPress: search,
             type: 'icon',
           },
         ],
       }}
     >
-      <Text className="text-sm text-muted-foreground">{t('skills.discover.hint')}</Text>
-      {popular.isLoading ? (
-        <View className="flex-1 justify-center">
-          <ContentState.Loading title={t('skills.loading')} />
-        </View>
-      ) : popular.isError ? (
-        <View className="flex-1 justify-center">
-          <ContentState.Error
-            primaryAction={{ children: t('common.retry'), onPress: () => void popular.refetch() }}
-            title={t('skills.error.search-unavailable')}
-          />
-        </View>
-      ) : popularSkills.length ? (
-        <Section title={t('skills.discover.popular')}>
-          {popularSkills.map((result) => (
+      <View className="flex-row items-center justify-between gap-2">
+        <Button
+          accessibilityLabel={t('skills.marketplace.source')}
+          onPress={() => setPicker('source')}
+          variant="ghost"
+        >
+          <Button.Label>{source === 'cherryin' ? 'CherryIN' : 'skills.sh'}</Button.Label>
+          <ChevronDownIcon className="size-4 text-muted-foreground" />
+        </Button>
+        {source === 'cherryin' ? (
+          <Button onPress={() => setPicker('sort')} variant="ghost">
+            <Button.Label>{t(sortLabelKeys[sort])}</Button.Label>
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
+          </Button>
+        ) : null}
+      </View>
+      {current.isLoading ? (
+        <ContentState.Loading title={t('skills.loading')} />
+      ) : current.isError && !current.data ? (
+        <ContentState.Error
+          title={t('skills.error.search-unavailable')}
+          primaryAction={{ children: t('common.retry'), onPress: () => void current.refetch() }}
+        />
+      ) : results.length ? (
+        <Section>
+          {results.map((item) => (
             <Section.Item
-              accessibilityLabel={`${result.name}, ${result.description}`}
-              description={result.description}
-              key={result.key}
-              label={result.name}
-              onPress={() => open(result)}
-              testID={`skills-discover-${result.key}`}
+              key={item.url}
+              label={item.name}
+              onPress={() => open(item)}
+              description={
+                <View className="gap-1">
+                  <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+                    {item.description}
+                  </Text>
+                  {item.collection ? (
+                    <Text className="text-xs text-muted-foreground">
+                      {t('skills.marketplace.collection')}
+                    </Text>
+                  ) : null}
+                </View>
+              }
               trailing={
                 <View className="flex-row items-center gap-1">
-                  {result.installs === undefined ? null : (
+                  {item.installs === undefined ? null : (
                     <Text className="text-sm text-muted-foreground">
-                      {formatCompactNumber(result.installs)}
+                      {formatCompactNumber(item.installs)}
                     </Text>
                   )}
                   <ChevronRightIcon className="size-5 text-muted-foreground" />
@@ -150,7 +267,49 @@ export function SkillDiscoveryScreen() {
             />
           ))}
         </Section>
+      ) : (
+        <ContentState.Empty
+          title={t('skills.discover.empty')}
+          primaryAction={
+            source === 'cherryin'
+              ? { children: 'skills.sh', onPress: () => setSource('skills-sh') }
+              : undefined
+          }
+        />
+      )}
+      {source === 'cherryin' && catalog.hasNextPage ? (
+        <Button
+          disabled={catalog.isFetchingNextPage}
+          onPress={() => void catalog.fetchNextPage()}
+          variant="ghost"
+        >
+          {catalog.isFetchNextPageError ? t('common.retry') : t('skills.loadMore')}
+        </Button>
       ) : null}
+      <OptionPickerBottomSheet
+        open={picker === 'source'}
+        onClose={() => setPicker(null)}
+        onValueChange={setSource}
+        options={[
+          { value: 'cherryin', label: 'CherryIN' },
+          { value: 'skills-sh', label: 'skills.sh' },
+        ]}
+        selectedValue={source}
+        size="compact"
+        title={t('skills.marketplace.source')}
+      />
+      <OptionPickerBottomSheet
+        open={picker === 'sort'}
+        onClose={() => setPicker(null)}
+        onValueChange={setSort}
+        options={(Object.keys(sortLabelKeys) as (keyof typeof sortLabelKeys)[]).map((value) => ({
+          value,
+          label: t(sortLabelKeys[value]),
+        }))}
+        selectedValue={sort}
+        size="compact"
+        title={t('skills.marketplace.sort')}
+      />
     </SkillPage>
   );
 }

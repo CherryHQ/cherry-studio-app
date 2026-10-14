@@ -7,6 +7,7 @@
 import { createHttpClient, type HttpClient, isHttpError } from '@/backend/services/http';
 import { SkillsError } from '@/shared/contracts/skills';
 import type { Skill, SkillSource } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { BUNDLED_SKILLS, bundledSkillLocator, type BundledSkillDefinition } from './bundled';
 import {
@@ -24,6 +25,8 @@ export type SkillSourceCandidate = {
   version: string | null;
   tags: string[];
   source: SkillSource;
+  /** Already downloaded immutable bytes, retained only for the candidate's bounded lifetime. */
+  acquisition?: SkillAcquisition;
 };
 
 export type SkillAcquisition = {
@@ -117,6 +120,8 @@ export function installedSkillLocator(
   skill: Pick<Skill, 'folderName' | 'source' | 'sourceUrl'>,
 ): string | null {
   if (skill.source === 'builtin') return bundledSkillLocator(skill.folderName);
+  const cherryin = skill.sourceUrl ? parseCherryinSkillUrl(skill.sourceUrl) : null;
+  if (cherryin?.entryPath) return cherryinSkillLocator(cherryin.id, cherryin.entryPath);
   const location = skill.sourceUrl ? parseGithubSkillUrl(skill.sourceUrl) : null;
   return location ? githubSkillLocator(location) : null;
 }

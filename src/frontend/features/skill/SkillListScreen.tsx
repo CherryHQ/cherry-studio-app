@@ -6,18 +6,20 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { HeaderMenuGuide, RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
+import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { useAppSearch } from '@/frontend/appShell/search';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
+import { useSkillTabNavigation } from './SkillNavigation';
 import { SkillPage } from './SkillPage';
 import { useStartSkillChat } from './useStartSkillChat';
 
 export function SkillListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const navigateTab = useSkillTabNavigation();
   const { isAvailable: canAddInChat, isOpening, open } = useStartSkillChat();
   const { open: openSearch } = useAppSearch();
   const apiClient = useApiClient();
@@ -98,35 +100,15 @@ export function SkillListScreen() {
           {
             id: 'skill-discover',
             label: t('skills.discover.title'),
-            onPress: () => router.push('/skills/discover'),
+            onPress: () => navigateTab('discover'),
           },
         ],
       },
     ],
   };
 
-  if (!isLoading && !error && skills.length === 0) {
-    return (
-      <View className="flex-1 bg-background" testID="skills-list">
-        <RouteHeader {...headerProps} />
-        <HeaderMenuGuide
-          hint={
-            canAddInChat
-              ? t('skills.installedEmptyHint', {
-                  create: t('skills.create.name'),
-                  add: t('skills.addInChat'),
-                  discover: t('skills.discover.title'),
-                })
-              : t('skills.installedEmptyDiscoverHint', { discover: t('skills.discover.title') })
-          }
-          title={t('skills.installedEmpty')}
-        />
-      </View>
-    );
-  }
-
   return (
-    <SkillPage headerProps={headerProps} testID="skills-list">
+    <SkillPage headerProps={headerProps} navigation="library" testID="skills-list">
       {isLoading ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading title={t('skills.loading')} />
@@ -136,6 +118,16 @@ export function SkillListScreen() {
           <ContentState.Error
             primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
             title={t('skills.loadFailed')}
+          />
+        </View>
+      ) : skills.length === 0 ? (
+        <View className="flex-1 justify-center">
+          <ContentState.Empty
+            title={t('skills.installedEmpty')}
+            primaryAction={{
+              children: t('skills.discover.title'),
+              onPress: () => navigateTab('discover'),
+            }}
           />
         </View>
       ) : (

@@ -1,6 +1,6 @@
 /** App-owned bootstrap Skill: available even before the user has installed any packages. */
 export const FIND_SKILLS_INSTRUCTIONS = `## Built-in Skill: find-skills
-Help users discover and add reusable Skills. Check search_local_skills first when an installed Skill may already help. For a supplied URL, pass it to find_skills or install_skill unchanged; otherwise search find_skills with concise English keywords. Never fabricate URLs, run package managers, or fetch installation scripts through another tool.
+Help users discover and add reusable Skills. Check search_local_skills first when an installed Skill may already help. For a supplied URL, pass it to find_skills or install_skill unchanged; otherwise search find_skills with concise keywords. Never fabricate URLs, run package managers, or fetch installation scripts through another tool.
 Discover find_skills and install_skill through tool_search by exact name before calling them.
 Choose by task fit and source; popularity is not proof of quality. If choices differ materially, explain them briefly and ask one useful question. Do not turn a search-only or comparison request into installation.
 When the user intends to add a Skill, call install_skill with the chosen url. It validates and saves the complete package and enables it for the current Agent. Installation does not prove the workflow can execute here: scripts are saved as resources and do not provide an interpreter.
