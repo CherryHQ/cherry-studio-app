@@ -754,10 +754,8 @@ reports its own content height back to Fabric. On Android, `replaceTextInRange` 
 watcher during edits, so it reports the updated height after formatting is applied. This covers
 markdown paste and programmatic inserts without extending measurement to formatting-only commands.
 
-Callers can override the fallback 132-point input cap through `style.maxHeight`.
-`getComposerTextMaxHeight` subtracts dock padding and surface insets from a caller-supplied dock
-budget, along with measured/content-owned reserved rows, while preserving a minimum text row.
-Chat uses this contract for its responsive height limit; painting retains the fallback.
+Callers can override the default 132-point input cap through `style.maxHeight`. Local and remote
+text chat use a fixed 240-point cap; painting keeps the default.
 
 The Android paste wrapper also leaves child measurement and frames to Fabric, matching React
 Native's `ReactViewGroup` layout contract. Its previous `LinearLayout` pass measured the editor

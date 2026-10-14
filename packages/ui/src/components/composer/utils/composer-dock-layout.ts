@@ -13,30 +13,6 @@ export function getComposerBottomPadding(bottomInset: number) {
   return Math.max(bottomInset, composerMinBottomPadding) + composerBottomLift;
 }
 
-/** Text space left after the dock, surface, and caller-owned rows take their share. */
-export function getComposerTextMaxHeight({
-  maxDockHeight,
-  bottomInset,
-  reservedContentHeight,
-  minTextHeight,
-}: {
-  maxDockHeight: number;
-  bottomInset: number;
-  reservedContentHeight: number;
-  minTextHeight: number;
-}) {
-  return Math.max(
-    minTextHeight,
-    Math.floor(
-      maxDockHeight -
-        getComposerBottomPadding(bottomInset) -
-        surfaceStyle.paddingTop -
-        surfaceStyle.paddingBottom -
-        reservedContentHeight,
-    ),
-  );
-}
-
 /** Distance from the screen bottom to the toolbar action centers with the keyboard closed. */
 export function getComposerActionCenterOffset(bottomInset: number) {
   return (

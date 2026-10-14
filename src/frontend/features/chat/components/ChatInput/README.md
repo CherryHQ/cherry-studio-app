@@ -5,13 +5,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 
 ## Current Contract
 
-- Local and remote text composers grow naturally up to a responsive height limit. The dock uses
-  half the window space below the header and above the keyboard, less its surface/padding, footer,
-  toolbar, and measured attachment/status rows. At least one resting text row remains available
-  when those controls exceed the budget. The smaller plugin/Skill-picker cap still takes priority.
-  Native text measurement owns growth, shrinkage, and overflow scrolling; JavaScript does not
-  measure text or toggle scrolling at the threshold. Keyboard target events update the budget,
-  rather than every animation frame or a transcript height affected by the input itself.
+- Local and remote text inputs grow naturally up to a fixed 240-point maximum, then scroll inside
+  that viewport. Deleting text lets the input shrink again. Keyboard visibility and attachment
+  height do not change this cap; the smaller plugin/Skill-picker cap still takes priority.
 - An Agent selection owns an isolated Draft composer. Its first send uses `startSession`, which
   admits the message before atomically creating the Session and first message pair; observation and
   navigation begin only after that succeeds.

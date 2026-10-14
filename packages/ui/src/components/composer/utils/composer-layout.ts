@@ -24,8 +24,8 @@ const pillPaddingHorizontal = 10;
 // Narrower than the toolbar's own gap so an icon and its label read as one thing
 // rather than as two tools that happen to be adjacent.
 const pillGap = 6;
-// Fallback for callers without a container-owned height budget. Chat supplies
-// its responsive cap through the input style; painting keeps this default.
+// Default cap for callers such as painting. Chat supplies its own fixed cap
+// through the input style.
 const maxTextHeight = 132;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composer-text-style.ios`.

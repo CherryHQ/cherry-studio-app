@@ -334,17 +334,15 @@ function TextChatInput({
                   streaming={isBusy}
                   testID="chat-composer"
                 >
+                  <View
+                    accessibilityElementsHidden={isPickerVisible}
+                    importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
+                    pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                    style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                  >
+                    <ComposerAttachments />
+                  </View>
                   <ChatInputSurface
-                    accessories={
-                      <View
-                        accessibilityElementsHidden={isPickerVisible}
-                        importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
-                        pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                        style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                      >
-                        <ComposerAttachments />
-                      </View>
-                    }
                     streaming={isBusy}
                     placeholder={
                       skillAction
