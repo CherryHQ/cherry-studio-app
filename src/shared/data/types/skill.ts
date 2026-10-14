@@ -134,12 +134,12 @@ export const CreateSkillInputSchema = z.strictObject({
 });
 export type CreateSkillInput = z.infer<typeof CreateSkillInputSchema>;
 
-export const SkillSourceRegistrySchema = z.enum(['bundled', 'github']);
+export const SkillSourceRegistrySchema = z.enum(['bundled', 'github', 'cherryin']);
 export type SkillSourceRegistry = z.infer<typeof SkillSourceRegistrySchema>;
 
 /**
  * Where a discovered candidate comes from. `locator` is its origin identity
- * (`bundled:<name>` or `github:<owner>/<repo>/<skill root>`); an installed
+ * (`bundled:<name>`, `github:<owner>/<repo>/<skill root>`, or a CherryIN package entry); an installed
  * Skill derives the same identity from its source and URL.
  */
 export const SkillSourceSchema = z.strictObject({

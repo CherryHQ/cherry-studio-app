@@ -457,6 +457,20 @@ export class AgentGlobalSkillService {
     }
   }
 
+  /** Installed members belonging to one marketplace package, including disabled entries. */
+  async listBySourcePrefix(prefix: string): Promise<Skill[]> {
+    const rows = await this.db
+      .select()
+      .from(agentGlobalSkillTable)
+      .where(
+        and(
+          eq(agentGlobalSkillTable.source, 'marketplace'),
+          sql`substr(${agentGlobalSkillTable.sourceUrl}, 1, ${prefix.length}) = ${prefix}`,
+        ),
+      );
+    return rows.map(rowToSkill);
+  }
+
   /** Folders and hashes in use, for storage reconciliation. */
   async listStorageReferences(): Promise<{ folderName: string; contentHash: string }[]> {
     return this.db

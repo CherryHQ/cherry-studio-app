@@ -67,6 +67,8 @@ import {
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
+  createCherryinSkillClient,
+  createCherryinSkillSource,
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
@@ -267,9 +269,14 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
+  const cherryinClient = createCherryinSkillClient();
+  const cherryinSkills = createCherryinSkillSource(cherryinClient);
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
-    marketplace: createSkillMarketplace(githubSkills),
+    marketplace: createSkillMarketplace(githubSkills, {
+      client: cherryinClient,
+      source: cherryinSkills,
+    }),
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
@@ -287,6 +294,7 @@ export function createBackend(
     sources: {
       bundled: createBundledSkillSource(),
       github: githubSkills,
+      cherryin: cherryinSkills,
     },
     agentExists: (agentId) =>
       services.agentData.getById(agentId).then(

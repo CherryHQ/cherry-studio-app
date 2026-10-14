@@ -49,14 +49,31 @@ plugin connection ownership and per-turn tool filtering.
 
 ## Sources And Package Format
 
-Keyword search uses skills.sh and returns listings only; nothing is downloaded until a listing URL
-is resolved. The same registry's all-time leaderboard supplies the popular list: its first page,
-bounded to 50 listings with their install counts. Listings from publishers other than a GitHub
-`<owner>/<repo>` cannot resolve to a package and are omitted from both. skills.sh pages and
+Discovery defaults to CherryIN's public catalog at `https://skills.cherryin.ai`, with paginated
+search and popular/newest/name sorting. Catalog and detail reads never download
+packages or require credentials. All CherryIN list requests send `mobileSupport=supported`;
+upstream owns this classification through the `mobileSupport` field (`supported` or `unsupported`).
+Search, sorting and pagination use the same server-filtered list. Pasted CherryIN
+links and market detail pages also hide entries whose `mobileSupport` is not `supported`. This is a
+discovery UI policy: backend detail resolution, installation and updates remain available regardless
+of that field, and installed Skills remain manageable in the library. The app does not maintain a
+mobile compatibility classifier or allowlist.
+
+CherryIN downloads are ZIP packages, bounded to 32 MiB compressed and expanded, with unsafe paths,
+symlinks, collisions and invalid checksums rejected before installation. Resolution discovers up to
+256 `SKILL.md` entries and pins their bytes to the archive digest. Each member's canonical CherryIN
+URL includes its package-relative entry path in the fragment, so later updates select the same
+member. Multi-skill packages require explicit member selection; successful installations survive
+other members' failures. Candidate handles expire after 30 minutes and retain at most 64 MiB.
+
+Agent keyword search prefers CherryIN and falls back to skills.sh when no installable listing matches. The
+discovery source picker also exposes skills.sh explicitly. Its all-time leaderboard is bounded to
+50 listings with install counts. Listings from publishers other than a GitHub `<owner>/<repo>`
+cannot resolve to a package and are omitted from skills.sh results. skills.sh pages and
 public GitHub repository, directory, raw entry and `SKILL.md` links resolve to GitHub packages;
 repositories with multiple Skills return candidates, with a maximum of 20 package directories.
 Like desktop, a package's folder name is its declared name and holds one installation. A candidate
-from the same origin (GitHub owner, repository and directory) reuses it; a
+from the same origin (a CherryIN entry or GitHub owner, repository and directory) reuses it; a
 different package with the same name is refused.
 
 GitHub resolution pins a ref to a commit and acquires the complete package directory, including a
@@ -125,8 +142,7 @@ a step that needs it. Reading a script must never be reported as running it.
 
 ## Conversation Installation
 
-The main entry is **Sidebar → Skills → More → Add in chat**, with a direct **Add Skill** action in the
-empty library. It returns to chat with a fresh
+The main entry is **Sidebar → Skills → More → Add in chat**. It returns to chat with a fresh
 draft and a removable built-in `find-skills` reference inside the input, using the same presentation
 as plugin references. It uses the current available Agent or the first available Agent as fallback.
 A shared composer handoff carries the action exactly as draft content;
@@ -137,12 +153,14 @@ retain the reference, successful sends clear the submitted selection, and switch
 The complete app-owned discovery workflow is available when management tools are present,
 so no bootstrap package needs to be installed first. The
 composer plus menu only selects already installed Skills. Manual discovery is available through
-**Discover Skills** in the same **More** menu. That page opens on the popular list, so it offers
-something to browse before any query; its search shows the same list while the query is empty.
+the **Library / Discover** tabs. An empty library has a direct discovery action. Discover opens on
+CherryIN's popular list; its source picker switches to skills.sh. Installation from these pages
+adds to the library without binding an Agent.
 
 Installed and discovery searches use the shared App Search route, which owns the input, cancellation
-and result selection. Selecting a discovery listing opens its detail page before resolving and
-inspecting the package. The chat's separate Skills menu uses the same anchored popover as Plugins;
+and result selection. Discovery search keeps the query when switching sources. A CherryIN detail
+page loads metadata first; installation or viewing collection members triggers package acquisition
+and inspection. The chat's separate Skills menu uses the same anchored popover as Plugins;
 it preserves the keyboard and inserts existing Agent bindings as inline references. Deleting a
 reference removes its selection. Submission records both Skill and plugin references against the
 final plain prompt, adjusting plugin offsets as Skill link syntax is removed. User messages retain
@@ -153,7 +171,7 @@ link color. The plus menu, picker rows and sidebar use the same Lucide icon. The
 the editor link. Inline artwork is tagged so the native paste wrapper keeps it inside the text and
 does not import it as a file attachment.
 
-The Agent uses two tools. `find_skills` searches skills.sh with keywords or lists the Skills behind a
+The Agent uses two tools. `find_skills` searches CherryIN first with keywords or lists the Skills behind a
 URL; it never installs. `install_skill` takes one URL, resolves and downloads it, validates
 the package, installs it and enables it for the current Agent in the same transaction. A URL with
 several Skills returns their URLs for the model to choose from. Package validation failures return their
@@ -241,7 +259,7 @@ and claim success. Explicit upstream updates still replace current local content
 ## Persistence And Lifecycle
 
 `agent_global_skill` and `agent_skill` match desktop's columns, defaults and index names. Mobile
-writes `source` as `marketplace` (GitHub-hosted packages); `builtin` remains readable for legacy
+writes `source` as `marketplace` (CherryIN, GitHub and generated user-library packages); `builtin` remains readable for legacy
 installations and backups. It writes `source_url` as the URL updates re-resolve, and `is_enabled`
 as global enablement; new
 installations and conversation bindings are written enabled. Desktop's `namespace` is absent
@@ -289,7 +307,7 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `load_skill` | Read a complete entry; emit an attributed receipt and available resource paths; repeat reads recover the body without another budget charge |
 | `list_skill_files` | List package paths after loading or explicit selection |
 | `read_skill_file` | Read a package-local text line window; binary content is metadata only |
-| `find_skills` | Search skills.sh, or list the Skills behind a supported URL |
+| `find_skills` | Search CherryIN with skills.sh fallback, or list the Skills behind a supported URL |
 | `install_skill` | Validate, install and bind one Skill for this Agent; append it to the turn |
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
