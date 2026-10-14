@@ -41,7 +41,7 @@ export function useBackgroundActivityNavigation(): void {
       router.navigate(href);
     }
     clearLastNotificationResponse();
-    if (data.terminal !== true) return;
+    if (data.terminal !== true && data.attention !== true) return;
     void dismissNotificationAsync(response.notification.request.identifier).catch(
       (error: unknown) => {
         logger.warn('Could not dismiss opened notification', { error });

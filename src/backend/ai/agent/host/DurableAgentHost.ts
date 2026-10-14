@@ -1042,7 +1042,7 @@ export class DurableAgentHost implements AgentProtocol {
     this.approvalWaits.set(key, [...(this.approvalWaits.get(key) ?? []), wait]);
     this.publish(identity.sessionId, { type: 'approval.requested', approval: view });
     this.publishCurrentStatus(identity.sessionId, state);
-    state.background?.awaitApproval(projectDurableHostTurn(state.active).assistant ?? undefined);
+    this.updateBackgroundInteraction(identity.sessionId, state);
     try {
       const decision = await response;
       this.publish(identity.sessionId, {
@@ -1054,8 +1054,35 @@ export class DurableAgentHost implements AgentProtocol {
       wait.completedAt = Date.now();
       signal.removeEventListener('abort', abort);
       state.approvals.delete(approval.id);
+      this.updateBackgroundInteraction(identity.sessionId, state);
       this.publishCurrentStatus(identity.sessionId, state);
     }
+  }
+
+  private updateBackgroundInteraction(sessionId: string, state: LiveSession): void {
+    const turnId = state.active?.identity.turnId;
+    if (!turnId || !state.background) return;
+    const approval = state.approvals.values().next().value?.view;
+    if (approval) {
+      state.background.setInteraction({
+        kind: 'approval',
+        id: approval.id,
+        title: approval.displayName,
+        respond: (decision) =>
+          this.respondApproval({ sessionId, turnId, approvalId: approval.id, decision }),
+      });
+      state.background.awaitApproval(undefined, undefined, approval.id);
+    } else if (state.question) {
+      const pending = state.question;
+      state.background.setInteraction({
+        kind: 'question',
+        id: pending.toolCallId,
+        question: pending.question,
+        respond: (answer) =>
+          this.respondQuestion({ sessionId, turnId, toolCallId: pending.toolCallId, answer }),
+      });
+      state.background.awaitApproval(undefined, 'question', pending.toolCallId);
+    } else state.background.setInteraction(undefined);
   }
 
   private async askUser(
@@ -1071,14 +1098,12 @@ export class DurableAgentHost implements AgentProtocol {
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
     this.publish(sessionId, { type: 'question.updated', question: state.question });
     this.publishCurrentStatus(sessionId, state);
-    state.background?.awaitApproval(
-      state.active ? (projectDurableHostTurn(state.active).assistant ?? undefined) : undefined,
-      'question',
-    );
+    this.updateBackgroundInteraction(sessionId, state);
     try {
       return await response;
     } finally {
       state.question = null;
+      this.updateBackgroundInteraction(sessionId, state);
       this.publish(sessionId, { type: 'question.updated', question: null });
       this.publishCurrentStatus(sessionId, state);
     }

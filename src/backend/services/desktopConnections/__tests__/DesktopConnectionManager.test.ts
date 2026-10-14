@@ -733,6 +733,110 @@ describe('DesktopConnectionManager ownership', () => {
     expect(row.deviceId).toBe('replacement');
   });
 
+  it('keeps a user-started remote connection after the route releases its last lease', async () => {
+    manager.enablePersistentConnections();
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    lease.release();
+    appState('background');
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(channel.isOpen).toBe(true);
+    expect(manager.getPersistentConnections()).toEqual([
+      { id: row.id, name: row.name, status: 'connected', token: expect.any(String) },
+    ]);
+    manager.disconnect(row.id);
+    expect(channel.isOpen).toBe(false);
+    expect(manager.getPersistentConnections()).toEqual([]);
+    expect(row.grants).toEqual(grants);
+    expect(row.status).toBe('paired');
+  });
+
+  it('manual disconnect suppresses retained consumers, discovery and foreground retries until explicit reconnect', async () => {
+    manager.enablePersistentConnections();
+    const first = session();
+    const next = session();
+    connect.mockResolvedValueOnce(first as never).mockResolvedValueOnce(next as never);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await lease.ready(signal());
+    const firstToken = manager.getPersistentConnections()[0].token;
+    lease.setBackgroundRequired?.(true);
+    manager.disconnect(row.id);
+    expect(lease.getSnapshot()).toEqual({ status: 'suspended', reason: 'disconnected' });
+    expect(lease.signal.aborted).toBe(false);
+    await expect(lease.ready(signal())).rejects.toMatchObject({ name: 'DesktopUnreachableError' });
+    appState('background');
+    appState('active');
+    mockDiscoveryReceive({ type: 'network' });
+    const other = await manager.retain(row.id, 'configuration', signal());
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(other.getSnapshot()).toEqual({ status: 'suspended', reason: 'disconnected' });
+    manager.reconnect(row.id);
+    await expect(lease.ready(signal())).resolves.toBe(next);
+    await expect(other.ready(signal())).resolves.toBe(next);
+    expect(manager.getPersistentConnections()[0].token).not.toBe(firstToken);
+    expect(row.grants).toEqual(grants);
+  });
+
+  it('preserves manual disconnect across a new manager without changing saved pairing', async () => {
+    const paused = new Set<string>();
+    const intents = {
+      isDisconnected: (id: string) => paused.has(id),
+      setDisconnected: (id: string, value: boolean) => {
+        if (value) paused.add(id);
+        else paused.delete(id);
+      },
+    };
+    manager.configure(store, intents);
+    manager.disconnect(row.id);
+    await manager._doStop();
+    await manager._doDestroy();
+    manager = new DesktopConnectionManager();
+    manager.configure(store, intents);
+    manager.enablePersistentConnections();
+    await manager._doInit();
+    const lease = await manager.retain(row.id, 'agent', signal());
+    expect(lease.getSnapshot()).toEqual({ status: 'suspended', reason: 'disconnected' });
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(connect).not.toHaveBeenCalled();
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    manager.reconnect(row.id);
+    await expect(lease.ready(signal())).resolves.toBe(channel);
+    expect(paused.size).toBe(0);
+    expect(row.deviceId).toBe(original.deviceId);
+  });
+
+  it('closes a late successful dial after manual disconnect instead of installing it', async () => {
+    manager.enablePersistentConnections();
+    const dial = deferred<DesktopSession>();
+    const channel = session();
+    connect.mockReturnValueOnce(dial.promise);
+    const lease = await manager.retain(row.id, 'agent', signal());
+    await jest.advanceTimersByTimeAsync(0);
+    manager.disconnect(row.id);
+    dial.resolve(channel as never);
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(channel.isOpen).toBe(false);
+    expect(lease.getSnapshot()).toEqual({ status: 'suspended', reason: 'disconnected' });
+    expect(manager.getPersistentConnections()).toEqual([]);
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('never holds a persistent connection for configuration-only requests', async () => {
+    manager.enablePersistentConnections();
+    const channel = session();
+    connect.mockResolvedValueOnce(channel as never);
+    const lease = await manager.retain(row.id, 'configuration', signal());
+    await lease.ready(signal());
+    expect(manager.getPersistentConnections()).toEqual([]);
+    lease.release();
+    await jest.advanceTimersByTimeAsync(3_000);
+    expect(channel.isOpen).toBe(false);
+  });
+
   it('closes a temporary pairing channel returned after the caller aborted', async () => {
     const dial = deferred<DesktopSession>();
     const channel = session();

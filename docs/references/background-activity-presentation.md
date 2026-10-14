@@ -32,7 +32,7 @@ presentation mechanism, not an execution guarantee.
 The iOS **Live Activities** preference controls chat and painting cards only. Turning it off
 retires presentation without releasing execution. The persisted `chat.background_reply.enabled`
 key is retained for compatibility. Android's mandatory service notification remains independent of
-that preference. Completion preferences control alerts; they do not turn protection off.
+that preference. Completion preferences control completion alerts; they do not turn protection off.
 
 ## Execution And Attention
 
@@ -45,9 +45,77 @@ and the SystemIntegration notification bridge. One conversation anchors the serv
 other conversations have their own cards. The anchor moves without restarting execution. See
 [Android Background Generation](./android-background-generation.md).
 
+The native service owns foreground admission and anchor identity; SystemIntegration owns notification
+content. Same-anchor text and visibility updates must not repost the service's plain fallback over a
+Live Update. Moving the anchor reuses the destination's existing card; settling an anchor updates its
+ongoing state before detachment. This prevents streaming text from repeatedly demoting and promoting
+the same island.
+
 iOS completion delivery checks permission and current generation, retires its settled Live Activity,
 then posts a deterministic completion notice for that destination. This replacement retains a short
 delivery lease. A superseded round cannot retire or post over its successor.
+
+Local and observed desktop sessions distinguish waiting for approval from waiting for an answer.
+The compact Live Activity replaces its timer with the translated waiting label and attention icon.
+Each request carries its approval, tool-call, or remote interaction identity: title/preview updates
+stay silent, while consecutive requests each receive an alert even without an intermediate running
+phase. Both waiting states retain execution demand.
+
+On iOS, pending decisions also raise a local notification independently of the Live Activities and
+completion-notification preferences. Notification permission is requested once after a user starts a
+round, including when completion alerts are disabled. Foreground decisions use the existing in-app
+attention channel; the currently visible session suppresses that message. Background alerts contain
+the session title and a translated waiting label; actionable single questions also include their prompt.
+The ongoing Live Activity remains available. Resolving or retiring a request clears its alert;
+generation checks suppress obsolete queued delivery. Tapping the alert opens the exact local or
+desktop session, where the existing approval and question controls handle the decision. Opening a
+decision notice never approves a tool or releases execution protection.
+
+Android updates its existing ongoing task notification and alerts once per pending request. On
+Android 16 and newer, an unfinished user-started task requests standard Live Update promotion with
+its current status as the status-chip text. Completed messages and standalone alerts remain ordinary
+notifications. The system owns promotion and user dismissal; a foreground-service notification alone
+does not establish that the task was promoted. Compatible OEMs may render the standard Live Update
+on their island surface. This does not implement Xiaomi's separate proprietary focus-notification
+protocol or imply that all Android devices expose the same surface. See Android's
+[Live Update guidance](https://developer.android.com/develop/ui/views/notifications/live-update).
+
+### Direct Decisions
+
+Pending approvals expose Allow and Deny. A single question with single selection exposes up to two
+option buttons; Android's system reply field also offers all option labels and accepts free text.
+On Android 16 and later, a separate ordinary notification hosts text reply while the promoted status
+card retains its buttons. Promoted Live Updates must hide RemoteInput actions under
+[Android 16 CDD 3.8.3.1/H-0-5](https://source.android.com/docs/compatibility/16/android-16-cdd#2_2_3_software).
+The reply notice is silent and retires when the request resolves, changes, or its task is dismissed.
+iOS notifications offer a text reply action. iOS Live Activities expose the option or approval
+buttons on their expanded and Lock Screen layouts; text entry remains a notification interaction.
+Multi-question, multiple-selection, and text-change review forms retain the in-app interaction.
+
+The live reply owns an opaque token for the exact request and generation. Native controls carry
+only that token and an action identifier, and never replay model work. The backend resolves through
+the existing local Host or desktop interaction command, checks that the request is still current,
+and ignores duplicate, replaced, retired, or already-resolved requests. Action delivery does not
+require a visible chat screen. Android uses a non-exported notification-action receiver and a
+bounded native inbox; iOS uses notification response callbacks and Expo's Live Activity intent
+events. These local actions require the owning runtime to remain available; they do not add remote
+push delivery or durable execution after process death. OEM island rendering of notification
+buttons still requires device acceptance; notification actions alone do not prove parity.
+
+Simple question text appears on actionable cards so a person can answer it. Tool arguments remain
+available in the app's approval detail view. Android retains private Lock Screen visibility, and
+iOS labels retain privacy-sensitive presentation. System notification preview settings also apply.
+
+The interaction follows the separation between progress and decisions in
+[Claude Code Remote Control](https://code.claude.com/docs/en/remote-control#mobile-push-notifications):
+keep progress glanceable and draw attention when approval or an answer is required.
+[OpenAI's notification controls](https://learn.chatgpt.com/docs/notifications) similarly distinguish
+turn-completion alerts from permission and question notifications.
+These are locally delivered alerts while the Mobile process can receive events. APNs/FCM device
+registration and a desktop/server push sender are not implemented; after iOS suspends Mobile,
+remote events cannot refresh its card or trigger an alert until execution resumes. A Live Activity
+does not extend the finite UIKit execution window. Reliable suspended-app delivery requires that
+separate end-to-end push transport.
 
 ## Settled Surfaces
 
@@ -100,3 +168,10 @@ denial; disabled presentation; user-dismissed cards; process restart; power rest
 multilingual payloads. Native acceptance must also confirm retirement of an ended Live Activity before its replacement,
 including completion-notice handoff. Native delivery and OS behavior require a rebuilt client; lint
 and source guards are insufficient.
+
+The following examples show the Android per-PC connection group from a physical Android 16 device
+and an iOS single-question Live Activity from a simulator using a deterministic local model fixture.
+The iOS fixture validates native layout and action delivery, not suspended-app remote push.
+
+![Android connection group with Disconnect](../../.github/images/background-activity/android-connection-group.png)
+![iOS single-question card with a long title](../../.github/images/background-activity/ios-question-card.png)

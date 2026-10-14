@@ -211,6 +211,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     clearSession() {},
     updateSessionTitle() {},
     startTurn: () => ({
+      setInteraction() {},
       updateContent() {},
       awaitApproval() {},
       finish() {},

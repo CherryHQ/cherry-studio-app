@@ -1,6 +1,7 @@
-import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
+import { Button, HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -29,105 +30,121 @@ export const renderBackgroundActivity: LiveActivityComponent<
   const hasCompactLabel = props.compactLabel !== undefined;
   const isSimplified =
     environment.levelOfDetail === 'simplified' || environment.activityFamily === 'small';
-  const summary = props.preview && !isSimplified ? props.preview : props.title;
-  const expandedContent = props.preview && !isSimplified ? props.preview : props.detail;
+  const summary =
+    props.actions?.prompt ?? (props.preview && !isSimplified ? props.preview : props.title);
+  const expandedContent =
+    props.actions?.prompt ?? (props.preview && !isSimplified ? props.preview : props.detail);
   const timerInterval = {
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
   };
   return {
     banner: (
-      <HStack
-        alignment="center"
-        spacing={10}
-        modifiers={[
-          activityBackgroundTint(null),
-          padding({ horizontal: 14, vertical: 12 }),
-          frame({ maxWidth: Infinity, alignment: 'leading' }),
-        ]}
-      >
-        {props.logoUri ? (
-          <Image
-            uiImage={props.logoUri}
-            modifiers={[
-              resizable(),
-              frame({ height: 32, width: 32 }),
-              widgetAccentedRenderingMode('fullColor'),
-            ]}
-          />
-        ) : (
-          <Text
-            modifiers={[
-              font({ size: 18, weight: 'bold' }),
-              foregroundStyle(brandColor),
-              frame({ height: 32, width: 32, alignment: 'center' }),
-            ]}
-          >
-            C
-          </Text>
-        )}
-        <VStack
-          alignment="leading"
-          spacing={4}
-          modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+      <VStack alignment="leading" spacing={8}>
+        <HStack
+          alignment="center"
+          spacing={10}
+          modifiers={[
+            activityBackgroundTint(null),
+            padding({ horizontal: 14, vertical: 12 }),
+            frame({ maxWidth: Infinity, alignment: 'leading' }),
+          ]}
         >
-          <HStack
-            alignment="center"
-            spacing={6}
-            modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
-          >
+          {props.logoUri ? (
+            <Image
+              uiImage={props.logoUri}
+              modifiers={[
+                resizable(),
+                frame({ height: 32, width: 32 }),
+                widgetAccentedRenderingMode('fullColor'),
+              ]}
+            />
+          ) : (
             <Text
               modifiers={[
-                font({ size: 14, weight: 'semibold' }),
-                foregroundStyle({ type: 'hierarchical', style: 'primary' }),
-                lineLimit(1),
-                truncationMode('tail'),
-                layoutPriority(1),
+                font({ size: 18, weight: 'bold' }),
+                foregroundStyle(brandColor),
+                frame({ height: 32, width: 32, alignment: 'center' }),
               ]}
             >
-              {props.detail}
+              C
             </Text>
-            {props.attribution ? (
+          )}
+          <VStack
+            alignment="leading"
+            spacing={4}
+            modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+          >
+            <HStack
+              alignment="center"
+              spacing={6}
+              modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+            >
               <Text
                 modifiers={[
-                  font({ size: 12, weight: 'medium' }),
-                  privacySensitive(),
-                  foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                  font({ size: 14, weight: 'semibold' }),
+                  foregroundStyle({ type: 'hierarchical', style: 'primary' }),
                   lineLimit(1),
                   truncationMode('tail'),
+                  layoutPriority(1),
                 ]}
               >
-                {props.attribution}
+                {props.detail}
               </Text>
-            ) : null}
-            <Spacer />
-            {!hasCompactLabel ? (
-              <Text
-                countsDown={false}
-                timerInterval={timerInterval}
-                modifiers={[
-                  font({ size: 12, weight: 'medium' }),
-                  monospacedDigit(),
-                  foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-                ]}
+              {props.attribution ? (
+                <Text
+                  modifiers={[
+                    font({ size: 12, weight: 'medium' }),
+                    privacySensitive(),
+                    foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                    lineLimit(1),
+                    truncationMode('tail'),
+                  ]}
+                >
+                  {props.attribution}
+                </Text>
+              ) : null}
+              <Spacer />
+              {!hasCompactLabel ? (
+                <Text
+                  countsDown={false}
+                  timerInterval={timerInterval}
+                  modifiers={[
+                    font({ size: 12, weight: 'medium' }),
+                    monospacedDigit(),
+                    foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                  ]}
+                />
+              ) : null}
+            </HStack>
+            <Text
+              modifiers={[
+                font({ size: 12 }),
+                privacySensitive(),
+                foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+                lineLimit(1),
+                multilineTextAlignment('leading'),
+                truncationMode('tail'),
+                frame({ maxWidth: Infinity, alignment: 'leading' }),
+              ]}
+            >
+              {summary}
+            </Text>
+          </VStack>
+        </HStack>
+        {props.actions?.buttons.length ? (
+          <HStack spacing={12} modifiers={[padding({ horizontal: 14, bottom: 10 })]}>
+            {props.actions.buttons.map((action) => (
+              <Button
+                key={action.id}
+                label={action.label}
+                modifiers={[privacySensitive()]}
+                target={JSON.stringify({ token: props.actions!.token, actionId: action.id })}
               />
-            ) : null}
+            ))}
           </HStack>
-          <Text
-            modifiers={[
-              font({ size: 12 }),
-              privacySensitive(),
-              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
-              lineLimit(1),
-              multilineTextAlignment('leading'),
-              truncationMode('tail'),
-              frame({ maxWidth: Infinity, alignment: 'leading' }),
-            ]}
-          >
-            {summary}
-          </Text>
-        </VStack>
-      </HStack>
+        ) : null}
+      </VStack>
     ),
     bannerSmall: (
       <HStack
@@ -266,6 +283,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
               modifiers={[
                 resizable(),
                 frame({ height: 24, width: 24 }),
+                fixedSize(),
                 widgetAccentedRenderingMode('fullColor'),
               ]}
             />
@@ -275,6 +293,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
                 font({ size: 14, weight: 'bold' }),
                 foregroundStyle(brandColor),
                 frame({ height: 24, width: 24, alignment: 'center' }),
+                fixedSize(),
               ]}
             >
               C
@@ -287,12 +306,11 @@ export const renderBackgroundActivity: LiveActivityComponent<
               foregroundStyle('#FFFFFF'),
               lineLimit(1),
               truncationMode('tail'),
-              layoutPriority(1),
+              frame({ maxWidth: Infinity, alignment: 'leading' }),
             ]}
           >
             {props.title}
           </Text>
-          <Spacer />
           {hasCompactLabel ? (
             <Text
               modifiers={[
@@ -300,6 +318,8 @@ export const renderBackgroundActivity: LiveActivityComponent<
                 foregroundStyle('#FFFFFF'),
                 lineLimit(1),
                 truncationMode('tail'),
+                fixedSize({ horizontal: true, vertical: false }),
+                layoutPriority(1),
               ]}
             >
               {props.compactLabel}
@@ -320,7 +340,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
         <Text
           modifiers={[
             font({ size: 13 }),
-            privacySensitive(!!props.preview && !isSimplified),
+            privacySensitive(!!props.actions || (!!props.preview && !isSimplified)),
             foregroundStyle('#C7C7CC'),
             lineHeight(17),
             lineLimit(isSimplified ? 1 : 2),
@@ -331,6 +351,18 @@ export const renderBackgroundActivity: LiveActivityComponent<
         >
           {expandedContent}
         </Text>
+        {props.actions?.buttons.length ? (
+          <HStack spacing={12}>
+            {props.actions.buttons.map((action) => (
+              <Button
+                key={action.id}
+                label={action.label}
+                modifiers={[privacySensitive()]}
+                target={JSON.stringify({ token: props.actions!.token, actionId: action.id })}
+              />
+            ))}
+          </HStack>
+        ) : null}
       </VStack>
     ),
   };

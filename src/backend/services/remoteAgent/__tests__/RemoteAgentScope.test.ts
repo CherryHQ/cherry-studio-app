@@ -229,6 +229,7 @@ it('observes through its lease, suppresses stale command targets, and never owns
 
 function backgroundFixture() {
   const turn = {
+    setInteraction: jest.fn(),
     updateContent: jest.fn(),
     update: jest.fn(),
     awaitApproval: jest.fn(),
@@ -740,7 +741,7 @@ it('keeps inline tool payloads out of frontend references and rejects another sc
 });
 
 it('materializes a question only from its bound input revision and preserves the response target', async () => {
-  const test = fixture();
+  const test = backgroundFixture();
   const input = {
     questions: [
       { question: '目录？', options: [{ label: 'src' }, { label: 'docs' }], multiSelect: true },
@@ -779,6 +780,14 @@ it('materializes a question only from its bound input revision and preserves the
   await settle();
   const question = snapshot!.interactions[0];
   expect(question.kind).toBe('question');
+  expect(test.turn.updateContent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      phase: 'awaiting-answer',
+      attentionId: 'question',
+      detail: 'chat.question.waiting',
+    }),
+  );
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
   await expect(
     test.source.readResource(question.input, new AbortController().signal),
   ).resolves.toEqual({
