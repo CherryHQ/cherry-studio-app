@@ -16,7 +16,7 @@ export * from './custom/gateway/gatewayImageModel';
 export * from './custom/gateway/gatewayProvider';
 export * from './custom/imageGenerationModel';
 export * from './custom/imageTransportRegistry';
-export * from './custom/minimax/minimaxImageModel';
+export * from './custom/minimax/MinimaxImageModel';
 export * from './custom/minimax/minimaxProvider';
 export * from './custom/modelscope/modelscopeProvider';
 export * from './custom/modelscope/modelscopeTransport';

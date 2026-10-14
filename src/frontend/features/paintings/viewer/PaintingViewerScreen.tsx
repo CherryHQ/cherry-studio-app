@@ -22,8 +22,8 @@ import type { Painting } from '@/shared/data/types/painting';
 import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 import { paintingResizeOptions } from '../utils/paintingResizeOptions';
-import { PaintingViewerChrome } from './components/PaintingViewerChrome';
-import { PaintingViewerImage } from './components/PaintingViewerImage';
+import { PaintingViewerChrome } from './components/PaintingViewerChrome/PaintingViewerChrome';
+import { PaintingViewerImage } from './components/PaintingViewerImage/PaintingViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {

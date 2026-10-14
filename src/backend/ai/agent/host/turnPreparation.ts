@@ -52,7 +52,17 @@ import type {
 import { ASK_USER_QUESTION_TOOL_NAME, type AskUserQuestion } from '../tools/askUserQuestionTool';
 import type { SystemCapabilitySource } from '../tools/builtInToolSource';
 import type { AgentRuntimeToolResolver } from '../tools/runtimeTools';
-import { createSkillTools, createSkillManagementTools } from '../tools/skill';
+import {
+  createSkillTools,
+  createSkillManagementTools,
+  createSkillCreationTool,
+} from '../tools/skill';
+import {
+  createLoadWorkflowTool,
+  getPluginWorkflows,
+  requireLoadedWorkflows,
+  restoreLoadedWorkflows,
+} from '../tools/workflowTool';
 import type { AgentDefinition, AgentDefinitionSource } from './agentDefinitions';
 import type { AgentImageGenerationPlan, AgentImageGenerationPort } from './agentImageGeneration';
 import { validateRuntimeContextCheckpointCandidate } from './contextCheckpoints';
@@ -98,7 +108,11 @@ export type TurnPreparationDependencies = {
   skillWorkflow?: SkillsModule;
   store: Pick<
     AgentSessionStore,
-    'getLatestContextCheckpoint' | 'getSession' | 'loadRuntimeTurnContext' | 'loadSkillActivations'
+    | 'getLatestContextCheckpoint'
+    | 'getSession'
+    | 'loadRuntimeTurnContext'
+    | 'loadSkillActivations'
+    | 'loadWorkflowLoads'
   >;
   systemCapabilities: SystemCapabilitySource;
   webTools?(): Promise<RuntimeWebTools>;
@@ -129,6 +143,8 @@ export type TurnPlan = {
   tools: readonly RuntimeTool[];
   webTools?: RuntimeWebTools;
   pluginGuides: readonly PluginGuideSnapshot[];
+  /** Plugin guides loaded earlier in the Session whose connection is still in this turn. */
+  workflowInstructions: readonly { key: string; text: string }[];
   /** The Skills usable in this turn, with their pinned revisions. */
   skills: TurnSkillPlan;
   toolDiscoveryWarnings: readonly string[];
@@ -141,6 +157,7 @@ export type TurnPlan = {
 export type TurnSkillPlan = {
   scope: SkillTurnScope;
   findAndInstall?: boolean;
+  create?: boolean;
   /** Explicitly selected Skills with their instructions already loaded. */
   selected: readonly { entry: SkillTurnEntry; instructions: string }[];
   /** Instructions restored from earlier turns' receipts; they ride with the system prompt. */
@@ -423,6 +440,7 @@ export async function prepareResolvedTurn(
       sessionTitle: session.name,
       tools: [],
       pluginGuides: [],
+      workflowInstructions: [],
       skills: EMPTY_TURN_SKILL_PLAN,
       toolDiscoveryWarnings: [],
       userParts: parts.map(
@@ -466,7 +484,7 @@ export async function prepareResolvedTurn(
   }
 
   if (parsed.skillAction && (!dependencies.skillWorkflow || !dependencies.skills))
-    fail('CAPABILITY_UNSUPPORTED', 'Skill discovery is unavailable in this environment.');
+    fail('CAPABILITY_UNSUPPORTED', 'Skill management is unavailable in this environment.');
 
   // Freeze system capabilities, configured MCP tools, and connected plugins so
   // mid-turn changes cannot alter the active catalog. The catalog closes over
@@ -521,19 +539,13 @@ export async function prepareResolvedTurn(
       signal.throwIfAborted();
       fail('EXECUTION_UNAVAILABLE', 'The configured Agent tools are unavailable.');
     }
-    skills = await resolveTurnSkills(
-      dependencies,
-      agent,
-      parsed.skillIds ?? [],
-      [...systemTools, ...configuredTools],
-      receipts,
-      signal,
-    );
+    skills = await resolveTurnSkills(dependencies, agent, parsed.skillIds ?? [], receipts, signal);
     const expanding = createExpandingSkillScope(skills.scope);
     skills = {
       ...skills,
       scope: expanding.scope,
       findAndInstall: parsed.skillAction === 'find-and-install',
+      create: parsed.skillAction === 'create',
     };
     if (skills.scope.entries.length > 0 || dependencies.skillWorkflow) {
       const loaded = [...skills.selected, ...(skills.active?.values() ?? [])];
@@ -560,12 +572,8 @@ export async function prepareResolvedTurn(
               adaptation: {
                 workflow: dependencies.skillWorkflow,
                 source: dependencies.skills,
-                context: {
-                  agentId: agent.id,
-                  disabledCapabilities: agent.disabledCapabilities,
-                  model: agent.model,
-                  tools: [...systemTools, ...configuredTools],
-                },
+                context: { agentId: agent.id },
+                tools: [...systemTools, ...configuredTools],
                 askUser: dependencies.askUser,
                 language: dependencies.appLanguage?.() ?? 'en-US',
                 replace: expanding.replace,
@@ -577,25 +585,30 @@ export async function prepareResolvedTurn(
     if (dependencies.skillWorkflow && dependencies.skills) {
       skillTools = [
         ...skillTools,
+        createSkillCreationTool(dependencies.skillWorkflow),
         ...createSkillManagementTools({
           workflow: dependencies.skillWorkflow,
           source: dependencies.skills,
-          context: {
-            agentId: agent.id,
-            disabledCapabilities: agent.disabledCapabilities,
-            model: agent.model,
-            tools: [...systemTools, ...configuredTools],
-          },
+          context: { agentId: agent.id },
           installIntent: skills.findAndInstall === true,
           include: expanding.include,
         }),
       ];
     }
   }
-  const tools = applyAgentToolApprovalMode(
+  let tools = applyAgentToolApprovalMode(
     [...systemTools, ...configuredTools, ...skillTools],
     agent.toolApprovalMode,
   );
+  let workflowInstructions: TurnPlan['workflowInstructions'] = [];
+  if (pluginGuides.length > 0) {
+    const workflows = getPluginWorkflows(pluginGuides);
+    tools = [...requireLoadedWorkflows(tools, workflows), createLoadWorkflowTool(workflows)];
+    workflowInstructions = restoreLoadedWorkflows(
+      workflows,
+      await raceAbort(dependencies.store.loadWorkflowLoads(parsed.sessionId), signal),
+    );
+  }
   const webTools =
     runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
@@ -683,6 +696,7 @@ export async function prepareResolvedTurn(
     toolDiscoveryWarnings,
     userParts,
     pluginGuides,
+    workflowInstructions,
     skills,
     usageAttribution,
   };
@@ -697,7 +711,6 @@ async function resolveTurnSkills(
   dependencies: Pick<TurnPreparationDependencies, 'skills'>,
   agent: AgentDefinition,
   skillIds: readonly string[],
-  tools: readonly RuntimeTool[],
   activations: readonly SkillActivation[],
   signal: AbortSignal,
 ): Promise<TurnSkillPlan> {
@@ -709,16 +722,7 @@ async function resolveTurnSkills(
   }
   let scope: SkillTurnScope;
   try {
-    scope = await raceAbort(
-      dependencies.skills.resolve({
-        agentId: agent.id,
-        disabledCapabilities: agent.disabledCapabilities,
-        model: agent.model,
-        tools,
-        signal,
-      }),
-      signal,
-    );
+    scope = await raceAbort(dependencies.skills.resolve({ agentId: agent.id, signal }), signal);
   } catch (error) {
     signal.throwIfAborted();
     if (skillIds.length > 0) {

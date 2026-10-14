@@ -161,6 +161,12 @@ markers stay visible as dashed separators before the process disclosure; in-loop
 between the corresponding tool steps inside it. Running markers show progress, completed markers
 show the estimated tokens saved when available, and skipped markers render nothing. The marker
 itself has no press target or detail disclosure. Summary text remains private to the Runtime.
+The local runtime adds no marker for its own compaction: a running or failed compaction is session
+status shown below the transcript, and stored completed markers still render.
+
+A script's tool calls render inside its tool part as a list of names, statuses and cut arguments:
+live while the script runs, and from the result's summaries once it finishes. Code Mode and stored
+`run_js` results share the JavaScript part, which shows the code as code.
 
 ### Detail Content Status
 
@@ -321,8 +327,8 @@ Plugin and Skill references stay inline as an icon and name in the input's link 
 recorded UTF-16 text ranges. User messages do not show a separate Skill selection or revision caption.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
-the exact returned instruction body and revision, with a separate link to the current Skill page.
-Instruction bodies and revision hashes stay inside the detail sheet rather than the compact trace.
+the Skill's name and description. Instruction bodies, revision hashes and library navigation belong
+to the Skills library, not the transcript.
 
 Text selection uses React Native `Text` for user messages and the existing Markdown renderer for
 assistant messages. Message text is always selectable; there is no per-message selection toggle,

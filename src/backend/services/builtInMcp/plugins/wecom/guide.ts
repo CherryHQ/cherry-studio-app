@@ -2,11 +2,14 @@ import type { PluginGuideDefinition } from '../../pluginGuide';
 
 // Official CLI 1.2.1 workflows at WecomTeam/wecom-cli, commit 1cd90a5337ce11ffbcf14c5ad2e85e6ee97c8b08.
 export const wecomGuide = {
-  revision: 1,
+  revision: 2,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# WeCom
+Tools may cover messages, mail, tasks, calendars, meetings, documents, tables and files; availability
+follows the current service catalog and grants.
 Cherry calls the current official WeCom CLI gateway directly. Tools are discovered from the
 authorizing user's service catalog. Names follow wecom_<service>__<resource>__<method>; use the
 exact available tool name, description and input schema. No shell or local CLI executable is
@@ -18,9 +21,11 @@ authorizing user, resource permissions and organization policy. If a service is 
 is denied, explain the actual error and direct the user to their WeCom bot permission page.
 Refresh tools after authorization changes; reconnect if necessary. Some access needs administrator
 approval. Do not claim that reconnection will grant permissions the enterprise has not approved.
-Search/read access does not authorize sending messages, invitations, emails or changing data.
-
-## Identity, messages and mail
+Search/read access does not authorize sending messages, invitations, emails or changing data.`,
+    },
+    {
+      requiredTools: [],
+      content: `## Identity, messages and mail
 Use identity whoami to resolve the authorizing user and contact users search to resolve other
 people. Disambiguate names before assigning or inviting people.
 The message service lists sessions the bot can send to; it is not a list of the user's unread

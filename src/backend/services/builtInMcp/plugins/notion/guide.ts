@@ -1,10 +1,11 @@
 import type { PluginGuideDefinition } from '../../pluginGuide';
 
 export const notionGuide = {
-  revision: 2,
+  revision: 3,
   sections: [
     {
       requiredTools: [],
+      alwaysInclude: true,
       content: `# Notion
 Use this connection for Notion knowledge, pages and database records within the connected user's
 permissions. Include source page links. Attachments and Notion agents are unavailable.

@@ -9,7 +9,9 @@
  * Host has drained its turns.
  */
 
+import { fromByteArray } from 'base64-js';
 import { getLocales } from 'expo-localization';
+import { Platform } from 'react-native';
 import { createMMKV } from 'react-native-mmkv';
 
 import type { AiService } from '@/backend/ai/AiService';
@@ -27,13 +29,14 @@ import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { createInternalEntryWithPreview } from '@/backend/services/file/filePreviewStorage';
-import { discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
+import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { devicePermissions } from '@/backend/services/permissions';
-import { createSkillEnvironmentReader, skillStorage } from '@/backend/services/skill';
+import { skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import type { LanguageVarious } from '@/shared/data/preference';
+import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
@@ -66,6 +69,40 @@ const LEGACY_REPLAY_CACHE_ID = 'cherry-agent-replay-cache';
   'KeepAliveCoordinator',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
+  scriptSandbox() {
+    const native = createJsSandbox();
+    return native?.startBridge
+      ? {
+          fingerprint: `${Platform.OS} ${Platform.Version}`,
+          startBridge: native.startBridge,
+        }
+      : undefined;
+  }
+  readonly writeToolOutput: NonNullable<MobileAgentHostPorts['writeToolOutput']> = async (
+    { name, data },
+    signal,
+  ) => {
+    const entry = await createInternalEntry(
+      fileEntryService,
+      {
+        source: typeof data === 'string' ? 'text' : 'base64',
+        data: typeof data === 'string' ? data : fromByteArray(data),
+        name,
+        mediaType:
+          typeof data === 'string'
+            ? 'text/plain'
+            : imageMediaTypeFromExtension(name.split('.').at(-1)),
+        provenance: 'generated',
+      },
+      signal,
+    );
+    return {
+      ref: { kind: 'managed-file', fileEntryId: entry.id },
+      name: entry.filename,
+      mediaType: entry.mediaType,
+      kind: 'created',
+    };
+  };
   readonly files = managedFileResolver;
   readonly inferenceModel = createAgentInferenceModelResolver(modelService);
   readonly runtimeTools;
@@ -130,13 +167,6 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     this.skills = createSkillScopeSource({
       skills: agentGlobalSkillService,
       storage: skillStorage,
-      environment: createSkillEnvironmentReader({
-        permissions: devicePermissions,
-        preference: preferenceService,
-        models: modelService,
-        plugins: mcpRuntime.pluginAuthorizations,
-      }),
-      models: modelService,
     });
   }
 

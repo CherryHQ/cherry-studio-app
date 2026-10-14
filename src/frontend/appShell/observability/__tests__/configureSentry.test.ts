@@ -47,6 +47,7 @@ jest.mock('@sentry/react-native', () => ({
   dedupeIntegration: jest.fn(),
   nativeReleaseIntegration: jest.fn(),
   deviceContextIntegration: jest.fn(),
+  expoContextIntegration: jest.fn(),
   sdkInfoIntegration: jest.fn(),
   createReactNativeRewriteFrames: jest.fn(),
 }));

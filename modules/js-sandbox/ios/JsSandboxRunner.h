@@ -16,6 +16,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)cancelWithId:(NSString *)runId NS_SWIFT_NAME(cancel(id:));
 
++ (NSString *)runBridgeWithId:(NSString *)runId
+                       setup:(NSString *)setup
+                        data:(NSString *)data
+                   startedAt:(double)startedAt
+                        seed:(uint32_t)seed
+                   timeoutMs:(uint32_t)timeoutMs
+                 memoryBytes:(uint32_t)memoryBytes
+                        post:(void (^)(NSString *message))post
+    NS_SWIFT_NAME(runBridge(id:setup:data:startedAt:seed:timeoutMs:memoryBytes:post:));
+
++ (void)deliverWithId:(NSString *)runId message:(NSString *)message
+    NS_SWIFT_NAME(deliver(id:message:));
+
 @end
 
 NS_ASSUME_NONNULL_END

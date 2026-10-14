@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
+import { CompactionEntry } from '@earendil-works/pi-durable';
 import type {
   AgentEvent,
   AgentEventStream,
@@ -14,6 +15,7 @@ import type {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
+import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
 
@@ -26,9 +28,17 @@ export class PiDurableObserver {
   private readonly inputs = new Map<SubmissionId, InputView>();
   private readonly entries = new Map<number, EntryRecord>();
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
+  private readonly nestedTools = new Map<
+    string,
+    { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
+  >();
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
   private generationAttempt = 0;
+  /** A provider attempt failed and Pi retries it; cleared once the next attempt produces output. */
+  private retrying = false;
+  private readonly compactions = new Map<number, boolean>();
+  private compactionFailed = false;
 
   constructor(
     private readonly runtime: PiDurableRuntime,
@@ -58,17 +68,27 @@ export class PiDurableObserver {
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
+    this.nestedTools.clear();
     this.run = [];
     this.partial = undefined;
+    this.retrying = false;
+    this.compactions.clear();
+    this.compactionFailed = false;
   }
 
   private async loadSnapshot(snapshot: SnapshotEvent) {
     this.inputs.clear();
     this.entries.clear();
     this.toolStates.clear();
+    this.nestedTools.clear();
     this.run = snapshot.run?.inputs ?? [];
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
+    this.retrying = snapshot.generation?.retry !== undefined;
+    this.compactions.clear();
+    for (const compaction of snapshot.compactions)
+      this.compactions.set(compaction.taskId, compaction.blocking);
+    this.compactionFailed = snapshot.compactionFailure !== undefined;
     const queued = new Set(snapshot.inbox.map((item) => item.id));
     const through = snapshot.entries.at(-1)?.id;
     for (const input of await this.runtime.submissions([...this.run, ...queued])) {
@@ -108,6 +128,19 @@ export class PiDurableObserver {
         this.toolStates.set(tool.callId, tool.status === 'running' ? 'running' : 'input-available');
       else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
     }
+    for (const tool of snapshot.nestedTools)
+      this.nestedTools.set(tool.callId, {
+        parentCallId: tool.parentCallId,
+        name: tool.name,
+        args: JSON.stringify(tool.arguments).slice(0, 1000),
+        status: tool.summary
+          ? tool.summary.isError
+            ? 'error'
+            : 'ok'
+          : tool.status === 'done'
+            ? 'interrupted'
+            : tool.status,
+      });
   }
 
   private async advance(events: readonly AgentEvent[]) {
@@ -118,6 +151,7 @@ export class PiDurableObserver {
       return;
     }
     const touched = new Set(this.run);
+    const previousContextStatus = this.contextStatus();
     const wasQueue = [...this.inputs.values()]
       .filter((input) => input.record.status === 'queued')
       .map((input) => input.record.id)
@@ -137,16 +171,23 @@ export class PiDurableObserver {
         case 'run_start':
           this.run = event.inputs;
           this.partial = undefined;
+          this.retrying = false;
           this.toolStates.clear();
+          this.nestedTools.clear();
           event.inputs.forEach((id) => touched.add(id));
           break;
         case 'run_end':
           event.inputs.forEach((id) => touched.add(id));
           this.run = [];
           this.partial = undefined;
+          this.retrying = false;
           break;
         case 'message_start':
-          if (event.message.role === 'assistant') this.partial = event.message;
+          if (event.message.role === 'assistant') {
+            this.partial = event.message;
+            // The failed attempt's own message follows its retry event in the same batch.
+            if (event.message.stopReason !== 'error') this.retrying = false;
+          }
           break;
         case 'message_update':
           if (this.partial) this.partial = updatedMessage(this.partial, event.changes, event.usage);
@@ -158,6 +199,14 @@ export class PiDurableObserver {
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);
+          if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
+          break;
+        case 'compaction_start':
+          this.compactions.set(event.taskId, event.blocking);
+          break;
+        case 'compaction_end':
+          this.compactions.delete(event.taskId);
+          if (event.error !== undefined) this.compactionFailed = true;
           break;
         case 'auto_retry_start':
           logger.warn('Pi durable generation retry scheduled', {
@@ -167,14 +216,35 @@ export class PiDurableObserver {
           });
           this.partial = undefined;
           this.generationAttempt = event.attempt;
+          this.retrying = true;
           break;
         case 'auto_retry_end':
           this.generationAttempt = event.attempt;
           break;
         case 'tool_execution_start':
+          if (event.parentToolCallId) {
+            this.nestedTools.set(event.toolCallId, {
+              parentCallId: event.parentToolCallId,
+              name: event.toolName,
+              args: JSON.stringify(event.args).slice(0, 1000),
+              status: 'running',
+            });
+            break;
+          }
           this.toolStates.set(event.toolCallId, 'running');
           break;
         case 'tool_execution_end':
+          if (event.parentToolCallId) {
+            const nested = this.nestedTools.get(event.toolCallId);
+            if (nested) {
+              nested.status = event.result
+                ? event.result.isError
+                  ? 'error'
+                  : 'ok'
+                : 'interrupted';
+            }
+            break;
+          }
           if (event.entry) this.entries.set(event.entry.id, event.entry);
           else {
             this.toolStates.set(event.toolCallId, 'interrupted');
@@ -197,6 +267,8 @@ export class PiDurableObserver {
           });
           break;
       }
+    if (this.contextStatus() !== previousContextStatus)
+      this.listener({ type: 'context.updated', status: this.contextStatus() });
     for (const id of this.run) touched.add(id);
     for (const id of touched) {
       const input = this.inputs.get(id);
@@ -221,10 +293,18 @@ export class PiDurableObserver {
     const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
     return {
       activeTurn: active ? this.project(active) : null,
+      contextStatus: this.contextStatus(),
       queue: [...this.inputs.values()]
         .filter((input) => input.record.status === 'queued')
         .map((input) => this.project(input)),
     };
+  }
+
+  /** Only blocking compaction delays a reply; background compaction is not presented. */
+  private contextStatus(): 'compacting' | 'compaction-failed' | null {
+    for (const blocking of this.compactions.values()) if (blocking) return 'compacting';
+    // A background compaction in progress supersedes an earlier failure.
+    return this.compactions.size === 0 && this.compactionFailed ? 'compaction-failed' : null;
   }
 
   private diagnosticContext() {
@@ -250,12 +330,13 @@ export class PiDurableObserver {
     const entries = [...this.entries.values()]
       .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
       .sort((a, b) => a.id - b.id);
-    return projectPiTurn({
+    const turn = projectPiTurn({
       sessionId: this.sessionId,
       ...input,
       entries,
       active,
       toolStates: this.toolStates,
+      nestedTools: this.nestedTools,
       ...(active && this.partial
         ? {
             partial: this.partial,
@@ -263,6 +344,7 @@ export class PiDurableObserver {
           }
         : {}),
     });
+    return active && this.retrying ? { ...turn, isRetrying: true } : turn;
   }
 }
 

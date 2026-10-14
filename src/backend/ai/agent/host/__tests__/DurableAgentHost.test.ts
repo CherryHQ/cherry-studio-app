@@ -276,6 +276,50 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('durable tool diagnostics', () => {
+  test('records returned installation errors without changing execution failure policy', async () => {
+    const { traces, records } = createTraceRecorder();
+    const output: RuntimeToolResult = {
+      value: { status: 'error', code: 'package-invalid', message: 'private package details' },
+      artifacts: [],
+    };
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'install_skill' },
+      providerName: 'install_skill',
+      displayName: 'Install Skill',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => output,
+    };
+    const state = fixture({ traces, tools: { getTools: async () => [tool] } });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    try {
+      const signal = new AbortController().signal;
+      const resolved = await state.execution()!.resolveTool(turn.identity, tool.ref, signal);
+      const result = await resolved.execute({
+        input: { url: 'https://private.example' },
+        signal,
+        toolCallId: 'call-1',
+        turnId: turn.identity.turnId,
+      });
+      expect(result).toBe(output);
+      expect(result.failure).toBeUndefined();
+      expect(records.at(-1)).toMatchObject({
+        name: 'pi.execute_tool',
+        status: 'error',
+        attributes: {
+          'tool.result.status': 'error',
+          'error.code': 'package-invalid',
+          'error.origin': 'tool',
+        },
+      });
+      expect(JSON.stringify(records)).not.toContain('private');
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test.each(['returned', 'thrown', 'cancelled'] as const)(
     'retains safe facts for a %s tool failure without changing the result',
     async (outcome) => {
@@ -353,6 +397,65 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('storage failure preserves pending turns and concurrent retries share one reopen', async () => {
+    const release = jest.fn();
+    const state = fixture({ executionLease: () => ({ release }) });
+    jest
+      .spyOn(state.conversations, 'watchWork')
+      .mockResolvedValue({ active: true, unsubscribe: async () => {} });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    await state.host.observeSession(state.sessionId, (event) => events.push(event));
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    expect(events).toContainEqual({ type: 'runtime.failed' });
+    const observations = await Promise.all([
+      state.host.observeSession(state.sessionId, () => {}),
+      state.host.observeSession(state.sessionId, () => {}),
+    ]);
+    expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+    expect(state.conversations.abort).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(
+      (await state.store.listMessages(state.sessionId)).find(
+        (message) => message.id === turn.assistantMessageId,
+      )?.status,
+    ).toBe('pending');
+    for (const observation of observations) {
+      expect(observation.snapshot.activeTurn?.id).toBe(turn.identity.turnId);
+      observation.unsubscribe();
+    }
+    await state.host.close();
+  });
+
+  test('a submission from a new chat reopens the engine after a storage failure', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    try {
+      // No session is observed, so nothing on screen carries a retry action.
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('records a failed recovery even when the durable database cannot open', async () => {
     const { traces, records } = createTraceRecorder();
     const state = fixture({
@@ -365,7 +468,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       },
     });
     await expect(state.host.initialize()).rejects.toThrow('private database path');
-    expect(records.at(-1)).toMatchObject({
+    expect(records.findLast((record) => record.name === 'ai.recovery')).toMatchObject({
       name: 'ai.recovery',
       status: 'error',
       attributes: { 'error.code': 'SQLITE_CANTOPEN' },
@@ -605,7 +708,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
           contentHash: 'directory-sha256:abc',
           folderName: 'outline',
           files: ['SKILL.md'],
-          admission: { status: 'ready', reasons: [] },
+          limitations: { scripts: [], unavailableTools: [] },
         },
       ],
       readInstructions: async () => 'Use a concise outline.',
@@ -644,6 +747,49 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         skillSelections: [selection],
         skillReferences: [{ type: 'skill', skillId, label: 'outline', offset: 9 }],
       });
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('keeps a plugin guide loaded in an earlier turn in the next turn system context', async () => {
+    const pluginTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'feishu-1', rawToolName: 'fetch-doc' },
+      providerName: 'mcp_feishu_fetch_doc',
+      displayName: 'Fetch document',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const guide = { pluginId: 'feishu', serverId: 'feishu-1', revision: 5, content: 'Read first.' };
+    const state = fixture({
+      runtimeTools: { resolve: async () => ({ tools: [pluginTool], pluginGuides: [guide] }) },
+    });
+    const configure = jest.spyOn(state.conversations, 'configure');
+    const turn = await state.reserve();
+    turn.parts.push({
+      id: 'load',
+      type: 'tool',
+      toolCallId: 'load',
+      toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+      providerName: 'load_workflow',
+      displayName: 'load_workflow',
+      state: 'output-available',
+      input: { workflow_id: 'plugin:feishu-1' },
+      output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+    });
+    await state.host.initialize();
+    try {
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Update the same document.' }],
+      });
+      expect(configure.mock.lastCall?.[1].initialInstructions).toEqual([
+        { key: 'workflow:plugin:feishu-1', text: expect.stringContaining('Read first.') },
+      ]);
     } finally {
       await state.host.close();
     }

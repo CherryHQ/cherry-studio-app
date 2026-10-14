@@ -11,6 +11,7 @@ import {
   getToolStatusTone,
   type ToolMessagePart,
 } from './toolPartState';
+import { ToolProgress } from './ToolProgress';
 import { textToolResultContent, type ToolResultContent } from './toolResultContent';
 import { ToolResultContentRenderer } from './ToolResultContentRenderer';
 
@@ -25,7 +26,12 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
   const title = getToolLabel(part, toolDisplay?.titleKey, t);
   // The app closed this call out when the turn ended; that is not a tool failure.
   const isSettledByApp = readCherryMeta(part)?.settledByApp === true;
-  const statusText = isSettledByApp ? t('chat.tool.unfinished') : getToolStatusText(part, t);
+  const statusText = isSettledByApp
+    ? t('chat.tool.unfinished')
+    : // Live calls mean the tool is executing, not waiting on its input.
+      part.state === 'input-available' && part.progress
+      ? t('chat.tool.running')
+      : getToolStatusText(part, t);
 
   return (
     <MessagePart.Tool
@@ -38,6 +44,7 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
         part.state === 'input-streaming' && toolName === 'edit_file' ? 'none' : 'shimmer'
       }
     >
+      {part.progress ? <ToolProgress progress={part.progress} /> : null}
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
       {part.state === 'output-error' && isSettledByApp ? (
         <Text className="text-foreground text-base italic" selectable>

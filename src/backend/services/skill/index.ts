@@ -1,7 +1,8 @@
 export { createSkillsModule, type SkillsBackend } from './createSkillsModule';
-export { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
-export { createSkillEnvironmentReader, type SkillEnvironmentReader } from './skillEnvironment';
+export { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 export { createSkillMarketplace } from './skillMarketplace';
+export { createCherryinSkillClient } from './cherryinSkillClient';
+export { createCherryinSkillSource } from './cherryinSkillSource';
 export { decodeUtf8, parseSkillEntry } from './skillPackage';
 export {
   createBundledSkillSource,

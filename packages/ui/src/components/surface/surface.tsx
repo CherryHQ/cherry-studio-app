@@ -1,6 +1,6 @@
 import { useResolveClassNames } from 'uniwind';
 
-import { SurfaceFrame } from './surface-frame';
+import { SurfaceFrame } from './surface-frame/surface-frame';
 import type { SurfaceProps, SurfaceShape, SurfaceTone } from './surface.types';
 
 const toneClassNames: Record<SurfaceTone, string> = {

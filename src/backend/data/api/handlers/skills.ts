@@ -11,7 +11,7 @@ import {
   UpdateSkillSchema,
 } from '@/shared/data/api/schemas/skills';
 import type { HandlersFor } from '@/shared/data/api/types';
-import type { Skill, SkillAdmission, SkillListItem } from '@/shared/data/types/skill';
+import type { Skill, SkillLimitations, SkillListItem } from '@/shared/data/types/skill';
 
 type SkillData = Pick<
   AgentGlobalSkillService,
@@ -19,15 +19,13 @@ type SkillData = Pick<
 >;
 
 /**
- * Derives current availability for installed Skills. Declared structurally:
- * the implementation reads capability owners under `backend/services`, which
- * this layer must not import. Results are per read and never persisted.
+ * What the Skills workflow owner knows beyond the row: whether the accepted
+ * bytes are on disk, and which part of the stored profile the app does not
+ * provide. Declared structurally because this layer must not import
+ * `backend/services`. Neither answer performs I/O beyond a storage lookup.
  */
-export type SkillAdmissionReader = {
-  evaluate(
-    skills: readonly Skill[],
-    agentId?: string,
-  ): Promise<{ admission: SkillAdmission; agentAdmission?: SkillAdmission }[]>;
+export type SkillAvailabilityReader = {
+  read(skill: Skill): { isPackageMissing: boolean; limitations: SkillLimitations };
 };
 
 /** Reads an immutable app-managed package revision without exposing device paths. */
@@ -37,25 +35,18 @@ export type SkillInstructionReader = {
 
 export function createSkillHandlers(
   service: SkillData,
-  admissions: SkillAdmissionReader,
+  availability: SkillAvailabilityReader,
   instructions: SkillInstructionReader,
 ): HandlersFor<SkillSchemas> {
-  async function project(
+  function project(
     entries: readonly { skill: Skill; binding: { isEnabled: boolean } | null }[],
     agentId?: string,
-  ): Promise<SkillListItem[]> {
-    const evaluated = await admissions.evaluate(
-      entries.map((entry) => entry.skill),
-      agentId,
-    );
-    return entries.map((entry, index) => ({
+  ): SkillListItem[] {
+    return entries.map((entry) => ({
       ...entry.skill,
-      admission: evaluated[index]!.admission,
+      ...availability.read(entry.skill),
       ...(agentId
-        ? {
-            binding: entry.binding ? { isEnabled: entry.binding.isEnabled } : null,
-            agentAdmission: evaluated[index]!.agentAdmission,
-          }
+        ? { binding: entry.binding ? { isEnabled: entry.binding.isEnabled } : null }
         : {}),
     }));
   }
@@ -70,15 +61,12 @@ export function createSkillHandlers(
         if (parsed.data.scope === 'composer') {
           const items: SkillListItem[] = [];
           let cursor = parsed.data.cursor;
-          // Missing packages cannot be read. Environment guidance must not hide
+          // Missing packages cannot be read. Limitations must not hide
           // otherwise accessible instructions from the composer.
           do {
             const page = await service.list({ ...parsed.data, cursor, limit: 200 });
             items.push(
-              ...(await project(page.items, parsed.data.agentId)).filter(
-                (item) =>
-                  !item.admission.reasons.some(({ code }) => code === 'package-unavailable'),
-              ),
+              ...project(page.items, parsed.data.agentId).filter((item) => !item.isPackageMissing),
             );
             cursor = page.nextCursor;
           } while (cursor && items.length <= parsed.data.limit);
@@ -92,7 +80,7 @@ export function createSkillHandlers(
         }
         const page = await service.list(parsed.data);
         return {
-          items: await project(page.items, parsed.data.agentId),
+          items: project(page.items, parsed.data.agentId),
           ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
         };
       },
@@ -100,7 +88,7 @@ export function createSkillHandlers(
     '/skills/:skillId': {
       GET: async ({ params }) => {
         const skill = await service.getById(params.skillId);
-        const [item] = await project([{ skill, binding: null }]);
+        const [item] = project([{ skill, binding: null }]);
         return item!;
       },
       PATCH: async ({ body, params }) => {
@@ -138,7 +126,7 @@ export function createSkillHandlers(
           entries.push(...page.items);
           cursor = page.nextCursor;
         } while (cursor);
-        return { items: await project(entries, params.agentId) };
+        return { items: project(entries, params.agentId) };
       },
       PUT: async ({ body, params }) => {
         const parsed = ReplaceAgentSkillsSchema.safeParse(body);

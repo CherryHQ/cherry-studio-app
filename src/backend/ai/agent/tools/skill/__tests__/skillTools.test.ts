@@ -14,7 +14,7 @@ function entry(overrides: Partial<SkillTurnEntry> & { id: string; name: string }
     contentHash: 'abcdef0123456789',
     folderName: overrides.name,
     files: ['SKILL.md', 'references/format.md'],
-    admission: { status: 'ready', reasons: [] },
+    limitations: { scripts: [], unavailableTools: [] },
     ...overrides,
   };
 }
@@ -40,6 +40,11 @@ const run = (tool: RuntimeTool, input: unknown) =>
     .then((r) => r.value as Record<string, unknown>);
 const toolNamed = (tools: RuntimeTool[], name: string) =>
   tools.find((t) => t.providerName === name)!;
+/** The body reaches the model as a system contribution, never through the stored receipt. */
+const loadedBody = (tools: RuntimeTool[], skillId: string) =>
+  toolNamed(tools, 'load_skill')
+    .execute({ input: { skill_id: skillId }, signal, toolCallId: 'call', turnId: 'turn-1' })
+    .then((r) => r.instructions?.text);
 
 describe('skill tools', () => {
   const scope = createScope([
@@ -56,31 +61,46 @@ describe('skill tools', () => {
     tools = createSkillTools(scope);
   });
 
-  it('searches only model-invocable Skills inside the scope with stable paging', async () => {
-    const search = toolNamed(tools, 'search_local_skills');
-    expect(await run(search, { query: '' })).toMatchObject({
+  it('lists only model-invocable Skills inside the scope', async () => {
+    const list = toolNamed(tools, 'list_local_skills');
+    expect(await run(list, {})).toMatchObject({
       total: 2,
-      matched: 2,
+      automaticTotal: 2,
       returned: 2,
       nextCursor: null,
       skills: [
-        { skill_id: 'a', name: 'daily-agenda', environment: { status: 'ready', reasons: [] } },
-        { skill_id: 'b', name: 'research-brief', environment: { status: 'ready', reasons: [] } },
+        { skill_id: 'a', name: 'daily-agenda' },
+        { skill_id: 'b', name: 'research-brief' },
       ],
     });
-    expect(await run(search, { query: 'RESEARCH' })).toMatchObject({
-      matched: 1,
-      skills: [{ skill_id: 'b' }],
+  });
+
+  it('returns complete multilingual descriptions for model selection without loading instructions', async () => {
+    const entries = [
+      entry({
+        id: 'minutes',
+        name: 'meeting-notes',
+        description: `${'Meeting context. '.repeat(100)}Use to summarize discussions and extract action items.`,
+      }),
+      entry({ id: 'travel', name: '旅行计划', description: '规划行程，安排交通和住宿。' }),
+    ];
+    const readInstructions = jest.fn(async () => null);
+    const list = toolNamed(
+      createSkillTools({ ...createScope(entries), readInstructions }),
+      'list_local_skills',
+    );
+    expect(await run(list, {})).toMatchObject({
+      total: 2,
+      skills: entries.map(({ id, name, description }) => ({ skill_id: id, name, description })),
     });
-    expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+    expect(readInstructions).not.toHaveBeenCalled();
   });
 
   it('includes manual-only metadata for an explicit inventory without granting loading access', async () => {
-    const search = toolNamed(tools, 'search_local_skills');
-    expect(await run(search, { query: '', include_manual: true })).toMatchObject({
+    const list = toolNamed(tools, 'list_local_skills');
+    expect(await run(list, { include_manual: true })).toMatchObject({
       total: 3,
       automaticTotal: 2,
-      matched: 3,
       returned: 3,
       skills: [
         { skill_id: 'a', invocation: { modelInvocable: true, userInvocable: true } },
@@ -92,7 +112,10 @@ describe('skill tools', () => {
     expect(await run(toolNamed(tools, 'load_skill'), { skill_id: 'manual' })).toMatchObject({
       status: 'error',
     });
-    expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+    expect(await run(list, {})).toMatchObject({
+      total: 2,
+      skills: [{ skill_id: 'a' }, { skill_id: 'b' }],
+    });
   });
 
   it('enumerates every page and refreshes the count after a conversation installation', async () => {
@@ -100,14 +123,13 @@ describe('skill tools', () => {
       entry({ id: `skill-${index}`, name: `skill-${index}` }),
     );
     const expanding = createExpandingSkillScope(createScope(entries));
-    const search = toolNamed(createSkillTools(expanding.scope), 'search_local_skills');
+    const list = toolNamed(createSkillTools(expanding.scope), 'list_local_skills');
     const ids: string[] = [];
     let cursor: string | null = null;
     const pageSizes: number[] = [];
     do {
-      const page = await run(search, { query: '', ...(cursor ? { cursor } : {}) });
+      const page = await run(list, cursor ? { cursor } : {});
       expect(page.total).toBe(45);
-      expect(page.matched).toBe(45);
       pageSizes.push(page.returned as number);
       ids.push(...(page.skills as { skill_id: string }[]).map(({ skill_id }) => skill_id));
       cursor = page.nextCursor as string | null;
@@ -119,11 +141,10 @@ describe('skill tools', () => {
     expect(expanding.include(createScope([installed]), installed.id, installed.contentHash)).toBe(
       true,
     );
-    expect(await run(search, { query: 'installed' })).toMatchObject({
+    expect(await run(list, { cursor: '40' })).toMatchObject({
       total: 46,
-      matched: 1,
-      returned: 1,
-      skills: [{ skill_id: 'installed' }],
+      returned: 6,
+      skills: [...entries.slice(40), installed].map(({ id }) => ({ skill_id: id })),
       nextCursor: null,
     });
   });
@@ -131,29 +152,28 @@ describe('skill tools', () => {
   it('loads instructions and lists files only for scoped Skills', async () => {
     tools = createSkillTools(scope);
     const load = toolNamed(tools, 'load_skill');
-    // Every successful read carries the complete pinned instructions.
-    expect(await run(load, { skill_id: 'a' })).toMatchObject({
+    // The stored receipt names the Skill and its resources; it never repeats the body.
+    const receipt = await run(load, { skill_id: 'a' });
+    expect(receipt).toMatchObject({
       status: 'ok',
       skill_id: 'a',
       revision: 'abcdef012345',
       files: ['references/format.md'],
-      instructions: '# a\n\nDo it.',
+      instructionsInSystem: true,
     });
+    expect(receipt).not.toHaveProperty('instructions');
     expect(await run(load, { skill_id: 'manual' })).toMatchObject({ status: 'error' });
-    const repeated = await run(load, { skill_id: 'a' });
-    expect(repeated).toMatchObject({ alreadyLoaded: true, instructions: '# a\n\nDo it.' });
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({ alreadyLoaded: true });
+    // Every successful read carries the complete pinned instructions.
+    expect(await loadedBody(tools, 'a')).toContain('# a\n\nDo it.');
     const selectedTools = createSkillTools(scope, {
       loadedSkillIds: ['manual'],
       explicitSkillIds: ['manual'],
     });
     expect(await run(toolNamed(selectedTools, 'load_skill'), { skill_id: 'manual' })).toMatchObject(
-      {
-        status: 'ok',
-        alreadyLoaded: true,
-        instructions: '# manual\n\nDo it.',
-        activation: { origin: 'explicit' },
-      },
+      { status: 'ok', alreadyLoaded: true, activation: { origin: 'explicit' } },
     );
+    expect(await loadedBody(selectedTools, 'manual')).toContain('# manual\n\nDo it.');
     expect(await run(load, { skill_id: 'other' })).toMatchObject({ status: 'error' });
     expect(
       await run(toolNamed(tools, 'list_skill_files'), { skill_id: 'a', prefix: 'references/' }),
@@ -170,10 +190,8 @@ describe('skill tools', () => {
       instructionCharacters: SKILL_ACTIVE_MAX_CHARACTERS,
     });
     const load = toolNamed(tools, 'load_skill');
-    expect(await run(load, { skill_id: 'a' })).toMatchObject({
-      alreadyLoaded: true,
-      instructions: '# a\n\nDo it.',
-    });
+    expect(await run(load, { skill_id: 'a' })).toMatchObject({ alreadyLoaded: true });
+    expect(await loadedBody(tools, 'a')).toContain('# a\n\nDo it.');
     expect(await run(load, { skill_id: 'b' })).toMatchObject({ status: 'error' });
   });
 

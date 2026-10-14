@@ -176,7 +176,7 @@ export class RemoteAttachmentDrafts {
               uploadId,
               saved: file.saved.map((saved) => ({
                 ...saved,
-                metadata: { ...saved.metadata, checksumAlgorithm: 'sha256' as const, uploadId },
+                metadata: { ...saved.metadata, uploadId },
                 expectedSha256: undefined,
                 resume: undefined,
               })),
@@ -254,7 +254,9 @@ export class RemoteAttachmentDrafts {
   }
   private async advance(row: RecordEntry, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
-    if (row.files.length) await this.getTransport(signal);
+    const checksumAlgorithm = row.files.length
+      ? (await this.getTransport(signal)).checksumAlgorithm
+      : undefined;
     signal.throwIfAborted();
     if (!row.sessionId) {
       if ('sessionId' in row.target) row.sessionId = row.target.sessionId;
@@ -286,9 +288,11 @@ export class RemoteAttachmentDrafts {
       }
     for (const file of row.files) {
       if (!file.saved.length) continue;
-      const legacy = file.saved.some((saved) => saved.metadata.checksumAlgorithm !== 'sha256');
+      const modeChanged = file.saved.some(
+        (saved) => saved.metadata.checksumAlgorithm !== checksumAlgorithm,
+      );
       let expired = false;
-      if (!legacy) {
+      if (!modeChanged) {
         try {
           await this.request('agent.uploads.get', { uploadId: file.uploadId }, signal);
         } catch (error) {
@@ -297,15 +301,15 @@ export class RemoteAttachmentDrafts {
         }
         signal.throwIfAborted();
       }
-      if (legacy || expired) {
+      if (modeChanged || expired) {
         row.removed.push({ ...file });
         file.uploadId = randomUUID();
         file.attachmentId = randomUUID();
         file.ready = false;
         file.saved = file.saved.map((saved) => ({
           ...saved,
-          metadata: { ...saved.metadata, checksumAlgorithm: 'sha256', uploadId: file.uploadId },
-          expectedSha256: legacy ? undefined : saved.expectedSha256,
+          metadata: { ...saved.metadata, checksumAlgorithm, uploadId: file.uploadId },
+          expectedSha256: modeChanged ? undefined : saved.expectedSha256,
           resume: undefined,
         }));
         this.persist();

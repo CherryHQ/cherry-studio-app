@@ -7,12 +7,10 @@ import { Text, View } from 'react-native';
 
 import { useBackendModule } from '@/frontend/data';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
-import { skillStatusTone } from '@/frontend/utils/skillStatus';
 import { isSkillsError, SkillsError, type SkillInspection } from '@/shared/contracts/skills';
-import { skillContentHashHex } from '@/shared/data/types/skill';
 
+import { SkillLimitationList } from './SkillLimitationList';
 import { SkillPage } from './SkillPage';
-import { SkillReasonList } from './SkillReasonList';
 
 export function SkillCandidateScreen() {
   const { t } = useTranslation();
@@ -89,11 +87,9 @@ function SkillCandidate({
   const [isInstalling, setIsInstalling] = useState(false);
   const queryClient = useQueryClient();
 
-  const { admission, candidate, issues, package: pkg } = inspection;
+  const { candidate, issues, limitations, package: pkg } = inspection;
   // The same value an installation stores, so the row reads the same before and after installing.
   const version = pkg?.version ?? candidate.version;
-  const status = admission?.status ?? null;
-  const tone = status ? skillStatusTone(status) : 'danger';
   const isInstalled = candidate.installedSkillId !== null;
   const canInstall = !isInstalled && pkg !== null;
 
@@ -135,21 +131,10 @@ function SkillCandidate({
         <Text className="text-base text-foreground" selectable>
           {pkg?.description ?? candidate.description}
         </Text>
-        {status ? (
-          <Text
-            className={`text-sm ${tone === 'success' ? 'text-success' : tone === 'danger' ? 'text-error' : 'text-muted-foreground'}`}
-          >
-            {t(`skills.status.${status}`)}
-          </Text>
-        ) : (
+        {pkg ? null : (
           <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>
         )}
-        {inspection.profile?.workflowScope ? (
-          <Text className="text-sm text-muted-foreground" selectable>
-            {inspection.profile.workflowScope}
-          </Text>
-        ) : null}
-        {admission ? <SkillReasonList reasons={admission.reasons} /> : null}
+        {limitations ? <SkillLimitationList limitations={limitations} /> : null}
         {pkg?.compatibility ? (
           <Text className="text-sm text-muted-foreground" selectable>
             {pkg.compatibility}
@@ -169,54 +154,22 @@ function SkillCandidate({
           </View>
         ) : null}
       </View>
-      <Section title={t('skills.detail.about')}>
-        <Section.Item
-          label={t('skills.detail.source')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">
-              {t(`skills.source.${candidate.source.registry}`)}
-            </Text>
-          }
-        />
-        {candidate.author ? (
-          <Section.Item
-            label={t('skills.detail.author')}
-            trailing={<Text className="text-sm text-muted-foreground">{candidate.author}</Text>}
-          />
-        ) : null}
-        {version ? (
-          <Section.Item
-            label={t('skills.detail.version')}
-            trailing={<Text className="text-sm text-muted-foreground">{version}</Text>}
-          />
-        ) : null}
-        {pkg ? (
-          <Section.Item
-            label={t('skills.detail.revision')}
-            trailing={
-              <Text className="text-sm text-muted-foreground">
-                {skillContentHashHex(pkg.contentHash).slice(0, 12)}
-              </Text>
-            }
-          />
-        ) : null}
-        {pkg ? (
-          <Section.Item
-            label={t('skills.detail.files')}
-            trailing={
-              <Text className="text-sm text-muted-foreground">{String(pkg.manifest.length)}</Text>
-            }
-          />
-        ) : null}
-        <Section.Item
-          label={t('skills.detail.verification')}
-          trailing={
-            <Text className="text-sm text-muted-foreground">
-              {t(`skills.provenance.${candidate.profileProvenance}`)}
-            </Text>
-          }
-        />
-      </Section>
+      {candidate.author || version ? (
+        <Section title={t('skills.detail.about')}>
+          {candidate.author ? (
+            <Section.Item
+              label={t('skills.detail.author')}
+              trailing={<Text className="text-sm text-muted-foreground">{candidate.author}</Text>}
+            />
+          ) : null}
+          {version ? (
+            <Section.Item
+              label={t('skills.detail.version')}
+              trailing={<Text className="text-sm text-muted-foreground">{version}</Text>}
+            />
+          ) : null}
+        </Section>
+      ) : null}
       {pkg?.instructionsPreview ? (
         <Section title={t('skills.candidate.preview')}>
           <Section.Item>

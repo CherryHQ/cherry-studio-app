@@ -1,7 +1,7 @@
 /**
  * Model-facing Skill tools over one turn's pinned scope.
  *
- * `search_local_skills` and `load_skill` cover automatic selection;
+ * `list_local_skills` and `load_skill` cover automatic selection;
  * `list_skill_files` and `read_skill_file` read package-local resources
  * progressively. Every call is bounded to the scope the Host resolved: the
  * model cannot name another Agent's Skills, another revision, or a path
@@ -29,21 +29,15 @@ import {
 import { toRuntimeInputSchema } from '../runtimeToolSchema';
 import { createSkillAdaptationTool, type SkillAdaptationToolOptions } from './skillAdaptationTool';
 
-export const SEARCH_LOCAL_SKILLS_TOOL_NAME = 'search_local_skills';
+export const LIST_LOCAL_SKILLS_TOOL_NAME = 'list_local_skills';
 export const LOAD_SKILL_TOOL_NAME = 'load_skill';
 export const LIST_SKILL_FILES_TOOL_NAME = 'list_skill_files';
 export const READ_SKILL_FILE_TOOL_NAME = 'read_skill_file';
 
-export const SKILL_SEARCH_PAGE_SIZE = 20;
+export const SKILL_LIST_PAGE_SIZE = 20;
 const SKILL_FILE_MAX_BYTES = 1_048_576;
 
-const searchInputSchema = z.strictObject({
-  query: z
-    .string()
-    .max(200)
-    .describe(
-      'Words to match against Skill names and descriptions. Empty lists the requested inventory.',
-    ),
+const listInputSchema = z.strictObject({
   include_manual: z
     .boolean()
     .optional()
@@ -53,12 +47,14 @@ const searchInputSchema = z.strictObject({
   cursor: z
     .string()
     .optional()
-    .describe('Continue a previous search from its returned nextCursor.'),
+    .describe(
+      'Continue the same inventory with its returned nextCursor and include_manual option.',
+    ),
 });
 const skillIdSchema = z
   .string()
   .min(1)
-  .describe('skill_id from the Skills catalog or search_local_skills.');
+  .describe('skill_id from the Skills catalog or list_local_skills.');
 const loadInputSchema = z.strictObject({ skill_id: skillIdSchema });
 const listFilesInputSchema = z.strictObject({
   skill_id: skillIdSchema,
@@ -129,36 +125,28 @@ export function createSkillTools(
 
   const tools: RuntimeTool[] = [
     {
-      ref: { source: 'builtin', capabilityId: SEARCH_LOCAL_SKILLS_TOOL_NAME },
-      providerName: SEARCH_LOCAL_SKILLS_TOOL_NAME,
-      displayName: 'Search Skills',
+      ref: { source: 'builtin', capabilityId: LIST_LOCAL_SKILLS_TOOL_NAME },
+      providerName: LIST_LOCAL_SKILLS_TOOL_NAME,
+      displayName: 'List Skills',
       description:
-        'Search Skills enabled for this Agent by name and description. Automatic discovery excludes manual-only packages. For the user\'s complete inventory, use query: "", include_manual: true: total is the requested inventory count, automaticTotal is its automatically invocable subset, matched is the query count, and returned is this page size. Follow nextCursor until null for a complete list. Unbound, disabled and unreadable packages and app-owned system workflows are excluded. Metadata grants no permission to load manual-only instructions.',
-      inputSchema: toRuntimeInputSchema(searchInputSchema),
-      inputPreview: { textField: 'query' },
+        "List names, IDs and complete descriptions of Skills enabled for this Agent, without keyword filtering. Compare their meanings with the user's task, including across languages, then call load_skill for a suitable Skill. Follow nextCursor with the same include_manual option until null before concluding that none fits or reporting a complete list. Automatic discovery excludes manual-only packages. For the user's complete inventory, use include_manual: true. total is the requested inventory count, automaticTotal is its automatically invocable subset, and returned is this page size. Unbound, disabled and unreadable packages and app-owned system workflows are excluded. Metadata grants no permission to load manual-only instructions.",
+      inputSchema: toRuntimeInputSchema(listInputSchema),
       approval: 'auto',
       async execute({ input }) {
-        const parsed = searchInputSchema.safeParse(input);
+        const parsed = listInputSchema.safeParse(input);
         if (!parsed.success) return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
-        const terms = parsed.data.query.toLowerCase().split(/\s+/).filter(Boolean);
         const modelInvocable = scope.entries.filter((entry) => entry.invocation.modelInvocable);
         const available = parsed.data.include_manual ? scope.entries : modelInvocable;
-        const matched = available.filter((entry) => {
-          if (terms.length === 0) return true;
-          const haystack = `${entry.name} ${entry.description}`.toLowerCase();
-          return terms.some((term) => haystack.includes(term));
-        });
         const offset = parseCursor(parsed.data.cursor);
-        const page = matched.slice(offset, offset + SKILL_SEARCH_PAGE_SIZE);
+        const page = available.slice(offset, offset + SKILL_LIST_PAGE_SIZE);
         const next = offset + page.length;
         return {
           value: {
             total: available.length,
             automaticTotal: modelInvocable.length,
-            matched: matched.length,
             returned: page.length,
             skills: page.map(summarize),
-            nextCursor: next < matched.length ? String(next) : null,
+            nextCursor: next < available.length ? String(next) : null,
           },
           artifacts: [],
         };
@@ -218,12 +206,6 @@ export function createSkillTools(
           loaded.add(entry.id);
           return {
             value: {
-              ...receipt,
-              alreadyLoaded,
-              files: entry.files.filter((path) => path !== 'SKILL.md'),
-              instructions,
-            },
-            modelValue: {
               ...receipt,
               alreadyLoaded,
               files: entry.files.filter((path) => path !== 'SKILL.md'),
@@ -340,7 +322,6 @@ function summarize(entry: SkillTurnEntry) {
     name: entry.name,
     description: entry.description,
     invocation: entry.invocation,
-    environment: entry.admission,
   };
 }
 

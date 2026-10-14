@@ -36,6 +36,16 @@ export function DeviceConnectionPairingScreen({
       params: input?.connectionId ? { connectionId: input.connectionId } : {},
     });
 
+  const cancel = () => {
+    if (setupIntent === 'chat') router.replace('/onboarding');
+    else if (input?.connectionId)
+      router.replace({
+        pathname: '/settings/device-connections/[connectionId]',
+        params: { connectionId: input.connectionId },
+      });
+    else router.replace('/settings/device-connections');
+  };
+
   const finish = () => {
     if (!connection) return;
     if (setupIntent === 'chat' && connection.capabilities.includes('configuration')) {
@@ -44,7 +54,7 @@ export function DeviceConnectionPairingScreen({
         params: { connectionId: connection.id },
       });
     } else if (setupIntent === 'chat') {
-      router.dismissTo('/onboarding');
+      router.replace('/onboarding');
     } else {
       router.replace({
         pathname: '/settings/device-connections/[connectionId]',
@@ -56,7 +66,7 @@ export function DeviceConnectionPairingScreen({
   return (
     <SettingsScrollPage
       contentClassName="flex-grow gap-8"
-      headerProps={{ title: t('settings.deviceConnections.pairing.title') }}
+      headerProps={{ onBack: cancel, title: t('settings.deviceConnections.pairing.title') }}
     >
       {!input ? (
         <ContentState.Empty
@@ -140,12 +150,18 @@ export function DeviceConnectionPairingScreen({
                 onPress: scanAgain,
               }}
             />
-          ) : connection ? (
-            <Button onPress={finish}>{t('common.done')}</Button>
           ) : (
-            <Button onPress={() => router.back()} variant="secondary">
-              {t('common.cancel')}
-            </Button>
+            <View className="flex-row flex-wrap items-center justify-center gap-3">
+              {connection ? (
+                <Button onPress={finish} size="sm">
+                  {t('common.done')}
+                </Button>
+              ) : (
+                <Button onPress={cancel} size="sm" variant="secondary">
+                  {t('common.cancel')}
+                </Button>
+              )}
+            </View>
           )}
         </>
       )}

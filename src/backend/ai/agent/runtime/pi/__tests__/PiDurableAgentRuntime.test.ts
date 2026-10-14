@@ -12,6 +12,7 @@ import {
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
+import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
@@ -175,7 +176,7 @@ describe('Persistent Agent facade', () => {
         contentHash: 'abcdef0123456789',
         folderName: 'grill-me',
         files: ['SKILL.md'],
-        admission: { status: 'ready', reasons: [] },
+        limitations: { scripts: [], unavailableTools: [] },
       };
       const selectedInstructions =
         'Ask one question at a time. Recommend an answer for each question.';
@@ -195,10 +196,10 @@ describe('Persistent Agent facade', () => {
       };
       const tools: RuntimeTool[] = [
         {
-          ref: { source: 'builtin', capabilityId: 'run_js' },
-          providerName: 'run_js',
-          displayName: 'Run JavaScript',
-          description: 'Run a local calculation.',
+          ref: { source: 'builtin', capabilityId: 'read_file' },
+          providerName: 'read_file',
+          displayName: 'Read file',
+          description: 'Read a local file.',
           inputSchema: { type: 'object', properties: {} },
           approval: 'auto',
           execute,
@@ -218,20 +219,23 @@ describe('Persistent Agent facade', () => {
         scope,
         selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
       };
+      const pluginGuides = [
+        {
+          pluginId: 'github',
+          revision: 3,
+          serverId: 'github',
+          content: '# GitHub\nUse get_me for account context.',
+          overview: 'GitHub repository and PR context; honor the requested branch.',
+        },
+      ];
+      tools.push(createLoadWorkflowTool(getPluginWorkflows(pluginGuides)));
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
         currentDate: '2026-10-09',
         tools,
         skills,
-        pluginGuides: [
-          {
-            pluginId: 'github',
-            revision: 3,
-            serverId: 'github',
-            content: '# GitHub\nUse get_me for account context.',
-          },
-        ],
+        pluginGuides,
       });
       const adapter = resolvePiApiAdapter(
         api === 'openai-completions' ? 'openai-chat-completions' : 'openai-responses',
@@ -290,9 +294,11 @@ describe('Persistent Agent facade', () => {
         expect(serialized).toContain('2026-10-09');
         expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
-        expect(serialized).toContain('## JavaScript Sandbox');
-        expect(serialized).toContain('# GitHub');
-        expect(serialized).toContain('## MCP Tool Discovery');
+        expect(serialized).toContain('## Reading Attachments');
+        expect(serialized).toContain('plugin:github: github workflows');
+        expect(serialized).toContain('honor the requested branch');
+        expect(serialized).not.toContain('Use get_me for account context.');
+        expect(serialized).toContain('# Tool discovery');
         expect(serialized).toContain('grill-me');
         expect(serialized).toContain(selectedInstructions);
         expect(serialized).toContain('launch-checklist');
@@ -303,14 +309,13 @@ describe('Persistent Agent facade', () => {
           input?: { role?: string }[];
         };
         expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
-          'run_js',
-          'search_local_skills',
+          'read_file',
+          'list_local_skills',
           'load_skill',
           'list_skill_files',
           'read_skill_file',
+          'load_workflow',
           'tool_search',
-          'tool_describe',
-          'tool_call',
         ]);
         expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([
           'system',
@@ -605,7 +610,7 @@ describe('Native web tools', () => {
     ...(name.startsWith('web_') ? { failureGroup: 'web' } : {}),
     execute: jest.fn(async () => ({ value: null, artifacts: [] })),
   });
-  const tools = [webTool('web_search'), webTool('web_fetch'), webTool('run_js')];
+  const tools = [webTool('web_search'), webTool('web_fetch'), webTool('read_file')];
   const configuration = {
     ...seed.configuration,
     tools,
@@ -802,7 +807,7 @@ describe('Native web tools', () => {
         name: 'web_fetch',
         input: { url: 'https://example.com/page' },
       },
-      { type: 'tool_use', id: 'toolu_js', name: 'run_js', input: {} },
+      { type: 'tool_use', id: 'toolu_js', name: 'read_file', input: {} },
     ];
     const fetched = {
       type: 'web_fetch_tool_result',
@@ -904,7 +909,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
       // The external search function and the native tool never reach the model together.
-      expect(toolNames(state.payloads[0]!)).toEqual(['web_fetch', 'run_js', 'web_search']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['web_fetch', 'read_file', 'web_search']);
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
@@ -958,7 +963,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
       expect(state.payloads).toHaveLength(2);
-      expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'run_js']);
+      expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'read_file']);
       expect(tools[1]!.execute).not.toHaveBeenCalled();
       const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
       expect(parts).toEqual(
@@ -985,7 +990,7 @@ describe('Native web tools', () => {
         configuration: { ...configuration, webTools: undefined },
       });
       await submitAndWait(runtime, input('first'));
-      expect(toolNames(state.payloads[0]!)).toEqual(['web_search', 'web_fetch', 'run_js']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['web_search', 'web_fetch', 'read_file']);
     } finally {
       await runtime.close();
     }
@@ -1056,7 +1061,7 @@ describe('Native web tools', () => {
     try {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'));
-      expect(toolNames(state.payloads[0]!)).toEqual(['run_js', 'web_search', 'web_fetch']);
+      expect(toolNames(state.payloads[0]!)).toEqual(['read_file', 'web_search', 'web_fetch']);
       expect(state.payloads[0]!.tools.slice(1).map((tool) => tool.type)).toEqual([
         'web_search_20250305',
         'web_fetch_20250910',

@@ -1,5 +1,5 @@
 /**
- * The Skills workflow owner: discovery, inspection, admission, managed
+ * The Skills workflow owner: discovery, inspection, managed
  * installation, update, and removal. Library reads and Agent bindings stay in
  * the Data API; per-turn scope resolution for the Agent Host lives beside it
  * in `skillScope.ts` and reads the same facts.
@@ -7,7 +7,7 @@
 
 import { Emitter } from '@/backend/core/lifecycle/event';
 import type {
-  SkillAdmissionReader,
+  SkillAvailabilityReader,
   SkillInstructionReader,
 } from '@/backend/data/api/handlers/skills';
 import type { Database } from '@/backend/data/db/DbService';
@@ -23,17 +23,13 @@ import {
   SkillsError,
   type SkillUpdateResult,
 } from '@/shared/contracts/skills';
-import type {
-  Skill,
-  SkillAdmission,
-  SkillCandidate,
-  SkillProfile,
-} from '@/shared/data/types/skill';
+import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
+import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
+import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
-import type { BundledSkillDefinition } from './bundled';
 import { adaptSkillPackage } from './skillAdaptation';
-import { evaluateSkillAdmission, type SkillAgentFacts } from './skillAdmission';
-import type { SkillEnvironmentReader } from './skillEnvironment';
+import { authorSkillPackage } from './skillAuthoring';
+import { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
   decodeUtf8,
@@ -50,27 +46,28 @@ import {
 import type { SkillStorage } from './skillStorage';
 
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
+const CANDIDATE_MAX_BYTES = 64 * 1024 * 1024;
 
 export type SkillsModuleDependencies = {
   marketplace: SkillMarketplace;
   db: { withWriteTx<T>(fn: (tx: Database) => Promise<T>): Promise<T> };
   skills: AgentGlobalSkillService;
   storage: SkillStorage;
-  environment: SkillEnvironmentReader;
   sources: {
     bundled: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
+    cherryin?: SkillSourceAdapter;
   };
-  /** Agent facts for binding-time and turn-time evaluation. */
-  agentFacts(agentId: string): Promise<SkillAgentFacts | null>;
+  agentExists(agentId: string): Promise<boolean>;
+  readAuthor(): Promise<string>;
 };
 
 type ResolvedCandidate = { candidate: SkillSourceCandidate; resolvedAt: number };
 
 export type SkillsBackend = SkillsModule & {
-  admissions: SkillAdmissionReader;
+  availability: SkillAvailabilityReader;
   instructionReader: SkillInstructionReader;
   /** Startup-only cleanup, before any installations or Agent turns can start. */
   reconcileStorage(): Promise<void>;
@@ -109,9 +106,20 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   }
 
   function remember(candidate: SkillSourceCandidate): SkillSourceCandidate {
-    if (candidates.size >= 64 && !candidates.has(candidate.candidateId))
-      candidates.delete(candidates.keys().next().value!);
+    for (const [id, entry] of candidates) {
+      if (Date.now() - entry.resolvedAt > CANDIDATE_TTL_MS) candidates.delete(id);
+    }
     candidates.set(candidate.candidateId, { candidate, resolvedAt: Date.now() });
+    const size = (value: SkillSourceCandidate) =>
+      value.acquisition
+        ? [...value.acquisition.files.values()].reduce((sum, file) => sum + file.byteLength, 0)
+        : 0;
+    let bytes = [...candidates.values()].reduce((sum, entry) => sum + size(entry.candidate), 0);
+    while (candidates.size > 256 || bytes > CANDIDATE_MAX_BYTES) {
+      const oldest = candidates.keys().next().value!;
+      bytes -= size(candidates.get(oldest)!.candidate);
+      candidates.delete(oldest);
+    }
     return candidate;
   }
 
@@ -140,7 +148,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       author: candidate.author,
       version: candidate.version,
       tags: candidate.tags,
-      profileProvenance: candidate.reviewed ? 'reviewed' : 'unverified',
       installedSkillId: installed?.id ?? null,
     };
   }
@@ -153,22 +160,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       : null;
   }
 
-  function buildProfile(reviewed: BundledSkillDefinition | null): SkillProfile {
-    if (reviewed) {
-      return {
-        provenance: 'reviewed',
-        requirements: reviewed.requirements,
-        workflowScope: reviewed.workflowScope,
-      };
-    }
-    return {
-      provenance: 'unverified',
-      requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
-      workflowScope: null,
-    };
-  }
-
-  /** Validate package bytes and report environment guidance separately. */
+  /** Validate package bytes and report the app's limitations separately. */
   async function acquireAndInspect(
     candidate: SkillSourceCandidate,
     signal?: AbortSignal,
@@ -189,19 +181,16 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           candidate: publicCandidate,
           package: null,
           issues: validation.issues,
-          profile: null,
-          admission: null,
+          limitations: null,
         },
         package: null,
         files: null,
       };
     }
     const pkg = validation.package;
-    const profile = buildProfile(candidate.reviewed);
-    const admission = evaluateSkillAdmission(profile, await deps.environment.read());
     return {
       inspection: {
-        candidate: { ...publicCandidate, profileProvenance: profile.provenance },
+        candidate: publicCandidate,
         package: {
           name: pkg.name,
           description: pkg.description,
@@ -216,8 +205,10 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           instructionsPreview: previewInstructions(pkg.instructions),
         },
         issues: [],
-        profile,
-        admission,
+        limitations: evaluateSkillLimitations({
+          manifest: pkg.manifest,
+          profile: deriveSkillProfile(pkg),
+        }),
       },
       package: pkg,
       files: acquisition.files,
@@ -227,7 +218,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   function toRecord(
     candidate: SkillSourceCandidate,
     pkg: ValidatedSkillPackage,
-    profile: SkillProfile,
   ): SkillInstallRecord {
     return {
       name: pkg.name,
@@ -239,34 +229,19 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       tags: pkg.tags.length > 0 ? pkg.tags : candidate.tags,
       contentHash: pkg.contentHash,
       manifest: pkg.manifest,
-      profile,
+      // Read from the bytes once, here; reads only compare stored facts with the app's capabilities.
+      profile: deriveSkillProfile(pkg),
       invocation: pkg.invocation,
     };
   }
 
-  const admissions: SkillAdmissionReader = {
-    async evaluate(skills, agentId) {
-      const environment = await deps.environment.read();
-      const agent = agentId ? await deps.agentFacts(agentId) : null;
-      return skills.map((skill) => {
-        const hasPackage = deps.storage.hasRevision(skill);
-        const admission: SkillAdmission = hasPackage
-          ? evaluateSkillAdmission(skill.profile, environment)
-          : { status: 'setup-required', reasons: [{ code: 'package-unavailable', subject: null }] };
-        return agent
-          ? {
-              admission,
-              agentAdmission: !hasPackage
-                ? admission
-                : evaluateSkillAdmission(skill.profile, environment, agent),
-            }
-          : { admission };
-      });
-    },
-  };
-
   const module: SkillsBackend = {
-    admissions,
+    availability: {
+      read: (skill) => ({
+        isPackageMissing: !deps.storage.hasRevision(skill),
+        limitations: evaluateSkillLimitations(skill),
+      }),
+    },
     instructionReader: {
       async read(skill) {
         if (!skill.manifest.some(({ path }) => path === 'SKILL.md')) return null;
@@ -285,10 +260,27 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     popular: (signal) => deps.marketplace.popular(signal),
+    searchSkillsSh: (query, signal) => deps.marketplace.searchSkillsSh(query, signal),
+    listCherryin: (input, signal) => deps.marketplace.listCherryin(input, signal),
+    async getCherryin(id, signal) {
+      const [detail, installed] = await Promise.all([
+        deps.marketplace.getCherryin(id, signal),
+        deps.skills.listBySourcePrefix(`${cherryinSkillUrl(id)}#`),
+      ]);
+      return {
+        ...detail,
+        installed: installed.flatMap((skill) => {
+          const location = skill.sourceUrl ? parseCherryinSkillUrl(skill.sourceUrl) : null;
+          return location?.entryPath
+            ? [{ skillId: skill.id, name: skill.name, entryPath: location.entryPath }]
+            : [];
+        }),
+      };
+    },
 
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
-      if (resolved.some((candidate) => candidate.source.registry !== 'github'))
+      if (resolved.some((candidate) => candidate.source.registry === 'bundled'))
         throw new SkillsError(
           'source-invalid',
           'System Skills are not available for installation.',
@@ -313,13 +305,13 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         );
       if (existing && !input.agentIds?.length)
         throw new SkillsError('already-installed', 'This Skill is already installed.');
-      const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
-      if (!pkg || !files || !inspection.profile || !inspection.admission) {
+      const { package: pkg, files } = await acquireAndInspect(candidate, signal);
+      if (!pkg || !files) {
         throw new SkillsError('package-invalid', 'The Skill package failed validation.');
       }
       for (const agentId of input.agentIds ?? []) {
-        const facts = await deps.agentFacts(agentId);
-        if (!facts) throw new SkillsError('not-found', 'The target Agent no longer exists.');
+        if (!(await deps.agentExists(agentId)))
+          throw new SkillsError('not-found', 'The target Agent no longer exists.');
       }
       signal?.throwIfAborted();
 
@@ -353,11 +345,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             folderName: pkg.name,
             contentHash: pkg.contentHash,
           });
-          return deps.skills.createTx(
-            tx,
-            toRecord(candidate, pkg, inspection.profile!),
-            input.agentIds ?? [],
-          );
+          return deps.skills.createTx(tx, toRecord(candidate, pkg), input.agentIds ?? []);
         });
         candidates.delete(input.candidateId);
         changes.fire();
@@ -376,11 +364,24 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       const resolved =
         current.source === 'builtin'
           ? await deps.sources.bundled.resolve(locator, signal)
-          : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
+          : locator.startsWith('cherryin:') && deps.sources.cherryin
+            ? await deps.sources.cherryin.resolve(locator, signal)
+            : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
       const candidate = remember(resolved);
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
-      if (!pkg || !files || !inspection.profile || !inspection.admission) {
+      if (!pkg || !files) {
         return { outcome: 'rejected', skill: current, inspection };
+      }
+      if (pkg.name !== current.folderName) {
+        return {
+          outcome: 'rejected',
+          skill: current,
+          inspection: {
+            ...inspection,
+            package: null,
+            issues: [{ code: 'name-mismatch', subject: current.folderName }],
+          },
+        };
       }
       if (pkg.contentHash === current.contentHash && deps.storage.hasRevision(current)) {
         return { outcome: 'unchanged', skill: current };
@@ -393,17 +394,56 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             folderName: current.folderName,
             contentHash: pkg.contentHash,
           });
-          return deps.skills.updateRevisionTx(
-            tx,
-            skillId,
-            toRecord(candidate, pkg, inspection.profile!),
-          );
+          return deps.skills.updateRevisionTx(tx, skillId, toRecord(candidate, pkg));
         });
         changes.fire();
         // The previous revision stays until reconciliation so an active turn can finish reading it.
         return { outcome: 'updated', skill };
       } catch (error) {
         deps.storage.discardStaging(handle);
+        throw error;
+      }
+    },
+
+    async create(input, signal) {
+      const { package: pkg, files } = authorSkillPackage(input, await deps.readAuthor());
+      if (await deps.skills.findByFolderName(pkg.name))
+        throw new SkillsError('already-installed', 'A Skill with this name already exists.');
+      signal?.throwIfAborted();
+      const handle = await deps.storage.stage(files);
+      try {
+        const skill = await deps.db.withWriteTx(async (tx) => {
+          signal?.throwIfAborted();
+          await deps.storage.publish(handle, {
+            folderName: pkg.name,
+            contentHash: pkg.contentHash,
+          });
+          return deps.skills.createTx(
+            tx,
+            {
+              name: pkg.name,
+              description: pkg.description,
+              source: 'marketplace',
+              sourceUrl: null,
+              author: pkg.author,
+              version: pkg.version,
+              tags: pkg.tags,
+              contentHash: pkg.contentHash,
+              manifest: pkg.manifest,
+              profile: deriveSkillProfile(pkg),
+              invocation: pkg.invocation,
+            },
+            [],
+          );
+        });
+        changes.fire();
+        return skill;
+      } catch (error) {
+        deps.storage.discardStaging(handle);
+        if (isDataApiError(error) && error.code === ErrorCode.CONFLICT)
+          throw new SkillsError('already-installed', 'A Skill with this name already exists.', {
+            cause: error,
+          });
         throw error;
       }
     },
@@ -432,7 +472,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
             input.skillId,
             {
               ...prepared.skill,
-              profile: { ...prepared.skill.profile, provenance: 'unverified' },
               contentHash: prepared.package.contentHash,
               manifest: prepared.package.manifest,
             },

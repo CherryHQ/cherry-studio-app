@@ -5,6 +5,8 @@ import type { TraceRecorder } from '../../observability';
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import type {
   RuntimeSqlDatabase,
+  RuntimeExecutionPorts,
+  RuntimeScriptSandbox,
   RuntimeUsageOwner,
   RuntimeUsageReport,
   RuntimeWebTools,
@@ -29,6 +31,11 @@ export type MobileAgentHostNaming = Pick<
  * never constructs a collaborator itself.
  */
 export type MobileAgentHostPorts = {
+  scriptSandbox?(): RuntimeScriptSandbox | undefined;
+  writeToolOutput?(
+    output: { name: string; data: string | Uint8Array },
+    signal: AbortSignal,
+  ): ReturnType<NonNullable<RuntimeExecutionPorts['writeToolOutput']>>;
   executionLease?(onInterrupt: (reason: Error) => void | Promise<void>): { release(): void };
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {

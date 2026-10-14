@@ -223,7 +223,7 @@ export default function ProviderListScreen() {
     router.push('/settings/provider/catalog');
   }, [router]);
   const openDesktopSync = useCallback(() => {
-    router.push('/settings/provider/desktop-sync');
+    router.replace('/settings/provider/desktop-sync');
   }, [router]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
