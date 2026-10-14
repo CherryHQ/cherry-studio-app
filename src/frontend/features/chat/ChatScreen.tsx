@@ -4,7 +4,7 @@ import {
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -105,6 +105,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
       ? `${createFindSkillsMention(t('skills.find.name'))} ${composerHandoff.draft}`
       : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -144,6 +145,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
             </View>
           ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
             <ChatWorkspace
+              feedbackHintBottomOffset={composerHeight}
               renderUsage={renderLocalUsage}
               snapshot={snapshot}
               messages={messages}
@@ -169,7 +171,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
         {/* Below the transcript: the column's top edge sits under the header overlay. */}
         {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
         {hasComposer ? (
-          <ComposerDock layoutMode="flow">
+          <ComposerDock layoutMode="flow" onHeightChange={setComposerHeight}>
             <View>
               <ChatInput
                 agentId={resolvedAgentId}

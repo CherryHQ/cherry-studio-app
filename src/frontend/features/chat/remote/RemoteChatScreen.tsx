@@ -136,6 +136,7 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
@@ -201,6 +202,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                feedbackHintBottomOffset={composerHeight}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}
@@ -215,7 +217,7 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="flow">
+          <ComposerDock layoutMode="flow" onHeightChange={setComposerHeight}>
             <View>
               <ConversationStatus
                 availability={availability}

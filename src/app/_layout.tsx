@@ -25,7 +25,7 @@ import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHan
 import { BackgroundActivityBridge } from '@/frontend/appShell/backgroundActivity';
 import { BackupDialog, RestoreOutcomeNotice } from '@/frontend/appShell/backup';
 import { ConversationProvider } from '@/frontend/appShell/conversation';
-import { FeedbackCaptureProvider } from '@/frontend/appShell/feedback';
+import { FeedbackCaptureProvider, FeedbackHintProvider } from '@/frontend/appShell/feedback';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/appShell/header';
 import {
   getRootHeaderStyle,
@@ -86,9 +86,11 @@ function RootLayout() {
                                     <LanguagePreferenceObserver />
                                     <SystemEntryBridge />
                                     <FeedbackCaptureProvider>
-                                      <ConversationProvider>
-                                        <RootStack />
-                                      </ConversationProvider>
+                                      <FeedbackHintProvider>
+                                        <ConversationProvider>
+                                          <RootStack />
+                                        </ConversationProvider>
+                                      </FeedbackHintProvider>
                                     </FeedbackCaptureProvider>
                                     <PrivacyConsentGate />
                                     <RestoreOutcomeNotice />

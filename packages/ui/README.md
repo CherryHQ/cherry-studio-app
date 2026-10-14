@@ -975,3 +975,9 @@ pnpm install --lockfile-only
 
 `MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
 iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.
+
+Toast options accept translated `actions` and an optional `dismissLabel`. Selecting an action
+hides that toast before invoking its callback; callers own persistence and outcome feedback.
+`show` returns an ID for scoped `hide`, so a workflow can remove its own hint on route or lifecycle
+changes without clearing unrelated notices. Bottom placement follows the keyboard and accepts a
+screen-measured `bottomOffset` for dock clearance. Default text-only toasts retain top placement.

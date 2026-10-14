@@ -2,6 +2,7 @@ import { Section, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useShakeFeedbackPreference } from '@/frontend/appShell/feedback';
 import { setSentryConsent, useSentryConsent } from '@/frontend/appShell/observability';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -13,7 +14,7 @@ export default function PrivacySettingsScreen() {
   const { enabled, available } = useSentryConsent();
   const [isSaving, setIsSaving] = useState(false);
   const [isShakeSaving, setIsShakeSaving] = useState(false);
-  const [isShakeEnabled, setIsShakeEnabled] = usePreference('app.feedback.shake_enabled');
+  const { enabled: isShakeEnabled, setEnabled: setIsShakeEnabled } = useShakeFeedbackPreference();
   const [dataCollectionEnabled, setDataCollectionEnabled] = usePreference(
     'app.privacy.data_collection.enabled',
   );
@@ -41,7 +42,7 @@ export default function PrivacySettingsScreen() {
     setIsShakeSaving(true);
     try {
       // Starting sensor observation waits for a durable opt-in, not an optimistic value.
-      await setIsShakeEnabled(value, { optimistic: false });
+      await setIsShakeEnabled(value);
     } catch {
       toast.show({ label: t('settings.privacy.saveFailed'), variant: 'danger' });
     } finally {

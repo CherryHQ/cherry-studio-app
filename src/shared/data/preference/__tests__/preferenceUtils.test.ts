@@ -35,5 +35,7 @@ describe('preference schema', () => {
 
 test('shake feedback requires a device-local opt-in', () => {
   expect(getDefaultValue('app.feedback.shake_enabled')).toBe(false);
+  expect(getDefaultValue('app.feedback.shake_hint_decision')).toBe('unseen');
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });

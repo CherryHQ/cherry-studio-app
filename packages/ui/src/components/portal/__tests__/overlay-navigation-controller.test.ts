@@ -54,3 +54,19 @@ test('a dialog opening in the same commit as the final dismissal prevents naviga
   controller.register();
   await expect(pending).resolves.toBe(false);
 });
+
+test('reports overlay presence until dismissal completes and releases subscriptions', () => {
+  const controller = createOverlayNavigation();
+  const listener = jest.fn();
+  const stop = controller.subscribe(listener);
+  expect(controller.hasOverlays()).toBe(false);
+  const remove = controller.register();
+  expect(controller.hasOverlays()).toBe(true);
+  expect(listener).toHaveBeenCalledTimes(1);
+  remove();
+  expect(controller.hasOverlays()).toBe(false);
+  expect(listener).toHaveBeenCalledTimes(2);
+  stop();
+  controller.register();
+  expect(listener).toHaveBeenCalledTimes(2);
+});

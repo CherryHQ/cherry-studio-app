@@ -58,3 +58,20 @@ submission/retry, and light/dark form layout on both platforms. In development b
 Expo developer menu's shake gesture before testing so it does not cover the captured page; production
 builds do not contain that menu. Simulator menu commands that simulate UIKit shake events do not
 produce accelerometer samples; use sensor input or physical-device verification for detection.
+
+## Error discovery hint
+
+The chat workspace observes new `failed` execution transitions for the focused conversation, for
+both local and desktop sources. Initial snapshots, history rows, cancellation, tool-level errors,
+and returning to an already failed conversation do not trigger discovery. The app-shell hint owner
+shows at most one actionable bottom toast per app session, only while foregrounded, with no other
+overlay or pending privacy disclosure, and only on a client that supports acceleration observation.
+The toast stays above the measured composer dock and follows the keyboard; it leaves transcript
+layout unchanged. A new overlay, route change, or background transition dismisses it.
+
+Showing, closing, swiping away, or timing out the hint never enables sensing. Enable atomically
+saves the shake opt-in and `app.feedback.shake_hint_decision=accepted` before confirming success.
+Never show again saves `ignored` without changing sensing. The Privacy switch also settles that
+choice, so explicitly disabling cannot result in another enable prompt. Both preferences are
+device-local and survive restart without being replaced by another device's backup. An unseen
+choice may be offered again in a later app session after dismissal; settled choices are silent.

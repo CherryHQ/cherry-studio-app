@@ -23,6 +23,13 @@ type NativeDiagnostics = {
 /** Acceleration including gravity, measured in g on both platforms. */
 export type AccelerationSample = { x: number; y: number; z: number; timestamp: number };
 
+export function supportsDiagnosticMotion(): boolean {
+  return (
+    requireOptionalNativeModule<NativeDiagnostics>('CherryDiagnostics')?.supportsShakeFeedback ===
+    true
+  );
+}
+
 export function observeDiagnosticMotion(listener: (sample: AccelerationSample) => void) {
   const module = requireOptionalNativeModule<NativeDiagnostics>('CherryDiagnostics');
   return module?.supportsShakeFeedback ? module.addListener('onAcceleration', listener) : undefined;

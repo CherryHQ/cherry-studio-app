@@ -29,7 +29,8 @@ function database() {
     INSERT INTO preference (key, value, created_at, updated_at)
       VALUES ('ui.theme_mode', '"dark"', 1, 1), ('app.user.id', '"source-device"', 1, 1),
              ('app.privacy.data_collection.enabled', 'true', 1, 1),
-             ('app.feedback.shake_enabled', 'true', 1, 1);
+             ('app.feedback.shake_enabled', 'true', 1, 1),
+             ('app.feedback.shake_hint_decision', '"accepted"', 1, 1);
   `);
   const adapter = {
     execAsync: async (sql: string) => raw.exec(sql),
@@ -79,6 +80,7 @@ test('preserves content and portable settings, but never resumes work or imports
     await restoreDeviceState(adapter, [
       { key: 'app.user.id', value: '"target-device"' },
       { key: 'app.feedback.shake_enabled', value: 'false' },
+      { key: 'app.feedback.shake_hint_decision', value: '"ignored"' },
       { key: 'app.privacy.data_collection.enabled', value: 'false' },
     ]);
     expect(raw.prepare('SELECT id, status FROM agent_session_message ORDER BY id').all()).toEqual([
@@ -100,6 +102,7 @@ test('preserves content and portable settings, but never resumes work or imports
     expect(JSON.parse(grant.credential).id).not.toBe('10000000-0000-4000-8000-000000000001');
     expect(raw.prepare('SELECT key, value FROM preference ORDER BY key').all()).toEqual([
       { key: 'app.feedback.shake_enabled', value: 'false' },
+      { key: 'app.feedback.shake_hint_decision', value: '"ignored"' },
       { key: 'app.privacy.data_collection.enabled', value: 'false' },
       { key: 'app.user.id', value: '"target-device"' },
       { key: 'ui.theme_mode', value: '"dark"' },

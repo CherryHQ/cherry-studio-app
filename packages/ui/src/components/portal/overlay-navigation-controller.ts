@@ -6,6 +6,13 @@ export function createOverlayNavigation() {
     for (const listener of [...listeners]) listener();
   }
   return {
+    hasOverlays: () => overlays.size > 0,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     register(dismiss?: () => void) {
       const id = Symbol();
       overlays.set(id, dismiss);
