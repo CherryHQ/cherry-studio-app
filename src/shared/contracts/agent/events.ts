@@ -40,10 +40,7 @@ export const AgentMessageDeltaSchema = z.union([
 ]);
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
-/** Blocking compaction delays the reply; background compaction does not. */
-export const AgentContextStatusSchema = z
-  .enum(['compacting', 'compacting-background', 'compaction-failed'])
-  .nullable();
+export const AgentContextStatusSchema = z.enum(['compacting', 'compaction-failed']).nullable();
 
 export const AgentEventSchema = z.union([
   z.strictObject({ type: z.literal('context.updated'), status: AgentContextStatusSchema }),

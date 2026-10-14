@@ -453,6 +453,7 @@
   "chat.reasoningStatus.thinking": "Suy nghĩ",
   "chat.reasoningStatus.thought": "Đã nghĩ kỹ rồi",
   "chat.runtime.failed": "Tác nhân hiện không khả dụng. Hãy thử lại để tiếp tục.",
+  "chat.runtime.retrying": "Yêu cầu thất bại. Đang tự động thử lại…",
   "chat.share.assistant": "Trợ lý",
   "chat.share.cancelled": "Đã hủy",
   "chat.share.completed": "Hoàn thành",

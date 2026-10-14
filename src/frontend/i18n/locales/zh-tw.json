@@ -453,6 +453,7 @@
   "chat.reasoningStatus.thinking": "思考中",
   "chat.reasoningStatus.thought": "已深度思考",
   "chat.runtime.failed": "智能體暫時無法使用，請重試以恢復。",
+  "chat.runtime.retrying": "請求失敗，正在自動重試…",
   "chat.share.assistant": "助理",
   "chat.share.cancelled": "已取消",
   "chat.share.completed": "已完成",

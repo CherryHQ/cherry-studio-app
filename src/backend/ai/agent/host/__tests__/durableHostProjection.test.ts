@@ -82,6 +82,13 @@ describe('durable message timing', () => {
     },
   );
 
+  test('a turn always states whether it is retrying', () => {
+    expect(
+      projectDurableHostTurn(turn({ status: 'running', isRetrying: true })).turn,
+    ).toMatchObject({ status: 'running', isRetrying: true });
+    expect(projectDurableHostTurn(turn({ status: 'running' })).turn.isRetrying).toBe(false);
+  });
+
   test('a stopped answer retains its output and retryable status without an execution error', () => {
     const projected = projectDurableHostTurn(
       turn({

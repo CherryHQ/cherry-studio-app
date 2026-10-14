@@ -35,6 +35,8 @@ export class PiDurableObserver {
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
   private generationAttempt = 0;
+  /** A provider attempt failed and Pi retries it; cleared once the next attempt produces output. */
+  private retrying = false;
   private readonly compactions = new Map<number, boolean>();
   private compactionFailed = false;
 
@@ -69,6 +71,7 @@ export class PiDurableObserver {
     this.nestedTools.clear();
     this.run = [];
     this.partial = undefined;
+    this.retrying = false;
     this.compactions.clear();
     this.compactionFailed = false;
   }
@@ -81,6 +84,7 @@ export class PiDurableObserver {
     this.run = snapshot.run?.inputs ?? [];
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
+    this.retrying = snapshot.generation?.retry !== undefined;
     this.compactions.clear();
     for (const compaction of snapshot.compactions)
       this.compactions.set(compaction.taskId, compaction.blocking);
@@ -167,6 +171,7 @@ export class PiDurableObserver {
         case 'run_start':
           this.run = event.inputs;
           this.partial = undefined;
+          this.retrying = false;
           this.toolStates.clear();
           this.nestedTools.clear();
           event.inputs.forEach((id) => touched.add(id));
@@ -175,9 +180,14 @@ export class PiDurableObserver {
           event.inputs.forEach((id) => touched.add(id));
           this.run = [];
           this.partial = undefined;
+          this.retrying = false;
           break;
         case 'message_start':
-          if (event.message.role === 'assistant') this.partial = event.message;
+          if (event.message.role === 'assistant') {
+            this.partial = event.message;
+            // The failed attempt's own message follows its retry event in the same batch.
+            if (event.message.stopReason !== 'error') this.retrying = false;
+          }
           break;
         case 'message_update':
           if (this.partial) this.partial = updatedMessage(this.partial, event.changes, event.usage);
@@ -206,6 +216,7 @@ export class PiDurableObserver {
           });
           this.partial = undefined;
           this.generationAttempt = event.attempt;
+          this.retrying = true;
           break;
         case 'auto_retry_end':
           this.generationAttempt = event.attempt;
@@ -289,10 +300,11 @@ export class PiDurableObserver {
     };
   }
 
-  private contextStatus(): 'compacting' | 'compacting-background' | 'compaction-failed' | null {
+  /** Only blocking compaction delays a reply; background compaction is not presented. */
+  private contextStatus(): 'compacting' | 'compaction-failed' | null {
     for (const blocking of this.compactions.values()) if (blocking) return 'compacting';
-    if (this.compactions.size) return 'compacting-background';
-    return this.compactionFailed ? 'compaction-failed' : null;
+    // A background compaction in progress supersedes an earlier failure.
+    return this.compactions.size === 0 && this.compactionFailed ? 'compaction-failed' : null;
   }
 
   private diagnosticContext() {
@@ -318,7 +330,7 @@ export class PiDurableObserver {
     const entries = [...this.entries.values()]
       .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
       .sort((a, b) => a.id - b.id);
-    return projectPiTurn({
+    const turn = projectPiTurn({
       sessionId: this.sessionId,
       ...input,
       entries,
@@ -332,6 +344,7 @@ export class PiDurableObserver {
           }
         : {}),
     });
+    return active && this.retrying ? { ...turn, isRetrying: true } : turn;
   }
 }
 

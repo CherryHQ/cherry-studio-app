@@ -193,10 +193,15 @@ type AgentTurnView = {
     | 'interrupted'
   assistantMessageId: string
   error: AgentErrorView | null
+  isRetrying?: boolean
   startedAt: string
   endedAt: string | null
 }
 ```
+
+`isRetrying` marks a running turn whose provider attempt failed and is being retried
+automatically. A failed attempt does not produce `error` or a transcript error until the run ends
+with a failure or interruption.
 
 Version 1 has one execution per turn and at most one active turn per Session. It has no execution
 entity, follow-up queue, steering, autonomous turn, or background task.
@@ -544,7 +549,7 @@ with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 
 ```ts
 type AgentEvent =
-  | { type: 'context.updated'; status: 'compacting' | 'compacting-background' | 'compaction-failed' | null }
+  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'runtime.failed' }
   | { type: 'question.updated'; question: AgentPendingQuestion | null }
   | { type: 'session.updated'; session: AgentSessionView }
@@ -620,7 +625,7 @@ type AgentSessionSnapshot = {
   streamingMessage: AgentMessageView | null
   pendingApprovals: AgentApprovalView[]
   pendingQuestion: AgentPendingQuestion | null
-  contextStatus?: 'compacting' | 'compacting-background' | 'compaction-failed' | null
+  contextStatus?: 'compacting' | 'compaction-failed' | null
 }
 ```
 
@@ -629,10 +634,8 @@ snapshot. The snapshot contains only live state that must be composed over persi
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
 
-`compacting` means the reply is waiting for context compaction. `compacting-background` records
-non-blocking work that may continue after the answer; it does not show the composer's waiting
-banner. Provider attempts that fail during automatic retry do not produce a transcript error until
-the run ends with a failure or interruption.
+`contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
+runs ahead of the threshold in the background does not delay the reply and is not reported.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished

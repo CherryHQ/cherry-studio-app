@@ -461,6 +461,7 @@
   "chat.reasoningStatus.thinking": "Pensando",
   "chat.reasoningStatus.thought": "Pensei bem",
   "chat.runtime.failed": "O agente está indisponível. Tente novamente para retomar.",
+  "chat.runtime.retrying": "O pedido falhou. A tentar novamente automaticamente…",
   "chat.share.assistant": "Assistente",
   "chat.share.cancelled": "Cancelado",
   "chat.share.completed": "Concluído",

@@ -165,21 +165,20 @@ export type RuntimeDurableTurn = {
   timing?: RuntimeTurnTiming;
   /** A history fork cut at the user input has no synthesized assistant placeholder. */
   hasAssistant: boolean;
+  /** A provider attempt failed and the engine is retrying it automatically. */
+  isRetrying?: boolean;
 };
 
 export type RuntimeConversationSnapshot = {
   activeTurn: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
-  contextStatus?: 'compacting' | 'compacting-background' | 'compaction-failed' | null;
+  contextStatus?: 'compacting' | 'compaction-failed' | null;
 };
 
 export type RuntimeConversationEvent =
   | { type: 'snapshot'; snapshot: RuntimeConversationSnapshot }
   | { type: 'turn.updated'; turn: RuntimeDurableTurn }
-  | {
-      type: 'context.updated';
-      status: 'compacting' | 'compacting-background' | 'compaction-failed' | null;
-    }
+  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
   | { type: 'queue.updated'; queue: readonly RuntimeDurableTurn[] };
 
 /** Persistent execution working copies. Cherry owns the user transcript and its lifecycle. */

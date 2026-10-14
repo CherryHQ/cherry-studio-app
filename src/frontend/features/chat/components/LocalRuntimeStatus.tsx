@@ -10,10 +10,16 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
   const { client } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const failed = state.status === 'error';
-  const showContextStatus =
-    state.contextStatus === 'compacting' || state.contextStatus === 'compaction-failed';
-  // Background compaction can outlive the answer; it must not look like a blocked reply.
-  if (!failed && !showContextStatus) return null;
+  const retrying = state.activeTurn?.status === 'running' && state.activeTurn.isRetrying === true;
+  const notice =
+    state.contextStatus === 'compacting'
+      ? t('chat.compaction.compacting')
+      : retrying
+        ? t('chat.runtime.retrying')
+        : state.contextStatus === 'compaction-failed'
+          ? t('chat.compaction.failed')
+          : null;
+  if (!failed && !notice) return null;
   return (
     <View className="px-4 py-2">
       {failed ? (
@@ -31,9 +37,7 @@ export function LocalRuntimeStatus({ sessionId }: { sessionId: string }) {
           accessibilityLiveRegion="polite"
           className="text-center text-xs text-muted-foreground"
         >
-          {state.contextStatus === 'compacting'
-            ? t('chat.compaction.compacting')
-            : t('chat.compaction.failed')}
+          {notice}
         </Text>
       )}
     </View>

@@ -116,6 +116,8 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     status: turn.status === 'queued' ? 'running' : turn.status,
     assistantMessageId: turn.assistantMessageId,
     error,
+    // Always present: clients skip turn updates whose fields are unchanged.
+    isRetrying: turn.isRetrying === true,
     startedAt: common.createdAt,
     endedAt: terminal ? common.updatedAt : null,
   });

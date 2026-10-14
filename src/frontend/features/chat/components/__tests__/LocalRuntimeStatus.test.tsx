@@ -40,28 +40,52 @@ afterEach(async () => {
   renderer = undefined;
 });
 
-test('removes the waiting banner when only background compaction remains after the answer', async () => {
-  mockState.contextStatus = 'compacting';
-  await render();
-  expect(JSON.stringify(renderer?.toJSON())).toContain('chat.compaction.compacting');
+function activeTurn(isRetrying: boolean): AgentSessionChatState['activeTurn'] {
+  return {
+    id: 'turn',
+    sessionId: 'session',
+    status: 'running',
+    assistantMessageId: 'assistant',
+    error: null,
+    isRetrying,
+    startedAt: '2026-10-14T00:00:00.000Z',
+    endedAt: null,
+  };
+}
 
-  mockState.contextStatus = 'compacting-background';
-  await render();
-  expect(renderer?.toJSON()).toBeNull();
+function text() {
+  return JSON.stringify(renderer?.toJSON() ?? null);
+}
 
-  mockState.contextStatus = null;
+test('shows automatic retry until the next attempt answers', async () => {
+  mockState.activeTurn = activeTurn(true);
+  await render();
+  expect(text()).toContain('chat.runtime.retrying');
+
+  mockState.activeTurn = activeTurn(false);
   await render();
   expect(renderer?.toJSON()).toBeNull();
 });
 
-test('background progress does not hide runtime recovery or a terminal compaction failure', async () => {
-  mockState.contextStatus = 'compacting-background';
-  mockState.status = 'error';
+test('waiting for compaction outranks retry, and retry outranks an earlier compaction failure', async () => {
+  mockState.activeTurn = activeTurn(true);
+  mockState.contextStatus = 'compacting';
   await render();
-  expect(JSON.stringify(renderer?.toJSON())).toContain('chat.runtime.failed');
+  expect(text()).toContain('chat.compaction.compacting');
 
-  mockState.status = 'ready';
   mockState.contextStatus = 'compaction-failed';
   await render();
-  expect(JSON.stringify(renderer?.toJSON())).toContain('chat.compaction.failed');
+  expect(text()).toContain('chat.runtime.retrying');
+
+  mockState.activeTurn = activeTurn(false);
+  await render();
+  expect(text()).toContain('chat.compaction.failed');
+});
+
+test('runtime recovery replaces transient notices', async () => {
+  mockState.activeTurn = activeTurn(true);
+  mockState.status = 'error';
+  await render();
+  expect(text()).toContain('chat.runtime.failed');
+  expect(text()).not.toContain('chat.runtime.retrying');
 });
