@@ -143,6 +143,12 @@ export class McpAppRuntime {
       if (session.initialized || session.closing) return;
       session.initialized = true;
       try {
+        // Views install their context listeners during initialization. Synchronize the native
+        // fullscreen surface before its input so touch users can reach fullscreen app controls.
+        await bridge.sendHostContextChange({
+          displayMode: 'fullscreen',
+          availableDisplayModes: ['fullscreen'],
+        });
         await bridge.sendToolInput({
           arguments:
             input.input && typeof input.input === 'object' && !Array.isArray(input.input)

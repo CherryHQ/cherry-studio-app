@@ -31,6 +31,7 @@ function createHarness() {
   };
   const runtime = new McpAppRuntime(ports);
   const responses = new Map<number, (message: Record<string, unknown>) => void>();
+  const notifications: { method: string; params: unknown }[] = [];
   let initialized!: () => void;
   const ready = new Promise<void>((resolve) => {
     initialized = resolve;
@@ -39,6 +40,7 @@ function createHarness() {
   const channel: McpAppChannel = {
     send: (serialized) => {
       const message = JSON.parse(serialized);
+      if ('method' in message && !('id' in message)) notifications.push(message);
       if (message.method === 'ui/resource-teardown') {
         runtime.receive(viewId, JSON.stringify({ jsonrpc: '2.0', id: message.id, result: {} }));
       } else if (message.method === 'ui/notifications/tool-result') {
@@ -89,10 +91,25 @@ function createHarness() {
     );
     await ready;
   };
-  return { runtime, ports, channel, controller, open, request, initialize };
+  return { runtime, ports, channel, controller, open, request, initialize, notifications };
 }
 
 describe('MCP App session boundaries', () => {
+  it('synchronizes the native fullscreen mode before delivering tool input to initialized views', async () => {
+    const app = createHarness();
+    const view = await app.open();
+    await app.initialize();
+    expect(app.notifications).toMatchObject([
+      {
+        method: 'ui/notifications/host-context-changed',
+        params: { displayMode: 'fullscreen', availableDisplayModes: ['fullscreen'] },
+      },
+      { method: 'ui/notifications/tool-input' },
+      { method: 'ui/notifications/tool-result' },
+    ]);
+    await app.runtime.close(view.id);
+  });
+
   it('gates tool calls behind initialization, then handles tools/list through the official bridge', async () => {
     const app = createHarness();
     const view = await app.open();

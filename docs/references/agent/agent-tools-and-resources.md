@@ -202,6 +202,8 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
 `callers` independently controls model and script access. Application callbacks provide structured
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
+For MCP calls, `value.content` contains the bounded model-visible content, including serialized
+structured output and managed image references. UI-only metadata never enters this script channel.
 Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
 carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
 rest through the discovery helpers.
@@ -580,6 +582,8 @@ response. The Code Mode prompt section states this limit. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
+Confirmed MCP child results have separate display receipts, preserving their App launchers, resource
+authority and media in the transcript even when the parent is cancelled or its task documents retire.
 
 Each script has a fresh native VM, a 64 MiB heap and a dedicated 8 MiB thread stack with a 7 MiB
 QuickJS stack limit. Across turns the service runs at most two scripts and, in a separate pool, two
