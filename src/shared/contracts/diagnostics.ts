@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
+export const DIAGNOSTIC_SCREENSHOT_DIRECTORY = 'FeedbackScreenshots';
+export const DIAGNOSTIC_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 export const DiagnosticRangeSchema = z.enum(['24h', '3d', '7d']);
 export type DiagnosticRange = z.infer<typeof DiagnosticRangeSchema>;
 export const DIAGNOSTIC_API_ORIGIN = 'https://api.cherry-ai.com';
@@ -59,6 +61,7 @@ export const DiagnosticBundleInputSchema = z.strictObject({
 export type DiagnosticBundleInput = z.infer<typeof DiagnosticBundleInputSchema>;
 
 export const DiagnosticReportInputSchema = DiagnosticBundleInputSchema.extend({
+  screenshotId: z.uuidv4().optional(),
   description: z
     .string()
     .trim()

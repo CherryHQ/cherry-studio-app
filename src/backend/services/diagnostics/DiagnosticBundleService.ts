@@ -1,5 +1,5 @@
 import { randomUUID } from 'expo-crypto';
-import { Directory, File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 import {
   AppStatePolicy,
@@ -18,6 +18,8 @@ import {
   DiagnosticRangeSchema,
   DiagnosticReportInputSchema,
   DIAGNOSTIC_SOURCE_LIMIT_BYTES,
+  DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+  DIAGNOSTIC_SCREENSHOT_MAX_BYTES,
   normalizeDiagnosticDescription,
   type DiagnosticBundleInput,
   type DiagnosticExportResult,
@@ -238,6 +240,20 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     try {
       this.abort.signal.throwIfAborted();
       tempRoot = createDiagnosticTemporaryDirectory(bundleId);
+      // Adopt the selected screenshot before asynchronous collection. Only opaque IDs
+      // from our capture directory are accepted, never arbitrary file paths.
+      let screenshot: File | undefined;
+      if (input.screenshotId) {
+        const source = new File(
+          Paths.cache,
+          DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+          `${input.screenshotId}.png`,
+        );
+        if (!source.exists || source.size <= 0 || source.size > DIAGNOSTIC_SCREENSHOT_MAX_BYTES)
+          throw new Error('Invalid feedback screenshot');
+        screenshot = new File(tempRoot, 'screenshot.png');
+        source.copy(screenshot);
+      }
       const fileName = `cherry-studio-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}-${bundleId}.zip`;
       const destination = new File(tempRoot, fileName);
       const range = toTimeRange(input.range, Date.now());
@@ -325,6 +341,9 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         },
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
         feedback: { file: 'feedback.txt', source: 'user' },
+        ...(screenshot
+          ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
+          : {}),
         system,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
@@ -347,7 +366,10 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           { name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
           { name: 'feedback.txt', content: normalizeDiagnosticDescription(input.description) },
         ],
-        staged,
+        [
+          ...staged,
+          ...(screenshot ? [{ archiveName: 'screenshot.png', path: screenshot.uri }] : []),
+        ],
         this.abort.signal,
       );
       const bundle: DiagnosticSavedBundle = {
@@ -356,7 +378,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         fileName,
         filePath: destination.uri,
         archiveBytes: destination.size,
-        includedFileCount: staged.length,
+        includedFileCount: staged.length + (screenshot ? 1 : 0),
         omittedFileCount: omitted.length,
         hasWarnings: collection.warnings.size > 0,
       };

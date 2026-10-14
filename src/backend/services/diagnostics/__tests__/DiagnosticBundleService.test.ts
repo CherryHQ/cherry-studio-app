@@ -4,12 +4,18 @@ import { installLogWriter } from '@/shared/core/logger/LoggerService';
 import { DiagnosticBundleService } from '../DiagnosticBundleService';
 
 const mockWriteZip = jest.fn(
-  async (_destination: unknown, _entries: { name: string; content: string }[]) => {},
+  async (
+    _destination: unknown,
+    _entries: { name: string; content: string }[],
+    _sources: { archiveName: string; path: string }[],
+  ) => {},
 );
 const mockUpload = jest.fn();
 let mockUploadAvailable = true;
 const mockSave = jest.fn();
 const mockDeletedPaths: string[] = [];
+const mockCopy = jest.fn();
+let mockScreenshotSize = 123;
 const mockNative = { saveFile: mockSave, cancelOperations: jest.fn() };
 
 jest.mock('../../../../../modules/diagnostics', () => ({ getNativeDiagnostics: () => mockNative }));
@@ -58,7 +64,10 @@ jest.mock('expo-file-system', () => {
       return this.uri.split('/').at(-1)!;
     }
     exists = true;
-    size = 99;
+    get size() {
+      return this.uri.endsWith('.png') ? mockScreenshotSize : 99;
+    }
+    copy = mockCopy;
     create() {}
     list() {
       return [];
@@ -96,6 +105,7 @@ const input = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockUploadAvailable = true;
+  mockScreenshotSize = 123;
   mockWriteZip.mockReset();
   mockSnapshot.mockResolvedValue(snapshot);
   snapshot.dispose.mockImplementation(() => {});
@@ -312,3 +322,32 @@ test('releases snapshots on archive failure and cleanup failures do not replace 
   });
   await expect(service().inspect('24h')).resolves.toMatchObject({ hasWarnings: false });
 });
+
+test('stages only the selected screenshot and declares it in the archive', async () => {
+  const screenshotId = '550e8400-e29b-41d4-a716-446655440000';
+  await service().uploadBundle({ ...input, screenshotId });
+  expect(mockCopy).toHaveBeenCalledTimes(1);
+  const [, entries, sources] = mockWriteZip.mock.calls[0];
+  expect(JSON.parse(entries[0].content).screenshot).toEqual({
+    file: 'screenshot.png',
+    source: 'user',
+    bytes: 123,
+  });
+  expect(sources).toEqual([
+    { archiveName: 'screenshot.png', path: expect.stringMatching(/\/screenshot\.png$/) },
+  ]);
+  expect(mockDeletedPaths.every((path) => !path.includes('FeedbackScreenshots'))).toBe(true);
+});
+
+test.each([0, 8 * 1024 * 1024 + 1])(
+  'rejects an empty or oversized screenshot (%i bytes) before upload',
+  async (size) => {
+    mockScreenshotSize = size;
+    await expect(
+      service().uploadBundle({ ...input, screenshotId: '550e8400-e29b-41d4-a716-446655440000' }),
+    ).rejects.toMatchObject({ code: 'BUNDLE_BUILD_FAILED' });
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(mockWriteZip).not.toHaveBeenCalled();
+    expect(mockDeletedPaths).toHaveLength(1);
+  },
+);

@@ -7,19 +7,20 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 
 ## Feedback flow
 
-Settings → About → Feedback opens a compact dialog. The user writes a required description
+Settings → About → Feedback opens the feedback form page. Shaking captures the visible page first
+and opens the same form. The user writes a required description
 (at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
-confirms submission. The same dialog shows indeterminate progress, then success or a failure.
+confirms submission. The same page shows indeterminate progress, then success or a failure.
 There is no range selector or file-save step. Desktop's current report
 form and IPC schema accept only a description, so Mobile does not invent issue categories.
 
 Submission uses the last 24 hours with logs and traces included. The description draft survives
-failure and returning to the form; closing the dialog discards it. Submission blocks dialog
-closure until the operation settles. Retrying from the form creates a fresh archive.
+failure and returning to the form; leaving the form discards it. Submission blocks navigation
+back until the operation settles. Retrying from the form creates a fresh archive.
 
 The lower-level export and upload methods both take `DiagnosticReportInput`. Archives include
 `feedback.txt` beside the manifest, so an explicitly exported ZIP also preserves the description.
-Export remains a backend capability and is not part of the feedback dialog. The backend validates
+Export remains a backend capability and is not part of the feedback form. The backend validates
 the same input for saving and uploading. Description text stays separate from technical metadata.
 
 Desktop's current Doctor dialog owns checks, local export, and report submission. Its report flow
@@ -117,7 +118,7 @@ at 200 connections, with truncation reported. The manifest declares `privacy.cap
 for collected diagnostics.
 `privacy.containsUnredactedData` is true because the user-authored feedback is included verbatim
 (after trimming and newline normalization); `feedback` identifies its file and user origin.
-Technical identifiers can still be private; the dialog describes the scope before submission.
+Technical identifiers can still be private; the form describes the scope before submission.
 
 ## Save and upload
 
@@ -153,8 +154,7 @@ redirects are not followed.
 
 Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
-remove staged files. There is no retained ZIP, save-original action, or automatic retry. Only the
-in-memory description survives a failed attempt; an uncertain result warns about duplicate reports.
+remove staged files. There is no retained ZIP, save-original action, or automatic retry. The form retains its in-memory description and selected screenshot after a failed attempt; an uncertain result warns about duplicate reports.
 Explicit exports remove the temporary original after the system picker finishes and leave the
 user-selected destination intact.
 
@@ -182,3 +182,14 @@ error facts, the v2 request/acknowledgement/error contract and upload/save lifec
 Executing tests, type checks, native builds, device acceptance or a real submission requires
 explicit user authorization. A schema-v2
 manifest alone does not establish server acceptance of mobile metadata payloads.
+
+
+## Screenshot attachments
+
+Shake feedback may supply an optional UUID `screenshotId`. Preparation reads only the matching PNG
+in the app-owned `FeedbackScreenshots` cache directory, rejects empty files or files above 8 MiB,
+and copies it into the attempt directory before asynchronous source collection. The ZIP includes
+`screenshot.png` and an explicit `screenshot` manifest entry. The screenshot is not redacted and
+may show conversation content; the form previews it and discloses this separately from metadata
+collection. Removing it omits the ID entirely. No screenshot is taken during bundle preparation.
+The existing multipart request and signature remain unchanged.

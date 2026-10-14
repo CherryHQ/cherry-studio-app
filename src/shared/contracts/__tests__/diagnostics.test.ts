@@ -56,3 +56,20 @@ describe('diagnostic wire inputs', () => {
     ).toBe(false);
   });
 });
+
+test('screenshot attachments accept opaque IDs, never arbitrary paths', () => {
+  const report = { ...input, description: 'feedback' };
+  expect(
+    DiagnosticReportInputSchema.parse({
+      ...report,
+      screenshotId: '550e8400-e29b-41d4-a716-446655440000',
+    }).screenshotId,
+  ).toBeDefined();
+  for (const screenshotId of [
+    '../private',
+    'file:///private.png',
+    'https://example.com/image.png',
+    '',
+  ])
+    expect(DiagnosticReportInputSchema.safeParse({ ...report, screenshotId }).success).toBe(false);
+});

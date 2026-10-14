@@ -1,27 +1,26 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { Button, Dialog, Input, Spinner, TextField } from '@cherrystudio/ui/components';
+import { Button, Image, Input, Spinner, TextField } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
+import { useFeedbackCapture } from '@/frontend/appShell/feedback';
 import {
   diagnosticDescriptionByteLength,
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
 } from '@/shared/contracts/diagnostics';
 
+import { SettingsScrollPage } from '../../components/SettingsScrollPage';
 import { useCopyReportId } from './useCopyReportId';
 import { useDiagnosticBundle } from './useDiagnosticBundle';
 
-/** One dialog owns the draft, submission, and result; the service owns temporary files. */
-export function FeedbackDialog({
-  onClose,
-  onViewReport,
-}: {
-  onClose: () => void;
-  onViewReport: (reportId: string) => void;
-}) {
-  // Resolve business hooks here: the shared dialog renders its content through a portal.
+/** Both manual feedback and shake capture enter this form. */
+export function FeedbackScreen() {
+  const router = useRouter();
+  const { screenshot, captureFailed, clearScreenshot } = useFeedbackCapture();
   const { t } = useTranslation();
   const [description, setDescription] = useState('');
   const [attempted, setAttempted] = useState(false);
@@ -33,6 +32,7 @@ export function FeedbackDialog({
   const isTooLong = bytes > DIAGNOSTIC_DESCRIPTION_MAX_BYTES;
   const showError = isTooLong || (attempted && normalized.length === 0);
   const isSubmitting = state.status === 'submitting';
+  usePreventRemove(isSubmitting, () => {});
   const title =
     state.status === 'uploaded'
       ? t('settings.about.diagnostics.results.uploaded')
@@ -45,7 +45,7 @@ export function FeedbackDialog({
   function close() {
     workflow.close(() => {
       Keyboard.dismiss();
-      onClose();
+      router.back();
     });
   }
 
@@ -53,17 +53,14 @@ export function FeedbackDialog({
     setAttempted(true);
     if (!normalized || isTooLong) return;
     Keyboard.dismiss();
-    void workflow.submit(normalized);
+    void workflow.submit(normalized, screenshot?.id);
   }
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) close();
-      }}
-      testID="feedback-dialog"
-      title={title}
+    <SettingsScrollPage
+      contentClassName="gap-5"
+      headerProps={{ title }}
+      keyboardShouldPersistTaps="handled"
     >
       {state.status === 'editing' ? (
         <>
@@ -83,6 +80,30 @@ export function FeedbackDialog({
               <TextField.Error>{t('settings.about.diagnostics.descriptionError')}</TextField.Error>
             )}
           </TextField>
+          {screenshot && (
+            <View className="gap-2">
+              <Text className="text-sm font-medium text-foreground">
+                {t('settings.about.feedback.screenshot')}
+              </Text>
+              <Image
+                source={{ uri: screenshot.uri }}
+                contentFit="contain"
+                className="h-56 w-full"
+                accessibilityLabel={t('settings.about.feedback.screenshot')}
+              />
+              <Text className="text-xs leading-5 text-muted-foreground">
+                {t('settings.about.feedback.screenshotConsent')}
+              </Text>
+              <Button variant="ghost" onPress={clearScreenshot} testID="feedback-remove-screenshot">
+                {t('common.remove')}
+              </Button>
+            </View>
+          )}
+          {captureFailed && (
+            <Text className="text-sm text-muted-foreground">
+              {t('settings.about.feedback.screenshotFailed')}
+            </Text>
+          )}
           <View className="gap-1">
             <Text className="text-sm font-medium text-foreground">
               {t('settings.about.feedback.attachment')}
@@ -158,7 +179,15 @@ export function FeedbackDialog({
           <View className="gap-2">
             {state.status === 'uploaded' ? (
               <>
-                <Button onPress={() => onViewReport(state.reportId)} testID="feedback-view-status">
+                <Button
+                  onPress={() =>
+                    router.replace({
+                      pathname: '/settings/about/feedback/[reportId]',
+                      params: { reportId: state.reportId },
+                    })
+                  }
+                  testID="feedback-view-status"
+                >
                   {t('settings.about.feedback.status.view')}
                 </Button>
                 <Button onPress={close} variant="ghost">
@@ -178,6 +207,6 @@ export function FeedbackDialog({
           </View>
         </>
       )}
-    </Dialog>
+    </SettingsScrollPage>
   );
 }

@@ -77,3 +77,16 @@ test('an acknowledgement received after unmount still saves its receipt', async 
   });
   expect(rememberFeedback).toHaveBeenCalledWith(uploaded.reportId, 'keep the ID');
 });
+
+test('submits the selected screenshot and omits it after removal before retry', async () => {
+  mockUpload.mockResolvedValueOnce({ status: 'submission_failed', reason: 'service_unavailable' });
+  await act(async () => {
+    await workflow.submit('screen problem', 'capture-id');
+  });
+  expect(mockUpload.mock.calls[0][0].screenshotId).toBe('capture-id');
+  act(() => workflow.edit());
+  await act(async () => {
+    await workflow.submit('screen problem');
+  });
+  expect(mockUpload.mock.calls[1][0]).not.toHaveProperty('screenshotId');
+});

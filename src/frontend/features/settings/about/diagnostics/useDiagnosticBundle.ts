@@ -45,13 +45,14 @@ export function useDiagnosticBundle() {
     };
   }, []);
 
-  async function submit(description: string) {
+  async function submit(description: string, screenshotId?: string) {
     if (busy.current) return;
     busy.current = true;
     setState({ status: 'submitting' });
     try {
       const result = await module.uploadBundle({
         description,
+        ...(screenshotId ? { screenshotId } : {}),
         range: '24h',
         includeLogs: true,
         includeTraces: true,

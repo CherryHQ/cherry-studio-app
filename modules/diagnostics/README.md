@@ -3,6 +3,8 @@
 Local Expo module for Cherry Mobile diagnostics. Workflow ownership and the Desktop compatibility
 contract are documented in [Diagnostics](../../src/backend/services/diagnostics/README.md).
 
+The native boundary also emits foreground accelerometer samples for [shake feedback](../../src/frontend/appShell/feedback/README.md), normalized to g on both platforms. Observation is opt-in through the event subscription and stops in the background.
+
 The native boundary owns system document save completion, file identity and hashing, the
 provisioned HMAC credential, and bounded file-backed HTTP transfer.
 The module never decides which logs or chat records to collect. There are no package downloads
