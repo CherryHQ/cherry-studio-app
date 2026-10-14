@@ -22,4 +22,5 @@ export {
   composerContentGap,
   getComposerActionCenterOffset,
   getComposerKeyboardStickyOffset,
+  getComposerTextMaxHeight,
 } from './utils/composer-dock-layout';

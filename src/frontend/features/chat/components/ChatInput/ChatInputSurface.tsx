@@ -1,9 +1,22 @@
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef } from 'react';
+import {
+  type ComponentProps,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, type StyleProp, type TextStyle, View } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  type StyleProp,
+  StyleSheet,
+  type TextStyle,
+  View,
+} from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -20,6 +33,8 @@ import {
   useComposerState,
 } from '@/frontend/components/Composer';
 import { hasComposerSendableContent } from '@/frontend/components/Composer/utils/composerAttachments';
+
+import { useChatInputHeightLimit } from './hooks/useChatInputHeightLimit';
 
 const restingInputHeight = 32;
 const FIELD_CONTENT_STYLE = { minHeight: restingInputHeight };
@@ -44,6 +59,7 @@ export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>)
 }
 
 export function ChatInputSurface({
+  accessories,
   leadingAction,
   secondaryAction,
   trailingAction,
@@ -53,6 +69,7 @@ export function ChatInputSurface({
   placeholder,
   attachmentMode = 'images',
 }: {
+  accessories?: ReactNode;
   leadingAction?: ReactNode;
   secondaryAction?: ReactNode;
   trailingAction?: ReactNode;
@@ -63,8 +80,24 @@ export function ChatInputSurface({
   attachmentMode?: 'images' | 'text-only';
 }) {
   const { t } = useTranslation();
-  const { isEditing } = useComposerPresentationState();
+  const { isEditing, isKeyboardTrackingEnabled } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
+  const [accessoriesHeight, setAccessoriesHeight] = useState(0);
+  const maxTextHeight = useChatInputHeightLimit(
+    restingInputHeight,
+    accessoriesHeight + activeToolbarGap + restingInputHeight,
+    isKeyboardTrackingEnabled,
+  );
+  const requestedMaxHeight = StyleSheet.flatten(fieldStyle)?.maxHeight;
+  const resolvedFieldStyle = [
+    fieldStyle,
+    {
+      maxHeight:
+        typeof requestedMaxHeight === 'number'
+          ? Math.min(requestedMaxHeight, maxTextHeight)
+          : maxTextHeight,
+    },
+  ];
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
   const isInputActive = isEditing || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
@@ -142,65 +175,71 @@ export function ChatInputSurface({
     },
     [fieldFrameHeight, isInputActive],
   );
+  const handleAccessoriesLayout = useCallback((event: LayoutChangeEvent) => {
+    setAccessoriesHeight(Math.ceil(event.nativeEvent.layout.height));
+  }, []);
   return (
-    <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
-      <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
-        {/* Center a short field in the action row; longer drafts grow naturally. */}
-        <View
-          className="absolute top-0 right-0 left-0 justify-center"
-          onLayout={handleFieldLayout}
-          style={FIELD_CONTENT_STYLE}
-        >
-          <ComposerField
-            placeholder={placeholder}
-            style={fieldStyle}
-            attachmentMode={attachmentMode}
-            testID="chat-composer-input"
-          />
-        </View>
-      </Animated.View>
-      <Animated.View
-        className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
-        pointerEvents="box-none"
-        style={controlsRowStyle}
-      >
-        {/* The primary actions stay reachable while the field is empty and unfocused. */}
-        {leadingAction ?? <View style={{ width: restingInputHeight }} />}
-        <Animated.View
-          accessibilityElementsHidden={!isInputActive}
-          className="min-w-0 shrink"
-          importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-          pointerEvents={isInputActive ? 'auto' : 'none'}
-          style={secondaryControlRevealStyle}
-        >
-          {secondaryAction}
+    <View>
+      <View onLayout={handleAccessoriesLayout}>{accessories}</View>
+      <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
+        <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
+          {/* Center a short field in the action row; longer drafts grow naturally. */}
+          <View
+            className="absolute top-0 right-0 left-0 justify-center"
+            onLayout={handleFieldLayout}
+            style={FIELD_CONTENT_STYLE}
+          >
+            <ComposerField
+              placeholder={placeholder}
+              style={resolvedFieldStyle}
+              attachmentMode={attachmentMode}
+              testID="chat-composer-input"
+            />
+          </View>
         </Animated.View>
-        <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
-          {trailingAction ? (
-            <Animated.View
-              accessibilityElementsHidden={!isInputActive}
-              importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
-              pointerEvents={isInputActive ? 'auto' : 'none'}
-              style={secondaryControlRevealStyle}
-            >
-              {trailingAction}
-            </Animated.View>
-          ) : null}
-          {streaming && hasFollowUp && onStop ? (
-            <Composer.Action
-              accessibilityLabel={t('chat.input.action.stopGenerating')}
-              className="bg-transparent"
-              onPress={onStop}
-              testID="chat-composer-stop"
-            >
-              <PauseIcon className="size-6 text-foreground" />
-            </Composer.Action>
-          ) : null}
-          <Composer.Send
-            testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
-          />
-        </View>
+        <Animated.View
+          className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+          pointerEvents="box-none"
+          style={controlsRowStyle}
+        >
+          {/* The primary actions stay reachable while the field is empty and unfocused. */}
+          {leadingAction ?? <View style={{ width: restingInputHeight }} />}
+          <Animated.View
+            accessibilityElementsHidden={!isInputActive}
+            className="min-w-0 shrink"
+            importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+            pointerEvents={isInputActive ? 'auto' : 'none'}
+            style={secondaryControlRevealStyle}
+          >
+            {secondaryAction}
+          </Animated.View>
+          <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+            {trailingAction ? (
+              <Animated.View
+                accessibilityElementsHidden={!isInputActive}
+                importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                pointerEvents={isInputActive ? 'auto' : 'none'}
+                style={secondaryControlRevealStyle}
+              >
+                {trailingAction}
+              </Animated.View>
+            ) : null}
+            {streaming && hasFollowUp && onStop ? (
+              <Composer.Action
+                accessibilityLabel={t('chat.input.action.stopGenerating')}
+                className="bg-transparent"
+                onPress={onStop}
+                testID="chat-composer-stop"
+              >
+                <PauseIcon className="size-6 text-foreground" />
+              </Composer.Action>
+            ) : null}
+            <Composer.Send
+              testID={streaming && !hasFollowUp ? 'chat-composer-stop' : 'chat-composer-send'}
+            />
+          </View>
+        </Animated.View>
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
