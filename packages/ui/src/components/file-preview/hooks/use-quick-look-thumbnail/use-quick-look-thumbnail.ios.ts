@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { PixelRatio } from 'react-native';
 
-import type { FilePreviewFile, FilePreviewOperation } from '../file-preview.types';
+import type { FilePreviewFile, FilePreviewOperation } from '../../file-preview.types';
 import {
   getQuickLookThumbnail,
   quickLookThumbnailCacheKey,
   type QuickLookThumbnailInput,
-} from '../utils/quick-look-thumbnail-cache.ios';
+} from '../../utils/quick-look-thumbnail-cache/quick-look-thumbnail-cache.ios';
 
 type ThumbnailState = {
   key: string;

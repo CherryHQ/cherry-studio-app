@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Surface } from '../surface';
 
-jest.mock('../surface-frame', () => {
+jest.mock('../surface-frame/surface-frame', () => {
   const React = jest.requireActual('react');
 
   return {

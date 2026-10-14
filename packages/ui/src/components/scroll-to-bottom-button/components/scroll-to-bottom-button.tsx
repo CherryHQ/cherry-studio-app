@@ -5,7 +5,7 @@ import { useResolveClassNames } from 'uniwind';
 
 import { duration, easing } from '../../../motion';
 import { BackgroundPressExclusion } from '../../background-press/background-press';
-import { SurfaceFrame } from '../../surface/surface-frame';
+import { SurfaceFrame } from '../../surface/surface-frame/surface-frame';
 
 export const scrollToBottomButtonSize = 40;
 const SURFACE_CLASS_NAME = 'border border-border bg-background';

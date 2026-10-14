@@ -74,9 +74,10 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 
 ## Expose Deliberate Public Surfaces
 
-- Add `index.ts` or `index.tsx` only at a boundary consumed by routes, parent pages, sibling modules,
+- Add `index.ts` only at a boundary consumed by routes, parent pages, sibling modules,
   or package users.
 - A barrel contains named re-exports only and exposes the smallest interface callers need.
+- A barrel has no JSX and uses `.ts`; Expo's reserved `index.tsx` route files remain route adapters.
 - External callers import the module root. Module internals import their leaf files directly and do
   not route dependencies back through their own barrel.
 - Private `components`, `hooks`, and `utils` buckets do not need barrels.

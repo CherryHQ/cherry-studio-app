@@ -1,4 +1,4 @@
-import type { QuickLookThumbnailInput } from '../utils/quick-look-thumbnail-cache.ios';
+import type { QuickLookThumbnailInput } from '../quick-look-thumbnail-cache.ios';
 
 const mockGenerateThumbnail = jest.fn();
 
@@ -64,8 +64,8 @@ jest.mock('expo-file-system', () => {
 });
 
 const { getQuickLookThumbnail, quickLookThumbnailCacheKey } = jest.requireActual<
-  typeof import('../utils/quick-look-thumbnail-cache.ios')
->('../utils/quick-look-thumbnail-cache.ios');
+  typeof import('../quick-look-thumbnail-cache.ios')
+>('../quick-look-thumbnail-cache.ios');
 const { testState } = jest.requireMock<{
   testState: { directories: Set<string>; files: Set<string> };
 }>('expo-file-system');
