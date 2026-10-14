@@ -38,6 +38,7 @@ export const uploadProgressSchema = z.object({
   resume: z.object({ resumeId: z.string(), expectedWriterEpoch: z.string() }).optional(),
 });
 export type UploadTransport = {
+  checksumAlgorithm?: 'sha256';
   write(
     input: Omit<UploadChunk, 'kind' | 'requestId'>,
     signal: AbortSignal,
@@ -103,7 +104,9 @@ export async function uploadAttachments(
           filename: attachment.name,
           mediaType: attachment.mediaType,
           byteLength: size,
-          checksumAlgorithm: 'sha256',
+          ...(transport.checksumAlgorithm
+            ? { checksumAlgorithm: transport.checksumAlgorithm }
+            : {}),
         });
         if (!metadata.success) throw new RemoteAgentError('INVALID_ATTACHMENT');
         initialEntry = {
@@ -114,7 +117,7 @@ export async function uploadAttachments(
         remember(initialEntry);
       }
       let entry: SavedUpload = initialEntry;
-      if (entry.metadata.checksumAlgorithm !== 'sha256')
+      if (entry.metadata.checksumAlgorithm !== transport.checksumAlgorithm)
         throw new RemoteAgentError('UPGRADE_REQUIRED');
       const recovering = saved.some((value) => value.fileEntryId === attachment.fileEntryId);
       const transfer = async (signal: AbortSignal): Promise<AgentUploadState> => {
@@ -144,7 +147,10 @@ export async function uploadAttachments(
           preparationMs: Date.now() - startedAt,
         });
         const ref = { uploadId: entry.metadata.uploadId };
-        if (state.uploadId !== ref.uploadId || state.checksumAlgorithm !== 'sha256')
+        if (
+          state.uploadId !== ref.uploadId ||
+          state.checksumAlgorithm !== entry.metadata.checksumAlgorithm
+        )
           throw new RemoteAgentError('PROTOCOL_ERROR');
         if (state.state === 'receiving') {
           const resume = entry.resume ?? {
@@ -212,38 +218,44 @@ export async function uploadAttachments(
         );
         return state;
       };
-      const abort = new AbortController();
-      const callerSignal = signal;
-      const taskSignal = AbortSignal.any([signal, abort.signal]);
-      const hashing = files.hashFile(entry.sourceFileEntryId, taskSignal).then((digest) => {
-        taskSignal.throwIfAborted();
-        if (!/^[a-f0-9]{64}$/.test(digest)) throw new RemoteAgentError('VERIFICATION_FAILED');
-        if (entry.expectedSha256 && entry.expectedSha256 !== digest)
-          throw new RemoteAgentError('UPLOAD_SOURCE_CHANGED');
-        entry = { ...entry, expectedSha256: digest };
-        remember(entry);
-        logger.info('Upload source hashed', {
-          uploadId: entry.metadata.uploadId,
-          elapsedMs: Date.now() - startedAt,
-        });
-        return digest;
-      });
       let state: AgentUploadState;
-      let expectedSha256: string;
-      const sending = recovering ? hashing.then(() => transfer(taskSignal)) : transfer(taskSignal);
-      try {
-        [expectedSha256, state] = await Promise.all([hashing, sending]);
-      } catch (error) {
-        abort.abort();
-        await Promise.allSettled([hashing, sending]);
-        callerSignal.throwIfAborted();
-        if (error instanceof RemoteAgentError) throw error;
-        const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-        throw new RemoteAgentError(
-          code === 'NATIVE_HASH_UNAVAILABLE' || code === 'RESOURCE_UNAVAILABLE'
-            ? code
-            : 'VERIFICATION_FAILED',
-        );
+      let expectedSha256: string | undefined;
+      if (entry.metadata.checksumAlgorithm === 'sha256') {
+        const abort = new AbortController();
+        const taskSignal = AbortSignal.any([signal, abort.signal]);
+        const hashing = files.hashFile(entry.sourceFileEntryId, taskSignal).then((digest) => {
+          taskSignal.throwIfAborted();
+          if (!/^[a-f0-9]{64}$/.test(digest)) throw new RemoteAgentError('VERIFICATION_FAILED');
+          if (entry.expectedSha256 && entry.expectedSha256 !== digest)
+            throw new RemoteAgentError('UPLOAD_SOURCE_CHANGED');
+          entry = { ...entry, expectedSha256: digest };
+          remember(entry);
+          logger.info('Upload source hashed', {
+            uploadId: entry.metadata.uploadId,
+            elapsedMs: Date.now() - startedAt,
+          });
+          return digest;
+        });
+        const sending = recovering
+          ? hashing.then(() => transfer(taskSignal))
+          : transfer(taskSignal);
+        try {
+          [expectedSha256, state] = await Promise.all([hashing, sending]);
+        } catch (error) {
+          abort.abort();
+          await Promise.allSettled([hashing, sending]);
+          signal.throwIfAborted();
+          if (error instanceof RemoteAgentError) throw error;
+          const code =
+            error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+          throw new RemoteAgentError(
+            code === 'NATIVE_HASH_UNAVAILABLE' || code === 'RESOURCE_UNAVAILABLE'
+              ? code
+              : 'VERIFICATION_FAILED',
+          );
+        }
+      } else {
+        state = await transfer(signal);
       }
       signal.throwIfAborted();
       const ref = { uploadId: entry.metadata.uploadId };
@@ -251,7 +263,11 @@ export async function uploadAttachments(
       if (state.state === 'receiving')
         state = await request(
           'agent.uploads.complete',
-          { ...ref, writerEpoch: state.writerEpoch, expectedSha256 },
+          {
+            ...ref,
+            writerEpoch: state.writerEpoch,
+            ...(expectedSha256 ? { expectedSha256 } : {}),
+          },
           signal,
         );
       while (state.state === 'verifying') {
@@ -265,8 +281,8 @@ export async function uploadAttachments(
         state.uploadId !== ref.uploadId ||
         state.state !== 'ready' ||
         Number(state.committedOffset) !== size ||
-        state.checksumAlgorithm !== 'sha256' ||
-        state.sha256 !== expectedSha256
+        state.checksumAlgorithm !== entry.metadata.checksumAlgorithm ||
+        (entry.metadata.checksumAlgorithm === 'sha256' && state.sha256 !== expectedSha256)
       )
         throw new RemoteAgentError('INVALID_ATTACHMENT');
       refs.push(ref);
