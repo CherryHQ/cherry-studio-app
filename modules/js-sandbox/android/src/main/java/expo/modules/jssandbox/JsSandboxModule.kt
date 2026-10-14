@@ -5,15 +5,19 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import java.util.concurrent.ConcurrentHashMap
 
 class JsSandboxModule : Module() {
+  private val runs = ConcurrentHashMap.newKeySet<String>()
+
   override fun definition() = ModuleDefinition {
     Name("JsSandbox")
+    Events("onMessage")
 
     AsyncFunction("run") { runId: String, code: String, limits: JsSandboxLimits, promise: Promise ->
       // A dedicated thread per run: a script that spins until its deadline must
       // not hold a shared executor, and parallel tool calls run side by side.
-      Thread(null, {
+      launch(runId, promise) {
         val result = JsSandboxNative.run(
           runId.toByteArray(Charsets.UTF_8),
           code.toByteArray(Charsets.UTF_8),
@@ -22,19 +26,63 @@ class JsSandboxModule : Module() {
           limits.maxResultBytes,
           limits.maxLogBytes,
         )
-        promise.resolve(String(result, Charsets.UTF_8))
-      }, "JsSandbox", STACK_SIZE_BYTES).start()
+        String(result, Charsets.UTF_8)
+      }
+    }
+
+    AsyncFunction("runBridge") { runId: String, setup: String, data: String, clock: JsSandboxClock, limits: JsSandboxLimits, promise: Promise ->
+      launch(runId, promise) {
+        val result = JsSandboxNative.runBridge(
+          runId.toByteArray(Charsets.UTF_8), setup.toByteArray(Charsets.UTF_8),
+          data.toByteArray(Charsets.UTF_8), clock.startedAt, clock.seed.toLong().toInt(),
+          limits.timeoutMs, limits.memoryBytes,
+          JsSandboxMessageSink { message ->
+            sendEvent("onMessage", mapOf("runId" to runId, "message" to String(message, Charsets.UTF_8)))
+          },
+        )
+        String(result, Charsets.UTF_8)
+      }
+    }
+
+    Function("deliver") { runId: String, message: String ->
+      JsSandboxNative.deliver(runId.toByteArray(Charsets.UTF_8), message.toByteArray(Charsets.UTF_8))
     }
 
     Function("cancel") { runId: String ->
       JsSandboxNative.cancel(runId.toByteArray(Charsets.UTF_8))
     }
+
+    OnDestroy {
+      runs.forEach { JsSandboxNative.cancel(it.toByteArray(Charsets.UTF_8)) }
+    }
+  }
+
+  private fun launch(runId: String, promise: Promise, work: () -> String) {
+    runs.add(runId)
+    Thread(null, {
+      try {
+        promise.resolve(work())
+      } catch (error: Exception) {
+        promise.reject("ERR_JS_SANDBOX", error.message, error)
+      } finally {
+        runs.remove(runId)
+      }
+    }, "JsSandbox", STACK_SIZE_BYTES).start()
   }
 
   private companion object {
     /** QuickJS stops recursion at 7 MiB of this stack (`kMaxStackBytes`), leaving room for the native code below its checks. */
     const val STACK_SIZE_BYTES = 8L shl 20
   }
+}
+
+class JsSandboxClock : Record {
+  @Field val startedAt: Double = 0.0
+  @Field val seed: Double = 0.0
+}
+
+internal fun interface JsSandboxMessageSink {
+  fun post(message: ByteArray)
 }
 
 class JsSandboxLimits : Record {
@@ -61,4 +109,19 @@ internal object JsSandboxNative {
 
   @JvmStatic
   external fun cancel(runId: ByteArray)
+
+  @JvmStatic
+  external fun runBridge(
+    runId: ByteArray,
+    setup: ByteArray,
+    data: ByteArray,
+    startedAt: Double,
+    seed: Int,
+    timeoutMs: Int,
+    memoryBytes: Int,
+    sink: JsSandboxMessageSink,
+  ): ByteArray
+
+  @JvmStatic
+  external fun deliver(runId: ByteArray, message: ByteArray)
 }

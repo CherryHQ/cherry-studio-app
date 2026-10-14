@@ -32,7 +32,9 @@ Current producers are:
 - Pi: language-model requests as `pi.generate_content`, including compaction and failures while
   resolving configuration/permissions before a provider stream exists. `pi.execute_tool` records
   attempted application capability execution, including built-in tools and image generation,
-  with tool call id, outcome and safe failure facts. The model bridge records terminal stream
+  with tool call id, outcome and safe failure facts. A Code Mode script is one `run_js` record,
+  failed with `script_failed` when the script fails; each tool call it makes has its own record
+  under a `<script call id>/<key>` id. The model bridge records terminal stream
   events without copying provider payloads.
 - MCP: `mcp.connect` for each new connection, `mcp.list_tools` for each complete catalog request
   (including pagination), and `mcp.call_tool` for each attempted tool execution. A reconnect produces

@@ -274,6 +274,20 @@ export const AgentToolInputPreviewSchema = z.strictObject({
 });
 export type AgentToolInputPreview = z.infer<typeof AgentToolInputPreviewSchema>;
 
+export const AgentToolProgressSchema = z.strictObject({
+  calls: z.array(
+    z.strictObject({
+      id: z.string(),
+      name: z.string(),
+      /** Display name of a tool the app has no translated title for, such as an MCP tool. */
+      title: z.string().optional(),
+      args: z.string().max(1000),
+      status: z.enum(['pending', 'running', 'ok', 'error', 'interrupted']),
+    }),
+  ),
+});
+export type AgentToolProgress = z.infer<typeof AgentToolProgressSchema>;
+
 const AgentToolMessagePartSchema = z
   .strictObject({
     id: z.string().min(1),
@@ -294,6 +308,7 @@ const AgentToolMessagePartSchema = z
     ]),
     input: JsonValueSchema.optional(),
     inputPreview: AgentToolInputPreviewSchema.optional(),
+    progress: AgentToolProgressSchema.optional(),
     output: JsonValueSchema.optional(),
     approvalId: z.string().optional(),
     error: AgentErrorViewSchema.optional(),

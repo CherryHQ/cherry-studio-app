@@ -1,5 +1,5 @@
 import type { Context, JsonValue } from '@earendil-works/chord';
-import type { ToolCall, TSchema } from '@earendil-works/pi-ai';
+import type { TSchema } from '@earendil-works/pi-ai';
 import {
   defineExtension,
   defineTool,
@@ -10,25 +10,30 @@ import {
   type HookApi,
   type ToolExecutionApi,
   type ToolExecutionResult,
+  type ToolHookCall,
+  type ToolTaskInput,
 } from '@earendil-works/pi-durable';
+import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
+import { createToolSearchTool } from '@earendil-works/pi-durable/tool-search';
+import { z } from 'zod';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
 import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
-import {
-  createPiDeferredToolDiscoveryTools,
-  PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT,
-  PI_TOOL_CALL_TOOL_NAME,
-} from './piDeferredToolDiscovery';
+import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
+import { PI_TOOL_BUDGET } from './piToolBudget';
 import { retainToolInstructions, toolInstructionsSection } from './piToolInstructions';
 
 type PiDurableToolOptions = {
   name: string;
   tools: readonly RuntimeTool[];
+  codemode?: Extension;
   previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
-  beforeCall?(call: ToolCall, api: HookApi, context: Context): Promise<string | undefined>;
+  admitCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<boolean>;
+  beforeCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
   resolve(
     tool: RuntimeTool,
@@ -46,11 +51,20 @@ type PiDurableToolOptions = {
   approve(
     tool: RuntimeTool,
     input: RuntimeJsonValue,
-    call: ToolCall,
+    call: ToolHookCall,
     api: HookApi,
     context: Context,
   ): Promise<boolean>;
 };
+
+const BUDGET_REFUSAL = `The turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget is exhausted.`;
+
+const codemodeRulesSection = section(
+  'cherry-codemode',
+  () =>
+    `Every tools.* call a Code Mode script makes counts toward the turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget. A call beyond it fails without running; return what the script has gathered instead of retrying. Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.`,
+  { tag: false },
+);
 
 /** Stored as native ToolResultMessage.details so the UI can read structured results and artifacts. */
 type PiToolDetails = {
@@ -63,16 +77,17 @@ type PiToolDetails = {
 };
 
 /**
- * Adapt existing capabilities to Pi's task boundary. Every side-effect tool, including MCP dispatch,
+ * Adapt existing capabilities to Pi's task boundary. Every application tool
  * is unsafe to replay after intent; Pi marks an uncertain outcome interrupted on process recovery.
  */
 export function createPiDurableToolExtension(options: PiDurableToolOptions): Extension {
   const catalog = new Map(options.tools.map((tool) => [tool.providerName, tool]));
+  const scriptCapability = catalog.get(PI_SCRIPT_CAPABILITY_NAME);
+  const codemode =
+    scriptCapability && scriptCapability.approval !== 'deny' ? options.codemode : undefined;
   const failedGroups = new Set<string>();
   let failedTurnId: string | undefined;
   let restoringFailures: Promise<void> = Promise.resolve();
-  const dispatchedTargets = new Map<string, RuntimeTool>();
-  const dispatchInvocations = new Map<string, { api: ToolExecutionApi; context: Context }>();
 
   async function resolve(template: RuntimeTool, api: HookApi, context: Context) {
     const binding = await options.resolve(template, api, context);
@@ -116,7 +131,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         turnId,
       });
       // Only trusted application callbacks can contribute system instructions. MCP payloads cannot.
-      const { instructions, instructionsFailureValue, modelValue, ...output } = result;
+      const { instructions, instructionsFailureValue, modelValue, modelImages, ...output } = result;
       // Callbacks cross into durable JSON here; reject invalid payloads before native persistence.
       let stored = RuntimeJsonValueSchema.parse(
         JSON.parse(
@@ -139,7 +154,19 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         }
       }
       await options.onResult?.(tool, stored, api, context);
-      return stored;
+      if (stored.artifacts.length) {
+        const task = await api.getTask(api.taskId, context);
+        const input = task?.input as ToolTaskInput | undefined;
+        if (input?.kind === 'nested')
+          await retainPiCodemodeArtifacts(
+            api,
+            input.parent,
+            input.parentCallId,
+            stored.artifacts,
+            context,
+          );
+      }
+      return tool.ref.source === 'builtin' && modelImages ? { ...stored, modelImages } : stored;
     } catch (error) {
       signal.throwIfAborted();
       const failure = { ...normalizeAiError(error), origin: 'tool' as const };
@@ -151,111 +178,176 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
   }
 
   const tools = options.tools
-    .filter((tool) => tool.ref.source !== 'mcp' && tool.approval !== 'deny')
+    .filter((tool) => tool.approval !== 'deny' && tool !== scriptCapability)
     .map((tool) =>
       defineTool({
         name: tool.providerName,
         description: tool.description,
         parameters: tool.inputSchema as TSchema,
+        structuredOutputSchema: {
+          type: 'object',
+          properties: {
+            value: {},
+            artifacts: { type: 'array', items: {} },
+          },
+          required: ['value', 'artifacts'],
+        } as TSchema,
+        ...(tool.ref.source === 'mcp' ? { deferred: true as const } : {}),
         replay: 'unsafe',
-        async execute(args, api, context) {
+        async execute(args: unknown, api: ToolExecutionApi, context: Context) {
           const output = await execute(tool, RuntimeJsonValueSchema.parse(args), api, context);
           return resultWithDetails(tool, output);
         },
       }),
     );
 
-  const mcp = options.tools.filter((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny');
-  const discovery = createPiDeferredToolDiscoveryTools(
-    mcp,
-    (tool, input, callId, signal) => {
-      if (!signal) throw new Error('A durable tool requires cancellation ownership.');
-      const invocation = dispatchInvocations.get(callId);
-      if (!invocation) throw new Error('The MCP dispatch has no active durable invocation.');
-      dispatchedTargets.set(callId, tool);
-      return execute(tool, input, invocation.api, invocation.context);
-    },
-    async (_callId, signal, _activity, operation) => {
-      signal?.throwIfAborted();
-      // The existing catalog owns bounded schema/search/correction output. Pi owns its storage.
-      const result = operation(32_000);
-      return result.activityError
-        ? { ...result.modelOutput, failure: { error: result.activityError, scope: 'call' } }
-        : result.modelOutput;
-    },
-  );
-  const durableDiscovery = mcp.length
-    ? discovery.map((tool) =>
-        defineTool({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-          // Dispatch may run an external effect. Discovery shares this conservative policy.
-          replay: 'unsafe',
-          async execute(args, api, context) {
-            dispatchInvocations.set(api.callId, { api, context });
-            try {
-              const result = await tool.execute(api.callId, args, requireSignal(context));
-              const output = RuntimeJsonValueSchema.parse(result.details) as RuntimeToolResult;
-              const target = dispatchedTargets.get(api.callId);
-              return target
-                ? { ...result, ...resultWithDetails(target, output) }
-                : {
-                    ...result,
-                    isError: output.failure !== undefined,
-                    details: {
-                      kind: 'cherry.meta-tool-result',
-                      providerName: tool.name,
-                      displayName: tool.label,
-                      output,
-                    },
-                  };
-            } finally {
-              dispatchedTargets.delete(api.callId);
-              dispatchInvocations.delete(api.callId);
-            }
-          },
-        }),
-      )
-    : [];
-
   return defineExtension({
     name: options.name,
-    tools: [...tools, ...durableDiscovery],
+    tools: [
+      ...tools,
+      ...(codemode?.tools ?? []).map((tool) => ({
+        ...tool,
+        async execute(args: unknown, api: ToolExecutionApi, context: Context) {
+          const { tool: current, turnId } = await resolve(scriptCapability!, api, context);
+          if (current.approval === 'deny') throw new Error('JavaScript execution is disabled.');
+          // The ledger only grows within a turn, so one refusal settles every later call.
+          let exhausted = false;
+          const script = () =>
+            tool.execute(
+              args,
+              {
+                ...api,
+                // Admission precedes upstream argument validation and nested task creation, so a
+                // refused call costs no task. The script receives an error and keeps its output.
+                async executeTool(name, arguments_, callContext, nestedOptions) {
+                  const key = nestedOptions?.key;
+                  if (key === undefined)
+                    throw new Error('A nested tool call requires a stable key.');
+                  exhausted ||=
+                    options.admitCall !== undefined &&
+                    !(await options.admitCall(
+                      {
+                        type: 'toolCall',
+                        // Upstream derives the nested task's call ID the same way.
+                        id: `${api.callId}/${key}`,
+                        name,
+                        arguments: arguments_,
+                        parent: { taskId: api.taskId, callId: api.callId },
+                      },
+                      api,
+                      callContext,
+                    ));
+                  if (exhausted)
+                    return {
+                      taskId: api.taskId,
+                      isError: true,
+                      diagnostics: [
+                        {
+                          severity: 'error' as const,
+                          code: 'tool_call_limit_exceeded',
+                          message: BUDGET_REFUSAL,
+                        },
+                      ],
+                    };
+                  return api.executeTool(name, arguments_, callContext, nestedOptions);
+                },
+              },
+              context,
+            );
+          // The capability's execute is the Host's boundary for tool diagnostics; it sees the
+          // script's outcome while Pi keeps the upstream result.
+          let result: Awaited<ReturnType<typeof script>> | undefined;
+          await current.execute({
+            input: RuntimeJsonValueSchema.parse(args),
+            signal: requireSignal(context),
+            toolCallId: api.callId,
+            turnId,
+            run: async () => {
+              result = await script();
+              const value: RuntimeJsonValue = result.isError
+                ? { status: 'error', code: 'script_failed' }
+                : { status: 'ok' };
+              return { value, artifacts: [] };
+            },
+          });
+          if (!result) throw new Error('The JavaScript capability did not run its script.');
+          return result;
+        },
+      })),
+      ...(options.tools.some((tool) => tool.ref.source === 'mcp' && tool.approval !== 'deny')
+        ? [createToolSearchTool()]
+        : []),
+    ],
     sections: [
       ...(options.tools.some((tool) => tool.ref.source === 'builtin' && tool.approval !== 'deny')
         ? [toolInstructionsSection]
         : []),
-      ...(mcp.length
-        ? [
-            section('cherry-mcp-discovery', () => PI_DEFERRED_TOOL_DISCOVERY_SYSTEM_PROMPT, {
-              tag: false,
-            }),
-          ]
-        : []),
+      ...(codemode ? [...(codemode.sections ?? []), codemodeRulesSection] : []),
     ],
     hooks: [
       hook(ToolTask, {
         async beforeTool(call, api, context) {
+          // A nested call was admitted by the Code Mode wrapper before its task existed.
+          if (!call.parent && options.admitCall && !(await options.admitCall(call, api, context)))
+            return { block: BUDGET_REFUSAL };
           const blocked = await options.beforeCall?.(call, api, context);
           if (blocked) return { block: blocked };
           const template =
-            call.name === PI_TOOL_CALL_TOOL_NAME
-              ? discovery.find((tool) => tool.name === call.name)?.approvalTarget?.(call.arguments)
-                  ?.tool
+            call.name === CODEMODE_TOOL_NAME && codemode
+              ? scriptCapability
               : catalog.get(call.name);
-          // Search/describe and unknown dispatch are handled by the bounded catalog adapter.
+          // Upstream discovery and Code Mode have no application-side effect to approve.
           if (!template) return;
           const { tool: target } = await resolve(template, api, context);
           if (target.approval === 'deny') return { block: 'This tool is disabled.' };
           if (target.failureGroup && failedGroups.has(target.failureGroup))
             return { block: 'This tool group stopped after an earlier failure.' };
           if (target.approval === 'auto') return;
-          const input = RuntimeJsonValueSchema.parse(
-            call.name === PI_TOOL_CALL_TOOL_NAME ? call.arguments.params : call.arguments,
-          );
+          const input = RuntimeJsonValueSchema.parse(call.arguments);
           if (!(await options.approve(target, input, call, api, context)))
             return { block: 'The user denied this tool call.' };
+        },
+        async afterTool(call, result, api, context) {
+          if (call.name !== CODEMODE_TOOL_NAME || !codemode) return;
+          const files = await api.snapshot(PiCodemodeFiles, api.taskId, context);
+          const text = (result.output ?? [])
+            .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+            .join('\n');
+          // Upstream lists each call under its provider name; an MCP alias needs its display name.
+          const details = z
+            .looseObject({ calls: z.array(z.looseObject({ name: z.string() })) })
+            .safeParse(result.details);
+          const value = RuntimeJsonValueSchema.parse({
+            output: text,
+            details: details.success
+              ? {
+                  ...details.data,
+                  calls: details.data.calls.map((item) => {
+                    const called = catalog.get(item.name);
+                    return called?.ref.source === 'mcp'
+                      ? { ...item, title: called.displayName }
+                      : item;
+                  }),
+                }
+              : (result.details ?? null),
+          });
+          const output: RuntimeToolResult = {
+            value,
+            modelValue: text,
+            artifacts: files?.artifacts ?? [],
+          };
+          return {
+            ...result,
+            details: JSON.parse(
+              JSON.stringify({
+                kind: 'cherry.tool-result',
+                ref: scriptCapability!.ref,
+                providerName: CODEMODE_TOOL_NAME,
+                displayName: scriptCapability!.displayName,
+                output,
+              }),
+            ),
+          };
         },
       }),
     ],
@@ -268,16 +360,28 @@ function requireSignal(context: Context): AbortSignal {
 }
 
 function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolExecutionResult {
+  const { modelImages, ...stored } = output;
   const details: PiToolDetails = {
     kind: 'cherry.tool-result',
     ref: tool.ref,
     providerName: tool.providerName,
     displayName: tool.displayName,
-    output,
+    output: stored,
     ...(tool.failureGroup ? { failureGroup: tool.failureGroup } : {}),
   };
   return {
-    content: [{ type: 'text', text: JSON.stringify(toModelToolResult(output)) }],
+    output: [
+      { type: 'text', text: JSON.stringify(toModelToolResult(stored)) },
+      ...(modelImages ?? []).map((item) => ({
+        type: 'image' as const,
+        data: item.data,
+        mimeType: item.mediaType,
+      })),
+    ],
+    // Error values may have a different shape from a capability's success schema.
+    ...(!output.failure
+      ? { structuredOutput: { value: output.value, artifacts: output.artifacts } }
+      : {}),
     isError: output.failure !== undefined,
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };

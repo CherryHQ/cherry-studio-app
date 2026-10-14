@@ -1,7 +1,8 @@
 # JS Sandbox
 
-Runs model-written JavaScript for the Agent's `run_js` tool, discovered by Expo under `modules/`.
-Requires a new native build; clients without the module omit the tool. The tool contract and
+Runs model-written JavaScript for the Agent's upstream Code Mode and bounded computations such as
+local page extraction, discovered by Expo under `modules/`.
+Requires a new native build; clients without the module omit the JavaScript capability. The tool contract and
 limits are described in [Agent Tools And Controlled Resources](../../docs/references/agent/agent-tools-and-resources.md#javascript-sandbox).
 
 ## Design
@@ -45,10 +46,31 @@ settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(r
 run, including one that has not started yet. The caller (`src/backend/services/jsSandbox`) owns the
 limits.
 
-The `run_js` tool defaults to a 5-second execution deadline and allows at most 30 seconds. The
-sandbox service shares a two-run limit across turns, queues extra calls, and retains a cancelled
+The sandbox service shares a two-run limit across turns, queues extra calls, and retains a cancelled
 run's slot until the native promise settles. Waiting in the queue does not consume the execution
 deadline. The low-level native API still leaves policy to its caller.
+
+## Interactive Bridge
+
+`runBridge(runId, setup, data, clock, limits)` runs trusted host setup and emits JSON through the
+`onMessage` event. `deliver(runId, message)` queues a reply; only the run's native thread enters
+QuickJS. The setup returns `deliver` and `drained` hooks. The native loop drains promise jobs, waits
+without consuming CPU for replies, and wakes on cancellation. After a `done` event it keeps the
+channel alive until the host stops it, so that event's delivery cannot race listener removal; a run
+that ends with a native error resolves at once.
+
+Code Mode supplies the unmodified upstream prelude and a small transport driver. Native clock calls
+are interposed only inside the QuickJS translation unit, on this thread: context creation seeds
+randomness, subsequent reads use virtual time, and local date operations use UTC. The vendored
+engine is unchanged. The driver removes WeakRef/FinalizationRegistry and follows upstream sequence
+acknowledgements. Replay fingerprints include the engine, driver/prelude, platform and budgets.
+
+The bridge has a 100,000-interrupt-poll compute allowance in addition to cancellation, memory and
+stack limits. Both execution paths poll between batches of fifty promise jobs. Tool waits do not
+consume the compute allowance; upstream Code Mode owns any requested wall-clock timeout. Module
+destruction cancels its owned runs on iOS and Android. The service passes no native deadline or
+output limit to a bridge run, and gives bridge runs their own two slots, retained until native
+cleanup: a script parked on a tool must not block the bounded computation that tool needs.
 
 ## QuickJS-NG
 

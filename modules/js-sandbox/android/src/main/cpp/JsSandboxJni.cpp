@@ -1,6 +1,7 @@
 #include <jni.h>
 
 #include <string>
+#include <stdexcept>
 
 #include "JsSandbox.h"
 
@@ -50,4 +51,35 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNat
 extern "C" JNIEXPORT void JNICALL
 Java_expo_modules_jssandbox_JsSandboxNative_cancel(JNIEnv *env, jclass, jbyteArray runId) {
   cherry::jssandbox::cancel(fromBytes(env, runId));
+}
+
+extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNative_runBridge(
+    JNIEnv *env, jclass, jbyteArray runId, jbyteArray setup, jbyteArray data,
+    jdouble startedAt, jint seed, jint timeoutMs, jint memoryBytes, jobject sink) {
+  jclass sinkClass = env->GetObjectClass(sink);
+  jmethodID post = env->GetMethodID(sinkClass, "post", "([B)V");
+  env->DeleteLocalRef(sinkClass);
+  if (!post) return nullptr;
+  const cherry::jssandbox::Limits limits{
+      static_cast<uint32_t>(timeoutMs), static_cast<size_t>(memoryBytes), 0, 0};
+  const auto result = cherry::jssandbox::runBridge(
+      fromBytes(env, runId), fromBytes(env, setup), fromBytes(env, data),
+      startedAt, static_cast<uint32_t>(seed), limits,
+      [env, sink, post](const std::string &message) {
+        jbyteArray bytes = toBytes(env, message);
+        if (bytes) {
+          env->CallVoidMethod(sink, post, bytes);
+          env->DeleteLocalRef(bytes);
+        }
+        if (env->ExceptionCheck()) {
+          env->ExceptionClear();
+          throw std::runtime_error("Native sandbox message delivery failed.");
+        }
+      });
+  return toBytes(env, result);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_expo_modules_jssandbox_JsSandboxNative_deliver(
+    JNIEnv *env, jclass, jbyteArray runId, jbyteArray message) {
+  cherry::jssandbox::deliver(fromBytes(env, runId), fromBytes(env, message));
 }

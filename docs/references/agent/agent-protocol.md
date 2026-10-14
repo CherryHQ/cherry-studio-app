@@ -257,6 +257,8 @@ type AgentMessagePart =
         | 'error'
         | 'interrupted'
       input?: JsonValue
+      progress?: { calls: { id: string; name: string; title?: string; args: string;
+        status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted' }[] }
       output?: JsonValue
       approvalId?: string
       error?: AgentErrorView
@@ -542,6 +544,10 @@ with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 
 ```ts
 type AgentEvent =
+  | { type: 'context.updated'; status: 'compacting' | 'compaction-failed' | null }
+  | { type: 'runtime.failed' }
+  | { type: 'question.updated'; question: AgentPendingQuestion | null }
+  | { type: 'session.updated'; session: AgentSessionView }
   | { type: 'turn.updated'; turn: AgentTurnView }
   | { type: 'message.created'; message: AgentMessageView }
   | { type: 'message.delta'; messageId: string; delta: AgentMessageDelta }
@@ -553,6 +559,7 @@ type AgentEvent =
 type AgentMessageDelta =
   | { op: 'part.add'; index: number; part: AgentMessagePart }
   | { op: 'text.append'; partId: string; text: string }
+  | { op: 'tool.input.preview'; partId: string; preview: AgentToolInputPreview }
   | { op: 'part.replace'; part: AgentMessagePart }
 ```
 
@@ -561,6 +568,12 @@ there is no untyped patch object.
 
 Durable facts commit before their events publish. Streaming deltas are ephemeral; a fresh observer
 gets the accumulated streaming message from the snapshot.
+
+`context.updated` and `runtime.failed` describe the local engine, not a turn, and persist nothing.
+`context.updated` reports a running or failed context compaction; the snapshot repeats the current
+value as `contextStatus`. `runtime.failed` means the engine's storage session closed after a failure:
+the client shows a retry action, and refreshing the Session reopens the engine and resumes
+unfinished work.
 
 Compaction history uses Desktop-compatible `data-compaction-anchor` parts, in transcript order:
 
@@ -578,13 +591,15 @@ type CompactionAnchorData = {
 }
 ```
 
-The Host inserts one `compacting` part per attempt using `part.add`, then replaces that same id with
-`done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
+The local Pi Durable runtime reports a running or failed compaction through `context.updated` and
+adds no anchor; anchors remain the PC Agent's vocabulary and the stored form of earlier local
+transcripts. Where a Host does insert them, it adds one `compacting` part per attempt using
+`part.add`, then replaces that same id with `done` or `skipped`. Every `part.add` index is the Host transcript position, so parts that follow an
 anchor keep their order for live observers. Each attempt has a distinct id. Only completed anchors enter streaming snapshots
 and terminal persistence; skipped, cancelled, or still-running attempts leave no historical marker.
 Completed anchors survive later turn failure or interruption. Recovery also removes transient anchors.
-The Mobile path emits `turn-start` for preflight folds and `in-loop` between tool batches, with
-`trigger: 'auto'`; `agent-session` and `manual` retain their Desktop vocabulary without adding commands.
+`turn-start` marks a preflight fold and `in-loop` one between tool batches, with `trigger: 'auto'`;
+`agent-session` and `manual` retain their Desktop vocabulary without adding commands.
 Optional measurements are omitted when unavailable; Mobile does not infer `foldedCount` from tool parts.
 
 Turn-start anchors render as a dashed separator outside the process disclosure. In-loop anchors remain
@@ -604,6 +619,8 @@ type AgentSessionSnapshot = {
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
   pendingApprovals: AgentApprovalView[]
+  pendingQuestion: AgentPendingQuestion | null
+  contextStatus?: 'compacting' | 'compaction-failed' | null
 }
 ```
 

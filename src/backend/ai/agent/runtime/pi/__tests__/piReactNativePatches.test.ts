@@ -84,6 +84,9 @@ describe('Pi React Native patches', () => {
       '@earendil-works/chord/context',
       '@earendil-works/pi-durable',
       '@earendil-works/pi-durable/storage/sqlite',
+      '@earendil-works/pi-durable/codemode',
+      '@earendil-works/pi-durable/tool-search',
+      '@earendil-works/pi-codemode/native',
       '@earendil-works/pi-ai/api/anthropic-messages',
       '@earendil-works/pi-ai/api/azure-openai-responses',
       '@earendil-works/pi-ai/api/lazy',
@@ -107,6 +110,10 @@ describe('Pi React Native patches', () => {
         .sort(),
     ).toEqual(['auth/context.native.js', 'auth/credential-store.js', 'auth/resolve.js']);
     for (const [file, source] of graph) {
+      expect({ file, wasmImport: /(?:from|import)\s*["']quickjs-wasi/.test(source) }).toEqual({
+        file,
+        wasmImport: false,
+      });
       expect({ file, nodeImport: /(?:from\s+|require\()["']node:/.test(source) }).toEqual({
         file,
         nodeImport: false,

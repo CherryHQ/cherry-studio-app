@@ -397,6 +397,65 @@ describe('durable tool diagnostics', () => {
 });
 
 describe('Cherry-owned transcript and disposable execution recovery', () => {
+  test('storage failure preserves pending turns and concurrent retries share one reopen', async () => {
+    const release = jest.fn();
+    const state = fixture({ executionLease: () => ({ release }) });
+    jest
+      .spyOn(state.conversations, 'watchWork')
+      .mockResolvedValue({ active: true, unsubscribe: async () => {} });
+    const turn = await state.reserve('running');
+    await state.host.initialize();
+    const events: AgentEvent[] = [];
+    await state.host.observeSession(state.sessionId, (event) => events.push(event));
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    expect(events).toContainEqual({ type: 'runtime.failed' });
+    const observations = await Promise.all([
+      state.host.observeSession(state.sessionId, () => {}),
+      state.host.observeSession(state.sessionId, () => {}),
+    ]);
+    expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+    expect(state.conversations.abort).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(
+      (await state.store.listMessages(state.sessionId)).find(
+        (message) => message.id === turn.assistantMessageId,
+      )?.status,
+    ).toBe('pending');
+    for (const observation of observations) {
+      expect(observation.snapshot.activeTurn?.id).toBe(turn.identity.turnId);
+      observation.unsubscribe();
+    }
+    await state.host.close();
+  });
+
+  test('a submission from a new chat reopens the engine after a storage failure', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    state.execution()!.onFailure!({
+      code: 'unknown',
+      message: 'Storage unavailable',
+      retryable: false,
+    });
+    try {
+      // No session is observed, so nothing on screen carries a retry action.
+      await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Hello' }],
+      });
+      expect(state.conversations.initialize).toHaveBeenCalledTimes(2);
+      expect(state.conversations.submit).toHaveBeenCalledTimes(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('records a failed recovery even when the durable database cannot open', async () => {
     const { traces, records } = createTraceRecorder();
     const state = fixture({
@@ -409,7 +468,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       },
     });
     await expect(state.host.initialize()).rejects.toThrow('private database path');
-    expect(records.at(-1)).toMatchObject({
+    expect(records.findLast((record) => record.name === 'ai.recovery')).toMatchObject({
       name: 'ai.recovery',
       status: 'error',
       attributes: { 'error.code': 'SQLITE_CANTOPEN' },

@@ -40,7 +40,11 @@ export const AgentMessageDeltaSchema = z.union([
 ]);
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
+export const AgentContextStatusSchema = z.enum(['compacting', 'compaction-failed']).nullable();
+
 export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('context.updated'), status: AgentContextStatusSchema }),
+  z.strictObject({ type: z.literal('runtime.failed') }),
   z.strictObject({
     type: z.literal('question.updated'),
     question: AgentPendingQuestionSchema.nullable(),
@@ -79,6 +83,7 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   streamingMessage: AgentMessageViewSchema.nullable(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
   pendingQuestion: AgentPendingQuestionSchema.nullable(),
+  contextStatus: AgentContextStatusSchema.optional(),
 });
 export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
 

@@ -28,6 +28,30 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('running tool rows retain live child progress for rendering', () => {
+    const progress = {
+      calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],
+    };
+    const item = toAgentMessageListItem(
+      message('assistant', {
+        parts: [
+          {
+            id: 'call',
+            type: 'dynamic-tool',
+            toolCallId: 'call',
+            toolName: 'codemode',
+            title: 'JavaScript',
+            toolRef: { source: 'builtin', capabilityId: 'run_js' },
+            state: 'running',
+            progress,
+          },
+        ],
+      }),
+    );
+    expect(item?.data.parts?.[0]).toMatchObject({ state: 'input-available', progress });
+    expect(item?.data.parts?.[0]).not.toHaveProperty('output');
+  });
+
   test.each(['streaming', 'success'] as const)(
     'joins restored reasoning summaries without changing source history, status=%s',
     (status) => {

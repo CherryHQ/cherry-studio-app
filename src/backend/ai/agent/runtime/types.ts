@@ -130,6 +130,8 @@ export type RuntimeToolResult = {
   artifacts: RuntimeArtifact[];
   /** Compact built-in model value when the full display value is already supplied in instructions. */
   modelValue?: RuntimeJsonValue;
+  /** Built-in vision output. Transcript parts keep file IDs; Pi context checkpoints may retain pixels. */
+  modelImages?: { data: string; mediaType: string }[];
   /**
    * Trusted built-in callback instructions for subsequent requests in this execution.
    * Kept outside compactable messages; the Host replaces them when configuring the next turn.
@@ -171,17 +173,26 @@ export type RuntimeDocumentAttachmentPart = Omit<
   attachmentReport?: FileAttachmentReport;
 };
 
+/** A managed image as pixels. `fileEntryId` lets the model read it again once they leave context. */
+export type RuntimeImagePart = {
+  type: 'file';
+  fileEntryId?: string;
+  mediaType: string;
+  name?: string;
+  uri: string;
+};
+
 export type RuntimeInputPart =
   | { type: 'text'; text: string }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
-  | { type: 'file'; mediaType: string; name?: string; uri: string };
+  | RuntimeImagePart;
 
 export type RuntimeMessagePart =
   | { type: 'text' | 'reasoning'; text: string }
   | RuntimeTextAttachmentPart
   | RuntimeDocumentAttachmentPart
-  | { type: 'file'; mediaType: string; name?: string; uri: string }
+  | RuntimeImagePart
   | {
       type: 'tool-call';
       toolCallId: string;
@@ -242,6 +253,8 @@ export type RuntimeToolCall = {
   toolCallId: string;
   /** The executing turn, so a Host-bound tool can correlate to its live turn state. */
   turnId: string;
+  /** The Runtime's executor for a capability the Host only describes, such as Code Mode. */
+  run?(): Promise<RuntimeToolResult>;
 };
 
 export type RuntimeTool = {
@@ -292,6 +305,16 @@ export type RuntimeExecutionRequest = {
   trace?: TraceSpan;
 };
 
+export type RuntimeToolProgress = {
+  calls: {
+    id: string;
+    name: string;
+    title?: string;
+    args: string;
+    status: 'pending' | 'running' | 'ok' | 'error' | 'interrupted';
+  }[];
+};
+
 export type RuntimeOutputPart =
   | { id: string; type: 'error'; error: RuntimeError }
   | { id: string; type: 'data-search-suggestions'; data: { html: string } }
@@ -334,6 +357,7 @@ export type RuntimeOutputPart =
         | 'interrupted';
       input?: RuntimeJsonValue;
       inputPreview?: RuntimeToolInputPreview;
+      progress?: RuntimeToolProgress;
       output?: RuntimeToolResult;
       approvalId?: string;
       error?: RuntimeError;

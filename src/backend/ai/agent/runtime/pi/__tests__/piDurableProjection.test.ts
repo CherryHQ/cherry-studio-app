@@ -1,6 +1,7 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
+import { toAgentMessagePart } from '../../../host/runtimeProjection';
 import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
@@ -72,6 +73,58 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
 }
 
 describe('Pi turn projection', () => {
+  test('preserves upstream loaded tool names for search presentation', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'search',
+                  name: 'tool_search',
+                  arguments: { query: 'notes' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'search',
+              toolName: 'tool_search',
+              content: [{ type: 'text', text: 'Loaded 1 tool.' }],
+              details: { loaded: ['mcp_notes'] },
+              isError: false,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.parts[0]).toMatchObject({
+      type: 'tool',
+      toolRef: { source: 'meta', name: 'tool_search' },
+      state: 'output-available',
+      output: { value: { loaded: ['mcp_notes'] } },
+    });
+  });
+
   const placed = {
     id: 1,
     type: 'input',
@@ -259,6 +312,22 @@ describe('Pi turn projection', () => {
       } as unknown as SubmissionRecord,
       entries: [
         { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'cherry.codemode-artifacts',
+          data: {
+            callId: 'call',
+            artifacts: [
+              {
+                ref: { kind: 'managed-file', fileEntryId: 'file' },
+                name: 'saved.txt',
+                mediaType: 'text/plain',
+                kind: 'created',
+              },
+            ],
+          },
+        },
       ] as unknown as EntryRecord[],
     });
     expect(turn.status).toBe('interrupted');
@@ -268,6 +337,128 @@ describe('Pi turn projection', () => {
       input: { filename: 'notes.md', content: 'body' },
       output: { value: { status: 'interrupted' }, artifacts: [] },
     });
+    expect(turn.parts[1]).toMatchObject({ type: 'file', name: 'saved.txt' });
+  });
+
+  test('a failed script keeps the JavaScript capability and reports the error its output ends with', () => {
+    const scriptText = `Script failed\nOutput:\n${'line\n'.repeat(100)}Script error:\nSyntaxError: unexpected token`;
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata: {
+        ...metadata,
+        tools: [
+          {
+            ...writeFile,
+            ref: { source: 'builtin', capabilityId: 'run_js' },
+            providerName: 'run_js',
+            displayName: 'Run JavaScript',
+          },
+        ],
+      },
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'script',
+                  name: 'codemode',
+                  arguments: { code: 'const = 1' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'script',
+              toolName: 'codemode',
+              content: [{ type: 'text', text: scriptText }],
+              // What the capability's afterTool hook stores for every script, failed or not.
+              details: {
+                kind: 'cherry.tool-result',
+                ref: { source: 'builtin', capabilityId: 'run_js' },
+                providerName: 'codemode',
+                displayName: 'Run JavaScript',
+                output: {
+                  value: { output: scriptText, details: { calls: [] } },
+                  modelValue: scriptText,
+                  artifacts: [],
+                },
+              },
+              isError: true,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    expect(part).toMatchObject({
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      providerName: 'codemode',
+      displayName: 'Run JavaScript',
+      state: 'error',
+    });
+    // The reason is a bounded tail, so the error survives long output ahead of it.
+    expect(part.error?.message.endsWith('Script error:\nSyntaxError: unexpected token')).toBe(true);
+    expect(part.error!.message.length).toBeLessThan(scriptText.length);
+    // The protocol accepts an error tool part only with the error result shape.
+    expect(toAgentMessagePart(part)).toMatchObject({
+      state: 'error',
+      output: { value: { status: 'error' }, artifacts: [] },
+    });
+  });
+
+  test('live child status is progress, never a final tool output', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata: {
+        ...metadata,
+        tools: [
+          writeFile,
+          {
+            ...writeFile,
+            ref: { source: 'mcp' as const, serverId: 'server', rawToolName: 'lookup' },
+            providerName: 'mcp_lookup_0ab12cd',
+            displayName: 'lookup',
+          },
+        ],
+      },
+      active: true,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2000)] },
+      ] as unknown as EntryRecord[],
+      nestedTools: new Map([
+        ['child', { parentCallId: 'call', name: 'write_file', args: '{}', status: 'running' }],
+        ['remote', { parentCallId: 'call', name: 'mcp_lookup_0ab12cd', args: '{}', status: 'ok' }],
+      ]),
+    });
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    // The client translates built-in names; an MCP alias carries its display name.
+    expect(part.progress).toEqual({
+      calls: [
+        { id: 'child', name: 'write_file', args: '{}', status: 'running' },
+        { id: 'remote', name: 'mcp_lookup_0ab12cd', title: 'lookup', args: '{}', status: 'ok' },
+      ],
+    });
+    expect(turn.parts[0]).not.toHaveProperty('output');
   });
 
   test('streams a bounded file preview instead of the growing tool input', () => {

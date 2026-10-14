@@ -452,7 +452,7 @@ platforms remain in the plan regardless of delivery order.
 
 The [current tool architecture](./agent-tools-and-resources.md) remains authoritative for shipped
 behavior. Pi owns the only model/tool loop, the Host freezes executable tools per turn, and MCP
-tools already use `tool_search`, `tool_describe`, and `tool_call`.
+tools use upstream `tool_search` followed by calls to the loaded real tools.
 
 ```mermaid
 flowchart TD

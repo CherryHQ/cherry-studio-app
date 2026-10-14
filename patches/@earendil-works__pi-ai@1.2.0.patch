@@ -28,7 +28,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
          }
          if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
              continue;
-@@ -683,6 +691,12 @@
+@@ -715,6 +723,12 @@
              }
              output.stopReason = options?.signal?.aborted ? "aborted" : "error";
              output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -41,7 +41,7 @@ diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
              stream.push({ type: "error", reason: output.stopReason, error: output });
              stream.end();
          }
-@@ -1307,4 +1321,4 @@
+@@ -1348,4 +1362,4 @@
              throw new Error(`Unhandled stop reason: ${reason}`);
      }
  }

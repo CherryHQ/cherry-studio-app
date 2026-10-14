@@ -88,6 +88,7 @@ type LiveSession = {
   assistant: AgentMessageView | null;
   active: RuntimeDurableTurn | null;
   queue: readonly RuntimeDurableTurn[];
+  contextStatus: 'compacting' | 'compaction-failed' | null;
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
@@ -131,6 +132,7 @@ export class DurableAgentHost implements AgentProtocol {
   private accepting = false;
   private closing: Promise<void> | undefined;
   private suspension: Promise<void> | undefined;
+  private resuming: Promise<void> | undefined;
   private suspended = false;
   private workWatch: { unsubscribe(): Promise<void> } | undefined;
   private executionLease: { release(): void } | undefined;
@@ -185,6 +187,21 @@ export class DurableAgentHost implements AgentProtocol {
     if (!this.ports.durableStorage || !this.ports.recordDurableUsage)
       throw new Error('Persistent Agent storage and usage ports are required.');
     const execution: RuntimeExecutionPorts = {
+      scriptSandbox: this.ports.scriptSandbox?.(),
+      writeToolOutput: this.ports.writeToolOutput
+        ? async (identity, output, signal) => {
+            await this.prepareExecution(identity, signal);
+            return this.ports.writeToolOutput!(output, signal);
+          }
+        : undefined,
+      onFailure: (error) => {
+        logger.error('Durable Agent storage failed', new Error(error.message));
+        for (const sessionId of this.listeners.keys())
+          this.publish(sessionId, { type: 'runtime.failed' });
+        void this.suspend(new Error(error.message)).catch((failure) =>
+          logger.warn('Failed to suspend the Agent after storage failure', failure),
+        );
+      },
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
@@ -259,6 +276,7 @@ export class DurableAgentHost implements AgentProtocol {
     };
     const recovery = this.ports.traces?.startTrace('ai.recovery');
     try {
+      this.controller.signal.throwIfAborted();
       await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
       const copies = await this.conversations.sessions();
       // Upstream abort enables scheduling too. Attach current owners before retiring stale copies.
@@ -278,13 +296,15 @@ export class DurableAgentHost implements AgentProtocol {
       const work = await this.conversations.watchWork((active) => this.protectWork(active));
       this.workWatch = work;
       this.protectWork(work.active);
+      this.controller.signal.throwIfAborted();
       this.accepting = true;
       this.conversations.resume();
       recovery?.end('ok');
     } catch (error) {
       recovery?.end('error', traceErrorAttributes(error));
       logger.error('Agent operation failed', { error, operation: 'ai.recovery' });
-      await this.close();
+      if (!this.controller.signal.aborted)
+        await this.suspend(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -299,22 +319,26 @@ export class DurableAgentHost implements AgentProtocol {
     this.controller.abort(new Error('The Agent Host generation is closing.'));
     for (const admission of this.admissions.values())
       admission.controller.abort(this.controller.signal.reason);
-    await this.suspension;
+    await this.suspension?.catch((error) => logger.warn('Previous runtime cleanup failed', error));
+    await this.resuming?.catch((error) => logger.warn('Runtime reopening failed', error));
     await this.workWatch?.unsubscribe();
     this.workWatch = undefined;
     await Promise.allSettled([...this.admissions.values()].map((admission) => admission.promise));
     await Promise.allSettled([...this.attachments.values()]);
     await Promise.allSettled([...this.live.values()].map((state) => state.unsubscribe()));
     await Promise.allSettled([...this.pendingWrites]);
-    await this.conversations.close();
-    await this.naming.drain();
-    for (const state of this.live.values()) state.background?.retire();
-    this.live.clear();
-    this.prepared.clear();
-    this.preparing.clear();
-    this.listeners.clear();
-    this.executionLease?.release();
-    this.executionLease = undefined;
+    try {
+      await this.conversations.close();
+      await this.naming.drain();
+    } finally {
+      for (const state of this.live.values()) state.background?.retire();
+      this.live.clear();
+      this.prepared.clear();
+      this.preparing.clear();
+      this.listeners.clear();
+      this.executionLease?.release();
+      this.executionLease = undefined;
+    }
   }
 
   private protectWork(active: boolean) {
@@ -327,36 +351,51 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   /** OS expiration closes invocations without abort marks; foreground reopens persisted tasks. */
-  private suspend(): Promise<void> {
+  private suspend(reason = new Error('Background execution expired.')): Promise<void> {
     if (this.controller.signal.aborted) return this.closing ?? Promise.resolve();
     return (this.suspension ??= this.traceOperation('ai.suspend', {}, async () => {
       this.accepting = false;
       this.suspended = true;
-      for (const admission of this.admissions.values())
-        admission.controller.abort(new Error('Background execution expired.'));
+      for (const admission of this.admissions.values()) admission.controller.abort(reason);
       await Promise.allSettled([...this.admissions.values()].map((entry) => entry.promise));
       await this.workWatch?.unsubscribe();
       this.workWatch = undefined;
       await Promise.allSettled([...this.attachments.values()]);
       await Promise.allSettled([...this.live.values()].map((state) => state.unsubscribe()));
       await Promise.allSettled([...this.pendingWrites]);
-      await this.conversations.close();
-      for (const state of this.live.values()) state.background?.retire();
-      this.live.clear();
-      this.prepared.clear();
-      this.preparing.clear();
-      this.executionLease?.release();
-      this.executionLease = undefined;
+      try {
+        await this.conversations.close();
+      } finally {
+        for (const state of this.live.values()) state.background?.retire();
+        this.live.clear();
+        this.prepared.clear();
+        this.preparing.clear();
+        this.executionLease?.release();
+        this.executionLease = undefined;
+      }
     }));
   }
 
   async resumeSuspended() {
+    if (this.resuming) return this.resuming;
     if (!this.suspended || this.controller.signal.aborted) return;
-    await this.suspension;
-    if (this.controller.signal.aborted || !this.suspended) return;
-    this.suspended = false;
-    this.suspension = undefined;
-    await this.initialize();
+    this.resuming = (async () => {
+      await this.suspension?.catch((error) =>
+        logger.warn('Previous runtime cleanup failed', error),
+      );
+      if (this.controller.signal.aborted) return;
+      this.suspended = false;
+      this.suspension = undefined;
+      try {
+        await this.initialize();
+      } catch (error) {
+        this.suspended = true;
+        throw error;
+      }
+    })().finally(() => {
+      this.resuming = undefined;
+    });
+    return this.resuming;
   }
 
   getSessionStatus(sessionId: string) {
@@ -800,6 +839,7 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
+    await this.resumeSuspended();
     const session = await this.requireSession(sessionId);
     const agent = await this.ports.agents.getAgent(session.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
@@ -820,6 +860,7 @@ export class DurableAgentHost implements AgentProtocol {
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
       pendingQuestion: state?.question ?? null,
+      contextStatus: state?.contextStatus ?? null,
       pendingApprovals: [...(state?.approvals.values() ?? [])].map((entry) => entry.view),
     });
     const listeners = this.listeners.get(sessionId) ?? new Set();
@@ -1214,6 +1255,7 @@ export class DurableAgentHost implements AgentProtocol {
         assistant: null,
         active: null,
         queue: [],
+        contextStatus: null,
         unsubscribe: async () => {},
         background: null,
         backgroundRequestId: null,
@@ -1230,6 +1272,7 @@ export class DurableAgentHost implements AgentProtocol {
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
       state.queue = observed.snapshot.queue;
+      state.contextStatus = observed.snapshot.contextStatus ?? null;
       this.recordQueue(sessionId, state.queue, []);
       state.unsubscribe = observed.unsubscribe;
       this.live.set(sessionId, state);
@@ -1251,7 +1294,12 @@ export class DurableAgentHost implements AgentProtocol {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
       this.recordQueue(sessionId, event.snapshot.queue, state.queue);
       state.queue = event.snapshot.queue;
+      state.contextStatus = event.snapshot.contextStatus ?? null;
+      this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
       if (state.active) this.present(state.active);
+    } else if (event.type === 'context.updated') {
+      state.contextStatus = event.status;
+      this.publish(sessionId, event);
     } else if (event.type === 'queue.updated') {
       this.recordQueue(sessionId, event.queue, state.queue);
       state.queue = event.queue;
@@ -1544,6 +1592,10 @@ export class DurableAgentHost implements AgentProtocol {
     sessionId: string,
     operation: (signal: AbortSignal) => Promise<Result>,
   ): Promise<Result> {
+    // A submission reopens a suspended engine, as observing a session does: a new chat has no
+    // session on screen to carry the retry action.
+    if (this.suspended && !this.controller.signal.aborted)
+      return this.resumeSuspended().then(() => this.admit(sessionId, operation));
     if (!this.accepting)
       fail('EXECUTION_UNAVAILABLE', 'The Agent Host is not accepting submissions.');
     storageMutationGate.assertWritable();
