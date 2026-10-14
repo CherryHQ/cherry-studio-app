@@ -2,9 +2,10 @@
 
 First-use setup lives in the `/onboarding` native stack. The welcome page offers manual provider
 setup, synchronization from a computer, and setup later. Manual setup continues through provider →
-connection → chat model. Computer setup continues through device preparation → scan → sync guide →
-provider selection/import → chat model. The welcome page is headerless; subsequent pages retain
-native back navigation. The complete welcome content scrolls when larger text or a smaller window
+connection → chat model. Computer setup continues through device selection → scan → pairing →
+provider selection/import → chat model. Entry, step changes, retries, and completion use `replace`;
+completed steps are absent from back history. The welcome page is headerless; subsequent headers
+exit to the welcome page. The complete welcome content scrolls when larger text or a smaller window
 needs more room.
 
 The welcome page opens with a logo-led intro owned by `hooks/useWelcomeIntro.ts`. The logo draws
@@ -28,12 +29,14 @@ focusable.
   state through an explicit route-owned `setupIntent` prop, not a URL parameter. Presets show the
   API key first and fold name/base URL into advanced settings. Custom services show one address
   and a protocol picker; saved custom services remain selectable after leaving setup.
-- `deviceConnections/` explains desktop pairing and lets users resume with a saved computer.
-  Dedicated onboarding routes reuse the settings scanner, sync guide, and `DesktopProviderSyncScreen`
+- `deviceConnections/` lets users resume with a saved computer. Paired computers without configuration
+  permission are unavailable for synchronization; bindings needing repair continue to the scanner.
+  Dedicated onboarding routes reuse the settings scanner, pairing progress, and `DesktopProviderSyncScreen`
   through the same route-owned `setupIntent="chat"` contract. They stay in the onboarding stack;
-  an ordinary settings URL cannot opt into first-use behavior. Pairing replaces the scanner with
-  the guide, and provider import replaces the selection page with the existing chat-model page.
-  The paired connection ID follows the flow, so multiple computers never change the chosen source.
+  an ordinary settings URL cannot opt into first-use behavior. Scanning replaces the scanner with
+  pairing progress, and successful pairing continues to provider import. Import replaces the
+  selection page with the existing chat-model page. The paired connection ID follows the flow,
+  including connection editing, so multiple computers never change the chosen source.
 - Pairing and provider import keep onboarding pending. Leaving the sync flow returns to the welcome
   page and keeps the saved pairing/configuration. Empty provider previews can be reloaded; unsupported
   providers cannot be selected. If an import has no supported chat models, users can sync again or
@@ -52,7 +55,7 @@ focusable.
   error category and recovery action, never raw provider errors. Saved models remain selectable.
 - Completion requires an actual response from the bound conversation Runtime. It then enables
   the model/provider, reuses the seeded Agent when possible, saves `agent.default_model_id` and
-  the completed status, and opens a draft chat. Fast/translation defaults are unchanged.
+  the completed status, and replaces setup with a draft chat. Fast/translation defaults are unchanged.
 - Cancellation/blur stops the probe and prevents subsequent navigation. Failed checks keep
   saved connection/model data for retry without completing onboarding or changing defaults.
   The probe sends no history or tools and may incur a small provider charge, disclosed beside

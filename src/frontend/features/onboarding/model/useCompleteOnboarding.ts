@@ -129,7 +129,6 @@ export function useCompleteOnboarding() {
       signal.throwIfAborted();
       await queryClient.invalidateQueries({ queryKey: ['/models'] });
       signal.throwIfAborted();
-      router.dismissAll();
       router.replace(chatHref({ agentId: agent.id, kind: 'draft' }));
     } catch {
       if (!signal.aborted)

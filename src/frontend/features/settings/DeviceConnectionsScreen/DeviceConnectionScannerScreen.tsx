@@ -37,6 +37,16 @@ export function DeviceConnectionScannerScreen({
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
 
+  const cancel = () => {
+    if (setupIntent === 'chat') router.replace('/onboarding');
+    else if (connectionId)
+      router.replace({
+        pathname: '/settings/device-connections/[connectionId]',
+        params: { connectionId },
+      });
+    else router.replace('/settings/device-connections');
+  };
+
   const retryScan = () => {
     scanInFlight.current = false;
     setScanError(undefined);
@@ -87,6 +97,7 @@ export function DeviceConnectionScannerScreen({
   return (
     <View className="flex-1 bg-grouped-background">
       <RouteHeader
+        onBack={cancel}
         title={t(
           connectionId
             ? 'settings.deviceConnections.location.scan'

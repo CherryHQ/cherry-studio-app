@@ -23,7 +23,7 @@ export function DeviceConnectionsScreen() {
         accessibilityLabel: t('settings.deviceConnections.scan.action'),
         icon: CameraIcon,
         key: 'scan-device',
-        onPress: () => router.push('/settings/device-connections/scan'),
+        onPress: () => router.replace('/settings/device-connections/scan'),
         type: 'icon',
       },
     ],
@@ -56,7 +56,7 @@ export function DeviceConnectionsScreen() {
           }
           primaryAction={{
             children: t('settings.deviceConnections.scan.action'),
-            onPress: () => router.push('/settings/device-connections/scan'),
+            onPress: () => router.replace('/settings/device-connections/scan'),
           }}
           title={t('settings.deviceConnections.empty')}
         />

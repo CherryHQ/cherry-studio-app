@@ -10,6 +10,7 @@ import {
   type FirstUseSetupIntent,
   type ProviderSetupRouteParamsInput,
 } from '@/frontend/appShell/navigation';
+import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import type { ProviderConfigurationIssue } from '@/shared/contracts';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -32,6 +33,7 @@ export default function ProviderCreationScreen({
   const {
     providerId,
     providerName,
+    connectionId: rawConnectionId,
     intent,
     issue,
     returnTo: rawReturnTo,
@@ -39,14 +41,17 @@ export default function ProviderCreationScreen({
     ProviderSetupRouteParamsInput & {
       providerId?: string;
       providerName?: string;
+      connectionId?: string | string[];
       intent?: string;
       issue?: ProviderConfigurationIssue;
     }
   >();
+  const connectionId = getSingleRouteParam(rawConnectionId);
   const returnTo = readProviderSetupReturnTo(rawReturnTo) ?? '/settings/provider';
 
   return providerId ? (
     <SavedProviderSetupScreen
+      connectionId={connectionId}
       intent={intent === 'sync' ? 'sync' : 'enable'}
       issue={issue}
       providerId={providerId}
@@ -84,16 +89,19 @@ function NewProviderScreen({
   const { allowNavigation, requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges: configuration.isDirty,
     isSaving: configuration.isCreating,
+    onClose: setupIntent === 'chat' ? () => router.replace('/onboarding') : undefined,
   });
   const handleContinue = useCallback(() => {
     void create().then((created) => {
       if (!created) return;
+      allowNavigation();
       if (setupIntent === 'chat') {
-        router.setParams({ providerId: created.providerId, providerName: created.providerName });
-        router.push({ params: { providerId: created.providerId }, pathname: '/onboarding/model' });
+        router.replace({
+          params: { providerId: created.providerId },
+          pathname: '/onboarding/model',
+        });
         return;
       }
-      allowNavigation();
       router.replace({
         params: {
           enableProvider: 'true',
@@ -130,6 +138,7 @@ function NewProviderScreen({
 }
 
 function SavedProviderSetupScreen({
+  connectionId,
   intent,
   issue,
   providerId,
@@ -137,6 +146,7 @@ function SavedProviderSetupScreen({
   returnTo,
   setupIntent,
 }: {
+  connectionId?: string;
   intent: ProviderSetupIntent;
   issue?: ProviderConfigurationIssue;
   providerId: string;
@@ -150,21 +160,31 @@ function SavedProviderSetupScreen({
   const configuration = useSavedProviderConfiguration(providerId);
   const displayedProviderName = configuration.provider?.name ?? providerName ?? '';
   const isBusy = isPreparing || (configuration.value?.isBusy ?? false);
+  const close = () => {
+    if (setupIntent === 'chat') router.replace('/onboarding');
+    else router.back();
+  };
   const handleContinue = useCallback(() => {
     if (setupIntent === 'chat') {
-      router.push({ params: { providerId }, pathname: '/onboarding/model' });
+      router.replace({
+        params: connectionId ? { connectionId } : { providerId },
+        pathname: '/onboarding/model',
+      });
       return;
     }
     void openSetup(providerId, returnTo, intent, true);
-  }, [intent, openSetup, providerId, returnTo, router, setupIntent]);
+  }, [connectionId, intent, openSetup, providerId, returnTo, router, setupIntent]);
 
   return (
     <>
-      <RouteHeader title={t('settings.provider.setup.title', { name: displayedProviderName })} />
+      <RouteHeader
+        onBack={setupIntent === 'chat' ? close : undefined}
+        title={t('settings.provider.setup.title', { name: displayedProviderName })}
+      />
       {configuration.isError ? (
         <View className="flex-1 justify-center px-6 py-10">
           <ContentState.Error
-            primaryAction={{ children: t('common.back'), onPress: () => router.back() }}
+            primaryAction={{ children: t('common.back'), onPress: close }}
             title={t('settings.provider.setup.loadFailed')}
           />
         </View>
