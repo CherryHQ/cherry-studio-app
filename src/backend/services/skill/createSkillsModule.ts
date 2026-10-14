@@ -23,10 +23,12 @@ import {
   SkillsError,
   type SkillUpdateResult,
 } from '@/shared/contracts/skills';
+import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
 import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { adaptSkillPackage } from './skillAdaptation';
+import { authorSkillPackage } from './skillAuthoring';
 import { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 import type { SkillMarketplace } from './skillMarketplace';
 import {
@@ -59,6 +61,7 @@ export type SkillsModuleDependencies = {
     cherryin?: SkillSourceAdapter;
   };
   agentExists(agentId: string): Promise<boolean>;
+  readAuthor(): Promise<string>;
 };
 
 type ResolvedCandidate = { candidate: SkillSourceCandidate; resolvedAt: number };
@@ -408,6 +411,49 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
         return { outcome: 'updated', skill };
       } catch (error) {
         deps.storage.discardStaging(handle);
+        throw error;
+      }
+    },
+
+    async create(input, signal) {
+      const { package: pkg, files } = authorSkillPackage(input, await deps.readAuthor());
+      if (await deps.skills.findByFolderName(pkg.name))
+        throw new SkillsError('already-installed', 'A Skill with this name already exists.');
+      signal?.throwIfAborted();
+      const handle = await deps.storage.stage(files);
+      try {
+        const skill = await deps.db.withWriteTx(async (tx) => {
+          signal?.throwIfAborted();
+          await deps.storage.publish(handle, {
+            folderName: pkg.name,
+            contentHash: pkg.contentHash,
+          });
+          return deps.skills.createTx(
+            tx,
+            {
+              name: pkg.name,
+              description: pkg.description,
+              source: 'marketplace',
+              sourceUrl: null,
+              author: pkg.author,
+              version: pkg.version,
+              tags: pkg.tags,
+              contentHash: pkg.contentHash,
+              manifest: pkg.manifest,
+              profile: deriveSkillProfile(pkg),
+              invocation: pkg.invocation,
+            },
+            [],
+          );
+        });
+        changes.fire();
+        return skill;
+      } catch (error) {
+        deps.storage.discardStaging(handle);
+        if (isDataApiError(error) && error.code === ErrorCode.CONFLICT)
+          throw new SkillsError('already-installed', 'A Skill with this name already exists.', {
+            cause: error,
+          });
         throw error;
       }
     },

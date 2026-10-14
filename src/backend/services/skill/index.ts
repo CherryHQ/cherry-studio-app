@@ -1,5 +1,5 @@
 export { createSkillsModule, type SkillsBackend } from './createSkillsModule';
-export { evaluateSkillLimitations } from './skillCompatibility';
+export { deriveSkillProfile, evaluateSkillLimitations } from './skillCompatibility';
 export { createSkillMarketplace } from './skillMarketplace';
 export { createCherryinSkillClient } from './cherryinSkillClient';
 export { createCherryinSkillSource } from './cherryinSkillSource';

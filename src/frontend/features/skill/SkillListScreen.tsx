@@ -84,6 +84,11 @@ export function SkillListScreen() {
           ...(canAddInChat
             ? [
                 {
+                  id: 'skill-create',
+                  label: t('skills.create.name'),
+                  onPress: () => void open('create'),
+                },
+                {
                   id: 'skill-add-chat',
                   label: t('skills.addInChat'),
                   onPress: () => void open(),

@@ -96,6 +96,7 @@ describe('turn preparation', () => {
         inspect: unavailable,
         install: unavailable,
         update: unavailable,
+        create: unavailable,
         previewAdaptation: unavailable,
         adapt: unavailable,
         uninstall: unavailable,
@@ -180,6 +181,7 @@ describe('turn preparation', () => {
   test.each([
     { skillIds: ['00000000-0000-4000-8000-000000000124'] },
     { skillAction: 'find-and-install' as const },
+    { skillAction: 'create' as const },
   ])('minimal mode rejects explicit Skill input %j', async (selection) => {
     const harness = createHarness();
     harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
