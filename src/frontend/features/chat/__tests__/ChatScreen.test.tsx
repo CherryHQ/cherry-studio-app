@@ -174,7 +174,7 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('keeps the composer in normal flow and shares only keyboard geometry', () => {
+  it('keeps transcript spacing unchanged when the feedback hint measures the composer', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
@@ -186,7 +186,13 @@ describe('ChatScreen composer dock wiring', () => {
     expect(dockProps).toMatchObject({
       layoutMode: 'flow',
     });
-    expect(dockProps?.onHeightChange).toBeUndefined();
+    const onHeightChange = dockProps?.onHeightChange as (height: number) => void;
+    act(() => onHeightChange(180));
+    expect(chatWorkspaceProps).toMatchObject({
+      contentBottomInset: 8,
+      keyboardOffset: 26,
+      feedbackHintBottomOffset: 180,
+    });
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       controls: mockChatControls,
