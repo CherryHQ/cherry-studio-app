@@ -4,5 +4,9 @@ module.exports = {
   sourceSkips: ['PackageJsonAndroidAndIosScriptsIfNotContainRun', 'ExpoConfigVersions'],
   // AnyDoc downloads this version-pinned iOS binary only on macOS. Android autolinking
   // hashes the whole package; keep its version and sources, but exclude the host-only download.
-  ignorePaths: ['**/node_modules/react-native-anydoc/ios/AnydocCore.xcframework/**/*'],
+  ignorePaths: [
+    '**/node_modules/react-native-anydoc/ios/AnydocCore.xcframework/**/*',
+    // pnpm generates executable shims with absolute install paths inside workspace packages.
+    '**/node_modules/.bin/**/*',
+  ],
 };

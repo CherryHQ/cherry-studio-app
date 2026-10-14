@@ -65,3 +65,29 @@ test.each([
   writePackageFile(file, content);
   expect((await fingerprint()).hash).not.toBe(before.hash);
 });
+
+test('workspace package fingerprints ignore generated command shims but track native sources', async () => {
+  const packagePath = 'packages/ui';
+  const nativeFile = join(projectRoot, packagePath, 'ios/View.swift');
+  const shimFile = join(projectRoot, packagePath, 'node_modules/.bin/react-native');
+  mkdirSync(dirname(nativeFile), { recursive: true });
+  mkdirSync(dirname(shimFile), { recursive: true });
+  writeFileSync(nativeFile, 'class View {}');
+  const options = {
+    platforms: [],
+    useRNCoreAutolinkingFromExpo: true,
+    extraSources: [
+      { type: 'dir' as const, filePath: packagePath, reasons: ['rncoreAutolinkingIos'] },
+    ],
+  };
+  const before = await createFingerprintAsync(projectRoot, options);
+  writeFileSync(shimFile, '#!/bin/sh\nexec node /checkout/node_modules/react-native/cli.js "$@"\n');
+  expect((await createFingerprintAsync(projectRoot, options)).hash).toBe(before.hash);
+  writeFileSync(
+    shimFile,
+    '#!/bin/sh\nexec node /eas-build/node_modules/react-native/cli.js "$@"\n',
+  );
+  expect((await createFingerprintAsync(projectRoot, options)).hash).toBe(before.hash);
+  writeFileSync(nativeFile, 'class ChangedView {}');
+  expect((await createFingerprintAsync(projectRoot, options)).hash).not.toBe(before.hash);
+});

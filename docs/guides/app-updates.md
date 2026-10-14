@@ -13,6 +13,10 @@ There is no application-owned reload call, update dialog, foreground polling, or
 Active conversations are not restarted. Offline launches use available downloaded or embedded
 code; incomplete downloads do not become runnable updates.
 
+Keep OTA terminology, runtime fingerprints, update IDs, and channel names out of user-facing UI.
+These details belong in diagnostic bundles and crash reports. Visual acceptance markers must stay
+in isolated local test fixtures and must not enter application source or published updates.
+
 `runtimeVersion.policy: fingerprint` derives compatibility from dependencies, native modules,
 configuration, and config plugins. A changed fingerprint requires a new native package before
 that runtime can receive updates. Never override a runtime to force compatibility.
@@ -21,6 +25,8 @@ numbers remotely; these numbers do not change the JS/native interface. It also e
 version-pinned `ios/AnydocCore.xcframework` download, which exists only after installation on macOS
 but is included in Android's package-directory hash. This keeps Android fingerprints consistent
 across macOS and Linux; AnyDoc's package version and native sources remain compatibility inputs.
+Generated `node_modules/.bin` command shims are also excluded because pnpm embeds absolute install
+paths in them, which differ between the checkout and EAS's temporary build directory.
 Permissions, widgets, extensions, reporting policy, native dependencies, and plugins remain
 compatibility inputs.
 Other conservative fingerprint inputs, including package versions, `eas.json`, `patches/`, and files
