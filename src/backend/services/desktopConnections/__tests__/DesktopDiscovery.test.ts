@@ -1,6 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 
-import { DesktopDiscovery } from '../desktopDiscovery';
+import { DesktopDiscovery } from '../DesktopDiscovery';
 
 jest.mock('expo', () => ({ requireOptionalNativeModule: jest.fn() }));
 

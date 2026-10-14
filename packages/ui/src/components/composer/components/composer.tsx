@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { SurfaceFrame } from '../../surface/surface-frame';
+import { SurfaceFrame } from '../../surface/surface-frame/surface-frame';
 import type { ComposerLabels, ComposerProps } from '../composer.types';
 import {
   ComposerActionsContext,

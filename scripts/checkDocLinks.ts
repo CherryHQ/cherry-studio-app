@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { AGENTS_SKILLS_DIR, listSkillNames } from './skills-common';
+import { AGENTS_SKILLS_DIR, listSkillNames } from './skillsCommon';
 
 const ROOT = path.resolve(__dirname, '..');
 const SCAN_ROOTS = ['docs', 'src', 'packages', 'scripts', 'migrations'];

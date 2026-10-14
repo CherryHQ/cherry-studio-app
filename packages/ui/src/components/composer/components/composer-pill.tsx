@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
-import { SurfaceFrame } from '../../surface/surface-frame';
+import { SurfaceFrame } from '../../surface/surface-frame/surface-frame';
 import type { ComposerPillProps } from '../composer.types';
 import { actionHitSlop, composerActionSize, pillStyle } from '../utils/composer-layout';
 

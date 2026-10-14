@@ -12,7 +12,7 @@ import {
   listSkillNames,
   ROOT_DIR,
   readFileSafe,
-} from './skills-common';
+} from './skillsCommon';
 
 function isAgentsReadmeFile(file: string): boolean {
   return /^\.agents\/skills\/README(?:\.[a-z0-9-]+)?\.md$/i.test(file);
