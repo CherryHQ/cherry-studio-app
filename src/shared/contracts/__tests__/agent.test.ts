@@ -23,6 +23,19 @@ import {
 
 const MCP_TOOL_REF = { source: 'mcp', serverId: 'server-1', rawToolName: 'search' } as const;
 
+test('transient context and runtime events round-trip without diagnostic payloads', () => {
+  for (const event of [
+    { type: 'context.updated', status: 'compacting' },
+    { type: 'context.updated', status: 'compaction-failed' },
+    { type: 'context.updated', status: null },
+    { type: 'runtime.failed' },
+  ])
+    expect(AgentEventSchema.parse(roundTrip(event))).toEqual(event);
+  expect(AgentEventSchema.safeParse({ type: 'runtime.failed', error: 'device path' }).success).toBe(
+    false,
+  );
+});
+
 function roundTrip<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
 }
@@ -95,43 +108,48 @@ describe('Agent Session status contract', () => {
 });
 
 describe('Agent tool and managed-file contracts', () => {
-  test('preserves find-and-install intent through sends and history without accepting client assessment claims', () => {
-    const input = {
-      sessionId: 'session-1',
-      userMessageId: 'user-1',
-      assistantMessageId: 'assistant-1',
-      parts: [{ type: 'text', text: 'Find a note-taking Skill' }],
-      skillAction: 'find-and-install',
-    };
-    expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
-    const initial = { ...input, agentId: 'agent-1' };
-    expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
-    const part = {
-      id: 'user-text',
-      type: 'text',
-      text: input.parts[0]!.text,
-      state: 'done',
-      skillAction: input.skillAction,
-    };
-    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
-    expect(
-      AgentSubmitMessageInputSchema.safeParse({
-        ...input,
-        skillAction: 'install-without-assessment',
-      }).success,
-    ).toBe(false);
-    expect(
-      AgentSubmitMessageInputSchema.safeParse({ ...input, preparedCandidates: ['model-generated'] })
-        .success,
-    ).toBe(false);
-    expect(
-      AgentInputPartSchema.safeParse({
+  test.each(['find-and-install', 'create'])(
+    'preserves %s intent through sends and history without accepting client assessment claims',
+    (skillAction) => {
+      const input = {
+        sessionId: 'session-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        parts: [{ type: 'text', text: 'Find a note-taking Skill' }],
+        skillAction,
+      };
+      expect(AgentSubmitMessageInputSchema.parse(roundTrip(input))).toEqual(input);
+      const initial = { ...input, agentId: 'agent-1' };
+      expect(AgentStartSessionInputSchema.parse(roundTrip(initial))).toEqual(initial);
+      const part = {
+        id: 'user-text',
         type: 'text',
-        text: 'notes',
-        skillAction: 'find-and-install',
-      }).success,
-    ).toBe(false);
-  });
+        text: input.parts[0]!.text,
+        state: 'done',
+        skillAction: input.skillAction,
+      };
+      expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+      expect(
+        AgentSubmitMessageInputSchema.safeParse({
+          ...input,
+          skillAction: 'install-without-assessment',
+        }).success,
+      ).toBe(false);
+      expect(
+        AgentSubmitMessageInputSchema.safeParse({
+          ...input,
+          preparedCandidates: ['model-generated'],
+        }).success,
+      ).toBe(false);
+      expect(
+        AgentInputPartSchema.safeParse({
+          type: 'text',
+          text: 'notes',
+          skillAction: 'find-and-install',
+        }).success,
+      ).toBe(false);
+    },
+  );
 
   test('round-trips image settings through initial sends, follow-ups, and inference snapshots', () => {
     const imageGeneration = { mode: 'edit', paramValues: { size: '1024x1024', numImages: 2 } };
@@ -446,6 +464,32 @@ describe('Agent tool and managed-file contracts', () => {
     } as const;
 
     expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+  });
+
+  test('running child progress round-trips with bounded arguments and closed statuses', () => {
+    const part = {
+      id: 'parent',
+      type: 'dynamic-tool',
+      toolCallId: 'parent',
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      toolName: 'codemode',
+      title: 'JavaScript',
+      state: 'running',
+      progress: { calls: [{ id: 'parent/c1', name: 'read_file', args: '{}', status: 'running' }] },
+    };
+    expect(AgentMessagePartSchema.parse(roundTrip(part))).toEqual(part);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        progress: { calls: [{ ...part.progress.calls[0], args: 'x'.repeat(1001) }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentMessagePartSchema.safeParse({
+        ...part,
+        progress: { calls: [{ ...part.progress.calls[0], status: 'unknown' }] },
+      }).success,
+    ).toBe(false);
   });
 
   test('accepts managed file ids and rejects raw file URIs', () => {

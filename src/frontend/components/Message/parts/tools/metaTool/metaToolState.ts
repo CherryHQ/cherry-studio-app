@@ -87,6 +87,12 @@ export function getMetaToolStatusText(
 }
 
 export function parseToolSearchNamespaces(output: unknown): ToolSearchNamespace[] {
+  if (isRecord(output) && Array.isArray(output.loaded)) {
+    const tools = output.loaded.flatMap((name) =>
+      typeof name === 'string' && name.trim() ? [{ name }] : [],
+    );
+    return tools.length ? [{ namespace: '', tools }] : [];
+  }
   if (!isRecord(output) || !Array.isArray(output.matchedNamespaces)) {
     return [];
   }

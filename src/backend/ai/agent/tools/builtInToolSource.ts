@@ -252,7 +252,8 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
-    ...(deps.jsSandbox ? [createRunJsTool({ sandbox: deps.jsSandbox, files: fileContent })] : []),
+    // Code Mode is the capability's only executor, so it needs the interactive bridge.
+    ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),
     ...createReminderTools(deviceDeps),
     ...createHealthTools(deviceDeps),

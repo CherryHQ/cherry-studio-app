@@ -559,12 +559,6 @@ export class PiDurableRuntime {
     await conversation.reset(handoff, context);
   }
 
-  async compact(sessionId: string, instructions?: string, context: Context = BACKGROUND_CONTEXT) {
-    const conversation = await this.requireSession(sessionId, context);
-    const id = await conversation.compact(instructions, context);
-    return this.harness.waitForTask(id, context);
-  }
-
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });
@@ -576,6 +570,10 @@ export class PiDurableRuntime {
 
   watchWork(context: Context = BACKGROUND_CONTEXT) {
     return this.harness.watchTaskGraph(context);
+  }
+
+  get closed() {
+    return this.harness.closed;
   }
 
   /** Call only after current capabilities and approval handlers have been reconstructed. */

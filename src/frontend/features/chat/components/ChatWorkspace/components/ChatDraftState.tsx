@@ -6,6 +6,7 @@ import { AgentAvatar } from '@/frontend/components/Avatar';
 type ChatDraftStateProps = {
   assistantAvatar?: null | string;
   assistantAvatarUri?: null | string;
+  assistantEmoji?: string;
   assistantName?: string;
   contentBottomInset: number;
 };
@@ -14,6 +15,7 @@ type ChatDraftStateProps = {
 export function ChatDraftState({
   assistantAvatar,
   assistantAvatarUri,
+  assistantEmoji,
   assistantName,
   contentBottomInset,
 }: ChatDraftStateProps) {
@@ -28,6 +30,7 @@ export function ChatDraftState({
         {assistantName ? (
           <AgentAvatar
             avatar={assistantAvatar}
+            emoji={assistantEmoji}
             name={assistantName}
             size={48}
             uri={assistantAvatarUri}

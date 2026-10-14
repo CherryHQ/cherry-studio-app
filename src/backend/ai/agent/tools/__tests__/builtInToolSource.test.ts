@@ -56,11 +56,11 @@ describe('createSystemCapabilitySource', () => {
     ]);
   });
 
-  test('offers run_js without approval only when the client has the native sandbox', async () => {
-    const withoutSandbox = await resolve({});
-    expect(capabilityIds(withoutSandbox)).not.toContain('run_js');
+  test('offers run_js without approval only when the client has the interactive bridge', async () => {
+    expect(capabilityIds(await resolve({}))).not.toContain('run_js');
+    expect(capabilityIds(await resolve({ jsSandbox: { run: jest.fn() } }))).not.toContain('run_js');
 
-    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    const tools = await resolve({ jsSandbox: { run: jest.fn(), startBridge: jest.fn() } });
     expect(capabilityIds(tools)).toContain('run_js');
     expect(approvalOf(tools, 'run_js')).toBe('auto');
   });

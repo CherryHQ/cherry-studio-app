@@ -1,4 +1,3 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
@@ -15,7 +14,7 @@ import {
 import type { SystemModelSupportFilter } from '@/backend/data/api/handlers/models';
 import type { PluginCatalogReader } from '@/backend/data/api/handlers/pluginCatalog';
 import type {
-  SkillAdmissionReader,
+  SkillAvailabilityReader,
   SkillInstructionReader,
 } from '@/backend/data/api/handlers/skills';
 import type { DbService } from '@/backend/data/db/DbService';
@@ -69,7 +68,8 @@ import {
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
-  createSkillEnvironmentReader,
+  createCherryinSkillClient,
+  createCherryinSkillSource,
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
@@ -90,7 +90,7 @@ export type BackendComposition = {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
     pluginCatalog: PluginCatalogReader;
-    skillAdmissions: SkillAdmissionReader;
+    skillAvailability: SkillAvailabilityReader;
     skillInstructions: SkillInstructionReader;
     systemModelSupport: SystemModelSupportFilter;
   };
@@ -270,9 +270,14 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
+  const cherryinClient = createCherryinSkillClient();
+  const cherryinSkills = createCherryinSkillSource(cherryinClient);
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
-    marketplace: createSkillMarketplace(githubSkills),
+    marketplace: createSkillMarketplace(githubSkills, {
+      client: cherryinClient,
+      source: cherryinSkills,
+    }),
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
@@ -285,26 +290,18 @@ export function createBackend(
       },
     },
     skills: services.agentGlobalSkill,
+    readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
-    environment: createSkillEnvironmentReader({
-      permissions: services.devicePermissions,
-      preference: services.preference,
-      models: services.model,
-      plugins: services.mcpRuntime.pluginAuthorizations,
-    }),
     sources: {
       bundled: createBundledSkillSource(),
       github: githubSkills,
+      cherryin: cherryinSkills,
     },
-    agentFacts: async (agentId) => {
-      const agent = await services.agentData.getById(agentId).catch(() => null);
-      if (!agent) return null;
-      const model = agent.model ? await services.model.getById(agent.model) : null;
-      return {
-        disabledCapabilities: agent.disabledCapabilities,
-        supportsToolCalling: model?.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL) ?? false,
-      };
-    },
+    agentExists: (agentId) =>
+      services.agentData.getById(agentId).then(
+        () => true,
+        () => false,
+      ),
   });
 
   services.agent.configureSkills(skills);
@@ -356,7 +353,7 @@ export function createBackend(
       agentAvatars,
       mcpServerMutations,
       pluginCatalog: getBuiltInPluginCatalog,
-      skillAdmissions: skills.admissions,
+      skillAvailability: skills.availability,
       skillInstructions: skills.instructionReader,
       systemModelSupport,
     },

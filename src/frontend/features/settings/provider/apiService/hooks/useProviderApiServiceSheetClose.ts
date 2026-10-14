@@ -9,9 +9,11 @@ import { Keyboard } from 'react-native';
 export function useProviderApiServiceSheetClose({
   hasUnsavedChanges,
   isSaving,
+  onClose,
 }: {
   hasUnsavedChanges: boolean;
   isSaving: boolean;
+  onClose?: () => void;
 }) {
   const navigation = useNavigation();
   const router = useRouter();
@@ -25,13 +27,17 @@ export function useProviderApiServiceSheetClose({
 
   const closeWithoutPrompt = useCallback(() => {
     allowNavigation();
+    if (onClose) {
+      onClose();
+      return;
+    }
     if (navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
 
     router.replace('/');
-  }, [allowNavigation, navigation, router]);
+  }, [allowNavigation, navigation, onClose, router]);
 
   const confirmDiscard = useCallback(
     (onConfirm: () => void) => {

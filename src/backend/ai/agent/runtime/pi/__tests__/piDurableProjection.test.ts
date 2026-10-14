@@ -1,6 +1,7 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
+import { toAgentMessagePart } from '../../../host/runtimeProjection';
 import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
@@ -72,6 +73,232 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
 }
 
 describe('Pi turn projection', () => {
+  test('preserves upstream loaded tool names for search presentation', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'search',
+                  name: 'tool_search',
+                  arguments: { query: 'notes' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'search',
+              toolName: 'tool_search',
+              content: [{ type: 'text', text: 'Loaded 1 tool.' }],
+              details: { loaded: ['mcp_notes'] },
+              isError: false,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    expect(turn.parts[0]).toMatchObject({
+      type: 'tool',
+      toolRef: { source: 'meta', name: 'tool_search' },
+      state: 'output-available',
+      output: { value: { loaded: ['mcp_notes'] } },
+    });
+  });
+
+  const placed = {
+    id: 1,
+    type: 'input',
+    status: 'placed',
+    entry: 1,
+  } as unknown as SubmissionRecord;
+
+  function projectMessage(message: AssistantMessage, streaming: boolean) {
+    return projectPiTurn({
+      sessionId: 'session',
+      record: placed,
+      metadata,
+      active: true,
+      entries: streaming
+        ? []
+        : ([
+            { id: 2, conversationId: 1, kind: 'pi.assistant', model: [message] },
+          ] as unknown as EntryRecord[]),
+      ...(streaming ? { partial: message } : {}),
+    });
+  }
+
+  test.each([true, false])(
+    'joins consecutive reasoning summaries without truncating content while streaming=%s',
+    (streaming) => {
+      const message: AssistantMessage = {
+        ...call('body', 2_000),
+        api: 'openai-responses',
+        content: [
+          { type: 'thinking', thinking: 'Inspecting screenshot names' },
+          { type: 'thinking', thinking: '正在核对截图中的玩家名称' },
+          { type: 'thinking', thinking: '我按总伤害划分选手档位' },
+          { type: 'text', text: 'The complete answer.' },
+        ],
+      };
+      const turn = projectMessage(message, streaming);
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          type: 'reasoning',
+          text: 'Inspecting screenshot names\n\n正在核对截图中的玩家名称\n\n我按总伤害划分选手档位',
+          state: 'done',
+        }),
+        expect.objectContaining({ type: 'text', text: 'The complete answer.' }),
+      ]);
+      expect(message.content).toHaveLength(4);
+    },
+  );
+
+  test.each([true, false])(
+    'omits empty reasoning disclosures while retaining provider replay content, streaming=%s',
+    (streaming) => {
+      const message: AssistantMessage = {
+        ...call('body', 2_000),
+        api: 'openai-responses',
+        content: [
+          { type: 'thinking', thinking: '' },
+          { type: 'thinking', thinking: '', thinkingSignature: 'opaque-provider-replay' },
+          { type: 'thinking', thinking: '\n \t' },
+          { type: 'toolCall', id: 'js-call', name: 'javascript', arguments: { code: '1 + 1' } },
+        ],
+      };
+      const turn = projectMessage(message, streaming);
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          type: 'tool',
+          toolCallId: 'js-call',
+          providerName: 'javascript',
+        }),
+      ]);
+      expect(message.content[1]).toEqual({
+        type: 'thinking',
+        thinking: '',
+        thinkingSignature: 'opaque-provider-replay',
+      });
+      expect(message.content).toHaveLength(4);
+    },
+  );
+
+  test('keeps reasoning phases separated by tools and marks only the growing phase as streaming', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [
+        { type: 'thinking', thinking: 'Before the tool.' },
+        call('body', 2_000).content[0]!,
+        { type: 'thinking', thinking: 'After the tool.' },
+        { type: 'thinking', thinking: 'More reasoning.' },
+      ],
+    };
+    const turn = projectMessage(message, true);
+
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Before the tool.', state: 'done' }),
+      expect.objectContaining({ type: 'tool', toolCallId: 'call' }),
+      expect.objectContaining({
+        type: 'reasoning',
+        text: 'After the tool.\n\nMore reasoning.',
+        state: 'streaming',
+      }),
+    ]);
+  });
+
+  test('keeps the pending assistant when reasoning has not produced visible text yet', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [{ type: 'thinking', thinking: '' }],
+    };
+    const turn = projectMessage(message, true);
+
+    expect(turn.hasAssistant).toBe(true);
+    expect(turn.parts).toEqual([]);
+  });
+
+  test.each([true, false])(
+    'keeps consecutive retry summaries in one phase while streaming=%s',
+    (streaming) => {
+      const earlier: AssistantMessage = {
+        ...call('body', 2_000),
+        content: [{ type: 'thinking', thinking: 'Earlier summary.' }],
+        stopReason: 'error',
+        errorMessage: 'The provider request failed.',
+      };
+      const retry: AssistantMessage = {
+        ...call('body', 3_000),
+        content: [
+          { type: 'thinking', thinking: 'Retry summary.' },
+          call('body', 3_000).content[0]!,
+        ],
+      };
+      const turn = projectPiTurn({
+        sessionId: 'session',
+        record: placed,
+        metadata,
+        active: true,
+        entries: [
+          { id: 2, conversationId: 1, kind: 'pi.assistant', model: [earlier] },
+          ...(streaming
+            ? []
+            : [{ id: 3, conversationId: 1, kind: 'pi.assistant', model: [retry] }]),
+        ] as unknown as EntryRecord[],
+        ...(streaming ? { partial: retry } : {}),
+      });
+
+      expect(turn.parts).toEqual([
+        expect.objectContaining({
+          id: 'pi:2:block:0',
+          type: 'reasoning',
+          text: 'Earlier summary.\n\nRetry summary.',
+          state: 'done',
+        }),
+        expect.objectContaining({ type: 'tool', toolCallId: 'call' }),
+      ]);
+      expect(earlier.content[0]).toEqual({ type: 'thinking', thinking: 'Earlier summary.' });
+      expect(retry.content[0]).toEqual({ type: 'thinking', thinking: 'Retry summary.' });
+    },
+  );
+
+  test('keeps a visible reasoning phase active while its next summary is still empty', () => {
+    const message: AssistantMessage = {
+      ...call('body', 2_000),
+      content: [
+        { type: 'thinking', thinking: 'Received summary.' },
+        { type: 'thinking', thinking: '' },
+      ],
+    };
+    expect(projectMessage(message, true).parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'streaming' }),
+    ]);
+    expect(projectMessage(message, false).parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', text: 'Received summary.', state: 'done' }),
+    ]);
+  });
+
   test('recovered terminal inputs settle tool calls that have no result entry', () => {
     const turn = projectPiTurn({
       sessionId: 'session',
@@ -85,6 +312,22 @@ describe('Pi turn projection', () => {
       } as unknown as SubmissionRecord,
       entries: [
         { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'cherry.codemode-artifacts',
+          data: {
+            callId: 'call',
+            artifacts: [
+              {
+                ref: { kind: 'managed-file', fileEntryId: 'file' },
+                name: 'saved.txt',
+                mediaType: 'text/plain',
+                kind: 'created',
+              },
+            ],
+          },
+        },
       ] as unknown as EntryRecord[],
     });
     expect(turn.status).toBe('interrupted');
@@ -94,6 +337,128 @@ describe('Pi turn projection', () => {
       input: { filename: 'notes.md', content: 'body' },
       output: { value: { status: 'interrupted' }, artifacts: [] },
     });
+    expect(turn.parts[1]).toMatchObject({ type: 'file', name: 'saved.txt' });
+  });
+
+  test('a failed script keeps the JavaScript capability and reports the error its output ends with', () => {
+    const scriptText = `Script failed\nOutput:\n${'line\n'.repeat(100)}Script error:\nSyntaxError: unexpected token`;
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata: {
+        ...metadata,
+        tools: [
+          {
+            ...writeFile,
+            ref: { source: 'builtin', capabilityId: 'run_js' },
+            providerName: 'run_js',
+            displayName: 'Run JavaScript',
+          },
+        ],
+      },
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      active: true,
+      entries: [
+        {
+          id: 2,
+          conversationId: 1,
+          kind: 'pi.assistant',
+          model: [
+            {
+              ...call('', 2000),
+              content: [
+                {
+                  type: 'toolCall',
+                  id: 'script',
+                  name: 'codemode',
+                  arguments: { code: 'const = 1' },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'script',
+              toolName: 'codemode',
+              content: [{ type: 'text', text: scriptText }],
+              // What the capability's afterTool hook stores for every script, failed or not.
+              details: {
+                kind: 'cherry.tool-result',
+                ref: { source: 'builtin', capabilityId: 'run_js' },
+                providerName: 'codemode',
+                displayName: 'Run JavaScript',
+                output: {
+                  value: { output: scriptText, details: { calls: [] } },
+                  modelValue: scriptText,
+                  artifacts: [],
+                },
+              },
+              isError: true,
+              timestamp: 2100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+    });
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    expect(part).toMatchObject({
+      toolRef: { source: 'builtin', capabilityId: 'run_js' },
+      providerName: 'codemode',
+      displayName: 'Run JavaScript',
+      state: 'error',
+    });
+    // The reason is a bounded tail, so the error survives long output ahead of it.
+    expect(part.error?.message.endsWith('Script error:\nSyntaxError: unexpected token')).toBe(true);
+    expect(part.error!.message.length).toBeLessThan(scriptText.length);
+    // The protocol accepts an error tool part only with the error result shape.
+    expect(toAgentMessagePart(part)).toMatchObject({
+      state: 'error',
+      output: { value: { status: 'error' }, artifacts: [] },
+    });
+  });
+
+  test('live child status is progress, never a final tool output', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      metadata: {
+        ...metadata,
+        tools: [
+          writeFile,
+          {
+            ...writeFile,
+            ref: { source: 'mcp' as const, serverId: 'server', rawToolName: 'lookup' },
+            providerName: 'mcp_lookup_0ab12cd',
+            displayName: 'lookup',
+          },
+        ],
+      },
+      active: true,
+      record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2000)] },
+      ] as unknown as EntryRecord[],
+      nestedTools: new Map([
+        ['child', { parentCallId: 'call', name: 'write_file', args: '{}', status: 'running' }],
+        ['remote', { parentCallId: 'call', name: 'mcp_lookup_0ab12cd', args: '{}', status: 'ok' }],
+      ]),
+    });
+    const part = turn.parts[0];
+    if (part?.type !== 'tool') throw new Error('Expected a tool part');
+    // The client translates built-in names; an MCP alias carries its display name.
+    expect(part.progress).toEqual({
+      calls: [
+        { id: 'child', name: 'write_file', args: '{}', status: 'running' },
+        { id: 'remote', name: 'mcp_lookup_0ab12cd', title: 'lookup', args: '{}', status: 'ok' },
+      ],
+    });
+    expect(turn.parts[0]).not.toHaveProperty('output');
   });
 
   test('streams a bounded file preview instead of the growing tool input', () => {

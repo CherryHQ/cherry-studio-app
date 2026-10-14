@@ -8,7 +8,7 @@ jest.mock('heroui-native/utils', () => {
   return { cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')) };
 });
 
-jest.mock('../switch-control', () => {
+jest.mock('../switch-control/switch-control', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
 
@@ -18,8 +18,10 @@ jest.mock('../switch-control', () => {
   };
 });
 
-const { SwitchControl: FallbackSwitchControl } = jest.requireActual('../switch-control.tsx') as {
-  SwitchControl: (typeof import('../switch-control'))['SwitchControl'];
+const { SwitchControl: FallbackSwitchControl } = jest.requireActual(
+  '../switch-control/switch-control.tsx',
+) as {
+  SwitchControl: (typeof import('../switch-control/switch-control'))['SwitchControl'];
 };
 
 describe('Switch', () => {

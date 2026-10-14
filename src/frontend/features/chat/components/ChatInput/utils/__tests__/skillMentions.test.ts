@@ -1,6 +1,6 @@
 import { readPluginMentions } from '../pluginMentions';
 import {
-  createFindSkillsMention,
+  createSkillActionMention,
   createSkillMentionLabel,
   createSkillMentionUrl,
   readSkillMentions,
@@ -24,7 +24,9 @@ describe('composer Skill references', () => {
   });
 
   test('the built-in inline reference supplies installation intent without sending artwork characters', () => {
-    expect(readSkillMentions(`${createFindSkillsMention('找技能')} 搜索笔记技能`)).toEqual({
+    expect(
+      readSkillMentions(`${createSkillActionMention('find-and-install', '找技能')} 搜索笔记技能`),
+    ).toEqual({
       skills: [],
       skillAction: 'find-and-install',
       skillReferences: [
@@ -62,7 +64,9 @@ describe('composer Skill references', () => {
   });
 
   test('escaped brackets and backslashes in labels survive submission', () => {
-    expect(readSkillMentions(createFindSkillsMention('Find [notes] \\ tasks'))).toEqual({
+    expect(
+      readSkillMentions(createSkillActionMention('find-and-install', 'Find [notes] \\ tasks')),
+    ).toEqual({
       skills: [],
       skillAction: 'find-and-install',
       skillReferences: [
@@ -92,7 +96,7 @@ describe('composer Skill references', () => {
     const plugin = '[飞书](tool://plugin/00000000-0000-4000-8000-000000000002/feishu)';
     const skill = `[notes](${createSkillMentionUrl(SKILL_ID)})`;
     const plugins = readPluginMentions(
-      `📄 ${plugin} ${skill} ${plugin} ${createFindSkillsMention('找技能')} ${skill}`,
+      `📄 ${plugin} ${skill} ${plugin} ${createSkillActionMention('find-and-install', '找技能')} ${skill}`,
     );
     const parsed = readSkillMentions(plugins.text, plugins.pluginReferences);
     expect(parsed.text).toBe('📄 飞书 notes 飞书 找技能 notes');
@@ -110,7 +114,7 @@ describe('composer Skill references', () => {
 
   test('changing Agents removes Skill references while preserving text and plugin references', () => {
     const plugin = '[飞书](tool://plugin/00000000-0000-4000-8000-000000000001/feishu)';
-    const draft = `${createFindSkillsMention('找技能')} [笔记](${createSkillMentionUrl(SKILL_ID)}) 用 ${plugin} 整理`;
+    const draft = `${createSkillActionMention('find-and-install', '找技能')} [笔记](${createSkillMentionUrl(SKILL_ID)}) 用 ${plugin} 整理`;
     const remaining = removeSkillMentions(draft);
     expect(remaining).toBe(`  用 ${plugin} 整理`);
     expect(readSkillMentions(remaining).skills).toEqual([]);
@@ -118,4 +122,14 @@ describe('composer Skill references', () => {
     const escaped = `\\[Notes](${createSkillMentionUrl(SKILL_ID)})`;
     expect(removeSkillMentions(escaped)).toBe(escaped);
   });
+});
+
+test('create-skill references carry the action, preserve visible offsets and disappear on Agent changes', () => {
+  const mention = createSkillActionMention('create', '创建技能');
+  expect(readSkillMentions(`🍒 ${mention} 周报`)).toMatchObject({
+    skillAction: 'create',
+    text: '🍒 创建技能 周报',
+    skillReferences: [{ type: 'skill-action', action: 'create', label: '创建技能', offset: 3 }],
+  });
+  expect(removeSkillMentions(`${mention} 周报`)).toBe(' 周报');
 });

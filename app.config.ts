@@ -41,6 +41,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           : config.name!,
     slug: config.slug!,
     scheme: `cherrystudio${suffix.replace('.', '-')}`,
+    updates: {
+      ...config.updates,
+      enabled: profile !== 'development' && process.env.EXPO_PUBLIC_STORYBOOK_ENABLED !== 'true',
+    },
     ios: {
       ...config.ios,
       buildNumber: process.env.EAS_BUILD_IOS_BUILD_NUMBER ?? config.ios?.buildNumber,
@@ -99,7 +103,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
-      isApkUpdatesEnabled: apkUpdatesSetting === 'true',
+      // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
+      // Keeping it out of packaged configs keeps it out of their runtime fingerprints.
+      isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',
       sentryEnvironment: profile,
       reporting,
       eas: {

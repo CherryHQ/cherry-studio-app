@@ -10,6 +10,7 @@ export type {
   RuntimeExecutionIdentity,
   RuntimeExecutionPorts,
   RuntimeSqlDatabase,
+  RuntimeScriptSandbox,
   RuntimeUsageOwner,
 } from './durableTypes';
 

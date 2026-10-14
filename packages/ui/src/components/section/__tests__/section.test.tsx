@@ -33,7 +33,7 @@ jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
   };
 });
 
-jest.mock('../../switch/switch-control', () => {
+jest.mock('../../switch/switch-control/switch-control', () => {
   const React = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
 

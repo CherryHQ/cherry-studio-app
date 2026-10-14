@@ -86,6 +86,7 @@ export {
   type AgentSessionStatus,
   type AgentToolRef,
   type AgentToolInputPreview,
+  type AgentToolProgress,
   type AgentTurnView,
   type AgentView,
   type JsonValue,

@@ -1,7 +1,10 @@
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { getLocales } from 'expo-localization';
 import { Platform } from 'react-native';
+
+import { runningUpdate } from '@/backend/services/appUpdate';
 
 import type { DiagnosticWarning } from './types';
 
@@ -19,8 +22,8 @@ export function collectDiagnosticSystemInfo(warnings: Set<DiagnosticWarning>) {
     application: collectValue(warnings, () => ({
       isPackaged: !__DEV__,
       name: Constants.expoConfig?.name ?? 'Cherry Studio',
-      version: Constants.expoConfig?.version ?? 'unknown',
-      buildNumber: Constants.platform?.ios?.buildNumber ?? Constants.platform?.android?.versionCode,
+      version: Application.nativeApplicationVersion ?? 'unknown',
+      buildNumber: Application.nativeBuildVersion,
       profile: ['development', 'development-simulator', 'preview', 'production'].includes(
         Constants.expoConfig?.extra?.sentryEnvironment,
       )
@@ -41,8 +44,10 @@ export function collectDiagnosticSystemInfo(warnings: Set<DiagnosticWarning>) {
     },
     runtime: {
       expo: Constants.expoConfig?.sdkVersion,
-      runtimeVersion: Constants.expoRuntimeVersion,
-      updateId: Constants.manifest2?.id,
+      runtimeVersion: runningUpdate.runtimeVersion,
+      updateId: runningUpdate.updateId,
+      updateChannel: runningUpdate.channel,
+      isEmbeddedLaunch: runningUpdate.isEmbeddedLaunch,
       reactNative: Platform.constants.reactNativeVersion,
       hermes: 'HermesInternal' in globalThis,
     },

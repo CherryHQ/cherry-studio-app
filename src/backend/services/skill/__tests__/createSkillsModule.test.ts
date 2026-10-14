@@ -3,10 +3,11 @@ import type {
   SkillInstallRecord,
 } from '@/backend/data/services/AgentGlobalSkillService';
 import type { Skill } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
-import type { SkillEnvironmentFacts } from '../skillAdmission';
+import type { SkillPackageFiles } from '../skillPackage';
 import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
@@ -15,18 +16,10 @@ jest.mock('@/backend/services/http', () => ({
   isHttpError: () => false,
 }));
 
-const environment: SkillEnvironmentFacts = {
-  platform: 'ios',
-  permissions: {},
-  webSearchAvailability: { fetchUrls: false, searchKeywords: false },
-  hasPaintingModel: false,
-  connectedPlugins: new Map(),
-};
-
 const reviewed: BundledSkillDefinition = {
   name: 'notes',
   revision: 1,
-  requirements: { platforms: null, execution: 'none', builtInTools: [], pluginTools: [] },
+  requiredTools: [],
   workflowScope: 'Notes',
   files: {
     'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nWrite notes.',
@@ -36,19 +29,17 @@ const reviewed: BundledSkillDefinition = {
 const needsWeb: BundledSkillDefinition = {
   ...reviewed,
   name: 'web-notes',
-  requirements: {
-    platforms: null,
-    execution: 'none',
-    builtInTools: ['web_search'],
-    pluginTools: [],
-  },
+  requiredTools: ['web_search'],
   files: { 'SKILL.md': '---\nname: web-notes\ndescription: Web notes\n---\nSearch first.' },
 };
 const needsPython: BundledSkillDefinition = {
   ...reviewed,
   name: 'py-notes',
-  requirements: { platforms: null, execution: 'python', builtInTools: [], pluginTools: [] },
-  files: { 'SKILL.md': '---\nname: py-notes\ndescription: Py notes\n---\nRun python.' },
+  files: {
+    'SKILL.md':
+      '---\nname: py-notes\ndescription: Py notes\nallowed-tools: Bash(python:*) Read\n---\nRun python.',
+    'scripts/run.py': 'print(1)',
+  },
 };
 
 type Fakes = ReturnType<typeof createFakes>;
@@ -56,6 +47,8 @@ function createFakes() {
   const rows = new Map<string, Skill>();
   const published: string[] = [];
   const staged = new Set<string>();
+  const stageFiles = new Map<string, SkillPackageFiles>();
+  const revisionFiles = new Map<string, SkillPackageFiles>();
   let nextId = 1;
   const toSkill = (record: SkillInstallRecord, id: string, folderName: string): Skill => ({
     ...record,
@@ -103,18 +96,22 @@ function createFakes() {
       [...rows.values()].map((s) => ({ folderName: s.folderName, contentHash: s.contentHash })),
   } as unknown as AgentGlobalSkillService;
   const storage: SkillStorage = {
-    stage: async () => {
+    stage: async (files) => {
       const handle = `stage-${staged.size + 1}`;
       staged.add(handle);
+      stageFiles.set(handle, files);
       return handle;
     },
     discardStaging: (handle) => void staged.delete(handle),
     publish: async (handle, ref) => {
       if (!staged.delete(handle)) throw new Error('missing staging');
       published.push(`${ref.folderName}/${ref.contentHash}`);
+      revisionFiles.set(`${ref.folderName}/${ref.contentHash}`, stageFiles.get(handle)!);
+      stageFiles.delete(handle);
     },
     hasRevision: () => true,
-    readFile: async () => null,
+    readFile: async (ref, path) =>
+      revisionFiles.get(`${ref.folderName}/${ref.contentHash}`)?.get(path) ?? null,
     listFiles: () => [],
     removeSkill: (folderName) =>
       void published.splice(
@@ -142,6 +139,11 @@ const marketplace = {
   popular: async () => [],
   resolveUrl: async () => [],
   search: async () => [],
+  searchSkillsSh: async () => [],
+  listCherryin: async () => ({ items: [], nextOffset: null }),
+  getCherryin: async (): Promise<never> => {
+    throw new Error('unused');
+  },
 };
 
 function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
@@ -159,11 +161,11 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
         },
       }));
   return createSkillsModule({
+    readAuthor: async () => 'Current user',
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
-    environment: { read: async () => environment },
     sources: {
       bundled: createBundledSkillSource([]),
       github: {
@@ -183,20 +185,115 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
         },
       },
     },
-    agentFacts: async () => ({ disabledCapabilities: [], supportsToolCalling: true }),
+    agentExists: async () => true,
   });
 }
 
 describe('createSkillsModule', () => {
+  it('preserves a CherryIN installation when an upstream update changes its declared name', async () => {
+    const fakes = createFakes();
+    let name = 'notes';
+    const candidate = (): SkillSourceCandidate => ({
+      candidateId: `cherryin:${name}`,
+      name,
+      description: 'Take notes',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'cherryin',
+        locator: cherryinSkillLocator('notes', 'SKILL.md'),
+        url: cherryinSkillUrl('notes', 'SKILL.md'),
+        revision: name,
+      },
+    });
+    const module = createSkillsModule({
+      ...fakes,
+      readAuthor: async () => 'Current user',
+      marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
+      sources: {
+        bundled: createBundledSkillSource([]),
+        github: {
+          registry: 'github',
+          resolve: async () => {
+            throw new Error('unused');
+          },
+          resolveUrl: async () => {
+            throw new Error('unused');
+          },
+          acquire: async () => {
+            throw new Error('unused');
+          },
+        },
+        cherryin: {
+          registry: 'cherryin',
+          resolve: async () => candidate(),
+          acquire: async () => ({
+            expectedName: name,
+            files: new Map([
+              [
+                'SKILL.md',
+                new TextEncoder().encode(
+                  `---\nname: ${name}\ndescription: Take notes\n---\nWrite notes.`,
+                ),
+              ],
+            ]),
+          }),
+        },
+      },
+      agentExists: async () => true,
+    });
+    const [resolved] = await module.resolve(cherryinSkillUrl('notes'));
+    const installed = await module.install({ candidateId: resolved!.candidateId });
+    name = 'renamed-notes';
+    await expect(module.update(installed.id)).resolves.toMatchObject({
+      outcome: 'rejected',
+      inspection: { issues: [{ code: 'name-mismatch' }] },
+    });
+    expect(await fakes.skills.getById(installed.id)).toEqual(installed);
+    expect(fakes.published).toHaveLength(1);
+  });
+
+  it('saves generated content with the current author and no Agent binding', async () => {
+    const fakes = createFakes();
+    const module = createModule(fakes, []);
+    const changed = jest.fn();
+    module.subscribeChanges(changed);
+    const input = {
+      name: 'my-notes',
+      description: 'When asked for notes',
+      instructions: 'Keep notes concise.',
+      allowedTools: ['write_file'],
+      tags: ['notes'],
+    };
+    const saved = await module.create(input);
+    expect(saved).toMatchObject({
+      source: 'marketplace',
+      sourceUrl: null,
+      name: input.name,
+      author: 'Current user',
+      version: '1.0',
+      tags: ['notes'],
+      profile: { declaredTools: ['write_file'] },
+    });
+    expect(await module.instructionReader.read(saved)).toBe(input.instructions);
+    expect(fakes.bound).toEqual([]);
+    expect(changed).toHaveBeenCalledTimes(1);
+    await expect(module.create(input)).rejects.toMatchObject({ code: 'already-installed' });
+    expect(fakes.rows.size).toBe(1);
+    expect(fakes.bound).toEqual([]);
+    await expect(module.update(saved.id)).rejects.toMatchObject({ code: 'source-invalid' });
+  });
+
   it('refuses to expose system workflows as installable candidates', async () => {
     const fakes = createFakes();
     const bundled = createBundledSkillSource();
     const module = createSkillsModule({
+      readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      environment: { read: async () => environment },
       sources: {
         bundled,
         github: {
@@ -207,7 +304,7 @@ describe('createSkillsModule', () => {
           },
         },
       },
-      agentFacts: async () => ({ disabledCapabilities: [], supportsToolCalling: true }),
+      agentExists: async () => true,
     });
     await expect(module.resolve('https://github.com/owner/repo')).rejects.toMatchObject({
       code: 'source-invalid',
@@ -250,7 +347,7 @@ describe('createSkillsModule', () => {
     expect(fakes.bound).toEqual([`first:${installed.id}`, `second:${installed.id}`]);
   });
 
-  it('inspects, binds explicitly, and installs packages despite environment limitations', async () => {
+  it('inspects, binds explicitly, and installs packages despite app limitations', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [reviewed, needsWeb, needsPython]);
     const changes = jest.fn();
@@ -258,21 +355,17 @@ describe('createSkillsModule', () => {
     const [notes, web, py] = await module.resolve('https://github.com/owner/repo');
     expect(notes).toMatchObject({
       name: 'notes',
-      profileProvenance: 'reviewed',
       installedSkillId: null,
     });
 
     const inspection = await module.inspect(notes!.candidateId);
     expect(inspection).toMatchObject({
       issues: [],
-      admission: { status: 'ready', reasons: [] },
+      limitations: { scripts: [], unavailableTools: [] },
       package: { name: 'notes', manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }] },
     });
-    expect(await module.inspect(web!.candidateId)).toMatchObject({
-      admission: { status: 'setup-required' },
-    });
     expect(await module.inspect(py!.candidateId)).toMatchObject({
-      admission: { status: 'unsupported' },
+      limitations: { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] },
     });
     expect(fakes.staged.size).toBe(0);
 
@@ -283,7 +376,7 @@ describe('createSkillsModule', () => {
     expect(installed).toMatchObject({
       name: 'notes',
       folderName: 'notes',
-      profile: { provenance: 'reviewed' },
+      profile: { declaredTools: [] },
     });
     expect(fakes.published).toEqual([`notes/${installed.contentHash}`]);
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
@@ -372,7 +465,7 @@ describe('createSkillsModule', () => {
     expect(fakes.storage.reconcile).toHaveBeenCalledWith([]);
   });
 
-  it('installs and updates complete external packages without inferring execution support', async () => {
+  it('records what a package asks of the app at installation and again on update', async () => {
     const fakes = createFakes();
     let files: Record<string, string> = {
       'SKILL.md':
@@ -387,7 +480,6 @@ describe('createSkillsModule', () => {
       author: null,
       version: null,
       tags: [],
-      reviewed: null,
       source: {
         registry: 'github',
         locator: 'github:owner/repo/notes',
@@ -396,11 +488,11 @@ describe('createSkillsModule', () => {
       },
     };
     const module = createSkillsModule({
+      readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
-      environment: { read: async () => environment },
       sources: {
         bundled: createBundledSkillSource([]),
         github: {
@@ -415,15 +507,12 @@ describe('createSkillsModule', () => {
           resolveUrl: async () => candidate,
         },
       },
-      agentFacts: async () => ({ disabledCapabilities: ['web'], supportsToolCalling: false }),
+      agentExists: async () => true,
     });
     const [resolved] = await module.resolve(candidate.source.url!);
+    // Prose mentioning Python is not read; the script file is a fact of the package.
     expect(await module.inspect(resolved!.candidateId)).toMatchObject({
-      profile: {
-        provenance: 'unverified',
-        requirements: { execution: 'none', builtInTools: [], pluginTools: [] },
-      },
-      admission: { status: 'unverified', reasons: [] },
+      limitations: { scripts: ['scripts/fill.py'], unavailableTools: [] },
     });
     const installed = await module.install({
       candidateId: resolved!.candidateId,
@@ -434,16 +523,18 @@ describe('createSkillsModule', () => {
       'references/outline.md',
       'scripts/fill.py',
     ]);
+    expect(installed.profile).toEqual({ declaredTools: [] });
     expect(fakes.bound).toEqual([`agent-1:${installed.id}`]);
     expect((await module.update(installed.id)).outcome).toBe('unchanged');
     files = {
-      'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun `python scripts/fill.py`.',
+      'SKILL.md':
+        '---\nname: notes\ndescription: Take notes\nallowed-tools: Bash Read\n---\nRun `python scripts/fill.py`.',
       'scripts/fill.py': 'print(1)',
     };
     expect(await module.update(installed.id)).toMatchObject({
       outcome: 'updated',
       skill: {
-        profile: { provenance: 'unverified' },
+        profile: { declaredTools: ['Bash', 'Read'] },
         manifest: [{ path: 'SKILL.md' }, { path: 'scripts/fill.py' }],
       },
     });

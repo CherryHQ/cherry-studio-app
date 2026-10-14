@@ -151,36 +151,35 @@ function fixture(
   };
 }
 
-it.each([
-  { agentAttachmentSelections: false },
-  { agentUploadsVersion: 0 },
-  { agentUploadChecksum: undefined },
-])('disables attachments after reconnect loses capability %j', async (unsupported) => {
-  const test = fixture();
-  test.connection.agentAttachmentSelections = true;
-  const signal = new AbortController().signal;
-  await test.source.listAgents(undefined, signal);
-  expect(test.source.getState().attachments).toBe(true);
+it.each([{ agentAttachmentSelections: false }, { agentUploadsVersion: 0 }])(
+  'disables attachments after reconnect loses capability %j',
+  async (unsupported) => {
+    const test = fixture();
+    test.connection.agentAttachmentSelections = true;
+    const signal = new AbortController().signal;
+    await test.source.listAgents(undefined, signal);
+    expect(test.source.getState().attachments).toBe(true);
 
-  test.setState({ status: 'suspended' });
-  Object.assign(test.connection, unsupported);
-  test.setState({ status: 'ready' });
-  await test.source.listAgents(undefined, signal);
-  expect(test.source.getState().attachments).toBe(false);
-  expect(test.source.getState().preupload).toBe(test.connection.agentAttachmentSelections);
+    test.setState({ status: 'suspended' });
+    Object.assign(test.connection, unsupported);
+    test.setState({ status: 'ready' });
+    await test.source.listAgents(undefined, signal);
+    expect(test.source.getState().attachments).toBe(false);
+    expect(test.source.getState().preupload).toBe(test.connection.agentAttachmentSelections);
 
-  Object.assign(test.connection, {
-    agentAttachmentSelections: true,
-    agentUploadsVersion: 1,
-    agentUploadChecksum: 'sha256',
-  });
-  await test.source.listAgents(undefined, signal);
-  expect(test.source.getState().attachments).toBe(true);
-  test.source.dispose();
-  await test.source.drain();
-});
+    Object.assign(test.connection, {
+      agentAttachmentSelections: true,
+      agentUploadsVersion: 1,
+      agentUploadChecksum: 'sha256',
+    });
+    await test.source.listAgents(undefined, signal);
+    expect(test.source.getState().attachments).toBe(true);
+    test.source.dispose();
+    await test.source.drain();
+  },
+);
 
-it('does not notify capability subscribers repeatedly for a checksum-incapable desktop', async () => {
+it('does not notify capability subscribers when only the checksum mode changes', async () => {
   const test = fixture();
   Object.assign(test.connection, {
     agentAttachmentSelections: true,
@@ -191,7 +190,12 @@ it('does not notify capability subscribers repeatedly for a checksum-incapable d
   const signal = new AbortController().signal;
   await test.source.listAgents(undefined, signal);
   const initial = test.source.getState();
-  expect(initial).toMatchObject({ attachments: false, preupload: true });
+  expect(initial).toMatchObject({ attachments: true, preupload: true });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState()).toBe(initial);
+  expect(states).toEqual([initial]);
+
+  test.connection.agentUploadChecksum = 'sha256';
   await test.source.listAgents(undefined, signal);
   expect(test.source.getState()).toBe(initial);
   expect(states).toEqual([initial]);
@@ -201,6 +205,21 @@ it('does not notify capability subscribers repeatedly for a checksum-incapable d
   expect(test.source.getState()).toMatchObject({ attachments: false, preupload: false });
   expect(states).toHaveLength(2);
   unsubscribe();
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('keeps attachments available after reconnecting to a desktop without source checksums', async () => {
+  const test = fixture();
+  test.connection.agentAttachmentSelections = true;
+  const signal = new AbortController().signal;
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState().attachments).toBe(true);
+  test.setState({ status: 'suspended' });
+  Object.assign(test.connection, { agentUploadChecksum: undefined });
+  test.setState({ status: 'ready' });
+  await test.source.listAgents(undefined, signal);
+  expect(test.source.getState()).toMatchObject({ attachments: true, preupload: true });
   test.source.dispose();
   await test.source.drain();
 });
@@ -1009,6 +1028,76 @@ it('keeps a command whose reply was lost in transit uncertain rather than failed
   test.source.dispose();
   await test.source.drain();
 });
+
+it.each([undefined, 'sha256'] as const)(
+  'sends uploaded file references with desktop checksum capability %s',
+  async (checksumAlgorithm) => {
+    const test = fixture(undefined, undefined, {
+      resolve: jest.fn(),
+      prepareUploadSource: jest.fn(),
+      hashFile: jest.fn(),
+    });
+    const write = jest.fn(async () => ({
+      ok: true,
+      requestId: 'ack',
+      uploadId: 'uploaded-file',
+      writerEpoch: '1',
+      committedOffset: '3',
+    }));
+    Object.assign(test.connection, {
+      agentUploadChecksum: checksumAlgorithm,
+      sendUploadChunk: write,
+    });
+    let snapshot: RemoteSessionSnapshot | undefined;
+    const unobserve = test.source.observe('s', (value) => {
+      snapshot = value;
+    });
+    await settle();
+    const chunk = {
+      uploadId: 'uploaded-file',
+      writerEpoch: '1',
+      offset: '0',
+      bytes: new Uint8Array([1, 2, 3]),
+    };
+    const upload = jest
+      .spyOn(remoteUploads, 'uploadAttachments')
+      .mockImplementationOnce(
+        async (_attachments, _files, _request, signal, _progress, _saved, _save, getTransport) => {
+          const transport = await getTransport(signal);
+          expect(transport.checksumAlgorithm).toBe(checksumAlgorithm);
+          await transport.write(chunk, signal);
+          return [{ uploadId: chunk.uploadId }];
+        },
+      );
+    try {
+      const sent = await test.source.send(snapshot!.sendTarget!, '', [
+        {
+          fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+          name: 'report.pdf',
+          mediaType: 'application/pdf',
+        },
+      ]);
+      expect(write).toHaveBeenCalledWith(chunk, expect.any(AbortSignal));
+      expect(
+        test.request.mock.calls.filter(([method]) => method === 'agent.messages.send'),
+      ).toEqual([
+        [
+          'agent.messages.send',
+          expect.objectContaining({
+            commandId: sent.id,
+            attachments: [{ uploadId: chunk.uploadId }],
+          }),
+          expect.any(AbortSignal),
+        ],
+      ]);
+    } finally {
+      upload.mockRestore();
+      unobserve();
+      test.source.dispose();
+      await test.source.drain();
+    }
+  },
+);
 
 it.each(['offline', 'suspended'] as const)(
   'keeps an upload recoverable when the lease becomes %s between requests',

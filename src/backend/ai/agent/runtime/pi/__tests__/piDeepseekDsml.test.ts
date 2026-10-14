@@ -306,7 +306,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
     };
     const responses = [
       '<｜DSML｜Tool loop><search>save note</search></｜DSML｜Tool>',
-      '<｜DSML｜tool_calls><｜DSML｜invoke name="tool_call"><｜DSML｜parameter name="name" string="true">mcp__notes__save</｜DSML｜parameter><｜DSML｜parameter name="params" string="false">{"text":"hello"}</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>',
+      '<｜DSML｜tool_calls><｜DSML｜invoke name="mcp__notes__save"><｜DSML｜parameter name="text" string="true">hello</｜DSML｜parameter></｜DSML｜invoke></｜DSML｜tool_calls>',
       'Saved your note.',
     ];
     const { requests, messages } = await runDurableLoop(() => {
@@ -317,7 +317,7 @@ describe('Pi DeepSeek DSML adaptation', () => {
     expect(executions).toEqual([{ text: 'hello' }]);
     expect(requests).toHaveLength(3);
     expect(getCurrentTools(requests[1]!.messages).map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(['tool_search', 'tool_describe', 'tool_call']),
+      expect.arrayContaining(['tool_search', 'mcp__notes__save']),
     );
     expect(messages.at(-1)).toMatchObject({
       role: 'assistant',

@@ -317,6 +317,7 @@ async function resolveRuntimeImages(
       }
       images.set(fact.fileEntryId, {
         type: 'file',
+        fileEntryId: fact.fileEntryId,
         mediaType: fact.mediaType,
         name: fact.name,
         uri,

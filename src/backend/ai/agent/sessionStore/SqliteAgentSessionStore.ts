@@ -653,6 +653,24 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async loadWorkflowLoads(sessionId: string) {
+    const rows = await readSqliteRows<{ workflowId: unknown }>(
+      this.dbService.getSqlite(),
+      sql`
+        SELECT json_extract(part.value, '$.output.value.workflow_id') AS "workflowId"
+        FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+          AND json_extract(part.value, '$.type') = 'dynamic-tool'
+          AND json_extract(part.value, '$.toolRef.source') = 'builtin'
+          AND json_extract(part.value, '$.toolRef.capabilityId') = 'load_workflow'
+          AND json_extract(part.value, '$.state') = 'output-available'
+          AND json_extract(part.value, '$.output.value.status') = 'ok'
+        ORDER BY message.created_at, message.id, part.key
+      `,
+    );
+    return rows.flatMap(({ workflowId }) => (typeof workflowId === 'string' ? [workflowId] : []));
+  }
+
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
     const [row] = await readSqliteRows<{ assistantMessageId: string; checkpointJson: string }>(
       this.dbService.getSqlite(),

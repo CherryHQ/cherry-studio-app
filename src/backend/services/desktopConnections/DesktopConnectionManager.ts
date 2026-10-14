@@ -26,7 +26,7 @@ import type {
   DesktopDomainLease,
   DesktopLeaseState,
 } from './connectionPorts';
-import { DesktopDiscovery } from './desktopDiscovery';
+import { DesktopDiscovery } from './DesktopDiscovery';
 import { DesktopEndpointResolver } from './DesktopEndpointResolver';
 import { DesktopSession } from './DesktopSession';
 import { loadDeviceIdentity } from './deviceIdentity';

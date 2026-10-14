@@ -25,10 +25,12 @@ import {
 import {
   type AgentSkillBinding,
   AgentSkillBindingSchema,
+  EMPTY_SKILL_PROFILE,
   type Skill,
   type SkillInvocation,
   type SkillManifestEntry,
   type SkillProfile,
+  SkillProfileSchema,
   SkillSchema,
   type SkillSourceKind,
 } from '@/shared/data/types/skill';
@@ -61,7 +63,7 @@ export type ListSkillsResult = {
   nextCursor?: string;
 };
 
-/** Everything an Agent turn needs to know before evaluating environment eligibility. */
+/** Everything an Agent turn needs to know about one usable Skill. */
 export type AgentSkillProjection = {
   skill: Skill;
   binding: AgentSkillBinding;
@@ -80,7 +82,8 @@ export function rowToSkill(row: AgentGlobalSkillRow): Skill {
     tags: row.tags,
     contentHash: row.contentHash,
     manifest: row.manifest,
-    profile: row.profile,
+    // Rows written before profiles held package facts report none until their next update.
+    profile: SkillProfileSchema.safeParse(row.profile).data ?? EMPTY_SKILL_PROFILE,
     invocation: row.invocation,
     isEnabled: row.isEnabled,
     createdAt: timestampToISO(row.createdAt),
@@ -126,9 +129,9 @@ function escapeLike(term: string): string {
 /**
  * Persistence for the installed Skill library and Agent bindings.
  *
- * Global enablement and Agent enablement are user intent and live here.
- * Environment admission is derived by the Skills workflow owner from these
- * facts; this service never stores an availability boolean.
+ * Global enablement and Agent enablement are user intent and live here. The
+ * profile holds what the package asks of its host; the Skills workflow owner
+ * compares it with the app, and this service never stores an availability boolean.
  */
 export class AgentGlobalSkillService {
   private get dbService() {
@@ -452,6 +455,20 @@ export class AgentGlobalSkillService {
     if (!row) {
       throw DataApiErrorFactory.notFound('Skill', skillId);
     }
+  }
+
+  /** Installed members belonging to one marketplace package, including disabled entries. */
+  async listBySourcePrefix(prefix: string): Promise<Skill[]> {
+    const rows = await this.db
+      .select()
+      .from(agentGlobalSkillTable)
+      .where(
+        and(
+          eq(agentGlobalSkillTable.source, 'marketplace'),
+          sql`substr(${agentGlobalSkillTable.sourceUrl}, 1, ${prefix.length}) = ${prefix}`,
+        ),
+      );
+    return rows.map(rowToSkill);
   }
 
   /** Folders and hashes in use, for storage reconciliation. */

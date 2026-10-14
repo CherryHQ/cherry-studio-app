@@ -72,6 +72,10 @@ test('exports only allowlisted trace fields even if stored metadata contains ext
       'http.status_code': 403,
       'tool.name': 'list_tasks',
       'error.code': 'Bearer-private',
+      'error.stage': 'stream',
+      'error.category': 'permission',
+      'error.retryable': false,
+      'tool.result.status': 'partial',
       endpoint: 'https://private.test',
       'tool.arguments': 'private parameters',
       'tool.result': 'private response',
@@ -85,9 +89,14 @@ test('exports only allowlisted trace fields even if stored metadata contains ext
       'plugin.error.reason': 'access',
       'http.status_code': 403,
       'tool.name': 'list_tasks',
+      'error.stage': 'stream',
+      'error.category': 'permission',
+      'error.retryable': false,
+      'tool.result.status': 'partial',
     },
   });
-  expect(JSON.stringify(projected)).not.toMatch(/private|Bearer|endpoint|arguments|result/);
+  expect(JSON.stringify(projected)).not.toMatch(/private|Bearer|endpoint|arguments/);
+  expect(projected?.attributes).not.toHaveProperty(['tool.result']);
   expect(projectDiagnosticTrace({ ...record, name: 'agent.event' })).toBeUndefined();
 });
 
@@ -107,6 +116,50 @@ test('uses terminal time for completed requests and start time for unfinished re
     ),
   ).toBeUndefined();
 });
+
+test.each(['running', 'ok', 'error', 'cancelled'] as const)(
+  'exports Pi tool execution records with status %s instead of reporting malformed lines',
+  (status) => {
+    const record = {
+      ...trace,
+      name: 'pi.execute_tool',
+      status,
+      ...(status === 'running' ? { revision: 1, endedAt: undefined, durationMs: undefined } : {}),
+      context: { agentId: 'agent-1', sessionId: 'session-1', turnId: 'turn-1' },
+      attributes: {
+        'tool.name': 'fetch_url',
+        'tool.call.id': 'call-1',
+        'error.code': 'web_lookup_failed',
+        'error.retryable': false,
+        'tool.arguments': 'private parameters',
+        'tool.result': 'private response',
+      },
+    };
+    const projected = projectDiagnosticLine(
+      { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(record)) },
+      'traces',
+      { fromMs: 0, toMs: 1000 },
+    );
+    expect(projected).toEqual({
+      timestamp: status === 'running' ? 100 : 200,
+      data: expect.any(Uint8Array),
+    });
+    if (!projected || projected === 'malformed') throw new Error('Expected exported tool trace');
+    const exported = new TextDecoder().decode(projected.data);
+    expect(JSON.parse(exported)).toMatchObject({
+      name: record.name,
+      status,
+      context: record.context,
+      attributes: {
+        'tool.name': 'fetch_url',
+        'tool.call.id': 'call-1',
+        'error.code': 'web_lookup_failed',
+        'error.retryable': false,
+      },
+    });
+    expect(exported).not.toMatch(/private|arguments|result/);
+  },
+);
 
 test.each([
   'pi.execute_tool',

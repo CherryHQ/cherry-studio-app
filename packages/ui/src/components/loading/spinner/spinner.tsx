@@ -1,7 +1,7 @@
 import type { Ref } from 'react';
 import type { View, ViewProps } from 'react-native';
 
-import { SpinnerControl } from './spinner-control';
+import { SpinnerControl } from './spinner-control/spinner-control';
 
 export type SpinnerSize = 'default' | 'lg' | 'sm';
 export type SpinnerColor = 'danger' | 'default' | 'success' | 'warning' | (string & {});

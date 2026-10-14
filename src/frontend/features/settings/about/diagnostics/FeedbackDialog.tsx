@@ -70,7 +70,7 @@ export function FeedbackDialog({
           <TextField invalid={showError}>
             <Input
               accessibilityLabel={t('settings.about.diagnostics.description')}
-              className="min-h-36"
+              className="min-h-36 ios:shadow-field android:shadow-sm"
               invalid={showError}
               multiline
               onChangeText={setDescription}
