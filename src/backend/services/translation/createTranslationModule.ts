@@ -1,4 +1,3 @@
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { TranslationError, type TranslationModule } from '@/shared/contracts/translation';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
@@ -20,7 +19,9 @@ export function createTranslationModule({
       onText?: (text: string) => void,
     ): Promise<{ finishReason: string; text: string }>;
   };
-  preference: Pick<PreferenceService, 'get'>;
+  preference: {
+    get(key: 'feature.translate.model_id' | 'agent.default_model_id'): Promise<string | null>;
+  };
   models: Pick<ModelService, 'getById'>;
 }): TranslationModule {
   return {
