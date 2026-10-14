@@ -84,6 +84,11 @@ export function SkillListScreen() {
           ...(canAddInChat
             ? [
                 {
+                  id: 'skill-create',
+                  label: t('skills.create.name'),
+                  onPress: () => void open('create'),
+                },
+                {
                   id: 'skill-add-chat',
                   label: t('skills.addInChat'),
                   onPress: () => void open(),
@@ -108,6 +113,7 @@ export function SkillListScreen() {
           hint={
             canAddInChat
               ? t('skills.installedEmptyHint', {
+                  create: t('skills.create.name'),
                   add: t('skills.addInChat'),
                   discover: t('skills.discover.title'),
                 })

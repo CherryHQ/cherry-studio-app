@@ -68,6 +68,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   intent to the conversation workflow. Rejected sends retain it, successful sends clear the
   submitted selection, and switching Agents clears it. The Host owns discovery,
   admission, installation and enabling for the current Agent.
+- **Create Skill** in the same library menu seeds a removable `create-skill` reference. Its `create`
+  action shares the discovery handoff, send, retry and history contract. The Host owns full-content
+  review and explicit save/binding choices. Trial opens a fresh unsent installed-Skill draft.
 - The plus menu does not add or discover Skills; it only selects installed Skills for use.
 - The menu's Skills row opens the same anchored small-menu presentation as Plugins, listing eligible
   installed bindings for the current Agent. A row inserts an inline Skill reference and closes the

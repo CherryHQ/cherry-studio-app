@@ -1,8 +1,8 @@
 import type { PluginTextReference } from '@/shared/data/types/plugin';
-import type { SkillListItem, SkillTextReference } from '@/shared/data/types/skill';
+import type { SkillAction, SkillListItem, SkillTextReference } from '@/shared/data/types/skill';
 
 const SKILL_MENTION_PATTERN =
-  /\[((?:\\.|[^\]\\\n])+)\]\(skill:\/\/(?:builtin\/(find-skills)|installed\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\)/gi;
+  /\[((?:\\.|[^\]\\\n])+)\]\(skill:\/\/(?:builtin\/(find-skills|create-skill)|installed\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\)/gi;
 
 export function createSkillMentionLabel(label: string): string {
   return `\uFFFC\u2009${label}`;
@@ -12,9 +12,9 @@ export function createSkillMentionUrl(skillId: string): string {
   return `skill://installed/${skillId}`;
 }
 
-export function createFindSkillsMention(label: string): string {
+export function createSkillActionMention(action: SkillAction, label: string): string {
   const escapedLabel = createSkillMentionLabel(label).replace(/[\\[\]]/g, '\\$&');
-  return `[${escapedLabel}](skill://builtin/find-skills)`;
+  return `[${escapedLabel}](skill://builtin/${action === 'create' ? 'create-skill' : 'find-skills'})`;
 }
 
 function isEscaped(draft: string, offset: number): boolean {
@@ -29,7 +29,7 @@ export function readSkillMentions(
   pluginReferences: readonly PluginTextReference[] = [],
 ): {
   skills: Pick<SkillListItem, 'id' | 'name'>[];
-  skillAction?: 'find-and-install';
+  skillAction?: SkillAction;
   skillReferences: SkillTextReference[];
   pluginReferences: PluginTextReference[];
   text: string;
@@ -37,7 +37,7 @@ export function readSkillMentions(
   const skills = new Map<string, Pick<SkillListItem, 'id' | 'name'>>();
   const skillReferences: SkillTextReference[] = [];
   const replacements: { end: number; removedLength: number }[] = [];
-  let skillAction: 'find-and-install' | undefined;
+  let skillAction: SkillAction | undefined;
   let text = '';
   let cursor = 0;
   for (const match of draft.matchAll(SKILL_MENTION_PATTERN)) {
@@ -48,7 +48,7 @@ export function readSkillMentions(
     text += draft.slice(cursor, match.index);
     const offset = text.length;
     if (builtin) {
-      skillAction = 'find-and-install';
+      skillAction = builtin.toLowerCase() === 'create-skill' ? 'create' : 'find-and-install';
       skillReferences.push({ type: 'skill-action', action: skillAction, label, offset });
     } else {
       const id = skillId.toLowerCase();

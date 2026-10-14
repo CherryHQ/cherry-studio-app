@@ -4,3 +4,4 @@ export {
   SEARCH_LOCAL_SKILLS_TOOL_NAME,
 } from './skillTools';
 export { createSkillManagementTools } from './skillManagementTools';
+export { createSkillCreationTool } from './skillCreationTool';
