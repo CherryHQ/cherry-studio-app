@@ -404,17 +404,29 @@ export function mergeAgentMessageViews(
   if (live.length === 0) {
     return persisted;
   }
-
-  const liveById = new Map(live.map((message) => [message.id, message]));
-  const merged = persisted.map((message) => liveById.get(message.id) ?? message);
-  const persistedIds = new Set(persisted.map((message) => message.id));
-
-  for (const message of live) {
-    if (!persistedIds.has(message.id)) {
-      merged.push(message);
-    }
+  if (persisted.length === 0) {
+    return live;
   }
 
+  const liveById = new Map(live.map((message) => [message.id, message]));
+  const persistedIds = new Set(persisted.map((message) => message.id));
+  const compareMessages = (left: AgentMessageView, right: AgentMessageView) =>
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+    // Match the store's binary (createdAt, id) order, not locale collation.
+    (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  const newLive = live.filter((message) => !persistedIds.has(message.id)).toSorted(compareMessages);
+  const merged: AgentMessageView[] = [];
+  let liveIndex = 0;
+
+  // A bounded history window can omit older live rows. Insert them in transcript
+  // order instead of moving old questions after the latest saved answers.
+  for (const message of persisted) {
+    while (liveIndex < newLive.length && compareMessages(newLive[liveIndex], message) < 0) {
+      merged.push(newLive[liveIndex++]);
+    }
+    merged.push(liveById.get(message.id) ?? message);
+  }
+  merged.push(...newLive.slice(liveIndex));
   return merged;
 }
 
