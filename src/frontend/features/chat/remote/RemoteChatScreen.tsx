@@ -207,6 +207,7 @@ function RemoteChatSession() {
                 snapshot={snapshot}
                 messageWindow={history}
                 sessionId={target.sessionId}
+                assistantEmoji={agent?.emoji}
                 assistantName={agent?.name}
                 isAssistantToolbarEnabled
                 contentBottomInset={composerContentGap}
