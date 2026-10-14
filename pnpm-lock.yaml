@@ -447,7 +447,7 @@ importers:
         specifier: ~57.0.3
         version: 57.0.3(expo@57.0.24)(react-native-web@0.21.2(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(supports-color@8.1.1)
       expo-updates:
-        specifier: 57.0.23
+        specifier: ~57.0.23
         version: 57.0.23(expo-dev-client@57.0.18(expo@57.0.24)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1)))(expo@57.0.24)(react-native@0.86.3(patch_hash=4cba38531453ffe33a182aae939b0ea844412679dcc3592d1f97e6a52c831755)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/jest-preset@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1))(@react-native/metro-config@0.86.3(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.3)(supports-color@8.1.1))(react@19.2.3)(supports-color@8.1.1)
       expo-web-browser:
         specifier: ~57.0.2
