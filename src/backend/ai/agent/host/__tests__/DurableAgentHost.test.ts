@@ -752,6 +752,49 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('keeps a plugin guide loaded in an earlier turn in the next turn system context', async () => {
+    const pluginTool: RuntimeTool = {
+      ref: { source: 'mcp', serverId: 'feishu-1', rawToolName: 'fetch-doc' },
+      providerName: 'mcp_feishu_fetch_doc',
+      displayName: 'Fetch document',
+      description: '',
+      inputSchema: { type: 'object' },
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const guide = { pluginId: 'feishu', serverId: 'feishu-1', revision: 5, content: 'Read first.' };
+    const state = fixture({
+      runtimeTools: { resolve: async () => ({ tools: [pluginTool], pluginGuides: [guide] }) },
+    });
+    const configure = jest.spyOn(state.conversations, 'configure');
+    const turn = await state.reserve();
+    turn.parts.push({
+      id: 'load',
+      type: 'tool',
+      toolCallId: 'load',
+      toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+      providerName: 'load_workflow',
+      displayName: 'load_workflow',
+      state: 'output-available',
+      input: { workflow_id: 'plugin:feishu-1' },
+      output: { value: { status: 'ok', workflow_id: 'plugin:feishu-1' }, artifacts: [] },
+    });
+    await state.host.initialize();
+    try {
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Update the same document.' }],
+      });
+      expect(configure.mock.lastCall?.[1].initialInstructions).toEqual([
+        { key: 'workflow:plugin:feishu-1', text: expect.stringContaining('Read first.') },
+      ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('settles completed native results at startup and keeps the idle working copy', async () => {
     const { traces, records } = createTraceRecorder();
     const state = fixture({ traces });

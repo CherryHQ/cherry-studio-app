@@ -18,9 +18,10 @@ the Skill or open a file viewer.
 
 Structured notes, research brief and daily agenda are app-owned system workflows. The Host includes
 their instructions and templates in internal system context, independently of installed packages or
-Agent bindings. Calendar and research workflows are included only when all their required built-in
-tools are present in the current turn. They are not listed, recommended, installable or selectable
-in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
+Agent bindings. They are short enough to stay resident, so a matching request never depends on the
+model loading them first. Calendar and research workflows are included only when all their required
+built-in tools are present in the current turn. They are not listed, recommended, installable or
+selectable in user Skill pages. Earlier `builtin` installation records and package bytes remain available to
 backups, but are excluded from user reads, binding updates and installed runtime scope. Installing a
 user package with the same folder name replaces that hidden legacy record and its bindings; its old
 bytes follow ordinary storage reconciliation.
@@ -133,8 +134,8 @@ its token is the only handoff data in navigation parameters. Opening the draft d
 message or install a package. Sending persists the structured `find-and-install` intent on the user
 message, including retries. Deleting the reference cancels the installation intent. Rejected sends
 retain the reference, successful sends clear the submitted selection, and switching Agents clears it.
-The app-owned discovery instructions are always available
-when management tools are present, so no bootstrap package needs to be installed first. The
+The complete app-owned discovery workflow is available when management tools are present,
+so no bootstrap package needs to be installed first. The
 composer plus menu only selects already installed Skills. Manual discovery is available through
 **Discover Skills** in the same **More** menu. That page opens on the popular list, so it offers
 something to browse before any query; its search shows the same list while the query is empty.
@@ -292,12 +293,14 @@ limited to paths in the accepted manifest. The model-facing tools are:
 | `install_skill` | Validate, install and bind one Skill for this Agent; append it to the turn |
 | `adapt_skill` | Review bounded local entry changes in the existing question sheet, save on explicit consent and replace current-turn instructions |
 
-These are directly exposed built-in functions, not MCP catalog entries. `tool_search` searches only
-MCP tools, so no matches there say nothing about Skill access. Pi Durable does not need a desktop
-filesystem path: the Host reads the app-managed `SKILL.md`, selected instructions go into the system
-prompt, and automatic loading returns the body through `load_skill`.
+These are application built-ins. Skill metadata, instruction and package file readers are directly
+exposed; discovery, installation and adaptation tools are deferred and found with
+`tool_search` by exact name. A search for a generic Skill tool does not describe installed package
+availability: use `search_local_skills` for that inventory. Pi Durable does not need a desktop
+filesystem path; the Host reads the app-managed `SKILL.md` and supplies its body in trusted system
+sections while `load_skill` returns a receipt.
 
-The initial catalog contains at most 40 whole name/ID/description entries within a 12,000-character
+The initial catalog retains at most 40 whole name/ID/description entries within a 12,000-character
 metadata budget. Descriptions are not individually truncated: their trailing usage conditions must
 remain available for model routing. When either bound omits entries, the prompt directs the model to
 search before concluding that no Skill fits. Search covers the remaining eligible

@@ -273,6 +273,8 @@ export type RuntimeTool = {
    * (cost-bearing or permission-gated calls). Absent means eligible.
    */
   autoApprovalEligible?: boolean;
+  /** Refuse before approval until a trusted instruction section with this key is in context. */
+  requiredInstructions?: { key: string; refusal: string };
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

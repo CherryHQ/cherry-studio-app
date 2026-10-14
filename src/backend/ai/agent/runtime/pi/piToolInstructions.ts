@@ -1,5 +1,10 @@
 import type { Context } from '@earendil-works/chord';
-import { defineDoc, section, type ToolExecutionApi } from '@earendil-works/pi-durable';
+import {
+  defineDoc,
+  type HookApi,
+  section,
+  type ToolExecutionApi,
+} from '@earendil-works/pi-durable';
 import { z } from 'zod';
 
 import type { RuntimeToolResult } from '../types';
@@ -49,4 +54,13 @@ export async function retainToolInstructions(
       throw new Error('The retained tool instruction budget is full.');
     document.sections = sections;
   }, context);
+}
+
+export async function hasToolInstructions(
+  key: string,
+  api: HookApi,
+  context: Context,
+): Promise<boolean> {
+  const document = await api.snapshot(ToolInstructions, api.conversationId, context);
+  return document?.sections.some((section) => section.key === key) ?? false;
 }

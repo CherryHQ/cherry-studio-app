@@ -221,18 +221,23 @@ describe('buildAgentSystemPrompt', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: 'Keep the answer brief.',
       appLanguage: 'zh-CN',
-      tools: [mcpTool()],
+      tools: [mcpTool(), tool('load_workflow')],
       pluginGuides: [
         {
           pluginId: 'example',
           serverId: 'server-1',
           revision: 2,
+          overview: 'Read and edit remote repository resources; honor the requested branch.',
           content: 'Read before editing.',
         },
       ],
     });
-    expect(prompt).toContain('Bundled plugin: example (revision 2; connection server-1)');
-    expect(prompt).toContain('Read before editing.');
+    expect(prompt).toContain('plugin:server-1: example workflows');
+    expect(prompt).not.toContain('Read before editing.');
+    expect(prompt).toContain('honor the requested branch');
+    expect(prompt).toContain('load its guide with `load_workflow`');
+    expect(prompt).toContain('its tools refuse to run until then');
+    expect(prompt).toContain('stays in system context for later turns');
     expect(prompt).toContain('Agent Instructions take precedence over these guides');
     expect(prompt).toContain('not callable aliases');
     expect(prompt).toContain('a guide is not evidence that a tool has been inspected');
