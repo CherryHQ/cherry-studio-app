@@ -38,6 +38,13 @@ Capture finishes before navigation. Repeated shakes cannot overlap capture or op
 forms. Switching routes, backgrounding, or unmounting invalidates pending capture and deletes its
 late result. A capture failure still opens the form and explains the missing image.
 
+After capture, CherryUI closes dismissible sheets and menus and waits for their owners to finish
+removing the overlays before navigation. Alerts, decision dialogs, and non-dismissible sheets
+keep the current page in place: discard that capture and let the user shake again after deciding.
+A newly opened overlay or lifecycle cancellation also cancels the handoff. The form uses the shared
+keyboard-aware scrolling pattern, including drag-to-dismiss, so bottom actions remain reachable
+while editing a description with an attached screenshot.
+
 The screenshot is copied from view-shot's temporary file to a UUID-named PNG under the app cache.
 Only the ID crosses the diagnostics contract. The form previews the screenshot, explains that its
 visible content will be shared, and allows removal. Nothing uploads until Submit. Removal, leaving

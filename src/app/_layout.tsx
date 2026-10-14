@@ -3,7 +3,13 @@ import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/promise';
 import '@/bootstrap/preboot/webCrypto';
-import { Alert, BottomSheetProvider, Portal, Toast } from '@cherrystudio/ui/components';
+import {
+  Alert,
+  BottomSheetProvider,
+  OverlayNavigationProvider,
+  Portal,
+  Toast,
+} from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
@@ -61,43 +67,45 @@ function RootLayout() {
       {/* iOS warmup focuses and removes a hidden input on the startup main thread. */}
       <KeyboardProvider preload={Platform.OS !== 'ios'}>
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
-          <Portal.AccessibilityBoundary>
-            <Toast.Provider>
-              <QueryProvider>
-                <AppBootstrapProvider>
-                  <BootstrapStartupCoordinator>
-                    <AppBootstrapGate>
-                      <StartupRouteReadyReporter>
-                        {/* Inside the reporter so a failed first render still lays out and ends startup. */}
-                        <AppErrorBoundary>
-                          <NavigationThemeProvider>
-                            <AppAlertProvider>
-                              <BottomSheetProvider>
-                                <RouteHeaderProvider rootAction="back">
-                                  <AppUpdateObserver />
-                                  <BackgroundActivityBridge />
-                                  <LanguagePreferenceObserver />
-                                  <SystemEntryBridge />
-                                  <FeedbackCaptureProvider>
-                                    <ConversationProvider>
-                                      <RootStack />
-                                    </ConversationProvider>
-                                  </FeedbackCaptureProvider>
-                                  <PrivacyConsentGate />
-                                  <RestoreOutcomeNotice />
-                                  <BackupDialog />
-                                </RouteHeaderProvider>
-                              </BottomSheetProvider>
-                            </AppAlertProvider>
-                          </NavigationThemeProvider>
-                        </AppErrorBoundary>
-                      </StartupRouteReadyReporter>
-                    </AppBootstrapGate>
-                  </BootstrapStartupCoordinator>
-                </AppBootstrapProvider>
-              </QueryProvider>
-            </Toast.Provider>
-          </Portal.AccessibilityBoundary>
+          <OverlayNavigationProvider>
+            <Portal.AccessibilityBoundary>
+              <Toast.Provider>
+                <QueryProvider>
+                  <AppBootstrapProvider>
+                    <BootstrapStartupCoordinator>
+                      <AppBootstrapGate>
+                        <StartupRouteReadyReporter>
+                          {/* Inside the reporter so a failed first render still lays out and ends startup. */}
+                          <AppErrorBoundary>
+                            <NavigationThemeProvider>
+                              <AppAlertProvider>
+                                <BottomSheetProvider>
+                                  <RouteHeaderProvider rootAction="back">
+                                    <AppUpdateObserver />
+                                    <BackgroundActivityBridge />
+                                    <LanguagePreferenceObserver />
+                                    <SystemEntryBridge />
+                                    <FeedbackCaptureProvider>
+                                      <ConversationProvider>
+                                        <RootStack />
+                                      </ConversationProvider>
+                                    </FeedbackCaptureProvider>
+                                    <PrivacyConsentGate />
+                                    <RestoreOutcomeNotice />
+                                    <BackupDialog />
+                                  </RouteHeaderProvider>
+                                </BottomSheetProvider>
+                              </AppAlertProvider>
+                            </NavigationThemeProvider>
+                          </AppErrorBoundary>
+                        </StartupRouteReadyReporter>
+                      </AppBootstrapGate>
+                    </BootstrapStartupCoordinator>
+                  </AppBootstrapProvider>
+                </QueryProvider>
+              </Toast.Provider>
+            </Portal.AccessibilityBoundary>
+          </OverlayNavigationProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>

@@ -5,6 +5,10 @@ import { FeedbackCaptureProvider, useFeedbackCapture } from '../FeedbackCaptureP
 import { removeFeedbackScreenshot } from '../feedbackScreenshot';
 import { useShakeFeedback } from '../useShakeFeedback';
 
+jest.mock('@cherrystudio/ui/components', () => ({
+  useOverlayNavigation: () => ({ prepareForNavigation: jest.fn().mockResolvedValue(true) }),
+}));
+
 let mockPath = '/home';
 let mockConsentPending = false;
 let mockShakeEnabled = true;

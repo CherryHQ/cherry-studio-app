@@ -19,14 +19,16 @@ jest.mock('../feedbackScreenshot', () => ({
 
 const screenshot = { id: 'capture', uri: 'file:///capture.png' };
 const onCaptured = jest.fn();
+const prepareForNavigation = jest.fn();
 let renderer: ReactTestRenderer;
 let stateChanged: (state: AppStateStatus) => void;
 let removeAppState: jest.Mock;
 function Probe({ enabled = true, route = '/home' }: { enabled?: boolean; route?: string }) {
-  useShakeFeedback({ enabled, route, onCaptured });
+  useShakeFeedback({ enabled, route, onCaptured, prepareForNavigation });
   return null;
 }
 function shake(start = 0) {
+  mockMotion({ x: 0, y: 0, z: 1, timestamp: start - 50 });
   mockMotion({ x: 3, y: 0, z: 1, timestamp: start });
   mockMotion({ x: 0, y: 0, z: 1, timestamp: start + 50 });
   mockMotion({ x: -3, y: 0, z: 1, timestamp: start + 200 });
@@ -34,6 +36,7 @@ function shake(start = 0) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  prepareForNavigation.mockResolvedValue(true);
   AppState.currentState = 'active';
   removeAppState = jest.fn();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, callback) => {
@@ -118,3 +121,55 @@ test('disabling stops observation and prevents background/foreground from restar
   act(() => renderer.update(<Probe enabled={false} route="/settings/privacy" />));
   expect(AppState.addEventListener).toHaveBeenCalledTimes(1);
 });
+
+test('captures the overlay, then waits for dismissal before opening feedback', async () => {
+  let finish!: (ready: boolean) => void;
+  prepareForNavigation.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => shake());
+  expect(prepareForNavigation).toHaveBeenCalledTimes(1);
+  expect(jest.mocked(captureFeedbackScreenshot).mock.invocationCallOrder[0]).toBeLessThan(
+    prepareForNavigation.mock.invocationCallOrder[0]!,
+  );
+  expect(onCaptured).not.toHaveBeenCalled();
+  act(() => shake(3000));
+  expect(captureFeedbackScreenshot).toHaveBeenCalledTimes(1);
+  await act(async () => finish(true));
+  expect(onCaptured).toHaveBeenCalledWith(screenshot);
+});
+
+test('a blocking dialog preserves the current page and a later shake can retry', async () => {
+  prepareForNavigation.mockResolvedValueOnce(false);
+  await act(async () => shake());
+  expect(onCaptured).not.toHaveBeenCalled();
+  expect(removeFeedbackScreenshot).toHaveBeenCalledWith(screenshot);
+  await act(async () => shake(3000));
+  expect(onCaptured).toHaveBeenCalledWith(screenshot);
+});
+
+test.each(['background', 'route', 'unmount', 'disabled'])(
+  'cancels overlay handoff after %s',
+  async (change) => {
+    let signal!: AbortSignal;
+    prepareForNavigation.mockImplementationOnce((pendingSignal: AbortSignal) => {
+      signal = pendingSignal;
+      return new Promise((resolve) => signal.addEventListener('abort', () => resolve(false)));
+    });
+    await act(async () => shake());
+    await act(async () => {
+      if (change === 'background') {
+        AppState.currentState = 'background';
+        stateChanged('background');
+      } else if (change === 'route') renderer.update(<Probe route="/settings" />);
+      else if (change === 'disabled') renderer.update(<Probe enabled={false} />);
+      else renderer.unmount();
+    });
+    expect(signal.aborted).toBe(true);
+    expect(onCaptured).not.toHaveBeenCalled();
+    expect(removeFeedbackScreenshot).toHaveBeenCalledWith(screenshot);
+  },
+);

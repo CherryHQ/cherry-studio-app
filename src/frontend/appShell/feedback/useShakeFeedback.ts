@@ -13,16 +13,20 @@ export function useShakeFeedback({
   enabled,
   route,
   onCaptured,
+  prepareForNavigation,
 }: {
   enabled: boolean;
   route: string;
+  prepareForNavigation: (signal: AbortSignal) => Promise<boolean>;
   onCaptured: (screenshot: FeedbackScreenshot | undefined) => void;
 }) {
   const captured = useEffectEvent(onCaptured);
+  const prepare = useEffectEvent(prepareForNavigation);
   useEffect(() => {
     if (!enabled) return;
     let disposed = false;
     let pending = false;
+    let handoff: AbortController | undefined;
     let generation = 0;
     let subscription: ReturnType<typeof observeDiagnosticMotion>;
     let detect = createShakeDetector();
@@ -31,6 +35,8 @@ export function useShakeFeedback({
       if (pending || disposed || AppState.currentState !== 'active') return;
       pending = true;
       const started = generation;
+      const controller = new AbortController();
+      handoff = controller;
       let screenshot: FeedbackScreenshot | undefined;
       try {
         screenshot = await captureFeedbackScreenshot();
@@ -42,12 +48,24 @@ export function useShakeFeedback({
         pending = false;
         return;
       }
+      let ready = false;
+      try {
+        ready = await prepare(controller.signal);
+      } catch {
+        // Preserve the current surface if it cannot safely yield to navigation.
+      }
+      if (!ready || disposed || generation !== started || AppState.currentState !== 'active') {
+        if (screenshot) removeFeedbackScreenshot(screenshot);
+        pending = false;
+        return;
+      }
       // Keep admission closed until the route changes, even if navigation takes a frame.
       captured(screenshot);
     }
 
     function updateSubscription() {
       generation++;
+      handoff?.abort();
       subscription?.remove();
       subscription = undefined;
       detect = createShakeDetector();
@@ -61,6 +79,7 @@ export function useShakeFeedback({
     const appState = AppState.addEventListener('change', updateSubscription);
     return () => {
       disposed = true;
+      handoff?.abort();
       subscription?.remove();
       appState.remove();
     };

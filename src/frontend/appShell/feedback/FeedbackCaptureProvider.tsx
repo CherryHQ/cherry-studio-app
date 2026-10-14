@@ -1,3 +1,4 @@
+import { useOverlayNavigation } from '@cherrystudio/ui/components';
 import { usePathname, useRouter } from 'expo-router';
 import {
   createContext,
@@ -25,6 +26,7 @@ const FeedbackCaptureContext = createContext<{
 /** App-wide capture owns temporary pixels; the feedback page owns editing and submission. */
 export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   const router = useRouter();
+  const { prepareForNavigation } = useOverlayNavigation();
   const pathname = usePathname();
   const consentPending = usePrivacyConsentPending();
   const [isShakeEnabled] = usePreference('app.feedback.shake_enabled');
@@ -62,6 +64,7 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
       pathname !== '/settings/about/feedback/new' &&
       !pathname.startsWith('/onboarding'),
     route: pathname,
+    prepareForNavigation,
     onCaptured: (image) => {
       clearScreenshot();
       owned.current = image;
