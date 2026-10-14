@@ -411,7 +411,9 @@ export function mergeAgentMessageViews(
   const liveById = new Map(live.map((message) => [message.id, message]));
   const persistedIds = new Set(persisted.map((message) => message.id));
   const compareMessages = (left: AgentMessageView, right: AgentMessageView) =>
-    Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id);
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+    // Match the store's binary (createdAt, id) order, not locale collation.
+    (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
   const newLive = live.filter((message) => !persistedIds.has(message.id)).toSorted(compareMessages);
   const merged: AgentMessageView[] = [];
   let liveIndex = 0;
