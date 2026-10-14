@@ -140,12 +140,18 @@ export function DeviceConnectionPairingScreen({
                 onPress: scanAgain,
               }}
             />
-          ) : connection ? (
-            <Button onPress={finish}>{t('common.done')}</Button>
           ) : (
-            <Button onPress={() => router.back()} variant="secondary">
-              {t('common.cancel')}
-            </Button>
+            <View className="flex-row flex-wrap items-center justify-center gap-3">
+              {connection ? (
+                <Button onPress={finish} size="sm">
+                  {t('common.done')}
+                </Button>
+              ) : (
+                <Button onPress={() => router.back()} size="sm" variant="secondary">
+                  {t('common.cancel')}
+                </Button>
+              )}
+            </View>
           )}
         </>
       )}
