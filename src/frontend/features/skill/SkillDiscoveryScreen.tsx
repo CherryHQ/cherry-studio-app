@@ -154,15 +154,17 @@ export function SkillDiscoveryScreen() {
       search: async ({ query, signal, cursor, filters }) => {
         if (/^https:\/\//i.test(query)) {
           const cherryin = parseCherryinSkillUrl(query);
-          if (cherryin)
+          if (cherryin) {
+            const detail = await skills.getCherryin(cherryin.id, signal);
             return {
               groups: [
                 {
                   key: 'url',
-                  items: [fromCherryin(await skills.getCherryin(cherryin.id, signal))],
+                  items: detail.mobileSupport === 'supported' ? [fromCherryin(detail)] : [],
                 },
               ],
             };
+          }
           const candidates = await skills.resolve(query, signal);
           return {
             groups: [

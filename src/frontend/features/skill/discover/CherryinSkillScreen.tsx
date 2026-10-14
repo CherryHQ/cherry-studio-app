@@ -200,6 +200,13 @@ function CherryinSkill({ id }: { id: string }) {
       </SkillPage>
     );
 
+  if (data.mobileSupport !== 'supported')
+    return (
+      <SkillPage headerProps={{ title: t('skills.candidate.title') }}>
+        <ContentState.Empty title={t('skills.notFound')} />
+      </SkillPage>
+    );
+
   const name = marketplaceText(data.name, language);
   const description = marketplaceText(data.description, language);
   const body = marketplaceText(data.longDescription, language);
