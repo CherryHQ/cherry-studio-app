@@ -1,1 +1,0 @@
-export { HealthScreen } from './HealthScreen';

@@ -61,7 +61,7 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       ) : null}
       {healthDataSharing && !recipient.data ? (
         recipient.isPending && healthDataSharing.providerId ? (
-          <ContentState.Loading title={t('health.loading')} />
+          <ContentState.Loading title={t('remoteAgent.loading')} />
         ) : (
           <ContentState.Error
             title={t('health.recipientUnavailable')}

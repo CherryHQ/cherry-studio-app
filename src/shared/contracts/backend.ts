@@ -6,7 +6,6 @@ import type { DesktopConnectionsModule } from './desktopConnections';
 import type { DiagnosticsModule } from './diagnostics';
 import type { DocumentExportModule } from './documentExport';
 import type { FileModule } from './file';
-import type { HealthModule } from './health';
 import type { McpModule } from './mcp';
 import type { ModelsModule } from './models';
 import type { PaintingsModule } from './paintings';
@@ -30,7 +29,6 @@ export interface Backend {
   readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;
   readonly file: FileModule;
-  readonly health: HealthModule;
   readonly mcp: McpModule;
   readonly models: ModelsModule;
   readonly paintings: PaintingsModule;

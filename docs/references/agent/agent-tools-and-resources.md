@@ -367,12 +367,9 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### Health And Fitness
 
-The iOS-only `/health` page is a sidebar destination. It shows the last seven days of activity,
-sleep and heart-rate metrics without invoking AI or persisting its overview. Native queries run
-only for scopes whose authorization inquiry has completed; the page requests read access only
-after a user press. Android has no Health Connect bridge, native health module or health entry.
-
-`health_get_summary` and `health_list_workouts` belong to the `health` Agent capability.
+Health is an iOS-only built-in tool group, not a separate page. System permissions own read
+authorization; `health_get_summary` and `health_list_workouts` belong to the `health` Agent
+capability. Android has no Health Connect bridge, native health module or health entry.
 The Agent created during first-run onboarding enables health; manually created Agents start with
 it disabled. Existing Agents retain their stored capability preferences without a data migration.
 Both tools always require application approval, including in automatic approval mode.
@@ -389,8 +386,8 @@ library cache, and daily queries stop between days when the turn is cancelled. T
 patch removes native logs of health values.
 
 The initial App Store release removed this integration after a Guideline 2.5.1 finding. Restoring
-it requires a new native binary and a new submission; review notes and store metadata must describe
-the visible Health & Fitness page. See [Health Review](../../guides/health-review.md).
+it requires a new native binary and a new submission; store metadata and review notes must describe
+the Agent health analysis and how to reach it. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 

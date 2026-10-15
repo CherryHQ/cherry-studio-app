@@ -1,6 +1,6 @@
 import type { HealthKit, QuantityDataPoint } from 'react-native-nitro-healthkit';
 
-import { createHealthModule, getHealthSummary } from '../health';
+import { getHealthSummary } from '../health';
 
 const range = { startDate: '2026-09-01T00:00:00Z', endDate: '2026-09-02T00:00:00Z' };
 const sample: QuantityDataPoint = {
@@ -14,62 +14,6 @@ const localIso = (year: number, month: number, day: number) =>
   new Date(year, month - 1, day).toISOString();
 
 describe('health summaries with incomplete data', () => {
-  test('does not load native health data before a read inquiry completes', async () => {
-    const loadHealthKit = jest.fn();
-    const health = createHealthModule(
-      {
-        getStatuses: async (scopes) =>
-          Object.fromEntries(
-            scopes.map((scope) => [scope, { state: 'undetermined', canAskAgain: true }]),
-          ),
-      },
-      loadHealthKit,
-    );
-    await expect(health.getOverview()).resolves.toEqual({
-      state: 'access-required',
-      canRequest: true,
-    });
-    expect(loadHealthKit).not.toHaveBeenCalled();
-  });
-
-  test('keeps an unsupported device separate from an outdated native client', async () => {
-    for (const reason of ['unsupported', 'native-unavailable'] as const) {
-      const loadHealthKit = jest.fn();
-      const health = createHealthModule(
-        {
-          getStatuses: async (scopes) =>
-            Object.fromEntries(
-              scopes.map((scope) => [scope, { state: 'unavailable', reason, canAskAgain: false }]),
-            ),
-        },
-        loadHealthKit,
-      );
-      await expect(health.getOverview()).resolves.toEqual({ state: 'unavailable', reason });
-      expect(loadHealthKit).not.toHaveBeenCalled();
-    }
-  });
-
-  test('the local overview reads only available scopes and keeps missing metrics null', async () => {
-    const native = { getAggregatedQuantity: jest.fn(async () => 1200) };
-    const health = createHealthModule(
-      {
-        getStatuses: async () => ({
-          'health.steps.read': { state: 'requested', canAskAgain: false },
-        }),
-      },
-      async () => native as unknown as HealthKit,
-    );
-    const overview = await health.getOverview();
-    expect(overview).toMatchObject({
-      state: 'ready',
-      metrics: expect.arrayContaining([
-        { type: 'steps', unit: 'count', value: 1200, state: 'available' },
-        { type: 'sleep', unit: 'h', value: null, state: 'no-data' },
-      ]),
-    });
-    expect(native.getAggregatedQuantity).toHaveBeenCalledTimes(1);
-  });
-
   test('daily queries stop between days when the read is cancelled', async () => {
     const controller = new AbortController();
     const native = {

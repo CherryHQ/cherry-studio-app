@@ -1,13 +1,6 @@
 import type { CategoryDataPoint, HealthKit, WorkoutDataPoint } from 'react-native-nitro-healthkit';
 
-import {
-  canRequestDevicePermission,
-  canUseDevicePermission,
-  HEALTH_DATA_TYPES,
-  healthPermissionScope,
-  type HealthModule,
-  type PermissionsModule,
-} from '@/shared/contracts';
+import { HEALTH_DATA_TYPES } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { normalizeOptionalDateRange, toIso, withNativeToolTimeout } from './utils';
@@ -53,54 +46,6 @@ const quantityMetrics: Record<
     unit: 'count',
   },
 };
-
-export function createHealthModule(
-  permissions: Pick<PermissionsModule, 'getStatuses'>,
-  loadHealthKit: HealthKitLoader = loadHealthKitModule,
-): HealthModule {
-  return {
-    async getOverview(signal) {
-      signal?.throwIfAborted();
-      const scopes = healthMetricNames.map(healthPermissionScope);
-      const statuses = await permissions.getStatuses(scopes);
-      signal?.throwIfAborted();
-      if (scopes.every((scope) => statuses[scope]?.reason === 'unsupported')) {
-        return { state: 'unavailable', reason: 'unsupported' };
-      }
-      if (scopes.some((scope) => statuses[scope]?.reason === 'native-unavailable')) {
-        return { state: 'unavailable', reason: 'native-unavailable' };
-      }
-      const metrics = healthMetricNames.filter((metric) =>
-        canUseDevicePermission(
-          healthPermissionScope(metric),
-          statuses[healthPermissionScope(metric)],
-        ),
-      );
-      if (!metrics.length) {
-        return {
-          state: 'access-required',
-          canRequest: scopes.some((scope) => canRequestDevicePermission(statuses[scope])),
-        };
-      }
-      const range = normalizeOptionalDateRange();
-      const healthKit = await loadHealthKit();
-      signal?.throwIfAborted();
-      const summary = await getRangeHealthSummary(healthKit, metrics, range.start, range.end);
-      signal?.throwIfAborted();
-      return {
-        state: 'ready',
-        startDate: range.start.toISOString(),
-        endDate: range.end.toISOString(),
-        metrics: healthMetricNames.map((type) => ({
-          type,
-          unit: type === 'sleep' ? 'h' : quantityMetrics[type].unit,
-          value: summary.data[type]?.value ?? null,
-          state: summary.metricStates[type] ?? 'no-data',
-        })),
-      };
-    },
-  };
-}
 
 export async function getHealthSummary(
   input: {
