@@ -269,7 +269,7 @@ type PaintingGalleryQueryResult = {
   isPending: boolean;
 };
 
-function resolvedPaintingFilesQueryOptions(
+export function resolvedPaintingFilesQueryOptions(
   paintings: PaintingsModule,
   painting: Painting | undefined,
 ) {

@@ -6,6 +6,83 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('places every existing painting on its own board and cascades board deletion', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0009_painting_boards',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      const paintingFiles = '{"input":["file-in"],"output":["file-out"]}';
+      database.exec(`
+        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
+        VALUES
+          ('first', 'cherryin', 'cherryin::gpt-image-2', '  A cat wearing sunglasses at golden hour on the beach  ', 'a0', 10, 20, '${paintingFiles}'),
+          ('second', 'cherryin', NULL, 'Snow', 'a1', 30, 40, '{"input":[],"output":[]}');
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+
+      expect(
+        database
+          .prepare(
+            'SELECT id, board_id, prompt, brief, order_key, created_at, updated_at, files FROM painting ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          board_id: 'first',
+          brief: null,
+          created_at: 10,
+          files: paintingFiles,
+          id: 'first',
+          order_key: 'a0',
+          prompt: '  A cat wearing sunglasses at golden hour on the beach  ',
+          updated_at: 20,
+        },
+        {
+          board_id: 'second',
+          brief: null,
+          created_at: 30,
+          files: '{"input":[],"output":[]}',
+          id: 'second',
+          order_key: 'a1',
+          prompt: 'Snow',
+          updated_at: 40,
+        },
+      ]);
+      expect(database.prepare('SELECT * FROM painting_board ORDER BY id').all()).toEqual([
+        {
+          created_at: 10,
+          focus_painting_id: 'first',
+          id: 'first',
+          title: 'A cat wearing sunglasses at golden hour',
+          updated_at: 20,
+        },
+        {
+          created_at: 30,
+          focus_painting_id: 'second',
+          id: 'second',
+          title: 'Snow',
+          updated_at: 40,
+        },
+      ]);
+
+      database.exec(`DELETE FROM painting_board WHERE id = 'first'`);
+      expect(database.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'second' }]);
+      expect(() =>
+        database.exec(`
+          INSERT INTO painting (id, board_id, provider_id, prompt, order_key, created_at, updated_at)
+          VALUES ('orphan', 'missing', 'cherryin', 'Orphan', 'a2', 1, 1)
+        `),
+      ).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds an optional native OAuth reference without replacing existing MCP header connections', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -542,6 +619,7 @@ describe('bundled SQLite migrations', () => {
         'job',
         'mcp_server',
         'painting',
+        'painting_board',
         'plugin_authorization',
         'preference',
         'user_model',
@@ -603,13 +681,22 @@ describe('bundled SQLite migrations', () => {
       ]);
       expect(columnNames(database, 'painting')).toEqual([
         'id',
+        'board_id',
         'provider_id',
         'model_id',
         'prompt',
+        'brief',
         'order_key',
         'created_at',
         'updated_at',
         'files',
+      ]);
+      expect(columnNames(database, 'painting_board')).toEqual([
+        'id',
+        'title',
+        'focus_painting_id',
+        'created_at',
+        'updated_at',
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
       expect(
@@ -708,8 +795,16 @@ describe('bundled SQLite migrations', () => {
       // left to constrain.
       expect(fileEntryTableSql).not.toContain('CHECK');
       // No association table remains: a painting owns its file ids in `files`,
-      // so deleting a file cannot rewrite the receipt that points at it.
-      expect(getForeignKeys(database, 'painting')).toEqual([]);
+      // so deleting a file cannot rewrite the receipt that points at it. Its only
+      // reference is the board that owns it, and deleting the board removes it.
+      expect(
+        getForeignKeys(database, 'painting').map(({ from, on_delete, table, to }) => ({
+          from,
+          on_delete,
+          table,
+          to,
+        })),
+      ).toEqual([{ from: 'board_id', on_delete: 'CASCADE', table: 'painting_board', to: 'id' }]);
 
       // Agent delete semantics: agents soft-delete first (RESTRICT guards hard
       // cleanup); sessions hard-delete and cascade their messages. Fork lineage
@@ -882,8 +977,10 @@ describe('bundled SQLite migrations', () => {
       });
 
       database.exec(`
-        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
-        VALUES ('painting-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
+        INSERT INTO painting_board (id, title, created_at, updated_at)
+        VALUES ('board-1', 'Board', 1, 1);
+        INSERT INTO painting (id, board_id, provider_id, model_id, prompt, order_key, created_at, updated_at)
+        VALUES ('painting-1', 'board-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
         INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
         VALUES ('file-1', 'input.png', 'image/png', 4, 1, 1, NULL);
       `);
@@ -976,6 +1073,7 @@ function getForeignKeys(database: DatabaseSync, table: string) {
     from: string;
     on_delete: string;
     table: string;
+    to: string;
   }[];
 }
 

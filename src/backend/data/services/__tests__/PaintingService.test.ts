@@ -190,6 +190,79 @@ describe('PaintingService integration', () => {
     });
   });
 
+  it('finds the painting that produced a file, and nothing for files it only used', async () => {
+    insertPainting(sqlite, 'painting-source', 'a0', 1, { input: [], output: ['source-output'] });
+    insertPainting(sqlite, 'painting-edit', 'a1', 2, {
+      input: ['source-output'],
+      output: ['edit-output-1', 'edit-output-2'],
+    });
+
+    await expect(service.findByOutputFile('edit-output-2')).resolves.toMatchObject({
+      id: 'painting-edit',
+    });
+    await expect(service.findByOutputFile('source-output')).resolves.toMatchObject({
+      id: 'painting-source',
+    });
+    await expect(service.findByOutputFile('imported-photo')).resolves.toBeNull();
+  });
+
+  it('lists only the paintings of one board, oldest first', async () => {
+    insertPainting(sqlite, 'painting-late', 'a0', 3, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-early', 'a1', 1, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-elsewhere', 'a2', 2);
+
+    await expect(
+      service.listByBoard('board-shared').then((paintings) => paintings.map(({ id }) => id)),
+    ).resolves.toEqual(['painting-early', 'painting-late']);
+  });
+
+  it('removes a board once its last painting is deleted, but keeps boards that still hold some', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-b', 'a1', 2, undefined, 'board-shared');
+    insertPainting(sqlite, 'painting-alone', 'a2', 3, undefined, 'board-alone');
+
+    await service.deleteMany(['painting-a', 'painting-alone']);
+
+    expect(boardIds(sqlite)).toEqual(['board-shared']);
+    await service.deleteMany(['painting-b']);
+    expect(boardIds(sqlite)).toEqual([]);
+  });
+
+  it('deletes a board with all of its paintings while leaving their files in the library', async () => {
+    insertPainting(
+      sqlite,
+      'painting-a',
+      'a0',
+      1,
+      { input: [], output: ['a-output'] },
+      'board-gone',
+    );
+    insertPainting(sqlite, 'painting-b', 'a1', 2, undefined, 'board-gone');
+    insertPainting(sqlite, 'painting-kept', 'a2', 3, undefined, 'board-kept');
+    insertFile(sqlite, 'a-output', 1);
+
+    await service.deleteBoard('board-gone');
+
+    expect(sqlite.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'painting-kept' }]);
+    expect(sqlite.prepare('SELECT id FROM file_entry').all()).toEqual([{ id: 'a-output' }]);
+    await expect(service.deleteBoard('board-gone')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('renames a board and remembers its focused painting, rejecting blank titles', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1, undefined, 'board-1');
+
+    await expect(
+      service.updateBoard('board-1', { focusPaintingId: 'painting-a', title: '  Sunset cat  ' }),
+    ).resolves.toMatchObject({ focusPaintingId: 'painting-a', id: 'board-1', title: 'Sunset cat' });
+    await expect(service.updateBoard('board-1', { title: '   ' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+    await expect(service.getBoard('board-1')).resolves.toMatchObject({ title: 'Sunset cat' });
+    await expect(service.updateBoard('missing', { title: 'x' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
   it('deletes a painting without touching its files', async () => {
     insertPainting(sqlite, 'painting-delete', 'a0', 1, { input: [], output: ['delete-output'] });
     insertFile(sqlite, 'delete-output', 1);
@@ -315,14 +388,27 @@ function insertPainting(
   orderKey: string,
   timestamp: number,
   files: PaintingFiles = { input: [], output: [] },
+  boardId = `board-${id}`,
 ) {
   database
     .prepare(
-      `INSERT INTO painting
-       (id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
-       VALUES (?, 'provider', 'provider::model', 'prompt', ?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO painting_board (id, title, created_at, updated_at)
+       VALUES (?, 'Board', ?, ?)`,
     )
-    .run(id, orderKey, timestamp, timestamp, JSON.stringify(files));
+    .run(boardId, timestamp, timestamp);
+  database
+    .prepare(
+      `INSERT INTO painting
+       (id, board_id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
+       VALUES (?, ?, 'provider', 'provider::model', 'prompt', ?, ?, ?, ?)`,
+    )
+    .run(id, boardId, orderKey, timestamp, timestamp, JSON.stringify(files));
+}
+
+function boardIds(database: DatabaseSync) {
+  return (
+    database.prepare('SELECT id FROM painting_board ORDER BY id').all() as { id: string }[]
+  ).map((row) => row.id);
 }
 
 /**

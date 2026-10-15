@@ -44,6 +44,8 @@ export type PaintingGenerateJobImage = {
 };
 
 export type PaintingGenerateJobInput = {
+  /** Absent on jobs enqueued before boards existed. */
+  boardId?: string;
   images: readonly PaintingGenerateJobImage[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;

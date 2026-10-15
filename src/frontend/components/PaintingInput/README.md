@@ -1,35 +1,38 @@
 # Painting Input
 
-Shared image composer controls for standalone painting and Agent chat. This module owns image
+Shared image composer controls for the painting board and Agent chat. This module owns image
 attachment selection, model selection, and registry-derived generation parameters. It submits a
 `PaintingInputSubmission` through `onGenerate`; the caller owns execution, history, and cancellation.
 Callers mount `PaintingInputProvider` inside their `ComposerSessionProvider`, around both text and
-image controls. They supply successful outputs and an execution callback; the provider retains
-reference intent and per-model/per-mode parameter drafts across control switches.
+image controls. The provider retains reference intent and per-model/per-mode parameter drafts across
+control switches, and holds the local model selection so switching presentations does not reset it.
 
-Standalone painting supplies an optional painting and uses a local image model selection. Agent
-chat supplies a controlled `modelSelection`, which permits switching between text and image models.
-The shared controls do not create painting jobs, navigate, or persist conversation messages.
+`PaintingInput` is the Agent-chat presentation: attachments above the field, then a toolbar with the
++ menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
+which permits switching between text and image models.
 
-`PaintingInput` is the existing Agent-chat presentation. `PaintingWorkspaceInput` composes the same
-surface, native field, add menu and send protocol into one row; reference previews and common
-registry parameters use the shared composer popover. `PaintingImageInput` uses that row with a
-fixed editing source: attachment pickers and image pasting are unavailable while the annotated image
-is the reference. Advanced and custom parameters keep the existing parameter sheet. Local model
-selection lives in `PaintingInputProvider` so switching presentations does not reset it; controlled
-Agent model selection still belongs to its caller.
+`PaintingWorkspaceInput` is the painting board's single row: the + menu, the attached reference,
+the field, and send. Nothing in the row is a form control. The + menu offers photos, camera, and
+generation settings. That sheet is the only parameter surface, one continuous page: the model row
+first, then shape, count, quality, and background, then the remaining registry parameters. Choices
+of up to four options are segmented controls; longer lists open their own page. Ratio cells show the
+ratio and the header adds the selected size's pixels. An unset parameter shows the value the model
+will use.
+
+A caller that attaches its own reference image passes `adoptSubmittedReference={false}` so a sent
+image is not adopted as the next turn's reference; Agent chat keeps the default and continues from
+its single submitted image.
 
 An optional `preparePrompt` freezes image-local instructions before prompt validation and asynchronous
 file preparation. It does not bypass the generation strategy or change parameter admission. The
-frontend-only `displayPrompt` on a submission belongs to the caller's current transcript; backend
-requests and persisted painting prompts use `prompt`.
+`displayPrompt` on a submission is the human brief; backend requests use `prompt`, and the painting
+board persists the brief beside it.
 
 `createPaintingGenerationStrategy` in shared utilities resolves the callable mode, image limits,
 prompt requirements and strict parameter admission from model capabilities. Both backend execution
 owners use the same strategy before persisting work, with authoritative managed-file metadata.
 `usePaintingInput` applies this policy to every presentation. Readiness checks and rejected submissions
-use the existing feedback flow; the compact layout does not add model capability subtitles or a
-parallel parameter-validation policy.
+use the existing feedback flow.
 
 A valid single output becomes an automatic reference only for compatible models and untouched
 next-turn input. Multiple outputs remain optional candidates. Generate-only models pause automatic

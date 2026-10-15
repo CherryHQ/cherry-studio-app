@@ -19,6 +19,8 @@ import type {
 } from './tasks/paintingGenerateJobHandler';
 
 type PaintingReceiptInput = {
+  boardId?: string;
+  brief?: string;
   inputFileIds: readonly FileEntryId[];
   modelId: string;
   prompt: string;
@@ -111,11 +113,14 @@ async function startGeneration(
     const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
     if (existing) {
       return {
+        boardId: activeJobBoardId(existing.input),
         jobId: existing.id,
         paintingId: activeJobPaintingId(existing.input),
       };
     }
     const receiptInput = {
+      ...(input.boardId ? { boardId: input.boardId } : {}),
+      ...(input.brief ? { brief: input.brief } : {}),
       inputFileIds: images.map((image) => image.fileEntryId),
       modelId: input.modelId,
       prompt,
@@ -127,6 +132,7 @@ async function startGeneration(
     const handle = await dependencies.jobs.enqueueGenerateTx(
       tx,
       {
+        boardId: receipt.boardId,
         images,
         mode: request.mode,
         modelId: input.modelId,
@@ -137,10 +143,10 @@ async function startGeneration(
       },
       { idempotencyKey: signature },
     );
-    return { jobId: handle.id, paintingId: receipt.id };
+    return { boardId: receipt.boardId, jobId: handle.id, paintingId: receipt.id };
   });
 
-  return { jobId: result.jobId, paintingId: result.paintingId };
+  return result;
 }
 
 async function resolveFileEntries(files: PaintingFileRepository, ids: readonly FileEntryId[]) {
@@ -162,6 +168,15 @@ function activeJobPaintingId(jobInput: unknown): string {
 }
 
 /**
+ * Jobs enqueued before boards existed carry no board id; their receipt was
+ * migrated onto a board named after itself.
+ */
+function activeJobBoardId(jobInput: unknown): string {
+  const input = jobInput as Partial<PaintingGenerateJobInput> | null;
+  return input?.boardId ?? activeJobPaintingId(jobInput);
+}
+
+/**
  * `paintingId` participates so that retrying an interrupted receipt does not
  * collide with generating the very same prompt as a brand-new painting — same
  * inputs, different intent, and the idempotency hit would silently hand the
@@ -169,6 +184,7 @@ function activeJobPaintingId(jobInput: unknown): string {
  */
 function generationSignature(input: PaintingGenerationInput): string {
   return JSON.stringify({
+    boardId: input.boardId ?? null,
     images: input.fileEntryIds,
     mode: input.mode,
     modelId: input.modelId,

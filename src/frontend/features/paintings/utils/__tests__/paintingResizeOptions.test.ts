@@ -30,9 +30,9 @@ describe('painting resize admission', () => {
       },
     });
     expect(options).toEqual([
-      { ratio: '1:1', paramValues: { size: '1024x1024' } },
-      { ratio: '2:3', paramValues: { size: '1024x1536' } },
-      { ratio: '3:2', paramValues: { size: '1536x1024' } },
+      { ratio: '1:1', paramValues: { size: '1024x1024' }, pixels: '1024×1024' },
+      { ratio: '2:3', paramValues: { size: '1024x1536' }, pixels: '1024×1536' },
+      { ratio: '3:2', paramValues: { size: '1536x1024' }, pixels: '1536×1024' },
     ]);
   });
 
@@ -45,7 +45,9 @@ describe('painting resize admission', () => {
         },
       },
     });
-    expect(options).toEqual([{ ratio: '1:1', paramValues: { size: '1024x1024' } }]);
+    expect(options).toEqual([
+      { ratio: '1:1', paramValues: { size: '1024x1024' }, pixels: '1024×1024' },
+    ]);
     expect(paintingResizeOptions(undefined)).toEqual([]);
   });
 });

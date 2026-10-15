@@ -30,8 +30,9 @@ here. Terms follow [Domain Language](../domain-language.md).
 6. **Only the user deletes files.** Removing a composer attachment removes its reference, not the
    library entry. Deletion belongs to the file library; there is no background garbage collection.
 7. **Owners hold their own file ids; there is no association table.** A message carries them in its
-   part JSON, a painting in its `files` column. Nothing maintains a reverse index, because nothing
-   asks which owners use a given file — and a file outlives every owner that pointed at it.
+   part JSON, a painting in its `files` column. Nothing maintains a reverse index; the one reverse
+   question asked — which painting produced an image the library opens — is answered by scanning
+   painting outputs, and a file outlives every owner that pointed at it.
 
 ## Storage
 

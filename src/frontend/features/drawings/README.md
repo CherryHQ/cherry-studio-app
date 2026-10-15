@@ -3,7 +3,8 @@
 This page owns `/drawings`: the painting history grid, recent-photo entry points, bundled templates,
 and multi-select deletion UI.
 
-The header's plus action opens a new painting. Long-pressing a history tile enters selection and
+The header's plus action opens a new painting board. Tapping a tile opens its painting's board
+focused on that image (or on its progress or failure while it has none). Long-pressing a history tile enters selection and
 selects that painting; releasing the same press does not navigate or toggle it again. While
 selecting, the header's back and Done actions clear selection and restore the gallery.
 

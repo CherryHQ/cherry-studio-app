@@ -5,13 +5,19 @@ import {
   type ResolvedImageGenerationMode,
 } from '@/shared/utils/imageGenerationParams';
 
-/** Resize picks only declared dimensions and carries their exact request value into the editor. */
+/**
+ * Changing the ratio offers only declared dimensions and carries their exact
+ * request value; pixel sizes also report their dimensions for display.
+ */
 export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefined) {
   const fields = getImageParamFields(mode);
   for (const key of ['aspectRatio', 'size', 'imageResolution']) {
     const field = fields.find((item) => item.key === key && item.spec.type === 'enum');
     if (!field || field.spec.type !== 'enum') continue;
-    const options = new Map<string, { ratio: string; paramValues: ImageParamDraft }>();
+    const options = new Map<
+      string,
+      { ratio: string; paramValues: ImageParamDraft; pixels?: string }
+    >();
     for (const value of field.spec.options) {
       const dimensions = parseImageRatio(value);
       if (!dimensions) continue;
@@ -23,7 +29,11 @@ export function paintingResizeOptions(mode: ResolvedImageGenerationMode | undefi
         ratio = `${dimensions.width / width}:${dimensions.height / width}`;
       }
       if (!options.has(ratio) || value === field.spec.default) {
-        options.set(ratio, { ratio, paramValues: { [field.key]: value } });
+        options.set(ratio, {
+          ratio,
+          paramValues: { [field.key]: value },
+          ...(key === 'aspectRatio' ? {} : { pixels: `${dimensions.width}×${dimensions.height}` }),
+        });
       }
     }
     if (options.size > 0) return [...options.values()];
