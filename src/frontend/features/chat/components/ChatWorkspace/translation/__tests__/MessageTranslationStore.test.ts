@@ -118,6 +118,42 @@ test('restores saved translation folded after reconstruction, isolated by Sessio
   expect(translate).toHaveBeenCalledTimes(3);
 });
 
+test('sharing snapshots only expanded current languages and preserves the captured text', async () => {
+  const { store, translate } = setup();
+  expect(store.getExpandedTranslations()).toEqual({});
+  await store.start(source, 'zh-CN');
+  const captured = store.getExpandedTranslations();
+  expect(captured).toEqual({
+    answer: { sourceHash: source.contentHash, language: 'zh-CN', content: '译文' },
+  });
+  store.toggle(source);
+  expect(store.getExpandedTranslations()).toEqual({});
+  translate.mockResolvedValueOnce('Traduction');
+  await store.start(source, 'fr-FR');
+  expect(store.getExpandedTranslations()).toEqual({
+    answer: { sourceHash: source.contentHash, language: 'fr-FR', content: 'Traduction' },
+  });
+  expect(captured.answer.content).toBe('译文');
+  expect(captured.answer.language).toBe('zh-CN');
+});
+
+test('sharing captures visible streaming text without waiting for another translation request', async () => {
+  const { store, translate } = setup();
+  const done = deferred<string>();
+  translate.mockImplementationOnce(() => done.promise);
+  const pending = store.start(source, 'zh-CN');
+  expect(store.getExpandedTranslations()).toEqual({});
+  translate.mock.calls[0][1]?.onText?.('部分译文');
+  expect(store.getExpandedTranslations().answer.content).toBe('部分译文');
+  store.toggle(source);
+  expect(store.getExpandedTranslations()).toEqual({});
+  done.resolve('完整译文');
+  await pending;
+  expect(store.getExpandedTranslations()).toEqual({});
+  store.toggle(source);
+  expect(store.getExpandedTranslations().answer.content).toBe('完整译文');
+});
+
 test('reopens and switches among three restored languages without translating again', async () => {
   const { store, api, translate, translation, stored } = setup();
   const translations = {

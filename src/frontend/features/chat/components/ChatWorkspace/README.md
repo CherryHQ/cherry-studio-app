@@ -85,13 +85,13 @@ row lifetimes. Button and result subscribe by message ID, so streamed translatio
 the transcript or original Markdown. The original toolbar's translation button is the only disclosure
 control: it keeps the same language icon and position, highlights while expanded, and toggles the
 result below it. Folding removes the complete result block. The block has a plain separator without
-a duplicate title or language heading. Its footer aligns icon-only copy, share, cancel, and retry
-actions with the original message toolbar. An icon-only translation button opens the target-language
-menu between copy and share. Choosing a language restores its cached result or starts translation
-when none is saved. Copy includes only the active translation text. Translation sharing opens the
-existing document export preview, defaulting to image with HTML and Markdown also available and
-the existing watermark preference. The immutable export includes the original text sent for
-translation and the active completed translation, with its target-language label. Switching to a
+a duplicate title or language heading. Its footer aligns icon-only copy, language selection, cancel,
+and retry actions with the original message toolbar. Choosing a language restores its cached result
+or starts translation when none is saved. Copy includes only the active translation text. Sharing
+uses the original message's share action and selection page. Opening sharing captures the current
+text and language of each expanded translation; folded translations are omitted even when cached.
+Image, HTML, and Markdown include the captured translation beneath its selected original message,
+independently of the thinking-content switch and with the existing watermark preference. Switching to a
 saved language makes no translation request. The block is excluded from the enclosing message menu
 and background press target, so
 holding its Markdown selects translated text; scrolling and control taps remain

@@ -43,6 +43,7 @@ import {
   useAgentChatDraftHandoff,
   useLocalConversation,
 } from './runtime';
+import { createChatShareHandoff, type ChatShareTranslations } from './share/chatShareHandoff';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
@@ -87,9 +88,16 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     navigation: target.kind === 'session' ? target : undefined,
   });
   const shareMessage = useCallback(
-    (messageId: string) => {
+    (messageId: string, translations?: ChatShareTranslations) => {
       if (sessionId)
-        router.push(conversationShareHref({ source: { kind: 'local' }, sessionId }, messageId));
+        router.push(
+          conversationShareHref(
+            { source: { kind: 'local' }, sessionId },
+            messageId,
+            undefined,
+            createChatShareHandoff(sessionId, translations),
+          ),
+        );
     },
     [sessionId],
   );

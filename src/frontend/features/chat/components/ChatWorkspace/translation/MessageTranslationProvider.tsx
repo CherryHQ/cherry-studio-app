@@ -46,7 +46,7 @@ function SessionTranslationProvider({ children, sessionId, messages }: ProviderP
 
 /** Both the toolbar action and its content subscribe to this message alone. */
 export function useMessageTranslation(message: MessageListItem) {
-  const store = use(TranslationContext);
+  const store = useMessageTranslationStore();
   const row = useChatMessageRow(message.id);
   const source = useMemo(
     () =>
@@ -68,4 +68,9 @@ export function useMessageTranslation(message: MessageListItem) {
   );
   const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   return store && source ? { state, source, store } : undefined;
+}
+
+/** Share actions read a snapshot on demand without subscribing to streamed text. */
+export function useMessageTranslationStore() {
+  return use(TranslationContext);
 }

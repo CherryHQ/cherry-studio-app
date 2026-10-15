@@ -7,6 +7,7 @@ import {
 import type { ApiClient } from '@/shared/data/api/types';
 import type { AppLanguage } from '@/shared/utils/languages';
 
+import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import {
   messageTranslationSource,
   type MessageTranslationSource,
@@ -94,6 +95,19 @@ export class MessageTranslationStore {
   toggle(source: MessageTranslationSource) {
     const state = this.get(source);
     if (state.status !== 'idle') this.publish(source, { ...state, visible: !state.visible });
+  }
+
+  getExpandedTranslations(): ChatShareTranslations {
+    const translations: Record<string, ChatShareTranslations[string]> = {};
+    for (const [messageId, { contentHash, state }] of this.states) {
+      if (state.visible && state.language && state.content.trim())
+        translations[messageId] = {
+          sourceHash: contentHash,
+          language: state.language,
+          content: state.content,
+        };
+    }
+    return translations;
   }
 
   async start(source: MessageTranslationSource, language: AppLanguage) {

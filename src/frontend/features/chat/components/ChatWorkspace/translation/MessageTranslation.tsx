@@ -1,7 +1,6 @@
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
-import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   ActionMenu,
@@ -16,11 +15,10 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { useDocumentExport } from '@/frontend/appShell/documentExport';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
-import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import { useMessageTranslation } from './MessageTranslationProvider';
 
@@ -73,7 +71,6 @@ export function MessageTranslationAction({ message }: { message: MessageListItem
 
 export function MessageTranslationContent({ message }: { message: MessageListItem }) {
   const translation = useMessageTranslation(message);
-  const { open } = useDocumentExport();
   const { t } = useTranslation();
   const { toast } = useToast();
   const store = translation?.store;
@@ -96,40 +93,6 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
       toast.show({ label: t('chat.messageActions.copied'), variant: 'success' });
     } catch {
       toast.show({ label: t('chat.messageActions.copyFailed'), variant: 'danger' });
-    }
-  };
-  const share = async () => {
-    try {
-      const language = APP_LANGUAGES.find(({ value }) => value === state.language)?.label;
-      const translationLabel = t('chat.translation.result', { language });
-      const outcome = await open({
-        input: {
-          kind: 'document',
-          document: {
-            title: translationLabel,
-            sections: [
-              {
-                id: `${message.id}:original`,
-                heading: t('chat.translation.original'),
-                presentation: 'message',
-                blocks: [{ kind: 'markdown', source: translation.source.text }],
-              },
-              {
-                id: `${message.id}:translation`,
-                heading: translationLabel,
-                presentation: 'message',
-                blocks: [{ kind: 'markdown', source: state.content }],
-              },
-            ],
-          },
-        },
-        initialFormat: 'image',
-        allowedFormats: ['image', 'html', 'markdown'],
-      });
-      if (outcome === 'busy')
-        toast.show({ label: t('documentExport.errors.busy'), variant: 'danger' });
-    } catch {
-      toast.show({ label: t('chat.translation.shareFailed'), variant: 'danger' });
     }
   };
   return (
@@ -196,16 +159,6 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
                 variant="ghost"
               />
             </ActionMenu>
-            {state.status === 'success' ? (
-              <Button
-                accessibilityLabel={t('chat.translation.share')}
-                icon={<ShareIcon className="text-muted-foreground" size={15} />}
-                onPress={() => void share()}
-                size="xs"
-                testID="message-translation-share"
-                variant="ghost"
-              />
-            ) : null}
           </View>
         </MessagePart.Translation>
       </ContextMenuExclusion>

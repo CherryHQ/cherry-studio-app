@@ -2,7 +2,7 @@ import XIcon from '@cherrystudio/app-icons/icons/x';
 import { Button, ContentState, SelectionIndicator } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useMemo, useEffect } from 'react';
+import { memo, useMemo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,6 +27,7 @@ import {
 } from '../runtime/agentMessageProjection';
 import { projectLocalTranscriptMessage } from '../runtime/localConversationView';
 import { useAgentMessageHistoryWindow } from '../runtime/useAgentMessageHistoryWindow';
+import { getChatShareHandoff } from './chatShareHandoff';
 import { chatShareMessagePreview } from './chatShareMessagePreview';
 import {
   ChatShareSelectionProvider,
@@ -47,11 +48,13 @@ export function ChatShareScreen() {
     scope?: string | string[];
     sessionId?: string | string[];
     messageId?: string | string[];
+    translationHandoff?: string | string[];
   }>();
   const connectionId = getSingleRouteParam(params.connectionId);
   const scope = getSingleRouteParam(params.scope);
   const sessionId = getSingleRouteParam(params.sessionId);
   const messageId = getSingleRouteParam(params.messageId);
+  const translationHandoff = getSingleRouteParam(params.translationHandoff);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -85,15 +88,29 @@ export function ChatShareScreen() {
           messageId={messageId}
         />
       ) : (
-        <LocalShareContent key={sessionId} sessionId={sessionId} messageId={messageId} />
+        <LocalShareContent
+          key={JSON.stringify([sessionId, translationHandoff])}
+          sessionId={sessionId}
+          messageId={messageId}
+          translationHandoff={translationHandoff}
+        />
       )}
     </View>
   );
 }
 
 /** Local selection reads the Session-keyed history window and one SQLite selection snapshot. */
-function LocalShareContent({ sessionId, messageId }: { sessionId: string; messageId?: string }) {
+function LocalShareContent({
+  sessionId,
+  messageId,
+  translationHandoff,
+}: {
+  sessionId: string;
+  messageId?: string;
+  translationHandoff?: string;
+}) {
   const api = useApiClient();
+  const [translations] = useState(() => getChatShareHandoff(translationHandoff, sessionId));
   const window = useAgentMessageHistoryWindow(sessionId, { messageId });
   const cache = useMemo(() => createAgentMessageListProjectionCache(), []);
   const messages = useMemo(
@@ -107,6 +124,7 @@ function LocalShareContent({ sessionId, messageId }: { sessionId: string; messag
   const target = useMemo<ChatShareTarget>(
     () => ({
       ref: { source: { kind: 'local' }, sessionId },
+      translations,
       prepareSelection: async (ids, signal) => {
         const snapshot = await api.get(`/agent-sessions/${sessionId}/messages/selection`, {
           query: { ids: [...ids] },
@@ -122,7 +140,7 @@ function LocalShareContent({ sessionId, messageId }: { sessionId: string; messag
         };
       },
     }),
-    [api, sessionId],
+    [api, sessionId, translations],
   );
   return <ConversationShareSelection target={target} history={history} messageId={messageId} />;
 }
