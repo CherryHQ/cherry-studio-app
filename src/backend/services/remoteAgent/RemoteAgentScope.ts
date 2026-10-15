@@ -13,10 +13,7 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
-import type {
-  BackgroundReplyLifecycle,
-  BackgroundReplyTurn,
-} from '@/backend/services/backgroundReply';
+import type { BackgroundReplyTurn } from '@/backend/services/backgroundReply';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
 import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
 import {
@@ -33,6 +30,7 @@ import type {
   RemoteResourceValue,
 } from '@/shared/contracts/remoteAgent';
 
+import type { RemoteBackgroundExecution } from '../remoteConversation';
 import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
 import {
@@ -55,11 +53,7 @@ import {
 } from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
-export type RemoteBackgroundExecution = {
-  replies: BackgroundReplyLifecycle;
-  keepAlive: KeepAliveSource;
-  translate(key: string): string;
-};
+export type { RemoteBackgroundExecution } from '../remoteConversation';
 
 type Observation = {
   tracking?: boolean;

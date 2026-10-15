@@ -15,6 +15,7 @@ const ConversationContext = createContext<ReturnType<typeof createConversationSo
 /** Owns the catalog sources the sidebar, Agent picker and remote chat retain. */
 export function ConversationProvider({ children }: PropsWithChildren) {
   const agent = useBackendModule('agent');
+  const remoteAssistant = useBackendModule('remoteAssistant');
   const remoteAgent = useBackendModule('remoteAgent');
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -22,6 +23,7 @@ export function ConversationProvider({ children }: PropsWithChildren) {
     createConversationSources({
       agent,
       remoteAgent,
+      remoteAssistant,
       api,
       readMarks: {
         get: (id) => cacheService.get(`chat.last_seen_turn.${id}`),

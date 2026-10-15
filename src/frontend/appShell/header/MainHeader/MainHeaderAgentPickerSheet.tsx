@@ -9,6 +9,13 @@ import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/co
 import { AgentAvatar } from '@/frontend/components/Avatar';
 
 type MainHeaderAgentPickerSheetProps = {
+  labels?: {
+    title: string;
+    loading: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    loadFailed: string;
+  };
   currentAgentId?: string;
   catalog: ReturnType<typeof useConversationAgents>;
   onSelect(agentId: string): void;
@@ -19,6 +26,7 @@ type MainHeaderAgentPickerSheetProps = {
 };
 
 export function MainHeaderAgentPickerSheet({
+  labels,
   currentAgentId,
   catalog,
   onSelect,
@@ -60,7 +68,7 @@ export function MainHeaderAgentPickerSheet({
       open={open}
       size="medium"
       testID="main-header-agent-picker"
-      title={t('agent.list.title')}
+      title={labels?.title ?? t('agent.list.title')}
     >
       <ScrollView
         className="min-h-0 flex-1"
@@ -68,19 +76,19 @@ export function MainHeaderAgentPickerSheet({
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
-          <ContentState.Loading title={t('agent.list.loading')} />
+          <ContentState.Loading title={labels?.loading ?? t('agent.list.loading')} />
         ) : isError ? (
           <ContentState.Error
             primaryAction={{
               children: t('agent.actions.retry'),
               onPress: () => void refetch(),
             }}
-            title={t('agent.list.loadFailed')}
+            title={labels?.loadFailed ?? t('agent.list.loadFailed')}
           />
         ) : agents.length === 0 ? (
           <ContentState.Empty
-            description={t('agent.list.emptyDescription')}
-            title={t('agent.list.emptyTitle')}
+            description={labels?.emptyDescription ?? t('agent.list.emptyDescription')}
+            title={labels?.emptyTitle ?? t('agent.list.emptyTitle')}
           />
         ) : (
           <View className="gap-1">

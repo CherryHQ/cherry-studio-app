@@ -7,13 +7,13 @@ test('pairing changes evict idle desktop catalogs while active readers and local
   const local = ['conversation-catalog', { kind: 'local' }, 'local', 'agents'];
   const idle = [
     'conversation-catalog',
-    { kind: 'desktop', connectionId: 'idle' },
+    { kind: 'desktop', domain: 'agent', connectionId: 'idle' },
     'grant',
     'agents',
   ];
   const active = [
     'conversation-catalog',
-    { kind: 'desktop', connectionId: 'active' },
+    { kind: 'desktop', domain: 'agent', connectionId: 'active' },
     'grant',
     'agents',
   ];

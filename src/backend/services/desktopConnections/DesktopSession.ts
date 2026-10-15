@@ -11,6 +11,7 @@ import {
   type RemoteAuthorization,
 } from '@cherrystudio/remote-protocol';
 import { agentMethods } from '@cherrystudio/remote-protocol/agent';
+import { assistantMethods } from '@cherrystudio/remote-protocol/assistant';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
@@ -23,7 +24,7 @@ import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
 
-const PROTOCOL_VERSIONS = [1];
+const PROTOCOL_VERSIONS = [2, 1];
 const REFRESH_MARGIN_MS = 60_000;
 // json-rpc-2.0 reports its own timeouts, send failures and rejectAllPendingRequests() as error
 // responses with this code and no `data`; a desktop verdict always carries protocol `data`.
@@ -42,6 +43,7 @@ export const desktopMethods = {
   ...pairingMethods(remoteAuthorizationSchema),
   ...configurationMethods,
   ...agentMethods,
+  ...assistantMethods,
 };
 export type DesktopMethod = keyof typeof desktopMethods;
 export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMethods)[M]['params']>;
@@ -79,6 +81,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
+  assistantVersion?: number;
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
@@ -103,6 +106,7 @@ export class DesktopSession {
         { protocolVersions: PROTOCOL_VERSIONS },
         options.signal,
       );
+      session.assistantVersion = hello.assistantVersion;
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
@@ -227,6 +231,14 @@ export class DesktopSession {
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop connection settings are not supported',
+      });
+    if (
+      method.startsWith('assistant.') &&
+      (this.channel.protocolVersion !== 2 || this.assistantVersion !== 1)
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop Assistant contract is not supported',
       });
     if (method.startsWith('agent.') && this.agentFailureVersion !== 1)
       throw new RemoteFailureError({

@@ -3,7 +3,7 @@ import {
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import { useDrawerStatus } from 'expo-router/drawer';
 import { type RefObject, createContext, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,8 +27,7 @@ import { MainHeaderView, MainHeaderAgentPickerSheet } from '@/frontend/appShell/
 import { ChatDockFooter } from '@/frontend/appShell/layout';
 import {
   conversationShareHref,
-  parseRemoteChatRoute,
-  type RemoteChatRouteParams,
+  type RemoteChatTarget,
   useChatSource,
 } from '@/frontend/appShell/navigation/chat';
 import {
@@ -44,6 +43,7 @@ import { ChatWorkspace, RemoteAssistantMessageUsage } from '../components/ChatWo
 import { ConversationPresenter } from './ConversationPresenter';
 import { RemoteComposer } from './RemoteComposer';
 import { useRemoteChatNavigation } from './useRemoteChatNavigation';
+import { useRemoteChatTarget } from './useRemoteChatTarget';
 import { readRemoteDraft } from './useRemoteDraftPersistence';
 
 const renderRemoteUsage = (message: MessageListItem) => (
@@ -51,26 +51,37 @@ const renderRemoteUsage = (message: MessageListItem) => (
 );
 
 export function RemoteChatScreen() {
-  const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
+  const target = useRemoteChatTarget();
+  if (!target) return <RemoteChatUnavailable state="unsupported" />;
   return target.connectionId ? (
     <ConversationSourceBoundary
-      key={target.connectionId}
-      source={{ kind: 'desktop', connectionId: target.connectionId }}
+      key={`${target.domain}:${target.connectionId}`}
+      source={{
+        kind: 'desktop',
+        connectionId: target.connectionId,
+        domain: target.domain ?? 'agent',
+      }}
       fallback={(state) => <RemoteChatUnavailable state={state} />}
     >
-      <RemoteChatSession />
+      <RemoteChatSession target={target} />
     </ConversationSourceBoundary>
   ) : (
     <RemoteChatUnavailable state="unpaired" />
   );
 }
-function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpaired' }) {
+function RemoteChatUnavailable({
+  state,
+}: {
+  state: 'loading' | 'error' | 'unpaired' | 'unsupported';
+}) {
   const { t } = useTranslation();
   return (
     <ChatScreenFrame header={UnresolvedRemoteHeader}>
       <View className="flex-1 justify-center px-8 py-16">
         {state === 'loading' ? (
           <ContentState.Loading title={t('remoteAgent.connecting')} />
+        ) : state === 'unsupported' ? (
+          <ContentState.Empty title={t('remoteConversation.unsupported')} />
         ) : state === 'error' ? (
           <ContentState.Error
             title={t('remoteAgent.loadFailed')}
@@ -104,6 +115,9 @@ const HeaderContext = createContext<{
 } | null>(null);
 function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
   const header = use(HeaderContext)!;
+  const { t } = useTranslation();
+  const source = useRemoteConversationSource();
+  const assistant = source.ref.kind === 'desktop' && source.ref.domain === 'assistant';
   const catalog = useConversationAgents();
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
@@ -119,6 +133,17 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
       />
       <MainHeaderAgentPickerSheet
         catalog={catalog}
+        labels={
+          assistant
+            ? {
+                title: t('remoteAssistant.title'),
+                loading: t('remoteAgent.loading'),
+                emptyTitle: t('remoteAssistant.empty'),
+                emptyDescription: t('remoteAssistant.configureOnDesktop'),
+                loadFailed: t('remoteAgent.loadFailed'),
+              }
+            : undefined
+        }
         currentAgentId={header.agent?.id}
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -128,12 +153,11 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
   );
 }
 const ignorePending = () => {};
-function RemoteChatSession() {
+function RemoteChatSession({ target }: { target: RemoteChatTarget }) {
   const drawerStatus = useDrawerStatus();
   const source = useRemoteConversationSource();
   const connectionId = source.ref.kind === 'desktop' ? source.ref.connectionId : undefined;
   const { availability } = useConversationSourceState();
-  const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
@@ -144,7 +168,12 @@ function RemoteChatSession() {
   );
   useBackgroundTaskNotifications(
     connectionId && target.sessionId
-      ? { kind: 'remote-chat', connectionId, sessionId: target.sessionId }
+      ? {
+          kind: 'remote-chat',
+          connectionId,
+          domain: target.domain ?? 'agent',
+          sessionId: target.sessionId,
+        }
       : undefined,
     drawerStatus !== 'open',
   );
@@ -240,7 +269,23 @@ function RemoteChatSession() {
                 />
               ) : null}
               {!target.sessionId && agents.isSuccess && !agents.items.length ? (
-                <ContentState.Empty title={t('remoteAgent.noAgents')} />
+                <ContentState.Empty
+                  title={t(
+                    target.domain === 'assistant'
+                      ? 'remoteAssistant.empty'
+                      : 'remoteAgent.noAgents',
+                  )}
+                />
+              ) : null}
+              {snapshot.interactions.some(
+                (interaction) => interaction.state === 'pending' && interaction.desktopRequired,
+              ) ? (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  className="px-4 py-2 text-sm text-muted-foreground"
+                >
+                  {t('remoteAssistant.desktopRequired')}
+                </Text>
               ) : null}
               {/* Agent-scoped workspace controls reset; the user's composer above stays mounted. */}
               <RemoteComposer

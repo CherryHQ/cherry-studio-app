@@ -101,6 +101,14 @@ export function DeviceConnectionDetailScreen() {
               onPress={() => router.push(remoteChatHref({ connectionId: connection.id }))}
             />
           ) : null}
+          {connection.capabilities.includes('assistant') ? (
+            <Section.Item
+              label={t('remoteAssistant.open')}
+              onPress={() =>
+                router.push(remoteChatHref({ connectionId: connection.id, domain: 'assistant' }))
+              }
+            />
+          ) : null}
           {connection.capabilities.includes('configuration') ? (
             <Section.Item
               description={t('settings.deviceConnections.syncGuide.entryDescription')}

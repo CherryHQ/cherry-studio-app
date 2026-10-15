@@ -39,14 +39,30 @@ export function useRemoteChatNavigation(
       // start keeps its route; an undelivered one stays on the draft and still resends to its Agent.
       const nextDraftId = target.sessionId || source.hasSubmission(draftId) ? uuidv7() : draftId;
       if (nextDraftId !== draftId || target.sessionId) origin.current = undefined;
-      openRemote({ connectionId: target.connectionId, agentId, draftId: nextDraftId });
+      openRemote({
+        connectionId: target.connectionId,
+        domain: target.domain,
+        agentId,
+        draftId: nextDraftId,
+      });
     },
     startNewChat: (agentId?: string) => {
       origin.current = undefined;
-      openRemote({ connectionId: target.connectionId, agentId, draftId: uuidv7() });
+      openRemote({
+        connectionId: target.connectionId,
+        domain: target.domain,
+        agentId,
+        draftId: uuidv7(),
+      });
     },
     onSessionCreated: (ref: ConversationRef) => {
-      if (origin.current !== identity) return false;
+      if (
+        origin.current !== identity ||
+        ref.source.kind !== 'desktop' ||
+        ref.source.connectionId !== target.connectionId ||
+        ref.source.domain !== (target.domain ?? 'agent')
+      )
+        return false;
       setHandoff({ sessionId: ref.sessionId, key: identity });
       // Same route: replacing would remount the whole screen and flash it.
       router.setParams({ sessionId: ref.sessionId, draftId: undefined });

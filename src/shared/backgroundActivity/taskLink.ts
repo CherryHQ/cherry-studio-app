@@ -6,7 +6,12 @@
 export type BackgroundTaskLink =
   | { kind: 'chat'; sessionId: string }
   | { kind: 'painting'; paintingId: string }
-  | { kind: 'remote-chat'; connectionId: string; sessionId: string };
+  | {
+      kind: 'remote-chat';
+      connectionId: string;
+      domain?: 'agent' | 'assistant';
+      sessionId: string;
+    };
 
 const PAINTINGS_SEGMENT = 'paintings';
 
@@ -16,7 +21,7 @@ export function createBackgroundTaskUrl(scheme: string, link: BackgroundTaskLink
     case 'chat':
       return `${scheme}:///?sessionId=${encodeURIComponent(link.sessionId)}`;
     case 'remote-chat':
-      return `${scheme}://remote?connectionId=${encodeURIComponent(link.connectionId)}&sessionId=${encodeURIComponent(link.sessionId)}`;
+      return `${scheme}://remote?connectionId=${encodeURIComponent(link.connectionId)}&sessionId=${encodeURIComponent(link.sessionId)}${link.domain === 'assistant' ? '&domain=assistant' : ''}`;
     case 'painting':
       return `${scheme}://${PAINTINGS_SEGMENT}?paintingId=${encodeURIComponent(link.paintingId)}`;
   }
@@ -43,8 +48,15 @@ export function parseBackgroundTaskUrl(
       const params = parseQuery(query);
       const connectionId = params.get('connectionId');
       const sessionId = params.get('sessionId');
+      const domain = params.get('domain');
+      if (domain && domain !== 'agent' && domain !== 'assistant') return undefined;
       return connectionId && sessionId
-        ? { kind: 'remote-chat', connectionId, sessionId }
+        ? {
+            kind: 'remote-chat',
+            connectionId,
+            sessionId,
+            ...(domain === 'assistant' ? { domain } : {}),
+          }
         : undefined;
     }
     if (segments.length === 2 && segments[0] === PAINTINGS_SEGMENT) {
@@ -68,7 +80,11 @@ export function isSameBackgroundTask(
 ): boolean {
   if (!left || !right || left.kind !== right.kind) return false;
   if (left.kind === 'remote-chat' && right.kind === 'remote-chat')
-    return left.connectionId === right.connectionId && left.sessionId === right.sessionId;
+    return (
+      left.connectionId === right.connectionId &&
+      left.sessionId === right.sessionId &&
+      (left.domain ?? 'agent') === (right.domain ?? 'agent')
+    );
   return left.kind === 'chat' && right.kind === 'chat'
     ? left.sessionId === right.sessionId
     : left.kind === 'painting' && right.kind === 'painting' && left.paintingId === right.paintingId;

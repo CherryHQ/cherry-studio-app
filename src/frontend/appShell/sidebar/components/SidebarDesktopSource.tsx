@@ -24,7 +24,7 @@ export function SidebarDesktopSource({
   const router = useRouter();
   const { remoteTarget } = useChatSource();
   const { connections, isLoading: isLoadingDevices } = useDesktopConnections();
-  const connectionId = remoteTarget.connectionId;
+  const connectionId = remoteTarget?.connectionId;
   const isSelectingDevice =
     isLoadingDevices || connections.some((connection) => connection.status === 'paired');
   const selected = connections.find((connection) => connection.id === connectionId);
@@ -33,10 +33,18 @@ export function SidebarDesktopSource({
       <ContentState.Loading title={t('remoteAgent.loading')} />
     </View>
   ) : null;
+  if (!remoteTarget)
+    return (
+      <RemoteSidebarFrame header={header}>
+        <View className="px-5 py-4">
+          <ContentState.Empty title={t('remoteConversation.unsupported')} />
+        </View>
+      </RemoteSidebarFrame>
+    );
   return connectionId ? (
     <ConversationSourceBoundary
-      key={connectionId}
-      source={{ kind: 'desktop', connectionId }}
+      key={`${remoteTarget.domain}:${connectionId}`}
+      source={{ kind: 'desktop', connectionId, domain: remoteTarget.domain ?? 'agent' }}
       fallback={(state) => (
         <RemoteSidebarFrame header={header}>
           {state === 'loading' ? (
@@ -51,7 +59,6 @@ export function SidebarDesktopSource({
     >
       <RemoteSidebarFrame
         header={header}
-
         status={<RemoteConnectionStatus name={selected?.name ?? ''} />}
       >
         {children}

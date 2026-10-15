@@ -2,6 +2,7 @@ import type { RemoteCapability } from '@cherrystudio/remote-protocol';
 import type { TFunction } from 'i18next';
 
 const LABEL_KEYS = {
+  assistant: 'settings.deviceConnections.capabilities.assistant',
   agent: 'settings.deviceConnections.capabilities.agent',
   configuration: 'settings.deviceConnections.capabilities.configuration',
 } as const;

@@ -14,7 +14,8 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const { t } = useTranslation();
   const { toast } = useToast();
   const pending = snapshot.interactions.find((item) => item.state === 'pending');
-  const interaction = pending?.kind === 'question' ? undefined : pending;
+  const interaction =
+    pending?.kind === 'question' || pending?.desktopRequired ? undefined : pending;
   const retired = snapshot.freshness.state === 'retired';
   const input = useConversationResourceValue(interaction?.input, retired);
   const isOpen = Boolean(interaction) && !retired;

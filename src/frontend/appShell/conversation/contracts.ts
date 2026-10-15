@@ -19,7 +19,10 @@ export type AgentRef = Opaque<'conversation-agent'>;
 export type WorkspaceRef = Opaque<'conversation-workspace'>;
 export type CatalogCursor = Opaque<'conversation-catalog-cursor'>;
 
-export type ConversationSourceRef = { kind: 'local' } | { kind: 'desktop'; connectionId: string };
+export type DesktopConversationDomain = 'agent' | 'assistant';
+export type ConversationSourceRef =
+  | { kind: 'local' }
+  | { kind: 'desktop'; connectionId: string; domain: DesktopConversationDomain };
 export type ConversationRef = { source: ConversationSourceRef; sessionId: string };
 export type Readable<T> = { getSnapshot(): T; subscribe(listener: () => void): () => void };
 export type ConversationFailure = {
@@ -116,6 +119,7 @@ export type ConversationInteraction = {
   title: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
   input: ResourceRead;
+  desktopRequired?: boolean;
   respond?: ConversationAction<ConversationInteractionResponse, void>;
 };
 /** Pure export values, never a deferred remote resource or an executable tool. */

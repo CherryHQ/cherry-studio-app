@@ -2,7 +2,7 @@ import type { DesktopConnectionService } from '@/backend/data/services/DesktopCo
 
 import type { DesktopSession } from './DesktopSession';
 
-export type DesktopDomain = 'agent' | 'configuration';
+export type DesktopDomain = 'agent' | 'assistant' | 'configuration';
 export type DesktopLeaseState = {
   status: 'connecting' | 'ready' | 'offline' | 'suspended' | 'retired';
   reason?:

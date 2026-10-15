@@ -471,3 +471,35 @@ describe('DesktopSession', () => {
     session.close();
   });
 });
+
+it('requires both protocol v2 and Assistant capability version without relying on Agent support', async () => {
+  for (const protocolVersion of [1, 2]) {
+    const catalog = jest.fn(() => ({ items: [], nextCursor: null }));
+    const channel = fakeChannel({
+      'connection.hello': () => ({
+        ...hello['connection.hello'](),
+        protocolVersion,
+        assistantVersion: 1,
+      }),
+      'assistant.assistants.list': catalog,
+    });
+    Object.assign(channel, { protocolVersion, offeredVersions: [2, 1] });
+    const session = await DesktopSession.connect(options({ '127.0.0.1': channel }));
+    try {
+      if (protocolVersion === 1) {
+        await expect(session.request('assistant.assistants.list', {})).rejects.toMatchObject({
+          reason: 'UPGRADE_REQUIRED',
+        });
+        expect(catalog).not.toHaveBeenCalled();
+      } else {
+        await expect(session.request('assistant.assistants.list', {})).resolves.toEqual({
+          items: [],
+          nextCursor: null,
+        });
+        expect(session.agentFailureVersion).toBeUndefined();
+      }
+    } finally {
+      session.close();
+    }
+  }
+});

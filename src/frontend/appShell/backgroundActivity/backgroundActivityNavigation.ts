@@ -8,7 +8,11 @@ export function backgroundActivityHref(url: unknown, scheme: string): Href | und
   const link = parseBackgroundTaskUrl(url, scheme);
   switch (link?.kind) {
     case 'remote-chat':
-      return remoteChatHref({ connectionId: link.connectionId, sessionId: link.sessionId });
+      return remoteChatHref({
+        connectionId: link.connectionId,
+        sessionId: link.sessionId,
+        ...(link.domain ? { domain: link.domain } : {}),
+      });
     case 'chat':
       return chatHref({ kind: 'session', sessionId: link.sessionId });
     case 'painting':

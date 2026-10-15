@@ -22,7 +22,7 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   const { toast } = useToast();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
-  const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
+  const loadingKey = `${source}:${remoteTarget?.domain ?? ''}:${remoteTarget?.connectionId ?? ''}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
     const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);
@@ -30,7 +30,10 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   }, [loadingKey]);
   const showLoading = source === 'local' || loadingFeedback === loadingKey;
   const isSessionMode = mode === 'sessions';
-  const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
+  const assistant = source === 'remote' && remoteTarget?.domain === 'assistant';
+  const sessionsLabel = t(assistant ? 'remoteAssistant.topics' : 'navigation.sessions');
+  const agentsLabel = t(assistant ? 'remoteAssistant.title' : 'navigation.agents');
+  const modeLabel = isSessionMode ? sessionsLabel : agentsLabel;
   const handleModeChange = useCallback(
     (nextMode: 'sessions' | 'agents') => {
       void setMode(nextMode).catch(() => {
@@ -45,18 +48,18 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
         checked: isSessionMode,
         group: 'view',
         id: 'show-sessions',
-        label: t('navigation.sessions'),
+        label: sessionsLabel,
         onPress: () => handleModeChange('sessions'),
       },
       {
         checked: !isSessionMode,
         group: 'view',
         id: 'show-agents',
-        label: t('navigation.agents'),
+        label: agentsLabel,
         onPress: () => handleModeChange('agents'),
       },
     ],
-    [handleModeChange, isSessionMode, t],
+    [handleModeChange, isSessionMode, sessionsLabel, agentsLabel],
   );
 
   const modeTrigger = (

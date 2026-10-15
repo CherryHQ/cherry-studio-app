@@ -109,7 +109,7 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
       if (existing && existing.desktopIdentity !== qr.desktopIdentity)
         throw desktopError('identity-mismatch', 'This code belongs to a different desktop');
       onProgress?.({ stage: 'connecting' });
-      const session = await this.connect(qr, signal).catch((error: unknown) => {
+      let session = await this.connect(qr, signal).catch((error: unknown) => {
         throw translate(error);
       });
       try {
@@ -122,7 +122,12 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
               throw error;
             });
           signal.throwIfAborted();
-          if (authorization) {
+          if (
+            authorization &&
+            qr.capabilities.every((domain) =>
+              authorization.grants.some((grant) => grant.domain === domain),
+            )
+          ) {
             onProgress?.({ stage: 'saving' });
             await store.updateStatus(
               id,
@@ -141,8 +146,16 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
             signal.throwIfAborted();
             return store.getById(id);
           }
-          await store.updateStatus(id, { status: 'needs-repair' }, signal, existing);
-          this.connections!.invalidate(id);
+          if (!authorization) {
+            await store.updateStatus(id, { status: 'needs-repair' }, signal, existing);
+            this.connections!.invalidate(id);
+          } else {
+            // Pairing claims require an unauthenticated channel, even for an existing device.
+            session.close();
+            session = await this.connect(qr, signal).catch((error: unknown) => {
+              throw translate(error);
+            });
+          }
         }
         onProgress?.({ stage: 'requesting' });
         const claim = await session.request(

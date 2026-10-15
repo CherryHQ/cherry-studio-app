@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type {
   ConversationMessage,
   ConversationHistoryView,
+  ConversationRef,
 } from '@/frontend/appShell/conversation';
 import {
   useConversation,
@@ -44,14 +45,19 @@ const KEEP_VISIBLE_POSITION = { data: true, size: true };
 export function ChatShareScreen() {
   const params = useLocalSearchParams<{
     connectionId?: string | string[];
+    domain?: string | string[];
     scope?: string | string[];
     sessionId?: string | string[];
     messageId?: string | string[];
   }>();
   const connectionId = getSingleRouteParam(params.connectionId);
+  const domain = getSingleRouteParam(params.domain);
   const scope = getSingleRouteParam(params.scope);
   const sessionId = getSingleRouteParam(params.sessionId);
   const messageId = getSingleRouteParam(params.messageId);
+  const conversation = sessionId
+    ? conversationRefFromRoute(sessionId, connectionId, domain)
+    : undefined;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
 
@@ -75,12 +81,11 @@ export function ChatShareScreen() {
         </Text>
         <View className="size-11" />
       </View>
-      {!sessionId ? (
+      {!sessionId || !conversation ? (
         <ContentState.Error title={t('chat.share.loadFailed')} />
       ) : connectionId ? (
         <RemoteShareContent
-          sessionId={sessionId}
-          connectionId={connectionId}
+          conversation={conversation}
           expectedScope={scope}
           messageId={messageId}
         />
@@ -128,26 +133,22 @@ function LocalShareContent({ sessionId, messageId }: { sessionId: string; messag
 }
 
 function RemoteShareContent({
-  sessionId,
-  connectionId,
+  conversation,
   expectedScope,
   messageId,
 }: {
-  sessionId: string;
-  connectionId: string;
+  conversation: ConversationRef;
   expectedScope?: string;
   messageId?: string;
 }) {
   const { t } = useTranslation();
-  const { session, error, isLoading } = useConversation(
-    conversationRefFromRoute(sessionId, connectionId),
-  );
+  const { session, error, isLoading } = useConversation(conversation);
   if (error || (session && expectedScope && session.scope !== expectedScope))
     return <ContentState.Error title={t('chat.share.loadFailed')} />;
   if (isLoading || !session) return <ContentState.Loading />;
   return (
     <RemoteShareSelection
-      key={JSON.stringify([session.scope, sessionId, messageId])}
+      key={JSON.stringify([session.scope, conversation.sessionId, messageId])}
       session={session}
       messageId={messageId}
     />

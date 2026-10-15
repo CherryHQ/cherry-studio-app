@@ -15,13 +15,14 @@ export function useVisibleBackgroundTask(task: BackgroundTaskLink | undefined, e
   const taskKind = task?.kind;
   const taskId = task?.kind === 'painting' ? task.paintingId : task?.sessionId;
   const connectionId = task?.kind === 'remote-chat' ? task.connectionId : undefined;
+  const domain = task?.kind === 'remote-chat' ? task.domain : undefined;
 
   useFocusEffect(
     useCallback(() => {
       if (!enabled || !taskKind || !taskId) return;
       const target: BackgroundTaskLink =
         taskKind === 'remote-chat'
-          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId }
+          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId, domain }
           : taskKind === 'chat'
             ? { kind: taskKind, sessionId: taskId }
             : { kind: taskKind, paintingId: taskId };
@@ -37,6 +38,6 @@ export function useVisibleBackgroundTask(task: BackgroundTaskLink | undefined, e
         release?.();
         appState.remove();
       };
-    }, [connectionId, enabled, taskId, taskKind]),
+    }, [connectionId, domain, enabled, taskId, taskKind]),
   );
 }

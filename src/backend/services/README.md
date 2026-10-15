@@ -49,6 +49,11 @@ suffix.
   Bootstrap injects a persistence service bound to that same database; list/detail reads remain
   in Data API. Its private Expo transport rejects redirects and keeps the deadline active through
   response-body consumption.
+- `remoteAgent` and `remoteAssistant` own independent domain leases, desktop projections and
+  durable command recovery. They share the physical connection manager and the credential-free
+  conversation port, but keep grants, drafts and command journals separate. `remoteConversation`
+  contains their shared message projection, content integrity and background execution ports;
+  it owns no runtime or desktop execution. Assistant history pins both revision and branch anchor.
 - `analytics` owns anonymous product reporting through `@cherrystudio/analytics-client`. Its client
   exists only while data collection is consented under the current privacy policy, so revoking
   consent destroys it along with anything queued. It keeps the desktop-aligned client identity in

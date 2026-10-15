@@ -522,11 +522,16 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
       ? createBackgroundTaskUrl(resolveScheme({}), {
           kind: 'remote-chat',
           connectionId: input.connectionId,
+          domain: input.domain,
           sessionId: input.sessionId,
         })
       : sessionTaskUrl(input.sessionId),
     key: input.connectionId
-      ? JSON.stringify([input.connectionId, input.sessionId])
+      ? JSON.stringify([
+          input.connectionId,
+          input.sessionId,
+          ...(input.domain === 'assistant' ? [input.domain] : []),
+        ])
       : input.sessionId,
   };
 }

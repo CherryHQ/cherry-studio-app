@@ -62,6 +62,7 @@ import {
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
+import type { RemoteAssistantRuntime } from '@/backend/services/remoteAssistant';
 import {
   createBundledSkillSource,
   createSkillMarketplace,
@@ -105,6 +106,7 @@ export function createBackend(
     desktopConnections: DesktopConnectionRuntime;
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
+    remoteAssistant: RemoteAssistantRuntime;
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
@@ -118,6 +120,11 @@ export function createBackend(
   );
   // Capture this host's database; late work never resolves a replacement host.
   const exportFiles = new FileEntryService(dbService);
+  infrastructure.remoteAssistant.configure({
+    connections: infrastructure.desktopConnectionManager,
+    journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-assistant-commands' })),
+    background: infrastructure.remoteBackground,
+  });
   infrastructure.remoteAgent.configure({
     connections: infrastructure.desktopConnectionManager,
     files: services.fileContent,
@@ -316,6 +323,7 @@ export function createBackend(
       systemEntry: systemEntry.module,
       agent: services.agent,
       remoteAgent: infrastructure.remoteAgent,
+      remoteAssistant: infrastructure.remoteAssistant,
       desktopConnections: infrastructure.desktopConnections,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,

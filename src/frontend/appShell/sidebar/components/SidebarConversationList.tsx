@@ -110,19 +110,21 @@ function SidebarCatalog({
 }
 
 function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
+  const source = useConversationSource();
+  const assistant = source.ref.kind === 'desktop' && source.ref.domain === 'assistant';
   const { t } = useTranslation();
   const query = useConversationAgents();
   if (query.isPending)
     return showLoading && query.isLoading ? (
       <View className="py-4">
-        <ContentState.Loading title={t('agent.list.loading')} />
+        <ContentState.Loading title={t(assistant ? 'remoteAgent.loading' : 'agent.list.loading')} />
       </View>
     ) : null;
   if (query.isError && !query.data)
     return (
       <View className="px-5 py-4">
         <ContentState.Error
-          title={t('agent.list.loadFailed')}
+          title={t(assistant ? 'remoteAgent.loadFailed' : 'agent.list.loadFailed')}
           primaryAction={{ children: t('common.retry'), onPress: () => void query.refetch() }}
         />
       </View>
@@ -130,7 +132,9 @@ function SidebarAgentGroups({ showLoading }: { showLoading: boolean }) {
   if (query.isSuccess && !query.items.length)
     return (
       <View className="px-5 py-4">
-        <ContentState.Empty description={t('agent.list.emptyTitle')} />
+        <ContentState.Empty
+          description={t(assistant ? 'remoteAssistant.empty' : 'agent.list.emptyTitle')}
+        />
       </View>
     );
   return (

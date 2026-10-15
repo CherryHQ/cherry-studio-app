@@ -1,5 +1,9 @@
 # Remote Access
 
+Desktop Assistant access is implemented as a separate domain alongside Agent access. See
+[Desktop Assistant Access](./assistant.md) for its scope, recovery rules and temporary local
+protocol-package override. Device acceptance remains separate from the implementation checks.
+
 Status: slices 1–3 (packages, pairing, configuration sync) are implemented. The slices 4–6
 migration now includes the shared Agent protocol, domain leases, desktop snapshot sync, durable
 command recovery, and frontend conversation adapters. Local chat history, message actions, approvals and
@@ -47,10 +51,11 @@ native module ownership and the network-independent pairing migration.
   requests, 256 KiB unacknowledged event bytes, 10-minute access tokens with a 30-second refresh
   grace, 20-second heartbeat, 60-second idle timeout.
 - **Methods**: `connection.hello|authenticate|refresh|ping`, `pairing.claim|get`,
-  `configuration.export.prepare|read`, and the `agent.*` map from `@cherrystudio/remote-protocol/agent`.
+  `configuration.export.prepare|read`, the `agent.*` map from `@cherrystudio/remote-protocol/agent`,
+  and the version-2 `assistant.*` map from `@cherrystudio/remote-protocol/assistant`.
   Notifications: `agent.events`, `agent.subscriptions.resetRequired`, `connection.closed`.
 - **Authorization**: the desktop user approves a subset of the requested capabilities
-  (`configuration`, `agent`) while pairing; each becomes a grant id. `connection.authenticate`
+  (`configuration`, `agent`, and version-2 `assistant`) while pairing; each becomes a grant id. `connection.authenticate`
   needs only `deviceId` because identity is the Noise key. Revocation surfaces as `GRANT_REVOKED`
   on the next request or write.
 - **Commands** carry a client `commandId`; the desktop keys receipts by device + grant + command,
@@ -60,7 +65,8 @@ native module ownership and the network-independent pairing migration.
 
 ## Shared packages
 
-- `@cherrystudio/remote-protocol@0.5.0` comes from npm. Its published exports include the Agent,
+- `@cherrystudio/remote-protocol@0.5.0` normally comes from npm; the current Assistant development
+  override uses the local package described above. Its published exports include the Agent,
   configuration, failure, and connection contracts; Mobile owns only its consumers and adapters.
 - `@cherrystudio/remote-transport@0.2.1` comes from npm and depends on the matching protocol
   version. The app loads it through dynamic `import()` so the ESM `@libp2p/*` chain never rides
@@ -95,7 +101,8 @@ ownership from desktop authority and distinguishes implementation from acceptanc
 ```text
 Settings / onboarding → Backend.desktopConnections → DesktopConnectionRuntime (workflows)
 Frontend conversation adapters → Backend.remoteAgent → RemoteAgentRuntime (Agent scopes)
-Both runtimes → DesktopConnectionManager (one channel, domain leases, AppState, reconnect)
+Frontend conversation adapters → Backend.remoteAssistant → RemoteAssistantRuntime (Assistant scopes)
+All three runtimes → DesktopConnectionManager (one channel, domain leases, AppState, reconnect)
 DesktopConnectionManager → DesktopSession (Noise, JSON-RPC, heartbeat and authorization refresh)
 RemoteAgentRuntime → SessionSync (in-memory desktop state) / RemoteAgentActions (MMKV command journal)
 ```

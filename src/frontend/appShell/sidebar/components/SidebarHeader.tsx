@@ -89,9 +89,16 @@ function SidebarDeviceTitle() {
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const current =
     source === 'remote'
-      ? connections.find((connection) => connection.id === remoteTarget.connectionId)
+      ? connections.find((connection) => connection.id === remoteTarget?.connectionId)
       : undefined;
-  const name = current?.name ?? brand;
+  const name = current
+    ? t('remoteConversation.deviceSource', {
+        name: current.name,
+        source: t(
+          remoteTarget?.domain === 'assistant' ? 'remoteAssistant.title' : 'navigation.agents',
+        ),
+      })
+    : brand;
   const [width, setWidth] = useState(0);
   const frame = (content: ReactNode) => (
     <View
@@ -110,13 +117,39 @@ function SidebarDeviceTitle() {
       label: brand,
       onPress: () => selectDevice(),
     },
-    ...connections.map((connection) => ({
-      group: 'devices',
-      id: `device-${connection.id}`,
-      checked: source === 'remote' && connection.id === remoteTarget.connectionId,
-      label: connection.name,
-      onPress: () => selectDevice(connection.id),
-    })),
+    ...connections.flatMap((connection): MenuItem[] => {
+      const domains = (['agent', 'assistant'] as const).filter((domain) =>
+        connection.capabilities.includes(domain),
+      );
+      if (!domains.length)
+        return [
+          {
+            group: 'devices',
+            id: `device-${connection.id}`,
+            label: connection.name,
+            onPress: () => {
+              closeDrawer();
+              router.push({
+                pathname: '/settings/device-connections/[connectionId]',
+                params: { connectionId: connection.id },
+              });
+            },
+          },
+        ];
+      return domains.map((domain) => ({
+        group: 'devices',
+        id: `device-${connection.id}-${domain}`,
+        checked:
+          source === 'remote' &&
+          connection.id === remoteTarget?.connectionId &&
+          remoteTarget.domain === domain,
+        label: t('remoteConversation.deviceSource', {
+          name: connection.name,
+          source: t(domain === 'assistant' ? 'remoteAssistant.title' : 'navigation.agents'),
+        }),
+        onPress: () => selectDevice(connection.id, domain),
+      }));
+    }),
     {
       group: 'manage',
       id: 'manage-devices',

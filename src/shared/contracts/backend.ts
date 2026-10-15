@@ -14,6 +14,7 @@ import type { PluginsModule } from './plugins';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
 import type { RemoteAgentModule } from './remoteAgent';
+import type { RemoteAssistantModule } from './remoteAssistant';
 import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
 import type { WebSearchModule } from './webSearch';
@@ -25,6 +26,7 @@ export interface Backend {
   readonly systemEntry: SystemEntryModule;
   readonly agent: AgentProtocol;
   readonly remoteAgent: RemoteAgentModule;
+  readonly remoteAssistant: RemoteAssistantModule;
   readonly desktopConnections: DesktopConnectionsModule;
   readonly diagnostics: DiagnosticsModule;
   readonly documentExport: DocumentExportModule;

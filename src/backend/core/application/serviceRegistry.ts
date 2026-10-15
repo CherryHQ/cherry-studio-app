@@ -27,6 +27,7 @@ import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoor
 import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import { RemoteAssistantRuntime } from '@/backend/services/remoteAssistant';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -56,6 +57,7 @@ export const services = {
   DesktopConnectionRuntime,
   ProviderAccountRuntime,
   RemoteAgentRuntime,
+  RemoteAssistantRuntime,
   DocumentExportRuntime,
   PreferenceService,
   AnalyticsService,
