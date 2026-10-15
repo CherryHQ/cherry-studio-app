@@ -1,11 +1,9 @@
 import { createHash } from 'node:crypto';
 
 import { Directory, File } from 'expo-file-system';
-import { strToU8, Zip, ZipDeflate, ZipPassThrough, zipSync } from 'fflate';
+import { strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough, zipSync } from 'fflate';
 
-import { backupStorageNative } from '@/backend/data/storage/storagePaths';
-
-import { unpackBackup } from '../backupArchive';
+import { packBackup, unpackBackup } from '../backupArchive';
 import type { BackupManifest } from '../backupFormat';
 
 jest.mock('expo-file-system', () => {
@@ -91,15 +89,17 @@ jest.mock('expo-file-system', () => {
     Paths: { availableDiskSpace: 2 ** 40 },
   };
 });
-jest.mock('@/backend/data/storage/storagePaths', () => ({ backupStorageNative: jest.fn() }));
+jest.mock('@/backend/services/file/fileHash', () => ({
+  hashLocalFile: async (uri: string) => {
+    const { File: MockFile } =
+      jest.requireMock<typeof import('expo-file-system')>('expo-file-system');
+    return mockHash(await new MockFile(uri).bytes());
+  },
+}));
 
-const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+const mockHash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
 test('extracts stored Office files without interpreting their inner ZIP entries as backup entries', async () => {
-  jest.mocked(backupStorageNative).mockReturnValue({
-    hashFile: async (uri: string) => hash(await new File(uri).bytes()),
-  } as ReturnType<typeof backupStorageNative>);
-
   const database = strToU8('database fixture');
   const officeFile = zipSync({ 'ppt/slides/slide1.xml': strToU8('<slide />') });
   const filePath = 'files/10000000-0000-4000-8000-000000000001.pptx';
@@ -113,8 +113,8 @@ test('extracts stored Office files without interpreting their inner ZIP entries 
     migrations: [{ when: 1789461429602, sha256: 'a'.repeat(64) }],
     counts: { sessions: 0, messages: 0, files: 1, pluginConnections: 0 },
     entries: [
-      { path: 'database/cherry.db', size: database.length, sha256: hash(database) },
-      { path: filePath, size: officeFile.length, sha256: hash(officeFile) },
+      { path: 'database/cherry.db', size: database.length, sha256: mockHash(database) },
+      { path: filePath, size: officeFile.length, sha256: mockHash(officeFile) },
     ],
   };
   const chunks: Uint8Array[] = [];
@@ -152,4 +152,73 @@ test('extracts stored Office files without interpreting their inner ZIP entries 
     ),
   ).resolves.toEqual(manifest);
   await expect(new File('file:///cache/extracted', filePath).bytes()).resolves.toEqual(officeFile);
+});
+
+/** Compression method of each central-directory record, in archive order. */
+function compressionMethods(archive: Uint8Array) {
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const end = archive.length - 22;
+  const methods: [string, number][] = [];
+  for (let offset = view.getUint32(end + 16, true); offset < end;) {
+    const nameLength = view.getUint16(offset + 28, true);
+    const name = new TextDecoder().decode(archive.subarray(offset + 46, offset + 46 + nameLength));
+    methods.push([name, view.getUint16(offset + 10, true)]);
+    offset +=
+      46 + nameLength + view.getUint16(offset + 30, true) + view.getUint16(offset + 32, true);
+  }
+  return methods;
+}
+
+test('round-trips a packed backup with deflated metadata and stored payloads', async () => {
+  const root = new Directory('file:///cache/export');
+  const database = strToU8('database fixture'.repeat(100));
+  const filePath = 'files/10000000-0000-4000-8000-000000000002.png';
+  const image = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+  const manifest: BackupManifest = {
+    product: 'cherry-mobile',
+    formatVersion: 1,
+    id: '20000000-0000-4000-8000-000000000002',
+    createdAt: '2026-10-15T00:00:00.000Z',
+    appVersion: '0.2.1',
+    platform: 'ios',
+    migrations: [{ when: 1789461429602, sha256: 'a'.repeat(64) }],
+    counts: { sessions: 0, messages: 0, files: 1, pluginConnections: 0 },
+    entries: [
+      { path: 'database/cherry.db', size: database.length, sha256: mockHash(database) },
+      { path: filePath, size: image.length, sha256: mockHash(image) },
+    ],
+  };
+  for (const [path, bytes] of [
+    ['manifest.json', strToU8(JSON.stringify(manifest))],
+    ['database/cherry.db', database],
+    [filePath, image],
+  ] as const)
+    new File(root, path).write(bytes);
+  const output = new File('file:///cache/export.zip');
+  const progress: [number, number][] = [];
+  await packBackup(root, manifest, output, new AbortController().signal, (done, total) =>
+    progress.push([done, total]),
+  );
+  expect(progress).toEqual([
+    [1, 3],
+    [2, 3],
+    [3, 3],
+  ]);
+
+  const archive = await output.bytes();
+  expect(compressionMethods(archive)).toEqual([
+    ['manifest.json', 8],
+    ['database/cherry.db', 8],
+    [filePath, 0],
+  ]);
+  expect(unzipSync(archive)[filePath]).toEqual(image);
+  await expect(
+    unpackBackup(
+      output,
+      new Directory('file:///cache/restored'),
+      new AbortController().signal,
+      () => {},
+    ),
+  ).resolves.toEqual(manifest);
+  await expect(new File('file:///cache/restored', filePath).bytes()).resolves.toEqual(image);
 });

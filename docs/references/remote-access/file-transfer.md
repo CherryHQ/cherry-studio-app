@@ -18,8 +18,12 @@ protocol link or dependency override is required.
 
 Use `@preeternal/react-native-file-hash@3.0.1`, default native engine and SHA-256. Its
 [published-source API](https://github.com/Preeternal/react-native-file-hash/blob/c0f799a456b80850d9d355842fb13003ac5c5f57/README.md)
-supports streamed native hashing and cancellation. The Expo plugin is configured; rebuild Android/iOS
-development clients. JS hot reload alone is insufficient. No custom Expo module is planned.
+supports streamed native hashing and cancellation. A local patch makes the iOS SHA-256 loop honor
+cancellation per chunk and fail on read errors instead of hashing a prefix; upstream checks
+cancellation only after the last read and treats a read error as end of file. The Expo plugin is
+configured; rebuild Android/iOS
+development clients. JS hot reload alone is insufficient. No custom Expo module is planned; backup
+and diagnostics share the same `hashLocalFile` port.
 
 ```text
 Check desktop checksum capability
@@ -39,7 +43,8 @@ Without desktop checksum capability
   → enable Send for the current attachment generation
 ```
 
-- The file module exposes `fileContent.hashFile(fileEntryId, signal)`. Extend the existing
+- The file module exposes `fileContent.hashFile(fileEntryId, signal)`, which resolves the managed
+  entry and delegates to `hashLocalFile(uri, signal)`. Extend the existing
   injected `RemoteUploadFiles` dependency. Both hash and upload use the same retained source ID;
   no extra copy for hashing, no file bytes in React state. Existing mutable-source snapshots stay.
 - `remoteUploads.ts` persists `expectedSha256` and mode, observes both task failures immediately,

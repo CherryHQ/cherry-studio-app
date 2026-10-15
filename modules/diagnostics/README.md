@@ -3,8 +3,8 @@
 Local Expo module for Cherry Mobile diagnostics. Workflow ownership and the Desktop compatibility
 contract are documented in [Diagnostics](../../src/backend/services/diagnostics/README.md).
 
-The native boundary owns file identity and hashing, the provisioned HMAC credential, and bounded
-file-backed HTTP transfer.
+The native boundary owns file identity, the provisioned HMAC credential, and bounded file-backed
+HTTP transfer. Archive hashing uses the app's shared native file hash.
 The module never decides which logs or chat records to collect. There are no package downloads
 or new native SDK dependencies.
 

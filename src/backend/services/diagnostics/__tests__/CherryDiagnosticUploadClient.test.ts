@@ -5,12 +5,15 @@ import { CherryDiagnosticUploadClient } from '../CherryDiagnosticUploadClient';
 const mockNative = {
   isUploadConfigured: jest.fn(),
   identifyFile: jest.fn(),
-  sha256: jest.fn(),
   sign: jest.fn(),
   upload: jest.fn(),
   cancelOperations: jest.fn(),
 };
+const mockHashLocalFile = jest.fn();
 jest.mock('../../../../../modules/diagnostics', () => ({ getNativeDiagnostics: () => mockNative }));
+jest.mock('@/backend/services/file/fileHash', () => ({
+  hashLocalFile: (...args: unknown[]) => mockHashLocalFile(...args),
+}));
 jest.mock('expo-crypto', () => ({
   randomUUID: mockRandomUUID,
   CryptoDigestAlgorithm: { SHA256: 'sha256' },
@@ -43,7 +46,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockNative.isUploadConfigured.mockReturnValue(true);
   mockNative.identifyFile.mockReturnValue({ size: archive.length });
-  mockNative.sha256.mockResolvedValue(fileSha256);
+  mockHashLocalFile.mockResolvedValue(fileSha256);
   mockNative.sign.mockImplementation(async (value: string) =>
     createHmac('sha256', 'test-client-secret').update(value).digest('hex'),
   );
@@ -54,7 +57,7 @@ afterEach(() => jest.restoreAllMocks());
 test('sends the app source without changing the ten-line v2 signature contract', async () => {
   const startedAt = Date.parse('2026-08-25T10:00:00Z');
   const now = jest.spyOn(Date, 'now').mockReturnValue(startedAt);
-  mockNative.sha256.mockImplementation(async () => {
+  mockHashLocalFile.mockImplementation(async () => {
     now.mockReturnValue(startedAt + 60_000);
     return fileSha256;
   });
@@ -66,6 +69,7 @@ test('sends the app source without changing the ten-line v2 signature contract',
     status: 'uploaded',
     reportId,
   });
+  expect(mockHashLocalFile).toHaveBeenCalledWith(input.filePath, expect.any(AbortSignal));
   const [path, name, description, headers] = mockNative.upload.mock.calls[0];
   expect(path).toBe(input.filePath);
   expect(name).toBe(input.fileName);
@@ -116,7 +120,7 @@ test.each([false, 'old-client'])(
       reason: 'not_configured',
     });
     expect(mockNative.identifyFile).not.toHaveBeenCalled();
-    expect(mockNative.sha256).not.toHaveBeenCalled();
+    expect(mockHashLocalFile).not.toHaveBeenCalled();
     expect(mockNative.sign).not.toHaveBeenCalled();
     expect(mockNative.upload).not.toHaveBeenCalled();
   },
@@ -134,7 +138,7 @@ test.each([
     status: 'rejected',
     reason,
   });
-  expect(mockNative.sha256).not.toHaveBeenCalled();
+  expect(mockHashLocalFile).not.toHaveBeenCalled();
   expect(mockNative.upload).not.toHaveBeenCalled();
 });
 
@@ -161,7 +165,7 @@ test('checks the normalized description byte limit and ZIP filename before uploa
     status: 'rejected',
     reason: 'invalid_archive',
   });
-  expect(mockNative.sha256).not.toHaveBeenCalled();
+  expect(mockHashLocalFile).not.toHaveBeenCalled();
   expect(mockNative.upload).not.toHaveBeenCalled();
 });
 
@@ -254,7 +258,7 @@ test('does not retry network failures and creates a new request ID and signature
 
 test('reports failures before transmission without claiming the submission is uncertain', async () => {
   const client = new CherryDiagnosticUploadClient();
-  mockNative.sha256.mockRejectedValueOnce(new Error('Archive missing'));
+  mockHashLocalFile.mockRejectedValueOnce(new Error('Archive missing'));
   await expect(client.upload(input)).resolves.toEqual({
     status: 'rejected',
     reason: 'invalid_archive',
@@ -280,9 +284,9 @@ test('honors cancellation before preparation and after archive hashing', async (
   controller.abort(reason);
   const client = new CherryDiagnosticUploadClient();
   await expect(client.upload({ ...input, signal: controller.signal })).rejects.toBe(reason);
-  expect(mockNative.sha256).not.toHaveBeenCalled();
+  expect(mockHashLocalFile).not.toHaveBeenCalled();
   const duringHash = new AbortController();
-  mockNative.sha256.mockImplementationOnce(async () => {
+  mockHashLocalFile.mockImplementationOnce(async () => {
     duringHash.abort(reason);
     return fileSha256;
   });

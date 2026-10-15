@@ -7,7 +7,6 @@ clients without it can open the original store but cannot create or restore back
 - `processId` survives JavaScript reloads and changes only with the native process.
 - `writeControl` synchronizes a temporary record, renames it over the control record, then
   synchronizes its parent directories. The previous record or the new record is readable.
-- `hashFile` computes SHA-256 in bounded chunks off the JavaScript thread.
 - `sealDirectory` synchronizes candidate files and directories before they may be referenced by
   the control record. All paths must remain inside private app storage.
 - On Android, `restartAfterRestore` starts a temporary Activity in a separate process, terminates
