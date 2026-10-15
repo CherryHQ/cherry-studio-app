@@ -130,6 +130,22 @@ jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 0,
 }));
 
+jest.mock('expo-router', () => ({ Stack: { Screen: () => null } }));
+jest.mock('@/frontend/appShell/header', () => ({ RouteHeader: () => null }));
+jest.mock('../PaintingImageEditor', () => ({
+  PaintingImageEditor: (props: PaintingInputProps) =>
+    jest.requireMock('@/frontend/components/PaintingInput').PaintingWorkspaceInput(props),
+}));
+jest.mock('../PaintingComparison', () => ({ PaintingComparison: () => null }));
+jest.mock('../PaintingWorkspaceBridge', () => ({ PaintingWorkspaceBridge: () => null }));
+jest.mock('@/frontend/components/ArtifactPreview', () => ({
+  ArtifactPreviewLink: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('@/frontend/components/FileEntryPreview', () => ({
+  PreviewImage: () => null,
+  useResolvedFile: () => ({ data: null }),
+}));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -171,7 +187,7 @@ jest.mock('@/frontend/components/Message', () => ({
       };
     }, []);
     mockMessageListProps = props;
-    const assistant = props.messages.find((message) => message.role === 'assistant');
+    const assistant = props.messages.findLast((message) => message.role === 'assistant');
     return assistant ? props.renderMessage(assistant) : null;
   },
 }));
@@ -199,7 +215,7 @@ jest.mock('@/frontend/components/PaintingInput', () => ({
   PaintingInputProvider: jest.requireActual(
     '@/frontend/components/PaintingInput/PaintingInputProvider',
   ).PaintingInputProvider,
-  PaintingInput: (props: PaintingInputProps) => {
+  PaintingWorkspaceInput: (props: PaintingInputProps) => {
     const { usePaintingInputSession } = jest.requireActual(
       '@/frontend/components/PaintingInput/PaintingInputProvider',
     );
@@ -297,7 +313,7 @@ describe('PaintingComposer', () => {
     });
   });
 
-  it('replaces the persisted turn with a pending request and then its result', async () => {
+  it('retains the persisted turn before a pending request and its result', async () => {
     let resolveGeneration: ((value: PaintingGenerationStart) => void) | undefined;
     mockGenerate.mockImplementationOnce(
       () =>
@@ -314,12 +330,22 @@ describe('PaintingComposer', () => {
       await Promise.resolve();
     });
 
+    expect(mockMessageListProps?.messages.map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+    ]);
     expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: painting.prompt,
+      type: 'text',
+    });
+    expect(mockMessageListProps?.messages.at(-2)?.data.parts?.[0]).toEqual({
       text: input.prompt,
       type: 'text',
     });
-    expect(mockMessageListProps?.messages[1].status).toBe('pending');
-    expect(mockMessageListProps?.enteringMessageId).toBe('uuid-2');
+    expect(mockMessageListProps?.messages.at(-1)?.status).toBe('pending');
+    expect(mockMessageListProps?.enteringMessageId).toBe('uuid-3');
 
     await act(async () => {
       mockGeneration.status = 'idle';
@@ -328,7 +354,7 @@ describe('PaintingComposer', () => {
       await generationPromise;
     });
 
-    expect(mockMessageListProps?.messages[1].status).toBe('success');
+    expect(mockMessageListProps?.messages.at(-1)?.status).toBe('success');
     expect(mockAssistantProps).toMatchObject({
       animateOutput: true,
       outputs: result.outputs,
@@ -389,7 +415,7 @@ describe('PaintingComposer', () => {
     await act(async () => {
       await mockInputProps?.onGenerate(input).catch(() => undefined);
     });
-    expect(mockMessageListProps?.messages[1].status).toBe('error');
+    expect(mockMessageListProps?.messages.at(-1)?.status).toBe('error');
     expect(mockAssistantProps?.error).toEqual(new Error('provider unavailable'));
     expect(mockAssistantProps?.onRetry).toEqual(expect.any(Function));
 
@@ -403,6 +429,7 @@ describe('PaintingComposer', () => {
       type: 'text',
     });
     expect(mockAssistantProps).toMatchObject({ outputs: files.outputs, paintingId: painting.id });
+    expect(mockMessageListProps?.messages).toHaveLength(2);
   });
 
   it('keeps the selected editing target when a follow-up is cancelled', async () => {

@@ -28,6 +28,7 @@ import type {
   PaintingInterruption,
 } from '../hooks/usePaintingGeneration';
 import { PaintingErrorMessage } from './PaintingErrorMessage';
+import { PaintingResultActions } from './PaintingResultActions';
 
 type PaintingOutput = { fileEntryId: string; uri: string };
 
@@ -47,7 +48,11 @@ export function PaintingAssistantMessage({
   paintingId,
   prompt,
   resolution,
+  modelName,
   status,
+  onEditOutput,
+  onCompareOutput,
+  workspaceId,
 }: {
   animateOutput?: boolean;
   aspectRatio: number;
@@ -58,7 +63,11 @@ export function PaintingAssistantMessage({
   paintingId?: string;
   prompt: string;
   resolution: string;
+  modelName?: string;
   status: PaintingGenerationStatus;
+  onEditOutput?: (output: PaintingOutput) => void;
+  onCompareOutput?: (output: PaintingOutput) => void;
+  workspaceId?: string;
 }) {
   const { t } = useTranslation();
   const [previewWidth, setPreviewWidth] = useState(0);
@@ -194,25 +203,44 @@ export function PaintingAssistantMessage({
     );
 
     return (
-      <BackgroundPressExclusion className="w-full" key={output.fileEntryId} style={{ aspectRatio }}>
-        {paintingId ? (
-          <ArtifactPreviewLink
-            href={{
-              pathname: '/paintings/[paintingId]',
-              params: { fileEntryId: output.fileEntryId, paintingId },
-            }}
-          >
-            {result}
-          </ArtifactPreviewLink>
-        ) : (
-          result
-        )}
-      </BackgroundPressExclusion>
+      <View className="w-full gap-2" key={output.fileEntryId}>
+        <BackgroundPressExclusion className="w-full" style={{ aspectRatio }}>
+          {paintingId ? (
+            <ArtifactPreviewLink
+              href={{
+                pathname: '/paintings/[paintingId]',
+                params: { fileEntryId: output.fileEntryId, paintingId, workspaceId },
+              }}
+            >
+              {result}
+            </ArtifactPreviewLink>
+          ) : (
+            result
+          )}
+        </BackgroundPressExclusion>
+        {paintingId && isResultInteractive ? (
+          <PaintingResultActions
+            output={output}
+            onEdit={onEditOutput}
+            onCompare={onCompareOutput}
+          />
+        ) : null}
+      </View>
     );
   });
 
   return (
     <View className="w-full">
+      {status !== 'generating' && visibleOutputs.length > 0 ? (
+        <View className="flex-row items-center gap-2 pb-2">
+          {modelName ? (
+            <Text className="min-w-0 shrink text-muted-foreground text-xs" numberOfLines={1}>
+              {modelName}
+            </Text>
+          ) : null}
+          <Text className="text-muted-foreground text-xs">{resolution}</Text>
+        </View>
+      ) : null}
       <View className="relative w-full" onLayout={handlePreviewLayout}>
         {showLoader ? (
           previewWidth > 0 ? (

@@ -95,15 +95,17 @@ export function PaintingViewerChrome({
         >
           <PencilIcon className="size-6 text-constant-white" />
         </HeaderIconButton>
-        <ActionMenu items={resizeMenuItems}>
-          <View
-            accessibilityLabel={t('painting.viewer.resize')}
-            accessibilityRole="button"
-            className="size-9 items-center justify-center"
-          >
-            <ProportionsIcon className="size-6 text-constant-white" />
-          </View>
-        </ActionMenu>
+        {resizeMenuItems.length > 0 ? (
+          <ActionMenu items={resizeMenuItems}>
+            <View
+              accessibilityLabel={t('painting.viewer.resize')}
+              accessibilityRole="button"
+              className="size-9 items-center justify-center"
+            >
+              <ProportionsIcon className="size-6 text-constant-white" />
+            </View>
+          </ActionMenu>
+        ) : null}
       </View>
     </>
   );

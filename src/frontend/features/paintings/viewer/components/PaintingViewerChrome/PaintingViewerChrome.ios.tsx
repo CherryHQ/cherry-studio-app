@@ -73,14 +73,16 @@ export function PaintingViewerChrome({
         <Stack.Toolbar.Button accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
           {t('painting.viewer.edit')}
         </Stack.Toolbar.Button>
-        <Stack.Toolbar.Menu accessibilityLabel={t('painting.viewer.resize')}>
-          <Stack.Toolbar.Label>{t('painting.viewer.resize')}</Stack.Toolbar.Label>
-          {aspectRatios.map((ratio) => (
-            <Stack.Toolbar.MenuAction key={ratio} onPress={() => onResizeSelect(ratio)}>
-              {ratio}
-            </Stack.Toolbar.MenuAction>
-          ))}
-        </Stack.Toolbar.Menu>
+        {aspectRatios.length > 0 ? (
+          <Stack.Toolbar.Menu accessibilityLabel={t('painting.viewer.resize')}>
+            <Stack.Toolbar.Label>{t('painting.viewer.resize')}</Stack.Toolbar.Label>
+            {aspectRatios.map((ratio) => (
+              <Stack.Toolbar.MenuAction key={ratio} onPress={() => onResizeSelect(ratio)}>
+                {ratio}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        ) : null}
         <Stack.Toolbar.Spacer />
       </Stack.Toolbar>
     </>

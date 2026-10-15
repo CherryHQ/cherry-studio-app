@@ -29,3 +29,11 @@ test('a viewer is identified by its output, so reopening that output cannot stac
   // The output-less legacy path redirects to the task page instead of claiming a viewer identity.
   expect(paintingViewerRouteId({ paintingId: 'p' })).toBeUndefined();
 });
+
+test('viewers from different mounted workspaces return to their own creation session', () => {
+  const output = { fileEntryId: 'f1', paintingId: 'p' };
+  const first = paintingViewerRouteId({ ...output, workspaceId: 'one' });
+  expect(first).toBe(paintingViewerRouteId({ ...output, workspaceId: ['one'] }));
+  expect(first).not.toBe(paintingViewerRouteId({ ...output, workspaceId: 'two' }));
+  expect(first).not.toBe(paintingViewerRouteId(output));
+});

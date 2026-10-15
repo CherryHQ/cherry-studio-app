@@ -15,8 +15,12 @@ export function paintingRouteId(params?: {
 export function paintingViewerRouteId(params?: {
   fileEntryId?: string | string[];
   paintingId?: string | string[];
+  workspaceId?: string | string[];
 }): string | undefined {
   const paintingId = getSingleRouteParam(params?.paintingId);
   const fileEntryId = getSingleRouteParam(params?.fileEntryId);
-  return paintingId && fileEntryId ? `${paintingId}/${fileEntryId}` : undefined;
+  const workspaceId = getSingleRouteParam(params?.workspaceId);
+  return paintingId && fileEntryId
+    ? `${paintingId}/${fileEntryId}${workspaceId ? `/workspace:${workspaceId}` : ''}`
+    : undefined;
 }

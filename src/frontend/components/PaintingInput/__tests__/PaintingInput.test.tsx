@@ -6,12 +6,16 @@ import type { ComposerSurface } from '@/frontend/components/Composer';
 import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 import type { Model } from '@/shared/data/types/model';
 
-import { PaintingInput } from '../PaintingInput';
+import { PaintingInput, type PaintingPromptPreparation } from '../PaintingInput';
 import { PaintingInputProvider, usePaintingInputSession } from '../PaintingInputProvider';
 
 let mockSurfaceProps: ComponentProps<typeof ComposerSurface>;
 let mockSession: ReturnType<typeof usePaintingInputSession>;
-let mockComposerState: { attachments: ComposerAttachmentReady[]; draft: string };
+let mockComposerState: {
+  attachments: ComposerAttachmentReady[];
+  draft: string;
+  isSubmitting?: boolean;
+};
 let mockModel: Model;
 const mockGenerate = jest.fn(async (_input: unknown) => undefined);
 const mockPrepareAttachments = jest.fn(
@@ -45,9 +49,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('@tanstack/react-query', () => ({ useQueries: () => [] }));
 jest.mock('@/frontend/appShell/navigation', () => ({ useOpenProviderSetup: () => jest.fn() }));
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({ prepareAttachments: mockPrepareAttachments }),
+  queryKeys: { files: { uri: (id: string) => ['file-uri', id] } },
 }));
 jest.mock('@/frontend/data/hooks', () => ({ usePreference: () => ['provider::image'] }));
 jest.mock('@/frontend/components/ModelPicker', () => ({
@@ -77,7 +84,7 @@ jest.mock('@/frontend/components/Composer', () => ({
   },
   useComposerActions: () => ({ removeAttachment: jest.fn(), clearAttachments: jest.fn() }),
   useComposerPresentationActions: () => ({ runInputReplacement: jest.fn() }),
-  useComposerState: () => mockComposerState,
+  useComposerState: () => ({ isSubmitting: false, ...mockComposerState }),
 }));
 
 type HarnessProps = {
@@ -85,8 +92,9 @@ type HarnessProps = {
   outputs?: string[];
   status?: 'idle' | 'generating';
   showText?: boolean;
+  preparePrompt?: PaintingPromptPreparation;
 };
-function Probe({ canSend, status = 'idle', showText }: HarnessProps) {
+function Probe({ canSend, status = 'idle', showText, preparePrompt }: HarnessProps) {
   const session = usePaintingInputSession();
   useEffect(() => {
     mockSession = session;
@@ -96,6 +104,7 @@ function Probe({ canSend, status = 'idle', showText }: HarnessProps) {
       canSend={canSend}
       onCancel={() => undefined}
       onGenerate={mockGenerate}
+      preparePrompt={preparePrompt}
       status={status}
     />
   );
@@ -145,12 +154,45 @@ describe('capability-aware painting input', () => {
   });
   afterEach(() => act(() => renderer.unmount()));
 
+  it('freezes image-local instructions before prompt validation and asynchronous preparation', async () => {
+    const preparePrompt = jest.fn((text: string) => ({
+      prompt: `Location instruction: ${text || 'soften the marked edge'}`,
+      displayPrompt: 'Soften the marked edge',
+    }));
+    const preparation = deferred<ReturnType<typeof mockFile>[]>();
+    mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
+    update({ preparePrompt });
+    let pending: Promise<void> | undefined;
+    await act(async () => {
+      pending = mockSurfaceProps.onSend({ attachments: [], text: '' });
+      await Promise.resolve();
+    });
+    preparePrompt.mockImplementation(() => ({
+      prompt: 'new instructions',
+      displayPrompt: 'New instructions',
+    }));
+    await act(async () => {
+      preparation.resolve([mockFile('first')]);
+      await pending;
+    });
+    expect(preparePrompt).toHaveBeenCalledTimes(1);
+    expect(preparePrompt).toHaveBeenCalledWith('', [
+      expect.objectContaining({ fileEntryId: 'first' }),
+    ]);
+    expect(mockGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'Location instruction: soften the marked edge',
+        displayPrompt: 'Soften the marked edge',
+      }),
+    );
+  });
+
   it('hides the old reference immediately and submits the frozen image before adopting the next success', async () => {
     const preparation = deferred<ReturnType<typeof mockFile>[]>();
     mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
     expect(referenceIds()).toEqual(['first']);
     let sending!: Promise<void>;
-    mockComposerState = { attachments: [], draft: '' };
+    mockComposerState = { attachments: [], draft: '', isSubmitting: true };
     act(() => {
       sending = mockSurfaceProps.onSend({ attachments: [], text: 'Make it blue' });
     });
@@ -166,6 +208,7 @@ describe('capability-aware painting input', () => {
         attachments: [expect.objectContaining({ fileEntryId: 'first' })],
       }),
     );
+    mockComposerState = { attachments: [], draft: '' };
     update({ status: 'generating' });
     expect(referenceIds()).toEqual([]);
     update({ outputs: ['second'] });
