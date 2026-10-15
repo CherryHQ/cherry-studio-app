@@ -30,7 +30,8 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Architecture Overview](./references/architecture-overview.md) | Runtime model, source ownership, dependency boundaries, and frontend/backend interfaces |
-| [Code Organization](./references/code-organization.md) | Module placement, domain promotion, layer ownership, and public surfaces |
+| [Code Organization](./references/code-organization.md) | Module placement, domain promotion, layer ownership, public surfaces, and retiring superseded code |
+| [Shared Building Blocks](./references/shared-building-blocks.md) | Index of capabilities that already have one owner, to check before writing a helper |
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
