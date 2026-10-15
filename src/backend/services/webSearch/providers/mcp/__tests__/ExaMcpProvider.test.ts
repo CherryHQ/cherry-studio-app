@@ -6,9 +6,12 @@ import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/
 import { ApiKeyRotationState } from '../../../utils/provider';
 import { ExaMcpProvider } from '../ExaMcpProvider';
 
+const mockFetch = jest.fn();
+
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
-    withContext: () => ({ warn: jest.fn() }),
+    withContext: () => ({ error: jest.fn(), warn: jest.fn() }),
   },
 }));
 
@@ -33,10 +36,8 @@ const FETCH_RESULT_FRAME = readFileSync(
 );
 
 describe('ExaMcpProvider', () => {
-  const originalFetch = global.fetch;
-
   afterEach(() => {
-    global.fetch = originalFetch;
+    mockFetch.mockReset();
     jest.useRealTimers();
   });
 
@@ -46,16 +47,12 @@ describe('ExaMcpProvider', () => {
     const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
     const result = await provider.searchKeywords('hello', runtimeConfig);
 
-    expect(fetchMock).toHaveBeenCalledWith('https://mcp.exa.ai/mcp', {
-      method: 'POST',
-      headers: expect.any(Headers),
-      body: expect.any(String),
-      signal: expect.any(AbortSignal),
-    });
-    // Decode before asserting: the request schema's `parse` rebuilds the object
-    // in schema-shape order, and pinning the serialized string would pin a key
+    const request = sentRequest(fetchMock);
+    expect(request.url).toBe('https://mcp.exa.ai/mcp');
+    expect(request.method).toBe('POST');
+    // Decode before asserting: pinning the serialized string would pin a key
     // order that neither JSON-RPC nor the server cares about.
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
+    expect(JSON.parse(await request.text())).toEqual({
       jsonrpc: '2.0',
       id: 1,
       method: 'tools/call',
@@ -69,9 +66,9 @@ describe('ExaMcpProvider', () => {
         },
       },
     });
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-    expect(headers.get('accept')).toBe('application/json, text/event-stream');
-    expect(headers.get('content-type')).toBe('application/json');
+    expect(request.headers.get('accept')).toBe('application/json, text/event-stream');
+    expect(request.headers.get('content-type')).toBe('application/json');
+    expect(request.headers.get('x-app-name')).toBe('CherryStudioMobile');
     expect(result).toEqual({
       query: 'hello',
       providerId: 'exa-mcp',
@@ -108,12 +105,12 @@ describe('ExaMcpProvider', () => {
 
     const response = await provider.fetchUrls('https://example.com', runtimeConfig);
 
-    const request = fetchMock.mock.calls[0][1];
-    expect(JSON.parse(request.body)).toMatchObject({
+    const request = sentRequest(fetchMock);
+    expect(JSON.parse(await request.text())).toMatchObject({
       method: 'tools/call',
       params: { name: 'web_fetch_exa', arguments: { urls: ['https://example.com'] } },
     });
-    expect((request.headers as Headers).has('x-api-key')).toBe(false);
+    expect(request.headers.has('x-api-key')).toBe(false);
     expect(response).toMatchObject({
       providerId: 'exa-mcp',
       capability: 'fetchUrls',
@@ -184,23 +181,21 @@ describe('ExaMcpProvider', () => {
   });
 
   test('preserves HTTP status and retry hints while sending an optional configured key', async () => {
-    global.fetch = jest
-      .fn()
-      .mockResolvedValue(
-        new Response('Rate limit exceeded', { status: 429, headers: { 'retry-after': '60' } }),
-      );
+    mockFetch.mockResolvedValue(
+      new Response('Rate limit exceeded', { status: 429, headers: { 'retry-after': '60' } }),
+    );
     const provider = new ExaMcpProvider(
       createProvider({ apiKeys: ['configured-key'] }),
       new ApiKeyRotationState(),
     );
 
     await expect(provider.fetchUrls('https://example.com', runtimeConfig)).rejects.toMatchObject({
+      message: 'Exa MCP fetch failed: HTTP 429 Rate limit exceeded',
       kind: 'http',
       status: 429,
       retryAfter: '60',
     });
-    const headers = jest.mocked(global.fetch).mock.calls[0]?.[1]?.headers as Headers;
-    expect(headers.get('x-api-key')).toBe('configured-key');
+    expect(sentRequest(mockFetch).headers.get('x-api-key')).toBe('configured-key');
   });
 
   test('skips malformed SSE frames and keeps parsing later frames', async () => {
@@ -231,14 +226,27 @@ describe('ExaMcpProvider', () => {
     });
   });
 
-  test.each(['', 'Invalid API key'])(
-    'preserves HTTP rejection status in lookup diagnostics (%s)',
-    async (body) => {
-      global.fetch = jest.fn().mockResolvedValue(new Response(body, { status: 401 }));
+  test.each([
+    { label: 'empty body', body: '', message: 'Exa MCP search failed: HTTP 401' },
+    {
+      label: 'text body',
+      body: 'Invalid API key',
+      message: 'Exa MCP search failed: HTTP 401 Invalid API key',
+    },
+    {
+      label: 'long body',
+      body: 'x'.repeat(501),
+      message: `Exa MCP search failed: HTTP 401 ${'x'.repeat(500)}... [truncated]`,
+    },
+  ])(
+    'preserves HTTP rejection status in lookup diagnostics ($label)',
+    async ({ body, message }) => {
+      mockFetch.mockResolvedValue(new Response(body, { status: 401 }));
       const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
 
       await expect(provider.searchKeywords('hello', runtimeConfig)).rejects.toMatchObject({
         name: 'HttpError',
+        message,
         kind: 'http',
         status: 401,
       });
@@ -247,8 +255,8 @@ describe('ExaMcpProvider', () => {
 
   test('surfaces the internal timeout as a TimeoutError rather than an AbortError', async () => {
     jest.useFakeTimers();
-    global.fetch = jest.fn((_url, init?: RequestInit) => {
-      const signal = init?.signal;
+    mockFetch.mockImplementation((request: Request) => {
+      const signal = request.signal;
 
       return new Promise<Response>((_resolve, reject) => {
         signal?.addEventListener(
@@ -259,7 +267,7 @@ describe('ExaMcpProvider', () => {
           { once: true },
         );
       });
-    }) as unknown as typeof fetch;
+    });
 
     const provider = new ExaMcpProvider(createProvider(), new ApiKeyRotationState());
     const searchPromise = provider.searchKeywords('hello', runtimeConfig);
@@ -274,14 +282,17 @@ describe('ExaMcpProvider', () => {
 });
 
 function mockTextResponse(body: string): jest.Mock {
-  const fetchMock = jest.fn().mockResolvedValue(
+  mockFetch.mockResolvedValue(
     new Response(body, {
       status: 200,
       headers: { 'content-type': 'text/event-stream' },
     }),
   );
-  global.fetch = fetchMock;
-  return fetchMock;
+  return mockFetch;
+}
+
+function sentRequest(fetchMock: jest.Mock): Request {
+  return fetchMock.mock.calls[0][0] as Request;
 }
 
 function createProvider(overrides: Partial<WebSearchProvider> = {}): WebSearchProvider {

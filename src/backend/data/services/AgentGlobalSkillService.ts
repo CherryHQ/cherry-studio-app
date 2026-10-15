@@ -19,8 +19,6 @@ import {
   ListSkillsQuerySchema,
   ReplaceAgentSkillsSchema,
   type ReplaceAgentSkillsInput,
-  type UpdateSkillDto,
-  UpdateSkillSchema,
 } from '@/shared/data/api/schemas/skills';
 import {
   type AgentSkillBinding,
@@ -244,30 +242,6 @@ export class AgentGlobalSkillService {
       .from(agentSkillTable)
       .where(and(eq(agentSkillTable.agentId, agentId), inArray(agentSkillTable.skillId, skillIds)));
     return new Map(rows.map((row) => [row.skillId, rowToBinding(row)]));
-  }
-
-  async update(skillId: string, input: UpdateSkillDto): Promise<Skill> {
-    const dto = UpdateSkillSchema.parse(input);
-    const row = await this.dbService.withWriteTx(async (tx) => {
-      const [updated] = await tx
-        .update(agentGlobalSkillTable)
-        .set({
-          isEnabled: dto.isEnabled,
-          updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
-        })
-        .where(
-          and(
-            eq(agentGlobalSkillTable.id, skillId),
-            eq(agentGlobalSkillTable.source, 'marketplace'),
-          ),
-        )
-        .returning();
-      if (!updated) {
-        throw DataApiErrorFactory.notFound('Skill', skillId);
-      }
-      return updated;
-    });
-    return rowToSkill(row);
   }
 
   async listBindings(agentId: string): Promise<{ items: AgentSkillBinding[] }> {

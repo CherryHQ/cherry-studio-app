@@ -1,8 +1,9 @@
 # MCP App WebView Shell
 
 This package owns the browser document used by the native MCP Apps host. It exports a small HTML
-factory, so Metro consumes TypeScript directly; there are no downloaded assets, generated bundles,
-postinstall scripts, or separate browser dependencies to build.
+factory and the injected script that delivers native messages to that document, so Metro consumes
+TypeScript directly; there are no downloaded assets, generated bundles, postinstall scripts, or
+separate browser dependencies to build.
 
 The native backend owns the official Apps bridge. The document only forwards JSON-RPC between a
 sandboxed, opaque-origin iframe and native. Its per-view nonce prevents a child frame from bypassing

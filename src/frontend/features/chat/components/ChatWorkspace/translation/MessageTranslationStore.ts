@@ -43,8 +43,7 @@ export class MessageTranslationStore {
   ) {}
 
   private cacheKey(messageId: string) {
-    // Earlier entries may contain output saved before truncation was checked.
-    return JSON.stringify([2, this.scope, this.sessionId, messageId, this.language]);
+    return JSON.stringify([this.scope, this.sessionId, messageId, this.language]);
   }
 
   get(source: MessageTranslationSource): MessageTranslationState {
@@ -104,7 +103,6 @@ export class MessageTranslationStore {
         },
       );
       if (!isCurrent()) return;
-      if (!content.trim()) throw new TranslationError('failed', 'Empty translation.');
       const saved = { ...this.cache.getPersist('chat.translations') };
       const key = this.cacheKey(source.messageId);
       delete saved[key];

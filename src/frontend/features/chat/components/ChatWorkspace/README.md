@@ -89,7 +89,6 @@ transcript stays mounted so reading positions and message expansion state are re
 
 Successful results are reading aids in the existing persistent UI cache, keyed by source scope,
 Session, message and target language, and checked against the source content hash. The cache retains
-the latest 100 generated translations. Truncated, failed and cancelled translations are not saved;
-legacy cache entries created before completion checking are regenerated on demand.
+the latest 100 generated translations. Truncated, failed and cancelled translations are not saved.
 Reopening a conversation restores a matching result. Translation neither adds a turn nor changes
 message parts, model history, original-message copy or conversation export.

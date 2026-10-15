@@ -1,7 +1,7 @@
 import { UriTemplate } from '@modelcontextprotocol/client';
 
 import type { McpContentEntry, McpContentPreview } from '@/shared/contracts/mcp';
-import { stripMcpMetadata } from '@/shared/contracts/mcpContent';
+import { readMcpBinaryBlock, stripMcpMetadata } from '@/shared/contracts/mcpContent';
 
 import type { McpRuntimeClient } from './mcpProtocolClient';
 
@@ -103,18 +103,16 @@ export async function readMcpContent(
     const block = raw as Record<string, unknown>;
     const resource =
       block.type === 'resource' ? (block.resource as Record<string, unknown>) : undefined;
-    const data =
-      resource?.blob ?? (block.type === 'image' || block.type === 'audio' ? block.data : undefined);
-    const mimeType = resource?.mimeType ?? block.mimeType;
-    if (typeof data === 'string' && typeof mimeType === 'string') {
-      if (
-        data.length * 0.75 > remaining ||
-        !/^[a-zA-Z0-9+/]*={0,2}$/.test(data) ||
-        !/^[\w.+-]+\/[\w.+-]+$/.test(mimeType)
-      )
+    const binary = readMcpBinaryBlock(block);
+    if (binary) {
+      if (!binary.valid || binary.bytes > remaining)
         throw new Error('The MCP file exceeds the size limit or has an invalid format.');
-      remaining -= data.length * 0.75;
-      files.push({ data, mimeType, name: `mcp-${files.length + 1}` });
+      remaining -= binary.bytes;
+      files.push({
+        data: binary.data,
+        mimeType: binary.mimeType,
+        name: `mcp-${files.length + 1}`,
+      });
     } else if (typeof block.text === 'string') text += `${block.text}\n`;
     else if (typeof resource?.text === 'string') text += `${resource.uri}\n${resource.text}\n`;
     else text += `${JSON.stringify(stripMcpMetadata(block))}\n`;

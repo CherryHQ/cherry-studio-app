@@ -8,14 +8,13 @@ import {
   ReplaceAgentSkillsSchema,
   type SkillSchemas,
   SkillInstructionsResponseSchema,
-  UpdateSkillSchema,
 } from '@/shared/data/api/schemas/skills';
 import type { HandlersFor } from '@/shared/data/api/types';
 import type { Skill, SkillLimitations, SkillListItem } from '@/shared/data/types/skill';
 
 type SkillData = Pick<
   AgentGlobalSkillService,
-  'getById' | 'list' | 'listBindings' | 'replaceBindings' | 'update'
+  'getById' | 'list' | 'listBindings' | 'replaceBindings'
 >;
 
 /**
@@ -90,13 +89,6 @@ export function createSkillHandlers(
         const skill = await service.getById(params.skillId);
         const [item] = project([{ skill, binding: null }]);
         return item!;
-      },
-      PATCH: async ({ body, params }) => {
-        const parsed = UpdateSkillSchema.safeParse(body);
-        if (!parsed.success) {
-          throw toDataApiError(parsed.error, 'Skill update');
-        }
-        return service.update(params.skillId, parsed.data);
       },
     },
     '/skills/:skillId/instructions': {

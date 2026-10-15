@@ -108,7 +108,6 @@ describe('createSkillStorage', () => {
       'store/Data/Skills/brief/abc/references/format.md',
     ]);
     expect(storage.hasRevision(ref)).toBe(true);
-    expect(storage.listFiles(ref)).toEqual(['SKILL.md', 'references/format.md']);
     expect(new TextDecoder().decode((await storage.readFile(ref, 'references/format.md'))!)).toBe(
       '# Format',
     );
@@ -140,7 +139,5 @@ describe('createSkillStorage', () => {
       'store/Data/Skills/brief/v2/SKILL.md',
       'store/Data/Skills/brief/v2/references/format.md',
     ]);
-    storage.removeSkill('brief');
-    expect(snapshot()).toEqual([]);
   });
 });

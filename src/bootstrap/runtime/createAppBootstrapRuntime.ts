@@ -32,7 +32,7 @@ import type {
   DesktopConnectionManager,
   DesktopConnectionRuntime,
 } from '@/backend/services/desktopConnections';
-import type { DiagnosticBundleService } from '@/backend/services/diagnostics/DiagnosticBundleService';
+import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';

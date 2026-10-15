@@ -1,9 +1,6 @@
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 
-// The leading object character belongs to the editor's native inline image.
-export function createPluginMentionLabel(label: string): string {
-  return `\uFFFC\u2009${label}`;
-}
+import { isMentionEscaped, readMentionLabel } from './mentionLabels';
 
 export function createPluginMentionUrl(serverId: string, pluginId?: string): string {
   return `tool://plugin/${serverId}${pluginId ? `/${pluginId}` : ''}`;
@@ -25,11 +22,8 @@ export function readPluginMentions(draft: string): {
   let cursor = 0;
   for (const match of draft.matchAll(pluginMentionPattern)) {
     const [source, rawLabel, id, pluginId] = match;
-    let precedingSlashes = 0;
-    for (let index = match.index - 1; index >= 0 && draft[index] === '\\'; index--)
-      precedingSlashes++;
-    if (precedingSlashes % 2 === 1) continue;
-    const label = rawLabel.replace(/^\uFFFC\u2009?/, '').replace(/\\([\\[\]])/g, '$1');
+    if (isMentionEscaped(draft, match.index)) continue;
+    const label = readMentionLabel(rawLabel);
     if (!label) continue;
     text += draft.slice(cursor, match.index);
     ids.add(id.toLowerCase());

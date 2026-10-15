@@ -1,4 +1,8 @@
-import { createMcpAppHtml, normalizeMcpAppDomains } from '@cherrystudio/mcp-app-webview';
+import {
+  createMcpAppHtml,
+  createMcpAppReceiveScript,
+  normalizeMcpAppDomains,
+} from '@cherrystudio/mcp-app-webview';
 
 import { mcpToolAppUri, mcpToolVisible } from '../mcpAppMetadata';
 
@@ -42,5 +46,11 @@ describe('MCP App authority declarations', () => {
     expect(html).toContain("connect-src 'none'");
     expect(html).toContain("form-action 'none'");
     expect(html).toContain('URL.revokeObjectURL(source)');
+  });
+
+  it('delivers serialized messages without closing the script or breaking its line', () => {
+    expect(createMcpAppReceiveScript('{"text":"</script>\u2028\u2029"}')).toBe(
+      'window.__cherryMcpReceive?.({"text":"\\u003c/script>\\u2028\\u2029"});true;',
+    );
   });
 });

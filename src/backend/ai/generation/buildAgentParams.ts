@@ -130,7 +130,6 @@ export async function buildAgentParams({
     {
       enableGenerateImage: false,
       enableReasoning: request.reasoningEffort !== undefined,
-      enableWebSearch: false,
     },
     {
       aiSdkProviderId: sdkConfig.providerId,

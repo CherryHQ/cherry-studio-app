@@ -63,7 +63,6 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import {
-  createBundledSkillSource,
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
@@ -293,7 +292,6 @@ export function createBackend(
     readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
     sources: {
-      bundled: createBundledSkillSource(),
       github: githubSkills,
       cherryin: cherryinSkills,
     },

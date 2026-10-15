@@ -126,9 +126,6 @@ export class MobileRegistryLoader {
     return this.registry;
   }
 
-  loadModels(): ModelConfig[] {
-    return this.requireSnapshot().models.models;
-  }
   loadProviders(): MobileProviderConfig[] {
     return mobileProviders.providers;
   }

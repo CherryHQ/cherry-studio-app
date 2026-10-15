@@ -1,4 +1,4 @@
-import { mcpModelTextOverflow, projectMcpModelContent } from '../mcpContent';
+import { mcpModelTextOverflow, projectMcpModelContent, readMcpBinaryBlock } from '../mcpContent';
 
 describe('MCP model projection', () => {
   it('keeps images in the image channel and excludes UI metadata and user-only content', () => {
@@ -78,5 +78,34 @@ describe('MCP model projection', () => {
     });
     expect(JSON.stringify(projection)).not.toContain('SECRETBASE64');
     expect(JSON.stringify(projection).length).toBeLessThan(65 * 1024);
+  });
+});
+
+describe('MCP binary blocks', () => {
+  it('reads inline image, audio, and blob resource bytes and leaves budgets to callers', () => {
+    expect(readMcpBinaryBlock({ type: 'audio', data: 'AAAA', mimeType: 'audio/wav' })).toEqual({
+      data: 'AAAA',
+      mimeType: 'audio/wav',
+      bytes: 3,
+      valid: true,
+    });
+    expect(
+      readMcpBinaryBlock({
+        type: 'resource',
+        mimeType: 'application/octet-stream',
+        resource: { uri: 'mcp://file', blob: 'AAAA' },
+      }),
+    ).toMatchObject({ mimeType: 'application/octet-stream', valid: true });
+    expect(
+      readMcpBinaryBlock({ type: 'image', data: 'not base64!', mimeType: 'image/png' }),
+    ).toMatchObject({ valid: false });
+    expect(readMcpBinaryBlock({ type: 'image', data: 'AAAA', mimeType: 'png' })).toMatchObject({
+      valid: false,
+    });
+    expect(readMcpBinaryBlock({ type: 'image', data: 'AAAA' })).toBeUndefined();
+    expect(
+      readMcpBinaryBlock({ type: 'text', text: 'AAAA', mimeType: 'text/plain' }),
+    ).toBeUndefined();
+    expect(readMcpBinaryBlock(null)).toBeUndefined();
   });
 });

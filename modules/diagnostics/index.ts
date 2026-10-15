@@ -1,7 +1,6 @@
 import { requireOptionalNativeModule } from 'expo';
 
 type NativeDiagnostics = {
-  saveFile(uri: string, name: string): Promise<string | null>;
   isUploadConfigured(): boolean;
   sha256(uri: string): Promise<string>;
   sign(value: string): Promise<string>;

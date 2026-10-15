@@ -24,8 +24,7 @@ jest.mock('@modelcontextprotocol/client', () => ({
   registerClient: jest.fn(),
 }));
 const mockRequest = jest.fn();
-jest.mock('@/backend/services/http', () => ({
-  ...jest.requireActual('@/backend/services/http'),
+jest.mock('@/backend/services/http/createHttpClient', () => ({
   createHttpClient: jest.fn(() => ({ request: mockRequest })),
 }));
 jest.mock('expo-crypto', () => ({

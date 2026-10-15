@@ -42,32 +42,11 @@ test('keeps translations separate for different content and languages', async ()
   expect(skillTranslationQueryOptions(skills, input).initialData()).toBe(translated);
 });
 
-test('regenerates legacy cached text whose completion was never checked', async () => {
-  const { cacheService } = jest.requireMock('@/frontend/data/CacheService');
-  cacheService.setPersist('skills.translations', {
-    [`${input.contentHash}:${input.language}`]: 'old partial translation',
-  });
-  const translation = { translate: jest.fn().mockResolvedValue(translated) };
-  const options = skillTranslationQueryOptions(translation, input);
-
-  expect(options.initialData()).toBeUndefined();
-  expect(await options.queryFn({ signal: new AbortController().signal })).toBe(translated);
-  expect(translation.translate).toHaveBeenCalledTimes(1);
-  expect(options.initialData()).toBe(translated);
-});
-
-test('failed and cancelled translations do not leave a saved document', async () => {
+test('failed translations do not leave a saved document', async () => {
   const skills = { translate: jest.fn().mockRejectedValue(new Error('offline')) };
-  const controller = new AbortController();
   const options = skillTranslationQueryOptions(skills, input);
-  await expect(options.queryFn({ signal: controller.signal })).rejects.toThrow('offline');
-  expect(options.initialData()).toBeUndefined();
-
-  const cancelled = new Error('closed');
-  skills.translate.mockImplementation(async () => {
-    controller.abort(cancelled);
-    return translated;
-  });
-  await expect(options.queryFn({ signal: controller.signal })).rejects.toBe(cancelled);
+  await expect(options.queryFn({ signal: new AbortController().signal })).rejects.toThrow(
+    'offline',
+  );
   expect(options.initialData()).toBeUndefined();
 });

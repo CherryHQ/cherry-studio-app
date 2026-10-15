@@ -5,7 +5,6 @@ export {
   type HeaderActionGroupProps,
 } from './components/HeaderActionGroup/HeaderActionGroup';
 export { HeaderChrome } from './components/HeaderChrome';
-export { HeaderMenuGuide } from './HeaderMenuGuide';
 export { headerScreenOptions, mainHeaderRowHeight } from './headerScreenOptions';
 export { MainHeader } from './MainHeader/MainHeader';
 export {

@@ -5,7 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import type { ComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
+import {
+  type ComposerAttachmentReady,
+  createReadyAttachmentDraft,
+} from '@/frontend/components/Composer/utils/composerAttachments';
 import { useMcpAppConversation } from '@/frontend/components/McpApp';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
@@ -106,16 +109,7 @@ export function McpContentPicker({
             mediaType: content.mimeType,
             name: content.name,
           });
-          attachments.push({
-            id: resolved.entry.id,
-            fileEntryId: resolved.entry.id,
-            status: 'ready',
-            uri: resolved.uri,
-            name: resolved.entry.filename,
-            mediaType: resolved.entry.mediaType,
-            kind: resolved.entry.mediaType.startsWith('image/') ? 'image' : 'file',
-            size: resolved.entry.size,
-          });
+          attachments.push(createReadyAttachmentDraft(resolved, resolved.entry.id));
         } finally {
           if (temporary.exists) temporary.delete();
         }

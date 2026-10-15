@@ -1,7 +1,6 @@
 /**
  * App-owned system workflows. They contribute internal Agent guidance and
- * are never offered as user-installable recommendations. Package definitions
- * remain readable for installations and backups from earlier builds.
+ * are never offered as user-installable recommendations.
  */
 
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
@@ -14,13 +13,10 @@ import { structuredNotesSkill } from './structuredNotes';
 export type BundledSkillDefinition = {
   /** Must equal the package `name`. */
   readonly name: string;
-  /** Bumped whenever any file changes; the locator stays stable. */
-  readonly revision: number;
   /** Package-relative path to UTF-8 text. */
   readonly files: Readonly<Record<string, string>>;
   /** Built-in tools the workflow calls; it is offered only when all are present in the turn. */
   readonly requiredTools: readonly BuiltInToolCapabilityId[];
-  readonly workflowScope: string;
 };
 
 export const BUNDLED_SKILLS: readonly BundledSkillDefinition[] = [
@@ -28,10 +24,6 @@ export const BUNDLED_SKILLS: readonly BundledSkillDefinition[] = [
   researchBriefSkill,
   structuredNotesSkill,
 ];
-
-export function bundledSkillLocator(name: string): string {
-  return `bundled:${name}`;
-}
 
 /** Inline the complete workflow and its resources only when its tools are present. */
 export function getSystemSkillInstructions(availableTools: ReadonlyMap<string, string>): string[] {

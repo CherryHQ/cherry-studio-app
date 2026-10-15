@@ -74,7 +74,6 @@ export type SkillsErrorCode =
   | 'package-invalid'
   | 'package-too-large'
   | 'admission-unsupported'
-  | 'admission-setup-required'
   | 'storage-unavailable'
   | 'already-installed'
   | 'content-changed'
