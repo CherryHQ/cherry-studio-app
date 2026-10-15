@@ -200,8 +200,14 @@ export class PiDurableObserver {
           break;
         case 'message_end':
           this.entries.set(event.entry.id, event.entry);
-          if (event.entry.model?.some((message) => message.role === 'assistant'))
-            this.partial = undefined;
+          for (const message of event.entry.model ?? []) {
+            if (message.role === 'assistant') {
+              this.partial = undefined;
+              // Throttled partials may leave the first response content in the final entry only.
+              if (message.stopReason !== 'error' && hasResponseContent(message))
+                this.retrying = false;
+            }
+          }
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);

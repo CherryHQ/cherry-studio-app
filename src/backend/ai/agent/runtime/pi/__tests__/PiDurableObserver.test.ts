@@ -231,9 +231,9 @@ test('reports blocking compaction only; background compaction never delays the r
   }
 });
 
-test.each([false, true])(
-  'keeps retry feedback until content arrives, first content in start=%s',
-  async (hasImmediateContent) => {
+test.each(['message_start', 'message_update', 'message_end'] as const)(
+  'keeps retry feedback until content arrives in %s',
+  async (contentEvent) => {
     const response = (stopReason: 'error' | 'stop', timestamp: number) =>
       ({
         role: 'assistant',
@@ -255,7 +255,10 @@ test.each([false, true])(
     try {
       expect((await observer.start()).activeTurn?.isRetrying).toBeUndefined();
       // Pi reports the retry before the failed attempt's own message in the same batch.
-      const failed = response('error', 2);
+      const failed: AssistantMessage = {
+        ...response('error', 2),
+        content: [{ type: 'text', text: 'Interrupted response' }],
+      };
       await advance([
         { type: 'auto_retry_start', attempt: 1, at: 3, errorMessage: 'Request timed out' },
         { type: 'message_start', message: failed },
@@ -266,11 +269,15 @@ test.each([false, true])(
       expect(latestTurn().isRetrying).toBe(true);
       const next = {
         ...response('stop', 4),
-        content: [{ type: 'text' as const, text: hasImmediateContent ? 'Resumed' : '' }],
+        content: [
+          { type: 'text' as const, text: contentEvent === 'message_start' ? 'Resumed' : '' },
+        ],
       };
       await advance([{ type: 'message_start', message: next }]);
-      if (!hasImmediateContent) {
+      if (contentEvent !== 'message_start') {
         expect(latestTurn().isRetrying).toBe(true);
+      }
+      if (contentEvent === 'message_update') {
         await advance([
           {
             type: 'message_update',
@@ -283,6 +290,26 @@ test.each([false, true])(
             ],
           },
         ]);
+      } else if (contentEvent === 'message_end') {
+        // The final partial was throttled away, but the committed response starts a tool round.
+        const completed: AssistantMessage = {
+          ...next,
+          stopReason: 'toolUse',
+          content: [{ type: 'toolCall', id: 'call', name: 'ask_user_question', arguments: {} }],
+        };
+        await advance([
+          {
+            type: 'message_end',
+            entry: { id: 3, model: [completed] } as unknown as EntryRecord,
+          },
+        ]);
+        expect(latestTurn()).toMatchObject({
+          status: 'running',
+          parts: [
+            { type: 'text', text: 'Interrupted response' },
+            { type: 'tool', toolCallId: 'call', state: 'input-available' },
+          ],
+        });
       }
       expect(latestTurn().isRetrying).toBeUndefined();
     } finally {

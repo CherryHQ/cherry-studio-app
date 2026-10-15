@@ -289,7 +289,7 @@ function toDisplayParts(
           text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
           state: sourcePart.state,
         };
-      } else if (sourcePart.text.trim()) {
+      } else if (sourcePart.text.trim() || sourcePart.state === 'streaming') {
         displayParts.push(projectAgentPart(sourcePart, cache).part);
         partKeys.push(sourcePart.id);
       }

@@ -175,14 +175,54 @@ describe('agentMessageProjection', () => {
     expect(settled?.data.parts).toEqual([
       { type: 'reasoning', text: 'Received summary.', state: 'done' },
     ]);
-    expect(
-      toAgentMessageListItem(
-        message('empty', {
-          parts: [{ id: 'opaque', type: 'reasoning', text: '', state: 'streaming' }],
-        }),
-      )?.data.parts,
-    ).toEqual([]);
   });
+
+  test.each([false, true])(
+    'keeps empty reasoning visible only while streaming, after a completed tool=%s',
+    (afterTool) => {
+      const cache = createAgentMessageListProjectionCache();
+      const precedingParts: AgentMessageView['parts'] = afterTool
+        ? [
+            {
+              id: 'tool',
+              type: 'dynamic-tool',
+              title: 'Run JavaScript',
+              toolCallId: 'js-call',
+              toolName: 'run_js',
+              toolRef: { source: 'builtin', capabilityId: 'run_js' },
+              input: { code: '1 + 1' },
+              output: { value: 2, artifacts: [] },
+              state: 'output-available',
+            },
+          ]
+        : [];
+      const reasoning = { id: 'reasoning', type: 'reasoning' as const, text: '' };
+      const growing = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'streaming' }],
+        }),
+        cache,
+      );
+      const settled = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'done' }],
+        }),
+        cache,
+      );
+
+      expect(growing?.data.partKeys).toEqual([
+        ...precedingParts.map((part) => part.id),
+        'reasoning',
+      ]);
+      expect(growing?.data.parts?.at(-1)).toEqual({
+        type: 'reasoning',
+        text: '',
+        state: 'streaming',
+      });
+      expect(settled?.data.partKeys).toEqual(precedingParts.map((part) => part.id));
+      expect(settled?.data.parts).toEqual(growing?.data.parts?.slice(0, -1));
+    },
+  );
 
   test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
     const parts: AgentMessageView['parts'] = [
