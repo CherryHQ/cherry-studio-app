@@ -36,6 +36,19 @@ const browserRedirect = (context, moduleName) => {
 };
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // Native fetch has no browser CORS, and Hermes needs a validator without dynamic codegen.
+  if (
+    moduleName === '@modelcontextprotocol/client/_shims' &&
+    (platform === 'android' || platform === 'ios')
+  ) {
+    return {
+      type: 'sourceFile',
+      filePath: path.join(
+        path.dirname(require.resolve('@modelcontextprotocol/client')),
+        'shimsWorkerd.mjs',
+      ),
+    };
+  }
   // pnpm peer variants can give @expo/ui a second Expo runtime. Its Expo.fx
   // replaces __loadBundleAsync, but native startup initialized only the root
   // copy's HMR client. Keep Expo and its subpaths on that same runtime.

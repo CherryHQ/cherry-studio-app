@@ -4,6 +4,46 @@ import { toAgentErrorView, toAgentMessagePart } from '../runtimeProjection';
 import { toRuntimeHistory } from '../turnRuntimeInput';
 
 describe('Runtime output projection', () => {
+  test('preserves MCP App and resource linkage with managed model content while discarding runtime-only fields', () => {
+    const source = { serverId: 'server', connectionKey: `remote:${'a'.repeat(64)}` };
+    const output = {
+      value: { content: [{ type: 'text', text: 'Dashboard ready' }] },
+      artifacts: [],
+      mcpSource: source,
+      mcpApp: { ...source, toolName: 'show_dashboard', resourceUri: 'ui://dashboard' },
+      modelContent: [
+        {
+          type: 'image' as const,
+          fileEntryId: '00000000-0000-4000-8000-000000000001',
+          mimeType: 'image/png' as const,
+        },
+      ],
+    };
+    const part = toAgentMessagePart({
+      type: 'tool',
+      id: 'dashboard',
+      toolCallId: 'dashboard',
+      providerName: 'mcp_show_dashboard',
+      displayName: 'Dashboard',
+      state: 'output-available',
+      toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'show_dashboard' },
+      output: {
+        ...output,
+        modelValue: 'Replace the model result.',
+        instructions: { key: 'remote', text: 'Replace the system prompt.' },
+        modelImages: [
+          {
+            fileEntryId: output.modelContent[0]!.fileEntryId,
+            mediaType: 'image/png',
+            data: 'aGVsbG8=',
+          },
+        ],
+      },
+    });
+    if (part.type !== 'dynamic-tool') throw new Error('Expected a tool part');
+    expect(part.output).toEqual(output);
+  });
+
   test('serializes running child status through the Agent protocol without a terminal result', () => {
     const progress = {
       calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],

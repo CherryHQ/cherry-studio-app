@@ -28,6 +28,46 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test.each(['output-available', 'denied'] as const)(
+    'preserves canonical MCP identity for %s tools with opaque runtime names',
+    (state) => {
+      const source = { serverId: 'server-1', connectionKey: `remote:${'a'.repeat(64)}` };
+      const app = {
+        ...source,
+        agentId: 'agent-1',
+        toolName: 'show_dashboard',
+        resourceUri: 'ui://acceptance/dashboard',
+      };
+      const value = { content: [{ type: 'text', text: 'Dashboard ready' }] };
+      const item = toAgentMessageListItem(
+        message('assistant-mcp', {
+          status: 'success',
+          parts: [
+            {
+              id: 'tool-1',
+              type: 'dynamic-tool',
+              toolCallId: 'call-1',
+              toolName: 'mcp_show_dashboard_0z77llj',
+              toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'show_dashboard' },
+              title: 'show_dashboard',
+              input: {},
+              state,
+              ...(state === 'output-available'
+                ? { output: { value, artifacts: [], mcpSource: source, mcpApp: app } }
+                : {}),
+            },
+          ],
+        }),
+      );
+
+      expect(item?.data.parts?.[0]).toMatchObject({
+        toolMetadata: { cherry: { tool: { type: 'mcp', serverId: 'server-1' } } },
+        state: state === 'denied' ? 'output-denied' : state,
+        ...(state === 'output-available' ? { output: value, mcpSource: source, mcpApp: app } : {}),
+      });
+    },
+  );
+
   test('running tool rows retain live child progress for rendering', () => {
     const progress = {
       calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],

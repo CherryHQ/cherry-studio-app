@@ -9,11 +9,17 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import {
+  McpAppConversationBridge,
+  McpAppLauncher,
+  useMcpAppConversation,
+} from '@/frontend/components/McpApp';
+import {
   type CherryToolMeta,
   readCherryMeta,
   readCherryToolMetadata,
 } from '@/shared/data/types/uiParts';
 
+import { McpResourceLink } from './McpResourceLink';
 import {
   getToolDisplayState,
   getToolName,
@@ -31,6 +37,7 @@ const MAX_ARG_VALUE_LENGTH = 1200;
 
 export function McpToolPart({ part }: McpToolPartProps) {
   const { t } = useTranslation();
+  const conversation = useMcpAppConversation();
   const toolName = getToolName(part);
   const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
@@ -50,30 +57,43 @@ export function McpToolPart({ part }: McpToolPartProps) {
       testID="mcp-tool-part"
       title={title}
     >
-      {normalizedOutput ? <McpOutputSection normalized={normalizedOutput} /> : null}
-      {readCherryMeta(part)?.settledByApp ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.mcpTool.response')}
-          value={t('chat.mcpTool.unfinishedDetail')}
+      <McpAppConversationBridge value={conversation}>
+        {part.state === 'output-available' && part.mcpApp ? (
+          <McpAppLauncher reference={part.mcpApp} input={part.input} result={part.output} />
+        ) : null}
+        {normalizedOutput ? (
+          <McpOutputSection normalized={normalizedOutput} source={part.mcpSource} />
+        ) : null}
+        {readCherryMeta(part)?.settledByApp ? (
+          <MessagePart.TextSection
+            tone="danger"
+            title={t('chat.mcpTool.response')}
+            value={t('chat.mcpTool.unfinishedDetail')}
+          />
+        ) : part.state === 'output-error' ? (
+          <MessagePart.TextSection
+            tone="danger"
+            title={t('chat.mcpTool.response')}
+            value={part.errorText}
+          />
+        ) : null}
+        <MessagePart.ValueSection
+          maxLength={MAX_ARG_VALUE_LENGTH}
+          title={t('chat.mcpTool.arguments')}
+          value={part.input}
         />
-      ) : part.state === 'output-error' ? (
-        <MessagePart.TextSection
-          tone="danger"
-          title={t('chat.mcpTool.response')}
-          value={part.errorText}
-        />
-      ) : null}
-      <MessagePart.ValueSection
-        maxLength={MAX_ARG_VALUE_LENGTH}
-        title={t('chat.mcpTool.arguments')}
-        value={part.input}
-      />
+      </McpAppConversationBridge>
     </MessagePart.Tool>
   );
 }
 
-function McpOutputSection({ normalized }: { normalized: NormalizedMcpResult }) {
+function McpOutputSection({
+  normalized,
+  source,
+}: {
+  normalized: NormalizedMcpResult;
+  source?: ToolMessagePart['mcpSource'];
+}) {
   const { t } = useTranslation();
   const visibleContent = normalized.content.flatMap((content) => toToolResultContent(content, t));
 
@@ -91,6 +111,13 @@ function McpOutputSection({ normalized }: { normalized: NormalizedMcpResult }) {
       <ToolResultContentRenderer
         contents={visibleContent}
         imageAccessibilityLabel={t('chat.attachments.image')}
+        renderResourceLink={
+          source
+            ? (content) => (
+                <McpResourceLink source={source} uri={content.uri} label={content.label} />
+              )
+            : undefined
+        }
       />
     </View>
   );

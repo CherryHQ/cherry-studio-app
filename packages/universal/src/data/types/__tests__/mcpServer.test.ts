@@ -35,6 +35,22 @@ describe('McpServerSchema', () => {
     expect(McpServerSchema.parse({ ...server, headers }).headers).toEqual(headers);
   });
 
+  it('accepts only the OAuth grant reference and client identity in serialized connections', () => {
+    const oauth = { authorizationId: id, clientId: 'registered-client' };
+    expect(McpServerSchema.parse({ ...server, oauth })).toEqual({ ...server, oauth });
+    for (const patch of [
+      { authorizationId: 'not-a-uuid' },
+      { clientId: '' },
+      { clientId: '   ' },
+      { accessToken: 'must-not-be-exported' },
+      { refreshToken: 'must-not-be-exported' },
+    ]) {
+      expect(McpServerSchema.safeParse({ ...server, oauth: { ...oauth, ...patch } }).success).toBe(
+        false,
+      );
+    }
+  });
+
   it('takes tool rules as a list of names, and rejects a bare one', () => {
     expect(McpServerSchema.parse({ ...server, disabledTools: [] }).disabledTools).toEqual([]);
     expect(() => McpServerSchema.parse({ ...server, disabledTools: 'search' })).toThrow();
