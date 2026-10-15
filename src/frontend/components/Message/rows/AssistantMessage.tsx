@@ -1,21 +1,14 @@
-import { ImageGenerationLoader, MessagePart } from '@cherrystudio/ui/components';
+import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import {
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
 } from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
-import { findLatestActivityPart, partitionMessageParts } from '../parts/partitionMessageParts';
-import {
-  getToolDisplayState,
-  isProviderWebSearchToolPart,
-  isToolMessagePart,
-} from '../parts/tools/toolPartState';
 import type { MessageListItem } from '../types';
 
 type AssistantMessageProps = {
@@ -34,56 +27,18 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
 }: {
   message: MessageListItem;
 }) {
-  const { t } = useTranslation();
   const parts = message.data.parts ?? [];
   const isPending = message.status === 'pending';
   const isPendingEmptyMessage =
     isPending &&
     !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
-  const isWaitingForResponse = isPending && !showsLiveActivity(parts);
 
   if (isPendingEmptyMessage && message.imageGeneration) {
     return <PendingImageMessage settings={message.imageGeneration} />;
   }
 
-  return (
-    <>
-      {!isPendingEmptyMessage ? <MessageParts message={message} /> : null}
-      {isWaitingForResponse ? (
-        <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
-      ) : null}
-    </>
-  );
+  return <MessageParts message={message} />;
 });
-
-/**
- * Whether an unfinished reply already shows its own live feedback. Body parts render after the
- * process group, so process activity is hidden above any of them, such as an answered question.
- */
-function showsLiveActivity(parts: readonly CherryMessagePart[]) {
-  const latestActivityPart = findLatestActivityPart(parts);
-  const { body } = partitionMessageParts(parts);
-  const isAtBottom = (part: CherryMessagePart) =>
-    body.length === 0 || body.some((item) => item.part === part);
-  return parts.some((part) => {
-    if (part.type === 'data-compaction-anchor') return part.data.status === 'compacting';
-    if (isToolMessagePart(part)) {
-      return (
-        part.state === 'approval-requested' ||
-        (!isProviderWebSearchToolPart(part) &&
-          getToolDisplayState(part) === 'running' &&
-          isAtBottom(part))
-      );
-    }
-    return (
-      part === latestActivityPart &&
-      (part.type === 'text' || part.type === 'reasoning') &&
-      part.state === 'streaming' &&
-      (part.type === 'reasoning' || part.text.trim().length > 0) &&
-      isAtBottom(part)
-    );
-  });
-}
 
 export const AssistantMessage = memo(function AssistantMessage({
   children,
