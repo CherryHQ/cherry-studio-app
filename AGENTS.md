@@ -18,7 +18,9 @@ configuration, not in repository rules.
 - When naming or renaming files, directories, identifiers, or documentation, read
   [Naming Conventions](docs/references/naming-conventions.md).
 - When adding, moving, or exposing modules, read
-  [Code Organization](docs/references/code-organization.md).
+  [Code Organization](docs/references/code-organization.md). Before writing a helper, parser,
+  transport adapter, store, or component, check
+  [Shared Building Blocks](docs/references/shared-building-blocks.md).
 - When adding, changing, removing, or running tests, read
   [Testing And CI](docs/guides/testing-and-ci.md).
 - When changing user-visible copy, translations, or supported languages, read
