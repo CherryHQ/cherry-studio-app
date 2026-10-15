@@ -1,5 +1,6 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { useToast } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -26,6 +27,7 @@ import { fileLibrarySelectionScope, type FileLibraryViewMode } from './utils/con
  */
 function FileLibraryScreenBody() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { toast } = useToast();
   const { left, right } = useSafeAreaInsets();
   const [filter, setFilter] = useState<FileLibraryFilter>('all');
@@ -50,6 +52,11 @@ function FileLibraryScreenBody() {
         icon: EllipsisIcon,
         items: [
           {
+            id: 'library-trash',
+            label: t('trash.title'),
+            onPress: () => router.push({ pathname: '/trash', params: { kind: 'file' } }),
+          },
+          {
             checked: viewMode === 'grid',
             id: 'library-view-grid',
             label: t('library.view.grid'),
@@ -66,7 +73,7 @@ function FileLibraryScreenBody() {
         type: 'menu',
       },
     ],
-    [changeViewMode, t, viewMode],
+    [changeViewMode, router, t, viewMode],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [

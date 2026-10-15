@@ -1,4 +1,16 @@
-import { and, desc, eq, inArray, isNotNull, lt, lte, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import {
   AppStatePolicy,
@@ -74,6 +86,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .from(agentSessionMessageTable)
       .where(
         and(
+          sql`EXISTS (SELECT 1 FROM agent_session WHERE id = ${agentSessionMessageTable.sessionId} AND deleted_at IS NULL)`,
           eq(agentSessionMessageTable.role, 'assistant'),
           inArray(agentSessionMessageTable.status, [...UNSETTLED_MESSAGE_STATUSES]),
         ),
@@ -101,7 +114,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .getDb()
       .select()
       .from(agentSessionTable)
-      .where(eq(agentSessionTable.id, sessionId))
+      .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
       .limit(1);
     return row ? toAgentSessionView(row) : null;
   }
@@ -111,7 +124,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .getDb()
       .select({ revision: agentSessionTable.runtimeRevision })
       .from(agentSessionTable)
-      .where(eq(agentSessionTable.id, sessionId))
+      .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
       .limit(1);
     return row?.revision ?? null;
   }
@@ -122,7 +135,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [row] = await tx
         .update(agentSessionTable)
         .set({ name, isNameManuallyEdited: true })
-        .where(eq(agentSessionTable.id, sessionId))
+        .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
         .returning();
       return row ? toAgentSessionView(row) : null;
     });
@@ -141,6 +154,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           and(
             eq(agentSessionTable.id, sessionId),
             eq(agentSessionTable.name, expectedName),
+            isNull(agentSessionTable.deletedAt),
             eq(agentSessionTable.isNameManuallyEdited, false),
           ),
         )
@@ -154,20 +168,27 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
-    return this.dbService.withWriteTx(async (tx) => {
-      // Advance each surviving fork's row timestamp through Drizzle before the
-      // FK's ON DELETE SET NULL fallback can clear the lineage invisibly.
-      await tx
+    const deleted = await this.dbService.withWriteTx((tx) =>
+      tx
         .update(agentSessionTable)
-        .set({ forkBoundaryMessageId: null, forkedFromSessionId: null })
-        .where(eq(agentSessionTable.forkedFromSessionId, sessionId));
-      // Messages go with the session via the ON DELETE CASCADE foreign key.
-      const deleted = await tx
-        .delete(agentSessionTable)
-        .where(eq(agentSessionTable.id, sessionId))
-        .returning({ id: agentSessionTable.id });
-      return deleted.length > 0;
-    });
+        .set({
+          deletedAt: Date.now(),
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+        })
+        .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
+        .returning({ id: agentSessionTable.id }),
+    );
+    if (deleted.length)
+      publishDataApiChanges([
+        '/trash',
+        '/trash/summary',
+        '/agent-sessions',
+        `/agent-sessions/${sessionId}`,
+        `/agent-sessions/${sessionId}/messages`,
+        '/search/entities',
+        '/search/contents',
+      ]);
+    return deleted.length > 0;
   }
 
   async reserveInitialSubmission(
@@ -203,7 +224,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [session] = await tx
         .select({ id: agentSessionTable.id })
         .from(agentSessionTable)
-        .where(eq(agentSessionTable.id, input.sessionId))
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)))
         .limit(1);
       if (!session) {
         throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
@@ -212,7 +233,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       await tx
         .update(agentSessionTable)
         .set({ lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})` })
-        .where(eq(agentSessionTable.id, input.sessionId));
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)));
       return reserved;
     });
   }
@@ -222,7 +243,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [source] = await tx
         .select()
         .from(agentSessionTable)
-        .where(eq(agentSessionTable.id, input.sessionId))
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)))
         .limit(1);
       if (!source) {
         return { status: 'session-not-found' };
@@ -367,7 +388,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [session] = await tx
         .select({ id: agentSessionTable.id })
         .from(agentSessionTable)
-        .where(eq(agentSessionTable.id, input.sessionId))
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)))
         .limit(1);
       if (!session) {
         return { status: 'session-not-found' };
@@ -424,7 +445,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       await tx
         .update(agentSessionTable)
         .set({ runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1` })
-        .where(eq(agentSessionTable.id, input.sessionId));
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)));
       // The boundary column is application-owned, so the delete below would
       // otherwise leave this Session pointing at a row that no longer exists.
       await tx
@@ -468,7 +489,9 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
                 ? (newest.stats?.runtimeTiming?.completedAt ?? newest.createdAt)
                 : newest.createdAt,
           })
-          .where(eq(agentSessionTable.id, input.sessionId));
+          .where(
+            and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)),
+          );
       }
 
       return { deletedMessageIds, status: 'deleted' };
@@ -485,7 +508,12 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const [source, user] = await tx
         .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
-        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            sql`EXISTS (SELECT 1 FROM agent_session WHERE id = ${input.sessionId} AND deleted_at IS NULL)`,
+          ),
+        )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
         .limit(2);
       if (
@@ -544,7 +572,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           lastActivityAt: Date.now(),
           runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
         })
-        .where(eq(agentSessionTable.id, input.sessionId));
+        .where(and(eq(agentSessionTable.id, input.sessionId), isNull(agentSessionTable.deletedAt)));
       return {
         turnId,
         userMessage: toAgentMessageView(userRow),
@@ -554,6 +582,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
+    if (!(await this.getSession(sessionId))) return [];
     const rows = await this.dbService
       .getDb()
       .select(agentMessageViewColumns)
@@ -568,6 +597,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
    * reads synchronously, and these scan every message of the Session.
    */
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
+    if (!(await this.getSession(sessionId)))
+      return {
+        anchorFound: afterTurnId === null,
+        hasMessages: false,
+        history: [],
+        referencedFileEntryIds: [],
+      };
     const sqlite = this.dbService.getSqlite();
     const [anchor] =
       afterTurnId === null
@@ -622,6 +658,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   /** Receipts across the complete transcript, without materializing its messages. */
   async loadSkillActivations(sessionId: string) {
+    if (!(await this.getSession(sessionId))) return [];
     const skillRows = await readSqliteRows<{ messageId: string; activation: string }>(
       this.dbService.getSqlite(),
       sql`
@@ -656,6 +693,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async loadWorkflowLoads(sessionId: string) {
+    if (!(await this.getSession(sessionId))) return [];
     const rows = await readSqliteRows<{ workflowId: unknown }>(
       this.dbService.getSqlite(),
       sql`
@@ -674,6 +712,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
+    if (!(await this.getSession(sessionId))) return null;
     const [row] = await readSqliteRows<{ assistantMessageId: string; checkpointJson: string }>(
       this.dbService.getSqlite(),
       sql`

@@ -1,6 +1,10 @@
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import { fileEntryTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
@@ -30,6 +34,28 @@ const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 const fileChanges = new Emitter<FileEntryId>();
+
+export function notifyFileChange(id: FileEntryId): void {
+  fileChanges.fire(id);
+  publishDataApiChanges(['/trash', '/trash/summary']);
+}
+
+export async function trashInternalEntry(
+  entries: Pick<FileEntryService, 'withWriteTx'>,
+  id: FileEntryId,
+): Promise<boolean> {
+  storageMutationGate.assertWritable();
+  const rows = await entries.withWriteTx(async (tx) => {
+    storageMutationGate.assertWritable();
+    return tx
+      .update(fileEntryTable)
+      .set({ deletedAt: Date.now(), updatedAt: sql`${fileEntryTable.updatedAt}` })
+      .where(and(eq(fileEntryTable.id, id), isNull(fileEntryTable.deletedAt)))
+      .returning({ id: fileEntryTable.id });
+  });
+  if (rows.length) notifyFileChange(id);
+  return rows.length > 0;
+}
 
 /** All managed-file writers notify here, after their entry changes commit. */
 export function subscribeFileChanges(listener: (entryId: FileEntryId) => void): () => void {
@@ -314,9 +340,10 @@ export async function rewriteInternalTextEntry(
 export async function deleteInternalEntry(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   id: FileEntryId,
+  deletedAt?: number,
 ): Promise<boolean> {
   const deletedEntry = await entries.withWriteTx(async (tx) => {
-    const entry = await entries.findByIdTx(tx, id);
+    const entry = await entries.findByIdTx(tx, id, deletedAt);
     if (!entry) {
       return null;
     }

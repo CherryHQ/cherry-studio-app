@@ -330,6 +330,7 @@ export function createBackend(
         createInternalEntry: services.fileContent.createInternalEntry,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
+        moveToTrash: services.fileContent.moveToTrash,
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
         getUri: services.fileContent.getUri,

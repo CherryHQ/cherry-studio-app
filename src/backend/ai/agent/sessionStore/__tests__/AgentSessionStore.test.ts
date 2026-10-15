@@ -858,7 +858,7 @@ describe.each([
     expect((await store.getSession(source.id))?.name).toBe('Maths');
   });
 
-  test('deleting a fork source advances the surviving Session row timestamp', async () => {
+  test('trashing a fork source preserves the surviving Session lineage and timestamp', async () => {
     const deletionTime = 2_000_000_001_000;
     jest.useFakeTimers({ now: 2_000_000_000_000 });
     try {
@@ -889,9 +889,9 @@ describe.each([
       expect(await store.deleteSession(source.id)).toBe(true);
       expect(await store.getSession(result.session.id)).toEqual(
         expect.objectContaining({
-          forkBoundaryMessageId: null,
-          forkedFromSessionId: null,
-          updatedAt: new Date(deletionTime).toISOString(),
+          forkBoundaryMessageId: result.session.forkBoundaryMessageId,
+          forkedFromSessionId: source.id,
+          updatedAt: result.session.updatedAt,
         }),
       );
     } finally {
@@ -1282,7 +1282,7 @@ describe.each([
     ]);
   });
 
-  test('deleteSession removes the transcript with the session', async () => {
+  test('deleteSession hides the transcript with the session', async () => {
     const session = await harness.createEmptySession({ agentId });
     await store.reserveSubmission({
       ...messageIds(),
@@ -1707,12 +1707,12 @@ describe('SqliteAgentSessionStore database guarantees', () => {
       .get(recursive.session.id) as { lastActivityAt: number };
     expect(recursiveFork.lastActivityAt).toBe(anchorCompletedAt);
 
-    // Deleting the source drops the lineage claim and never deletes the fork itself.
+    // Trashing the source retains recoverable lineage and never deletes the fork.
     expect(await store.deleteSession(source.id)).toBe(true);
     expect(await store.getSession(result.session.id)).toEqual(
       expect.objectContaining({
-        forkBoundaryMessageId: null,
-        forkedFromSessionId: null,
+        forkBoundaryMessageId: result.session.forkBoundaryMessageId,
+        forkedFromSessionId: source.id,
         id: result.session.id,
       }),
     );

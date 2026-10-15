@@ -83,6 +83,12 @@ export default function SettingsScreen() {
           </Section>
           <Section>
             <Section.Item
+              label={t('storage.title')}
+              leading={<DatabaseIcon className="size-4 text-foreground" />}
+              onPress={() => router.push('/settings/storage')}
+              testID="settings-storage"
+            />
+            <Section.Item
               label={t('backup.title')}
               leading={<DatabaseIcon className="size-4 text-foreground" />}
               onPress={() => router.push('/settings/backup')}

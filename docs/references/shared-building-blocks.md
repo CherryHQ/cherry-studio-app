@@ -31,6 +31,7 @@ it already exists.
 | Safe Markdown code fences | `createCodeBlockMarkdown` in `src/shared/utils/createCodeBlockMarkdown.ts` |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
+| Recoverable file and local Session deletion, retention, and permanent removal | [Unified Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
 
@@ -46,6 +47,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
 | Target-language menus for text translation | `useTranslationLanguageMenu` in `src/frontend/hooks/useTranslationLanguageMenu.ts`, rendered by CherryUI `ActionMenu` |
+| Trash restore/delete/empty decisions and feedback | `useTrashActions` in `src/frontend/hooks/trash` |
 | List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |

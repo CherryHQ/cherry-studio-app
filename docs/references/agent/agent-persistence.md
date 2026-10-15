@@ -32,7 +32,7 @@ record for mobile-originated Agent Sessions only.
 - Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an
   Agent-table-backed `AgentDefinitionSource` used by the production Host. Session renames and
   removals delegate to the Host so an active turn is cancelled and drained before the row is
-  hard-deleted.
+  moved to the unified trash.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
@@ -150,8 +150,11 @@ boundary, not in `AgentService`: resolving it is file-system work under `backend
 
 **Delete semantics.** `agent` soft-deletes (`deletedAt`), so Sessions never orphan; hard cleanup of
 an Agent is refused while Sessions exist (`RESTRICT`). Session deletion aborts execution, drains
-settlement/usage, then hard-deletes Cherry rows and cascades messages. Forks are independent row
-copies and survive source deletion. The Host retires the Pi binding; no owner can be recreated from
+settlement/usage, then marks the Session as trashed and increments `runtimeRevision`. Messages,
+checkpoints, and fork lineage remain recoverable for 30 days. Active lists, search, transcript reads,
+and execution exclude trashed Sessions. Restore keeps the original activity time. Permanent removal
+cascades messages and clears surviving forks’ source/boundary metadata. Forks remain independent
+row copies. See [Unified Trash](../data/trash.md). The Host retires the Pi binding; no owner can be recreated from
 Pi. Retired upstream bytes remain until the next idle initialization closes and deletes the Pi
 file. No raw upstream SQL or archive tombstone is involved.
 
@@ -244,8 +247,9 @@ listing/cascade and MCP server delete-time disabling.
 | `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
 | `runtimeRevision` | integer | NOT NULL DEFAULT `0` | Incremented on turn deletion/retry to invalidate Pi working copies |
 | `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
-| `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
-| `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
+| `createdAt` / `updatedAt` | integer | helper defaults | Row timestamps; restore does not change activity time |
+| `deletedAt` | integer | NULL | Time moved to trash; permanent removal after 30 days or explicit user action |
+| `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is permanently deleted |
 | `forkBoundaryMessageId` | text | NULL | Message inside the fork that closes the copied prefix; maintained atomically with lineage and not a cross-table FK |
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
@@ -330,8 +334,9 @@ projection:
   it to `stats.runtimeTiming.completedAt`. Message and Session `updatedAt` remain physical row
   modification timestamps.
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
-  `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
-  cascading the source delete to its messages.
+  `deleteSession` retains messages and fork lineage in trash. Permanent removal explicitly clears
+  surviving forks’ source and boundary metadata, advancing their `updatedAt`, before cascading the
+  source delete to its messages.
 - Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without

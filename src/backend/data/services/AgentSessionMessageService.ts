@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
@@ -95,7 +95,7 @@ export class AgentSessionMessageService {
     const [session] = await this.db
       .select({ id: agentSessionTable.id })
       .from(agentSessionTable)
-      .where(eq(agentSessionTable.id, sessionId))
+      .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
       .limit(1);
     if (!session) {
       throw DataApiErrorFactory.notFound('AgentSession', sessionId);
@@ -161,7 +161,7 @@ export class AgentSessionMessageService {
           inArray(agentSessionMessageTable.id, input.ids),
         ),
       )
-      .where(eq(agentSessionTable.id, sessionId))
+      .where(and(eq(agentSessionTable.id, sessionId), isNull(agentSessionTable.deletedAt)))
       .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id));
     if (!rows[0]) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     const messages = rows.flatMap(({ message }) => (message ? [message] : []));

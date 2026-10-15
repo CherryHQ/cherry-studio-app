@@ -1,0 +1,1 @@
+export { useTrashActions } from './useTrashActions';

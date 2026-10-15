@@ -15,6 +15,7 @@ import type { McpServerService } from '../../services/McpServerService';
 import type { PaintingService } from '../../services/PaintingService';
 import type { PluginAuthorizationService } from '../../services/PluginAuthorizationService';
 import type { ProviderService } from '../../services/ProviderService';
+import type { TrashService } from '../../services/TrashService';
 import { type AgentAvatars, createAgentHandlers } from './agents';
 import { createAgentSessionMessageHandlers } from './agentSessionMessages';
 import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
@@ -35,8 +36,11 @@ import {
   type SkillAvailabilityReader,
   type SkillInstructionReader,
 } from './skills';
+import { createTrashHandlers, type TrashMutations } from './trash';
 
 export type DataApiDependencies = {
+  trash: TrashService;
+  trashMutations: TrashMutations;
   agentAvatars: AgentAvatars;
   agents: AgentService;
   agentGlobalSkills: AgentGlobalSkillService;
@@ -66,6 +70,7 @@ export type DataApiDependencies = {
 
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
+    ...createTrashHandlers(dependencies.trash, dependencies.trashMutations),
     ...createAgentHandlers(dependencies.agents, dependencies.agentAvatars),
     ...createAgentToolBindingHandlers(dependencies.agentToolBindings),
     ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),

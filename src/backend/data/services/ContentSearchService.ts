@@ -118,7 +118,8 @@ export class ContentSearchService {
           }
           JOIN agent_session session ON session.id = message.session_id
           LEFT JOIN agent ON agent.id = session.agent_id AND agent.deleted_at IS NULL
-          WHERE ${sessionCondition}
+          WHERE session.deleted_at IS NULL
+            AND ${sessionCondition}
             AND ${agentCondition}
             AND ${createdAtCondition}
             AND ${ftsConditions.length > 0 ? sql.join(ftsConditions, sql` AND `) : sql`1 = 1`}

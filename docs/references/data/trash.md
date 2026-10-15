@@ -1,0 +1,43 @@
+# Unified Trash
+
+The trash retains user-deleted local Agent Sessions and library files for 30 days. `/trash` displays
+All, Sessions, and Files, with deletion dates, remaining days, and total trashed file bytes. The
+library menu opens Files; Settings → Storage opens the unified page and offers Empty trash.
+
+## Data And Operations
+
+There is no duplicate trash table. `agent_session.deletedAt` and `file_entry.deletedAt` own
+membership; `TrashService` projects their metadata into one cursor stream, ordered by deletion time
+and `kind:id` so cross-table id collisions cannot skip entries. Category filters run in SQL.
+
+- Session deletion continues through `MobileAgentHost`: cancel admission/execution, drain settlement
+  and usage, mark the Session, increment its runtime revision, and retire its working copy. Messages,
+  checkpoints, activity time, and fork lineage stay in Cherry. Trashed Sessions are excluded from
+  normal listing, title/content search, transcript export, and execution admission.
+- Library deletion uses `FileModule.moveToTrash`. Normal file reads, Agent attachment/edit paths,
+  and previews treat trashed files as unavailable. Restore clears the deletion mark, keeping the
+  entry id and content/preview revision. Historical references work again when their file is restored.
+- Restore and permanent deletion act on one item. Emptying the current category or the whole trash
+  requires a confirmation naming its scope. Session restoration never restores separately deleted
+  files; deleting or permanently removing a Session never removes its independent attachments.
+- Permanent Session removal cascades messages and clears source/boundary metadata in surviving
+  forks. File removal reuses `deleteInternalEntry`: delete the row transactionally, then unlink bytes
+  and preview best-effort. A cleanup failure does not roll back the authoritative row deletion.
+- Cancelling imports or discarding temporary edits remains immediate hard cleanup, outside the trash.
+
+## Lifetime And Backup
+
+`TrashRuntime` captures its host's database, serializes restore/delete/empty/sweep operations, and
+joins pending work on stop. It sweeps once on startup and on foreground entry. Only items whose
+`deletedAt` is strictly older than 30 days qualify; permanent removal rechecks the captured deletion
+time inside the write transaction so restoring an item wins over stale cleanup. There is no timer,
+scheduled job, or background-task registration.
+
+The backup mutation gate blocks trash mutations, and backup admission considers pending trash work.
+Backups already include the full Cherry database and every referenced library blob, including
+trashed records with their original deletion time. After a backup restore and restart, the startup
+sweep removes expired items. Cache thumbnails are derived and are regenerated as needed.
+
+Folders and version-history grouping are owned by issue #1281, which can extend these deletion and
+restore operations once those records exist. The current trash contains individual library entries
+and whole local Sessions.

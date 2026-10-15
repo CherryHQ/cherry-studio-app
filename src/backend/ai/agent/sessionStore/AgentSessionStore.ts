@@ -144,7 +144,7 @@ export interface AgentSessionStore {
     expectedName: string,
     name: string,
   ): Promise<AgentSessionView | null>;
-  /** Deletes the Session's messages with it. */
+  /** Moves the settled Session to trash, retaining its messages and fork lineage. */
   deleteSession(sessionId: string): Promise<boolean>;
   /** Assistant rows still `pending`/`streaming`; the Host matches them against engine state. */
   listUnsettledAssistantMessages(): Promise<

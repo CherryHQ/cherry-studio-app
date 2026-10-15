@@ -40,6 +40,7 @@ import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliv
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -176,11 +177,13 @@ export function createAppBootstrapRuntime(
     languageServing,
     providerRegistryUpdater,
   });
+  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   backup.configure(
     () =>
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
-      hasPendingSkillStorageWork(),
+      hasPendingSkillStorageWork() ||
+      trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
@@ -189,6 +192,8 @@ export function createAppBootstrapRuntime(
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      trash: trash.entries,
+      trashMutations: trash,
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
       agentGlobalSkills: services.agentGlobalSkill,
