@@ -32,8 +32,10 @@ type FeedbackState =
   | { status: 'failed'; messageKey: string }
   | Extract<DiagnosticUploadResult, { status: 'uploaded' | 'submission_unknown' }>;
 
-export function useDiagnosticBundle() {
+export function useDiagnosticBundle(screenshotId?: string) {
   const module = useBackendModule('diagnostics');
+  const [selectedScreenshotId, setSelectedScreenshotId] = useState<string>();
+  const isScreenshotIncluded = screenshotId !== undefined && selectedScreenshotId === screenshotId;
   const [state, setState] = useState<FeedbackState>({ status: 'editing' });
   const mounted = useRef(true);
   const busy = useRef(false);
@@ -45,14 +47,14 @@ export function useDiagnosticBundle() {
     };
   }, []);
 
-  async function submit(description: string, screenshotId?: string) {
+  async function submit(description: string) {
     if (busy.current) return;
     busy.current = true;
     setState({ status: 'submitting' });
     try {
       const result = await module.uploadBundle({
         description,
-        ...(screenshotId ? { screenshotId } : {}),
+        ...(isScreenshotIncluded ? { screenshotId } : {}),
         range: '24h',
         includeLogs: true,
         includeTraces: true,
@@ -90,6 +92,10 @@ export function useDiagnosticBundle() {
 
   return {
     state,
+    isScreenshotIncluded,
+    setScreenshotIncluded: (included: boolean) => {
+      if (!busy.current) setSelectedScreenshotId(included ? screenshotId : undefined);
+    },
     submit,
     edit: () => {
       if (!busy.current) setState({ status: 'editing' });

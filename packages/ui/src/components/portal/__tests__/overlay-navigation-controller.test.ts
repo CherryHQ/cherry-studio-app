@@ -70,3 +70,17 @@ test('reports overlay presence until dismissal completes and releases subscripti
   controller.register();
   expect(listener).toHaveBeenCalledTimes(2);
 });
+
+test('admission is read-only and blocks only decision surfaces', () => {
+  const controller = createOverlayNavigation();
+  const dismiss = jest.fn();
+  expect(controller.canNavigate()).toBe(true);
+  controller.register(dismiss);
+  expect(controller.canNavigate()).toBe(true);
+  expect(dismiss).not.toHaveBeenCalled();
+  const remove = controller.register();
+  expect(controller.canNavigate()).toBe(false);
+  expect(dismiss).not.toHaveBeenCalled();
+  remove();
+  expect(controller.canNavigate()).toBe(true);
+});

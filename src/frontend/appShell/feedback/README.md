@@ -38,19 +38,38 @@ Capture finishes before navigation. Repeated shakes cannot overlap capture or op
 forms. Switching routes, backgrounding, or unmounting invalidates pending capture and deletes its
 late result. A capture failure still opens the form and explains the missing image.
 
-After capture, CherryUI closes dismissible sheets and menus and waits for their owners to finish
-removing the overlays before navigation. Alerts, decision dialogs, and non-dismissible sheets
-keep the current page in place: discard that capture and let the user shake again after deciding.
+Before capture, CherryUI checks whether navigation is allowed without dismissing any surface.
+Alerts, decision dialogs, and non-dismissible sheets keep the current page in place without taking
+a screenshot. After capture, CherryUI closes dismissible sheets and menus and waits for their
+owners to finish removing the overlays before navigation. A blocker opened during capture discards
+the image and keeps the current page in place; the user can shake again after deciding.
 A newly opened overlay or lifecycle cancellation also cancels the handoff. The form uses the shared
 keyboard-aware scrolling pattern, including drag-to-dismiss, so bottom actions remain reachable
 while editing a description with an attached screenshot.
 
+Provider settings, device connections, plugin configuration, and OAuth route families always use
+text-only feedback, including their sheets and masked credential fields. The route policy lives in
+`feedbackCapturePolicy.ts`; new credential entry or reveal routes must be added there. This deliberately
+also excludes list pages in those families and does not attempt to redact arbitrary chat content.
+
 The screenshot is copied from view-shot's temporary file to a UUID-named PNG under the app cache.
 Only the ID crosses the diagnostics contract. The form previews the screenshot, explains that its
-visible content will be shared, and allows removal. Nothing uploads until Submit. Removal, leaving
-the form, or app-shell disposal deletes the draft image. Backend preparation copies the chosen
+visible content may be sensitive, and allows removal. The capture notice says the image is local;
+each new report defaults Include screenshot to off. Only selecting it and pressing Submit attaches
+the image; otherwise the request omits its ID. Retries preserve the selection, removal clears it,
+and a replacement image requires a new selection. Removal, leaving the form, or app-shell disposal
+deletes the draft image. Backend preparation copies the chosen
 image before collecting diagnostics; each upload attempt deletes its own staged copy. A failed
 submission keeps the draft image for an explicit retry.
+
+## Release disclosures
+
+The form's chat-content and credential exclusion applies to diagnostic logs, not screenshots.
+Before release, the published privacy policy and store privacy declarations must reflect optional
+screenshot uploads and their purpose, recipients, retention, and deletion process. Confirm these
+details with the service owner; this client change does not establish or publish server policy.
+
+## Device acceptance
 
 Native changes require a rebuilt custom client. Device acceptance must cover actual shakes,
 capture-before-navigation, repeat shakes, foreground/background, cancel/back, image removal,

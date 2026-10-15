@@ -7,6 +7,8 @@ export function createOverlayNavigation() {
   }
   return {
     hasOverlays: () => overlays.size > 0,
+    /** Read-only admission check; leave dismissible surfaces intact for capture. */
+    canNavigate: () => [...overlays.values()].every((dismiss) => dismiss !== undefined),
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {

@@ -14,6 +14,7 @@ import {
 import { usePrivacyConsentPending } from '@/frontend/appShell/privacy';
 import { usePreference } from '@/frontend/data/hooks';
 
+import { canCaptureFeedbackRoute } from './feedbackCapturePolicy';
 import { removeFeedbackScreenshot, type FeedbackScreenshot } from './feedbackScreenshot';
 import { useShakeFeedback } from './useShakeFeedback';
 
@@ -26,8 +27,9 @@ const FeedbackCaptureContext = createContext<{
 /** App-wide capture owns temporary pixels; the feedback page owns editing and submission. */
 export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
   const router = useRouter();
-  const { prepareForNavigation } = useOverlayNavigation();
+  const { prepareForNavigation, canNavigate } = useOverlayNavigation();
   const pathname = usePathname();
+  const captureScreenshot = canCaptureFeedbackRoute(pathname);
   const consentPending = usePrivacyConsentPending();
   const [isShakeEnabled] = usePreference('app.feedback.shake_enabled');
   const [screenshot, setScreenshot] = useState<FeedbackScreenshot>();
@@ -65,11 +67,13 @@ export function FeedbackCaptureProvider({ children }: PropsWithChildren) {
       !pathname.startsWith('/onboarding'),
     route: pathname,
     prepareForNavigation,
+    canStart: canNavigate,
+    captureScreenshot,
     onCaptured: (image) => {
       clearScreenshot();
       owned.current = image;
       setScreenshot(image);
-      setCaptureFailed(!image);
+      setCaptureFailed(captureScreenshot && !image);
       router.push('/settings/about/feedback/new');
     },
   });

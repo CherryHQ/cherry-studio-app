@@ -5,8 +5,9 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
-`OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes an
-abortable `prepareForNavigation(signal)` handoff: dismissible sheets and Cherry-rendered menus close
+`OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
+read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
+dismissible sheets and Cherry-rendered menus close
 through their existing owners, and navigation waits until they are gone. Alerts, decision dialogs,
 non-dismissible sheets, newly appearing overlays, and cancellation return false without approving
 or discarding a user decision. The caller owns navigation and any temporary resources; the provider

@@ -14,12 +14,17 @@ export function useShakeFeedback({
   route,
   onCaptured,
   prepareForNavigation,
+  canStart,
+  captureScreenshot,
 }: {
   enabled: boolean;
+  captureScreenshot: boolean;
+  canStart: () => boolean;
   route: string;
   prepareForNavigation: (signal: AbortSignal) => Promise<boolean>;
   onCaptured: (screenshot: FeedbackScreenshot | undefined) => void;
 }) {
+  const canBegin = useEffectEvent(canStart);
   const captured = useEffectEvent(onCaptured);
   const prepare = useEffectEvent(prepareForNavigation);
   useEffect(() => {
@@ -32,14 +37,14 @@ export function useShakeFeedback({
     let detect = createShakeDetector();
 
     async function capture() {
-      if (pending || disposed || AppState.currentState !== 'active') return;
+      if (pending || disposed || AppState.currentState !== 'active' || !canBegin()) return;
       pending = true;
       const started = generation;
       const controller = new AbortController();
       handoff = controller;
       let screenshot: FeedbackScreenshot | undefined;
       try {
-        screenshot = await captureFeedbackScreenshot();
+        if (captureScreenshot) screenshot = await captureFeedbackScreenshot();
       } catch {
         // A failed capture still allows text feedback; the form explains the missing image.
       }
@@ -83,5 +88,5 @@ export function useShakeFeedback({
       subscription?.remove();
       appState.remove();
     };
-  }, [enabled, route]);
+  }, [enabled, route, captureScreenshot]);
 }

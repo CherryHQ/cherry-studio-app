@@ -20,11 +20,27 @@ jest.mock('../feedbackScreenshot', () => ({
 const screenshot = { id: 'capture', uri: 'file:///capture.png' };
 const onCaptured = jest.fn();
 const prepareForNavigation = jest.fn();
+const canStart = jest.fn();
 let renderer: ReactTestRenderer;
 let stateChanged: (state: AppStateStatus) => void;
 let removeAppState: jest.Mock;
-function Probe({ enabled = true, route = '/home' }: { enabled?: boolean; route?: string }) {
-  useShakeFeedback({ enabled, route, onCaptured, prepareForNavigation });
+function Probe({
+  enabled = true,
+  route = '/home',
+  captureScreenshot = true,
+}: {
+  enabled?: boolean;
+  route?: string;
+  captureScreenshot?: boolean;
+}) {
+  useShakeFeedback({
+    enabled,
+    route,
+    onCaptured,
+    prepareForNavigation,
+    canStart,
+    captureScreenshot,
+  });
   return null;
 }
 function shake(start = 0) {
@@ -37,6 +53,7 @@ function shake(start = 0) {
 beforeEach(() => {
   jest.clearAllMocks();
   prepareForNavigation.mockResolvedValue(true);
+  canStart.mockReturnValue(true);
   AppState.currentState = 'active';
   removeAppState = jest.fn();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, callback) => {
@@ -142,11 +159,13 @@ test('captures the overlay, then waits for dismissal before opening feedback', a
   expect(onCaptured).toHaveBeenCalledWith(screenshot);
 });
 
-test('a blocking dialog preserves the current page and a later shake can retry', async () => {
-  prepareForNavigation.mockResolvedValueOnce(false);
+test('a blocking dialog skips capture and navigation; a later shake can retry', async () => {
+  canStart.mockReturnValueOnce(false);
   await act(async () => shake());
   expect(onCaptured).not.toHaveBeenCalled();
-  expect(removeFeedbackScreenshot).toHaveBeenCalledWith(screenshot);
+  expect(captureFeedbackScreenshot).not.toHaveBeenCalled();
+  expect(prepareForNavigation).not.toHaveBeenCalled();
+  expect(removeFeedbackScreenshot).not.toHaveBeenCalled();
   await act(async () => shake(3000));
   expect(onCaptured).toHaveBeenCalledWith(screenshot);
 });
@@ -173,3 +192,19 @@ test.each(['background', 'route', 'unmount', 'disabled'])(
     expect(removeFeedbackScreenshot).toHaveBeenCalledWith(screenshot);
   },
 );
+
+test('sensitive surfaces enter text feedback without capturing pixels', async () => {
+  act(() => renderer.update(<Probe route="/settings/provider/secret" captureScreenshot={false} />));
+  await act(async () => shake());
+  expect(captureFeedbackScreenshot).not.toHaveBeenCalled();
+  expect(prepareForNavigation).toHaveBeenCalledTimes(1);
+  expect(onCaptured).toHaveBeenCalledWith(undefined);
+});
+
+test('a blocker appearing during capture still cancels handoff and deletes the image', async () => {
+  prepareForNavigation.mockResolvedValueOnce(false);
+  await act(async () => shake());
+  expect(captureFeedbackScreenshot).toHaveBeenCalledTimes(1);
+  expect(onCaptured).not.toHaveBeenCalled();
+  expect(removeFeedbackScreenshot).toHaveBeenCalledWith(screenshot);
+});

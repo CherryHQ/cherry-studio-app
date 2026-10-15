@@ -1,6 +1,6 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
-import { Button, Image, Input, Spinner, TextField } from '@cherrystudio/ui/components';
+import { Button, Image, Input, Spinner, Switch, TextField } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import { useState } from 'react';
@@ -26,7 +26,7 @@ export function FeedbackScreen() {
   const { t } = useTranslation();
   const [description, setDescription] = useState('');
   const [attempted, setAttempted] = useState(false);
-  const workflow = useDiagnosticBundle();
+  const workflow = useDiagnosticBundle(screenshot?.id);
   const { state } = workflow;
   const copyReportId = useCopyReportId(state.status === 'uploaded' ? state.reportId : '');
   const normalized = description.trim();
@@ -55,7 +55,7 @@ export function FeedbackScreen() {
     setAttempted(true);
     if (!normalized || isTooLong) return;
     Keyboard.dismiss();
-    void workflow.submit(normalized, screenshot?.id);
+    void workflow.submit(normalized);
   }
 
   return (
@@ -104,12 +104,29 @@ export function FeedbackScreen() {
                     className="h-56 w-full"
                     accessibilityLabel={t('settings.about.feedback.screenshot')}
                   />
-                  <Text className="text-xs leading-5 text-muted-foreground">
+                  <Text
+                    accessibilityLiveRegion="polite"
+                    className="text-xs leading-5 text-muted-foreground"
+                  >
                     {t('settings.about.feedback.screenshotConsent')}
                   </Text>
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text className="flex-1 text-sm text-foreground">
+                      {t('settings.about.feedback.includeScreenshot')}
+                    </Text>
+                    <Switch
+                      accessibilityLabel={t('settings.about.feedback.includeScreenshot')}
+                      value={workflow.isScreenshotIncluded}
+                      onValueChange={workflow.setScreenshotIncluded}
+                      testID="feedback-include-screenshot"
+                    />
+                  </View>
                   <Button
                     variant="ghost"
-                    onPress={clearScreenshot}
+                    onPress={() => {
+                      workflow.setScreenshotIncluded(false);
+                      clearScreenshot();
+                    }}
                     testID="feedback-remove-screenshot"
                   >
                     {t('common.remove')}

@@ -6,7 +6,10 @@ import { removeFeedbackScreenshot } from '../feedbackScreenshot';
 import { useShakeFeedback } from '../useShakeFeedback';
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  useOverlayNavigation: () => ({ prepareForNavigation: jest.fn().mockResolvedValue(true) }),
+  useOverlayNavigation: () => ({
+    prepareForNavigation: jest.fn().mockResolvedValue(true),
+    canNavigate: () => true,
+  }),
 }));
 
 let mockPath = '/home';
@@ -101,4 +104,15 @@ test('observes the persisted shake preference without disabling manual feedback'
   mockShakeEnabled = false;
   act(() => renderer.update(tree()));
   expect(options().enabled).toBe(false);
+});
+
+test('sensitive routes retain text feedback without claiming that capture failed', () => {
+  mockPath = '/plugins/mcp/server';
+  act(() => renderer.update(tree()));
+  expect(options().enabled).toBe(true);
+  expect(options().captureScreenshot).toBe(false);
+  act(() => options().onCaptured(undefined));
+  expect(mockPush).toHaveBeenCalledWith('/settings/about/feedback/new');
+  expect(value.screenshot).toBeUndefined();
+  expect(value.captureFailed).toBe(false);
 });
