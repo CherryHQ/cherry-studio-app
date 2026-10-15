@@ -80,6 +80,26 @@ beforeEach(() => {
 });
 
 describe('native MCP protocol boundary', () => {
+  it('routes tool and prompt list changes to one catalog refresh only while active', async () => {
+    const onCatalogChanged = jest.fn();
+    const client = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: true,
+      authorization,
+      onCatalogChanged,
+    });
+    const handlers = mockOptions.listChanged as Record<'tools' | 'prompts', { onChanged(): void }>;
+    handlers.prompts.onChanged();
+    handlers.tools.onChanged();
+    expect(onCatalogChanged).toHaveBeenCalledTimes(2);
+    client.setForeground?.(false);
+    handlers.prompts.onChanged();
+    await client.close();
+    handlers.prompts.onChanged();
+    expect(onCatalogChanged).toHaveBeenCalledTimes(2);
+  });
+
   it('reads bounded JSON with the React Native Response implementation', async () => {
     const client = await open();
     const encoded = new TextEncoder().encode(JSON.stringify({ name: 'Cherry 验收' }));

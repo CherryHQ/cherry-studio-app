@@ -96,10 +96,13 @@ export interface McpModule {
   receiveAppMessage(id: string, message: string): void;
   updateAppContext(id: string, context: McpAppHostContext): void;
   closeApp(id: string): Promise<void>;
-  listContent(serverId: string, signal?: AbortSignal): Promise<McpContentEntry[]>;
-  readContent(
+  /** Local metadata only; opening the composer never starts MCP discovery. */
+  getCachedPrompts(): Promise<Readonly<Record<string, readonly McpPromptEntry[]>>>;
+  subscribePromptCatalogs(listener: () => void): () => void;
+  readPrompt(
+    agentId: string,
     serverId: string,
-    entry: McpContentEntry,
+    name: string,
     args: Record<string, string>,
     signal?: AbortSignal,
   ): Promise<McpContentPreview>;
@@ -119,13 +122,14 @@ export interface McpModule {
 }
 
 export type McpContentEntry = {
-  kind: 'resource' | 'template' | 'prompt';
-  /** Resource URI, URI template, or prompt name, interpreted only by its server. */
+  kind: 'resource' | 'prompt';
+  /** Resource URI or prompt name, interpreted only by its server. */
   key: string;
   title: string;
   description?: string;
   arguments: { name: string; description?: string; required: boolean }[];
 };
+export type McpPromptEntry = McpContentEntry & { kind: 'prompt' };
 export type McpContentPreview = {
   serverName: string;
   title: string;

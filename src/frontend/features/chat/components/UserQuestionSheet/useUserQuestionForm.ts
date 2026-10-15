@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
-/** Presentation model shared by local `ask_user_question` and desktop question forms. */
+/** Presentation model shared by conversation questions and MCP prompt parameters. */
 export type QuestionFormOption = { id: string; label: string; description?: string };
 export type QuestionFormQuestion = {
   id: string;
   header?: string;
   question: string;
   description?: string;
+  /** Overrides the request's skip policy for a field with its own requirement. */
+  required?: boolean;
+  input?: { label: string; maxLength?: number; preserveWhitespace?: boolean };
   textChanges?: readonly { before: string; after: string; reason: string }[];
   selection: 'single' | 'multiple';
   options: readonly QuestionFormOption[];
@@ -20,7 +23,7 @@ export type QuestionFormAnswer = {
 
 export type UserQuestionFormProps = {
   questions: readonly QuestionFormQuestion[];
-  /** Desktop question forms require every answer; only the local tool accepts a skip. */
+  /** Default skip policy for questions without their own requirement. */
   allowSkip: boolean;
   disabled: boolean;
   /**
@@ -58,11 +61,13 @@ export function useUserQuestionForm({
   const locked = disabled || busy;
   const isLast = index === questions.length - 1;
   const answered = isAnswered(answer);
-  // Submitting skips whatever is still unanswered when the request accepts skips.
-  const isComplete = allowSkip || questions.every(({ id }) => isAnswered(answers.get(id)));
+  const canSkip = !(question.required ?? !allowSkip);
+  const isComplete = questions.every(
+    ({ id, required }) => !(required ?? !allowSkip) || isAnswered(answers.get(id)),
+  );
   const action: 'submit' | 'next' | 'skip' = isLast
     ? 'submit'
-    : answered || !allowSkip
+    : answered || !canSkip
       ? 'next'
       : 'skip';
   const canAct = action === 'submit' ? isComplete : action === 'next' ? answered : true;
@@ -93,7 +98,7 @@ export function useUserQuestionForm({
   }
 
   function skip() {
-    if (!allowSkip) return;
+    if (!canSkip) return;
     change(() => ({ ...emptyAnswer, skipped: true }));
     navigate(index + 1);
   }
@@ -103,10 +108,15 @@ export function useUserQuestionForm({
     submitting.current = true;
     setBusy(true);
     setFailed(false);
-    const response = questions.map(({ id }) => {
+    const response = questions.map(({ id, input }) => {
       const answer = answers.get(id);
       return answer && isAnswered(answer)
-        ? { ...answer, text: answer.text.trim(), skipped: false, questionId: id }
+        ? {
+            ...answer,
+            text: input?.preserveWhitespace ? answer.text : answer.text.trim(),
+            skipped: false,
+            questionId: id,
+          }
         : { ...emptyAnswer, skipped: true, questionId: id };
     });
     try {

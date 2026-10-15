@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Text } from 'react-native';
 
 import { useMcpAppConversation } from '@/frontend/components/McpApp';
-import { McpContentPicker } from '@/frontend/components/McpContent';
+import { McpResourcePreview } from '@/frontend/components/McpContent';
 import type { McpResourceReference, McpResultSource } from '@/shared/contracts/mcpContent';
 
 /** User-opened resource previews use the original MCP authority, including for HTTPS URIs. */
@@ -31,7 +31,7 @@ export function McpResourceLink({
         {label}
       </Button>
       {resource ? (
-        <McpContentPicker resource={resource} onClose={() => setResource(undefined)} />
+        <McpResourcePreview resource={resource} onClose={() => setResource(undefined)} />
       ) : null}
     </>
   );

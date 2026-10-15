@@ -1,10 +1,9 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useUniwind } from 'uniwind';
 
 import { PluginIcon } from '@/frontend/components/PluginIcon';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -19,8 +18,7 @@ import { PluginRow } from './PluginRow';
 export function McpServerGroup() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { theme } = useUniwind();
-  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
+  const mcpIcon = useMcpIcon();
   const { servers: allServers } = useMcpServersApi();
   const servers = useMemo(
     () => allServers.filter((server) => server.origin !== 'builtin'),
