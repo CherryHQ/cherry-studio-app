@@ -53,6 +53,10 @@ the human editing brief. These notes guide the image model through its existing 
 contract: they are not masks or pixel-constrained edits. The persisted prompt retains the complete
 model instructions. Annotation drafts are retained per source within the mounted workspace, not
 stored in a new database schema. Completion does not close an editor containing newer input.
+While a send is being prepared or admitted, annotation selection, creation, deletion, and editor
+exit stay disabled until draft recovery finishes. Typing still belongs to the selected annotation,
+so a rejected send restores its text to the same target. This lock ends at admission, not when the
+background image generation completes.
 
 The reference popover can reopen a single image for editing. Annotation drafts recognize both the
 album attachment identity and the managed file identity, so returning before import finishes does

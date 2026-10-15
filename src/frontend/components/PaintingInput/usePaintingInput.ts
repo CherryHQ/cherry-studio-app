@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import {
   useComposerActions,
@@ -40,11 +40,10 @@ export function usePaintingInput({
   preparePrompt?: PaintingPromptPreparation;
 }) {
   const file = useBackendModule('file');
-  const { attachments, draft } = useComposerState();
+  const { attachments, draft, isSubmitting } = useComposerState();
   const { removeAttachment } = useComposerActions();
   const session = usePaintingInputSession();
   const { reference } = session;
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const strategy = createPaintingGenerationStrategy(model);
   const selection = reference.selection;
   const resolvedReference = useResolvedFile(selection?.image.fileEntryId);
@@ -165,7 +164,6 @@ export function usePaintingInput({
         paramValues: paramValuesSnapshot,
       });
       reference.beginSubmission(images);
-      setIsSubmitting(true);
       try {
         const prepared = await file.prepareAttachments({
           fileEntryIds: images.map((image) => image.fileEntryId),
@@ -196,8 +194,6 @@ export function usePaintingInput({
       } catch (error) {
         reference.rejectSubmission();
         throw error;
-      } finally {
-        setIsSubmitting(false);
       }
     },
   };

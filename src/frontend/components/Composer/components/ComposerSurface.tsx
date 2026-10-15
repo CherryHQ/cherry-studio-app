@@ -66,11 +66,10 @@ export function ComposerSurface({
     getSendErrorLabel,
     sendFailedLabel: labels?.sendFailed,
   });
-  const { attachments, draft } = useComposerState();
-  const { addAttachments, clearAttachments, setDraft } = useComposerActions();
+  const { attachments, draft, isSubmitting } = useComposerState();
+  const { addAttachments, beginSendAttempt, clearAttachments, endSendAttempt, setDraft } =
+    useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
-  const activeSendAttemptIdRef = useRef<number | null>(null);
-  const nextSendAttemptIdRef = useRef(0);
   // The composer's actions must not change with what was typed (see CherryUI's `Composer`), and
   // callers rebuild their handlers on every update, so the handlers read these when invoked.
   const latest = useRef({ attachments, draft, onSend, onStop });
@@ -80,13 +79,6 @@ export function ComposerSurface({
 
   const handleSend = useCallback(async () => {
     const { attachments, draft, onSend } = latest.current;
-    if (activeSendAttemptIdRef.current !== null) {
-      logger.debug('Ignored duplicate message send', {
-        attemptId: activeSendAttemptIdRef.current,
-      });
-      return;
-    }
-
     const attachmentSnapshot = attachments.filter(isComposerAttachmentReady);
     if (attachmentSnapshot.length !== attachments.length) {
       logger.warn('Ignored message send with attachments that are not ready');
@@ -94,8 +86,11 @@ export function ComposerSurface({
       return;
     }
 
-    const attemptId = ++nextSendAttemptIdRef.current;
-    activeSendAttemptIdRef.current = attemptId;
+    const attemptId = beginSendAttempt();
+    if (attemptId === null) {
+      logger.debug('Ignored duplicate message send');
+      return;
+    }
 
     const draftSnapshot = draft;
 
@@ -115,12 +110,14 @@ export function ComposerSurface({
       );
       addAttachments([...attachmentSnapshot]);
     } finally {
-      activeSendAttemptIdRef.current = null;
+      endSendAttempt();
     }
   }, [
+    beginSendAttempt,
     clearAttachments,
     dismissInput,
     dismissKeyboardOnSend,
+    endSendAttempt,
     reportSendError,
     labels?.sendFailed,
     addAttachments,
@@ -139,6 +136,7 @@ export function ComposerSurface({
   return (
     <Composer
       canSend={
+        !isSubmitting &&
         !hasImportingComposerAttachments(attachments) &&
         (canSend ?? hasComposerSendableContent(draft, attachments))
       }

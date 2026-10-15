@@ -31,9 +31,12 @@ import {
 type ComposerStateContextValue = {
   attachments: readonly ComposerAttachmentDraft[];
   draft: string;
+  isSubmitting: boolean;
 };
 
 type ComposerActionsContextValue = {
+  beginSendAttempt: () => number | null;
+  endSendAttempt: () => void;
   subscribeAttachmentChanges?: (
     listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
   ) => () => void;
@@ -111,6 +114,21 @@ export function ComposerProvider({
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeSendAttemptIdRef = useRef<number | null>(null);
+  const nextSendAttemptIdRef = useRef(0);
+  // The surface may remount while file preparation or draft recovery is pending.
+  const beginSendAttempt = useCallback(() => {
+    if (activeSendAttemptIdRef.current !== null) return null;
+    const attemptId = ++nextSendAttemptIdRef.current;
+    activeSendAttemptIdRef.current = attemptId;
+    setIsSubmitting(true);
+    return attemptId;
+  }, []);
+  const endSendAttempt = useCallback(() => {
+    activeSendAttemptIdRef.current = null;
+    setIsSubmitting(false);
+  }, []);
   const presentation = useComposerPresentation(inputRef);
   const [localAttachments, setLocalAttachmentState] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,
@@ -162,10 +180,15 @@ export function ComposerProvider({
   const replaceAttachment = attachmentStore?.replaceAttachment ?? replaceLocalAttachment;
   const subscribeAttachmentChanges = attachmentStore?.subscribeAttachmentChanges;
 
-  const stateValue = useMemo(() => ({ attachments, draft }), [attachments, draft]);
+  const stateValue = useMemo(
+    () => ({ attachments, draft, isSubmitting }),
+    [attachments, draft, isSubmitting],
+  );
 
   const actionsValue = useMemo(
     () => ({
+      beginSendAttempt,
+      endSendAttempt,
       addAttachments,
       clearAttachments,
       removeAttachment,
@@ -175,6 +198,8 @@ export function ComposerProvider({
       subscribeAttachmentChanges,
     }),
     [
+      beginSendAttempt,
+      endSendAttempt,
       addAttachments,
       clearAttachments,
       removeAttachment,

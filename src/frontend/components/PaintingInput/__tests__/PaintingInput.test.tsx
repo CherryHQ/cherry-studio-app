@@ -11,7 +11,11 @@ import { PaintingInputProvider, usePaintingInputSession } from '../PaintingInput
 
 let mockSurfaceProps: ComponentProps<typeof ComposerSurface>;
 let mockSession: ReturnType<typeof usePaintingInputSession>;
-let mockComposerState: { attachments: ComposerAttachmentReady[]; draft: string };
+let mockComposerState: {
+  attachments: ComposerAttachmentReady[];
+  draft: string;
+  isSubmitting?: boolean;
+};
 let mockModel: Model;
 const mockGenerate = jest.fn(async (_input: unknown) => undefined);
 const mockPrepareAttachments = jest.fn(
@@ -80,7 +84,7 @@ jest.mock('@/frontend/components/Composer', () => ({
   },
   useComposerActions: () => ({ removeAttachment: jest.fn(), clearAttachments: jest.fn() }),
   useComposerPresentationActions: () => ({ runInputReplacement: jest.fn() }),
-  useComposerState: () => mockComposerState,
+  useComposerState: () => ({ isSubmitting: false, ...mockComposerState }),
 }));
 
 type HarnessProps = {
@@ -188,7 +192,7 @@ describe('capability-aware painting input', () => {
     mockPrepareAttachments.mockReturnValueOnce(preparation.promise);
     expect(referenceIds()).toEqual(['first']);
     let sending!: Promise<void>;
-    mockComposerState = { attachments: [], draft: '' };
+    mockComposerState = { attachments: [], draft: '', isSubmitting: true };
     act(() => {
       sending = mockSurfaceProps.onSend({ attachments: [], text: 'Make it blue' });
     });
@@ -204,6 +208,7 @@ describe('capability-aware painting input', () => {
         attachments: [expect.objectContaining({ fileEntryId: 'first' })],
       }),
     );
+    mockComposerState = { attachments: [], draft: '' };
     update({ status: 'generating' });
     expect(referenceIds()).toEqual([]);
     update({ outputs: ['second'] });
