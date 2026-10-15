@@ -7,7 +7,14 @@ import {
   useComposerExpansion,
 } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef } from 'react';
+import {
+  type ComponentProps,
+  type PropsWithChildren,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type LayoutChangeEvent,
@@ -52,6 +59,48 @@ export function ChatInputComposer(props: ComponentProps<typeof ComposerSurface>)
       {...props}
       streaming={props.streaming && !hasComposerSendableContent(draft, attachments)}
     />
+  );
+}
+
+/** Attachments and the large editor's collapse control share the top row. */
+export function ChatInputAccessories({ children }: PropsWithChildren) {
+  const { t } = useTranslation();
+  const expansion = useComposerExpansion();
+  const isExpanded = expansion?.state.isExpanded ?? false;
+  const progress = expansion?.meta.progress;
+  const rowStyle = useAnimatedStyle(() => ({
+    minHeight: restingActionSlotWidth * (progress?.get() ?? 0),
+    paddingRight: restingActionSlotWidth * (progress?.get() ?? 0),
+  }));
+  const actionStyle = useAnimatedStyle(() => ({ opacity: progress?.get() ?? 0 }));
+
+  return (
+    <Composer.ExpansionMeasure>
+      <Animated.View className="relative" style={rowStyle}>
+        {children}
+        {expansion ? (
+          <Animated.View
+            accessibilityElementsHidden={!isExpanded}
+            className="absolute top-0 right-0 size-8"
+            importantForAccessibility={isExpanded ? 'auto' : 'no-hide-descendants'}
+            pointerEvents={isExpanded ? 'auto' : 'none'}
+            style={actionStyle}
+          >
+            <Pressable
+              accessibilityLabel={t('chat.input.action.collapseEditor')}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isExpanded }}
+              className="flex-1 items-center justify-center"
+              hitSlop={6}
+              onPress={expansion.actions.collapse}
+              testID="chat-composer-collapse"
+            >
+              <Minimize2Icon className="size-5 text-muted-foreground" />
+            </Pressable>
+          </Animated.View>
+        ) : null}
+      </Animated.View>
+    </Composer.ExpansionMeasure>
   );
 }
 
@@ -184,32 +233,27 @@ export function ChatInputSurface({
             layout={isExpanded ? 'fill' : 'content'}
             onLayout={isExpanded ? undefined : handleFieldLayout}
             placeholder={placeholder}
-            style={[
-              isExpanded ? undefined : fieldStyle,
-              expansion && isInputActive ? fieldActionInsetStyle : undefined,
-            ]}
+            style={
+              isExpanded
+                ? undefined
+                : [fieldStyle, expansion && isInputActive ? fieldActionInsetStyle : undefined]
+            }
             attachmentMode={attachmentMode}
             testID="chat-composer-input"
           />
         </View>
       </Animated.View>
-      {expansion && isInputActive ? (
+      {expansion && isInputActive && !isExpanded ? (
         <Pressable
-          accessibilityLabel={t(
-            isExpanded ? 'chat.input.action.collapseEditor' : 'chat.input.action.expandEditor',
-          )}
+          accessibilityLabel={t('chat.input.action.expandEditor')}
           accessibilityRole="button"
-          accessibilityState={{ expanded: isExpanded }}
+          accessibilityState={{ expanded: false }}
           className="absolute top-0 right-0 size-8 items-center justify-center"
           hitSlop={6}
-          onPress={isExpanded ? expansion.actions.collapse : expansion.actions.expand}
-          testID={isExpanded ? 'chat-composer-collapse' : 'chat-composer-expand'}
+          onPress={expansion.actions.expand}
+          testID="chat-composer-expand"
         >
-          {isExpanded ? (
-            <Minimize2Icon className="size-5 text-muted-foreground" />
-          ) : (
-            <Maximize2Icon className="size-5 text-muted-foreground" />
-          )}
+          <Maximize2Icon className="size-5 text-muted-foreground" />
         </Pressable>
       ) : null}
       <Animated.View

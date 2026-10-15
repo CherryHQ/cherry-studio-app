@@ -33,7 +33,7 @@ import {
 } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
 
-import { ChatInputSurface } from '../components/ChatInput';
+import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 import { restoreRemoteInput } from './restoreRemoteInput';
@@ -221,7 +221,7 @@ export function RemoteComposer({
         }}
         testID="chat-composer"
       >
-        <Composer.ExpansionMeasure>
+        <ChatInputAccessories>
           <ComposerAttachments
             transfer={(file) => {
               if (!preparation) return undefined;
@@ -271,7 +271,7 @@ export function RemoteComposer({
               </Button>
             </View>
           ) : null}
-        </Composer.ExpansionMeasure>
+        </ChatInputAccessories>
         <ChatInputSurface
           attachmentMode={supportsAttachments ? 'images' : 'text-only'}
           streaming={canStop}

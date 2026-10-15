@@ -36,8 +36,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   surface below the top safe area, with a collapse action and no heading. Its background fills
   both screen edges and extends through the footer and bottom safe area. Local and
   remote conversations share the same field and toolbar; large-editor layout never remounts the
-  native input or clears its buffer. The expanded field fills the available region and scrolls
-  natively. The compact height cap remains unchanged.
+  native input or clears its buffer. The collapse control shares the top accessory row with
+  attachments; only that row reserves its width. The expanded field below uses the full content
+  width and scrolls natively. The compact height cap remains unchanged.
 - Expansion preserves spatial continuity: the top edge grows upward while toolbar actions stay
   at the dock's bottom anchor. The isolated composer frame uses the shared 250ms settle curve;
   backdrop and opaque surface follow that progress, with no opacity on glass-control ancestors.

@@ -1,4 +1,3 @@
-import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View } from 'react-native';
@@ -35,7 +34,7 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
+import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -361,7 +360,7 @@ function TextChatInput({
                     streaming={isBusy}
                     testID="chat-composer"
                   >
-                    <Composer.ExpansionMeasure>
+                    <ChatInputAccessories>
                       <View
                         accessibilityElementsHidden={isPickerVisible}
                         importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
@@ -371,7 +370,7 @@ function TextChatInput({
                         <ComposerAttachments />
                         {mode === 'standard' ? <McpAppContextNotice /> : null}
                       </View>
-                    </Composer.ExpansionMeasure>
+                    </ChatInputAccessories>
                     <ChatInputSurface
                       streaming={isBusy}
                       placeholder={
