@@ -331,11 +331,11 @@ export function projectPiTurn(options: {
         const state = streaming && index === message.content.length - 1 ? 'streaming' : 'done';
         const previous = parts.at(-1);
         // Adjacent summaries remain one phase, including across provider retries.
-        // Opaque items stay in model history and keep a growing phase active without an empty row.
+        // Keep a growing phase visible even before its first readable summary arrives.
         if (previous?.type === 'reasoning') {
           if (block.thinking.trim()) previous.text += `\n\n${block.thinking}`;
           previous.state = state;
-        } else if (block.thinking.trim()) {
+        } else if (block.thinking.trim() || state === 'streaming') {
           parts.push({ id, type: 'reasoning', text: block.thinking, state });
         }
         return;

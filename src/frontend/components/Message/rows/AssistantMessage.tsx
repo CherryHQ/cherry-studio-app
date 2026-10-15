@@ -9,6 +9,11 @@ import {
 } from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
+import {
+  getToolDisplayState,
+  isProviderWebSearchToolPart,
+  isToolMessagePart,
+} from '../parts/tools/toolPartState';
 import type { MessageListItem } from '../types';
 
 type AssistantMessageProps = {
@@ -28,20 +33,45 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   message: MessageListItem;
 }) {
   const { t } = useTranslation();
+  const parts = message.data.parts ?? [];
+  const isPending = message.status === 'pending';
   const isPendingEmptyMessage =
-    message.status === 'pending' &&
-    !message.data.parts?.some(
-      (part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped',
-    );
+    isPending &&
+    !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
+  const latestActivityPart = isPending
+    ? parts.findLast(
+        (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
+      )
+    : undefined;
+  const isWaitingForResponse =
+    isPending &&
+    !parts.some((part) => {
+      if (part.type === 'data-compaction-anchor') return part.data.status === 'compacting';
+      if (isToolMessagePart(part)) {
+        return (
+          part.state === 'approval-requested' ||
+          (!isProviderWebSearchToolPart(part) && getToolDisplayState(part) === 'running')
+        );
+      }
+      return (
+        part === latestActivityPart &&
+        (part.type === 'text' || part.type === 'reasoning') &&
+        part.state === 'streaming' &&
+        (part.type === 'reasoning' || part.text.trim().length > 0)
+      );
+    });
 
   if (isPendingEmptyMessage && message.imageGeneration) {
     return <PendingImageMessage settings={message.imageGeneration} />;
   }
 
-  return isPendingEmptyMessage ? (
-    <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
-  ) : (
-    <MessageParts message={message} />
+  return (
+    <>
+      {!isPendingEmptyMessage ? <MessageParts message={message} /> : null}
+      {isWaitingForResponse ? (
+        <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
+      ) : null}
+    </>
   );
 });
 

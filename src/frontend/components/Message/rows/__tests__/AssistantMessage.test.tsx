@@ -59,7 +59,9 @@ describe('AssistantMessage', () => {
   });
 
   test('renders structured parts once assistant content is available', () => {
-    const message = createAssistantMessage('pending', [{ text: 'Thinking', type: 'text' }]);
+    const message = createAssistantMessage('pending', [
+      { state: 'streaming', text: 'Thinking', type: 'text' },
+    ]);
 
     act(() => {
       renderer = create(<AssistantMessage message={message} />);
@@ -67,6 +69,108 @@ describe('AssistantMessage', () => {
 
     expect(mockMessageParts).toHaveBeenCalledWith({ message });
     expect(mockMessagePartPending).not.toHaveBeenCalled();
+  });
+
+  test('keeps activity visible after answering a question until the reply settles', () => {
+    const question = {
+      type: 'dynamic-tool' as const,
+      toolName: 'ask_user_question',
+      toolCallId: 'question',
+      input: {},
+    };
+    act(() => {
+      renderer = create(
+        <AssistantMessage
+          message={createAssistantMessage('pending', [{ ...question, state: 'input-available' }])}
+        />,
+      );
+    });
+    expect(mockMessagePartPending).not.toHaveBeenCalled();
+
+    const answered = { ...question, state: 'output-available' as const, output: {} };
+    const waiting = createAssistantMessage('pending', [answered]);
+    act(() => renderer!.update(<AssistantMessage message={waiting} />));
+    expect(mockMessageParts).toHaveBeenLastCalledWith({ message: waiting });
+    expect(mockMessagePartPending).toHaveBeenCalledWith({
+      accessibilityLabel: 'chat.message.waitingForResponse',
+    });
+
+    mockMessagePartPending.mockClear();
+    act(() =>
+      renderer!.update(
+        <AssistantMessage message={createAssistantMessage('success', [answered])} />,
+      ),
+    );
+    expect(mockMessagePartPending).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    {
+      name: 'completed text',
+      parts: [{ type: 'text', state: 'done', text: 'Working on it.' }],
+      waiting: true,
+    },
+    {
+      name: 'empty streaming text',
+      parts: [{ type: 'text', state: 'streaming', text: '' }],
+      waiting: true,
+    },
+    {
+      name: 'empty streaming reasoning',
+      parts: [{ type: 'reasoning', state: 'streaming', text: '' }],
+      waiting: false,
+    },
+    {
+      name: 'running tool',
+      parts: [
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'input-available',
+          input: {},
+        },
+      ],
+      waiting: false,
+    },
+    {
+      name: 'pending approval',
+      parts: [
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'approval-requested',
+          input: {},
+          approval: { id: 'approval' },
+        },
+      ],
+      waiting: false,
+    },
+    {
+      name: 'earlier reasoning followed by a completed tool',
+      parts: [
+        { type: 'reasoning', state: 'streaming', text: 'Earlier reasoning' },
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'output-available',
+          input: {},
+          output: {},
+        },
+      ],
+      waiting: true,
+    },
+  ] satisfies {
+    name: string;
+    parts: NonNullable<MessageListItem['data']['parts']>;
+    waiting: boolean;
+  }[])('shows waiting=$waiting for $name', ({ parts, waiting }) => {
+    act(() => {
+      renderer = create(<AssistantMessage message={createAssistantMessage('pending', parts)} />);
+    });
+    expect(mockMessagePartPending).toHaveBeenCalledTimes(waiting ? 1 : 0);
   });
 
   test('renders composed children after the message body', () => {

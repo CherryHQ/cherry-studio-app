@@ -18,6 +18,7 @@ import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../d
 import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
+import { hasResponseContent } from './piStreamEvents';
 
 type InputView = { record: SubmissionRecord; metadata: JsonObject | undefined };
 const logger = loggerService.withContext('PiDurableObserver');
@@ -186,11 +187,16 @@ export class PiDurableObserver {
           if (event.message.role === 'assistant') {
             this.partial = event.message;
             // The failed attempt's own message follows its retry event in the same batch.
-            if (event.message.stopReason !== 'error') this.retrying = false;
+            if (event.message.stopReason !== 'error' && hasResponseContent(event.message))
+              this.retrying = false;
           }
           break;
         case 'message_update':
-          if (this.partial) this.partial = updatedMessage(this.partial, event.changes, event.usage);
+          if (this.partial) {
+            this.partial = updatedMessage(this.partial, event.changes, event.usage);
+            if (this.partial.stopReason !== 'error' && hasResponseContent(this.partial))
+              this.retrying = false;
+          }
           break;
         case 'message_end':
           this.entries.set(event.entry.id, event.entry);
