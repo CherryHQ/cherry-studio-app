@@ -1,110 +1,133 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
-import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 
 import {
   preparePaintingAnnotationPrompts,
   type PaintingAnnotation,
 } from '../utils/paintingAnnotations';
 
-/** Keep the draft's annotation identity fixed until send recovery has finished. */
-export function usePaintingAnnotationDraft({
-  initialAnnotations,
-  onAnnotationsChange,
-  onClose,
-  onGenerate,
-}: {
-  initialAnnotations: readonly PaintingAnnotation[];
-  onAnnotationsChange: (annotations: readonly PaintingAnnotation[]) => void;
-  onClose: () => void;
-  onGenerate: (input: PaintingInputSubmission) => Promise<unknown>;
-}) {
+type AnnotationState = {
+  /** Unsent annotations per image, so switching images and back keeps them. */
+  byImage: Readonly<Record<string, readonly PaintingAnnotation[]>>;
+  /** The whole-image request, kept aside while the composer edits an annotation. */
+  generalDraft: string;
+  imageKey: string | null;
+  selectedId: number | null;
+};
+
+const noAnnotations: readonly PaintingAnnotation[] = [];
+
+/**
+ * Positional notes on the focused image. The composer has one text field, so
+ * selecting an annotation swaps the field to that note's text and selecting
+ * "whole image" swaps it back; typing always belongs to the current selection.
+ * Changing the focused image saves the selected note and returns the field to
+ * the whole-image request.
+ */
+export function usePaintingAnnotationDraft(imageKey: string | null) {
   const { t } = useTranslation();
   const { draft, isSubmitting } = useComposerState();
   const { setDraft } = useComposerActions();
-  const [annotations, setAnnotations] = useState(initialAnnotations);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [generalDraft, setGeneralDraft] = useState(draft);
-  const submittedAnnotations = useRef<readonly PaintingAnnotation[] | null>(null);
-  const latest = useRef<{ draft: string; annotations: readonly PaintingAnnotation[] } | null>(null);
-  useLayoutEffect(() => {
-    latest.current = { draft, annotations };
-    return () => {
-      latest.current = null;
-    };
-  }, [draft, annotations]);
+  const [state, setState] = useState<AnnotationState>(() => ({
+    byImage: {},
+    generalDraft: draft,
+    imageKey,
+    selectedId: null,
+  }));
 
-  function updateAnnotations(next: readonly PaintingAnnotation[]) {
-    setAnnotations(next);
-    onAnnotationsChange(next);
+  function savedSelection(current: AnnotationState): AnnotationState {
+    if (current.selectedId === null || current.imageKey === null) {
+      return { ...current, generalDraft: draft };
+    }
+    const annotations = current.byImage[current.imageKey] ?? noAnnotations;
+    return {
+      ...current,
+      byImage: {
+        ...current.byImage,
+        [current.imageKey]: annotations.map((annotation) =>
+          annotation.id === current.selectedId ? { ...annotation, text: draft } : annotation,
+        ),
+      },
+    };
   }
 
-  function saveCurrentDraft() {
-    if (selectedId === null) {
-      setGeneralDraft(draft);
-      return annotations;
-    }
-    const next = annotations.map((annotation) =>
-      annotation.id === selectedId ? { ...annotation, text: draft } : annotation,
-    );
-    updateAnnotations(next);
-    return next;
+  // Render-phase adjustment: the guard makes it converge in one extra pass.
+  if (state.imageKey !== imageKey) {
+    const saved = savedSelection(state);
+    if (state.selectedId !== null) setDraft(saved.generalDraft);
+    setState({ ...saved, imageKey, selectedId: null });
+  }
+
+  const annotations = (imageKey && state.byImage[imageKey]) || noAnnotations;
+
+  function update(next: readonly PaintingAnnotation[], current: AnnotationState) {
+    if (!current.imageKey) return current;
+    return { ...current, byImage: { ...current.byImage, [current.imageKey]: next } };
   }
 
   return {
     annotations,
-    selectedId,
     isSubmitting,
-    selectAnnotation(id: number | null) {
-      if (isSubmitting || id === selectedId) return;
-      const saved = saveCurrentDraft();
-      setSelectedId(id);
-      setDraft(id === null ? generalDraft : (saved.find((item) => item.id === id)?.text ?? ''));
-    },
+    selectedId: state.selectedId,
     addAnnotation(x: number, y: number) {
-      if (isSubmitting) return;
-      const saved = saveCurrentDraft();
-      const id = saved.reduce((highest, item) => Math.max(highest, item.id), 0) + 1;
-      updateAnnotations([...saved, { id, x, y, text: '' }]);
-      setSelectedId(id);
+      if (isSubmitting || !imageKey) return;
+      const saved = savedSelection(state);
+      const existing = saved.byImage[imageKey] ?? noAnnotations;
+      const id = existing.reduce((highest, item) => Math.max(highest, item.id), 0) + 1;
+      setState({ ...update([...existing, { id, text: '', x, y }], saved), selectedId: id });
       setDraft('');
     },
-    removeSelectedAnnotation() {
-      if (isSubmitting || selectedId === null) return;
-      updateAnnotations(annotations.filter((annotation) => annotation.id !== selectedId));
-      setSelectedId(null);
-      setDraft(generalDraft);
+    selectAnnotation(id: number | null) {
+      if (isSubmitting || id === state.selectedId) return;
+      const saved = savedSelection(state);
+      setState({ ...saved, selectedId: id });
+      const current = (imageKey && saved.byImage[imageKey]) || noAnnotations;
+      setDraft(
+        id === null ? saved.generalDraft : (current.find((item) => item.id === id)?.text ?? ''),
+      );
     },
-    close() {
+    removeAnnotation(id: number) {
       if (isSubmitting) return;
-      saveCurrentDraft();
-      if (selectedId !== null) setDraft(generalDraft);
-      setSelectedId(null);
-      onClose();
+      const saved = savedSelection(state);
+      const remaining = annotations.filter((annotation) => annotation.id !== id);
+      const wasSelected = state.selectedId === id;
+      setState({
+        ...update(remaining, saved),
+        selectedId: wasSelected ? null : state.selectedId,
+      });
+      if (wasSelected) setDraft(saved.generalDraft);
     },
+    /**
+     * Freezes the request for submission: the model receives positional
+     * instructions, the board shows the human brief.
+     */
     preparePrompt(text: string) {
-      const next =
-        selectedId === null
+      const notes =
+        state.selectedId === null
           ? annotations
           : annotations.map((annotation) =>
-              annotation.id === selectedId ? { ...annotation, text } : annotation,
+              annotation.id === state.selectedId ? { ...annotation, text } : annotation,
             );
-      updateAnnotations(next);
-      submittedAnnotations.current = next;
-      return preparePaintingAnnotationPrompts(t, selectedId === null ? text : generalDraft, next);
+      return preparePaintingAnnotationPrompts(
+        t,
+        state.selectedId === null ? text : state.generalDraft,
+        notes,
+      );
     },
-    async generate(input: PaintingInputSubmission) {
-      const result = await onGenerate(input);
-      if (
-        result &&
-        latest.current &&
-        !latest.current.draft &&
-        latest.current.annotations === submittedAnnotations.current
-      )
-        onClose();
-      return result;
+    /** A sent request consumes the image's notes; a rejected one keeps them. */
+    clearSubmitted(submittedKey: string) {
+      setState((current) => {
+        const byImage = { ...current.byImage };
+        delete byImage[submittedKey];
+        return {
+          ...current,
+          byImage,
+          generalDraft: '',
+          selectedId: current.imageKey === submittedKey ? null : current.selectedId,
+        };
+      });
     },
   };
 }

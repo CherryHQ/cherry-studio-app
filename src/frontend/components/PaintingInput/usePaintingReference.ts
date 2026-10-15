@@ -21,6 +21,11 @@ export function usePaintingReference(
   result: PaintingInputResult | undefined,
   draft: string,
   attachments: readonly ComposerAttachmentDraft[],
+  /**
+   * Whether a single submitted image becomes the next turn's reference. Chat
+   * continues from it; a caller that attaches its own reference turns it off.
+   */
+  adoptSubmitted = true,
 ) {
   const attachmentKey = JSON.stringify(attachments.map((item) => [item.id, item.fileEntryId]));
   const [state, setState] = useState(() => ({
@@ -92,7 +97,7 @@ export function usePaintingReference(
         isPickerOpen: false,
         selection:
           value.selection ??
-          (images.length === 1 && images[0].kind === 'image'
+          (adoptSubmitted && images.length === 1 && images[0].kind === 'image'
             ? { image: images[0], origin: 'explicit' }
             : undefined),
       })),

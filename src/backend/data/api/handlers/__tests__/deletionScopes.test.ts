@@ -45,4 +45,36 @@ describe('Data API deletion scopes', () => {
 
     expect(trace).toEqual(['cancel', 'settled', 'deleteMany']);
   });
+
+  it('drains generations on every painting of a board before deleting the board', async () => {
+    let finish!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    scopes.register({
+      cancel: () => {
+        trace.push('cancel');
+        setTimeout(() => {
+          trace.push('settled');
+          finish();
+        }, 0);
+      },
+      kind: 'painting.generate',
+      scopes: [{ id: 'painting-2', kind: 'painting' }],
+      settled,
+    });
+    const service = {
+      deleteBoard: jest.fn(async () => {
+        trace.push('deleteBoard');
+      }),
+      listByBoard: jest.fn(async () => [{ id: 'painting-1' }, { id: 'painting-2' }]),
+    } as unknown as PaintingService;
+
+    await createPaintingHandlers(service)['/painting-boards/:id'].DELETE({
+      params: { id: 'board-1' },
+    });
+
+    expect(service.listByBoard).toHaveBeenCalledWith('board-1');
+    expect(trace).toEqual(['cancel', 'settled', 'deleteBoard']);
+  });
 });

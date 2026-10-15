@@ -1,1 +1,0 @@
-export { PaintingViewerScreen } from './PaintingViewerScreen';

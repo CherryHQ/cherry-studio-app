@@ -7,6 +7,10 @@ import type { Painting } from '@/shared/data/types/painting';
 import type { ResolvedFile } from './file';
 
 export type PaintingGenerationInput = {
+  /** The board to grow; omitted for the first generation of a new board. */
+  boardId?: string;
+  /** Human-written request when the model prompt was expanded from it. */
+  brief?: string;
   fileEntryIds: readonly FileEntryId[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
@@ -41,6 +45,8 @@ export type ResolvedPaintingFiles = {
 };
 
 export type PaintingGenerationStart = {
+  /** The board the receipt was written into — created when the input named none. */
+  boardId: string;
   jobId: string;
   /**
    * The receipt this job writes into — the caller has no other way to learn it

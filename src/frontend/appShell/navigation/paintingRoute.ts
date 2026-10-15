@@ -10,17 +10,3 @@ export function paintingRouteId(params?: {
   const paintingId = getSingleRouteParam(params?.paintingId);
   return paintingId ? `painting:${paintingId}` : undefined;
 }
-
-/** A viewer shows one output, so reopening that output reuses its page instead of stacking a copy. */
-export function paintingViewerRouteId(params?: {
-  fileEntryId?: string | string[];
-  paintingId?: string | string[];
-  workspaceId?: string | string[];
-}): string | undefined {
-  const paintingId = getSingleRouteParam(params?.paintingId);
-  const fileEntryId = getSingleRouteParam(params?.fileEntryId);
-  const workspaceId = getSingleRouteParam(params?.workspaceId);
-  return paintingId && fileEntryId
-    ? `${paintingId}/${fileEntryId}${workspaceId ? `/workspace:${workspaceId}` : ''}`
-    : undefined;
-}
