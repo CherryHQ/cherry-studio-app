@@ -32,8 +32,8 @@ import type {
 import {
   McpAuthorizationError,
   type McpOAuthStartInput,
-  type McpContentEntry,
   type McpContentPreview,
+  type McpPromptEntry,
 } from '@/shared/contracts/mcp';
 import type {
   McpAppReference,
@@ -54,7 +54,7 @@ import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
 import { mcpToolAppUri, mcpToolVisible } from './mcpAppMetadata';
 import { McpAppRuntime } from './McpAppRuntime';
-import { listMcpContent, readMcpContent } from './mcpContent';
+import { listMcpPrompts, readMcpContent } from './mcpContent';
 import { McpElicitationBroker } from './mcpElicitation';
 import {
   classifyMcpCallRejection,
@@ -147,6 +147,10 @@ type ServerRuntimeState = {
   connectionKey?: Promise<string>;
   connectionPromise?: Promise<McpRuntimeClient>;
   discoveryFailure?: { attempts: number; nextAttemptAt: number };
+  prompts?: McpPromptEntry[];
+  promptRefresh?: Promise<void>;
+  promptRefreshQueued?: boolean;
+  catalogWrite?: Promise<void>;
   generation: number;
   refresh?: Promise<void>;
   runtimeError?: string;
@@ -218,7 +222,10 @@ function createMcpClient(
   pluginAuthorizations: PluginAuthorizationManager,
   foreground: boolean,
   authorization: McpOAuthRuntime,
-  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onToolsChanged'>,
+  pooled?: Pick<
+    Parameters<typeof createRemoteMcpClient>[0],
+    'elicit' | 'onToolsChanged' | 'onPromptsChanged'
+  >,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
@@ -281,6 +288,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private readonly catalogPreparations = new Map<string, Promise<void>>();
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
+  private readonly promptCatalogListeners = new Set<() => void>();
 
   constructor(private readonly traces?: TraceRecorder) {
     super();
@@ -557,10 +565,58 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
   }
 
-  async listContent(serverId: string, signal?: AbortSignal): Promise<McpContentEntry[]> {
-    return this.withContentClient(serverId, signal, (client, _server, requestSignal) =>
-      listMcpContent(client, requestSignal),
+  readonly subscribePromptCatalogs = (listener: () => void): (() => void) => {
+    this.promptCatalogListeners.add(listener);
+    return () => this.promptCatalogListeners.delete(listener);
+  };
+
+  /** Read only the current connections' memory/disk catalogs, without opening a client. */
+  async getCachedPrompts(): Promise<Readonly<Record<string, readonly McpPromptEntry[]>>> {
+    const { items: servers } = await mcpServerService.list({ isEnabled: true });
+    const catalogs = await Promise.all(
+      servers
+        .filter((server) => server.isEnabled && server.origin !== 'builtin')
+        .map(async (server) => {
+          const state = this.getRuntimeState(server);
+          await this.restoreCatalog(server, state);
+          return [server.id, this.isCurrentState(state) ? (state.prompts ?? []) : []] as const;
+        }),
     );
+    return Object.fromEntries(catalogs);
+  }
+
+  async readPrompt(
+    agentId: string,
+    serverId: string,
+    name: string,
+    args: Record<string, string>,
+    signal?: AbortSignal,
+  ): Promise<McpContentPreview> {
+    const { items: bindings } = await agentToolBindingService.list(agentId);
+    if (
+      !bindings.some(
+        (binding) =>
+          binding.serverId === serverId &&
+          !binding.rawToolName &&
+          binding.enabled &&
+          binding.approval !== 'deny',
+      )
+    )
+      throw unavailableToolError();
+    const server = await mcpServerService.getById(serverId);
+    if (!server.isEnabled || server.origin === 'builtin') throw unavailableToolError();
+    const state = this.getRuntimeState(server);
+    await this.restoreCatalog(server, state);
+    const entry = state.prompts?.find((item) => item.key === name);
+    if (!entry) throw unavailableToolError();
+    return this.withContentClient(serverId, signal, (client, current, requestSignal) => {
+      if (
+        !this.isCurrentState(state) ||
+        !isSameMcpConnectionConfig(state.connectionConfig, toMcpConnectionConfig(current))
+      )
+        throw unavailableToolError();
+      return readMcpContent(client, current.name, entry, args, requestSignal);
+    });
   }
 
   async readResultResource(
@@ -585,20 +641,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
         );
       },
     );
-  }
-
-  async readContent(
-    serverId: string,
-    entry: McpContentEntry,
-    args: Record<string, string>,
-    signal?: AbortSignal,
-  ): Promise<McpContentPreview> {
-    return this.withContentClient(serverId, signal, async (client, server, requestSignal) => {
-      const catalog = await listMcpContent(client, requestSignal);
-      const current = catalog.find((item) => item.kind === entry.kind && item.key === entry.key);
-      if (!current) throw unavailableToolError();
-      return readMcpContent(client, server.name, current, args, requestSignal);
-    });
   }
 
   private async withContentClient<T>(
@@ -775,6 +817,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * against a service nothing will read again.
    */
   protected async onStop(): Promise<void> {
+    this.promptCatalogListeners.clear();
     await this.apps.stop();
     this.elicitations.stop();
     this.catalogPreparations.clear();
@@ -804,6 +847,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       this.runtimeSnapshots.delete(serverId);
       deleteMcpToolCatalog(serverId);
     }
+    this.notifyPromptCatalogs();
   }
 
   /**
@@ -888,6 +932,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         source: 'stored',
         tools: stored.tools,
       };
+      state.prompts ??= stored.prompts;
       this.runtimeSnapshots.set(server.id, {
         ...this.runtimeSnapshots.get(server.id),
         connectionConfig: state.connectionConfig,
@@ -1028,6 +1073,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
         onToolsChanged: () => {
           if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
         },
+        onPromptsChanged: () => {
+          if (state.client && this.isCurrentState(state, generation))
+            this.refreshPrompts(server, state, state.client);
+        },
       },
     )
       .then((client) => {
@@ -1037,6 +1086,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         }
         state.client = client;
         client.setForeground?.(this.foreground);
+        if (server.origin !== 'builtin') this.refreshPrompts(server, state, client);
         trace?.end('ok');
         return client;
       })
@@ -1101,6 +1151,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.abort.abort();
     state.abort = new AbortController();
     state.connectionPromise = undefined;
+    state.promptRefresh = undefined;
+    state.promptRefreshQueued = false;
     state.clientListed = false;
     if (state.client) {
       this.closeQuietly(state.client);
@@ -1424,19 +1476,74 @@ export class McpRuntimeService extends BaseService implements McpModule {
       protocol,
       toolCount: rawTools.length,
     });
-    if (discoveryWarnings.length === 0) {
-      const connectionKey = await this.getConnectionKey(state);
-      if (!this.isCurrentState(state)) return rawTools;
-      await writeMcpToolCatalog({
-        connectionKey,
-        discoveredAt,
-        expiresAt,
-        serverId: server.id,
-        tools: rawTools,
-        version: 2,
-      });
-    }
+    await this.persistCatalog(server, state);
     return rawTools;
+  }
+
+  private refreshPrompts(
+    server: McpServer,
+    state: ServerRuntimeState,
+    client: McpRuntimeClient,
+  ): void {
+    if (state.promptRefresh) {
+      state.promptRefreshQueued = true;
+      return;
+    }
+    const generation = state.generation;
+    const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS, state.abort.signal);
+    const refresh = listMcpPrompts(client, bound.signal)
+      .then(async (prompts) => {
+        if (!this.isCurrentState(state, generation)) return;
+        state.prompts = prompts;
+        this.notifyPromptCatalogs();
+        await this.persistCatalog(server, state);
+      })
+      .catch((error: unknown) => {
+        if (this.isCurrentState(state, generation))
+          logger.warn('Could not refresh the MCP prompt catalog', error as Error, {
+            serverId: server.id,
+          });
+      })
+      .finally(() => {
+        bound.done();
+        if (state.promptRefresh === refresh) {
+          state.promptRefresh = undefined;
+          if (state.promptRefreshQueued && this.isCurrentState(state, generation)) {
+            state.promptRefreshQueued = false;
+            this.refreshPrompts(server, state, client);
+          }
+        }
+      });
+    state.promptRefresh = refresh;
+  }
+
+  private persistCatalog(server: McpServer, state: ServerRuntimeState): Promise<void> {
+    // Tool and prompt discovery finish independently; their shared file has one writer.
+    const write = (state.catalogWrite ?? Promise.resolve())
+      .then(async () => {
+        const catalog = state.catalog;
+        if (!catalog || catalog.discoveryWarnings.length > 0 || !this.isCurrentState(state)) return;
+        const connectionKey = await this.getConnectionKey(state);
+        if (!this.isCurrentState(state)) return;
+        await writeMcpToolCatalog({
+          connectionKey,
+          discoveredAt: this.runtimeSnapshots.get(server.id)?.lastConnectedAt ?? Date.now(),
+          expiresAt: catalog.expiresAt,
+          serverId: server.id,
+          tools: catalog.tools,
+          prompts: state.prompts,
+          version: 2,
+        });
+      })
+      .finally(() => {
+        if (state.catalogWrite === write) state.catalogWrite = undefined;
+      });
+    state.catalogWrite = write;
+    return write;
+  }
+
+  private notifyPromptCatalogs(): void {
+    for (const listener of this.promptCatalogListeners) listener();
   }
 
   private recordDiscoveryFailure(state: ServerRuntimeState, error?: unknown): void {

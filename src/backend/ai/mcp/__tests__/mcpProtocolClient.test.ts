@@ -80,6 +80,28 @@ beforeEach(() => {
 });
 
 describe('native MCP protocol boundary', () => {
+  it('routes prompt-list changes to the prompt cache only while the connection is active', async () => {
+    const onPromptsChanged = jest.fn();
+    const onToolsChanged = jest.fn();
+    const client = await createRemoteMcpClient({
+      config: { endpointUrl },
+      signal: new AbortController().signal,
+      foreground: true,
+      authorization,
+      onPromptsChanged,
+      onToolsChanged,
+    });
+    const handlers = mockOptions.listChanged as { prompts: { onChanged(): void } };
+    handlers.prompts.onChanged();
+    expect(onPromptsChanged).toHaveBeenCalledTimes(1);
+    expect(onToolsChanged).not.toHaveBeenCalled();
+    client.setForeground?.(false);
+    handlers.prompts.onChanged();
+    await client.close();
+    handlers.prompts.onChanged();
+    expect(onPromptsChanged).toHaveBeenCalledTimes(1);
+  });
+
   it('reads bounded JSON with the React Native Response implementation', async () => {
     const client = await open();
     const encoded = new TextEncoder().encode(JSON.stringify({ name: 'Cherry 验收' }));

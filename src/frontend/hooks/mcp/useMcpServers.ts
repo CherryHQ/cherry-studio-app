@@ -1,5 +1,5 @@
 import { useQueryClient, useQuery as useTanStackQuery } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { queryKeys, useBackendModule, useMutation, useQuery } from '@/frontend/data';
 import {
@@ -8,13 +8,14 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
-import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import type { McpPromptEntry, McpServerRuntimeSummary } from '@/shared/contracts';
 import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly McpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =
   Object.freeze({});
+const EMPTY_MCP_PROMPTS: Readonly<Record<string, readonly McpPromptEntry[]>> = Object.freeze({});
 type McpServerListData = { items: McpServer[]; total: number };
 
 export function useMcpServersApi() {
@@ -62,6 +63,26 @@ export function useMcpServerRuntimeSummaries(servers: readonly McpServer[]) {
     query,
     summaries: query.data ?? EMPTY_MCP_RUNTIME_SUMMARIES,
   };
+}
+
+/** Connection discovery owns refresh; chat only observes the local catalog. */
+export function useCachedMcpPrompts() {
+  const mcp = useBackendModule('mcp');
+  const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      mcp.subscribePromptCatalogs(() => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers.prompts() });
+      }),
+    [mcp, queryClient],
+  );
+  const query = useTanStackQuery({
+    queryKey: queryKeys.mcpServers.prompts(),
+    queryFn: () => mcp.getCachedPrompts(),
+    staleTime: Infinity,
+    retry: false,
+  });
+  return query.data ?? EMPTY_MCP_PROMPTS;
 }
 
 export function useMcpServerMutations() {

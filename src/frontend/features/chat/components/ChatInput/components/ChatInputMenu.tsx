@@ -1,12 +1,13 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
-import { Composer, useToast } from '@cherrystudio/ui/components';
+import { Composer, Image, useToast } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/Composer';
-import { McpContentPicker } from '@/frontend/components/McpContent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
@@ -17,17 +18,20 @@ const logger = loggerService.withContext('ChatInputMenu');
 export function ChatInputMenu({
   media = 'all',
   onPickPlugins,
+  onPickPrompts,
   onPickSkills,
   triggerRef,
 }: {
   media?: 'all' | 'images';
   onPickPlugins?: () => void;
+  onPickPrompts?: () => void;
   onPickSkills?: () => void;
   triggerRef: RefObject<View | null>;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const [isMcpContentOpen, setIsMcpContentOpen] = useState(false);
+  const { theme } = useUniwind();
+  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const openDocumentPicker = useComposerDocumentPicker();
 
@@ -48,14 +52,6 @@ export function ChatInputMenu({
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}
       >
-        {media === 'all' ? (
-          <Composer.Menu.Item
-            icon={<BoxesIcon className="size-5 text-foreground" />}
-            label={t('mcp.content.title')}
-            onPress={() => setIsMcpContentOpen(true)}
-            testID="chat-composer-mcp-content"
-          />
-        ) : null}
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}
@@ -64,6 +60,14 @@ export function ChatInputMenu({
             testID="chat-composer-plugins"
           />
         )}
+        {onPickPrompts ? (
+          <Composer.Menu.Item
+            icon={<Image className="size-5" contentFit="contain" source={mcpIcon} />}
+            label={t('plugins.mcp.title')}
+            onPress={onPickPrompts}
+            testID="chat-composer-prompts"
+          />
+        ) : null}
         {onPickSkills ? (
           <Composer.Menu.Item
             icon={<ToolCaseIcon className="size-5 text-foreground" />}
@@ -73,9 +77,6 @@ export function ChatInputMenu({
           />
         ) : null}
       </ComposerMenu>
-      {media === 'all' && isMcpContentOpen ? (
-        <McpContentPicker onClose={() => setIsMcpContentOpen(false)} />
-      ) : null}
       {media === 'all' && isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />
       ) : null}

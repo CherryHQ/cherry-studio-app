@@ -38,8 +38,10 @@ import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
+import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
+import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { toAgentInputParts } from './utils/agentInputParts';
@@ -198,10 +200,13 @@ function TextChatInput({
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
+  const [isPromptPickerOpen, setIsPromptPickerOpen] = useState(false);
+  const prompts = useChatInputMcpPrompts(mode === 'standard' ? agentId : undefined);
   const [pickerAgentId, setPickerAgentId] = useState(agentId);
   if (pickerAgentId !== agentId) {
     setPickerAgentId(agentId);
     setIsSkillPickerOpen(false);
+    setIsPromptPickerOpen(false);
   }
   const [isPluginPickerOpen, setIsPluginPickerOpen] = useState(false);
   const pluginCatalog = usePluginCatalog();
@@ -213,13 +218,18 @@ function TextChatInput({
   const pluginMenuRef = useRef<View>(null);
   const closePluginPicker = useCallback(() => setIsPluginPickerOpen(false), []);
   const closeSkillPicker = useCallback(() => setIsSkillPickerOpen(false), []);
+  const closePromptPicker = useCallback(() => setIsPromptPickerOpen(false), []);
   const isPluginPickerVisible = mode === 'standard' && isPluginPickerOpen && !isApprovalPending;
   const isSkillPickerVisible =
     mode === 'standard' && isSkillPickerOpen && Boolean(agentId) && !isApprovalPending;
-  const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible;
+  const isPromptPickerVisible =
+    mode === 'standard' && isPromptPickerOpen && prompts.length > 0 && !isApprovalPending;
+  const isPickerVisible = isPluginPickerVisible || isSkillPickerVisible || isPromptPickerVisible;
+  if (isPromptPickerOpen && prompts.length === 0) setIsPromptPickerOpen(false);
   if (isApprovalPending || mode === 'minimal') {
     if (isPluginPickerOpen) setIsPluginPickerOpen(false);
     if (isSkillPickerOpen) setIsSkillPickerOpen(false);
+    if (isPromptPickerOpen) setIsPromptPickerOpen(false);
   }
   const { fontScale } = useWindowDimensions();
   const inputTextStyle = useResolveClassNames('text-base');
@@ -247,6 +257,7 @@ function TextChatInput({
     async ({ attachments, text }: ComposerSendPayload) => {
       setIsPluginPickerOpen(false);
       setIsSkillPickerOpen(false);
+      setIsPromptPickerOpen(false);
       const plugins =
         mode === 'standard' ? readPluginMentions(text) : { pluginReferences: [], text };
       // Skill parsing adjusts plugin offsets after removing the remaining link syntax.
@@ -305,106 +316,125 @@ function TextChatInput({
 
   return (
     <>
-      <ChatInputSkillPopover
-        agentId={agentId}
-        onClose={closeSkillPicker}
-        open={isSkillPickerVisible}
+      <ChatInputPromptPopover
+        agentId={mode === 'standard' ? agentId : undefined}
+        onClose={closePromptPicker}
+        open={isPromptPickerVisible}
+        prompts={prompts}
         returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
       >
-        <ChatInputPluginPopover
-          plugins={connectedPlugins}
-          onClose={closePluginPicker}
-          open={isPluginPickerVisible}
+        <ChatInputSkillPopover
+          agentId={agentId}
+          onClose={closeSkillPicker}
+          open={isSkillPickerVisible}
           returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
         >
-          <View
-            accessibilityElementsHidden={isApprovalPending}
-            importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
-            pointerEvents={isApprovalPending ? 'none' : 'auto'}
+          <ChatInputPluginPopover
+            plugins={connectedPlugins}
+            onClose={closePluginPicker}
+            open={isPluginPickerVisible}
+            returnFocusRef={isApprovalPending ? undefined : pluginMenuRef}
           >
-            <ChatInputEffortOverlay
-              onChange={selectReasoningEffort}
-              reasoningEffort={reasoningEffort}
-              reasoningEfforts={reasoningEfforts}
+            <View
+              accessibilityElementsHidden={isApprovalPending}
+              importantForAccessibility={isApprovalPending ? 'no-hide-descendants' : 'auto'}
+              pointerEvents={isApprovalPending ? 'none' : 'auto'}
             >
-              {(effortGauge) => (
-                <ChatInputComposer
-                  canSend={
-                    selectedModelItem &&
-                    (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
-                      ? canSend
-                      : false
-                  }
-                  dismissKeyboardOnSend={dismissKeyboardOnSend}
-                  getSendErrorLabel={getSendErrorLabel}
-                  onSend={handleSendPress}
-                  onStop={() => void cancel()}
-                  streaming={isBusy}
-                  testID="chat-composer"
-                >
-                  <View
-                    accessibilityElementsHidden={isPickerVisible}
-                    importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
-                    pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                    style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                  >
-                    <ComposerAttachments />
-                    {mode === 'standard' ? <McpAppContextNotice /> : null}
-                  </View>
-                  <ChatInputSurface
-                    streaming={isBusy}
-                    placeholder={
-                      skillAction
-                        ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
-                        : undefined
+              <ChatInputEffortOverlay
+                onChange={selectReasoningEffort}
+                reasoningEffort={reasoningEffort}
+                reasoningEfforts={reasoningEfforts}
+              >
+                {(effortGauge) => (
+                  <ChatInputComposer
+                    canSend={
+                      selectedModelItem &&
+                      (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
+                        ? canSend
+                        : false
                     }
+                    dismissKeyboardOnSend={dismissKeyboardOnSend}
+                    getSendErrorLabel={getSendErrorLabel}
+                    onSend={handleSendPress}
                     onStop={() => void cancel()}
-                    fieldStyle={isPickerVisible ? compactInputStyle : undefined}
-                    leadingAction={
-                      <ChatInputMenu
-                        media={mode === 'minimal' ? 'images' : 'all'}
-                        onPickSkills={
-                          mode === 'standard' && agentId
-                            ? () => {
-                                setIsPluginPickerOpen(false);
-                                setIsSkillPickerOpen(true);
-                              }
-                            : undefined
-                        }
-                        onPickPlugins={
-                          mode === 'standard'
-                            ? () => {
-                                setIsSkillPickerOpen(false);
-                                setIsPluginPickerOpen(true);
-                              }
-                            : undefined
-                        }
-                        triggerRef={pluginMenuRef}
-                      />
-                    }
-                    secondaryAction={
-                      <ComposerModelPill
-                        icon={
-                          selectedModelItem ? (
-                            <ModelPickerIcon
-                              model={selectedModelItem.model}
-                              provider={selectedModelItem.provider}
-                              size={20}
-                            />
-                          ) : undefined
-                        }
-                        label={selectedModelLabel}
-                        onPress={openModelPicker}
-                      />
-                    }
-                    trailingAction={effortGauge}
-                  />
-                </ChatInputComposer>
-              )}
-            </ChatInputEffortOverlay>
-          </View>
-        </ChatInputPluginPopover>
-      </ChatInputSkillPopover>
+                    streaming={isBusy}
+                    testID="chat-composer"
+                  >
+                    <View
+                      accessibilityElementsHidden={isPickerVisible}
+                      importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
+                      pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                      style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                    >
+                      <ComposerAttachments />
+                      {mode === 'standard' ? <McpAppContextNotice /> : null}
+                    </View>
+                    <ChatInputSurface
+                      streaming={isBusy}
+                      placeholder={
+                        skillAction
+                          ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
+                          : undefined
+                      }
+                      onStop={() => void cancel()}
+                      fieldStyle={isPickerVisible ? compactInputStyle : undefined}
+                      leadingAction={
+                        <ChatInputMenu
+                          media={mode === 'minimal' ? 'images' : 'all'}
+                          onPickSkills={
+                            mode === 'standard' && agentId
+                              ? () => {
+                                  setIsPluginPickerOpen(false);
+                                  setIsPromptPickerOpen(false);
+                                  setIsSkillPickerOpen(true);
+                                }
+                              : undefined
+                          }
+                          onPickPlugins={
+                            mode === 'standard'
+                              ? () => {
+                                  setIsSkillPickerOpen(false);
+                                  setIsPromptPickerOpen(false);
+                                  setIsPluginPickerOpen(true);
+                                }
+                              : undefined
+                          }
+                          onPickPrompts={
+                            mode === 'standard' && prompts.length > 0
+                              ? () => {
+                                  setIsPluginPickerOpen(false);
+                                  setIsSkillPickerOpen(false);
+                                  setIsPromptPickerOpen(true);
+                                }
+                              : undefined
+                          }
+                          triggerRef={pluginMenuRef}
+                        />
+                      }
+                      secondaryAction={
+                        <ComposerModelPill
+                          icon={
+                            selectedModelItem ? (
+                              <ModelPickerIcon
+                                model={selectedModelItem.model}
+                                provider={selectedModelItem.provider}
+                                size={20}
+                              />
+                            ) : undefined
+                          }
+                          label={selectedModelLabel}
+                          onPress={openModelPicker}
+                        />
+                      }
+                      trailingAction={effortGauge}
+                    />
+                  </ChatInputComposer>
+                )}
+              </ChatInputEffortOverlay>
+            </View>
+          </ChatInputPluginPopover>
+        </ChatInputSkillPopover>
+      </ChatInputPromptPopover>
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           modelType={mode === 'minimal' ? 'text' : 'all'}

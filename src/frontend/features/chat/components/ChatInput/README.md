@@ -60,6 +60,13 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
+- A short MCP row appears only when the current Agent enables a custom MCP server that has
+  cached prompt templates. Per-tool overrides do not enable that server's prompts. The same
+  keyboard-preserving compact menu used by Plugins lists the cached templates and their sources;
+  opening it performs no remote discovery. Selecting a template resolves its messages and adds
+  them to the draft without preview or sending. Parameters reuse `UserQuestionSheet`, including
+  its previous/next navigation and retained answers. Required fields gate submission; optional
+  fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or
