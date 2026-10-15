@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { agentSessionMessageService } from '../AgentSessionMessageService';
 import { createTestDb, type TestDb } from './_testDb';
@@ -25,6 +26,120 @@ describe('AgentSessionMessageService persistence', () => {
   afterEach(async () => {
     await uninstallTestHost();
     sqlite.close();
+  });
+
+  test('merges concurrent languages into message data and returns them with history and selection', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const original = sqlite
+      .prepare('SELECT data, stats, status, created_at FROM agent_session_message')
+      .get();
+    const session = sqlite.prepare('SELECT * FROM agent_session').all();
+    const sourceHash = sha256HexOfText('Original');
+    await Promise.all([
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        sourceHash,
+        language: 'zh-CN',
+        content: '中文译文',
+      }),
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        sourceHash,
+        language: 'fr-FR',
+        content: 'Traduction',
+      }),
+    ]);
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    const translations = page.items[0].translations;
+    expect(translations).toEqual({
+      sourceHash,
+      results: {
+        'zh-CN': { content: '中文译文', createdAt: expect.any(Number) },
+        'fr-FR': { content: 'Traduction', createdAt: expect.any(Number) },
+      },
+    });
+    expect(page.items[0].parts).toEqual(JSON.parse(original!.data as string).parts);
+    const selection = await agentSessionMessageService.readSelection('session-1', ['answer']);
+    expect(selection.messages[0].translations).toEqual(translations);
+    expect(sqlite.prepare('SELECT * FROM agent_session').all()).toEqual(session);
+    const stored = sqlite
+      .prepare('SELECT data, stats, status, created_at FROM agent_session_message')
+      .get();
+    expect(stored).toMatchObject({
+      stats: original!.stats,
+      status: original!.status,
+      created_at: original!.created_at,
+    });
+    expect(JSON.parse(stored!.data as string)).toEqual({
+      ...JSON.parse(original!.data as string),
+      translations,
+    });
+  });
+
+  test('rejects translations for missing, foreign, unsettled, changed or non-assistant messages', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const input = {
+      sourceHash: sha256HexOfText('Original'),
+      language: 'zh-CN' as const,
+      content: '译文',
+    };
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'missing', input),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      agentSessionMessageService.saveTranslation('other', 'answer', input),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        ...input,
+        sourceHash: sha256HexOfText('Old'),
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    sqlite.exec("UPDATE agent_session_message SET status = 'streaming' WHERE id = 'answer'");
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', input),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    sqlite.exec(
+      "UPDATE agent_session_message SET role = 'user', status = 'success' WHERE id = 'answer'",
+    );
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', input),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(
+      JSON.parse(sqlite.prepare('SELECT data FROM agent_session_message').get()!.data as string)
+        .translations,
+    ).toBeUndefined();
+  });
+
+  test('rolls back failed translation writes without losing previously saved languages', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const input = {
+      sourceHash: sha256HexOfText('Original'),
+      language: 'zh-CN' as const,
+      content: '译文',
+    };
+    const saved = await agentSessionMessageService.saveTranslation('session-1', 'answer', input);
+    testDb.failWriteTxCommit(new Error('disk full'));
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        ...input,
+        language: 'fr-FR',
+        content: 'Traduction',
+      }),
+    ).rejects.toThrow('disk full');
+    expect(
+      (await agentSessionMessageService.listByCursor('session-1')).items[0].translations,
+    ).toEqual(saved);
+  });
+
+  test('reads original messages even when their translation metadata is unreadable', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    sqlite.exec(
+      `UPDATE agent_session_message SET data = json_set(data, '$.translations', json('{"future":true}'))`,
+    );
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    expect(page.items[0].parts).toEqual([
+      { id: 'part-answer', type: 'text', text: 'Original', state: 'done' },
+    ]);
+    expect(page.items[0].translations).toBeUndefined();
   });
 
   test('reads a complete ordered selection and its title together, rejecting missing or foreign messages', async () => {

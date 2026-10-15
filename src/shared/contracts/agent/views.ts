@@ -10,6 +10,7 @@ import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts
  */
 import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
+import { MessageTranslationsSchema } from '@/shared/data/types/messageTranslation';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
 import {
@@ -398,6 +399,8 @@ export const AgentMessageViewSchema = z.strictObject({
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
+  // Local reading aids; execution and replay consume only parts.
+  translations: MessageTranslationsSchema.optional(),
   stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),

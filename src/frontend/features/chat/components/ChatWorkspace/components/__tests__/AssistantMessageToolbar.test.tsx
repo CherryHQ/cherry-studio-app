@@ -6,6 +6,10 @@ import { AssistantMessageActionsProvider } from '../../context/AssistantMessageA
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
+jest.mock('../../translation/MessageTranslationProvider', () => ({
+  useMessageTranslationStore: () => null,
+}));
+
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
 let mockIsSessionBusy = false;

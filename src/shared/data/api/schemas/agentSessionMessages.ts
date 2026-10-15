@@ -2,6 +2,12 @@ import * as z from 'zod';
 
 import type { AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import {
+  MessageTranslationResultSchema,
+  MessageTranslationsSchema,
+  type MessageTranslations,
+} from '@/shared/data/types/messageTranslation';
+import { APP_LANGUAGES } from '@/shared/utils/languages';
 
 export const AGENT_SESSION_MESSAGES_DEFAULT_LIMIT = 50;
 export const AGENT_SESSION_MESSAGES_MAX_LIMIT = 200;
@@ -53,14 +59,12 @@ export type AgentSessionMessagePage = CursorPaginationResponse<AgentMessageView>
   previousCursor?: string;
 };
 
-/** Data routes consume a portable reader; composition selects the history authority. */
-export interface AgentSessionMessageReader {
-  listByCursor(
-    sessionId: string,
-    params?: ListAgentSessionMessagesQueryParams,
-  ): Promise<AgentSessionMessagePage>;
-  readSelection(sessionId: string, ids: string[]): Promise<AgentTranscriptSelection>;
-}
+export const SaveAgentMessageTranslationSchema = z.strictObject({
+  sourceHash: MessageTranslationsSchema.shape.sourceHash,
+  language: z.enum(APP_LANGUAGES.map(({ value }) => value)),
+  content: MessageTranslationResultSchema.shape.content,
+});
+export type SaveAgentMessageTranslation = z.infer<typeof SaveAgentMessageTranslationSchema>;
 
 export const AgentTranscriptSelectionSchema = z.strictObject({
   ids: z.array(z.string().min(1)).min(1).max(128),
@@ -72,6 +76,13 @@ export type AgentTranscriptSelection = {
 };
 
 export type AgentSessionMessageSchemas = {
+  '/agent-sessions/:sessionId/messages/:messageId/translations': {
+    PATCH: {
+      params: { sessionId: string; messageId: string };
+      body: SaveAgentMessageTranslation;
+      response: MessageTranslations;
+    };
+  };
   '/agent-sessions/:sessionId/messages/selection': {
     GET: {
       params: { sessionId: string };

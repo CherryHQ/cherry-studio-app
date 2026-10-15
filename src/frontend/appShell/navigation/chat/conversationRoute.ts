@@ -15,13 +15,19 @@ export function conversationHref(ref: ConversationRef) {
     ? chatHref({ kind: 'session', sessionId: ref.sessionId })
     : remoteChatHref({ connectionId: ref.source.connectionId, sessionId: ref.sessionId });
 }
-export function conversationShareHref(ref: ConversationRef, messageId: string, scope?: string) {
+export function conversationShareHref(
+  ref: ConversationRef,
+  messageId: string,
+  scope?: string,
+  translationHandoff?: string,
+) {
   return {
     pathname: '/chat-share' as const,
     params: {
       sessionId: ref.sessionId,
       messageId,
       scope,
+      ...(translationHandoff ? { translationHandoff } : {}),
       ...(ref.source.kind === 'desktop' ? { connectionId: ref.source.connectionId } : {}),
     },
   };

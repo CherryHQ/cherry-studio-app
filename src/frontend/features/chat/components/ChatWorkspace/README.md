@@ -73,26 +73,51 @@ newer setting-change event.
 
 The assistant toolbar offers translation for complete, successful text answers. It extracts only
 answer text and code parts; reasoning, tool output, errors, and existing translations are excluded.
-Pressing translate opens a button-anchored language menu; choosing a language starts translation
-through `Backend.translation` with the configured translation model (or the default model when unset).
+Before a translation exists, pressing translate opens a button-anchored language menu. Choosing a
+language starts translation through `Backend.translation` with the configured translation model
+(or the default model when unset).
 Dismissal makes no request. Each answer owns its chosen language, independently of the app language
-and other answers. Desktop messages use the phone's model configuration and are cached under the
-pairing scope; no desktop transcript is edited.
+and other answers. Only the local Agent screen enables message translation. Remote conversations
+provide no translation action or translation state provider.
 
 `translation/MessageTranslationStore` owns requests for the open Session, independently of virtualized
 row lifetimes. Button and result subscribe by message ID, so streamed translation does not rerender
-the transcript or original Markdown. The result appears below the original toolbar, with cancel,
-retry, copy, and hide actions. The block is excluded from the enclosing message menu and background
-press target, so holding its Markdown selects translated text; scrolling and control taps remain
+the transcript or original Markdown. The original toolbar's translation button is the only disclosure
+control: it keeps the same language icon and position, highlights while expanded, and toggles the
+result below it. Folding removes the complete result block. The block has a plain separator without
+a duplicate title or language heading. Its footer aligns icon-only copy, language selection, cancel,
+and retry actions with the original message toolbar. Choosing a language restores its cached result
+or starts translation when none is saved. Copy includes only the active translation text. Sharing
+uses the original message's share action and selection page. Opening sharing captures the current
+text and language of each expanded translation; folded translations are omitted even when cached.
+Image, HTML, and Markdown include the captured translation beneath its selected original message,
+independently of the thinking-content switch and with the existing watermark preference. Switching to a
+saved language makes no translation request. The block is excluded from the enclosing message menu
+and background press target, so
+holding its Markdown selects translated text; scrolling and control taps remain
 owned by the existing list and CherryUI controls. Leaving the screen cancels in-flight requests. A changed, retried,
 removed, or incomplete source cannot accept a late result.
 Choosing a different language cancels that answer's previous request and rejects its late chunks
 and result. Retry uses the chosen target. Changing the app language does not change translation
 targets or cancel requests; the transcript and reading position stay mounted.
 
-Successful results are reading aids in the existing persistent UI cache, keyed by source scope,
-Session, message and target language, and checked against the source content hash. The cache retains
-the latest 100 generated translations. Truncated, failed and cancelled translations are not saved.
+Successful results live in the owning `agent_session_message.data.translations`, beside `parts`:
+`{ sourceHash, results: { [language]: { content, createdAt } } }`. History and selected-message reads
+include these reading aids with the message; there is no translation table, per-row hydration query,
+or count-based eviction. The message-scoped Data API mutation merges a completed language inside a
+serialized write transaction, after verifying the Session, message role, terminal status and exact
+source hash. Other languages, parts, statistics and conversation activity are preserved.
+
+Truncated, failed and cancelled results are never saved. Retry admission retains saved translations;
+on successful settlement, the message store removes them only if the translated source text has
+changed. Different reasoning or part IDs do not invalidate identical source text. A changed, removed,
+retried or incomplete source still cancels in-flight work and rejects its late chunks and result.
+Forking copies translations with the message data; deletion, database backup and restore follow the
+message's existing lifecycle. Display readers isolate invalid translation metadata from the original
+message. Canonical source extraction is shared with the persistence writer, and Runtime history
+assembly reads only the original parts. Skill document translations keep their separate UI cache.
+
 Selecting a previously translated language restores a matching result without another request.
-Translation neither adds a turn nor changes message parts, model history, original-message copy or
-conversation export.
+Reopening the Session displays the most recently generated language in a folded state. The current
+language and disclosure state belong to the open screen. Translation never adds a turn or changes
+original-message copy, usage statistics or model history.

@@ -1,5 +1,7 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
+import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   ActionMenu,
   BackgroundPressExclusion,
@@ -16,7 +18,7 @@ import { Text, View } from 'react-native';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
-import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import { useMessageTranslation } from './MessageTranslationProvider';
 
@@ -37,33 +39,54 @@ export function MessageTranslationAction({ message }: { message: MessageListItem
   });
   if (!translation) return null;
   const { state } = translation;
-  return (
-    <ActionMenu items={items}>
-      <Button
-        accessibilityLabel={t('chat.translation.translate')}
-        accessibilityState={{ busy: state.status === 'running' }}
-        icon={
-          state.status === 'success' ? (
-            <CheckIcon className="text-muted-foreground" size={15} />
-          ) : (
-            <LanguagesIcon className="text-muted-foreground" size={15} />
-          )
-        }
-        size="xs"
-        testID="assistant-message-translate"
-        variant="ghost"
-      />
-    </ActionMenu>
+  const hasTranslation = state.status !== 'idle';
+  const button = (
+    <Button
+      accessibilityLabel={t(
+        hasTranslation
+          ? state.visible
+            ? 'chat.translation.hide'
+            : 'chat.translation.show'
+          : 'chat.translation.translate',
+      )}
+      accessibilityState={{
+        busy: state.status === 'running',
+        expanded: hasTranslation ? state.visible : undefined,
+        selected: state.visible,
+      }}
+      icon={
+        <LanguagesIcon
+          className={state.visible ? 'text-primary' : 'text-muted-foreground'}
+          size={15}
+        />
+      }
+      onPress={hasTranslation ? () => translation.store.toggle(translation.source) : undefined}
+      size="xs"
+      testID="assistant-message-translate"
+      variant="ghost"
+    />
   );
+  return hasTranslation ? button : <ActionMenu items={items}>{button}</ActionMenu>;
 }
 
 export function MessageTranslationContent({ message }: { message: MessageListItem }) {
   const translation = useMessageTranslation(message);
   const { t } = useTranslation();
   const { toast } = useToast();
+  const store = translation?.store;
+  const source = translation?.source;
+  const onSelect = useCallback(
+    (language: AppLanguage) => {
+      if (store && source) void store.start(source, language);
+    },
+    [source, store],
+  );
+  const items = useTranslationLanguageMenu({
+    onSelect,
+    selectedLanguage: translation?.state.language,
+  });
   if (!translation?.state.visible) return null;
-  const { state, source, store } = translation;
-  const languageLabel = APP_LANGUAGES.find(({ value }) => value === state.language)?.label;
+  const { state } = translation;
   const copy = async () => {
     try {
       await Clipboard.setStringAsync(state.content);
@@ -76,58 +99,67 @@ export function MessageTranslationContent({ message }: { message: MessageListIte
     <BackgroundPressExclusion>
       <ContextMenuExclusion className="w-full" testID="message-translation">
         <MessagePart.Translation>
-          <View className="flex-row flex-wrap items-center justify-between gap-2">
-            <View className="flex-row flex-wrap items-center gap-2">
-              <Text className="text-muted-foreground text-xs" accessibilityLiveRegion="polite">
-                {t(
-                  state.status === 'running'
-                    ? 'chat.translation.translating'
-                    : 'chat.translation.title',
-                )}
-              </Text>
-              <Text className="text-muted-foreground text-xs">{languageLabel}</Text>
-            </View>
-            <View className="flex-row items-center gap-1">
-              {state.status === 'running' ? (
-                <Button onPress={() => store.cancel(source.messageId)} size="xs" variant="ghost">
-                  {t('common.cancel')}
-                </Button>
-              ) : null}
-              {state.status === 'success' ? (
-                <Button onPress={() => void copy()} size="xs" variant="ghost">
-                  {t('common.copy')}
-                </Button>
-              ) : null}
-              <Button onPress={() => store.toggle(source)} size="xs" variant="ghost">
-                {t('chat.translation.hide')}
-              </Button>
-            </View>
-          </View>
+          {state.status === 'running' && !state.content ? (
+            <Text className="text-muted-foreground text-sm" accessibilityLiveRegion="polite">
+              {t('chat.translation.translating')}
+            </Text>
+          ) : null}
           {state.content ? (
             <MarkdownText isStreaming={state.status === 'running'} markdown={state.content} />
           ) : null}
           {state.status === 'error' || state.status === 'cancelled' ? (
-            <View className="items-start gap-2">
-              <Text className="text-muted-foreground text-sm" accessibilityLiveRegion="polite">
-                {t(
-                  state.status === 'cancelled'
-                    ? 'chat.translation.cancelled'
-                    : state.error === 'model-unavailable'
-                      ? 'translation.error.modelUnavailable'
-                      : 'translation.error.failed',
-                )}
-              </Text>
+            <Text className="text-muted-foreground text-sm" accessibilityLiveRegion="polite">
+              {t(
+                state.status === 'cancelled'
+                  ? 'chat.translation.cancelled'
+                  : state.error === 'model-unavailable'
+                    ? 'translation.error.modelUnavailable'
+                    : 'translation.error.failed',
+              )}
+            </Text>
+          ) : null}
+          <View className="min-h-7 flex-row items-center gap-1">
+            {state.status === 'running' ? (
               <Button
+                accessibilityLabel={t('common.cancel')}
+                icon={<XIcon className="text-muted-foreground" size={15} />}
+                onPress={() => translation.store.cancel(translation.source.messageId)}
+                size="xs"
+                variant="ghost"
+              />
+            ) : null}
+            {state.status === 'error' || state.status === 'cancelled' ? (
+              <Button
+                accessibilityLabel={t('common.retry')}
+                icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
                 onPress={() => {
-                  if (state.language) void store.start(source, state.language);
+                  if (state.language)
+                    void translation.store.start(translation.source, state.language);
                 }}
                 size="xs"
                 variant="ghost"
-              >
-                {t('common.retry')}
-              </Button>
-            </View>
-          ) : null}
+              />
+            ) : null}
+            {state.status === 'success' ? (
+              <Button
+                accessibilityLabel={t('chat.translation.copy')}
+                icon={<CopyIcon className="text-muted-foreground" size={15} />}
+                onPress={() => void copy()}
+                size="xs"
+                testID="message-translation-copy"
+                variant="ghost"
+              />
+            ) : null}
+            <ActionMenu items={items}>
+              <Button
+                accessibilityLabel={t('chat.translation.switchLanguage')}
+                icon={<LanguagesIcon className="text-muted-foreground" size={15} />}
+                size="xs"
+                testID="message-translation-language-menu"
+                variant="ghost"
+              />
+            </ActionMenu>
+          </View>
         </MessagePart.Translation>
       </ContextMenuExclusion>
     </BackgroundPressExclusion>
