@@ -68,7 +68,16 @@ export class TrashRuntime extends BaseService {
 
   empty(kind: TrashFilter = 'all') {
     return this.mutate(async () => {
-      for (const item of await this.entries.candidates(kind)) await this.purge(item);
+      const failures: unknown[] = [];
+      for (const item of await this.entries.candidates(kind)) {
+        try {
+          await this.purge(item);
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+      if (failures.length)
+        throw new AggregateError(failures, 'Some trash items could not be removed');
     });
   }
 

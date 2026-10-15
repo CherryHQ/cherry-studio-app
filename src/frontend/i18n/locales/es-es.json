@@ -2187,6 +2187,7 @@
   "trash.deleteTitle": "¿Eliminar permanentemente?",
   "trash.deleted": "Eliminado permanentemente",
   "trash.deletedAt": "Eliminado: {{date}}",
+  "trash.deletionPending": "La eliminación no ha finalizado y este archivo no se puede restaurar. Vuelva a intentar eliminarlo; la aplicación también lo intentará al iniciarse de nuevo o volver al primer plano.",
   "trash.emptied": "Papelera vaciada",
   "trash.empty": "La papelera está vacía",
   "trash.emptyAll": "Vaciar papelera",

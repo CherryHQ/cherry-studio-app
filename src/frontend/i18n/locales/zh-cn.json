@@ -2161,6 +2161,7 @@
   "trash.deleteTitle": "永久删除？",
   "trash.deleted": "已永久删除",
   "trash.deletedAt": "删除时间：{{date}}",
+  "trash.deletionPending": "删除尚未完成，此文件无法恢复。请重试删除；应用也会在下次启动或回到前台时重试。",
   "trash.emptied": "已清空回收站",
   "trash.empty": "回收站为空",
   "trash.emptyAll": "清空回收站",

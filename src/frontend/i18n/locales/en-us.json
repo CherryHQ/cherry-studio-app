@@ -2174,6 +2174,7 @@
   "trash.deleteTitle": "Permanently delete?",
   "trash.deleted": "Permanently deleted",
   "trash.deletedAt": "Deleted: {{date}}",
+  "trash.deletionPending": "Deletion is incomplete and this file cannot be restored. Retry deletion, or the app will retry on its next launch or return to the foreground.",
   "trash.emptied": "Trash cleared",
   "trash.empty": "The trash is empty",
   "trash.emptyAll": "Empty trash",

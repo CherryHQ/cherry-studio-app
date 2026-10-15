@@ -212,12 +212,14 @@ the new `size`. Bytes first: a crash in between leaves a row whose `size` lags t
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
-Storage checks cancellation after loading the draft entry, before the synchronous native text
-write. Once bytes have changed, the size update finishes even if the turn is cancelled while that
-metadata write is queued.
+Storage queues draft edits with deletion and restoration, checking availability and cancellation
+inside the write transaction before the synchronous file write. Once bytes have changed, the size
+update finishes in the same transaction even if the turn is cancelled.
 
-**Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
-bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. Cancelling an
+**Delete** — `deleteInternalEntry` removes the row and writes a `file-cleanup:<id>` receipt into
+`app_state` in one transaction, then unlinks bytes and preview before clearing the receipt. A failed
+unlink remains visible as pending permanent deletion, cannot be restored, and is retried by the
+next trash sweep or explicit deletion. Its bytes remain counted until cleanup completes. Cancelling an
 attachment does not call it. User deletion calls `moveToTrash`; permanent trash removal and
 compensating cleanup use the hard-delete path.
 

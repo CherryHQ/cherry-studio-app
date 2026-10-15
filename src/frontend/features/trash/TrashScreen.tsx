@@ -109,18 +109,20 @@ export function TrashScreen() {
                   {t('trash.deletedAt', { date: dateFormatter.format(item.deletedAt) })}
                 </Text>
                 <Text className="text-sm text-muted-foreground">
-                  {t('trash.remaining', {
-                    days: Math.max(
-                      0,
-                      Math.ceil((item.deletedAt + TRASH_RETENTION_MS - now) / 86_400_000),
-                    ),
-                  })}
+                  {item.state === 'deleting'
+                    ? t('trash.deletionPending')
+                    : t('trash.remaining', {
+                        days: Math.max(
+                          0,
+                          Math.ceil((item.deletedAt + TRASH_RETENTION_MS - now) / 86_400_000),
+                        ),
+                      })}
                 </Text>
               </View>
               <View className="flex-row items-center justify-end gap-2">
                 <Button
                   variant="ghost"
-                  disabled={actions.isPending}
+                  disabled={actions.isPending || item.state === 'deleting'}
                   onPress={() => void actions.restore(item)}
                   accessibilityLabel={t('trash.restoreNamed', {
                     name: item.title || t('session.list.untitled'),

@@ -2187,6 +2187,7 @@
   "trash.deleteTitle": "Eliminar permanentemente?",
   "trash.deleted": "Eliminado permanentemente",
   "trash.deletedAt": "Eliminado: {{date}}",
+  "trash.deletionPending": "A eliminação está incompleta e este ficheiro não pode ser restaurado. Tente eliminá-lo novamente; a aplicação também tentará no próximo arranque ou regresso ao primeiro plano.",
   "trash.emptied": "Lixo esvaziado",
   "trash.empty": "O lixo está vazio",
   "trash.emptyAll": "Esvaziar lixo",

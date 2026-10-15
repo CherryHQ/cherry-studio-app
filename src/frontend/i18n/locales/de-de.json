@@ -2174,6 +2174,7 @@
   "trash.deleteTitle": "Endgültig löschen?",
   "trash.deleted": "Endgültig gelöscht",
   "trash.deletedAt": "Gelöscht: {{date}}",
+  "trash.deletionPending": "Das Löschen ist noch nicht abgeschlossen. Diese Datei kann nicht wiederhergestellt werden. Versuchen Sie es erneut; die App wiederholt den Vorgang auch beim nächsten Start oder bei der Rückkehr in den Vordergrund.",
   "trash.emptied": "Papierkorb geleert",
   "trash.empty": "Der Papierkorb ist leer",
   "trash.emptyAll": "Papierkorb leeren",

@@ -556,8 +556,8 @@ describe('fileStorage', () => {
     testState.files.set(previewUri, 1);
     const tx = {};
     const entries = {
-      deleteTx: jest.fn(async () => undefined),
-      findByIdTx: jest.fn(async () => entry),
+      beginDeletionTx: jest.fn(async () => ({ entry, deletedAt: 1 })),
+      finishDeletion: jest.fn(async () => undefined),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
         const result = await callback(tx);
         expect(onFileChange).not.toHaveBeenCalled();
@@ -567,7 +567,8 @@ describe('fileStorage', () => {
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(true);
 
-    expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
+    expect(entries.beginDeletionTx).toHaveBeenCalledWith(tx, entry.id, undefined);
+    expect(entries.finishDeletion).toHaveBeenCalledWith(entry.id);
     expect(testState.files.has(uri)).toBe(false);
     expect(testState.files.has(previewUri)).toBe(false);
     expect(onFileChange).toHaveBeenCalledTimes(1);
@@ -591,10 +592,16 @@ describe('fileStorage', () => {
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
     await expect(
-      rewriteInternalTextEntry({ findById: async () => entry } as never, {
-        id: entry.id,
-        data: 'changed',
-      }),
+      rewriteInternalTextEntry(
+        {
+          findByIdTx: async () => entry,
+          withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback({}),
+        } as never,
+        {
+          id: entry.id,
+          data: 'changed',
+        },
+      ),
     ).rejects.toThrow('immutable');
     expect(testState.writes).toEqual([]);
     expect(testState.files.get(uri)).toBe(entry.size);
@@ -606,7 +613,7 @@ describe('fileStorage', () => {
     testState.files.set(uri, entry.size);
     const tx = {};
     const entries = {
-      findById: jest.fn(async () => entry),
+      findByIdTx: jest.fn(async () => entry),
       updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
         ...entry,
         id,
@@ -634,9 +641,9 @@ describe('fileStorage', () => {
   test('refuses to rewrite a draft whose bytes are missing', async () => {
     const entry = { ...internalEntry(), provenance: 'generated' as const };
     const entries = {
-      findById: jest.fn(async () => entry),
+      findByIdTx: jest.fn(async () => entry),
       updateSizeTx: jest.fn(),
-      withWriteTx: jest.fn(),
+      withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(
@@ -656,26 +663,26 @@ describe('fileStorage', () => {
       finishLookup = resolve;
     });
     const entries = {
-      findById: jest.fn(() => lookup),
+      findByIdTx: jest.fn(() => lookup),
       updateSizeTx: jest.fn(),
-      withWriteTx: jest.fn(),
+      withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
     const controller = new AbortController();
     const cancelled = new Error('cancelled');
     const rewriting = rewriteInternalTextEntry(
-      entries,
+      entries as never,
       { data: 'late edit', id: entry.id },
       controller.signal,
     );
 
-    expect(entries.findById).toHaveBeenCalled();
+    expect(entries.findByIdTx).toHaveBeenCalled();
     controller.abort(cancelled);
     finishLookup(entry);
 
     await expect(rewriting).rejects.toBe(cancelled);
     expect(testState.writes).toEqual([]);
     expect(testState.files.get(uri)).toBe(entry.size);
-    expect(entries.withWriteTx).not.toHaveBeenCalled();
+    expect(entries.updateSizeTx).not.toHaveBeenCalled();
     expect(onFileChange).not.toHaveBeenCalled();
   });
 
@@ -685,16 +692,13 @@ describe('fileStorage', () => {
     testState.files.set(uri, entry.size);
     const controller = new AbortController();
     const entries = {
-      findById: jest.fn(async () => entry),
-      updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => ({
-        ...entry,
-        size,
-      })),
-      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
+      findByIdTx: jest.fn(async () => entry),
+      updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => {
         expect(testState.writes).toHaveLength(1);
         controller.abort();
-        return callback({});
+        return { ...entry, size };
       }),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(
@@ -711,13 +715,13 @@ describe('fileStorage', () => {
   test('reports a missing entry row without deleting anything', async () => {
     const entry = internalEntry();
     const entries = {
-      deleteTx: jest.fn(async () => undefined),
-      findByIdTx: jest.fn(async () => null),
+      beginDeletionTx: jest.fn(async () => null),
+      finishDeletion: jest.fn(),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(false);
-    expect(entries.deleteTx).not.toHaveBeenCalled();
+    expect(entries.finishDeletion).not.toHaveBeenCalled();
     expect(onFileChange).not.toHaveBeenCalled();
   });
 

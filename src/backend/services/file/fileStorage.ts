@@ -305,63 +305,59 @@ export async function discardInternalEntries(
  * updated ahead of its bytes would misreport content the blob never held.
  */
 export async function rewriteInternalTextEntry(
-  entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
+  entries: Pick<FileEntryService, 'findByIdTx' | 'updateSizeTx' | 'withWriteTx'>,
   input: { data: string; id: FileEntryId },
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const entry = await entries.findById(input.id);
-  signal?.throwIfAborted();
-  if (!entry) {
-    throw new Error(`Draft file entry does not exist: ${input.id}`);
-  }
-  if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
-  const file = managedFileForEntry(entry);
-  if (!file.exists) {
-    throw new Error(`Draft file bytes are missing: ${input.id}`);
-  }
-  // Expo writes text synchronously. Once the bytes change, finish recording
-  // their size even if the turn is cancelled while its DB write is queued.
-  file.write(input.data);
-  const size = file.size;
-  if (!Number.isSafeInteger(size) || size < 0) {
-    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
-  }
-  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
-  fileChanges.fire(entry.id);
+  const updatedEntry = await entries.withWriteTx(async (tx) => {
+    signal?.throwIfAborted();
+    const entry = await entries.findByIdTx(tx, input.id, null);
+    signal?.throwIfAborted();
+    if (!entry) {
+      throw new Error(`Draft file entry does not exist: ${input.id}`);
+    }
+    if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
+    const file = managedFileForEntry(entry);
+    if (!file.exists) {
+      throw new Error(`Draft file bytes are missing: ${input.id}`);
+    }
+    // Availability, synchronous bytes and metadata share the deletion write queue.
+    // Once bytes change, complete bookkeeping even if the caller cancels.
+    file.write(input.data);
+    const size = file.size;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+    }
+    return entries.updateSizeTx(tx, entry.id, size);
+  });
+  fileChanges.fire(updatedEntry.id);
   return updatedEntry;
 }
 
 /**
- * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
- * best-effort (a leftover blob is reclaimable by the future cache-cleanup
- * sweep, while a dangling row would not be).
+ * Permanently remove ownership before unlinking bytes and previews. The same transaction
+ * records an unlink receipt, retained on failure or process death for the next trash sweep.
  */
 export async function deleteInternalEntry(
-  entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
+  entries: Pick<FileEntryService, 'beginDeletionTx' | 'finishDeletion' | 'withWriteTx'>,
   id: FileEntryId,
   deletedAt?: number,
 ): Promise<boolean> {
-  const deletedEntry = await entries.withWriteTx(async (tx) => {
-    const entry = await entries.findByIdTx(tx, id, deletedAt);
-    if (!entry) {
-      return null;
-    }
-    await entries.deleteTx(tx, id);
-    return entry;
-  });
+  const cleanup = await entries.withWriteTx((tx) => entries.beginDeletionTx(tx, id, deletedAt));
 
-  if (!deletedEntry) {
+  if (!cleanup) {
     return false;
   }
 
   try {
-    deleteInternalFile(deletedEntry);
-    deleteFilePreview(deletedEntry);
-  } catch (error) {
-    logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
+    deleteInternalFile(cleanup.entry);
+    deleteFilePreview(cleanup.entry);
+    await entries.finishDeletion(id);
+  } finally {
+    // Row removal is committed even when unlinking fails; readers must not retain its content.
+    notifyFileChange(id);
   }
-  fileChanges.fire(id);
   return true;
 }
 

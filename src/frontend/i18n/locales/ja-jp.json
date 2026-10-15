@@ -2161,6 +2161,7 @@
   "trash.deleteTitle": "完全に削除しますか？",
   "trash.deleted": "完全に削除しました",
   "trash.deletedAt": "削除日：{{date}}",
+  "trash.deletionPending": "削除が完了していないため、このファイルは復元できません。削除を再試行してください。アプリは次回の起動時またはフォアグラウンドに戻ったときにも再試行します。",
   "trash.emptied": "ゴミ箱を空にしました",
   "trash.empty": "ゴミ箱は空です",
   "trash.emptyAll": "ゴミ箱を空にする",

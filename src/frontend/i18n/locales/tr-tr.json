@@ -2174,6 +2174,7 @@
   "trash.deleteTitle": "Kalıcı olarak silinsin mi?",
   "trash.deleted": "Kalıcı olarak silindi",
   "trash.deletedAt": "Silinme tarihi: {{date}}",
+  "trash.deletionPending": "Silme işlemi tamamlanmadı ve bu dosya geri yüklenemez. Silmeyi yeniden deneyin; uygulama bir sonraki açılışta veya ön plana döndüğünde de yeniden deneyecek.",
   "trash.emptied": "Çöp kutusu boşaltıldı",
   "trash.empty": "Çöp kutusu boş",
   "trash.emptyAll": "Çöp kutusunu boşalt",

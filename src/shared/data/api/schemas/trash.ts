@@ -17,9 +17,12 @@ export type TrashItem = {
   kind: TrashKind;
   title: string;
   deletedAt: number;
+  /** Permanent deletion has committed once state is `deleting`; only unlinking can be retried. */
+  state: 'trashed' | 'deleting';
   /** File bytes only; conversations do not own attachment bytes. */
   size: number;
 };
+/** Pending unlinks remain counted until both the blob and preview have been removed. */
 export type TrashSummary = { files: number; sessions: number; fileBytes: number };
 export type TrashSchemas = {
   '/trash': {

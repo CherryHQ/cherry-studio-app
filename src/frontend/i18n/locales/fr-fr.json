@@ -2187,6 +2187,7 @@
   "trash.deleteTitle": "Supprimer définitivement ?",
   "trash.deleted": "Supprimé définitivement",
   "trash.deletedAt": "Supprimé le : {{date}}",
+  "trash.deletionPending": "La suppression est incomplète et ce fichier ne peut pas être restauré. Réessayez de le supprimer ; l’application réessaiera aussi au prochain démarrage ou retour au premier plan.",
   "trash.emptied": "Corbeille vidée",
   "trash.empty": "La corbeille est vide",
   "trash.emptyAll": "Vider la corbeille",

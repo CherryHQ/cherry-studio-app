@@ -13,15 +13,21 @@ import {
   type TrashSummary,
 } from '@/shared/data/api/schemas/trash';
 
+import { FILE_CLEANUP_KEY_PREFIX } from './FileEntryService';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 const trashRows = sql`(
-  SELECT id, 'file' AS kind, filename AS title, deleted_at, size FROM file_entry WHERE deleted_at IS NOT NULL
+  SELECT id, 'file' AS kind, filename AS title, deleted_at, size, 'trashed' AS state FROM file_entry WHERE deleted_at IS NOT NULL
   UNION ALL
-  SELECT id, 'session' AS kind, name AS title, deleted_at, 0 AS size FROM agent_session WHERE deleted_at IS NOT NULL
+  SELECT id, 'session' AS kind, name AS title, deleted_at, 0 AS size, 'trashed' AS state FROM agent_session WHERE deleted_at IS NOT NULL
+  UNION ALL
+  SELECT json_extract(value, '$.entry.id') AS id, 'file' AS kind,
+    json_extract(value, '$.entry.filename') AS title, json_extract(value, '$.deletedAt') AS deleted_at,
+    json_extract(value, '$.entry.size') AS size, 'deleting' AS state
+  FROM app_state WHERE key GLOB ${`${FILE_CLEANUP_KEY_PREFIX}*`}
 ) AS trashed`;
 
-/** SQL owns trash membership; original records remain the only source of truth. */
+/** Recoverable rows and committed unlink receipts share one trash projection. */
 export class TrashService {
   constructor(private readonly dbService: DbService) {}
 
@@ -39,7 +45,7 @@ export class TrashService {
     const rows = await readSqliteRows<TrashItem>(
       this.dbService.getSqlite(),
       sql`
-      SELECT id, kind, title, deleted_at AS "deletedAt", size FROM ${trashRows}
+      SELECT id, kind, title, deleted_at AS "deletedAt", size, state FROM ${trashRows}
       WHERE ${condition ?? sql`1 = 1`} ORDER BY ${sql.join(ordering.orderBy, sql`, `)} LIMIT ${query.limit + 1}
     `,
       signal,
@@ -70,7 +76,7 @@ export class TrashService {
     const [row] = await readSqliteRows<TrashItem>(
       this.dbService.getSqlite(),
       sql`
-      SELECT id, kind, title, deleted_at AS "deletedAt", size FROM ${trashRows} WHERE kind = ${kind} AND id = ${id}
+      SELECT id, kind, title, deleted_at AS "deletedAt", size, state FROM ${trashRows} WHERE kind = ${kind} AND id = ${id}
     `,
     );
     if (!row) throw DataApiErrorFactory.notFound('TrashItem', id);
@@ -81,12 +87,12 @@ export class TrashService {
   async candidates(kind: TrashFilter, before?: number) {
     const condition = and(
       kind === 'all' ? undefined : sql`kind = ${kind}`,
-      before === undefined ? undefined : sql`deleted_at < ${before}`,
+      before === undefined ? undefined : sql`(state = 'deleting' OR deleted_at < ${before})`,
     );
     return readSqliteRows<TrashItem>(
       this.dbService.getSqlite(),
       sql`
-      SELECT id, kind, title, deleted_at AS "deletedAt", size FROM ${trashRows} WHERE ${condition ?? sql`1 = 1`}
+      SELECT id, kind, title, deleted_at AS "deletedAt", size, state FROM ${trashRows} WHERE ${condition ?? sql`1 = 1`}
     `,
     );
   }

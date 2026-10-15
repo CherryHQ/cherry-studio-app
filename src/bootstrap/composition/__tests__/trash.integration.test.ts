@@ -9,12 +9,15 @@ import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import {
   deleteInternalEntry,
   resolveFileEntry,
+  rewriteInternalTextEntry,
   trashInternalEntry,
 } from '@/backend/services/file/fileStorage';
 import { TrashRuntime } from '@/backend/services/trash';
 import { TRASH_RETENTION_MS } from '@/shared/data/api/schemas/trash';
 
 const mockFiles = new Set<string>();
+const mockContents = new Map<string, string>();
+const mockUnlinkFailures = new Set<string>();
 jest.mock('@/backend/data/storage/storagePaths', () => ({
   storageDirectory: () => 'file:///storage',
 }));
@@ -28,7 +31,16 @@ jest.mock('expo-file-system', () => {
       return mockFiles.has(this.uri);
     }
     delete() {
+      if (mockUnlinkFailures.has(this.uri)) throw new Error('unlink failed');
       mockFiles.delete(this.uri);
+      mockContents.delete(this.uri);
+    }
+    write(content: string) {
+      mockFiles.add(this.uri);
+      mockContents.set(this.uri, content);
+    }
+    get size() {
+      return new TextEncoder().encode(mockContents.get(this.uri) ?? '').byteLength;
     }
   }
   return { File: Entry, Directory: Entry, Paths: { cache: 'file:///cache' } };
@@ -50,6 +62,8 @@ let sessions: SqliteAgentSessionStore;
 beforeEach(() => {
   jest.spyOn(Date, 'now').mockReturnValue(now);
   mockFiles.clear();
+  mockContents.clear();
+  mockUnlinkFailures.clear();
   sqlite = new DatabaseSync(':memory:');
   db = createTestDb(sqlite);
   runtime = new TrashRuntime(db.dbService);
@@ -67,6 +81,7 @@ beforeEach(() => {
     VALUES ('${fileId}', 'notes.txt', 'text/plain', 123, 'imported', 1, 1);
   `);
   mockFiles.add(bytes);
+  mockContents.set(bytes, 'x'.repeat(123));
   mockFiles.add(preview);
 });
 
@@ -83,7 +98,7 @@ test('file trash preserves bytes and previews, hides ordinary reads, and restore
   expect((await files.listByCursor()).items).toEqual([]);
   await expect(resolveFileEntry(files, fileId)).resolves.toBeNull();
   expect((await runtime.entries.list({ kind: 'file' })).items).toEqual([
-    { id: fileId, kind: 'file', title: 'notes.txt', deletedAt: now, size: 123 },
+    { id: fileId, kind: 'file', title: 'notes.txt', deletedAt: now, size: 123, state: 'trashed' },
   ]);
   await runtime.restore('file', fileId);
   expect((await resolveFileEntry(files, fileId))?.uri).toBe(bytes);
@@ -193,6 +208,105 @@ test('backup freeze prevents trash mutations and cleanup', async () => {
   } finally {
     release();
   }
+});
+
+test('a queued deletion prevents a later draft edit from changing the recoverable bytes', async () => {
+  sqlite.prepare("UPDATE file_entry SET provenance = 'generated' WHERE id = ?").run(fileId);
+  let release!: () => void;
+  const barrier = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const blocking = db.dbService.withWriteTx(async () => barrier);
+  const deleting = trashInternalEntry(files, fileId);
+  const editing = expect(
+    rewriteInternalTextEntry(files, { id: fileId, data: 'changed' }),
+  ).rejects.toThrow('Draft file entry does not exist');
+  release();
+  await Promise.all([blocking, deleting, editing]);
+  await runtime.restore('file', fileId);
+  expect(mockContents.get(bytes)).toBe('x'.repeat(123));
+  expect(await files.getById(fileId)).toMatchObject({ size: 123, updatedAt: 1 });
+});
+
+test('an admitted draft edit commits matching metadata before the queued deletion', async () => {
+  sqlite.prepare("UPDATE file_entry SET provenance = 'generated' WHERE id = ?").run(fileId);
+  const editing = rewriteInternalTextEntry(files, { id: fileId, data: 'changed' });
+  const deleting = trashInternalEntry(files, fileId);
+  await Promise.all([editing, deleting]);
+  await runtime.restore('file', fileId);
+  expect(mockContents.get(bytes)).toBe('changed');
+  expect(await files.getById(fileId)).toMatchObject({ size: 7, updatedAt: now });
+});
+
+test.each(['blob', 'preview'])(
+  'retries a failed %s unlink after runtime replacement without allowing restoration',
+  async (resource) => {
+    await trashInternalEntry(files, fileId);
+    mockUnlinkFailures.add(resource === 'blob' ? bytes : preview);
+    await expect(runtime.delete('file', fileId)).rejects.toThrow('unlink failed');
+    expect(await files.findById(fileId)).toBeNull();
+    expect(await runtime.entries.get('file', fileId)).toMatchObject({
+      state: 'deleting',
+      size: 123,
+    });
+    expect(await runtime.entries.summary()).toEqual({ files: 1, sessions: 0, fileBytes: 123 });
+    await expect(runtime.restore('file', fileId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await runtime._doStop();
+    runtime = new TrashRuntime(db.dbService);
+    mockUnlinkFailures.clear();
+    // A committed unlink is retried immediately, even though retention has not elapsed.
+    await runtime.sweep();
+    expect(mockFiles.has(bytes)).toBe(false);
+    expect(mockFiles.has(preview)).toBe(false);
+    expect(await runtime.entries.summary()).toEqual({ files: 0, sessions: 0, fileBytes: 0 });
+  },
+);
+
+test('an interruption after recording permanent deletion leaves a receipt the next sweep completes', async () => {
+  await trashInternalEntry(files, fileId);
+  await files.withWriteTx((tx) => files.beginDeletionTx(tx, fileId, now));
+  expect(mockFiles.has(bytes)).toBe(true);
+  await runtime._doStop();
+  runtime = new TrashRuntime(db.dbService);
+  await runtime.sweep();
+  expect(mockFiles.has(bytes)).toBe(false);
+  expect(mockFiles.has(preview)).toBe(false);
+  expect((await runtime.entries.list()).items).toEqual([]);
+});
+
+test('a failed deletion commit preserves the recoverable entry and its bytes', async () => {
+  await trashInternalEntry(files, fileId);
+  db.failWriteTxCommit(new Error('commit failed'));
+  await expect(runtime.delete('file', fileId)).rejects.toThrow('commit failed');
+  expect(await runtime.entries.get('file', fileId)).toMatchObject({ state: 'trashed' });
+  expect(mockFiles.has(bytes)).toBe(true);
+  expect(mockFiles.has(preview)).toBe(true);
+  await runtime.restore('file', fileId);
+  expect(await files.findById(fileId)).not.toBeNull();
+});
+
+test('retries acknowledgement after bytes were removed but the receipt could not be cleared', async () => {
+  await trashInternalEntry(files, fileId);
+  db.failWriteTxCommit(new Error('commit failed'), 1);
+  await expect(runtime.delete('file', fileId)).rejects.toThrow('commit failed');
+  expect(mockFiles.has(bytes)).toBe(false);
+  expect(mockFiles.has(preview)).toBe(false);
+  expect(await runtime.entries.get('file', fileId)).toMatchObject({ state: 'deleting' });
+  await runtime.delete('file', fileId);
+  expect((await runtime.entries.list()).items).toEqual([]);
+});
+
+test('emptying continues past unlink failures and retries only the remaining receipt', async () => {
+  await trashInternalEntry(files, fileId);
+  await sessions.deleteSession(sourceId);
+  mockUnlinkFailures.add(bytes);
+  await expect(runtime.empty('all')).rejects.toThrow('Some trash items could not be removed');
+  expect((await runtime.entries.list()).items).toEqual([
+    expect.objectContaining({ id: fileId, state: 'deleting' }),
+  ]);
+  mockUnlinkFailures.clear();
+  await runtime.empty('file');
+  expect((await runtime.entries.list()).items).toEqual([]);
 });
 
 test('sweeps at startup and on foreground entry, and releases its app-state subscription on stop', async () => {

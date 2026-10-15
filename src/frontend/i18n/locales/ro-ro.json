@@ -2187,6 +2187,7 @@
   "trash.deleteTitle": "Ștergi definitiv?",
   "trash.deleted": "Șters definitiv",
   "trash.deletedAt": "Șters: {{date}}",
+  "trash.deletionPending": "Ștergerea nu s-a încheiat, iar acest fișier nu poate fi restaurat. Încercați din nou să îl ștergeți; aplicația va reîncerca și la următoarea pornire sau revenire în prim-plan.",
   "trash.emptied": "Coș golit",
   "trash.empty": "Coșul este gol",
   "trash.emptyAll": "Golește coșul",

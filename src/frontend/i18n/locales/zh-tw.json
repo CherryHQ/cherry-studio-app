@@ -2161,6 +2161,7 @@
   "trash.deleteTitle": "永久刪除？",
   "trash.deleted": "已永久刪除",
   "trash.deletedAt": "刪除時間：{{date}}",
+  "trash.deletionPending": "刪除尚未完成，此檔案無法還原。請重試刪除；應用程式也會在下次啟動或回到前景時重試。",
   "trash.emptied": "已清空資源回收筒",
   "trash.empty": "資源回收筒是空的",
   "trash.emptyAll": "清空資源回收筒",

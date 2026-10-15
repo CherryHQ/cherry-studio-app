@@ -2161,6 +2161,7 @@
   "trash.deleteTitle": "Xóa vĩnh viễn?",
   "trash.deleted": "Đã xóa vĩnh viễn",
   "trash.deletedAt": "Đã xóa: {{date}}",
+  "trash.deletionPending": "Việc xóa chưa hoàn tất và không thể khôi phục tệp này. Hãy thử xóa lại; ứng dụng cũng sẽ thử lại khi khởi động lần sau hoặc trở lại chế độ hoạt động.",
   "trash.emptied": "Đã dọn sạch thùng rác",
   "trash.empty": "Thùng rác trống",
   "trash.emptyAll": "Dọn sạch thùng rác",
