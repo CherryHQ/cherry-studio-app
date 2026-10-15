@@ -169,7 +169,7 @@ function ExpansionBackground({ progress }: { progress: SharedValue<number> }) {
   const style = useAnimatedStyle(() => ({ opacity: progress.get() }));
   return (
     <Animated.View
-      className="absolute inset-0 rounded-4xl border border-border bg-popover"
+      className="absolute inset-0 rounded-t-4xl bg-popover"
       pointerEvents="none"
       style={style}
     />

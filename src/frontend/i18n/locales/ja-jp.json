@@ -333,7 +333,6 @@
   "chat.input.attachmentUnavailable": "添付ファイルが利用できないか、変更されています。",
   "chat.input.attachmentsRejected": "これらの添付ファイルは送信できません。形式とファイル サイズを確認し、文書が破損していないか、パスワードで保護されていないかを確認してください。サポートされているドキュメント: PDF、DOCX、PPTX、XLSX、およびテキスト ファイル。",
   "chat.input.disclaimer": "AI生成コンテンツです。参考情報としてご利用ください",
-  "chat.input.editorTitle": "メッセージを編集",
   "chat.input.sendError.agentNotFound": "このエージェントはもう存在しません。",
   "chat.input.sendError.executionUnavailable": "このエージェントのモデルまたはツールは利用できません。エージェントの設定を確認してください。",
   "chat.input.sendError.modelNotConfigured": "このエージェントにはモデルが設定されていません。送信する前にモデルを選択してください。",

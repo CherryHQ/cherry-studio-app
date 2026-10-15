@@ -341,7 +341,6 @@
   "chat.input.attachmentUnavailable": "Un atașament nu este disponibil sau s-a modificat.",
   "chat.input.attachmentsRejected": "Aceste atașamente nu pot fi trimise. Verificați formatul și dimensiunea fișierului și asigurați-vă că documentele nu sunt deteriorate sau protejate prin parolă. Documente acceptate: PDF, DOCX, PPTX, XLSX și fișiere text.",
   "chat.input.disclaimer": "Conținut generat de IA, doar pentru referință",
-  "chat.input.editorTitle": "Editează mesajul",
   "chat.input.sendError.agentNotFound": "Acest agent nu mai există.",
   "chat.input.sendError.executionUnavailable": "Modelul sau instrumentele acestui agent nu sunt disponibile. Verificați setările Agentului.",
   "chat.input.sendError.modelNotConfigured": "Acest Agent nu are un model configurat. Selectați un model înainte de a trimite un mesaj.",

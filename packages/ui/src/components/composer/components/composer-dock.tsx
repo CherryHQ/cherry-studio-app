@@ -43,6 +43,7 @@ export function ComposerDock({
   onLayout,
 }: ComposerDockProps) {
   const { bottom } = useSafeAreaInsets();
+  const bottomPadding = getComposerBottomPadding(bottom);
   const expansion = useComposerExpansion();
   const fallbackRef = useRef<View>(null);
   const dockRef = containerRef ?? fallbackRef;
@@ -82,6 +83,11 @@ export function ComposerDock({
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: isExpandable ? (progress?.get() ?? 0) : 0,
   }));
+  const dockStyle = useAnimatedStyle(() => ({
+    paddingBottom: bottomPadding,
+    paddingHorizontal:
+      composerHorizontalScreenInset * (1 - (isExpandable ? (progress?.get() ?? 0) : 0)),
+  }));
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -108,11 +114,15 @@ export function ComposerDock({
         (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
       }
       pointerEvents="box-none"
-      style={{
-        paddingBottom: getComposerBottomPadding(bottom),
-        paddingHorizontal: composerHorizontalScreenInset,
-      }}
+      style={dockStyle}
     >
+      {isExpandable ? (
+        <Animated.View
+          className="absolute inset-0 rounded-t-4xl bg-popover"
+          pointerEvents="none"
+          style={backdropStyle}
+        />
+      ) : null}
       {children}
     </StyledKeyboardStickyView>
   );

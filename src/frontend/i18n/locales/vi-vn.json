@@ -333,7 +333,6 @@
   "chat.input.attachmentUnavailable": "Tệp đính kèm không có sẵn hoặc đã thay đổi.",
   "chat.input.attachmentsRejected": "Những tệp đính kèm này không thể gửi được. Kiểm tra định dạng và kích thước tệp, đồng thời đảm bảo tài liệu không bị hỏng hoặc được bảo vệ bằng mật khẩu. Các tài liệu được hỗ trợ: PDF, DOCX, PPTX, XLSX và các tệp văn bản.",
   "chat.input.disclaimer": "Nội dung do AI tạo, chỉ mang tính tham khảo",
-  "chat.input.editorTitle": "Chỉnh sửa tin nhắn",
   "chat.input.sendError.agentNotFound": "Tác nhân này không còn tồn tại.",
   "chat.input.sendError.executionUnavailable": "Mô hình hoặc công cụ của Tác nhân này không khả dụng. Kiểm tra cài đặt Tác nhân.",
   "chat.input.sendError.modelNotConfigured": "Tác nhân này chưa được cấu hình mô hình. Hãy chọn một mô hình trước khi gửi.",

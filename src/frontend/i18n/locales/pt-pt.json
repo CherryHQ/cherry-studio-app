@@ -341,7 +341,6 @@
   "chat.input.attachmentUnavailable": "Um anexo não está disponível ou foi alterado.",
   "chat.input.attachmentsRejected": "Estes anexos não podem ser enviados. Verifique o formato e o tamanho do ficheiro e certifique-se de que os documentos não estão danificados ou protegidos por palavra-passe. Documentos suportados: PDF, DOCX, PPTX, XLSX e ficheiros de texto.",
   "chat.input.disclaimer": "Conteúdo gerado por IA, apenas para referência",
-  "chat.input.editorTitle": "Editar mensagem",
   "chat.input.sendError.agentNotFound": "Este Agente já não existe.",
   "chat.input.sendError.executionUnavailable": "O modelo ou as ferramentas deste Agente não estão disponíveis. Verifique as definições do agente.",
   "chat.input.sendError.modelNotConfigured": "Este Agente não tem um modelo configurado. Selecione um modelo antes de enviar.",

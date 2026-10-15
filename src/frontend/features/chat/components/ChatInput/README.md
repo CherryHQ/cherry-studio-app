@@ -33,7 +33,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
 - Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
-  surface below the top safe area, with an Edit message heading and collapse action. Local and
+  surface below the top safe area, with a collapse action and no heading. Its background fills
+  both screen edges and extends through the footer and bottom safe area. Local and
   remote conversations share the same field and toolbar; large-editor layout never remounts the
   native input or clears its buffer. The expanded field fills the available region and scrolls
   natively. The compact height cap remains unchanged.

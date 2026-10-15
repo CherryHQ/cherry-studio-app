@@ -345,7 +345,6 @@
   "chat.input.attachmentUnavailable": "Вложение недоступно или изменено.",
   "chat.input.attachmentsRejected": "Эти вложения невозможно отправить. Проверьте формат и размер файла, а также убедитесь, что документы не повреждены и не защищены паролем. Поддерживаемые документы: PDF, DOCX, PPTX, XLSX и текстовые файлы.",
   "chat.input.disclaimer": "Контент сгенерирован ИИ и носит справочный характер",
-  "chat.input.editorTitle": "Редактирование сообщения",
   "chat.input.sendError.agentNotFound": "Этот Агент больше не существует.",
   "chat.input.sendError.executionUnavailable": "Модель или инструменты этого Агента недоступны. Проверьте настройки Агента.",
   "chat.input.sendError.modelNotConfigured": "Для этого Агента не настроена модель. Выберите модель перед отправкой.",

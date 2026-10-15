@@ -17,6 +17,7 @@ import {
   ComposerExpansion,
   ComposerExpansionBackground,
   ComposerExpansionMeasure,
+  useComposerExpansion,
 } from './composer-expansion';
 import { ComposerInput } from './composer-input';
 import { ComposerPill } from './composer-pill';
@@ -56,6 +57,7 @@ function ComposerRoot({
   testID,
   value,
 }: ComposerProps) {
+  const isExpansionPresented = useComposerExpansion()?.state.isPresented ?? false;
   const state = useMemo<ComposerStateContextValue>(
     () => ({
       canSend: canSend ?? value.trim().length > 0,
@@ -82,7 +84,9 @@ function ComposerRoot({
   return (
     <View style={style} testID={testID}>
       <SurfaceFrame
-        className="bg-card ios:shadow-field android:shadow-sm"
+        className={
+          isExpansionPresented ? 'bg-popover' : 'bg-card ios:shadow-field android:shadow-sm'
+        }
         cornerRadius={surfaceRadius}
         style={surfaceStyle}
       >

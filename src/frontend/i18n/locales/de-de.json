@@ -337,7 +337,6 @@
   "chat.input.attachmentUnavailable": "Ein Anhang ist nicht verfügbar oder wurde geändert.",
   "chat.input.attachmentsRejected": "Diese Anhänge können nicht gesendet werden. Überprüfen Sie das Format und die Dateigröße und stellen Sie sicher, dass die Dokumente nicht beschädigt oder durch ein Passwort geschützt sind. Unterstützte Dokumente: PDF, DOCX, PPTX, XLSX und Textdateien.",
   "chat.input.disclaimer": "KI-generierte Inhalte, nur zur Orientierung",
-  "chat.input.editorTitle": "Nachricht bearbeiten",
   "chat.input.sendError.agentNotFound": "Dieser Agent existiert nicht mehr.",
   "chat.input.sendError.executionUnavailable": "Das Modell oder die Tools dieses Agenten sind nicht verfügbar. Überprüfen Sie die Agent-Einstellungen.",
   "chat.input.sendError.modelNotConfigured": "Für diesen Agenten ist kein Modell konfiguriert. Wählen Sie vor dem Senden ein Modell aus.",

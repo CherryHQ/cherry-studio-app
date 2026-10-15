@@ -726,6 +726,8 @@ only compact input space; expansion stays in the same native subtree above the t
 `useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
 returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
 while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
+The expanded dock removes its horizontal gutter and fills through the bottom safe area, keeping
+the footer and controls inside one opaque surface with only the top corners rounded.
 Compose `Composer.ExpansionMeasure` around accessories that change height during expansion, and
 use `Composer.Input layout="fill"` inside the bounded large editing region. Its native ref and
 buffer remain mounted. The feature owns the field/toolbar arrangement and translated controls.

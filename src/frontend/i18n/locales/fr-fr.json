@@ -341,7 +341,6 @@
   "chat.input.attachmentUnavailable": "Une pièce jointe n'est pas disponible ou a été modifiée.",
   "chat.input.attachmentsRejected": "Ces pièces jointes ne peuvent pas être envoyées. Vérifiez le format et la taille du fichier et assurez-vous que les documents ne sont pas endommagés ou protégés par un mot de passe. Documents pris en charge : PDF, DOCX, PPTX, XLSX et fichiers texte.",
   "chat.input.disclaimer": "Contenu généré par IA, à titre indicatif uniquement",
-  "chat.input.editorTitle": "Modifier le message",
   "chat.input.sendError.agentNotFound": "Cet Agent n'existe plus.",
   "chat.input.sendError.executionUnavailable": "Le modèle ou les outils de cet agent ne sont pas disponibles. Vérifiez les paramètres de l'agent.",
   "chat.input.sendError.modelNotConfigured": "Aucun modèle n’est configuré pour cet Agent. Sélectionnez un modèle avant d’envoyer un message.",
