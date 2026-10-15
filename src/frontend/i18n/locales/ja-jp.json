@@ -1581,7 +1581,6 @@
   "settings.permissions.photos.selected": "厳選された写真",
   "settings.permissions.purpose.calendar": "指示に応じて予定を表示・管理します。",
   "settings.permissions.purpose.camera": "チャット、描画、アバター用の写真を撮るときに使用します。",
-  "settings.permissions.purpose.health": "選択したApple Healthの活動、睡眠、心拍数、ワークアウトのデータを健康とフィットネスの管理のために読み取ります。AI分析では、選択したモデルサービスにデータを共有する前に承認が必要です。",
   "settings.permissions.purpose.location": "近くの場所について尋ねたときに、アプリの使用中のみ使用します。",
   "settings.permissions.purpose.photos": "最近の写真を表示するために使用します。",
   "settings.permissions.purpose.reminders": "指示に応じて Apple リマインダーを表示・管理します。",

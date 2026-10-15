@@ -75,15 +75,13 @@ export function AgentCapabilitiesSection({
           <Section.SwitchItem
             key={row.capability}
             description={
-              row.capability === 'health'
-                ? t('settings.permissions.purpose.health')
-                : needsPermission
-                  ? t(
-                      status.reason
-                        ? `settings.permissions.reason.${status.reason}`
-                        : `agent.capabilities.permission.${status.state}`,
-                    )
-                  : undefined
+              needsPermission
+                ? t(
+                    status.reason
+                      ? `settings.permissions.reason.${status.reason}`
+                      : `agent.capabilities.permission.${status.state}`,
+                  )
+                : undefined
             }
             label={t(`agent.capabilities.${row.capability}.label`)}
             onValueChange={(value) => handleToggle(row, value)}

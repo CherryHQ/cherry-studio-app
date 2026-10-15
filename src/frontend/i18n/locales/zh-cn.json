@@ -1581,7 +1581,6 @@
   "settings.permissions.photos.selected": "选定照片",
   "settings.permissions.purpose.calendar": "按你的指令查看和管理日程。",
   "settings.permissions.purpose.camera": "拍摄聊天附件、绘画参考图或头像时使用。",
-  "settings.permissions.purpose.health": "读取所选 Apple Health 活动、睡眠、心率和运动记录，用于健康与健身管理。AI 分析需要先确认，才会向所选模型服务共享数据。",
   "settings.permissions.purpose.location": "询问附近地点时使用，仅在使用 App 期间访问。",
   "settings.permissions.purpose.photos": "用于显示最近的照片。",
   "settings.permissions.purpose.reminders": "按你的指令查看和管理提醒事项。",

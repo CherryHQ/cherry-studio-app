@@ -1593,7 +1593,6 @@
   "settings.permissions.photos.selected": "Seçilen fotoğraflar",
   "settings.permissions.purpose.calendar": "İsteğiniz üzerine etkinlikleri görüntüler ve yönetir.",
   "settings.permissions.purpose.camera": "Sohbet, çizim veya profil resmi için fotoğraf çektiğinizde kullanılır.",
-  "settings.permissions.purpose.health": "Sağlık ve fitness yönetimi için seçilen Apple Health aktivite, uyku, kalp atış hızı ve antrenman verilerini okur. Yapay zekâ analizi, seçilen model hizmetiyle veri paylaşmadan önce onay gerektirir.",
   "settings.permissions.purpose.location": "Yakındaki yerler hakkında soru sorduğunuzda, yalnızca uygulamayı kullanırken kullanılır.",
   "settings.permissions.purpose.photos": "Son fotoğraflarınızı göstermek için kullanılır.",
   "settings.permissions.purpose.reminders": "İsteğiniz üzerine Apple Hatırlatıcılar'ı görüntüler ve yönetir.",

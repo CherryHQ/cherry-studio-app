@@ -1581,7 +1581,6 @@
   "settings.permissions.photos.selected": "Ảnh được chọn",
   "settings.permissions.purpose.calendar": "Xem và quản lý sự kiện theo yêu cầu của bạn.",
   "settings.permissions.purpose.camera": "Dùng khi bạn chụp ảnh cho cuộc trò chuyện, bản vẽ hoặc ảnh đại diện.",
-  "settings.permissions.purpose.health": "Đọc dữ liệu hoạt động, giấc ngủ, nhịp tim và bài tập đã chọn từ Apple Health để quản lý sức khỏe và thể chất. Phân tích AI cần phê duyệt trước khi chia sẻ dữ liệu với dịch vụ mô hình đã chọn.",
   "settings.permissions.purpose.location": "Dùng khi bạn hỏi về địa điểm gần đây, chỉ trong lúc bạn dùng ứng dụng.",
   "settings.permissions.purpose.photos": "Dùng để hiển thị ảnh gần đây của bạn.",
   "settings.permissions.purpose.reminders": "Xem và quản lý Lời nhắc của Apple theo yêu cầu của bạn.",

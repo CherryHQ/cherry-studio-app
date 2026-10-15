@@ -1617,7 +1617,6 @@
   "settings.permissions.photos.selected": "Выбранные фотографии",
   "settings.permissions.purpose.calendar": "Просмотр и управление событиями по вашему запросу.",
   "settings.permissions.purpose.camera": "Используется, когда вы делаете фото для чата, рисунка или аватара.",
-  "settings.permissions.purpose.health": "Читает выбранные данные об активности, сне, пульсе и тренировках из Apple Health для управления здоровьем и фитнесом. Анализ ИИ требует согласия перед передачей данных выбранному сервису моделей.",
   "settings.permissions.purpose.location": "Используется, когда вы спрашиваете о местах поблизости, и только во время работы с приложением.",
   "settings.permissions.purpose.photos": "Используется для показа ваших недавних фото.",
   "settings.permissions.purpose.reminders": "Просмотр и управление Напоминаниями Apple по вашему запросу.",

@@ -1605,7 +1605,6 @@
   "settings.permissions.photos.selected": "Fotos selecionadas",
   "settings.permissions.purpose.calendar": "Consulta e gere eventos quando pedir.",
   "settings.permissions.purpose.camera": "Usada quando tira uma fotografia para uma conversa, um desenho ou o seu avatar.",
-  "settings.permissions.purpose.health": "Lê dados selecionados de atividade, sono, frequência cardíaca e treinos do Apple Health para gestão da saúde e atividade física. A análise por IA requer aprovação antes da partilha com o serviço de modelos escolhido.",
   "settings.permissions.purpose.location": "Usada quando pergunta por locais próximos, apenas enquanto utiliza a aplicação.",
   "settings.permissions.purpose.photos": "Usado para mostrar as suas fotografias recentes.",
   "settings.permissions.purpose.reminders": "Consulta e gere os Lembretes da Apple quando pedir.",

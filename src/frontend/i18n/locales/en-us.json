@@ -1593,7 +1593,6 @@
   "settings.permissions.photos.selected": "Selected photos",
   "settings.permissions.purpose.calendar": "View and manage events when you ask.",
   "settings.permissions.purpose.camera": "Used when you take a photo for a chat, drawing, or avatar.",
-  "settings.permissions.purpose.health": "Read selected Apple Health activity, sleep, heart-rate and workout data for health and fitness management. AI analysis requires approval before sharing data with the selected model service.",
   "settings.permissions.purpose.location": "Used when you ask about nearby places, only while you're using the app.",
   "settings.permissions.purpose.photos": "Used to show your recent photos.",
   "settings.permissions.purpose.reminders": "View and manage Apple Reminders when you ask.",

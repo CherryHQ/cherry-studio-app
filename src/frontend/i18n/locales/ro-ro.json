@@ -1605,7 +1605,6 @@
   "settings.permissions.photos.selected": "Fotografii selectate",
   "settings.permissions.purpose.calendar": "Vizualizează și gestionează evenimentele la cererea dvs.",
   "settings.permissions.purpose.camera": "Folosită când faceți o fotografie pentru un chat, un desen sau avatar.",
-  "settings.permissions.purpose.health": "Citește datele selectate despre activitate, somn, ritm cardiac și antrenamente din Apple Health pentru gestionarea sănătății și fitnessului. Analiza AI necesită aprobare înainte de partajarea cu serviciul de modele ales.",
   "settings.permissions.purpose.location": "Folosită când întrebați despre locuri din apropiere, doar cât timp utilizați aplicația.",
   "settings.permissions.purpose.photos": "Folosit pentru a afișa fotografiile recente.",
   "settings.permissions.purpose.reminders": "Vizualizează și gestionează Mementourile Apple la cererea dvs.",

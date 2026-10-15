@@ -7,7 +7,8 @@
  * this device can still grant, and this app has configured. Everything it
  * returns is executable; a capability that fails any gate is absent rather than
  * present and broken. A permission the OS can still request keeps the tool
- * offered as `ask`; execution prompts after in-app approval.
+ * offered as `ask`; execution prompts after in-app approval. HealthKit read
+ * access remains unknown after prompting, so queries can return no data.
  *
  * Resolution is per turn on purpose. Permissions and the drawing-model setting
  * change outside Cherry, so a catalog cached across turns would offer tools the

@@ -41,8 +41,7 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
     createDeviceRuntimeTool({
       capabilityId: HEALTH_TOOL_IDS.getSummary,
       deps,
-      description:
-        "Read selected Apple Health metrics as a range summary or daily aggregates for the user's health and fitness management. Requires explicit approval to share the results with the selected AI provider. Do not use this data for unrelated tasks or medical diagnosis.",
+      description: 'Read selected health metrics as a range summary or daily aggregates.',
       displayName: 'Health summary',
       inputSchema: summarySchema,
       permissionScopes: (input) =>
@@ -78,7 +77,7 @@ export function createHealthTools(deps: DeviceToolDependencies, loadHealthKit?: 
       capabilityId: HEALTH_TOOL_IDS.listWorkouts,
       deps,
       description:
-        "List Apple Health workouts for the user's fitness management from a date range of at most 90 days. Requires explicit approval to share results with the selected AI provider. An empty result may mean no records or no read access; never infer zero activity from it. Do not provide medical diagnosis.",
+        'List workouts from a date range of at most 90 days, subject to system history access. An empty result may mean no records or no read access; never infer zero activity from it.',
       displayName: 'List workouts',
       inputSchema: workoutsSchema,
       permissionScopes: ['health.workouts.read'],
