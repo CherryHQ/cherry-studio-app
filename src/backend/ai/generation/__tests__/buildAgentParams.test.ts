@@ -79,6 +79,42 @@ async function buildReasoningOptions(input: {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('buildAgentParams assistant-less contract', () => {
+  it.each([undefined, 1024])(
+    'uses the catalog output limit for gateway aliases unless overridden with %s',
+    async (maxOutputTokens) => {
+      const provider = createProvider('cherryin');
+      const model = resolveModel(provider, 'anthropic/claude-haiku-4.5');
+      expect(model.maxOutputTokens).toBe(64_000);
+
+      const result = await buildAgentParams({
+        request: {
+          uniqueModelId: model.id,
+          ...(maxOutputTokens !== undefined && { callOverrides: { maxOutputTokens } }),
+        },
+        services: createServices(),
+        provider,
+        model,
+      });
+
+      expect(result.sdkConfig.modelId).toBe('anthropic/claude-haiku-4.5');
+      expect(result.options.maxOutputTokens).toBe(maxOutputTokens ?? 64_000);
+    },
+  );
+
+  it('leaves the SDK default intact when the model has no output limit', async () => {
+    const provider = createProvider('cherryin');
+    const model = { ...resolveModel(provider, 'custom-model'), maxOutputTokens: undefined };
+
+    const result = await buildAgentParams({
+      request: { uniqueModelId: model.id },
+      services: createServices(),
+      provider,
+      model,
+    });
+
+    expect(result.options).not.toHaveProperty('maxOutputTokens');
+  });
+
   it('uses the shared normalized wire model id', async () => {
     const provider = createProvider('gemini');
     const model = {

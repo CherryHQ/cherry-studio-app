@@ -181,7 +181,11 @@ export async function buildAgentParams({
     getUsagePlugins: getRepairUsagePlugins,
   });
   const overridden = applyCallOverrides(
-    { providerOptions, standardParams: {} },
+    {
+      providerOptions,
+      standardParams:
+        model.maxOutputTokens !== undefined ? { maxOutputTokens: model.maxOutputTokens } : {},
+    },
     request.callOverrides,
     model,
   );
