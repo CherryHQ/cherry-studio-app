@@ -46,7 +46,7 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
     already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
     this behavior; its list does not dismiss the keyboard again.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
-  shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
+  shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
   Plugin and Skill references use the link color and stay inline at the field's font size. The
   native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
@@ -78,8 +78,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
   ownership on its next focus.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
-  CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
+  `Composer.Dock`. Chat uses its `expandable` layout: a compact-height placeholder reserves
+  transcript space while the same dock overlays the conversation during manual expansion.
+  Other floating surfaces can use CherryUI's `useComposerDockLayout` inset primitive.
 - `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
   child controls cancel the press inside CherryUI's native `BackgroundPressArea`, including a touch
   that stops momentum. Message text still dismisses; message controls and the scroll-to-bottom
@@ -136,6 +137,12 @@ walk to verify it.
 
 ## Behavior notes
 
+- Chat's screen-local `Composer.Expansion` owns manual large-editor presentation separately from
+  editing and draft state. Expand/collapse never moves the editor into a portal or requests native
+  focus/blur. Sending and a newly mounted composer session collapse the large editor. Native
+  keyboard hiding and input replacements retain its size choice; only field focus reconnects
+  keyboard tracking. `Composer.ExpansionMeasure` accounts for accessory height changes so the
+  editor stays below the top safe area when attachments grow or disappear.
 - Input surfaces have two policies. An overlay (the ＋ menu or chat effort
   slider) preserves field focus and the live keyboard. A replacement (model or
   settings Sheet, camera, photo library, or file picker) first disables dock

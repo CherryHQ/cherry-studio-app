@@ -8,7 +8,6 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { clearInitialURL } from 'expo-linking';
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -16,11 +15,11 @@ import * as WebBrowser from 'expo-web-browser';
 import { type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import {
   useMcpServerApiById,
   useMcpServerMutations,
@@ -123,8 +122,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   const mcp = useBackendModule('mcp');
   const queryClient = useQueryClient();
   const { alert } = useAlert();
-  const { theme } = useUniwind();
-  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
+  const mcpIcon = useMcpIcon();
 
   const isCreating = !serverId;
   const {

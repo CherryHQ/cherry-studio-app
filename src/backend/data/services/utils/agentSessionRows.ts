@@ -19,6 +19,7 @@ import {
   type AgentSessionEntity,
   AgentSessionEntitySchema,
 } from '@/shared/data/api/schemas/agentSessions';
+import { readMessageTranslations } from '@/shared/data/types/messageTranslation';
 
 import { timestampToISO } from './rowMappers';
 
@@ -95,6 +96,7 @@ function parseNullableJson<TValue>(value: string | null): TValue | null {
 }
 
 export function toAgentMessageView(row: AgentMessageViewRow): AgentMessageView {
+  const translations = readMessageTranslations(row.data.translations);
   return AgentMessageViewSchema.parse({
     id: row.id,
     sessionId: row.sessionId,
@@ -102,6 +104,7 @@ export function toAgentMessageView(row: AgentMessageViewRow): AgentMessageView {
     role: row.role,
     status: row.status,
     parts: row.data.parts,
+    ...(translations ? { translations } : {}),
     stats: row.stats ?? null,
     modelId: row.modelId,
     inferenceSnapshot: readAgentInferenceSnapshot(row.inferenceSnapshot),
@@ -146,7 +149,7 @@ export function toReadableAgentMessageViews(
           },
         };
       });
-      return [toAgentMessageView({ ...row, data: { parts: readableParts } })];
+      return [toAgentMessageView({ ...row, data: { ...row.data, parts: readableParts } })];
     } catch (error) {
       logger.warn('Skipping unreadable agent message', error as Error, {
         messageId: row.id,

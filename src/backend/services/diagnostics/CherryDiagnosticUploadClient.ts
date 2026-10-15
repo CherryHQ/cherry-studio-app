@@ -1,6 +1,7 @@
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 
+import { hashLocalFile } from '@/backend/services/file/fileHash';
 import {
   diagnosticDescriptionByteLength,
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
@@ -74,7 +75,10 @@ export class CherryDiagnosticUploadClient {
         return { status: 'rejected', reason: 'invalid_archive' };
       if (fileSize > ARCHIVE_LIMIT_BYTES)
         return { status: 'rejected', reason: 'archive_too_large' };
-      fileSha256 = await native.sha256(input.filePath);
+      fileSha256 = await hashLocalFile(
+        input.filePath,
+        input.signal ?? new AbortController().signal,
+      );
       input.signal?.throwIfAborted();
       descriptionSha256 = await digestStringAsync(CryptoDigestAlgorithm.SHA256, description);
       input.signal?.throwIfAborted();

@@ -32,8 +32,8 @@ import type {
 import {
   McpAuthorizationError,
   type McpOAuthStartInput,
-  type McpContentEntry,
   type McpContentPreview,
+  type McpPromptEntry,
 } from '@/shared/contracts/mcp';
 import type {
   McpAppReference,
@@ -48,13 +48,14 @@ import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
+import { enablesMcpServer } from '@/shared/utils/agentMcpBinding';
 import { isSameMcpConnectionConfig } from '@/shared/utils/mcpConnectionConfig';
 
 import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
 import { mcpToolAppUri, mcpToolVisible } from './mcpAppMetadata';
 import { McpAppRuntime } from './McpAppRuntime';
-import { listMcpContent, readMcpContent } from './mcpContent';
+import { listMcpPrompts, readMcpContent } from './mcpContent';
 import { McpElicitationBroker } from './mcpElicitation';
 import {
   classifyMcpCallRejection,
@@ -147,6 +148,7 @@ type ServerRuntimeState = {
   connectionKey?: Promise<string>;
   connectionPromise?: Promise<McpRuntimeClient>;
   discoveryFailure?: { attempts: number; nextAttemptAt: number };
+  prompts?: McpPromptEntry[];
   generation: number;
   refresh?: Promise<void>;
   runtimeError?: string;
@@ -218,7 +220,7 @@ function createMcpClient(
   pluginAuthorizations: PluginAuthorizationManager,
   foreground: boolean,
   authorization: McpOAuthRuntime,
-  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onToolsChanged'>,
+  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onCatalogChanged'>,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
@@ -281,6 +283,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private readonly catalogPreparations = new Map<string, Promise<void>>();
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
+  private readonly promptCatalogListeners = new Set<() => void>();
 
   constructor(private readonly traces?: TraceRecorder) {
     super();
@@ -557,10 +560,63 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
   }
 
-  async listContent(serverId: string, signal?: AbortSignal): Promise<McpContentEntry[]> {
-    return this.withContentClient(serverId, signal, (client, _server, requestSignal) =>
-      listMcpContent(client, requestSignal),
+  readonly subscribePromptCatalogs = (listener: () => void): (() => void) => {
+    this.promptCatalogListeners.add(listener);
+    return () => this.promptCatalogListeners.delete(listener);
+  };
+
+  /** Read only the current connections' memory/disk catalogs, without opening a client. */
+  async getCachedPrompts(): Promise<Readonly<Record<string, readonly McpPromptEntry[]>>> {
+    const { items: servers } = await mcpServerService.list({ isEnabled: true });
+    const catalogs = await Promise.all(
+      servers
+        .filter((server) => server.isEnabled && server.origin !== 'builtin')
+        .map(async (server) => {
+          const state = this.getRuntimeState(server);
+          await this.restoreCatalog(server, state);
+          return [server.id, this.isCurrentState(state) ? (state.prompts ?? []) : []] as const;
+        }),
     );
+    return Object.fromEntries(catalogs);
+  }
+
+  /** Resolves a cached prompt on the server's shared connection, like a tool call. */
+  async readPrompt(
+    agentId: string,
+    serverId: string,
+    name: string,
+    args: Record<string, string>,
+    signal: AbortSignal = new AbortController().signal,
+  ): Promise<McpContentPreview> {
+    const { items: bindings } = await agentToolBindingService.list(agentId);
+    if (!bindings.some((binding) => binding.serverId === serverId && enablesMcpServer(binding)))
+      throw unavailableToolError();
+    const server = await mcpServerService.getById(serverId);
+    if (!server.isEnabled || server.origin === 'builtin' || !isRunnableMcpServer(server))
+      throw unavailableToolError();
+    const state = this.getRuntimeState(server);
+    await this.restoreCatalog(server, state);
+    const entry = state.prompts?.find((item) => item.key === name);
+    if (!entry) throw unavailableToolError();
+    const generation = state.generation;
+    const requestSignal = AbortSignal.any([signal, state.abort.signal]);
+    try {
+      const client = await this.getClient(server, state, requestSignal);
+      const preview = await readMcpContent(client, server.name, entry, args, requestSignal);
+      if (!this.isCurrentState(state, generation)) throw unavailableToolError();
+      return preview;
+    } catch (error) {
+      if (error instanceof McpRuntimeToolError || !this.isCurrentState(state, generation)) {
+        throw error instanceof McpRuntimeToolError ? error : unavailableToolError();
+      }
+      const rejection = classifyMcpCallRejection(error);
+      if (rejection?.staleCatalog) {
+        this.refreshChangedCatalog(state);
+        throw rejection.failure;
+      }
+      if (!signal.aborted) this.resetConnection(state);
+      throw rejection?.failure ?? error;
+    }
   }
 
   async readResultResource(
@@ -585,20 +641,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
         );
       },
     );
-  }
-
-  async readContent(
-    serverId: string,
-    entry: McpContentEntry,
-    args: Record<string, string>,
-    signal?: AbortSignal,
-  ): Promise<McpContentPreview> {
-    return this.withContentClient(serverId, signal, async (client, server, requestSignal) => {
-      const catalog = await listMcpContent(client, requestSignal);
-      const current = catalog.find((item) => item.kind === entry.kind && item.key === entry.key);
-      if (!current) throw unavailableToolError();
-      return readMcpContent(client, server.name, current, args, requestSignal);
-    });
   }
 
   private async withContentClient<T>(
@@ -775,6 +817,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * against a service nothing will read again.
    */
   protected async onStop(): Promise<void> {
+    this.promptCatalogListeners.clear();
     await this.apps.stop();
     this.elicitations.stop();
     this.catalogPreparations.clear();
@@ -804,6 +847,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       this.runtimeSnapshots.delete(serverId);
       deleteMcpToolCatalog(serverId);
     }
+    this.notifyPromptCatalogs();
   }
 
   /**
@@ -880,11 +924,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
         readMcpToolCatalog(server.id),
         this.getConnectionKey(state),
       ]);
-      if (!stored || stored.connectionKey !== key) return;
-      if (!this.isCurrentState(state) || state.catalog) return;
+      if (!stored || stored.connectionKey !== key || !this.isCurrentState(state)) return;
+      state.prompts ??= stored.prompts;
+      if (state.catalog) return;
       state.catalog = {
         discoveryWarnings: [],
-        expiresAt: stored.expiresAt,
+        // A remote file written before prompt discovery refreshes on the next turn.
+        expiresAt: server.origin !== 'builtin' && !stored.prompts ? 0 : stored.expiresAt,
         source: 'stored',
         tools: stored.tools,
       };
@@ -1025,7 +1071,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       this.oauth,
       {
         elicit: (params, requestSignal) => this.askForServer(server, state, params, requestSignal),
-        onToolsChanged: () => {
+        onCatalogChanged: () => {
           if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
         },
       },
@@ -1371,8 +1417,18 @@ export class McpRuntimeService extends BaseService implements McpModule {
       'mcp.connection.generation': generation,
     });
     let rawTools: ListToolsResult['tools'];
+    let prompts: McpPromptEntry[] | undefined;
     try {
-      rawTools = await listAllTools(client, signal);
+      [rawTools, prompts] = await Promise.all([
+        listAllTools(client, signal),
+        server.origin === 'builtin'
+          ? undefined
+          : listMcpPrompts(client, signal).catch((error: unknown) => {
+              // Prompts are optional: a failure keeps the last known menu and never blocks tools.
+              logger.warn('Could not list MCP prompts', error as Error, { serverId: server.id });
+              return undefined;
+            }),
+      ]);
     } catch (error) {
       endMcpTrace(trace, error, signal, didTimeout?.());
       throw error;
@@ -1382,6 +1438,14 @@ export class McpRuntimeService extends BaseService implements McpModule {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
     state.clientListed = true;
+    if (prompts) {
+      const changed = JSON.stringify(prompts) !== JSON.stringify(state.prompts);
+      state.prompts = prompts;
+      if (changed) this.notifyPromptCatalogs();
+    } else {
+      // Keep the stored menu when a live discovery ran before the file was restored.
+      await this.restoreCatalog(server, state);
+    }
     const tools = await this.recordCatalog(
       server,
       state,
@@ -1433,10 +1497,15 @@ export class McpRuntimeService extends BaseService implements McpModule {
         expiresAt,
         serverId: server.id,
         tools: rawTools,
+        prompts: state.prompts,
         version: 2,
       });
     }
     return rawTools;
+  }
+
+  private notifyPromptCatalogs(): void {
+    for (const listener of this.promptCatalogListeners) listener();
   }
 
   private recordDiscoveryFailure(state: ServerRuntimeState, error?: unknown): void {

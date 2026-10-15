@@ -186,9 +186,18 @@ Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row st
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 
+An unfinished assistant row keeps the pending indicator after completed content while waiting for
+the next model response. `MessageParts` owns this fallback and evaluates the same normalized parts
+and body/process split it renders, so a removed generated-image reference cannot suppress feedback.
+The message status remains the source of whether the reply is unfinished. Active reasoning, visible
+running tools, and pending user questions or approvals supply their own feedback instead, unless
+that reasoning or tool renders in the process
+group above a body part such as an answered question. An empty streaming reasoning block stays visible;
+settled empty blocks remain hidden. Retry feedback clears only when the next attempt has response
+content, not when an empty text or thinking block starts.
+
 The tool content adapters are Generic, MCP, Web Search, Write File, Meta Search, Meta Inspect, Meta
-Invoke, and Meta Exec. Painting remains a feature-owned message renderer and is not a tool-detail
-variant. Count renderer families, disclosure layers, and visual states separately; combining them
+Invoke, and Meta Exec. Count renderer families, disclosure layers, and visual states separately; combining them
 into one component total obscures ownership and does not measure duplication.
 
 Use the following Storybook stories as the visual inventory:
@@ -197,8 +206,6 @@ Use the following Storybook stories as the visual inventory:
   states in light and dark themes.
 - `Messages / Playground / Light` and `Messages / Playground / Dark` exercise the production
   message-part dispatch, including Generic, MCP, Web Search, Write File, and all Meta tool adapters.
-- `Messages / Painting` separates generating, single-result, multiple-result, failed, and
-  interrupted painting states.
 
 When adding or changing an interactive renderer, add a production-shaped fixture for each relevant
 state, inspect both themes on a device, open the detail, and confirm that the summary uses the shared
@@ -219,7 +226,7 @@ The screen composes the message history and composer as sibling regions. Within 
 ownership flows from the list toward intrinsic content:
 
 ```text
-ChatScreen or PaintingComposer
+ChatScreen
 ├── message workspace
 │   └── MessageList
 │       └── list-owned row frame

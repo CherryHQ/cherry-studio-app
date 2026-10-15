@@ -15,6 +15,8 @@ const tx = { sentinel: 'tx' } as unknown as Database;
 
 function painting(id: string, outputs: FileEntryId[] = []): Painting {
   return {
+    boardId: 'board-1',
+    brief: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     files: { input: [inputFileId], output: outputs },
     id,
@@ -83,8 +85,9 @@ const generationInput = {
   prompt: ' draw ',
 };
 
-function signatureFor(paintingId: string | null = null) {
+function signatureFor(paintingId: string | null = null, boardId: string | null = null) {
   return JSON.stringify({
+    boardId,
     images: [inputFileId],
     mode: 'edit',
     modelId,
@@ -101,6 +104,7 @@ describe('createPaintingsModule', () => {
     const { backend, dependencies } = createSubject();
 
     await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      boardId: 'board-1',
       jobId: 'job-1',
       paintingId: 'painting-1',
     });
@@ -114,6 +118,7 @@ describe('createPaintingsModule', () => {
     expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
       tx,
       {
+        boardId: 'board-1',
         images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///managed.png' }],
         mode: 'edit',
         modelId,
@@ -146,7 +151,9 @@ describe('createPaintingsModule', () => {
       .mocked(dependencies.jobs.findActiveGenerateTx)
       .mockResolvedValue({ id: 'job-9', input: { paintingId: 'painting-9' } });
 
+    // A job enqueued before boards existed reports its receipt's migrated board.
     await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      boardId: 'painting-9',
       jobId: 'job-9',
       paintingId: 'painting-9',
     });
@@ -161,7 +168,7 @@ describe('createPaintingsModule', () => {
 
     await expect(
       backend.startGeneration({ ...generationInput, paintingId: 'painting-7' }),
-    ).resolves.toEqual({ jobId: 'job-1', paintingId: 'painting-7' });
+    ).resolves.toEqual({ boardId: 'board-1', jobId: 'job-1', paintingId: 'painting-7' });
 
     expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
     expect(dependencies.paintings.resetForRetryTx).toHaveBeenCalledWith(tx, 'painting-7', {
@@ -174,6 +181,29 @@ describe('createPaintingsModule', () => {
       tx,
       expect.objectContaining({ paintingId: 'painting-7' }),
       { idempotencyKey: signatureFor('painting-7') },
+    );
+  });
+
+  it('grows the named board and keeps the human brief beside the model prompt', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await backend.startGeneration({
+      ...generationInput,
+      boardId: 'board-1',
+      brief: 'Make the hat red',
+    });
+
+    expect(dependencies.paintings.createTx).toHaveBeenCalledWith(tx, {
+      boardId: 'board-1',
+      brief: 'Make the hat red',
+      inputFileIds: [inputFileId],
+      modelId,
+      prompt: 'draw',
+      providerId: 'openai',
+    });
+    expect(dependencies.jobs.findActiveGenerateTx).toHaveBeenCalledWith(
+      tx,
+      signatureFor(null, 'board-1'),
     );
   });
 

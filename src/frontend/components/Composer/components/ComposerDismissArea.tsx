@@ -1,4 +1,4 @@
-import { BackgroundPressArea } from '@cherrystudio/ui/components';
+import { BackgroundPressArea, useComposerExpansion } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 
 import {
@@ -14,11 +14,14 @@ export function ComposerDismissArea({
 }: PropsWithChildren<{ disabled?: boolean; testID?: string }>) {
   const { dismissInput } = useComposerPresentationActions();
   const { isEditing } = useComposerPresentationState();
+  const isExpanded = useComposerExpansion()?.state.isPresented ?? false;
 
   return (
     <BackgroundPressArea
       className="flex-1"
-      disabled={disabled || !isEditing}
+      accessibilityElementsHidden={isExpanded}
+      importantForAccessibility={isExpanded ? 'no-hide-descendants' : 'auto'}
+      disabled={disabled || !isEditing || isExpanded}
       onPress={dismissInput}
       testID={testID}
     >

@@ -13,6 +13,12 @@ import { surfaceRadius, surfaceStyle } from '../utils/composer-layout';
 import { ComposerAction } from './composer-action';
 import { ComposerCollapsible } from './composer-collapsible';
 import { ComposerDock } from './composer-dock';
+import {
+  ComposerExpansion,
+  ComposerExpansionBackground,
+  ComposerExpansionMeasure,
+  useComposerExpansion,
+} from './composer-expansion';
 import { ComposerInput } from './composer-input';
 import { ComposerPill } from './composer-pill';
 import { ComposerPopover } from './composer-popover';
@@ -51,6 +57,7 @@ function ComposerRoot({
   testID,
   value,
 }: ComposerProps) {
+  const isExpansionPresented = useComposerExpansion()?.state.isPresented ?? false;
   const state = useMemo<ComposerStateContextValue>(
     () => ({
       canSend: canSend ?? value.trim().length > 0,
@@ -77,10 +84,13 @@ function ComposerRoot({
   return (
     <View style={style} testID={testID}>
       <SurfaceFrame
-        className="bg-card ios:shadow-field android:shadow-sm"
+        className={
+          isExpansionPresented ? 'bg-popover' : 'bg-card ios:shadow-field android:shadow-sm'
+        }
         cornerRadius={surfaceRadius}
         style={surfaceStyle}
       >
+        <ComposerExpansionBackground />
         <ComposerStateContext value={state}>
           <ComposerActionsContext value={actions}>
             {children ?? (
@@ -108,6 +118,8 @@ export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
   Collapsible: ComposerCollapsible,
   Dock: ComposerDock,
+  Expansion: ComposerExpansion,
+  ExpansionMeasure: ComposerExpansionMeasure,
   Input: ComposerInput,
   Menu: MorphMenu,
   Pill: ComposerPill,

@@ -1,5 +1,8 @@
 export const paintingQueryKeys = {
   all: () => ['/paintings'] as const,
+  /** Matches every `/painting-boards/...` Data API query (board rows and their paintings). */
+  isBoardQuery: (queryKey: readonly unknown[]) =>
+    typeof queryKey[0] === 'string' && queryKey[0].startsWith('/painting-boards/'),
   allIds: () => ['/paintings', 'all-ids'] as const,
   detail: (paintingId: string) => [`/paintings/${paintingId}`] as const,
   galleryFiles: (paintingId: string) => ['painting-gallery-files', paintingId] as const,

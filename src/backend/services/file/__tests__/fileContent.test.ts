@@ -6,9 +6,10 @@ import { createInternalEntryWithPreview } from '../filePreviewStorage';
 import { readFileUriBytes, resolveFileEntry } from '../fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from '../importedImageNormalization';
 
-const mockFileHash = jest.fn();
-jest.mock('@preeternal/react-native-file-hash', () => ({
-  fileHash: (...args: unknown[]) => mockFileHash(...args),
+const mockHashLocalFile = jest.fn();
+jest.mock('../fileHash', () => ({
+  ...jest.requireActual('../fileHash'),
+  hashLocalFile: (...args: unknown[]) => mockHashLocalFile(...args),
 }));
 
 const FILE_ID = '00000000-0000-7000-8000-000000000001';
@@ -140,32 +141,15 @@ describe('fileContent attachment boundary', () => {
   });
 });
 
-describe('native managed-file hashing', () => {
-  test('hashes the resolved source with SHA-256 and rejects malformed or failed native results', async () => {
+describe('managed-file hashing', () => {
+  test('hashes the resolved managed URI and reports an unresolvable entry', async () => {
     const signal = new AbortController().signal;
-    mockFileHash.mockImplementation(async (uri, options) => {
-      expect(uri).toBe('file:///managed/notes.txt');
-      expect(options).toEqual({ algorithm: 'SHA-256', signal });
-      return 'a'.repeat(64);
-    });
+    mockHashLocalFile.mockResolvedValue('a'.repeat(64));
     expect(await fileContent.hashFile(FILE_ID, signal)).toBe('a'.repeat(64));
-    mockFileHash.mockResolvedValueOnce('invalid');
+    expect(mockHashLocalFile).toHaveBeenCalledWith('file:///managed/notes.txt', signal);
+    jest.mocked(resolveFileEntry).mockResolvedValueOnce(null);
     await expect(fileContent.hashFile(FILE_ID, signal)).rejects.toMatchObject({
-      code: 'VERIFICATION_FAILED',
+      code: 'RESOURCE_UNAVAILABLE',
     });
-    mockFileHash.mockRejectedValueOnce(new Error('private-path'));
-    await expect(fileContent.hashFile(FILE_ID, signal)).rejects.toMatchObject({
-      code: 'VERIFICATION_FAILED',
-      message: 'VERIFICATION_FAILED',
-    });
-  });
-
-  test('preserves cancellation even when native code resolves late', async () => {
-    const controller = new AbortController();
-    mockFileHash.mockImplementationOnce(async () => {
-      controller.abort(new Error('cancelled'));
-      return 'a'.repeat(64);
-    });
-    await expect(fileContent.hashFile(FILE_ID, controller.signal)).rejects.toThrow('cancelled');
   });
 });

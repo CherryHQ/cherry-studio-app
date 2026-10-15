@@ -21,6 +21,7 @@ import {
   storageDirectory,
   takeStorageOutcome,
 } from '@/backend/data/storage/storagePaths';
+import { hashLocalFile } from '@/backend/services/file/fileHash';
 import {
   BackupError,
   type BackupModule,
@@ -112,7 +113,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           entries.push({
             path,
             size: file.size,
-            sha256: await backupStorageNative().hashFile(file.uri),
+            sha256: await hashLocalFile(file.uri, signal),
           });
           this.publish({ phase: 'packing', completed: index, total: resources.paths.length * 2 });
         }
@@ -239,7 +240,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
         );
         signal.throwIfAborted();
         // Moved payloads keep their verified hashes; startup re-verifies every entry.
-        const databaseHash = await backupStorageNative().hashFile(database.uri);
+        const databaseHash = await hashLocalFile(database.uri, signal);
         const restoredManifest: BackupManifest = {
           ...manifest,
           ...(await bundledBackupVersion()),

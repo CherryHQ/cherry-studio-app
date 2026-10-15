@@ -228,7 +228,7 @@ describe('Pi turn projection', () => {
     ]);
   });
 
-  test('keeps the pending assistant when reasoning has not produced visible text yet', () => {
+  test('keeps a streaming reasoning indicator before the first summary text', () => {
     const message: AssistantMessage = {
       ...call('body', 2_000),
       content: [{ type: 'thinking', thinking: '' }],
@@ -236,7 +236,43 @@ describe('Pi turn projection', () => {
     const turn = projectMessage(message, true);
 
     expect(turn.hasAssistant).toBe(true);
-    expect(turn.parts).toEqual([]);
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'reasoning', state: 'streaming', text: '' }),
+    ]);
+  });
+
+  test('keeps an empty streaming reasoning phase after a completed tool result', () => {
+    const turn = projectPiTurn({
+      sessionId: 'session',
+      record: placed,
+      metadata,
+      active: true,
+      entries: [
+        { id: 2, conversationId: 1, kind: 'pi.assistant', model: [call('body', 2_000)] },
+        {
+          id: 3,
+          conversationId: 1,
+          kind: 'pi.tool-result',
+          data: { diagnostics: [] },
+          model: [
+            {
+              role: 'toolResult',
+              toolCallId: 'call',
+              toolName: 'write_file',
+              content: [{ type: 'text', text: 'Saved' }],
+              isError: false,
+              timestamp: 2_100,
+            },
+          ],
+        },
+      ] as unknown as EntryRecord[],
+      partial: { ...call('body', 2_200), content: [{ type: 'thinking', thinking: '' }] },
+    });
+
+    expect(turn.parts).toEqual([
+      expect.objectContaining({ type: 'tool', state: 'output-available' }),
+      expect.objectContaining({ type: 'reasoning', state: 'streaming', text: '' }),
+    ]);
   });
 
   test.each([true, false])(

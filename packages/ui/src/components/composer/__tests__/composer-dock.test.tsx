@@ -26,6 +26,8 @@ jest.mock('react-native-keyboard-controller', () => {
 });
 
 jest.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => 'settle' },
+  useAnimatedStyle: (factory: () => object) => factory(),
   useSharedValue: (initialValue: number) => {
     const { useRef } = jest.requireActual('react');
     return useRef({
@@ -36,6 +38,8 @@ jest.mock('react-native-reanimated', () => ({
     }).current;
   },
 }));
+
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
 
 type DockLayout = ReturnType<typeof useComposerDockLayout>;
 

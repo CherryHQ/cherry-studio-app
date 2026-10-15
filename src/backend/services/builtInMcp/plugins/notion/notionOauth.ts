@@ -1,6 +1,14 @@
+import {
+  discoverAuthorizationServerMetadata,
+  exchangeAuthorization,
+  refreshAuthorization,
+  registerClient,
+  type AuthorizationServerMetadata,
+  type FetchLike,
+} from '@modelcontextprotocol/client';
 import * as z from 'zod';
 
-import { createHttpClient, isHttpError, type HttpRequest } from '@/backend/services/http';
+import { createFetchBridge, isHttpError } from '@/backend/services/http';
 import { createPkceChallenge, nativeCallbackUrl, randomOauthValue } from '@/backend/utils/oauth';
 import { PluginError } from '@/shared/contracts/plugins';
 
@@ -15,47 +23,76 @@ import {
 } from './notionCredentials';
 import { readNotionSelf } from './notionSelf';
 
-const http = createHttpClient({ baseUrl: 'https://mcp.notion.com', timeoutMs: 15_000 });
+const AUTHORIZATION_SERVER = 'https://mcp.notion.com/';
+const RESOURCE = 'https://mcp.notion.com/mcp';
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
+const invalidResponse = () => new PluginError('request', 'Invalid Notion authorization response.');
+
+/** SDK metadata, registration and token requests stay on Notion's MCP host over the shared transport. */
+const notionFetch = createFetchBridge({
+  assertUrl: (value) => {
+    if (!NotionEndpointSchema.safeParse(value).success) throw invalidResponse();
+    return new URL(value);
+  },
+  unsupportedMethodError: invalidResponse,
+  maxResponseBytes: 65_536,
+  timeoutMs: 15_000,
+});
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
-  if (!parsed.success) throw new PluginError('request', 'Invalid Notion authorization response.');
+  if (!parsed.success) throw invalidResponse();
   return parsed.data;
 }
 
-async function request(input: HttpRequest) {
+function errorCode(body: string): string | undefined {
   try {
-    const response = await http.request<unknown>({
-      ...input,
-      redirect: 'error',
-      maxResponseBytes: 65_536,
-      errorDecoder: ({ data }) => {
-        const error = z.object({ error: z.string() }).safeParse(data);
-        return error.success
-          ? { code: error.data.error, message: 'Notion authorization failed.' }
-          : undefined;
-      },
-    });
-    return response.data;
+    const parsed = z.object({ error: z.string() }).safeParse(JSON.parse(body));
+    return parsed.success ? parsed.data.error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Runs SDK protocol steps with the caller's cancellation and maps failures by the first rejected
+ * HTTP status and OAuth error code. SDK error text can contain response bodies and never escapes.
+ */
+async function protocol<T>(
+  signal: AbortSignal,
+  operation: (fetchFn: FetchLike) => Promise<T>,
+): Promise<T> {
+  let failure: { status: number; code?: string } | undefined;
+  const fetchFn: FetchLike = async (input, init) => {
+    const response = await notionFetch(input, { ...init, signal });
+    if (response.ok || failure) return response;
+    const body = await response.text();
+    failure = { status: response.status, code: errorCode(body) };
+    return new Response(body, { status: response.status, headers: response.headers });
+  };
+  try {
+    return await operation(fetchFn);
   } catch (error) {
-    if (input.signal?.aborted)
-      throw new PluginError('cancelled', 'Notion authorization cancelled.');
+    if (signal.aborted) throw new PluginError('cancelled', 'Notion authorization cancelled.');
     if (error instanceof PluginError) throw error;
-    const metadata = isHttpError(error) ? { statusCode: error.status } : undefined;
-    if (isHttpError(error)) {
-      if (error.status === 401 || error.code === 'invalid_grant' || error.code === 'invalid_client')
-        throw new PluginError(
-          'authorization',
-          'Reconnect Notion to authorize this client again.',
-          metadata,
-        );
-      if (error.status === 403) throw new PluginError('access', 'Notion denied access.', metadata);
-      if (error.status === 429)
-        throw new PluginError('quota', 'Notion authorization rate limited.', metadata);
-      if (error.status && error.status < 500)
-        throw new PluginError('request', 'Notion rejected the authorization request.', metadata);
+    if (!failure) {
+      if (isHttpError(error))
+        throw new PluginError('network', 'Could not reach Notion authorization.');
+      throw invalidResponse();
     }
+    const { status, code } = failure;
+    const metadata = { statusCode: status };
+    if (status === 401 || code === 'invalid_grant' || code === 'invalid_client')
+      throw new PluginError(
+        'authorization',
+        'Reconnect Notion to authorize this client again.',
+        metadata,
+      );
+    if (status === 403) throw new PluginError('access', 'Notion denied access.', metadata);
+    if (status === 429)
+      throw new PluginError('quota', 'Notion authorization rate limited.', metadata);
+    if (status < 500)
+      throw new PluginError('request', 'Notion rejected the authorization request.', metadata);
     throw new PluginError('network', 'Could not reach Notion authorization.', metadata);
   }
 }
@@ -65,6 +102,14 @@ const MetadataSchema = z.object({
   authorization_endpoint: NotionEndpointSchema,
   token_endpoint: NotionEndpointSchema,
   registration_endpoint: NotionEndpointSchema,
+});
+
+/** Token requests use only the persisted endpoints, so registrations saved by older builds still renew. */
+const tokenServer = (application: NotionApplication): AuthorizationServerMetadata => ({
+  issuer: AUTHORIZATION_SERVER,
+  authorization_endpoint: application.authorizationEndpoint,
+  token_endpoint: application.tokenEndpoint,
+  response_types_supported: ['code'],
 });
 
 function redirectUrl() {
@@ -88,32 +133,31 @@ async function getApplication(store: PluginAuthorizationStore, signal: AbortSign
       );
     return application;
   }
-  const metadata = parse(
-    MetadataSchema,
-    await request({
-      method: 'GET',
-      path: '/.well-known/oauth-authorization-server',
-      signal,
-    }),
-  );
+  const discovered = await protocol(signal, async (fetchFn) => {
+    const metadata = await discoverAuthorizationServerMetadata(AUTHORIZATION_SERVER, { fetchFn });
+    if (!metadata) throw new Error('Notion authorization metadata is unavailable.');
+    return metadata;
+  });
+  const metadata = parse(MetadataSchema, discovered);
   const registration = parse(
     z.object({
       client_id: secret,
       token_endpoint_auth_method: z.literal('none').optional(),
     }),
-    await request({
-      method: 'POST',
-      path: new URL(metadata.registration_endpoint).pathname,
-      signal,
-      body: {
-        client_name: 'Cherry Studio',
-        client_uri: 'https://github.com/CherryHQ/cherry-studio-app',
-        redirect_uris: [redirect],
-        grant_types: ['authorization_code', 'refresh_token'],
-        response_types: ['code'],
-        token_endpoint_auth_method: 'none',
-      },
-    }),
+    await protocol(signal, (fetchFn) =>
+      registerClient(AUTHORIZATION_SERVER, {
+        metadata: discovered,
+        fetchFn,
+        clientMetadata: {
+          client_name: 'Cherry Studio',
+          client_uri: 'https://github.com/CherryHQ/cherry-studio-app',
+          redirect_uris: [redirect],
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          token_endpoint_auth_method: 'none',
+        },
+      }),
+    ),
   );
   signal.throwIfAborted();
   const application: NotionApplication = {
@@ -129,31 +173,23 @@ async function getApplication(store: PluginAuthorizationStore, signal: AbortSign
   return application;
 }
 
-async function exchange(
-  application: NotionApplication,
-  body: Record<string, string>,
+const TokenResponseSchema = z.object({
+  access_token: secret,
+  refresh_token: secret,
+  token_type: z.string().refine((value) => value.toLowerCase() === 'bearer'),
+  expires_in: z.number().int().positive(),
+});
+
+async function tokens(
   signal: AbortSignal,
+  operation: (fetchFn: FetchLike) => Promise<unknown>,
 ): Promise<NotionTokens> {
   const startedAt = Date.now();
-  const tokens = parse(
-    z.object({
-      access_token: secret,
-      refresh_token: secret,
-      token_type: z.string().refine((value) => value.toLowerCase() === 'bearer'),
-      expires_in: z.number().int().positive(),
-    }),
-    await request({
-      method: 'POST',
-      path: new URL(application.tokenEndpoint).pathname,
-      body: new URLSearchParams({ ...body, client_id: application.clientId }).toString(),
-      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-      signal,
-    }),
-  );
+  const response = parse(TokenResponseSchema, await protocol(signal, operation));
   return parse(NotionTokensSchema, {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt: startedAt + tokens.expires_in * 1000,
+    accessToken: response.access_token,
+    refreshToken: response.refresh_token,
+    expiresAt: startedAt + response.expires_in * 1000,
   });
 }
 
@@ -170,7 +206,7 @@ export const notionOauth = {
       state,
       code_challenge: challenge,
       code_challenge_method: 'S256',
-      resource: 'https://mcp.notion.com/mcp',
+      resource: RESOURCE,
     }).toString();
     return { state, verifier, authorizationUrl: url.href };
   },
@@ -180,27 +216,28 @@ export const notionOauth = {
     verifier: string,
     signal: AbortSignal,
   ) {
-    return exchange(
-      application,
-      {
-        grant_type: 'authorization_code',
-        code,
-        code_verifier: verifier,
-        redirect_uri: application.redirectUrl,
-        resource: 'https://mcp.notion.com/mcp',
-      },
-      signal,
+    // A public client: with no secret the SDK authenticates with client_id in the form body.
+    return tokens(signal, (fetchFn) =>
+      exchangeAuthorization(AUTHORIZATION_SERVER, {
+        metadata: tokenServer(application),
+        clientInformation: { client_id: application.clientId },
+        authorizationCode: code,
+        codeVerifier: verifier,
+        redirectUri: application.redirectUrl,
+        resource: RESOURCE,
+        fetchFn,
+      }),
     );
   },
-  refresh(application: NotionApplication, tokens: NotionTokens, signal: AbortSignal) {
-    return exchange(
-      application,
-      {
-        grant_type: 'refresh_token',
-        refresh_token: tokens.refreshToken,
-        resource: 'https://mcp.notion.com/mcp',
-      },
-      signal,
+  refresh(application: NotionApplication, current: NotionTokens, signal: AbortSignal) {
+    return tokens(signal, (fetchFn) =>
+      refreshAuthorization(AUTHORIZATION_SERVER, {
+        metadata: tokenServer(application),
+        clientInformation: { client_id: application.clientId },
+        refreshToken: current.refreshToken,
+        resource: RESOURCE,
+        fetchFn,
+      }),
     );
   },
   async getAccount(accessToken: string, signal: AbortSignal) {
@@ -217,7 +254,7 @@ export const notionOauth = {
           },
         },
       },
-      { url: 'https://mcp.notion.com/mcp' },
+      { url: RESOURCE },
     );
     try {
       return readNotionSelf(

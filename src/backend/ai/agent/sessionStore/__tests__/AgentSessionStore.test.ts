@@ -23,6 +23,7 @@ import type {
   AgentInferenceSnapshotV1,
   AgentSessionView,
 } from '@/shared/contracts/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { AgentSessionStore, FinalizeAssistantMessageInput } from '../AgentSessionStore';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
@@ -1913,3 +1914,88 @@ async function settleTurn(
   });
   return reserved;
 }
+
+describe('SQLite message-owned translations', () => {
+  let harness: StoreHarness;
+  beforeEach(() => {
+    harness = makeSqliteHarness();
+  });
+  afterEach(() => harness.cleanup());
+
+  async function translatedAnswer() {
+    const agentId = await harness.makeAgentId();
+    const session = await harness.createEmptySession({ agentId });
+    const input = {
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'input', type: 'text' as const, text: 'Question', state: 'done' as const }],
+    };
+    await harness.store.reserveSubmission(input);
+    const finalization: FinalizeAssistantMessageInput = {
+      assistantMessageId: input.assistantMessageId,
+      status: 'success',
+      parts: [{ id: 'answer', type: 'text', text: 'Original', state: 'done' }],
+      usage: null,
+      error: null,
+      contextCheckpoint: null,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    };
+    await harness.store.finalizeAssistantMessage(finalization);
+    const translations = {
+      sourceHash: sha256HexOfText('Original'),
+      results: {
+        'zh-CN': { content: '中文译文', createdAt: 1 },
+        'fr-FR': { content: 'Traduction', createdAt: 2 },
+      },
+    };
+    harness
+      .raw!.prepare(
+        "UPDATE agent_session_message SET data = json_set(data, '$.translations', json(?)) WHERE id = ?",
+      )
+      .run(JSON.stringify(translations), input.assistantMessageId);
+    return { input, finalization, translations };
+  }
+
+  test.each(['Original', 'Changed'])(
+    'reuses translations only when the retried source finishes as %s',
+    async (text) => {
+      const { input, finalization, translations } = await translatedAnswer();
+      const retry = await harness.store.reserveRetry({ ...input, assistantParts: [] });
+      expect(retry.assistantMessage.translations).toEqual(translations);
+      const final = await harness.store.finalizeAssistantMessage({
+        ...finalization,
+        turnId: retry.turnId,
+        parts: [
+          { id: 'new-reasoning', type: 'reasoning', text: 'Different reasoning', state: 'done' },
+          { id: 'new-answer', type: 'text', text, state: 'done' },
+        ],
+      });
+      expect(final.translations).toEqual(text === 'Original' ? translations : undefined);
+      const saved = (await harness.store.listMessages(input.sessionId)).at(-1);
+      expect(saved?.translations).toEqual(final.translations);
+      expect(saved?.parts).toEqual(final.parts);
+    },
+  );
+
+  test('copies translations with a fork and removes them with their owning message', async () => {
+    const { input, translations } = await translatedAnswer();
+    const result = await harness.store.forkSession({
+      sessionId: input.sessionId,
+      fromMessageId: input.assistantMessageId,
+    });
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') throw new Error('Expected a fork');
+    const copied = (await harness.store.listMessages(result.session.id)).at(-1);
+    expect(copied?.id).not.toBe(input.assistantMessageId);
+    expect(copied?.translations).toEqual(translations);
+    await harness.store.deleteSession(input.sessionId);
+    expect((await harness.store.listMessages(result.session.id)).at(-1)?.translations).toEqual(
+      translations,
+    );
+    await harness.store.deleteSession(result.session.id);
+    expect(
+      harness.raw!.prepare('SELECT count(*) AS count FROM agent_session_message').get(),
+    ).toEqual({ count: 0 });
+  });
+});

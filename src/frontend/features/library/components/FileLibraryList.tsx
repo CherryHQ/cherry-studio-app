@@ -12,7 +12,6 @@ import {
   fileEntryPreviewKind,
   FileEntrySkeleton,
   LoadedFileEntryPreview,
-  useOpenFileEntry,
 } from '@/frontend/components/FileEntryPreview';
 import {
   type SelectionSource,
@@ -31,6 +30,7 @@ import {
   type FileLibraryFilter,
   useFileEntries,
 } from '../hooks/useFileEntries';
+import { useOpenLibraryFile } from '../hooks/useOpenLibraryFile';
 import {
   fileLibraryGrid,
   fileLibrarySelectionScope,
@@ -79,7 +79,7 @@ export function FileLibraryList({
   const { t, i18n } = useTranslation();
   const file = useBackendModule('file');
   // Keep the edit request above recycled rows so refreshing the library cannot cancel it.
-  const { openFileEntry } = useOpenFileEntry();
+  const openLibraryFile = useOpenLibraryFile();
   const bottomInset = useListBottomInset();
   const pendingDeletionIds = usePendingDeletionIds(fileLibrarySelectionScope);
   const { enterEditing, toggleId } = useSelectionActions();
@@ -161,8 +161,7 @@ export function FileLibraryList({
     () => ({
       dateFormatter,
       isEditing,
-      // Each edit is already a new library entry; accepting it only advances the viewer.
-      onOpen: (resolvedFile) => openFileEntry(resolvedFile, () => true),
+      onOpen: (resolvedFile) => void openLibraryFile(resolvedFile),
       onStartSelection: handleStartSelection,
       onToggle: toggleId,
       selectedIds,
@@ -173,7 +172,7 @@ export function FileLibraryList({
       dateFormatter,
       handleStartSelection,
       isEditing,
-      openFileEntry,
+      openLibraryFile,
       selectedIds,
       tileSize,
       toggleId,

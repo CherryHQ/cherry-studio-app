@@ -30,6 +30,19 @@ function answer(
 }
 
 describe('Turn Runtime input assembly', () => {
+  test('message-owned translations never enter model history', () => {
+    const message = answer('answer', 'turn', undefined);
+    message.translations = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '中文译文', createdAt: 1 } },
+    };
+    expect(toRuntimeHistory([message])).toEqual([
+      {
+        turnId: 'turn',
+        messages: [{ role: 'assistant', parts: [{ type: 'text', text: 'Answer.' }] }],
+      },
+    ]);
+  });
   test('timeline compaction markers never enter model history', () => {
     const message: AgentMessageView = {
       id: 'assistant-1',

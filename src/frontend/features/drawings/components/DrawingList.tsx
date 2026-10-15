@@ -501,14 +501,16 @@ function DrawingGridItem({
       onPress={() => {
         if (isEditing) {
           onToggle(item.painting.id);
-        } else if (item.kind === 'output') {
-          router.push({
-            pathname: '/paintings/[paintingId]',
-            params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
-          });
         } else {
-          // Receipts without images reopen the composer for progress or retry.
-          router.push({ pathname: '/paintings', params: { paintingId: item.painting.id } });
+          // Every tile opens its painting's board, focused on that image (or on
+          // the receipt's progress or failure when it has none yet).
+          router.push({
+            pathname: '/paintings',
+            params:
+              item.kind === 'output'
+                ? { fileEntryId: item.fileEntryId, paintingId: item.painting.id }
+                : { paintingId: item.painting.id },
+          });
         }
       }}
       style={{ height }}

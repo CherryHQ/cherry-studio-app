@@ -43,6 +43,7 @@ import {
   useAgentChatDraftHandoff,
   useLocalConversation,
 } from './runtime';
+import { createChatShareHandoff, type ChatShareTranslations } from './share/chatShareHandoff';
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
@@ -87,9 +88,16 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     navigation: target.kind === 'session' ? target : undefined,
   });
   const shareMessage = useCallback(
-    (messageId: string) => {
+    (messageId: string, translations?: ChatShareTranslations) => {
       if (sessionId)
-        router.push(conversationShareHref({ source: { kind: 'local' }, sessionId }, messageId));
+        router.push(
+          conversationShareHref(
+            { source: { kind: 'local' }, sessionId },
+            messageId,
+            undefined,
+            createChatShareHandoff(sessionId, translations),
+          ),
+        );
     },
     [sessionId],
   );
@@ -148,6 +156,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               </View>
             ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
               <ChatWorkspace
+                isTranslationEnabled
                 renderUsage={renderLocalUsage}
                 snapshot={snapshot}
                 messages={messages}
@@ -173,7 +182,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="flow">
+            <ComposerDock layoutMode="expandable">
               <View>
                 <ChatInput
                   agentId={resolvedAgentId}

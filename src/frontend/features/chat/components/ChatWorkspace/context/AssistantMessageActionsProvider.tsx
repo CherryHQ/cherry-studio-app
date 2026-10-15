@@ -23,7 +23,9 @@ import type {
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
+import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 /** Matches the Session title column, which the fork input also caps at 255. */
@@ -58,7 +60,7 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   retryableMessageId?: string;
   /** Opens the source-owned share selector; absent while no Session exists. */
-  onShare?: (messageId: string) => void;
+  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -74,6 +76,7 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
+  const translationStore = useMessageTranslationStore();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
   const sharing = useRef(false);
@@ -154,13 +157,16 @@ export function AssistantMessageActionsProvider({
     },
     [],
   );
-  const share = useCallback(({ messageId }: { messageId: string }) => {
-    const { onShare: openShare } = latest.current;
-    if (!openShare || sharing.current) return;
-    sharing.current = true;
-    Keyboard.dismiss();
-    openShare(messageId);
-  }, []);
+  const share = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const { onShare: openShare } = latest.current;
+      if (!openShare || sharing.current) return;
+      sharing.current = true;
+      Keyboard.dismiss();
+      openShare(messageId, translationStore?.getExpandedTranslations());
+    },
+    [translationStore],
+  );
   const retry = useCallback(
     ({ messageId }: { messageId: string }) => {
       const current = latest.current;

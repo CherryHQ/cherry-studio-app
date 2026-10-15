@@ -1,6 +1,6 @@
 import type { PasteEventPayload } from 'expo-paste-input';
 import type { ReactNode, RefObject } from 'react';
-import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import type { LayoutChangeEvent, StyleProp, TextStyle, ViewStyle } from 'react-native';
 import type {
   EnrichedMarkdownTextInputInstance,
   MarkdownTextInputStyle,
@@ -97,6 +97,8 @@ export type ComposerInputHandle = EnrichedMarkdownTextInputInstance;
 
 export type ComposerInputProps = {
   autoFocus?: boolean;
+  /** Fills a bounded editing viewport while retaining native content measurement. */
+  layout?: 'content' | 'fill';
   /**
    * Styling for the entities the field can contain. Left to the caller because
    * what a link *means* here is the caller's: the composer has no idea one URL
@@ -105,6 +107,7 @@ export type ComposerInputProps = {
   markdownStyle?: MarkdownTextInputStyle;
   onBlur?: () => void;
   onFocus?: () => void;
+  onLayout?: (event: LayoutChangeEvent) => void;
   /**
    * Every paste, not just the ones the composer could use — text arrives here
    * too, already handled by the field. Callers filter for what they want.

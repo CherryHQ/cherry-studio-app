@@ -32,6 +32,27 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
+- Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
+  surface below the top safe area, with a collapse action and no heading. Its background fills
+  both screen edges and extends through the footer and bottom safe area. Local and
+  remote conversations share the same field and toolbar; large-editor layout never remounts the
+  native input or clears its buffer. The collapse control shares the top accessory row with
+  attachments; only that row reserves its width. The expanded field below uses the full content
+  width and scrolls natively. The compact height cap remains unchanged.
+- Expansion preserves spatial continuity: the top edge grows upward while toolbar actions stay
+  at the dock's bottom anchor. The isolated composer frame uses the shared 250ms settle curve;
+  backdrop and opaque surface follow that progress, with no opacity on glass-control ancestors.
+  Repeated actions reverse the current animation; stale close completions cannot hide a reopened
+  editor. System Reduce Motion lands directly on the target layout. Keyboard motion uses live
+  controller coordinates and does not receive another timing curve.
+- Collapse and its backdrop preserve the draft and current keyboard state. Android Back first
+  hides a visible keyboard, then collapses the large editor. The main header and transcript
+  accessibility are isolated through the close transition. Send collapses through the existing
+  send boundary; rejected sends retain its existing text/attachment recovery. Leaving the text
+  composer, including switching to an image-generation model, also collapses the large editor.
+  Native input,
+  selection, keyboard continuity, both-theme appearance and performance still require device
+  acceptance; source and unit coverage do not establish native conformance.
 - Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
   menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
   Native field blur and keyboard-hide notifications do not end editing. A completed background
@@ -60,6 +81,14 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
+- A short MCP row appears only when the current Agent enables a custom MCP server that has
+  cached prompt templates. Per-tool overrides do not enable that server's prompts. The same
+  keyboard-preserving compact menu used by Plugins lists the cached templates and their sources;
+  opening it performs no remote discovery. Selecting a template resolves its messages and adds
+  them to the draft without preview or sending; a template without parameters shows progress in
+  its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
+  its previous/next navigation and retained answers. Required fields gate submission; optional
+  fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or

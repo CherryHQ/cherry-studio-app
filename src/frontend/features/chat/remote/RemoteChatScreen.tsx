@@ -113,7 +113,13 @@ const HeaderContext = createContext<{
   selectAgent(agentId: string): void;
   startNewChat(agentId?: string): void;
 } | null>(null);
-function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+function RemoteHeader({
+  blurTarget,
+  hidden,
+}: {
+  blurTarget: RefObject<View | null>;
+  hidden?: boolean;
+}) {
   const header = use(HeaderContext)!;
   const { t } = useTranslation();
   const source = useRemoteConversationSource();
@@ -125,6 +131,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
       <MainHeaderView
         agent={header.agent}
         blurTarget={blurTarget}
+        hidden={hidden}
         onNewChat={() => header.startNewChat(header.agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
@@ -230,7 +237,6 @@ function RemoteChatSession({ target }: { target: RemoteChatTarget }) {
               />
             ) : (
               <ChatWorkspace
-                translationScope={JSON.stringify([target.connectionId, source.draftScope])}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}
@@ -246,7 +252,7 @@ function RemoteChatSession({ target }: { target: RemoteChatTarget }) {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="flow">
+          <ComposerDock layoutMode="expandable">
             <View>
               <ConversationStatus
                 availability={availability}

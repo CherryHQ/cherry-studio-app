@@ -12,9 +12,12 @@ import type { MessageListItem } from '../types';
 import type { ResolvedCitationText } from './citations';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import type { MessagePartRenderMode } from './MessageParts';
-import { groupMessageProcessItems, type MessageProcessItem } from './partitionMessageParts';
+import {
+  findLatestActivityPart,
+  groupMessageProcessItems,
+  type MessageProcessItem,
+} from './partitionMessageParts';
 import { ToolGroupPart } from './tools/ToolGroupPart';
-import { isToolMessagePart } from './tools/toolPartState';
 
 type ProcessGroupItem = MessageProcessItem & { key: string };
 
@@ -38,9 +41,7 @@ export function ProcessGroupPart({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const isStreaming = message.status === 'pending';
   const groups = groupMessageProcessItems(items);
-  const latestActivityPart = messageParts.findLast(
-    (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
-  );
+  const latestActivityPart = findLatestActivityPart(messageParts);
   const reasoningDurations = items.flatMap(({ part }) => {
     if (part.type !== 'reasoning') return [];
     const thinkingMs = readCherryMeta(part)?.thinkingMs;

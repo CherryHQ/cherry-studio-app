@@ -7,6 +7,16 @@ attachment-name fallback. Pending/streaming messages cannot be selected. Whole-r
 scrolling retains ordinary native press cancellation. Excerpts do not render Markdown, media,
 tools or reasoning. The exported document still contains the complete selected messages.
 
+Local message sharing also captures the current text and language of each expanded translation at
+entry. The selection route carries only an opaque token into a single in-memory handoff; translated
+text never enters the URL or saved navigation state. Only selected messages receive their captured
+translation, appended beneath the original with a language label. Folded translations stay excluded
+even when saved in the database. Captured text may include a visible translation still being generated;
+sharing does not translate again or wait for completion. Preparing the export validates its source hash
+against the fresh message snapshot, so an edited/retried original cannot receive an outdated translation.
+The thinking-content switch does not affect translation inclusion. Remote sharing has no translation
+handoff. Selection and format changes keep the captured translation unchanged.
+
 The original chat page stays mounted with its unchanged message widths, measured heights, scroll
 position and composer draft. It no longer subscribes to sharing selection. The selector's rows are
 safe to recycle: each reads its own selected boolean by message ID, while only the bottom controls

@@ -1,0 +1,27 @@
+diff --git a/ios/Engines/Native/Swift/FileHash.swift b/ios/Engines/Native/Swift/FileHash.swift
+index 8f861b01a0f41a165ea80d60c18c0a27beb33a0e..e4b2363bc7e1cbadfdc9e1e8048785147328961d 100644
+--- a/ios/Engines/Native/Swift/FileHash.swift
++++ b/ios/Engines/Native/Swift/FileHash.swift
+@@ -328,16 +328,14 @@ public class FileHashImpl: NSObject {
+     ) throws -> String {
+         var localHasher = hasher
+         try throwIfCancelled(operation)
+-        while autoreleasepool(invoking: {
+-            if operation?.isCancelled == true {
++        // Cherry: honor cancelOperation per chunk and surface read errors instead of hashing a prefix.
++        while try autoreleasepool(invoking: { () throws -> Bool in
++            try throwIfCancelled(operation)
++            guard let data = try fileHandle.read(upToCount: chunkSize), !data.isEmpty else {
+                 return false
+             }
+-            let data = try? fileHandle.read(upToCount: chunkSize)
+-            if let data = data, !data.isEmpty {
+-                localHasher.update(data: data)
+-                return true
+-            }
+-            return false
++            localHasher.update(data: data)
++            return true
+         }) {}
+         try throwIfCancelled(operation)
+         let digest = localHasher.finalize()

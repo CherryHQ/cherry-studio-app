@@ -77,7 +77,9 @@ and a 1 MiB cap; Pi retains account protocol polling and refresh. Remote MCP OAu
 registration, token exchange, and refresh use it through `mcpOAuthFetch`, which also allows
 loopback HTTP, caps responses at 512 KiB, and times out after 30 seconds. The MCP runtime owns
 refresh and cancellation. Only the initial challenge probe against the MCP endpoint uses streaming
-fetch: it reads the response headers and cancels a potentially open event stream.
+fetch: it reads the response headers and cancels a potentially open event stream. The Notion
+plugin runs the same SDK metadata, registration, and token functions through its own bridge, limited
+to `https://mcp.notion.com` with a 64 KiB cap and a 15-second timeout.
 
 ## Interceptors
 

@@ -28,6 +28,35 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('a stale history page cannot replace newer message-owned translations', () => {
+    const older = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '旧译文', createdAt: 1 } },
+    };
+    const newer = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '新译文', createdAt: 2 } },
+    };
+    const persisted = message('answer', { status: 'success', translations: older });
+    const live = message('answer', {
+      status: 'success',
+      translations: newer,
+      updatedAt: '2026-08-25T00:00:01.000Z',
+    });
+    expect(mergeAgentMessageViews([persisted], [live])[0]).toBe(live);
+  });
+  test('keeps newly persisted translations when an older live snapshot covers the same message', () => {
+    const translations = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '译文', createdAt: 1 } },
+    };
+    const persisted = message('answer', { status: 'success', translations });
+    const live = message('answer', { status: 'success' });
+    const merged = mergeAgentMessageViews([persisted], [live]);
+    expect(toAgentMessageListItem(merged[0])?.data.translations).toEqual(translations);
+    expect(merged[0].parts).toBe(live.parts);
+    expect(live.translations).toBeUndefined();
+  });
   test.each(['output-available', 'denied'] as const)(
     'preserves canonical MCP identity for %s tools with opaque runtime names',
     (state) => {
@@ -175,14 +204,54 @@ describe('agentMessageProjection', () => {
     expect(settled?.data.parts).toEqual([
       { type: 'reasoning', text: 'Received summary.', state: 'done' },
     ]);
-    expect(
-      toAgentMessageListItem(
-        message('empty', {
-          parts: [{ id: 'opaque', type: 'reasoning', text: '', state: 'streaming' }],
-        }),
-      )?.data.parts,
-    ).toEqual([]);
   });
+
+  test.each([false, true])(
+    'keeps empty reasoning visible only while streaming, after a completed tool=%s',
+    (afterTool) => {
+      const cache = createAgentMessageListProjectionCache();
+      const precedingParts: AgentMessageView['parts'] = afterTool
+        ? [
+            {
+              id: 'tool',
+              type: 'dynamic-tool',
+              title: 'Run JavaScript',
+              toolCallId: 'js-call',
+              toolName: 'run_js',
+              toolRef: { source: 'builtin', capabilityId: 'run_js' },
+              input: { code: '1 + 1' },
+              output: { value: 2, artifacts: [] },
+              state: 'output-available',
+            },
+          ]
+        : [];
+      const reasoning = { id: 'reasoning', type: 'reasoning' as const, text: '' };
+      const growing = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'streaming' }],
+        }),
+        cache,
+      );
+      const settled = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'done' }],
+        }),
+        cache,
+      );
+
+      expect(growing?.data.partKeys).toEqual([
+        ...precedingParts.map((part) => part.id),
+        'reasoning',
+      ]);
+      expect(growing?.data.parts?.at(-1)).toEqual({
+        type: 'reasoning',
+        text: '',
+        state: 'streaming',
+      });
+      expect(settled?.data.partKeys).toEqual(precedingParts.map((part) => part.id));
+      expect(settled?.data.parts).toEqual(growing?.data.parts?.slice(0, -1));
+    },
+  );
 
   test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
     const parts: AgentMessageView['parts'] = [

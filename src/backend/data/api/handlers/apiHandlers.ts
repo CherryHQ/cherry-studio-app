@@ -1,8 +1,8 @@
-import type { AgentSessionMessageReader } from '@/shared/data/api/schemas/agentSessionMessages';
 import type { ApiImplementation } from '@/shared/data/api/types';
 
 import type { AgentGlobalSkillService } from '../../services/AgentGlobalSkillService';
 import type { AgentService } from '../../services/AgentService';
+import type { AgentSessionMessageService } from '../../services/AgentSessionMessageService';
 import type { AgentSessionService } from '../../services/AgentSessionService';
 import type { AgentToolBindingService } from '../../services/AgentToolBindingService';
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
@@ -43,7 +43,7 @@ export type DataApiDependencies = {
   skillAvailability: SkillAvailabilityReader;
   skillInstructions: SkillInstructionReader;
   agentToolBindings: AgentToolBindingService;
-  agentSessionMessages: AgentSessionMessageReader;
+  agentSessionMessages: AgentSessionMessageService;
   agentSessionMutations: AgentSessionMutations;
   agentSessions: AgentSessionService;
   aiUsageRecords: AiUsageRecordService;

@@ -2,6 +2,7 @@ export const mcpServerQueryKeys = {
   all: () => ['/mcp-servers'] as const,
   detail: (serverId: string) => [`/mcp-servers/${serverId}`] as const,
   list: (params: { isEnabled?: boolean } = {}) => ['/mcp-servers', params] as const,
+  prompts: () => ['/mcp-servers', 'prompts'] as const,
   runtimeSummaries: (servers: readonly { id: string; isEnabled: boolean; updatedAt: string }[]) => [
     '/mcp-servers',
     'runtime-summaries',

@@ -21,9 +21,9 @@ suffix.
 - `webSearch` retains the desktop-aligned `WebSearchService`. Device permissions are adapted by
   `DevicePermissions`, which directly implements the shared `PermissionsModule` contract;
   avatar storage remains a set of domain functions.
-- `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
-  file maintenance orchestration. File-entry and reference persistence remain in
-  `src/backend/data/services`.
+- `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it,
+  native local-file hashing (`fileHash`), and file maintenance orchestration. File-entry and
+  reference persistence remain in `src/backend/data/services`.
 - `jobs` owns durable job orchestration. `JobHandlerRegistry` is the composition assembly service:
   it imports domain handlers and their dependencies, then exposes one frozen registry to the
   feature-agnostic `JobRuntime`. The runtime itself depends only on the database, that registry,

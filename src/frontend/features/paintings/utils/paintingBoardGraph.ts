@@ -1,0 +1,185 @@
+import type { Painting } from '@/shared/data/types/painting';
+
+/**
+ * A board node is either one generation (a painting) or an image that entered
+ * the board from outside — a photo the user attached — which has no generation
+ * of its own. Edges are derived, never stored: within one board, a painting
+ * that used another painting's output as input was made from it.
+ */
+export type PaintingBoardNodeRef =
+  | { kind: 'painting'; id: string; paintingId: string }
+  | { kind: 'import'; id: string; fileEntryId: string };
+
+export type PaintingBoardEdge = { from: string; to: string };
+
+export type PaintingBoardGraph = {
+  edges: readonly PaintingBoardEdge[];
+  nodes: readonly PaintingBoardNodeRef[];
+  /** Painting id that produced each output file in this board. */
+  outputOwners: ReadonlyMap<string, string>;
+};
+
+export function paintingNodeId(paintingId: string) {
+  return `painting:${paintingId}`;
+}
+
+export function importNodeId(fileEntryId: string) {
+  return `import:${fileEntryId}`;
+}
+
+/** Paintings must be in generation order (oldest first), as the board API returns them. */
+export function buildPaintingBoardGraph(paintings: readonly Painting[]): PaintingBoardGraph {
+  const outputOwners = new Map<string, string>();
+  for (const painting of paintings) {
+    for (const fileEntryId of painting.files.output) {
+      if (!outputOwners.has(fileEntryId)) outputOwners.set(fileEntryId, painting.id);
+    }
+  }
+
+  const nodes: PaintingBoardNodeRef[] = [];
+  const imports = new Set<string>();
+  const edges: PaintingBoardEdge[] = [];
+  const edgeKeys = new Set<string>();
+  for (const painting of paintings) {
+    const to = paintingNodeId(painting.id);
+    for (const fileEntryId of painting.files.input) {
+      const owner = outputOwners.get(fileEntryId);
+      let from: string;
+      if (owner && owner !== painting.id) {
+        from = paintingNodeId(owner);
+      } else {
+        from = importNodeId(fileEntryId);
+        if (!imports.has(fileEntryId)) {
+          imports.add(fileEntryId);
+          nodes.push({ fileEntryId, id: from, kind: 'import' });
+        }
+      }
+      const key = `${from}>${to}`;
+      if (!edgeKeys.has(key)) {
+        edgeKeys.add(key);
+        edges.push({ from, to });
+      }
+    }
+    nodes.push({ id: to, kind: 'painting', paintingId: painting.id });
+  }
+
+  return { edges, nodes, outputOwners };
+}
+
+export function paintingNodeParents(graph: PaintingBoardGraph, nodeId: string): string[] {
+  return graph.edges.filter((edge) => edge.to === nodeId).map((edge) => edge.from);
+}
+
+export function paintingNodeChildren(graph: PaintingBoardGraph, nodeId: string): string[] {
+  return graph.edges.filter((edge) => edge.from === nodeId).map((edge) => edge.to);
+}
+
+export type PaintingBoardLayoutNode = { id: string; x: number; y: number };
+
+export type PaintingBoardLayout = {
+  height: number;
+  nodes: ReadonlyMap<string, PaintingBoardLayoutNode>;
+  width: number;
+};
+
+export type PaintingBoardLayoutMetrics = {
+  columnGap: number;
+  nodeHeight: number;
+  nodeWidth: number;
+  rowGap: number;
+};
+
+/**
+ * Top-to-bottom layered layout. A node sits one row below its lowest parent,
+ * and an imported image sits directly above the first generation that used
+ * it. Within a row, nodes follow their parents' horizontal order and then
+ * generation order, so branches stay under the image they came from. Rows are
+ * centred on the widest row; positions are not stored.
+ */
+export function layoutPaintingBoard(
+  graph: PaintingBoardGraph,
+  metrics: PaintingBoardLayoutMetrics,
+): PaintingBoardLayout {
+  const order = new Map(graph.nodes.map((node, index) => [node.id, index]));
+  const parents = new Map<string, string[]>();
+  for (const edge of graph.edges) {
+    parents.set(edge.to, [...(parents.get(edge.to) ?? []), edge.from]);
+  }
+
+  // Generations only: imports are placed relative to their consumers below.
+  const generationDepth = new Map<string, number>();
+  for (const node of graph.nodes) {
+    if (node.kind !== 'painting') continue;
+    const depths = (parents.get(node.id) ?? [])
+      .filter((parent) => generationDepth.has(parent))
+      .map((parent) => (generationDepth.get(parent) ?? 0) + 1);
+    generationDepth.set(node.id, Math.max(0, ...depths));
+  }
+  const depth = new Map(generationDepth);
+  for (const node of graph.nodes) {
+    if (node.kind !== 'import') continue;
+    const consumers = graph.edges.filter((edge) => edge.from === node.id).map((edge) => edge.to);
+    const firstConsumerDepth = Math.min(
+      ...consumers.map((consumer) => generationDepth.get(consumer) ?? 0),
+    );
+    depth.set(node.id, Math.max(0, firstConsumerDepth - 1));
+  }
+  // An import that could not move above a root pushes that root and its
+  // descendants down one row; nodes are already in dependency order.
+  for (const node of graph.nodes) {
+    if (node.kind !== 'painting') continue;
+    const minimum = Math.max(
+      0,
+      ...(parents.get(node.id) ?? []).map((parent) => (depth.get(parent) ?? 0) + 1),
+    );
+    if ((depth.get(node.id) ?? 0) < minimum) depth.set(node.id, minimum);
+  }
+
+  const rows: string[][] = [];
+  for (const node of graph.nodes) {
+    const row = depth.get(node.id) ?? 0;
+    (rows[row] ??= []).push(node.id);
+  }
+
+  const column = new Map<string, number>();
+  for (const row of rows) {
+    if (!row) continue;
+    const anchor = (id: string) => {
+      const placed = (parents.get(id) ?? []).filter((parent) => column.has(parent));
+      if (placed.length === 0) {
+        // Imports have no parents; align them with the first consumer's other parents.
+        return Number.POSITIVE_INFINITY;
+      }
+      return placed.reduce((sum, parent) => sum + (column.get(parent) ?? 0), 0) / placed.length;
+    };
+    row.sort(
+      (left, right) =>
+        anchor(left) - anchor(right) || (order.get(left) ?? 0) - (order.get(right) ?? 0),
+    );
+    row.forEach((id, index) => column.set(id, index));
+  }
+
+  const widest = Math.max(1, ...rows.map((row) => row?.length ?? 0));
+  const step = metrics.nodeWidth + metrics.columnGap;
+  const width = widest * metrics.nodeWidth + (widest - 1) * metrics.columnGap;
+  const nodes = new Map<string, PaintingBoardLayoutNode>();
+  rows.forEach((row, rowIndex) => {
+    if (!row) return;
+    const rowWidth = row.length * metrics.nodeWidth + (row.length - 1) * metrics.columnGap;
+    const offset = (width - rowWidth) / 2;
+    row.forEach((id, index) => {
+      nodes.set(id, {
+        id,
+        x: offset + index * step,
+        y: rowIndex * (metrics.nodeHeight + metrics.rowGap),
+      });
+    });
+  });
+  const rowCount = rows.length;
+
+  return {
+    height: rowCount * metrics.nodeHeight + Math.max(0, rowCount - 1) * metrics.rowGap,
+    nodes,
+    width,
+  };
+}

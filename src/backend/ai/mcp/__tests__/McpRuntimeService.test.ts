@@ -2,9 +2,12 @@ import type { ListToolsResult } from '@ai-sdk/mcp';
 import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { AppState } from 'react-native';
 
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
+import type { McpPromptEntry, McpProtocolInfo } from '@/shared/contracts/mcp';
 import { PluginError } from '@/shared/contracts/plugins';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import type { TraceRecorder } from '../../observability';
@@ -171,6 +174,9 @@ type FakeClient = {
   callTool: jest.Mock;
   close: jest.Mock;
   listTools: jest.Mock;
+  listPrompts?: jest.Mock;
+  getPrompt?: jest.Mock;
+  protocolInfo?: McpProtocolInfo;
   serverInfo: { name: string; title?: string; version: string };
 };
 
@@ -1481,5 +1487,158 @@ describe('catalog reuse', () => {
       'builtin:github:grant-2',
     );
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('cached MCP prompts', () => {
+  const prompt: McpPromptEntry = {
+    kind: 'prompt',
+    key: 'review',
+    title: 'Review changes',
+    arguments: [{ name: 'topic', required: true }],
+  };
+
+  function promptClient() {
+    const client = makeClient(makeRawTools(['search']));
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: false, prompts: true };
+    client.listPrompts = jest.fn(async () => ({
+      prompts: [{ name: prompt.key, title: prompt.title, arguments: prompt.arguments }],
+    }));
+    client.getPrompt = jest.fn(async () => ({
+      messages: [{ role: 'user', content: { type: 'text', text: 'Review this topic.' } }],
+    }));
+    return client;
+  }
+
+  it('discovers on connection and restores prompt menus from disk without a connection', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    const changed = jest.fn();
+    const unsubscribe = service.subscribePromptCatalogs(changed);
+
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    expect(changed).toHaveBeenCalled();
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).prompts).toEqual([prompt]);
+    mockCreateMCPClient.mockClear();
+    client.listPrompts!.mockClear();
+
+    const restarted = new McpRuntimeService();
+    await expect(restarted.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    await expect(restarted.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    expect(client.listPrompts).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('never discovers a missing catalog from a menu read', async () => {
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse a prompt catalog after credentials change, disable, or invalidation', async () => {
+    const server = makeServer({ headers: { Authorization: 'Bearer old' } });
+    mockCreateMCPClient.mockResolvedValue(promptClient());
+    const { service } = makeService([server]);
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    server.isEnabled = false;
+    await expect(service.getCachedPrompts()).resolves.toEqual({});
+    server.isEnabled = true;
+    server.headers = { Authorization: 'Bearer changed' };
+    await expect(new McpRuntimeService().getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    const changed = jest.fn();
+    service.subscribePromptCatalogs(changed);
+    service.invalidateServer(server.id);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(storedFiles.has(catalogPath(server.id))).toBe(false);
+  });
+
+  it('keeps tools and the stored prompt menu when optional prompt discovery fails', async () => {
+    const server = makeServer();
+    mockCreateMCPClient.mockResolvedValue(promptClient());
+    await makeService([server]).service.getRuntimeSummaries([server]);
+    await flush();
+    const failing = promptClient();
+    failing.listPrompts!.mockRejectedValue(new Error('Prompt catalog offline'));
+    mockCreateMCPClient.mockResolvedValue(failing);
+    const { service } = makeService([server]);
+    // A settings read discovers live before anything restores the stored file.
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).prompts).toEqual([prompt]);
+  });
+
+  it('refreshes a stored catalog written before prompt discovery on the next turn', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    await makeService([server]).service.getRuntimeSummaries([server]);
+    await flush();
+    const stored = JSON.parse(storedFiles.get(catalogPath(server.id))!);
+    delete stored.prompts;
+    storedFiles.set(catalogPath(server.id), JSON.stringify(stored));
+    client.listPrompts!.mockClear();
+
+    const { service } = makeService([server]);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    await service.listExecutableToolDescriptors(server.id);
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+  });
+
+  it('resolves a prompt on the shared connection and rejects an inactive Agent binding', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    const binding: AgentToolBinding = {
+      id: 'binding-1',
+      agentId: 'agent-1',
+      serverId: server.id,
+      source: 'mcp',
+      enabled: true,
+      approval: 'ask',
+      displayNameSnapshot: server.name,
+      createdAt: server.createdAt,
+      updatedAt: server.updatedAt,
+    };
+    jest.spyOn(agentToolBindingService, 'list').mockResolvedValue({ items: [binding] });
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).resolves.toMatchObject({
+      title: prompt.title,
+      text: expect.stringContaining('Review this topic.'),
+    });
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.getPrompt).toHaveBeenCalledWith(
+      { name: prompt.key, arguments: { topic: 'Changes' } },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    // A server that no longer knows the prompt refreshes the catalog on its connection.
+    client.getPrompt!.mockRejectedValueOnce(new ProtocolError(-32602, 'Unknown prompt: review'));
+    client.listPrompts!.mockClear();
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_call_failed' });
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+
+    binding.enabled = false;
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(client.getPrompt).toHaveBeenCalledTimes(2);
   });
 });

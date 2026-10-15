@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { MarkdownText } from '@/frontend/components/MarkdownText';
-import { createCodeBlockMarkdown } from '@/frontend/utils/createCodeBlockMarkdown';
+import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 import { SourceLink } from '../SourceLink';
 import {

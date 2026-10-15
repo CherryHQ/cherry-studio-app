@@ -3,7 +3,7 @@ export type { ContextMenuLinkItem } from './components/ContextMenuLink';
 export { NavigationThemeProvider } from './components/NavigationThemeProvider';
 export { FirstUseGate } from './components/FirstUseGate';
 export { resolveHeaderContentInset } from './headerContentInset/headerContentInset';
-export { paintingRouteId, paintingViewerRouteId } from './paintingRoute';
+export { paintingRouteId } from './paintingRoute';
 export {
   providerSetupHref,
   readProviderSetupReturnTo,
@@ -13,6 +13,5 @@ export {
 export {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
-  paintingViewerHeaderShown,
 } from './rootStackPlatform/rootStackPlatform';
 export { useOpenProviderSetup } from './useOpenProviderSetup';

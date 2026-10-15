@@ -13,10 +13,14 @@ import { type UserQuestionFormProps, useUserQuestionForm } from './useUserQuesti
 
 const ignoreClose = () => undefined;
 
-export type UserQuestionSheetProps = UserQuestionFormProps & { open: boolean };
+export type UserQuestionSheetProps = UserQuestionFormProps & {
+  open: boolean;
+  /** User-started forms may be cancelled; pending conversation questions stay non-dismissible. */
+  onClose?: () => void;
+};
 
 /** Asks one question at a time and retains drafts while its owner hides the request. */
-export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
+export function UserQuestionSheet({ onClose, open, ...props }: UserQuestionSheetProps) {
   const { t } = useTranslation();
   const form = useUserQuestionForm(props);
   const { dismissInput } = useComposerPresentationActions();
@@ -50,7 +54,8 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
   return (
     <BottomSheet
       avoidKeyboard
-      dismissible={false}
+      closeAction={onClose ? { accessibilityLabel: t('common.cancel') } : undefined}
+      dismissible={Boolean(onClose)}
       footer={
         <View className="flex-row items-center gap-3">
           {total > 1 ? (
@@ -102,7 +107,7 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
           </View>
         </View>
       }
-      onClose={ignoreClose}
+      onClose={onClose ?? ignoreClose}
       open={open}
       size={hasTextChanges ? 'large' : 'medium'}
       testID="user-question-sheet"
@@ -201,12 +206,12 @@ export function UserQuestionSheet({ open, ...props }: UserQuestionSheetProps) {
       {/* Outside the scroll view, so the keyboard shrinks the options instead of hiding it. */}
       <View className="px-5 pb-3">
         <Input
-          accessibilityLabel={t('chat.question.custom')}
+          accessibilityLabel={form.question.input?.label ?? t('chat.question.custom')}
           disabled={form.locked}
-          maxLength={4000}
+          maxLength={form.question.input?.maxLength ?? 4000}
           onChangeText={form.setText}
           onSubmitEditing={advance}
-          placeholder={t('chat.question.custom')}
+          placeholder={form.question.input?.label ?? t('chat.question.custom')}
           returnKeyType={form.action === 'submit' ? 'done' : 'next'}
           style={fieldStyle}
           testID="user-question-custom"

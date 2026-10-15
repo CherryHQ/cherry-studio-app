@@ -1,1 +1,1 @@
-export { PaintingViewerScreen as default } from '@/frontend/features/paintings/viewer';
+export { PaintingRedirectScreen as default } from '@/frontend/features/paintings';
