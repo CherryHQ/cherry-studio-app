@@ -22,6 +22,7 @@ it already exists.
 | SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts` |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
+| Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `fileContent.createInternalEntry` in `src/backend/services/file/fileContent.ts` |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
@@ -47,3 +48,4 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
+| Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |

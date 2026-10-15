@@ -2,6 +2,7 @@ import type { McpContentEntry, McpContentPreview, McpPromptEntry } from '@/share
 import { readMcpBinaryBlock, stripMcpMetadata } from '@/shared/contracts/mcpContent';
 
 import type { McpRuntimeClient } from './mcpProtocolClient';
+import { McpRuntimeToolError } from './mcpRuntimeAdapter';
 
 export async function listMcpPrompts(
   client: McpRuntimeClient,
@@ -33,13 +34,17 @@ export async function readMcpContent(
   signal: AbortSignal,
 ): Promise<McpContentPreview> {
   if (entry.arguments.some((arg) => arg.required && !args[arg.name]?.trim()))
-    throw new Error('Missing content arguments.');
+    throw new McpRuntimeToolError('mcp_tool_input_invalid', 'Missing content arguments.', false);
   if (JSON.stringify(args).length > 64 * 1024)
-    throw new Error('Content arguments exceed the size limit.');
+    throw new McpRuntimeToolError(
+      'mcp_tool_input_invalid',
+      'Content arguments exceed the size limit.',
+      false,
+    );
   const blocks: unknown[] = [];
   if (entry.kind === 'prompt') {
     if (!client.protocolInfo?.prompts || !client.getPrompt)
-      throw new Error('Prompts are unavailable.');
+      throw new McpRuntimeToolError('mcp_tool_unavailable', 'Prompts are unavailable.', false);
     const result = await client.getPrompt(
       { name: entry.key, arguments: args },
       { signal, timeout: 10 * 60 * 1000 },
@@ -50,7 +55,7 @@ export async function readMcpContent(
     }
   } else {
     if (!client.protocolInfo?.resources || !client.readResource)
-      throw new Error('Resources are unavailable.');
+      throw new McpRuntimeToolError('mcp_tool_unavailable', 'Resources are unavailable.', false);
     const result = await client.readResource(
       { uri: entry.key },
       { signal, cacheMode: 'refresh', timeout: 10 * 60 * 1000 },
@@ -67,7 +72,11 @@ export async function readMcpContent(
     const binary = readMcpBinaryBlock(block);
     if (binary) {
       if (!binary.valid || binary.bytes > remaining)
-        throw new Error('The MCP file exceeds the size limit or has an invalid format.');
+        throw new McpRuntimeToolError(
+          'mcp_tool_result_invalid',
+          'The MCP file exceeds the size limit or has an invalid format.',
+          false,
+        );
       remaining -= binary.bytes;
       files.push({
         data: binary.data,
@@ -78,6 +87,11 @@ export async function readMcpContent(
     else if (typeof resource?.text === 'string') text += `${resource.uri}\n${resource.text}\n`;
     else text += `${JSON.stringify(stripMcpMetadata(block))}\n`;
   }
-  if (text.length > 256 * 1024) throw new Error('The MCP content exceeds the text limit.');
+  if (text.length > 256 * 1024)
+    throw new McpRuntimeToolError(
+      'mcp_tool_result_invalid',
+      'The MCP content exceeds the text limit.',
+      false,
+    );
   return { serverName, title: entry.title, text, files };
 }

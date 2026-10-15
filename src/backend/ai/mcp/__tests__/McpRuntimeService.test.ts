@@ -1558,19 +1558,43 @@ describe('cached MCP prompts', () => {
     expect(storedFiles.has(catalogPath(server.id))).toBe(false);
   });
 
-  it('keeps tools usable when optional prompt discovery fails', async () => {
+  it('keeps tools and the stored prompt menu when optional prompt discovery fails', async () => {
     const server = makeServer();
-    const client = promptClient();
-    client.listPrompts!.mockRejectedValue(new Error('Prompt catalog offline'));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const { service } = makeService([server]);
-    await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+    mockCreateMCPClient.mockResolvedValue(promptClient());
+    await makeService([server]).service.getRuntimeSummaries([server]);
     await flush();
-    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
-    expect(storedFiles.has(catalogPath(server.id))).toBe(true);
+    const failing = promptClient();
+    failing.listPrompts!.mockRejectedValue(new Error('Prompt catalog offline'));
+    mockCreateMCPClient.mockResolvedValue(failing);
+    const { service } = makeService([server]);
+    // A settings read discovers live before anything restores the stored file.
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).prompts).toEqual([prompt]);
   });
 
-  it('uses the cached definition when applying a prompt and rejects an inactive Agent binding', async () => {
+  it('refreshes a stored catalog written before prompt discovery on the next turn', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    await makeService([server]).service.getRuntimeSummaries([server]);
+    await flush();
+    const stored = JSON.parse(storedFiles.get(catalogPath(server.id))!);
+    delete stored.prompts;
+    storedFiles.set(catalogPath(server.id), JSON.stringify(stored));
+    client.listPrompts!.mockClear();
+
+    const { service } = makeService([server]);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    await service.listExecutableToolDescriptors(server.id);
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+  });
+
+  it('resolves a prompt on the shared connection and rejects an inactive Agent binding', async () => {
     const server = makeServer();
     const client = promptClient();
     mockCreateMCPClient.mockResolvedValue(client);
@@ -1595,15 +1619,26 @@ describe('cached MCP prompts', () => {
       title: prompt.title,
       text: expect.stringContaining('Review this topic.'),
     });
-    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
     expect(client.getPrompt).toHaveBeenCalledWith(
       { name: prompt.key, arguments: { topic: 'Changes' } },
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+
+    // A server that no longer knows the prompt refreshes the catalog on its connection.
+    client.getPrompt!.mockRejectedValueOnce(new ProtocolError(-32602, 'Unknown prompt: review'));
+    client.listPrompts!.mockClear();
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_call_failed' });
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+
     binding.enabled = false;
     await expect(
       service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
     ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
-    expect(client.getPrompt).toHaveBeenCalledTimes(1);
+    expect(client.getPrompt).toHaveBeenCalledTimes(2);
   });
 });

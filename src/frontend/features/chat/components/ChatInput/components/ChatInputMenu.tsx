@@ -1,13 +1,12 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
 import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/Composer';
+import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
@@ -30,8 +29,7 @@ export function ChatInputMenu({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { theme } = useUniwind();
-  const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
+  const mcpIcon = useMcpIcon();
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
   const openDocumentPicker = useComposerDocumentPicker();
 

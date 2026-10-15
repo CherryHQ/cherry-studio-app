@@ -386,17 +386,20 @@ the overall operation deadline and grant policy. The initial MCP challenge probe
 response headers through streaming fetch, because that endpoint can return a long-lived event
 stream; it cancels the body immediately.
 
-The MCP runtime discovers prompt metadata when a custom server connects and stores it alongside
-the connection-fingerprinted tool catalog. Prompt discovery is independent of tool discovery;
-failure does not block tools. Server prompt-list changes refresh the local metadata. The composer's
-MCP entry appears only when the current Agent has an enabled server-level binding to an enabled
-custom server with cached prompts. Both the entry and its compact menu read local metadata without
-connecting or listing remotely. Selecting a prompt fetches its messages through `prompts/get`,
-collecting arguments through the existing question bottom sheet when needed, then inserts the result
-into the draft. Required arguments must be answered; optional arguments may be skipped. The sheet
-retains answers across navigation and failed submissions, and cancellation leaves the draft unchanged.
-There is no separate preview step. The native owner rechecks the Agent binding and server
-configuration before resolving a cached prompt. Prompt roles remain quoted user content.
+Each custom-server catalog discovery lists prompt metadata alongside tools and stores both in the
+connection-fingerprinted catalog file, so prompts share the tool catalog's expiry, list-change, and
+rejection refreshes. A prompt-listing failure never blocks tools and keeps the last known prompts. A
+stored catalog written before prompt discovery refreshes on the next turn. The composer's MCP entry
+appears only when the current Agent has an enabled server-level binding to an enabled custom server
+with cached prompts. Both the entry and its compact menu read local metadata without connecting or
+listing remotely. Selecting a prompt fetches its messages through `prompts/get` on the server's
+shared connection, collecting arguments through the existing question bottom sheet when needed,
+then inserts the result into the draft. A prompt without arguments shows progress in its menu row;
+dismissing the menu abandons it. Required arguments must be answered; optional arguments may be
+skipped. The sheet retains answers across navigation and failed submissions, and cancellation
+leaves the draft unchanged. There is no separate preview step. The native owner rechecks the Agent
+binding and server configuration before resolving a cached prompt. Prompt roles remain quoted user
+content.
 
 Tool-returned resource links keep their preview and add content to the user draft only after Add.
 Bounded binary content becomes managed attachments; neither discovery nor preview starts an Agent

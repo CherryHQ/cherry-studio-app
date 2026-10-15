@@ -64,7 +64,8 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   cached prompt templates. Per-tool overrides do not enable that server's prompts. The same
   keyboard-preserving compact menu used by Plugins lists the cached templates and their sources;
   opening it performs no remote discovery. Selecting a template resolves its messages and adds
-  them to the draft without preview or sending. Parameters reuse `UserQuestionSheet`, including
+  them to the draft without preview or sending; a template without parameters shows progress in
+  its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
   its previous/next navigation and retained answers. Required fields gate submission; optional
   fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
