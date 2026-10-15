@@ -4,6 +4,7 @@ import {
   useAlert,
   useToast,
 } from '@cherrystudio/ui/components';
+import { useQueryClient } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -119,6 +120,7 @@ function PaintingBoardContent({
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const generation = usePaintingBoardGeneration(initialBoardId);
@@ -165,16 +167,20 @@ function PaintingBoardContent({
   const showChrome = !isChromeHidden || isEditing || isGenerating || mode === 'overview';
 
   // Remember where the user was, so reopening the board lands there.
-  const { trigger: updateBoard } = useMutation('PATCH', '/painting-boards/:id');
+  const { trigger: updateBoard } = useMutation('PATCH', '/painting-boards/:id', {
+    onSuccess: (updated) => {
+      queryClient.setQueryData([`/painting-boards/${updated.id}`], updated);
+    },
+  });
   const focusedPaintingId = focusedNode?.kind === 'painting' ? focusedNode.paintingId : undefined;
-  const rememberedFocus = board.board?.focusPaintingId;
+  // Save each focus transition, including a return while the previous save is pending.
   useEffect(() => {
-    if (!boardId || !focusedPaintingId || focusedPaintingId === rememberedFocus) return;
+    if (!boardId || !focusedPaintingId) return;
     void updateBoard({
       body: { focusPaintingId: focusedPaintingId },
       params: { id: boardId },
     }).catch(() => undefined);
-  }, [boardId, focusedPaintingId, rememberedFocus, updateBoard]);
+  }, [boardId, focusedPaintingId, updateBoard]);
 
   const focusNode = useCallback((nodeId: string, nextImageIndex = 0) => {
     setFocus({ imageIndex: nextImageIndex, nodeId });
