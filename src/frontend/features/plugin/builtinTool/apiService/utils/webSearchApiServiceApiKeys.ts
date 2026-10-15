@@ -1,4 +1,4 @@
-export function normalizeWebSearchApiKeys(apiKeys: readonly string[]): string[] {
+function normalizeWebSearchApiKeys(apiKeys: readonly string[]): string[] {
   const seen = new Set<string>();
   const keys: string[] = [];
 

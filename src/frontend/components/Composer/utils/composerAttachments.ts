@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 
 import type { FileUploadSelection } from '@/frontend/hooks/file';
+import type { ResolvedFile } from '@/shared/contracts/file';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { withCherryMeta } from '@/shared/data/types/uiParts';
@@ -112,6 +113,23 @@ export function replaceComposerAttachment(
   return attachments.map((attachment, position) =>
     position === index ? { ...replacement, id: attachment.id } : attachment,
   );
+}
+
+/** A managed file as a ready draft; the caller owns the draft identity. */
+export function createReadyAttachmentDraft(
+  { entry, uri }: ResolvedFile,
+  id: string,
+): ComposerAttachmentReady {
+  return {
+    fileEntryId: entry.id,
+    id,
+    kind: isComposerImageMediaType(entry.mediaType) ? 'image' : 'file',
+    mediaType: entry.mediaType,
+    name: entry.filename,
+    size: entry.size,
+    status: 'ready',
+    uri,
+  };
 }
 
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentSource {

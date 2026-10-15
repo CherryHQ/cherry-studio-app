@@ -46,6 +46,32 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
+export type McpBinaryBlock = {
+  /** Base64 payload. */
+  data: string;
+  mimeType: string;
+  /** Decoded size estimate for byte budgets. */
+  bytes: number;
+  /** Base64 and MIME syntax only; budgets and invalid-block handling belong to callers. */
+  valid: boolean;
+};
+
+/** Inline bytes of an image, audio, or embedded blob resource block; undefined for other blocks. */
+export function readMcpBinaryBlock(value: unknown): McpBinaryBlock | undefined {
+  const block = record(value);
+  const resource = block?.type === 'resource' ? record(block.resource) : undefined;
+  const data =
+    resource?.blob ?? (block?.type === 'image' || block?.type === 'audio' ? block.data : undefined);
+  const mimeType = resource?.mimeType ?? block?.mimeType;
+  if (typeof data !== 'string' || typeof mimeType !== 'string') return undefined;
+  return {
+    data,
+    mimeType,
+    bytes: data.length * 0.75,
+    valid: /^[a-zA-Z0-9+/]*={0,2}$/.test(data) && /^[\w.+-]+\/[\w.+-]+$/.test(mimeType),
+  };
+}
+
 /** Every model-visible block before the text budget applies. */
 function collectMcpModelContent(value: unknown): McpModelOutputContent {
   const result = record(value);
@@ -63,13 +89,9 @@ function collectMcpModelContent(value: unknown): McpModelOutputContent {
         data: block.data,
         mimeType: block.mimeType,
       });
-      const bytes = block.data.length * 0.75;
-      if (
-        parsed.success &&
-        bytes + imageBytes <= MAX_IMAGE_BYTES &&
-        /^[a-zA-Z0-9+/]*={0,2}$/.test(block.data)
-      ) {
-        imageBytes += bytes;
+      const binary = readMcpBinaryBlock(block);
+      if (parsed.success && binary?.valid && binary.bytes + imageBytes <= MAX_IMAGE_BYTES) {
+        imageBytes += binary.bytes;
         content.push(parsed.data);
       } else {
         content.push({

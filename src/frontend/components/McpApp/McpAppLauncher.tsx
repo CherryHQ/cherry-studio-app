@@ -1,4 +1,4 @@
-import { createMcpAppHtml } from '@cherrystudio/mcp-app-webview';
+import { createMcpAppHtml, createMcpAppReceiveScript } from '@cherrystudio/mcp-app-webview';
 import { BottomSheet, Button, ContentState, Dialog } from '@cherrystudio/ui/components';
 import { randomUUID } from 'expo-crypto';
 import { useFocusEffect } from 'expo-router';
@@ -111,10 +111,7 @@ function McpAppWindow({ launch, onClose }: { launch: McpAppLaunch; onClose(): vo
       .openApp(
         launch,
         {
-          send: (message) =>
-            webView.current?.injectJavaScript(
-              `window.__cherryMcpReceive?.(${message.replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029')});true;`,
-            ),
+          send: (message) => webView.current?.injectJavaScript(createMcpAppReceiveScript(message)),
           openLink: async (url) => {
             await confirm('link', url);
             abort.signal.throwIfAborted();

@@ -80,10 +80,10 @@ import {
 
 const logger = loggerService.withContext('McpRuntimeService');
 
-/** Ceiling for connect + tools/list, enforced through abort signals the SDK
- * forwards to the transport (native support since `@ai-sdk/mcp@1.0.66`).
- * Without it a server that accepts the socket then stalls would pin a client
- * slot indefinitely. */
+/** Ceiling for connect + tools/list, enforced through the abort signal each
+ * client stack forwards to its transport: the official MCP SDK for remote
+ * servers and `@ai-sdk/mcp` for built-in plugins. Without it a server that
+ * accepts the socket then stalls would pin a client slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 
 /** A failed discovery is not retried on the send path until this much time

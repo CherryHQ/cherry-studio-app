@@ -11,8 +11,8 @@ and usage capture. An optional callback receives cumulative streaming text. Canc
 through and checked before publishing chunks and accepting the final result.
 Generation retains its finish reason; translation rejects output cut short by a length limit,
 content filter, or provider error before consumers can save it as a success. Other generation
-consumers retain their own completion policy. Skill caches from before this completion check are
-not reused because their completeness cannot be established.
+consumers retain their own completion policy. A resolved result is therefore complete, non-empty
+and was not cancelled; consumers do not repeat those checks.
 
 Consumers own saved results and presentation; this module never edits documents, messages, or
 Agent history. Errors expose closed codes for localized feedback, while diagnostic details remain

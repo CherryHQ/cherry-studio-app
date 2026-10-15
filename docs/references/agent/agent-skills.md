@@ -23,9 +23,8 @@ text; translation never changes installed files or the instructions supplied to 
 are cancellable and are not made on page load. Successful translations are saved in the existing
 local persistent UI cache by package content hash and language, and appear immediately when the
 same document is reopened, including after an app restart. A changed package or another language
-uses its own translation; truncated, failed and cancelled requests are not saved. Cached results
-from before completion checking are regenerated on demand. The existing update action is
-labeled **Update skill** because it applies the upstream content directly.
+uses its own translation; truncated, failed and cancelled requests are not saved. The existing
+update action is labeled **Update skill** because it applies the upstream content directly.
 Installed Skills are available by default, with no library enablement switch. Agent settings enable
 Skills individually for each Agent; the chat composer selects eligible bindings for a message.
 An Agent toggle makes a Skill available for the model to choose when relevant. A composer reference
@@ -276,15 +275,14 @@ and claim success. Explicit upstream updates still replace current local content
 
 `agent_global_skill` and `agent_skill` match desktop's columns, defaults and index names. Mobile
 writes `source` as `marketplace` (CherryIN, GitHub and generated user-library packages); `builtin` remains readable for legacy
-installations and backups. It writes `source_url` as the URL updates re-resolve, and `is_enabled`
-as global enablement; new
-installations and conversation bindings are written enabled. Desktop's `namespace` is absent
+installations and backups. It writes `source_url` as the URL updates re-resolve. Mobile has no
+global enablement control, so `is_enabled` and conversation bindings are written enabled. Desktop's `namespace` is absent
 because app-owned system workflows live in Host instructions rather than user installations.
 Three mobile columns follow the shared ones: `manifest` lists accepted files for backup completeness and package-local reads,
 `profile` holds the tool names the package declares, and
 `invocation` lets list queries filter by invocation policy. Installation binds nothing unless
 Agent IDs were explicitly supplied; conversation tools supply only the current Agent. Binding
-changes preserve unrelated bindings; global disablement preserves binding preferences.
+changes preserve unrelated bindings.
 
 Accepted packages live in the selected storage generation beside its database, under
 `Data/Skills/<folder_name>/<content hash hex>/`; absolute sandbox paths are never persisted.

@@ -53,7 +53,6 @@ export type SkillsModuleDependencies = {
   skills: AgentGlobalSkillService;
   storage: SkillStorage;
   sources: {
-    bundled: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
@@ -221,7 +220,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     return {
       name: pkg.name,
       description: pkg.description,
-      source: candidate.source.registry === 'bundled' ? 'builtin' : 'marketplace',
+      source: 'marketplace',
       sourceUrl: candidate.source.url,
       author: pkg.author ?? candidate.author,
       version: pkg.version ?? candidate.version,
@@ -279,11 +278,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
 
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
-      if (resolved.some((candidate) => candidate.source.registry === 'bundled'))
-        throw new SkillsError(
-          'source-invalid',
-          'System Skills are not available for installation.',
-        );
       return Promise.all(resolved.map((candidate) => toPublicCandidate(remember(candidate))));
     },
 
@@ -319,11 +313,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           throw new SkillsError(
             'already-installed',
             'An existing revision needs an explicit update or repair.',
-          );
-        if (!existing.isEnabled)
-          throw new SkillsError(
-            'admission-setup-required',
-            'This Skill is globally disabled. Enable it in the Skill library first.',
           );
         await deps.db.withWriteTx(async (tx) => {
           for (const agentId of input.agentIds ?? [])
@@ -361,11 +350,9 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       const locator = installedSkillLocator(current);
       if (!locator) throw new SkillsError('source-invalid', 'This Skill source is unavailable.');
       const resolved =
-        current.source === 'builtin'
-          ? await deps.sources.bundled.resolve(locator, signal)
-          : locator.startsWith('cherryin:') && deps.sources.cherryin
-            ? await deps.sources.cherryin.resolve(locator, signal)
-            : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
+        locator.startsWith('cherryin:') && deps.sources.cherryin
+          ? await deps.sources.cherryin.resolve(locator, signal)
+          : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
       const candidate = remember(resolved);
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
       if (!pkg || !files) {

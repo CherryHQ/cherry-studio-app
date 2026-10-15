@@ -9,11 +9,8 @@ import { useComposerMeta, useComposerState } from '@/frontend/components/Compose
 import { PluginIcon } from '@/frontend/components/PluginIcon';
 
 import type { ChatInputPlugin } from '../utils/chatInputPlugins';
-import {
-  createPluginMentionLabel,
-  createPluginMentionUrl,
-  readPluginMentions,
-} from '../utils/pluginMentions';
+import { createMentionLabel } from '../utils/mentionLabels';
+import { createPluginMentionUrl, readPluginMentions } from '../utils/pluginMentions';
 
 type ChatInputPluginPopoverProps = {
   children: ReactNode;
@@ -65,7 +62,7 @@ export function ChatInputPluginPopover({
     setShouldRestoreFocus(true);
     if (!selectedIds.has(plugin.serverId)) {
       inputRef.current?.insertLink(
-        createPluginMentionLabel(t(`plugins.catalog.${plugin.id}.name`)),
+        createMentionLabel(t(`plugins.catalog.${plugin.id}.name`)),
         createPluginMentionUrl(plugin.serverId, plugin.id),
       );
       inputRef.current?.insertText(' ');

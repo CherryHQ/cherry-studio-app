@@ -14,7 +14,7 @@ const ARROW_TIP_X = 72;
  * Points from the full-width page body up to the header's overflow menu. The
  * caption carries the instruction for screen readers; the drawing is decorative.
  */
-export function HeaderMenuGuide({ hint, title }: { hint: string; title: string }) {
+export function FileMenuGuide({ hint, title }: { hint: string; title: string }) {
   const stroke = useThemeColor('muted-foreground');
 
   return (

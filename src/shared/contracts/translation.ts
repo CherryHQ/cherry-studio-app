@@ -21,5 +21,6 @@ export class TranslationError extends Error {
 
 /** Read-only text translation. Callers own display, cancellation and saved results. */
 export interface TranslationModule {
+  /** Resolves only with complete, non-empty text, and never once `options.signal` has aborted. */
   translate(input: TranslationInput, options?: TranslationOptions): Promise<string>;
 }

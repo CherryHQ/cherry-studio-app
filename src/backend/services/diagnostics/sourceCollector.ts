@@ -3,7 +3,7 @@ import { File, FileMode } from 'expo-file-system';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 
 import { getNativeDiagnostics } from '../../../../modules/diagnostics';
-import { diagnosticDirectory, yieldToRuntime } from './diagnosticFiles';
+import { diagnosticDirectory, LOG_NAME, yieldToRuntime } from './diagnosticFiles';
 import { projectDiagnosticLog, projectDiagnosticTrace } from './diagnosticMetadata';
 import type {
   DiagnosticFileSourceKind,
@@ -13,7 +13,6 @@ import type {
   StagedSource,
 } from './types';
 
-export const LOG_NAME = /^app-error\.(\d{4}-\d{2}-\d{2})\.log(?:\.\d+)?$/;
 const MAX_JSON_LINE_BYTES = 128 * 1024;
 const decoder = new TextDecoder();
 export type RawLine = { data?: Uint8Array; tooLarge: boolean };
@@ -113,27 +112,24 @@ export function projectDiagnosticLine(
 
 export async function collectDiagnosticSources(
   range: DiagnosticTimeRange,
-  selection: { includeLogs: boolean; includeTraces: boolean },
   signal?: AbortSignal,
   snapshot?: TraceDiagnosticSnapshot,
 ): Promise<SourceCollection> {
   const collection: SourceCollection = { logs: [], traces: [], warnings: new Set() };
   const sources: { file: File; name: string; kind: DiagnosticFileSourceKind }[] = [];
-  if (selection.includeLogs) {
-    try {
-      const root = diagnosticDirectory('logs');
-      if (root.exists) {
-        for (const file of root.list()) {
-          if (file instanceof File && LOG_NAME.test(file.name)) {
-            sources.push({ file, name: `logs/${file.name}`, kind: 'logs' });
-          }
+  try {
+    const root = diagnosticDirectory('logs');
+    if (root.exists) {
+      for (const file of root.list()) {
+        if (file instanceof File && LOG_NAME.test(file.name)) {
+          sources.push({ file, name: `logs/${file.name}`, kind: 'logs' });
         }
       }
-    } catch {
-      collection.warnings.add('source_unreadable');
     }
+  } catch {
+    collection.warnings.add('source_unreadable');
   }
-  if (selection.includeTraces && snapshot) {
+  if (snapshot) {
     for (const entry of snapshot.files) {
       if (/^\d+-[0-9a-f-]{36}\.jsonl$/.test(entry.name))
         sources.push({ file: new File(entry.uri), name: `traces/${entry.name}`, kind: 'traces' });

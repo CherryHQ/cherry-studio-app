@@ -5,7 +5,8 @@ the provider check.
 
 ## Public Interface
 
-- Field groups and pure API key helpers are exported from `index.ts`.
+- None. This module is private to the built-in tool pages, which import its field groups and
+  provider check hook from their leaf files.
 
 ## Organization
 

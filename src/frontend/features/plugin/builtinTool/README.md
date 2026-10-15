@@ -5,7 +5,8 @@ application-owned tools listed on the Plugins page.
 
 ## Public Interface
 
-- `index.ts` exports both route screens and the `BUILTIN_TOOLS` definitions the Plugins page lists.
+- `index.ts` exports both route screens, the `BUILTIN_TOOLS` definitions the Plugins page lists, and
+  `getWebSearchProviderDisplayName`, which names the provider serving each listed tool.
 - API management components, context, hooks, and helpers remain private to this page branch.
 
 ## Organization

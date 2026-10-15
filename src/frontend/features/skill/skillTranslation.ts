@@ -6,8 +6,7 @@ export function skillTranslationQueryOptions(
   translation: TranslationModule,
   { contentHash, language, text }: { contentHash: string; language: AppLanguage; text: string },
 ) {
-  // Earlier results were saved without checking whether generation was truncated.
-  const key = `v2:${contentHash}:${language}`;
+  const key = `${contentHash}:${language}`;
   const read = () => {
     const saved = cacheService.getPersist('skills.translations')?.[key];
     return typeof saved === 'string' && saved.trim() ? saved : undefined;
@@ -21,13 +20,10 @@ export function skillTranslationQueryOptions(
       if (saved) return saved;
 
       const translated = await translation.translate({ text, language }, { signal });
-      signal.throwIfAborted();
-      if (translated.trim()) {
-        cacheService.setPersist('skills.translations', {
-          ...cacheService.getPersist('skills.translations'),
-          [key]: translated,
-        });
-      }
+      cacheService.setPersist('skills.translations', {
+        ...cacheService.getPersist('skills.translations'),
+        [key]: translated,
+      });
       return translated;
     },
     retry: false,

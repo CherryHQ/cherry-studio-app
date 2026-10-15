@@ -26,8 +26,6 @@ export type ProviderConfig<
 export interface ProviderCapabilities {
   /** Whether reasoning/thinking parameters should be sent to the provider. */
   enableReasoning: boolean;
-  /** Whether provider-native web search should be enabled. */
-  enableWebSearch: boolean;
   /** Whether the model should generate images inline. */
   enableGenerateImage: boolean;
   /** Whether provider-native URL context should be enabled. */

@@ -3,12 +3,12 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { HeaderMenuGuide } from '@/frontend/appShell/header';
 import { canPreviewDocument, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
 
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
 import { FileDocumentPreview } from './FileDocumentPreview';
+import { FileMenuGuide } from './FileMenuGuide';
 import { FileViewerHeader } from './FileViewerHeader';
 
 export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
@@ -27,7 +27,7 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
       <FileViewerHeader file={file} />
       {status === 'tooLarge' ? (
         // System opening stays in the header's overflow menu; this state points there.
-        <HeaderMenuGuide
+        <FileMenuGuide
           hint={t('fileViewer.openWithMenuHint')}
           title={t('fileViewer.tooLargeToPreview')}
         />

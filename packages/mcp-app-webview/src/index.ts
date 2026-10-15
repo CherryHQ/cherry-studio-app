@@ -35,11 +35,20 @@ export function normalizeMcpAppDomains(value: unknown, websocket = false): strin
 function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
 }
-function scriptValue(value: unknown): string {
-  return JSON.stringify(value)
+/** Serialized JSON as an inline script expression that cannot close its tag or line. */
+function escapeScriptJson(json: string): string {
+  return json
     .replaceAll('<', '\\u003c')
     .replaceAll('\u2028', '\\u2028')
     .replaceAll('\u2029', '\\u2029');
+}
+function scriptValue(value: unknown): string {
+  return escapeScriptJson(JSON.stringify(value));
+}
+
+/** Native → View delivery of one serialized JSON-RPC message through `injectJavaScript`. */
+export function createMcpAppReceiveScript(serializedMessage: string): string {
+  return `window.__cherryMcpReceive?.(${escapeScriptJson(serializedMessage)});true;`;
 }
 
 /**

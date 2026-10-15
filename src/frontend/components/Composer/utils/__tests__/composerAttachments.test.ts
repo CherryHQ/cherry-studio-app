@@ -1,3 +1,4 @@
+import { FileEntrySchema } from '@/shared/data/types/file';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
@@ -10,6 +11,7 @@ import {
   createDroppedImageAttachmentDraft,
   createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
+  createReadyAttachmentDraft,
   hasComposerSendableContent,
   hasImportingComposerAttachments,
   isComposerAttachmentReady,
@@ -78,6 +80,35 @@ describe('composer attachments', () => {
         readyFileAttachment,
       ),
     ).toBeUndefined();
+  });
+
+  test('creates ready drafts from managed files under the caller-chosen draft id', () => {
+    const managed = (filename: string, mediaType: string) => ({
+      entry: FileEntrySchema.parse({
+        createdAt: 1_754_611_200_000,
+        filename,
+        id: '00000000-0000-7000-8000-000000000003',
+        mediaType,
+        provenance: 'imported',
+        size: 256,
+        updatedAt: 1_754_611_200_000,
+      }),
+      uri: `file:///managed/${filename}`,
+    });
+
+    expect(createReadyAttachmentDraft(managed('photo.png', 'image/png'), 'photo:a')).toEqual({
+      fileEntryId: '00000000-0000-7000-8000-000000000003',
+      id: 'photo:a',
+      kind: 'image',
+      mediaType: 'image/png',
+      name: 'photo.png',
+      size: 256,
+      status: 'ready',
+      uri: 'file:///managed/photo.png',
+    });
+    expect(
+      createReadyAttachmentDraft(managed('notes.pdf', 'application/pdf'), 'file-entry:b'),
+    ).toMatchObject({ id: 'file-entry:b', kind: 'file' });
   });
 
   test('appends attachments while preserving existing items and dropping duplicates', () => {

@@ -14,19 +14,13 @@ import {
   type OAuthClientInformation,
   type OAuthTokens,
 } from '@modelcontextprotocol/client';
-import Constants from 'expo-constants';
-import {
-  CryptoDigestAlgorithm,
-  CryptoEncoding,
-  digestStringAsync,
-  getRandomBytes,
-  randomUUID,
-} from 'expo-crypto';
+import { randomUUID } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { fetch as expoFetch } from 'expo/fetch';
 import * as z from 'zod';
 
 import { isHttpError } from '@/backend/services/http';
+import { createPkceChallenge, nativeCallbackUrl, randomOauthValue } from '@/backend/utils/oauth';
 import {
   McpAuthorizationError,
   type McpConnectionConfig,
@@ -81,17 +75,10 @@ type Attempt = {
   scope?: string;
 };
 
-const base64Url = (value: string) =>
-  value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
-
 function callbackUrl(): string {
-  const configured = Constants.expoConfig?.scheme;
-  const scheme = Array.isArray(configured) ? configured[0] : configured;
-  if (!['cherrystudio', 'cherrystudio-dev', 'cherrystudio-preview'].includes(scheme ?? '')) {
-    throw new McpAuthorizationError('unavailable');
-  }
-  return `${scheme}://plugins/mcp/oauth-callback`;
+  const url = nativeCallbackUrl('plugins/mcp/oauth-callback');
+  if (!url) throw new McpAuthorizationError('unavailable');
+  return url;
 }
 
 /** Native credentials and interactive attempts, owned and disposed by the MCP runtime. */
@@ -181,13 +168,8 @@ export class McpOAuthRuntime {
     if (this.attempts.size >= 4) throw new McpAuthorizationError('unavailable');
     const abort = new AbortController();
     const redirectUrl = callbackUrl();
-    const state = randomValue();
-    const verifier = randomValue();
-    const challenge = base64Url(
-      await digestStringAsync(CryptoDigestAlgorithm.SHA256, verifier, {
-        encoding: CryptoEncoding.BASE64,
-      }),
-    );
+    const state = randomOauthValue();
+    const { verifier, challenge } = await createPkceChallenge();
     const prior =
       previous?.origin !== 'builtin' && previous?.oauth
         ? await this.read(previous.oauth.authorizationId).catch(() => undefined)

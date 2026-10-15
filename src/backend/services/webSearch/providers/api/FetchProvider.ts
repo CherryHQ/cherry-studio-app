@@ -1,10 +1,12 @@
+import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
 
 import { downloadWebPage } from '../../http/downloadWebPage';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
-import { acquireLocalFetchSlot } from './localFetchSlot';
 
 const MAX_TEXT_CHARACTERS = 24_000;
+/** Queue URLs before downloading so complete HTML cannot accumulate behind QuickJS. */
+const localFetchSlots = createConcurrencySlots(1);
 
 export class FetchProvider extends BaseWebSearchProvider {
   async fetchUrls(
@@ -13,7 +15,7 @@ export class FetchProvider extends BaseWebSearchProvider {
     httpOptions?: RequestInit,
   ): Promise<WebSearchResponse> {
     const signal = httpOptions?.signal ?? new AbortController().signal;
-    const release = await acquireLocalFetchSlot(signal);
+    const release = await localFetchSlots.acquire(signal);
     let extractionOwnsSlot = false;
     try {
       const page = await downloadWebPage(input, signal);

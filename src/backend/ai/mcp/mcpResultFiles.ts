@@ -1,6 +1,6 @@
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import { createInternalEntry, discardInternalEntries } from '@/backend/services/file/fileStorage';
-import { mcpModelTextOverflow } from '@/shared/contracts/mcpContent';
+import { mcpModelTextOverflow, readMcpBinaryBlock } from '@/shared/contracts/mcpContent';
 import { fileEntryUrl, type FileEntry } from '@/shared/data/types/file';
 import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -37,20 +37,13 @@ export async function storeMcpResultFiles(
       let remaining = 8 * 1024 * 1024;
       for (const item of result.content.slice(0, 64)) {
         signal.throwIfAborted();
-        const resource = item?.type === 'resource' ? item.resource : undefined;
-        const data =
-          resource?.blob ?? (['image', 'audio'].includes(item?.type) ? item.data : undefined);
-        const mediaType = resource?.mimeType ?? item?.mimeType;
-        if (typeof data !== 'string' || typeof mediaType !== 'string') {
+        const binary = readMcpBinaryBlock(item);
+        if (!binary) {
           content.push(item);
           continue;
         }
-        const bytes = data.length * 0.75;
-        if (
-          bytes > remaining ||
-          !/^[a-zA-Z0-9+/]*={0,2}$/.test(data) ||
-          !/^[\w.+-]+\/[\w.+-]+$/.test(mediaType)
-        ) {
+        const { data, mimeType: mediaType, bytes } = binary;
+        if (!binary.valid || bytes > remaining) {
           content.push({
             type: 'text',
             text: '[MCP binary content omitted: invalid format or size limit]',
