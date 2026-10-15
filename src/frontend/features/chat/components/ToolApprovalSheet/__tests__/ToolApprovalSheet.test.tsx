@@ -78,6 +78,7 @@ describe('ToolApprovalSheet', () => {
     overrides: {
       approvals?: readonly PendingToolApproval[];
       canRespond?: boolean;
+      canApprove?: boolean;
       onRespond?: () => Promise<void>;
     } = {},
   ) {
@@ -86,6 +87,7 @@ describe('ToolApprovalSheet', () => {
       <ToolApprovalSheet
         approvals={approvals}
         canRespond={overrides.canRespond}
+        canApprove={overrides.canApprove}
         isOpen
         onRespond={onRespond}
       />
@@ -290,6 +292,16 @@ describe('ToolApprovalSheet', () => {
     await press(allowLabel);
     await press(denyLabel);
     expect(onRespond).not.toHaveBeenCalled();
+  });
+
+  test('keeps denial available while health sharing consent cannot be granted', async () => {
+    const { onRespond } = render({ canApprove: false });
+    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(denyLabel)?.props.disabled).toBe(false);
+    await press(allowLabel);
+    expect(onRespond).not.toHaveBeenCalled();
+    await press(denyLabel);
+    expect(onRespond).toHaveBeenCalledWith({ approvalId: 'approval-1', approved: false });
   });
 
   test('retains asynchronously loaded arguments during the close animation', () => {

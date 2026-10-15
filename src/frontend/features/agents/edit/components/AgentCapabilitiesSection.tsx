@@ -27,6 +27,7 @@ const CAPABILITY_DISPLAY_ORDER = [
   'agents',
   'calendar',
   'reminders',
+  'health',
   'location',
 ] as const satisfies readonly AgentCapability[];
 

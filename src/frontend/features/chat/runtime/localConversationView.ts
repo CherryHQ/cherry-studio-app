@@ -10,6 +10,7 @@ import {
   localConversationFailure,
 } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { BUILT_IN_TOOL_DESCRIPTORS } from '@/shared/data/types/builtInTool';
 
 import {
   type AgentMessageListProjectionCache,
@@ -24,6 +25,13 @@ import {
 import { localImageResult } from './localImageResult';
 
 export const LOCAL_CONVERSATION_SOURCE = { kind: 'local' } as const;
+
+/** Approvals for these tools disclose the receiving model service. */
+const HEALTH_TOOL_IDS = new Set<string>(
+  BUILT_IN_TOOL_DESCRIPTORS.filter((tool) => tool.agentCapability === 'health').map(
+    (tool) => tool.capabilityId,
+  ),
+);
 
 /** Rows shown without a Session client, such as the share selector; they carry no actions. */
 export function projectLocalTranscriptMessage(
@@ -160,12 +168,28 @@ export function createLocalConversationProjector(input: {
       const turn = state.activeTurn;
       const interactions: ConversationInteraction[] = state.pendingApprovals.map((approval) => {
         const inputKey = JSON.stringify(approval.input);
+        const isHealth =
+          approval.toolRef.source === 'builtin' &&
+          HEALTH_TOOL_IDS.has(approval.toolRef.capabilityId);
+        const inference = isHealth
+          ? state.liveMessages.find(
+              (message) => message.role === 'assistant' && message.turnId === approval.turnId,
+            )?.inferenceSnapshot
+          : undefined;
         return {
           id: approval.id,
           execution: approval.turnId,
           kind: 'decision',
           title: approval.displayName,
           state: 'pending',
+          ...(isHealth
+            ? {
+                healthDataSharing: {
+                  providerId:
+                    inference?.status === 'supported' ? inference.snapshot.model.providerId : null,
+                },
+              }
+            : {}),
           input: { kind: 'inline', value: { kind: 'json', value: approval.input, complete: true } },
           respond: action<ConversationInteractionResponse, void>(state, false, async (decision) => {
             if (
