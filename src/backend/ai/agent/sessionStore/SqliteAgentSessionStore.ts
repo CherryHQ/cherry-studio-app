@@ -724,6 +724,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     const message = await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select({
+          data: agentSessionMessageTable.data,
           sessionId: agentSessionMessageTable.sessionId,
           stats: agentSessionMessageTable.stats,
           turnId: agentSessionMessageTable.turnId,
