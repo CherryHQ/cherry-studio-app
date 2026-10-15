@@ -1,3 +1,5 @@
+import type { ReactElement } from 'react';
+import type { ViewProps } from 'react-native';
 import { callback } from 'react-native-nitro-modules';
 
 import type { ActionMenuProps } from '../menu.types';
@@ -9,8 +11,14 @@ import { NativeCherryMenuView, useNativeMenu } from '../use-native-menu';
  */
 export function ActionMenu({ children, items }: ActionMenuProps) {
   const { nativeItems, onAction } = useNativeMenu(items);
+  const child = children as ReactElement<ViewProps & { disabled?: boolean }>;
+  const isDisabled = Boolean(
+    child.props.disabled ||
+    child.props.accessibilityState?.disabled ||
+    child.props.pointerEvents === 'none',
+  );
 
-  if (items.length === 0) {
+  if (items.length === 0 || isDisabled) {
     return children;
   }
 

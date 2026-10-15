@@ -74,7 +74,7 @@ afterEach(() => {
   act(() => renderer?.unmount());
 });
 
-test('switches translation language without resetting reader state and rejects the old request', async () => {
+test('changing the app language preserves the chosen target, pending request and reader state', async () => {
   let finishOld!: (value: string) => void;
   const oldResult = new Promise<string>((resolve) => {
     finishOld = resolve;
@@ -87,7 +87,7 @@ test('switches translation language without resetting reader state and rejects t
   const previous = translation!;
   let pending!: Promise<void>;
   act(() => {
-    pending = previous.store.start(previous.source);
+    pending = previous.store.start(previous.source, 'zh-CN');
   });
   const oldOptions = mockTranslate.mock.calls[0][1];
 
@@ -95,21 +95,19 @@ test('switches translation language without resetting reader state and rejects t
   act(() => renderer.update(<Harness />));
 
   expect(readingPosition).toBe('current reading position');
-  expect(translation!.store).not.toBe(previous.store);
-  expect(translation!.store.language).toBe('fr-FR');
-  expect(translation!.state.status).toBe('idle');
-  expect(oldOptions?.signal?.aborted).toBe(true);
+  expect(translation!.store).toBe(previous.store);
+  expect(translation!.state).toMatchObject({ language: 'zh-CN', status: 'running' });
+  expect(oldOptions?.signal?.aborted).toBe(false);
   await act(async () => {
-    oldOptions?.onText?.('late text');
-    finishOld('late result');
+    oldOptions?.onText?.('译');
+    finishOld('译文');
     await pending;
   });
-  expect(cacheService.getPersist('chat.translations')).toEqual({});
-
-  await act(async () => {
-    await translation!.store.start(translation!.source);
+  expect(mockTranslate).toHaveBeenCalledTimes(1);
+  expect(translation!.state).toMatchObject({
+    content: '译文',
+    language: 'zh-CN',
+    status: 'success',
   });
-  expect(mockTranslate.mock.calls[1][0].language).toBe('fr-FR');
-  expect(translation!.state).toMatchObject({ content: 'Traduction', status: 'success' });
   expect(readingPosition).toBe('current reading position');
 });

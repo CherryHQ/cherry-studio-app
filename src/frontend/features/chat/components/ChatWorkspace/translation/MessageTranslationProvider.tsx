@@ -9,13 +9,11 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import type { ConversationMessage } from '@/frontend/appShell/conversation';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useBackendModule } from '@/frontend/data';
 import { cacheService } from '@/frontend/data/CacheService';
-import { resolveAppLanguage, type AppLanguage } from '@/shared/utils/languages';
 
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
 import { messageTranslationSource } from './messageTranslationSource';
@@ -30,34 +28,16 @@ type ProviderProps = PropsWithChildren<{
 }>;
 
 export function MessageTranslationProvider(props: ProviderProps) {
-  const { i18n } = useTranslation();
-  const language = resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language);
   return (
-    <SessionTranslationProvider
-      key={JSON.stringify([props.scope, props.sessionId])}
-      {...props}
-      language={language}
-    />
+    <SessionTranslationProvider key={JSON.stringify([props.scope, props.sessionId])} {...props} />
   );
 }
 
-function SessionTranslationProvider({
-  children,
-  scope,
-  sessionId,
-  language,
-  messages,
-}: ProviderProps & { language: AppLanguage }) {
+function SessionTranslationProvider({ children, scope, sessionId, messages }: ProviderProps) {
   const translator = useBackendModule('translation');
-  const [ownedStore, setOwnedStore] = useState(
-    () => new MessageTranslationStore(translator, cacheService, scope, sessionId, language),
+  const [store] = useState(
+    () => new MessageTranslationStore(translator, cacheService, scope, sessionId),
   );
-  // Replace only the translation owner; the transcript keeps its reading and row state.
-  let store = ownedStore;
-  if (store.language !== language) {
-    store = new MessageTranslationStore(translator, cacheService, scope, sessionId, language);
-    setOwnedStore(store);
-  }
   useFocusEffect(useCallback(() => () => store.cancelAll(), [store]));
   useLayoutEffect(() => {
     store.reconcile(messages);

@@ -39,6 +39,13 @@ test('keeps translations separate for different content and languages', async ()
   const french = skillTranslationQueryOptions(skills, { ...input, language: 'fr-FR' });
   expect(updated.initialData()).toBeUndefined();
   expect(french.initialData()).toBeUndefined();
+  skills.translate.mockResolvedValueOnce('# Lisez-moi');
+  await french.queryFn(context);
+  expect(skills.translate).toHaveBeenLastCalledWith(
+    { text: input.text, language: 'fr-FR' },
+    context,
+  );
+  expect(french.initialData()).toBe('# Lisez-moi');
   expect(skillTranslationQueryOptions(skills, input).initialData()).toBe(translated);
 });
 
