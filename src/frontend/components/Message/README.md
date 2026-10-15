@@ -186,6 +186,16 @@ Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row st
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 
+An unfinished assistant row keeps the pending indicator after completed content while waiting for
+the next model response. `MessageParts` owns this fallback and evaluates the same normalized parts
+and body/process split it renders, so a removed generated-image reference cannot suppress feedback.
+The message status remains the source of whether the reply is unfinished. Active reasoning, visible
+running tools, and pending user questions or approvals supply their own feedback instead, unless
+that reasoning or tool renders in the process
+group above a body part such as an answered question. An empty streaming reasoning block stays visible;
+settled empty blocks remain hidden. Retry feedback clears only when the next attempt has response
+content, not when an empty text or thinking block starts.
+
 The tool content adapters are Generic, MCP, Web Search, Write File, Meta Search, Meta Inspect, Meta
 Invoke, and Meta Exec. Painting remains a feature-owned message renderer and is not a tool-detail
 variant. Count renderer families, disclosure layers, and visual states separately; combining them

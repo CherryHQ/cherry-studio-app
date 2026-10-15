@@ -1,4 +1,4 @@
-import { ImageGenerationLoader, MessagePart } from '@cherrystudio/ui/components';
+import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
@@ -27,22 +27,17 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
 }: {
   message: MessageListItem;
 }) {
-  const { t } = useTranslation();
+  const parts = message.data.parts ?? [];
+  const isPending = message.status === 'pending';
   const isPendingEmptyMessage =
-    message.status === 'pending' &&
-    !message.data.parts?.some(
-      (part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped',
-    );
+    isPending &&
+    !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
 
   if (isPendingEmptyMessage && message.imageGeneration) {
     return <PendingImageMessage settings={message.imageGeneration} />;
   }
 
-  return isPendingEmptyMessage ? (
-    <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
-  ) : (
-    <MessageParts message={message} />
-  );
+  return <MessageParts message={message} />;
 });
 
 export const AssistantMessage = memo(function AssistantMessage({
