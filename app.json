@@ -89,7 +89,7 @@
           "UIInterfaceOrientationLandscapeRight"
         ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
-        "NSHealthShareUsageDescription": "Allow Cherry Studio to display your activity, sleep, heart rate, and workouts from Apple Health and, with your approval, analyze them with your selected AI service for health and fitness management.",
+        "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant and, with your approval, share it with your selected AI service for analysis.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
         "NSBonjourServices": ["_cherry-remote._tcp"],
