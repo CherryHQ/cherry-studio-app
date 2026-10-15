@@ -428,7 +428,8 @@ export function mergeAgentMessageViews(
     Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
     // Match the store's binary (createdAt, id) order, not locale collation.
     (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-  const newLive = live.filter((message) => !persistedIds.has(message.id)).toSorted(compareMessages);
+  // filter() already returns a fresh array, so sorting it in place is safe.
+  const newLive = live.filter((message) => !persistedIds.has(message.id)).sort(compareMessages);
   const merged: AgentMessageView[] = [];
   let liveIndex = 0;
 
