@@ -11,6 +11,7 @@ import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { pairingCancelDestination } from './pairingCancelDestination';
 import { useDesktopPairing } from './useDesktopPairing';
 
 export function DeviceConnectionPairingScreen({
@@ -36,15 +37,7 @@ export function DeviceConnectionPairingScreen({
       params: input?.connectionId ? { connectionId: input.connectionId } : {},
     });
 
-  const cancel = () => {
-    if (setupIntent === 'chat') router.replace('/onboarding');
-    else if (input?.connectionId)
-      router.replace({
-        pathname: '/settings/device-connections/[connectionId]',
-        params: { connectionId: input.connectionId },
-      });
-    else router.replace('/settings/device-connections');
-  };
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, input?.connectionId));
 
   const finish = () => {
     if (!connection) return;

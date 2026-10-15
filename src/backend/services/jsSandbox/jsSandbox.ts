@@ -9,13 +9,13 @@
 import * as Crypto from 'expo-crypto';
 import * as z from 'zod';
 
+import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
+
 import {
   getJsSandbox,
   type JsSandboxLimits,
   type JsSandboxNativeModule,
 } from '../../../../modules/js-sandbox';
-
-export type { JsSandboxLimits };
 
 const outputFields = {
   durationMs: z.number(),
@@ -84,41 +84,10 @@ export type JsSandboxBridge = {
 /** Per pool, shared across service instances and turns; each run can allocate 64 MiB. */
 export const JS_SANDBOX_MAX_CONCURRENT_RUNS = 2;
 
-function createRunSlots() {
-  const pending: (() => void)[] = [];
-  let running = 0;
-  return {
-    acquire(signal: AbortSignal): Promise<void> {
-      signal.throwIfAborted();
-      return new Promise((resolve, reject) => {
-        const start = () => {
-          signal.removeEventListener('abort', abort);
-          running++;
-          resolve();
-        };
-        const abort = () => {
-          const index = pending.indexOf(start);
-          if (index >= 0) pending.splice(index, 1);
-          reject(signal.reason);
-        };
-        if (running < JS_SANDBOX_MAX_CONCURRENT_RUNS) start();
-        else {
-          pending.push(start);
-          signal.addEventListener('abort', abort, { once: true });
-        }
-      });
-    },
-    release(): void {
-      running--;
-      pending.shift()?.();
-    },
-  };
-}
-
-const computeSlots = createRunSlots();
+const computeSlots = createConcurrencySlots(JS_SANDBOX_MAX_CONCURRENT_RUNS);
 // A bridge run holds its slot while its script waits on tools and approvals, and those tools may
 // themselves need a bounded computation. Separate pools keep one from starving the other.
-const bridgeSlots = createRunSlots();
+const bridgeSlots = createConcurrencySlots(JS_SANDBOX_MAX_CONCURRENT_RUNS);
 
 /** Null when this client was built without the native module. */
 export function createJsSandbox(
@@ -132,7 +101,7 @@ export function createJsSandbox(
     ...(native.runBridge && native.deliver && native.addListener
       ? {
           async startBridge(input: JsSandboxBridgeInput): Promise<JsSandboxBridge> {
-            await bridgeSlots.acquire(input.signal);
+            const releaseSlot = await bridgeSlots.acquire(input.signal);
             let started = false;
             let subscription: { remove(): void } | undefined;
             const runId = createRunId();
@@ -153,7 +122,7 @@ export function createJsSandbox(
                 finished = true;
                 subscription?.remove();
                 input.signal.removeEventListener('abort', abort);
-                bridgeSlots.release();
+                releaseSlot();
               });
               started = true;
               return {
@@ -166,7 +135,7 @@ export function createJsSandbox(
               if (!started) {
                 subscription?.remove();
                 input.signal.removeEventListener('abort', abort);
-                bridgeSlots.release();
+                releaseSlot();
               }
             }
           },
@@ -175,10 +144,9 @@ export function createJsSandbox(
     async run({ code, limits, signal, onSettled }) {
       let onAbort: (() => void) | undefined;
       let hasStarted = false;
-      let hasSlot = false;
+      let releaseSlot: (() => void) | undefined;
       try {
-        await computeSlots.acquire(signal);
-        hasSlot = true;
+        releaseSlot = await computeSlots.acquire(signal);
         signal.throwIfAborted();
         const runId = createRunId();
         // Settle on abort without waiting; the native side holds a cancel that
@@ -193,14 +161,14 @@ export function createJsSandbox(
         // Cancellation releases the caller immediately, but the slot remains
         // occupied until native cleanup finishes, so cancelled threads count too.
         const running = native.run(runId, code, limits).finally(() => {
-          computeSlots.release();
+          releaseSlot?.();
           onSettled?.();
         });
         hasStarted = true;
         return parseOutcome(await Promise.race([running, aborted]));
       } finally {
         if (!hasStarted) {
-          if (hasSlot) computeSlots.release();
+          releaseSlot?.();
           onSettled?.();
         }
         if (onAbort) {

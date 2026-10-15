@@ -53,9 +53,6 @@ export interface SkillStorage {
   publish(handle: string, ref: SkillRevisionRef): Promise<void>;
   hasRevision(ref: SkillRevisionRef): boolean;
   readFile(ref: SkillRevisionRef, packagePath: string): Promise<Uint8Array | null>;
-  listFiles(ref: SkillRevisionRef): string[];
-  /** Removes every revision of one Skill; best-effort after the record is gone. */
-  removeSkill(folderName: string): void;
   /** Removes revisions and staging that no live record references. */
   reconcile(live: readonly SkillRevisionRef[]): void;
 }
@@ -125,25 +122,6 @@ export function createSkillStorage(fs: SkillFileSystem, roots: SkillStorageRoots
       const path = [...revisionPath(ref), ...packagePath.split('/')];
       if (!fs.exists(path) || fs.isDirectory(path)) return null;
       return fs.readBytes(path);
-    },
-
-    listFiles(ref) {
-      const base = revisionPath(ref);
-      const result: string[] = [];
-      const walk = (relative: readonly string[]) => {
-        for (const name of fs.list([...base, ...relative])) {
-          const next = [...relative, name];
-          if (fs.isDirectory([...base, ...next])) walk(next);
-          else result.push(next.join('/'));
-        }
-      };
-      if (fs.isDirectory(base)) walk([]);
-      return result.sort();
-    },
-
-    removeSkill(folderName) {
-      assertSegment(folderName);
-      safeRemove(fs, [...skillsRoot(), folderName]);
     },
 
     reconcile(live) {

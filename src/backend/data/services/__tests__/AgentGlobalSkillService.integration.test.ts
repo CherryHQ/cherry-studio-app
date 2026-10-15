@@ -44,18 +44,6 @@ describe('AgentGlobalSkillService', () => {
       ),
     ).rejects.toMatchObject({ code: 'content-changed' });
     expect((await service.getById(installed.id)).contentHash).toBe(adapted.contentHash);
-    await service.update(installed.id, { isEnabled: false });
-    await expect(
-      testDb.dbService.withWriteTx((tx) =>
-        service.updateRevisionTx(
-          tx,
-          installed.id,
-          { ...adapted, contentHash: 'directory-sha256:disabled-write' },
-          adapted.contentHash,
-        ),
-      ),
-    ).rejects.toMatchObject({ code: 'content-changed' });
-    expect((await service.getById(installed.id)).contentHash).toBe(adapted.contentHash);
   });
   let service: AgentGlobalSkillService;
   let sqlite: DatabaseSync;
@@ -135,9 +123,6 @@ describe('AgentGlobalSkillService', () => {
       user.id,
     ]);
     await expect(service.getById(internal.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(service.update(internal.id, { isEnabled: false })).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
     await expect(
       service.replaceBindings(agent.id, { updates: [{ skillId: internal.id, isEnabled: true }] }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -168,7 +153,7 @@ describe('AgentGlobalSkillService', () => {
     ]);
   });
 
-  it('scopes Agent and composer reads by binding, global enablement, and invocation policy', async () => {
+  it('scopes Agent and composer reads by binding and invocation policy', async () => {
     const agent = await agentService.create({ name: 'Writer' });
     const other = await agentService.create({ name: 'Other' });
     const bound = await install(record('bound'), [agent.id]);
@@ -202,22 +187,6 @@ describe('AgentGlobalSkillService', () => {
       { skill: { id: manual.id } },
     ]);
     expect(await service.listUsableForAgent(other.id)).toEqual([]);
-
-    // Global disable hides the Skill without rewriting the Agent's preference.
-    await service.update(bound.id, { isEnabled: false });
-    expect(await service.listUsableForAgent(agent.id)).toMatchObject([
-      { skill: { id: manual.id } },
-    ]);
-    const preferences = (await service.listBindings(agent.id)).items.map(
-      ({ skillId, isEnabled }) => [skillId, isEnabled] as const,
-    );
-    expect(new Map(preferences)).toEqual(
-      new Map([
-        [bound.id, true],
-        [disabled.id, false],
-        [manual.id, true],
-      ]),
-    );
   });
 
   it('applies binding updates in place, rejects missing Skills, and clears bindings on uninstall', async () => {

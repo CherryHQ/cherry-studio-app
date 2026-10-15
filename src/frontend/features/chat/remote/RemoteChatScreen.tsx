@@ -201,6 +201,7 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                translationScope={JSON.stringify([target.connectionId, source.draftScope])}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}

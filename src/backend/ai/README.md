@@ -9,6 +9,7 @@ boundaries around it.
 ## Backend Ownership
 
 - `AiService.ts` owns non-conversation generation, model listing, SDK-only probes, and image generation.
+  Text generation can report cumulative streamed text without creating a conversation turn.
   Callers supply an explicit `uniqueModelId`; it does not resolve Agent state or stream chat turns.
 - `generation/` is the private implementation of `AiService`: AI SDK request assembly, provider
   configuration, model listing, Vertex authentication, execution, and mobile usage capture. Nothing

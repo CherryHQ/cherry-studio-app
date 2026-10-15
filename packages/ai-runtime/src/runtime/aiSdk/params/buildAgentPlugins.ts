@@ -1,5 +1,4 @@
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import { providerToolPlugin } from '@cherrystudio/ai-core/built-in/plugins';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { resolveAnthropicCacheSettings } from '@cherrystudio/universal/ai/anthropicCache';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
@@ -10,7 +9,6 @@ import { isDeepSeekModel, isGemini3Model } from '@cherrystudio/universal/utils/m
 import { SystemProviderIds } from '../../../utils/providerIds';
 import { getReasoningTagName } from '../../../utils/reasoning';
 import type { ResolvedReasoningInvocation } from '../../../utils/reasoningSerializers';
-import type { WebSearchPluginConfig } from '../../../utils/websearch';
 import { createAnthropicCachePlugin } from './features/anthropicCache';
 import { createDeepseekDsmlParserPlugin } from './features/deepseekDsmlParserPlugin';
 import { createGatewayUsageNormalizePlugin } from './features/gatewayUsageNormalize';
@@ -31,20 +29,11 @@ interface BuildAgentPluginsInput {
   provider: Provider;
   reasoning: ResolvedReasoningInvocation;
   streamOutput: boolean;
-  webSearchPluginConfig?: WebSearchPluginConfig;
 }
 
 export function buildAgentPlugins(input: BuildAgentPluginsInput): AiPlugin[] {
-  const {
-    aiSdkProviderId,
-    assistant,
-    endpointType,
-    model,
-    provider,
-    reasoning,
-    streamOutput,
-    webSearchPluginConfig,
-  } = input;
+  const { aiSdkProviderId, assistant, endpointType, model, provider, reasoning, streamOutput } =
+    input;
   const plugins: AiPlugin[] = [];
 
   if (aiSdkProviderId === SystemProviderIds.gateway) {
@@ -86,10 +75,6 @@ export function buildAgentPlugins(input: BuildAgentPluginsInput): AiPlugin[] {
 
   if (isGemini3Model(model)) {
     plugins.push(createSkipGeminiThoughtSignaturePlugin());
-  }
-
-  if (webSearchPluginConfig) {
-    plugins.push(providerToolPlugin('webSearch', webSearchPluginConfig));
   }
 
   return plugins;

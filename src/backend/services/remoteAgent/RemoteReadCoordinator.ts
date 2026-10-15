@@ -1,37 +1,22 @@
+import { type ConcurrencySlots, createConcurrencySlots } from '@/backend/utils/concurrencySlots';
+
 import { REMOTE_READ_CACHE_POLICY } from './remoteReadCachePolicy';
 
 type Flight = { controller: AbortController; users: number; promise: Promise<unknown> };
 /** One source-wide RPC budget; deduplicated work has independent consumer cancellation. */
 export class RemoteReadCoordinator {
   private readonly flights = new Map<string, Flight>();
-  private readonly queue: (() => void)[] = [];
-  private running = 0;
-  constructor(private readonly limit = REMOTE_READ_CACHE_POLICY.concurrency) {}
+  private readonly slots: ConcurrencySlots;
+  constructor(limit = REMOTE_READ_CACHE_POLICY.concurrency) {
+    this.slots = createConcurrencySlots(limit);
+  }
   async run<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
-    signal.throwIfAborted();
-    await new Promise<void>((resolve, reject) => {
-      const start = () => {
-        signal.removeEventListener('abort', abort);
-        this.running++;
-        resolve();
-      };
-      const abort = () => {
-        const index = this.queue.indexOf(start);
-        if (index >= 0) this.queue.splice(index, 1);
-        reject(signal.reason);
-      };
-      if (this.running < this.limit) start();
-      else {
-        this.queue.push(start);
-        signal.addEventListener('abort', abort, { once: true });
-      }
-    });
+    const release = await this.slots.acquire(signal);
     try {
       signal.throwIfAborted();
       return await work();
     } finally {
-      this.running--;
-      this.queue.shift()?.();
+      release();
     }
   }
   share<T>(

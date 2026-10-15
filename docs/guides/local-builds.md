@@ -191,8 +191,8 @@ alone does not force those uploads to retry.
 
 Keep the original sources, dependencies, and generated artifacts in the retained working directory.
 Restore the original build environment, including local credentials and the selected profile's
-`eas.json` environment overrides (`APK_UPDATES_ENABLED=true` for the APK;
-`APK_UPDATES_ENABLED=false` and `ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). From
+`eas.json` environment overrides (`ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). The APK's
+update checks follow its native `production-apk` channel, not an environment variable. From
 `<workdir>/build/android`, force the upload tasks to run with task-specific `--rerun` options:
 
 ```bash

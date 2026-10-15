@@ -104,7 +104,6 @@ export function FileImageViewer({
             title: t('imageEditor.title'),
             loading: t('fileViewer.loading'),
             saving: t('imageEditor.saving'),
-            hint: t('imageEditor.cropHint'),
             reset: t('imageEditor.reset'),
             rotate: t('imageEditor.rotate'),
             undo: t('imageEditor.undo'),

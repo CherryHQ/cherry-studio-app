@@ -1,33 +1,10 @@
 import CryptoKit
 import ExpoModulesCore
-import UIKit
+import Foundation
 
 private let secretSuffix = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
-private final class SaveDelegate: NSObject, UIDocumentPickerDelegate,
-  UIAdaptivePresentationControllerDelegate
-{
-  private var completion: ((String?) -> Void)?
-  init(_ completion: @escaping (String?) -> Void) { self.completion = completion }
-  private func finish(_ uri: String?) {
-    let callback = completion
-    completion = nil
-    callback?(uri)
-  }
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL])
-  {
-    finish(urls.first?.absoluteString)
-  }
-  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finish(nil) }
-  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-    finish(nil)
-  }
-  func cancel() { finish(nil) }
-}
-
 public class DiagnosticsModule: Module {
-  private var saveDelegate: SaveDelegate?
-  private weak var savePicker: UIDocumentPickerViewController?
   private let uploadLock = NSLock()
   private var upload: DiagnosticUpload?
 
@@ -57,13 +34,7 @@ public class DiagnosticsModule: Module {
       ]
     }
 
-    Function("cancelOperations") {
-      self.cancelUpload()
-      DispatchQueue.main.async {
-        self.savePicker?.dismiss(animated: false)
-        self.saveDelegate?.cancel()
-      }
-    }
+    Function("cancelOperations") { self.cancelUpload() }
 
     OnDestroy { self.cancelUpload() }
 
@@ -106,28 +77,5 @@ public class DiagnosticsModule: Module {
       return HMAC<SHA256>.authenticationCode(for: Data(value.utf8), using: key)
         .map { String(format: "%02x", $0) }.joined()
     }
-
-    AsyncFunction("saveFile") { (uri: URL, name: String, promise: Promise) in
-      guard self.saveDelegate == nil else {
-        promise.reject("ERR_BUSY", "A document export is already open")
-        return
-      }
-      guard let presenter = self.appContext?.utilities?.currentViewController() else {
-        promise.reject("ERR_NO_ACTIVITY", "No active screen for document export")
-        return
-      }
-      let delegate = SaveDelegate { [weak self] destination in
-        self?.saveDelegate = nil
-        promise.resolve(destination)
-      }
-      self.saveDelegate = delegate
-      // The staging file already has the suggested name. The picker copies it
-      // to the user's Files location and reports completion through its delegate.
-      let picker = UIDocumentPickerViewController(forExporting: [uri], asCopy: true)
-      self.savePicker = picker
-      picker.delegate = delegate
-      picker.presentationController?.delegate = delegate
-      presenter.present(picker, animated: true)
-    }.runOnQueue(.main)
   }
 }

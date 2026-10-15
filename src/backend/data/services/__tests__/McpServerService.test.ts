@@ -9,6 +9,12 @@ import { createTestDb } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
+const oauth = {
+  authorizationId: '00000000-0000-4000-8000-000000000001',
+  clientId: 'registered-client',
+};
+const oauthInput = { endpointUrl: 'https://example.com/mcp', name: 'OAuth' };
+
 describe('McpServerService', () => {
   let sqlite: DatabaseSync;
   let dbService: DbService;
@@ -65,11 +71,96 @@ describe('McpServerService', () => {
     const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Headers' });
 
     await expect(
+      service.update(server.id, { headers: { Authorization: 'Bearer manual' } }),
+    ).resolves.toMatchObject({ headers: { Authorization: 'Bearer manual' } });
+    await expect(
       service.update(server.id, { headers: { 'X-API-Key': 'secret' } }),
     ).resolves.toMatchObject({ headers: { 'X-API-Key': 'secret' } });
     await expect(service.update(server.id, { headers: {} })).resolves.toMatchObject({
       headers: {},
     });
+  });
+
+  it.each([
+    { ...oauth, authorizationId: 'not-a-uuid' },
+    { ...oauth, clientId: '' },
+    { ...oauth, clientId: '   ' },
+    { ...oauth, accessToken: 'must-not-be-stored' },
+  ])(
+    'rejects an invalid OAuth reference before creating or replacing a connection',
+    async (invalid) => {
+      await expect(service.saveOAuthConnection(oauthInput, invalid)).rejects.toBeDefined();
+      await expect(service.list()).resolves.toMatchObject({ items: [], total: 0 });
+
+      const server = await service.saveOAuthConnection(oauthInput, oauth);
+      await expect(
+        service.saveOAuthConnection({ ...oauthInput, name: 'Changed' }, invalid, server),
+      ).rejects.toBeDefined();
+      await expect(service.getById(server.id)).resolves.toEqual(server);
+    },
+  );
+
+  it.each(['Authorization', 'authorization', 'AUTHORIZATION', 'aUtHoRiZaTiOn'])(
+    'rejects a manual %s header when attaching or updating OAuth',
+    async (header) => {
+      const headers = { [header]: 'Bearer manual' };
+      await expect(
+        service.saveOAuthConnection({ ...oauthInput, headers }, oauth),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+      await expect(service.list()).resolves.toMatchObject({ total: 0 });
+
+      const server = await service.saveOAuthConnection(oauthInput, oauth);
+      await expect(service.update(server.id, { headers, name: 'Changed' })).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+      });
+      await expect(service.getById(server.id)).resolves.toEqual(server);
+    },
+  );
+
+  it('preserves OAuth when editing routing headers or disabling, and clears it on removal', async () => {
+    const server = await service.saveOAuthConnection(oauthInput, oauth);
+    const headers = { 'X-Tenant': 'tenant-1' };
+    await expect(service.update(server.id, { headers, isEnabled: false })).resolves.toMatchObject({
+      headers,
+      isEnabled: false,
+      oauth,
+    });
+    await service.update(server.id, { isEnabled: true });
+
+    const disconnected = await service.disconnectOAuth(server.id);
+    expect(disconnected.isEnabled).toBe(false);
+    expect(disconnected).not.toHaveProperty('oauth');
+    await expect(service.getById(server.id)).resolves.toEqual(disconnected);
+  });
+
+  it('allows manual authentication when changing the endpoint clears OAuth', async () => {
+    const server = await service.saveOAuthConnection(oauthInput, oauth);
+    const updated = await service.update(server.id, {
+      endpointUrl: 'https://other.example/mcp',
+      headers: { Authorization: 'Bearer manual' },
+    });
+    expect(updated).not.toHaveProperty('oauth');
+    expect(updated.headers).toEqual({ Authorization: 'Bearer manual' });
+    await expect(service.getById(server.id)).resolves.toEqual(updated);
+  });
+
+  it('checks the current grant after an authorization queued ahead of a header edit', async () => {
+    const server = await service.create(oauthInput);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outer = dbService.withWriteTx(async () => gate);
+    const authorization = service.saveOAuthConnection(oauthInput, oauth, server);
+    const update = service.update(server.id, { headers: { Authorization: 'Bearer manual' } });
+    const rejectedUpdate = expect(update).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+
+    await outer;
+    const authorized = await authorization;
+    await rejectedUpdate;
+    await expect(service.getById(server.id)).resolves.toEqual(authorized);
   });
 
   it('lists by id and enabled state, oldest first', async () => {

@@ -13,6 +13,7 @@ import {
   useComposerActions,
   useComposerState,
 } from '@/frontend/components/Composer';
+import { McpAppContextNotice, useMcpAppConversation } from '@/frontend/components/McpApp';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
@@ -190,6 +191,7 @@ function TextChatInput({
 }) {
   const { t } = useTranslation();
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
+  const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
   const selectedModelLabel = selectedModel?.name;
@@ -262,7 +264,10 @@ function TextChatInput({
         pluginReferences,
         skillReferences,
       );
-      await sendMessage({
+      const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
+      for (const context of appContexts)
+        parts.push({ type: 'text', text: `[MCP App context: ${context.title}]\n${context.text}` });
+      const result = await sendMessage({
         parts,
         ...(skillAction ? { skillAction } : {}),
         ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
@@ -277,9 +282,12 @@ function TextChatInput({
             }
           : {}),
       });
+      mcpApps?.consumed(appContexts);
+      return result;
     },
     [
       isReasoningEffortSelected,
+      mcpApps,
       mode,
       reasoningEffort,
       reasoningEfforts,
@@ -341,6 +349,7 @@ function TextChatInput({
                     style={isPickerVisible ? foldedAttachmentsStyle : undefined}
                   >
                     <ComposerAttachments />
+                    {mode === 'standard' ? <McpAppContextNotice /> : null}
                   </View>
                   <ChatInputSurface
                     streaming={isBusy}

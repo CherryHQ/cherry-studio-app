@@ -13,6 +13,7 @@ import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
+import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 
@@ -78,6 +79,7 @@ function renderChatAssistantMessage(
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}
+        <MessageTranslationContent message={message} />
       </AssistantMessage>
     </View>
   );

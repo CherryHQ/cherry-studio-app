@@ -17,6 +17,7 @@ import {
 } from '@/shared/data/api/schemas/desktopConnections';
 
 import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { pairingCancelDestination } from './pairingCancelDestination';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
@@ -37,15 +38,7 @@ export function DeviceConnectionScannerScreen({
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
 
-  const cancel = () => {
-    if (setupIntent === 'chat') router.replace('/onboarding');
-    else if (connectionId)
-      router.replace({
-        pathname: '/settings/device-connections/[connectionId]',
-        params: { connectionId },
-      });
-    else router.replace('/settings/device-connections');
-  };
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
 
   const retryScan = () => {
     scanInFlight.current = false;

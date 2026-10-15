@@ -26,8 +26,8 @@ export type SkillInspectedPackage = {
   invocation: SkillInvocation;
   manifest: SkillManifestEntry[];
   contentHash: string;
-  /** Bounded head of the instruction body, for the detail view. */
-  instructionsPreview: string;
+  /** Complete instruction body for reading before installation. */
+  instructions: string;
 };
 
 /**
@@ -74,7 +74,6 @@ export type SkillsErrorCode =
   | 'package-invalid'
   | 'package-too-large'
   | 'admission-unsupported'
-  | 'admission-setup-required'
   | 'storage-unavailable'
   | 'already-installed'
   | 'content-changed'

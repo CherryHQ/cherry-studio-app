@@ -44,8 +44,11 @@ Current producers are:
   passive state reads add no trace. The existing request flow owns all network activity.
 
 Model failures retain `error.stage` (`configuration`, `model_resolution`, or `stream`) and
-`error.category` from structured codes/statuses: network, timeout, authentication, permission,
-quota, rate limit, provider, request, or unknown. Messages are not used to guess a category.
+`error.category`, the product `AiFailureReason` that `classifyAiFailureReason` derives from the
+structured code and status alone. Messages are not used to guess a category. Provider codes the
+product table does not list (for example `usage_limit_reached` or `overloaded_error`) map in
+`piModelDiagnostics.ts`. A 4xx status without a product reason is `unknown`; `http.status_code`
+keeps the status.
 A request rejected before response headers is `no_response` and a body that fails afterwards is
 `stream_disconnected`; both are network failures, and `no_response` also covers native timeouts
 and TLS errors because the rejection carries no cause. Adapters without a custom fetch (Google)

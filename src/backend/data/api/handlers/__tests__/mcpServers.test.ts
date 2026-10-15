@@ -22,7 +22,10 @@ function server(overrides: Partial<RemoteMcpServer> = {}): RemoteMcpServer {
 
 function createMutationsSubject() {
   const current = server();
-  const runtime = { invalidateServer: jest.fn() };
+  const runtime = {
+    invalidateServer: jest.fn(),
+    forgetOAuthAuthorization: jest.fn(async () => undefined),
+  };
   const servers = {
     create: jest.fn(async () => current),
     delete: jest.fn(async () => undefined),
@@ -33,6 +36,17 @@ function createMutationsSubject() {
 }
 
 describe('createMcpServerMutations', () => {
+  it('revokes the native grant only after deleting its owning connection', async () => {
+    const { mutations, runtime, servers } = createMutationsSubject();
+    const oauth = { authorizationId: 'grant-id', clientId: 'client-id' };
+    servers.getById.mockResolvedValue(server({ oauth }));
+    servers.delete.mockImplementation(async () => {
+      expect(runtime.forgetOAuthAuthorization).not.toHaveBeenCalled();
+    });
+    await mutations.removeServer('server-1');
+    expect(runtime.forgetOAuthAuthorization).toHaveBeenCalledWith(oauth.authorizationId);
+  });
+
   it('creates without touching the runtime', async () => {
     const { mutations, runtime, servers } = createMutationsSubject();
 

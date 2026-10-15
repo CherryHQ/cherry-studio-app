@@ -67,3 +67,28 @@ messages. Assistant messages keep their existing toolbar. These controls sit out
 content's accessibility nodes; the complete row is never grouped into a single accessible element
 that would hide attachments or inline controls. A late initial status response cannot overwrite a
 newer setting-change event.
+
+
+## Message translation
+
+The assistant toolbar offers translation for complete, successful text answers. It extracts only
+answer text and code parts; reasoning, tool output, errors, and existing translations are excluded.
+The configured translation model (or the default model when unset) translates into the resolved app
+language through `Backend.translation`. Desktop messages are translated with the phone's model
+configuration and are cached under the pairing scope; no desktop transcript is edited.
+
+`translation/MessageTranslationStore` owns requests for the open Session, independently of virtualized
+row lifetimes. Button and result subscribe by message ID, so streamed translation does not rerender
+the transcript or original Markdown. The result appears below the original toolbar, with cancel,
+retry, copy, and hide actions. The block is excluded from the enclosing message menu and background
+press target, so holding its Markdown selects translated text; scrolling and control taps remain
+owned by the existing list and CherryUI controls. Leaving the screen cancels in-flight requests. A changed, retried,
+removed, or incomplete source cannot accept a late result.
+Changing the app language replaces only the translation store and cancels its old requests; the
+transcript stays mounted so reading positions and message expansion state are retained.
+
+Successful results are reading aids in the existing persistent UI cache, keyed by source scope,
+Session, message and target language, and checked against the source content hash. The cache retains
+the latest 100 generated translations. Truncated, failed and cancelled translations are not saved.
+Reopening a conversation restores a matching result. Translation neither adds a turn nor changes
+message parts, model history, original-message copy or conversation export.

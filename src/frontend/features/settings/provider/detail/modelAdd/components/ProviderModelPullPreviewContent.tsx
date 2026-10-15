@@ -257,9 +257,7 @@ const PullSectionHeader = memo(function PullSectionHeader({
   const { t } = useTranslation();
   const handleActionPress = useCallback(() => onToggleAll(ids), [ids, onToggleAll]);
   const actionLabel = t(
-    isSelected
-      ? 'settings.provider.models.selection.deselectAll'
-      : 'settings.provider.models.selection.selectAll',
+    isSelected ? 'common.selection.deselectAll' : 'settings.provider.models.selection.selectAll',
   );
 
   return (

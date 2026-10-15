@@ -28,6 +28,46 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test.each(['output-available', 'denied'] as const)(
+    'preserves canonical MCP identity for %s tools with opaque runtime names',
+    (state) => {
+      const source = { serverId: 'server-1', connectionKey: `remote:${'a'.repeat(64)}` };
+      const app = {
+        ...source,
+        agentId: 'agent-1',
+        toolName: 'show_dashboard',
+        resourceUri: 'ui://acceptance/dashboard',
+      };
+      const value = { content: [{ type: 'text', text: 'Dashboard ready' }] };
+      const item = toAgentMessageListItem(
+        message('assistant-mcp', {
+          status: 'success',
+          parts: [
+            {
+              id: 'tool-1',
+              type: 'dynamic-tool',
+              toolCallId: 'call-1',
+              toolName: 'mcp_show_dashboard_0z77llj',
+              toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'show_dashboard' },
+              title: 'show_dashboard',
+              input: {},
+              state,
+              ...(state === 'output-available'
+                ? { output: { value, artifacts: [], mcpSource: source, mcpApp: app } }
+                : {}),
+            },
+          ],
+        }),
+      );
+
+      expect(item?.data.parts?.[0]).toMatchObject({
+        toolMetadata: { cherry: { tool: { type: 'mcp', serverId: 'server-1' } } },
+        state: state === 'denied' ? 'output-denied' : state,
+        ...(state === 'output-available' ? { output: value, mcpSource: source, mcpApp: app } : {}),
+      });
+    },
+  );
+
   test('running tool rows retain live child progress for rendering', () => {
     const progress = {
       calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],
@@ -734,6 +774,73 @@ describe('agentMessageProjection', () => {
     expect(
       mergeAgentMessageViews([persistedUser, persistedAssistant], [finalizedAssistant, nextUser]),
     ).toEqual([persistedUser, finalizedAssistant, nextUser]);
+  });
+
+  test('keeps older live questions before the saved replies when the history window advances', () => {
+    const olderUser = message('user-1', { role: 'user', status: 'success' });
+    const latestUser = message('user-2', {
+      createdAt: '2026-08-25T00:00:01.000Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'turn-2',
+    });
+    const latestAssistant = message('assistant-2', {
+      createdAt: '2026-08-25T00:00:01.001Z',
+      status: 'success',
+      turnId: 'turn-2',
+    });
+    const nextUser = message('user-3', {
+      createdAt: '2026-08-25T00:00:02.000Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'turn-3',
+    });
+    const history = [latestUser, latestAssistant];
+    const live = [olderUser, latestUser, nextUser];
+
+    expect(mergeAgentMessageViews(history, live)).toEqual([
+      olderUser,
+      latestUser,
+      latestAssistant,
+      nextUser,
+    ]);
+    expect(history).toEqual([latestUser, latestAssistant]);
+    expect(live).toEqual([olderUser, latestUser, nextUser]);
+  });
+
+  test('uses ordered IDs to insert a missing user before its same-millisecond answer', () => {
+    const user = message('019ec992-a000-7000-8000-000000000001', {
+      role: 'user',
+      status: 'success',
+    });
+    const assistant = message('019ec992-a000-7000-8000-000000000002', { status: 'success' });
+
+    expect(mergeAgentMessageViews([assistant], [user])).toEqual([user, assistant]);
+  });
+
+  test('keeps the saved position of a retried answer when its live creation time differs', () => {
+    const user = message('user', { role: 'user', status: 'success' });
+    const assistant = message('assistant', {
+      createdAt: '2026-08-25T00:00:00.001Z',
+      status: 'pending',
+    });
+    const liveAssistant = {
+      ...assistant,
+      createdAt: '2026-08-25T00:00:01.000Z',
+      status: 'streaming' as const,
+    };
+    const nextUser = message('next-user', {
+      createdAt: '2026-08-25T00:00:00.002Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'next-turn',
+    });
+
+    expect(mergeAgentMessageViews([user, assistant], [liveAssistant, nextUser])).toEqual([
+      user,
+      liveAssistant,
+      nextUser,
+    ]);
   });
 
   test('structurally shares unchanged rows and parts across stream updates', () => {

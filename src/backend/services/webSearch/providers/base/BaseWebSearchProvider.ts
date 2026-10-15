@@ -1,15 +1,12 @@
 import type * as z from 'zod';
 
-import { HttpError, type HttpHeaders } from '@/backend/services/http';
-import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import type { HttpHeaders } from '@/backend/services/http';
 import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types/webSearch';
 
 import { requestWebSearchJson, type WebSearchJsonRequester } from '../../http/requestWebSearchJson';
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { assertProviderReady, resolveProviderApiHost } from '../../utils/provider';
 import { withoutTrailingSlash } from '../../utils/url';
-
-const MAX_HTTP_ERROR_TEXT_LENGTH = 500;
 
 export abstract class BaseWebSearchProvider {
   constructor(
@@ -34,17 +31,6 @@ export abstract class BaseWebSearchProvider {
     return this.apiKeyRotationState.resolve(this.provider, required);
   }
 
-  protected buildHeaders(headers?: HeadersInit): Headers {
-    const resolvedHeaders = new Headers(defaultAppHeaders());
-    const extraHeaders = new Headers(headers);
-
-    extraHeaders.forEach((value, key) => {
-      resolvedHeaders.set(key, value);
-    });
-
-    return resolvedHeaders;
-  }
-
   protected requestJson<TResponse, TBody = unknown>(request: {
     body?: TBody;
     headers?: HttpHeaders;
@@ -58,29 +44,6 @@ export abstract class BaseWebSearchProvider {
     return this.jsonRequester<TResponse, TBody>({
       ...request,
       providerId: this.provider.id,
-    });
-  }
-
-  protected async throwHttpError(message: string, response: Response): Promise<never> {
-    const errorText = (await response.text()).trim();
-
-    if (!errorText) {
-      throw new HttpError(`${message}: HTTP ${response.status}`, {
-        kind: 'http',
-        status: response.status,
-        retryAfter: response.headers.get('retry-after') ?? undefined,
-      });
-    }
-
-    const truncatedErrorText =
-      errorText.length > MAX_HTTP_ERROR_TEXT_LENGTH
-        ? `${errorText.slice(0, MAX_HTTP_ERROR_TEXT_LENGTH)}... [truncated]`
-        : errorText;
-
-    throw new HttpError(`${message}: HTTP ${response.status} ${truncatedErrorText}`, {
-      kind: 'http',
-      status: response.status,
-      retryAfter: response.headers.get('retry-after') ?? undefined,
     });
   }
 }

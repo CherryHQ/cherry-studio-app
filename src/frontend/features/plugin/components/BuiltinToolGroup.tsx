@@ -3,9 +3,8 @@ import { useTranslation } from 'react-i18next';
 
 import { PluginIcon } from '@/frontend/components/PluginIcon';
 import { usePreference } from '@/frontend/data/hooks';
-import { WEB_SEARCH_PROVIDER_PRESET_MAP } from '@/shared/data/presets/webSearchProviders';
 
-import { BUILTIN_TOOL_IDS, BUILTIN_TOOLS } from '../builtinTool';
+import { BUILTIN_TOOL_IDS, BUILTIN_TOOLS, getWebSearchProviderDisplayName } from '../builtinTool';
 import { PluginGroup } from './PluginGroup';
 import { PluginRow } from './PluginRow';
 
@@ -28,10 +27,7 @@ export function BuiltinToolGroup() {
             key={toolId}
             onPress={() => router.push(tool.pathname)}
             status={{
-              label:
-                providerIds[toolId] === 'fetch'
-                  ? t('settings.websearch.provider.localExtraction')
-                  : WEB_SEARCH_PROVIDER_PRESET_MAP[providerIds[toolId]].name,
+              label: getWebSearchProviderDisplayName(t, providerIds[toolId]),
               tone: 'default',
             }}
             testID={`plugins-builtin-tool-${toolId}`}

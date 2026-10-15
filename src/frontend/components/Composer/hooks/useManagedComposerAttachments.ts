@@ -13,8 +13,8 @@ import {
   type ComposerAttachmentDraft,
   type ComposerAttachmentSource,
   type ComposerInitialAttachment,
+  createReadyAttachmentDraft,
   isComposerAttachmentReady,
-  isComposerImageMediaType,
   isDropStagedFile,
   removeComposerAttachment,
   replaceComposerAttachment,
@@ -83,16 +83,7 @@ export function useManagedComposerAttachments(
         commitAttachments(
           attachmentsRef.current.map((attachment) =>
             attachment.id === source.id
-              ? {
-                  id: source.id,
-                  fileEntryId: resolved.entry.id,
-                  kind: isComposerImageMediaType(resolved.entry.mediaType) ? 'image' : 'file',
-                  mediaType: resolved.entry.mediaType,
-                  name: resolved.entry.filename,
-                  size: resolved.entry.size,
-                  status: 'ready',
-                  uri: resolved.uri,
-                }
+              ? createReadyAttachmentDraft(resolved, source.id)
               : attachment,
           ),
         );

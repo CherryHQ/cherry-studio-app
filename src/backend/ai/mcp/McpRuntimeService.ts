@@ -1,18 +1,27 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
-import { createMCPClient } from '@ai-sdk/mcp';
-import { fetch as expoFetch } from 'expo/fetch';
+import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
+import { AppState } from 'react-native';
+import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import {
   createBuiltInMcpClient,
   getBuiltInMcpToolEffect,
   PluginAuthorizationManager,
   isBuiltInMcpToolAllowed,
-  type PluginClient,
   type PluginToolCatalog,
 } from '@/backend/services/builtInMcp';
+import { McpOAuthRuntime } from '@/backend/services/mcp';
 import type {
   McpConnectionConfig,
   McpModule,
@@ -20,14 +29,39 @@ import type {
   McpServerRuntimeSummary,
   McpToolSummary,
 } from '@/shared/contracts';
+import {
+  McpAuthorizationError,
+  type McpOAuthStartInput,
+  type McpContentEntry,
+  type McpContentPreview,
+} from '@/shared/contracts/mcp';
+import type {
+  McpAppReference,
+  McpAppLaunch,
+  McpAppChannel,
+  McpAppView,
+  McpAppHostContext,
+} from '@/shared/contracts/mcpApp';
+import { McpResultSourceSchema, type McpResourceReference } from '@/shared/contracts/mcpContent';
+import type { McpElicitationResponse } from '@/shared/contracts/mcpInteraction';
 import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { McpServer } from '@/shared/data/types/mcpServer';
+import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
-import { isSameMcpConnectionConfig, normalizeMcpHeaders } from '@/shared/utils/mcpConnectionConfig';
+import { isSameMcpConnectionConfig } from '@/shared/utils/mcpConnectionConfig';
 
 import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
+import { mcpToolAppUri, mcpToolVisible } from './mcpAppMetadata';
+import { McpAppRuntime } from './McpAppRuntime';
+import { listMcpContent, readMcpContent } from './mcpContent';
+import { McpElicitationBroker } from './mcpElicitation';
+import {
+  classifyMcpCallRejection,
+  createRemoteMcpClient,
+  type McpRuntimeClient,
+} from './mcpProtocolClient';
+import { storeMcpResultFiles } from './mcpResultFiles';
 import {
   createBoundedSignal,
   createMcpRuntimeTools,
@@ -35,6 +69,7 @@ import {
   type McpRuntimeToolSelection,
   McpRuntimeToolError,
   prepareMcpInputSchema,
+  type McpInvocationProgress,
 } from './mcpRuntimeAdapter';
 import {
   createMcpConnectionKey,
@@ -45,10 +80,10 @@ import {
 
 const logger = loggerService.withContext('McpRuntimeService');
 
-/** Ceiling for connect + tools/list, enforced through abort signals the SDK
- * forwards to the transport (native support since `@ai-sdk/mcp@1.0.66`).
- * Without it a server that accepts the socket then stalls would pin a client
- * slot indefinitely. */
+/** Ceiling for connect + tools/list, enforced through the abort signal each
+ * client stack forwards to its transport: the official MCP SDK for remote
+ * servers and `@ai-sdk/mcp` for built-in plugins. Without it a server that
+ * accepts the socket then stalls would pin a client slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 
 /** A failed discovery is not retried on the send path until this much time
@@ -71,11 +106,6 @@ type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'sta
   connectionConfig: McpRuntimeConnectionConfig;
 };
 
-type McpRuntimeClient = Pick<
-  PluginClient,
-  'serverInfo' | 'listTools' | 'close' | 'discoveryWarnings'
->;
-
 type McpToolCallingClient = McpRuntimeClient & {
   callTool(input: {
     args: Record<string, unknown>;
@@ -85,6 +115,7 @@ type McpToolCallingClient = McpRuntimeClient & {
 };
 
 type ServerToolCatalog = {
+  expiresAt: number;
   /** Partial-discovery warnings that describe this catalog; empty when complete. */
   discoveryWarnings: readonly string[];
   /** A live catalog was discovered in this process, including plugin setup. */
@@ -93,6 +124,10 @@ type ServerToolCatalog = {
 };
 
 type ServerRuntimeState = {
+  /** Tool calls in flight on the pooled client; a server question pauses all of them. */
+  calls: Set<McpInvocationProgress>;
+  /** Server questions awaiting the user, withdrawn once no call remains to receive the answer. */
+  questions: Set<AbortController>;
   /** Cancels every in-flight request of the current generation; replaced on
    * reset so later work runs under a fresh signal. */
   abort: AbortController;
@@ -181,6 +216,9 @@ function createMcpClient(
   config: McpRuntimeConnectionConfig,
   signal: AbortSignal,
   pluginAuthorizations: PluginAuthorizationManager,
+  foreground: boolean,
+  authorization: McpOAuthRuntime,
+  pooled?: Pick<Parameters<typeof createRemoteMcpClient>[0], 'elicit' | 'onToolsChanged'>,
 ): Promise<McpRuntimeClient> {
   if (config.origin === 'builtin') {
     return createBuiltInMcpClient(
@@ -190,17 +228,7 @@ function createMcpClient(
       pluginAuthorizations,
     );
   }
-  const headers = normalizeMcpHeaders(config.headers);
-  return createMCPClient({
-    clientName: 'Cherry Studio',
-    initializationOptions: { signal },
-    transport: {
-      type: 'http',
-      url: config.endpointUrl,
-      fetch: expoFetch as unknown as typeof fetch,
-      ...(Object.keys(headers).length > 0 && { headers }),
-    },
-  });
+  return createRemoteMcpClient({ config, signal, foreground, authorization, ...pooled });
 }
 
 function isRunnableMcpServer(server: McpServer): boolean {
@@ -225,22 +253,30 @@ function isMcpToolCallingClient(client: McpRuntimeClient): client is McpToolCall
  * current connection configuration, from the per-server file the last complete
  * discovery wrote to the app cache directory, and only then from a live
  * discovery. A catalog is reused until the server is invalidated (endpoint,
- * header, or grant change, disable, delete, plugin connect or disconnect);
- * there is no timed refresh. The catalog is reconciled where the network is
- * already being used: a fresh connection lists tools before its first call, and
- * the settings screens always read live. A catalog with partial-discovery
+ * header, or grant change, disable, delete, plugin connect or disconnect).
+ * There is no timed refresh. A remote catalog past its freshness window is
+ * still served to the turn that asks for it, which also starts a background
+ * refresh for the next one; a tools-changed notification or a call the server
+ * rejects does the same. A fresh connection lists tools before its first call,
+ * and the settings screens always read live. A catalog with partial-discovery
  * warnings is still served immediately but refreshed in the background, and it
  * is never written to disk. A server whose discovery failed is not probed again
  * on the send path until its backoff expires.
  *
  * Connection reuse (`runtimeStates`) keeps one authenticated client per server
- * for the lifetime of the process.
+ * for the lifetime of the process. Tool calls share it. A question the server
+ * asks mid-call belongs to that server rather than to one call: every call in
+ * flight pauses its network budget until the user answers.
  */
 @Injectable('McpRuntimeService')
 @ServicePhase(Phase.PostReady)
+@AppStatePolicy('foreground-refresh')
 @DependsOn(['TraceStorageService'])
 export class McpRuntimeService extends BaseService implements McpModule {
   readonly pluginAuthorizations: PluginAuthorizationManager;
+  private readonly oauth = new McpOAuthRuntime();
+  private readonly oauthCompletions = new Map<string, Promise<McpServer>>();
+  private foreground = AppState.currentState === 'active';
   private nextGeneration = 0;
   private readonly catalogPreparations = new Map<string, Promise<void>>();
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
@@ -249,6 +285,259 @@ export class McpRuntimeService extends BaseService implements McpModule {
   constructor(private readonly traces?: TraceRecorder) {
     super();
     this.pluginAuthorizations = new PluginAuthorizationManager(undefined, undefined, traces);
+  }
+
+  async beginOAuth(input: McpOAuthStartInput) {
+    const previous = input.serverId ? await mcpServerService.getById(input.serverId) : undefined;
+    if (previous?.origin === 'builtin') throw new McpAuthorizationError('configuration');
+    return this.oauth.begin(input, previous);
+  }
+
+  completeOAuth(attemptId: string, callbackUrl: string): Promise<McpServer> {
+    const current = this.oauthCompletions.get(attemptId);
+    if (current) return current;
+    const completion = this.saveOAuthConnection(attemptId, callbackUrl).finally(() => {
+      this.oauthCompletions.delete(attemptId);
+    });
+    this.oauthCompletions.set(attemptId, completion);
+    return completion;
+  }
+
+  async receiveOAuthCallback(callbackUrl: string): Promise<McpServer | undefined> {
+    const attemptId = this.oauth.findAttempt(callbackUrl);
+    return attemptId ? this.completeOAuth(attemptId, callbackUrl) : undefined;
+  }
+
+  private async saveOAuthConnection(attemptId: string, callbackUrl: string): Promise<McpServer> {
+    const completed = await this.oauth.complete(attemptId, callbackUrl);
+    try {
+      await this.getServerInfo({
+        endpointUrl: completed.input.endpointUrl,
+        headers: completed.input.headers,
+        oauth: { authorizationId: completed.authorizationId, clientId: completed.clientId },
+      });
+      const server = await mcpServerService.saveOAuthConnection(
+        {
+          name: completed.input.name,
+          endpointUrl: completed.input.endpointUrl,
+          headers: completed.input.headers,
+        },
+        { authorizationId: completed.authorizationId, clientId: completed.clientId },
+        completed.previous,
+      );
+      this.invalidateServer(server.id);
+      if (completed.previous?.origin !== 'builtin' && completed.previous?.oauth) {
+        await this.forgetOAuthAuthorization(completed.previous.oauth.authorizationId);
+      }
+      return server;
+    } catch (error) {
+      await this.forgetOAuthAuthorization(completed.authorizationId);
+      throw error;
+    }
+  }
+
+  cancelOAuth(attemptId: string): void {
+    if (!this.oauthCompletions.has(attemptId)) this.oauth.cancel(attemptId);
+  }
+
+  async disconnectOAuth(serverId: string): Promise<McpServer> {
+    const previous = await mcpServerService.getById(serverId);
+    const server = await mcpServerService.disconnectOAuth(serverId);
+    this.invalidateServer(serverId);
+    if (previous.origin !== 'builtin' && previous.oauth)
+      await this.forgetOAuthAuthorization(previous.oauth.authorizationId);
+    return server;
+  }
+
+  async forgetOAuthAuthorization(authorizationId: string): Promise<void> {
+    // A native cleanup failure cannot undo the committed database revocation.
+    await this.oauth.remove(authorizationId).catch(() => undefined);
+  }
+
+  private readonly elicitations = new McpElicitationBroker();
+  private readonly apps = new McpAppRuntime({
+    resources: (reference, signal) =>
+      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
+        if (!client.listResources) throw unavailableToolError();
+        return client.listResources(undefined, { signal: requestSignal, cacheMode: 'refresh' });
+      }),
+    templates: (reference, signal) =>
+      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
+        if (!client.listResourceTemplates) throw unavailableToolError();
+        return client.listResourceTemplates(undefined, {
+          signal: requestSignal,
+          cacheMode: 'refresh',
+        });
+      }),
+    read: (reference, uri, signal) =>
+      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
+        if (!client.readResource) throw unavailableToolError();
+        const result = await client.readResource(
+          { uri },
+          { signal: requestSignal, cacheMode: 'refresh', timeout: 10 * 60 * 1000 },
+        );
+        if (JSON.stringify(result).length > 4 * 1024 * 1024) throw unavailableToolError();
+        return result;
+      }),
+    tools: (reference, signal) =>
+      this.withAppClient(reference, signal, async (client, server, requestSignal) => {
+        const { tools } = await client.listTools({ options: { signal: requestSignal } });
+        const permitted: Tool[] = [];
+        for (const tool of tools) {
+          if (!mcpToolVisible(tool, 'app') || server.disabledTools.includes(tool.name)) continue;
+          try {
+            await this.assertAppBinding(reference, tool.name);
+            permitted.push(tool as Tool);
+          } catch {
+            requestSignal.throwIfAborted();
+          }
+        }
+        return permitted;
+      }),
+    call: (reference, name, args, signal) => this.callAppTool(reference, name, args, signal),
+  });
+  openApp(input: McpAppLaunch, channel: McpAppChannel, signal: AbortSignal): Promise<McpAppView> {
+    return this.apps.open(input, channel, signal);
+  }
+  receiveAppMessage(id: string, message: string): void {
+    this.apps.receive(id, message);
+  }
+  updateAppContext(id: string, context: McpAppHostContext): void {
+    this.apps.updateContext(id, context);
+  }
+  closeApp(id: string): Promise<void> {
+    return this.apps.close(id);
+  }
+
+  private async assertAppBinding(
+    reference: McpAppReference,
+    name = reference.toolName,
+  ): Promise<void> {
+    if (!reference.agentId) throw unavailableToolError();
+    const binding = await agentToolBindingService.resolveMcpTool(reference.agentId, {
+      serverId: reference.serverId,
+      rawToolName: name,
+      isToolAvailable: true,
+    });
+    if (!binding.enabled || binding.approval === 'deny') throw unavailableToolError();
+  }
+  private async withAppClient<T>(
+    reference: McpAppReference,
+    signal: AbortSignal,
+    operation: (
+      client: McpToolCallingClient,
+      server: RemoteMcpServer,
+      signal: AbortSignal,
+    ) => Promise<T>,
+  ): Promise<T> {
+    if (!this.foreground) throw unavailableToolError();
+    await this.assertAppBinding(reference);
+    return this.withContentClient(
+      reference.serverId,
+      signal,
+      async (client, server, requestSignal) => {
+        if (
+          (await createMcpConnectionKey(server)) !== reference.connectionKey ||
+          !isMcpToolCallingClient(client)
+        )
+          throw unavailableToolError();
+        const { tools } = await client.listTools({ options: { signal: requestSignal } });
+        const source = tools.find((tool) => tool.name === reference.toolName);
+        if (
+          !source ||
+          mcpToolAppUri(source) !== reference.resourceUri ||
+          server.disabledTools.includes(source.name)
+        )
+          throw unavailableToolError();
+        const result = await operation(client, server, requestSignal);
+        await this.assertAppBinding(reference);
+        requestSignal.throwIfAborted();
+        return result;
+      },
+    );
+  }
+  private async callAppTool(
+    reference: McpAppReference,
+    name: string,
+    args: Record<string, unknown>,
+    signal: AbortSignal,
+  ): Promise<CallToolResult> {
+    if (JSON.stringify(args).length > 64 * 1024) throw unavailableToolError();
+    const inspect = async (
+      client: McpToolCallingClient,
+      server: McpServer,
+      requestSignal: AbortSignal,
+    ) => {
+      await this.assertAppBinding(reference, name);
+      const { tools } = await client.listTools({ options: { signal: requestSignal } });
+      const tool = tools.find((item) => item.name === name);
+      if (!tool || !mcpToolVisible(tool, 'app') || server.disabledTools.includes(name))
+        throw unavailableToolError();
+      const validator = z.fromJSONSchema(
+        tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0],
+      );
+      if (!validator.safeParse(args).success) throw unavailableToolError();
+    };
+    const server = await this.withAppClient(
+      reference,
+      signal,
+      async (client, current, requestSignal) => {
+        await inspect(client, current, requestSignal);
+        return current;
+      },
+    );
+    // Only currently allowed tools can prompt. Human waiting is outside the network deadline.
+    const response = await this.elicitations.request(
+      { serverId: server.id, serverName: server.name, endpointUrl: server.endpointUrl },
+      { mode: 'form', message: name, requestedSchema: { type: 'object', properties: {} } },
+      signal,
+      { name, arguments: args },
+    );
+    if (response.action !== 'accept') throw unavailableToolError();
+    return this.withAppClient(reference, signal, async (client, currentServer, requestSignal) => {
+      await inspect(client, currentServer, requestSignal);
+      const result = await client.callTool({ name, args, options: { abortSignal: requestSignal } });
+      if (JSON.stringify(result).length > 4 * 1024 * 1024)
+        throw new McpRuntimeToolError(
+          'mcp_tool_write_outcome_unknown',
+          'The tool result exceeded the size limit. Check the service before retrying.',
+          false,
+        );
+      return result as CallToolResult;
+    });
+  }
+
+  readonly getElicitations = this.elicitations.getSnapshot;
+  readonly subscribeElicitations = this.elicitations.subscribe;
+  respondElicitation(id: string, response: McpElicitationResponse): void {
+    this.elicitations.respond(id, response);
+  }
+
+  protected onInit(): void {
+    this.registerAppStateListener((status) => {
+      this.foreground = status === 'active';
+      if (!this.foreground) void this.apps.stop();
+      for (const state of this.runtimeStates.values()) {
+        state.client?.setForeground?.(this.foreground);
+      }
+    });
+  }
+
+  /** The server signalled that its catalog changed; replace it without waiting for a turn. */
+  private refreshChangedCatalog(state: ServerRuntimeState): void {
+    if (state.catalog) state.catalog.expiresAt = 0;
+    if (!this.foreground || !this.isCurrentState(state)) return;
+    void mcpServerService
+      .getById(state.serverId)
+      .then((server) => {
+        if (
+          server.isEnabled &&
+          this.isCurrentState(state) &&
+          isSameMcpConnectionConfig(state.connectionConfig, toMcpConnectionConfig(server))
+        )
+          this.refreshInBackground(server, state);
+      })
+      .catch(() => undefined);
   }
 
   /** Runtime metadata for the settings list, initializing any runnable server not yet observed. */
@@ -266,6 +555,94 @@ export class McpRuntimeService extends BaseService implements McpModule {
     );
 
     return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
+  }
+
+  async listContent(serverId: string, signal?: AbortSignal): Promise<McpContentEntry[]> {
+    return this.withContentClient(serverId, signal, (client, _server, requestSignal) =>
+      listMcpContent(client, requestSignal),
+    );
+  }
+
+  async readResultResource(
+    reference: McpResourceReference,
+    signal?: AbortSignal,
+  ): Promise<McpContentPreview> {
+    const source = McpResultSourceSchema.parse(reference.source);
+    const uri = z.string().min(1).max(8192).parse(reference.uri);
+    return this.withContentClient(
+      source.serverId,
+      signal,
+      async (client, server, requestSignal) => {
+        if ((await createMcpConnectionKey(server)) !== source.connectionKey)
+          throw unavailableToolError();
+        // A returned resource need not appear in resources/list. Its URI is interpreted only by this server.
+        return readMcpContent(
+          client,
+          server.name,
+          { kind: 'resource', key: uri, title: uri, arguments: [] },
+          {},
+          requestSignal,
+        );
+      },
+    );
+  }
+
+  async readContent(
+    serverId: string,
+    entry: McpContentEntry,
+    args: Record<string, string>,
+    signal?: AbortSignal,
+  ): Promise<McpContentPreview> {
+    return this.withContentClient(serverId, signal, async (client, server, requestSignal) => {
+      const catalog = await listMcpContent(client, requestSignal);
+      const current = catalog.find((item) => item.kind === entry.kind && item.key === entry.key);
+      if (!current) throw unavailableToolError();
+      return readMcpContent(client, server.name, current, args, requestSignal);
+    });
+  }
+
+  private async withContentClient<T>(
+    serverId: string,
+    signal: AbortSignal | undefined,
+    operation: (
+      client: McpRuntimeClient,
+      server: RemoteMcpServer,
+      signal: AbortSignal,
+    ) => Promise<T>,
+  ): Promise<T> {
+    const server = await mcpServerService.getById(serverId);
+    if (!server.isEnabled || server.origin === 'builtin' || !isRunnableMcpServer(server))
+      throw unavailableToolError();
+    const state = this.getRuntimeState(server);
+    const bound = createBoundedSignal(60_000, state.abort.signal, ...(signal ? [signal] : []));
+    let client: McpRuntimeClient | undefined;
+    try {
+      client = await createRemoteMcpClient({
+        config: server,
+        signal: bound.signal,
+        foreground: this.foreground,
+        authorization: this.oauth,
+        elicit: async (params, requestSignal) => {
+          bound.setPaused(true);
+          try {
+            return await this.elicitations.request(
+              { serverId, serverName: server.name, endpointUrl: server.endpointUrl },
+              params,
+              AbortSignal.any([bound.signal, requestSignal]),
+            );
+          } finally {
+            bound.setPaused(false);
+          }
+        },
+      });
+      const result = await operation(client, server, bound.signal);
+      bound.signal.throwIfAborted();
+      if (!this.isCurrentState(state)) throw unavailableToolError();
+      return result;
+    } finally {
+      bound.done();
+      await client?.close().catch(() => undefined);
+    }
   }
 
   /** Tool list for the server edit screen. */
@@ -325,12 +702,14 @@ export class McpRuntimeService extends BaseService implements McpModule {
       throw unavailableToolError();
     }
     const definitions = catalog.tools;
+    const connectionKey =
+      server.origin === 'builtin' ? undefined : await this.getConnectionKey(state);
     const disabledTools = new Set(server.disabledTools);
     for (const warning of catalog.discoveryWarnings) onUnavailable?.(warning);
     if (definitions.length === 0)
       onUnavailable?.(`${sourceName}: the service returned no available tools.`);
     return definitions
-      .filter((tool) => !disabledTools.has(tool.name))
+      .filter((tool) => !disabledTools.has(tool.name) && mcpToolVisible(tool, 'model'))
       .flatMap((tool) => {
         let inputSchema: RuntimeJsonValue;
         try {
@@ -341,8 +720,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
           );
           return [];
         }
+        const resourceUri = connectionKey ? mcpToolAppUri(tool) : undefined;
         return [
           {
+            ...(connectionKey ? { connectionKey } : {}),
+            ...(resourceUri && connectionKey
+              ? { app: { serverId: server.id, toolName: tool.name, resourceUri, connectionKey } }
+              : {}),
             description: tool.description ? `${sourceName}: ${tool.description}` : sourceName,
             displayName: tool.title ?? tool.annotations?.title ?? tool.name,
             // Pin the catalog to its endpoint and catalog generation; edits and
@@ -354,7 +738,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
                   pluginId: server.builtinId,
                   effect: getBuiltInMcpToolEffect(server.builtinId, tool.name),
                 }
-              : {}),
+              : // A wrong hint costs one repeated call on a server the user chose to connect;
+                // approval still gates every call, so this never widens what a tool may do.
+                tool.annotations?.readOnlyHint === true || tool.annotations?.idempotentHint === true
+                ? { effect: 'read' as const }
+                : {}),
             generation: state.catalogGeneration,
             inputSchema,
             rawToolName: tool.name,
@@ -367,9 +755,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
   /** Adapt an already selected catalog without reading Agent bindings or injecting the Host. */
   createRuntimeTools(selections: readonly McpRuntimeToolSelection[]): RuntimeTool[] {
     return createMcpRuntimeTools(selections, {
+      storeResult: storeMcpResultFiles,
       traces: this.traces,
-      invoke: (ref, input, signal, discoveredEndpointUrl, discoveredGeneration) =>
-        this.invokeTool(ref, input, signal, discoveredEndpointUrl, discoveredGeneration),
+      invoke: (ref, input, signal, discoveredEndpointUrl, discoveredGeneration, progress) =>
+        this.invokeTool(ref, input, signal, discoveredEndpointUrl, discoveredGeneration, progress),
     });
   }
 
@@ -386,6 +775,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * against a service nothing will read again.
    */
   protected async onStop(): Promise<void> {
+    await this.apps.stop();
+    this.elicitations.stop();
     this.catalogPreparations.clear();
     for (const state of [...this.runtimeStates.values()]) {
       this.retireState(state);
@@ -393,6 +784,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
 
     this.runtimeSnapshots.clear();
     await this.pluginAuthorizations.stop();
+    await this.oauth.stop();
   }
 
   /**
@@ -402,6 +794,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * forgets the catalog so the next turn discovers live.
    */
   invalidateServer(serverId: string, options: { preserveSnapshot?: boolean } = {}): void {
+    void this.apps.closeServer(serverId);
     this.catalogPreparations.delete(serverId);
     const state = this.runtimeStates.get(serverId);
     if (state) {
@@ -463,7 +856,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
       signal?.throwIfAborted();
     }
     if (state.catalog) {
-      if (state.catalog.discoveryWarnings.length > 0) this.refreshInBackground(server, state);
+      if (state.catalog.discoveryWarnings.length > 0 || state.catalog.expiresAt <= Date.now()) {
+        this.refreshInBackground(server, state);
+      }
       return state.catalog;
     }
     const failure = state.discoveryFailure;
@@ -475,7 +870,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       );
     }
     const tools = await this.fetchTools(server, state, signal);
-    return state.catalog ?? { discoveryWarnings: [], source: 'live', tools };
+    return state.catalog ?? { discoveryWarnings: [], expiresAt: 0, source: 'live', tools };
   }
 
   /** Single-flight restore of the stored catalog for this connection configuration. */
@@ -487,7 +882,12 @@ export class McpRuntimeService extends BaseService implements McpModule {
       ]);
       if (!stored || stored.connectionKey !== key) return;
       if (!this.isCurrentState(state) || state.catalog) return;
-      state.catalog = { discoveryWarnings: [], source: 'stored', tools: stored.tools };
+      state.catalog = {
+        discoveryWarnings: [],
+        expiresAt: stored.expiresAt,
+        source: 'stored',
+        tools: stored.tools,
+      };
       this.runtimeSnapshots.set(server.id, {
         ...this.runtimeSnapshots.get(server.id),
         connectionConfig: state.connectionConfig,
@@ -503,6 +903,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   private refreshInBackground(server: McpServer, state: ServerRuntimeState): void {
+    if (!this.foreground) return;
     const failure = state.discoveryFailure;
     if (state.refresh || (failure && Date.now() < failure.nextAttemptAt)) return;
     state.refresh = this.fetchTools(server, state)
@@ -539,6 +940,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     const state: ServerRuntimeState = {
+      calls: new Set(),
+      questions: new Set(),
       abort: new AbortController(),
       catalogGeneration: this.allocateGeneration(),
       clientListed: false,
@@ -560,6 +963,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
             serverName: storedSnapshot.serverName,
             serverTitle: storedSnapshot.serverTitle,
             serverVersion: storedSnapshot.serverVersion,
+            protocol: storedSnapshot.protocol,
             toolCount: storedSnapshot.toolCount,
           }
         : {};
@@ -617,6 +1021,14 @@ export class McpRuntimeService extends BaseService implements McpModule {
       state.connectionConfig,
       signal,
       this.pluginAuthorizations,
+      this.foreground,
+      this.oauth,
+      {
+        elicit: (params, requestSignal) => this.askForServer(server, state, params, requestSignal),
+        onToolsChanged: () => {
+          if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
+        },
+      },
     )
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
@@ -624,6 +1036,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
           throw new McpEvictedError(`MCP server ${server.name} was reconfigured while connecting`);
         }
         state.client = client;
+        client.setForeground?.(this.foreground);
         trace?.end('ok');
         return client;
       })
@@ -656,7 +1069,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
     });
     let client: McpRuntimeClient | undefined;
     try {
-      client = await createMcpClient(config, bound.signal, this.pluginAuthorizations);
+      client = await createMcpClient(
+        config,
+        bound.signal,
+        this.pluginAuthorizations,
+        this.foreground,
+        this.oauth,
+      );
       trace?.end('ok');
       return await operation(client);
     } catch (error) {
@@ -718,6 +1137,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     signal: AbortSignal,
     discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
+    progress: McpInvocationProgress,
   ): Promise<unknown> {
     if (input === null || Array.isArray(input) || typeof input !== 'object') {
       throw new McpRuntimeToolError(
@@ -780,11 +1200,19 @@ export class McpRuntimeService extends BaseService implements McpModule {
         }
       }
 
-      const result = await client.callTool({
-        args: input,
-        name: ref.rawToolName,
-        options: { abortSignal: invocationSignal },
-      });
+      let result: unknown;
+      state.calls.add(progress);
+      try {
+        progress.sent();
+        result = await client.callTool({
+          args: input,
+          name: ref.rawToolName,
+          options: { abortSignal: invocationSignal },
+        });
+      } finally {
+        state.calls.delete(progress);
+        if (state.calls.size === 0) for (const question of state.questions) question.abort();
+      }
       if (!this.isCurrentState(state, generation)) {
         throw unavailableToolError();
       }
@@ -794,9 +1222,16 @@ export class McpRuntimeService extends BaseService implements McpModule {
       if (error instanceof McpRuntimeToolError || !this.isCurrentState(state, generation)) {
         throw error instanceof McpRuntimeToolError ? error : unavailableToolError();
       }
+      const rejection = classifyMcpCallRejection(error);
+      if (rejection?.staleCatalog) {
+        // The server answered, so the connection is sound; its catalog is what went stale.
+        this.refreshChangedCatalog(state);
+        throw rejection.failure;
+      }
       if (!signal.aborted) {
         this.resetConnection(state);
       }
+      if (rejection) throw rejection.failure;
       if (error instanceof PluginError) {
         throw new McpRuntimeToolError(
           error.reason === 'unknown-write'
@@ -808,6 +1243,32 @@ export class McpRuntimeService extends BaseService implements McpModule {
         );
       }
       throw error;
+    }
+  }
+
+  /**
+   * A question the server asks mid-call. It is attributed to the server, the scope the user
+   * sees and answers for, so calls share one connection instead of each opening its own.
+   */
+  private async askForServer(
+    server: McpServer,
+    state: ServerRuntimeState,
+    params: unknown,
+    requestSignal: AbortSignal,
+  ): Promise<McpElicitationResponse> {
+    const waiting = [...state.calls];
+    const question = new AbortController();
+    state.questions.add(question);
+    for (const call of waiting) call.waiting(true);
+    try {
+      return await this.elicitations.request(
+        { serverId: server.id, serverName: server.name, endpointUrl: server.endpointUrl ?? '' },
+        params,
+        AbortSignal.any([requestSignal, question.signal, state.abort.signal]),
+      );
+    } finally {
+      state.questions.delete(question);
+      for (const call of waiting) call.waiting(false);
     }
   }
 
@@ -827,9 +1288,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
       if (
         error instanceof McpEvictedError ||
         error instanceof McpRuntimeToolError ||
+        error instanceof McpAuthorizationError ||
         error instanceof McpTimeoutError ||
         signal?.aborted
       ) {
+        if (error instanceof McpAuthorizationError) this.recordDiscoveryFailure(state, error);
         throw error;
       }
       logger.warn('MCP tools() failed, reconnecting once', { serverId: server.id });
@@ -919,11 +1382,17 @@ export class McpRuntimeService extends BaseService implements McpModule {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
     state.clientListed = true;
-    const tools = await this.recordCatalog(server, state, {
-      tools: rawTools,
-      discoveryWarnings: client.discoveryWarnings ?? [],
-      serverInfo: client.serverInfo,
-    });
+    const tools = await this.recordCatalog(
+      server,
+      state,
+      {
+        tools: rawTools,
+        discoveryWarnings: client.discoveryWarnings ?? [],
+        serverInfo: client.serverInfo,
+      },
+      client.catalogExpiresAt,
+      client.protocolInfo,
+    );
     trace?.end('ok', { 'mcp.tools_count': tools.length });
     return tools;
   }
@@ -932,6 +1401,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
     server: McpServer,
     state: ServerRuntimeState,
     catalog: PluginToolCatalog,
+    // Bundled plugin catalogs change only with their grant, which invalidates the server.
+    expiresAt = Number.MAX_SAFE_INTEGER,
+    protocol?: McpServerRuntimeSummary['protocol'],
   ): Promise<ListToolsResult['tools']> {
     const rawTools =
       server.origin === 'builtin'
@@ -941,7 +1413,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.runtimeError = discoveryWarnings.join(' ') || undefined;
     if (discoveryWarnings.length > 0) this.recordDiscoveryFailure(state);
     else state.discoveryFailure = undefined;
-    state.catalog = { discoveryWarnings, source: 'live', tools: rawTools };
+    state.catalog = { discoveryWarnings, expiresAt, source: 'live', tools: rawTools };
     const discoveredAt = Date.now();
     this.runtimeSnapshots.set(server.id, {
       connectionConfig: state.connectionConfig,
@@ -949,6 +1421,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       serverName: catalog.serverInfo.name,
       serverTitle: catalog.serverInfo.title,
       serverVersion: catalog.serverInfo.version,
+      protocol,
       toolCount: rawTools.length,
     });
     if (discoveryWarnings.length === 0) {
@@ -957,9 +1430,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
       await writeMcpToolCatalog({
         connectionKey,
         discoveredAt,
+        expiresAt,
         serverId: server.id,
         tools: rawTools,
-        version: 1,
+        version: 2,
       });
     }
     return rawTools;
@@ -983,6 +1457,7 @@ function toMcpConnectionConfig(server: McpServer): McpRuntimeConnectionConfig {
     };
   return {
     endpointUrl: server.endpointUrl,
+    ...(server.oauth && { oauth: server.oauth }),
     ...(server.headers && { headers: { ...server.headers } }),
   };
 }

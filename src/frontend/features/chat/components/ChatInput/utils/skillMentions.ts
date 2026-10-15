@@ -1,26 +1,18 @@
 import type { PluginTextReference } from '@/shared/data/types/plugin';
 import type { SkillAction, SkillListItem, SkillTextReference } from '@/shared/data/types/skill';
 
+import { createMentionLabel, isMentionEscaped, readMentionLabel } from './mentionLabels';
+
 const SKILL_MENTION_PATTERN =
   /\[((?:\\.|[^\]\\\n])+)\]\(skill:\/\/(?:builtin\/(find-skills|create-skill)|installed\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}))\)/gi;
-
-export function createSkillMentionLabel(label: string): string {
-  return `\uFFFC\u2009${label}`;
-}
 
 export function createSkillMentionUrl(skillId: string): string {
   return `skill://installed/${skillId}`;
 }
 
 export function createSkillActionMention(action: SkillAction, label: string): string {
-  const escapedLabel = createSkillMentionLabel(label).replace(/[\\[\]]/g, '\\$&');
+  const escapedLabel = createMentionLabel(label).replace(/[\\[\]]/g, '\\$&');
   return `[${escapedLabel}](skill://builtin/${action === 'create' ? 'create-skill' : 'find-skills'})`;
-}
-
-function isEscaped(draft: string, offset: number): boolean {
-  let slashes = 0;
-  for (let index = offset - 1; index >= 0 && draft[index] === '\\'; index--) slashes++;
-  return slashes % 2 === 1;
 }
 
 /** The editor owns references; submission separates their identity from plain prompt text. */
@@ -42,8 +34,8 @@ export function readSkillMentions(
   let cursor = 0;
   for (const match of draft.matchAll(SKILL_MENTION_PATTERN)) {
     const [source, rawLabel, builtin, skillId] = match;
-    if (isEscaped(draft, match.index)) continue;
-    const label = rawLabel.replace(/^\uFFFC\u2009?/, '').replace(/\\([\\[\]])/g, '$1');
+    if (isMentionEscaped(draft, match.index)) continue;
+    const label = readMentionLabel(rawLabel);
     if (!label) continue;
     text += draft.slice(cursor, match.index);
     const offset = text.length;
@@ -80,6 +72,6 @@ export function readSkillMentions(
 /** Agent changes clear Skill references while retaining ordinary text and plugin references. */
 export function removeSkillMentions(draft: string): string {
   return draft.replace(SKILL_MENTION_PATTERN, (source, _label, _builtin, _skillId, offset) =>
-    isEscaped(draft, offset) ? source : '',
+    isMentionEscaped(draft, offset) ? source : '',
   );
 }

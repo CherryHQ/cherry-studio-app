@@ -1,4 +1,3 @@
-export * from './anthropicHeaders';
 export * from './billingCost';
 export * from './citationIds';
 export * from './modelParameters';
@@ -8,4 +7,3 @@ export * from './providerIds';
 export * from './reasoning';
 export * from './reasoningSerializers';
 export * from './usageCapture';
-export * from './websearch';
