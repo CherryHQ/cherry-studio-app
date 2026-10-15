@@ -1,9 +1,22 @@
+import Maximize2Icon from '@cherrystudio/app-icons/icons/maximize-2';
+import Minimize2Icon from '@cherrystudio/app-icons/icons/minimize-2';
 import PauseIcon from '@cherrystudio/app-icons/icons/pause';
-import { Composer } from '@cherrystudio/ui/components';
+import {
+  COMPOSER_MAX_TEXT_HEIGHT,
+  Composer,
+  useComposerExpansion,
+} from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { type ComponentProps, type ReactNode, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, type StyleProp, type TextStyle, View } from 'react-native';
+import {
+  type LayoutChangeEvent,
+  Pressable,
+  type StyleProp,
+  Text,
+  type TextStyle,
+  View,
+} from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -65,11 +78,19 @@ export function ChatInputSurface({
   const { t } = useTranslation();
   const { isEditing } = useComposerPresentationState();
   const { attachments, draft } = useComposerState();
+  const expansion = useComposerExpansion();
+  const isExpanded = expansion?.state.isExpanded ?? false;
   const hasFollowUp = onStop !== undefined && hasComposerSendableContent(draft, attachments);
-  const isInputActive = isEditing || draft.length > 0 || attachments.length > 0;
+  const isInputActive = isExpanded || isEditing || draft.length > 0 || attachments.length > 0;
   const naturalFieldHeight = useRef(restingInputHeight);
   const activeProgress = useSharedValue(isInputActive ? 1 : 0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
+  const expansionHeaderHeight = useSharedValue(44);
+  const expansionProgress = expansion?.meta.progress;
+  const expansionHeight = expansion?.meta.extraHeight;
+  const collapseEditor = expansion?.actions.collapse;
+
+  useEffect(() => () => collapseEditor?.(), [collapseEditor]);
 
   useEffect(() => {
     activeProgress.set(withTiming(isInputActive ? 1 : 0, activeTransitionMotion));
@@ -85,14 +106,23 @@ export function ChatInputSurface({
     const progress = activeProgress.get();
 
     return {
-      height: fieldFrameHeight.get() + progress * (activeToolbarGap + restingInputHeight),
+      height:
+        fieldFrameHeight.get() +
+        progress * (activeToolbarGap + restingInputHeight) +
+        (expansionHeight?.get() ?? 0),
     };
   });
   const fieldFrameStyle = useAnimatedStyle(() => {
     const progress = activeProgress.get();
 
     return {
-      height: fieldFrameHeight.get(),
+      height: Math.max(
+        restingInputHeight,
+        fieldFrameHeight.get() +
+          (expansionHeight?.get() ?? 0) -
+          expansionHeaderHeight.get() * (expansionProgress?.get() ?? 0),
+      ),
+      top: expansionHeaderHeight.get() * (expansionProgress?.get() ?? 0),
       left: interpolate(progress, [0, 1], [restingActionSlotWidth, 0], Extrapolation.CLAMP),
       right: interpolate(progress, [0, 1], [restingActionSlotWidth, 0], Extrapolation.CLAMP),
     };
@@ -103,11 +133,17 @@ export function ChatInputSurface({
     return {
       transform: [
         {
-          translateY: progress * (fieldFrameHeight.get() + activeToolbarGap),
+          translateY:
+            progress * (fieldFrameHeight.get() + activeToolbarGap) + (expansionHeight?.get() ?? 0),
         },
       ],
     };
   });
+  const headerStyle = useAnimatedStyle(() => ({
+    height: expansionHeaderHeight.get() * (expansionProgress?.get() ?? 0),
+    opacity: expansionProgress?.get() ?? 0,
+    transform: [{ translateY: -8 * (1 - (expansionProgress?.get() ?? 0)) }],
+  }));
   // Keep GlassView's backdrop sampling intact: Reanimated opacity on an
   // ancestor writes a layer alpha that permanently strips the tools' fill.
   // The closed frame clips these controls after translation instead.
@@ -130,35 +166,88 @@ export function ChatInputSurface({
   });
   const handleFieldLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
+      const nextHeight = Math.max(
+        restingInputHeight,
+        Math.min(COMPOSER_MAX_TEXT_HEIGHT, Math.ceil(event.nativeEvent.layout.height)),
+      );
       if (naturalFieldHeight.current === nextHeight) {
         return;
       }
 
+      if (expansion?.state.isPresented) {
+        expansion.actions.resizeContent(nextHeight - naturalFieldHeight.current);
+      }
       naturalFieldHeight.current = nextHeight;
       if (isInputActive) {
         fieldFrameHeight.set(nextHeight);
       }
     },
-    [fieldFrameHeight, isInputActive],
+    [expansion, fieldFrameHeight, isInputActive],
   );
   return (
     <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
-      <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
+      {expansion ? (
+        <Animated.View
+          accessibilityElementsHidden={!isExpanded}
+          className="absolute top-0 right-0 left-0 overflow-hidden"
+          importantForAccessibility={isExpanded ? 'auto' : 'no-hide-descendants'}
+          pointerEvents={isExpanded ? 'auto' : 'none'}
+          style={headerStyle}
+        >
+          <View
+            className="min-h-8 justify-center pr-10"
+            onLayout={(event) => expansionHeaderHeight.set(event.nativeEvent.layout.height + 12)}
+          >
+            <Text
+              accessibilityRole="header"
+              className="min-w-0 flex-1 text-xs text-muted-foreground"
+            >
+              {t('chat.input.editorTitle')}
+            </Text>
+          </View>
+        </Animated.View>
+      ) : null}
+      <Animated.View className="absolute overflow-hidden" style={fieldFrameStyle}>
         {/* Center a short field in the action row; longer drafts grow naturally. */}
         <View
-          className="absolute top-0 right-0 left-0 justify-center"
-          onLayout={handleFieldLayout}
+          className={
+            isExpanded ? 'absolute inset-0' : 'absolute top-0 right-0 left-0 justify-center'
+          }
           style={FIELD_CONTENT_STYLE}
         >
           <ComposerField
+            layout={isExpanded ? 'fill' : 'content'}
+            onLayout={isExpanded ? undefined : handleFieldLayout}
             placeholder={placeholder}
-            style={fieldStyle}
+            style={
+              isExpanded
+                ? undefined
+                : [fieldStyle, expansion && isInputActive ? compactFieldStyle : undefined]
+            }
             attachmentMode={attachmentMode}
             testID="chat-composer-input"
           />
         </View>
       </Animated.View>
+      {expansion && isInputActive ? (
+        <Pressable
+          accessibilityLabel={t(
+            isExpanded ? 'chat.input.action.collapseEditor' : 'chat.input.action.expandEditor',
+          )}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+          className="absolute top-0 right-0 size-8 items-center justify-center"
+          hitSlop={6}
+          onPress={isExpanded ? expansion.actions.collapse : expansion.actions.expand}
+          testID={isExpanded ? 'chat-composer-collapse' : 'chat-composer-expand'}
+        >
+          {isExpanded ? (
+            <Minimize2Icon className="size-5 text-muted-foreground" />
+          ) : (
+            <Maximize2Icon className="size-5 text-muted-foreground" />
+          )}
+        </Pressable>
+      ) : null}
       <Animated.View
         className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
         pointerEvents="box-none"
@@ -204,3 +293,5 @@ export function ChatInputSurface({
     </Animated.View>
   );
 }
+
+const compactFieldStyle = { paddingRight: 40 };

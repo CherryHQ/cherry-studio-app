@@ -52,6 +52,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
     Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: mockToast }),
+    useComposerExpansion: () => null,
     useAlert: () => ({ alert: mockAlert }),
   };
 });

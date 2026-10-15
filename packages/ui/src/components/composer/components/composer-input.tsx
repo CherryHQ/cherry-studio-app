@@ -10,6 +10,8 @@ import { pasteWrapperStyle, textInputBoxStyle } from '../utils/composer-layout';
 import { composerTextStyle } from '../utils/composer-text-style/composer-text-style';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
+const fillWrapperStyle = { ...pasteWrapperStyle, height: '100%' } as const;
+const fillInputStyle = { height: '100%', maxHeight: '100%' } as const;
 
 /**
  * The text field, growing with its content up to a capped height.
@@ -25,9 +27,11 @@ const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
  */
 export function ComposerInput({
   autoFocus = false,
+  layout = 'content',
   markdownStyle,
   onBlur,
   onFocus,
+  onLayout,
   onPaste,
   placeholder,
   ref,
@@ -57,8 +61,9 @@ export function ComposerInput({
   // Flattened rather than passed as an array: this input takes a single style
   // object, not RN's `StyleProp`.
   const resolvedStyle = useMemo(
-    () => StyleSheet.flatten([baseTextStyle, inputStyle, style]),
-    [baseTextStyle, style],
+    () =>
+      StyleSheet.flatten([baseTextStyle, inputStyle, layout === 'fill' && fillInputStyle, style]),
+    [baseTextStyle, layout, style],
   );
 
   const handleChangeMarkdown = useCallback(
@@ -88,7 +93,10 @@ export function ComposerInput({
     // and the alternative — wrapping only when the prop is present — would make
     // the field's own view hierarchy depend on a callback, so a caller adding
     // paste support later would be debugging a layout change they didn't make.
-    <TextInputWrapper onPaste={onPaste} style={pasteWrapperStyle}>
+    <TextInputWrapper
+      onPaste={onPaste}
+      style={layout === 'fill' ? fillWrapperStyle : pasteWrapperStyle}
+    >
       <EnrichedMarkdownTextInput
         autoFocus={autoFocus}
         cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
@@ -103,6 +111,7 @@ export function ComposerInput({
         onBlur={onBlur}
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
+        onLayout={onLayout}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

@@ -28,7 +28,7 @@ const pillGap = 6;
 // judgement about how much of the conversation the composer may eat, and that
 // one has shipped. It lands mid-line on both platforms, which is useful — a
 // clipped glyph row is what tells the reader the field scrolls.
-const maxTextHeight = 132;
+export const COMPOSER_MAX_TEXT_HEIGHT = 132;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composer-text-style.ios`.
 const textPaddingVertical = 4;
@@ -68,7 +68,7 @@ export const pillStyle = {
   paddingHorizontal: pillPaddingHorizontal,
 } as const;
 export const textInputBoxStyle = {
-  maxHeight: maxTextHeight,
+  maxHeight: COMPOSER_MAX_TEXT_HEIGHT,
   paddingVertical: textPaddingVertical,
 } as const;
 // The paste wrapper shrink-wraps its child by default, which would pull the

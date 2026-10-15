@@ -13,6 +13,11 @@ import { surfaceRadius, surfaceStyle } from '../utils/composer-layout';
 import { ComposerAction } from './composer-action';
 import { ComposerCollapsible } from './composer-collapsible';
 import { ComposerDock } from './composer-dock';
+import {
+  ComposerExpansion,
+  ComposerExpansionBackground,
+  ComposerExpansionMeasure,
+} from './composer-expansion';
 import { ComposerInput } from './composer-input';
 import { ComposerPill } from './composer-pill';
 import { ComposerPopover } from './composer-popover';
@@ -81,6 +86,7 @@ function ComposerRoot({
         cornerRadius={surfaceRadius}
         style={surfaceStyle}
       >
+        <ComposerExpansionBackground />
         <ComposerStateContext value={state}>
           <ComposerActionsContext value={actions}>
             {children ?? (
@@ -108,6 +114,8 @@ export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
   Collapsible: ComposerCollapsible,
   Dock: ComposerDock,
+  Expansion: ComposerExpansion,
+  ExpansionMeasure: ComposerExpansionMeasure,
   Input: ComposerInput,
   Menu: MorphMenu,
   Pill: ComposerPill,

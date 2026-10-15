@@ -173,7 +173,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="flow">
+            <ComposerDock layoutMode="expandable">
               <View>
                 <ChatInput
                   agentId={resolvedAgentId}

@@ -1,6 +1,15 @@
-import { type PropsWithChildren, type RefObject, useCallback } from 'react';
-import type { LayoutChangeEvent, View } from 'react-native';
+import {
+  type PropsWithChildren,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { withUniwind } from 'uniwind';
 
@@ -9,13 +18,15 @@ import {
   getComposerBottomPadding,
   getComposerKeyboardStickyOffset,
 } from '../utils/composer-dock-layout';
+import { useComposerExpansion } from './composer-expansion';
 
 const StyledKeyboardStickyView = withUniwind(KeyboardStickyView);
 
 export type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<View | null>;
   /** Uses normal parent layout instead of overlaying sibling content. */
-  layoutMode?: 'floating' | 'flow';
+  layoutMode?: 'floating' | 'flow' | 'expandable';
+  collapseLabel?: string;
   /** Stops following keyboard coordinates while another surface owns input. */
   keyboardTrackingEnabled?: boolean;
   onHeightChange?: (height: number) => void;
@@ -26,29 +37,76 @@ export function ComposerDock({
   children,
   containerRef,
   layoutMode = 'floating',
+  collapseLabel = 'Collapse editor',
   keyboardTrackingEnabled = true,
   onHeightChange,
   onLayout,
 }: ComposerDockProps) {
   const { bottom } = useSafeAreaInsets();
+  const expansion = useComposerExpansion();
+  const fallbackRef = useRef<View>(null);
+  const dockRef = containerRef ?? fallbackRef;
+  const [compactHeight, setCompactHeight] = useState(0);
+  const isExpandable = layoutMode === 'expandable' && expansion !== null;
+  const isPresented = isExpandable && expansion.state.isPresented;
+  const tracking = expansion?.meta.keyboardTrackingEnabled;
+  const progress = expansion?.meta.progress;
+  const compactDockHeight = expansion?.meta.compactDockHeight;
+
+  const recordCompactHeight = useCallback(
+    (height: number) => {
+      const measuredHeight = Math.ceil(height);
+      setCompactHeight((current) => (current === measuredHeight ? current : measuredHeight));
+      compactDockHeight?.set(measuredHeight);
+    },
+    [compactDockHeight],
+  );
+
+  useEffect(() => {
+    if (!isExpandable || isPresented) return;
+    let active = true;
+    // Closing may end without another layout event. Re-measure once so new
+    // text or attachments leave the transcript exactly the compact space.
+    dockRef.current?.measure((_x, _y, _width, height) => {
+      if (active) recordCompactHeight(height);
+    });
+    return () => {
+      active = false;
+    };
+  }, [dockRef, isExpandable, isPresented, recordCompactHeight]);
+
+  useLayoutEffect(() => {
+    if (isExpandable) tracking?.set(keyboardTrackingEnabled);
+  }, [isExpandable, keyboardTrackingEnabled, tracking]);
+
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity: isExpandable ? (progress?.get() ?? 0) : 0,
+  }));
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
+      if (isExpandable && !isPresented) {
+        recordCompactHeight(event.nativeEvent.layout.height);
+      }
       onHeightChange?.(event.nativeEvent.layout.height);
       onLayout?.(event);
     },
-    [onHeightChange, onLayout],
+    [isExpandable, isPresented, onHeightChange, onLayout, recordCompactHeight],
   );
 
   // Move the dock boundary with its content: Android BlurTargetView clips
   // children to their own bounds, so a stationary wrapper hides the lifted input.
-  return (
+  const dock = (
     <StyledKeyboardStickyView
-      ref={containerRef}
+      ref={dockRef}
+      accessibilityViewIsModal={isPresented}
       className={layoutMode === 'flow' ? 'z-10 shrink-0' : 'absolute right-0 bottom-0 left-0 z-10'}
       enabled={keyboardTrackingEnabled}
       offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}
-      onLayout={onHeightChange || onLayout ? handleLayout : undefined}
+      onAccessibilityEscape={isPresented ? expansion?.actions.collapse : undefined}
+      onLayout={
+        (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
+      }
       pointerEvents="box-none"
       style={{
         paddingBottom: getComposerBottomPadding(bottom),
@@ -57,5 +115,27 @@ export function ComposerDock({
     >
       {children}
     </StyledKeyboardStickyView>
+  );
+
+  if (!isExpandable) return dock;
+
+  return (
+    <>
+      <View style={{ height: compactHeight }} />
+      <Animated.View
+        className="absolute inset-0 bg-scrim"
+        pointerEvents={isPresented ? 'auto' : 'none'}
+        style={backdropStyle}
+      >
+        <Pressable
+          accessibilityLabel={collapseLabel}
+          accessibilityRole="button"
+          accessible={isPresented}
+          className="flex-1"
+          onPress={expansion.actions.collapse}
+        />
+      </Animated.View>
+      {dock}
+    </>
   );
 }

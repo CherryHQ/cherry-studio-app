@@ -102,7 +102,13 @@ const HeaderContext = createContext<{
   selectAgent(agentId: string): void;
   startNewChat(agentId?: string): void;
 } | null>(null);
-function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+function RemoteHeader({
+  blurTarget,
+  hidden,
+}: {
+  blurTarget: RefObject<View | null>;
+  hidden?: boolean;
+}) {
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -111,6 +117,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
       <MainHeaderView
         agent={header.agent}
         blurTarget={blurTarget}
+        hidden={hidden}
         onNewChat={() => header.startNewChat(header.agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
@@ -217,7 +224,7 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="flow">
+          <ComposerDock layoutMode="expandable">
             <View>
               <ConversationStatus
                 availability={availability}

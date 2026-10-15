@@ -1,3 +1,4 @@
+import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWindowDimensions, View } from 'react-native';
@@ -360,15 +361,17 @@ function TextChatInput({
                     streaming={isBusy}
                     testID="chat-composer"
                   >
-                    <View
-                      accessibilityElementsHidden={isPickerVisible}
-                      importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
-                      pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                      style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                    >
-                      <ComposerAttachments />
-                      {mode === 'standard' ? <McpAppContextNotice /> : null}
-                    </View>
+                    <Composer.ExpansionMeasure>
+                      <View
+                        accessibilityElementsHidden={isPickerVisible}
+                        importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
+                        pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                        style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                      >
+                        <ComposerAttachments />
+                        {mode === 'standard' ? <McpAppContextNotice /> : null}
+                      </View>
+                    </Composer.ExpansionMeasure>
                     <ChatInputSurface
                       streaming={isBusy}
                       placeholder={

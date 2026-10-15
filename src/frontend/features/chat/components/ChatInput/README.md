@@ -32,6 +32,25 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
+- Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
+  surface below the top safe area, with an Edit message heading and collapse action. Local and
+  remote conversations share the same field and toolbar; large-editor layout never remounts the
+  native input or clears its buffer. The expanded field fills the available region and scrolls
+  natively. The compact height cap remains unchanged.
+- Expansion preserves spatial continuity: the top edge grows upward while toolbar actions stay
+  at the dock's bottom anchor. The isolated composer frame uses the shared 250ms settle curve;
+  backdrop and opaque surface follow that progress, with no opacity on glass-control ancestors.
+  Repeated actions reverse the current animation; stale close completions cannot hide a reopened
+  editor. System Reduce Motion lands directly on the target layout. Keyboard motion uses live
+  controller coordinates and does not receive another timing curve.
+- Collapse and its backdrop preserve the draft and current keyboard state. Android Back first
+  hides a visible keyboard, then collapses the large editor. The main header and transcript
+  accessibility are isolated through the close transition. Send collapses through the existing
+  send boundary; rejected sends retain its existing text/attachment recovery. Leaving the text
+  composer, including switching to an image-generation model, also collapses the large editor.
+  Native input,
+  selection, keyboard continuity, both-theme appearance and performance still require device
+  acceptance; source and unit coverage do not establish native conformance.
 - Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
   menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
   Native field blur and keyboard-hide notifications do not end editing. A completed background
