@@ -114,16 +114,27 @@ export function ComposerDock({
         (isExpandable && !isPresented) || onHeightChange || onLayout ? handleLayout : undefined
       }
       pointerEvents="box-none"
-      style={dockStyle}
+      style={
+        isExpandable
+          ? undefined
+          : {
+              paddingBottom: bottomPadding,
+              paddingHorizontal: composerHorizontalScreenInset,
+            }
+      }
     >
       {isExpandable ? (
-        <Animated.View
-          className="absolute inset-0 rounded-t-4xl bg-popover"
-          pointerEvents="none"
-          style={backdropStyle}
-        />
-      ) : null}
-      {children}
+        <Animated.View pointerEvents="box-none" style={dockStyle}>
+          <Animated.View
+            className="absolute inset-0 rounded-t-4xl bg-popover"
+            pointerEvents="none"
+            style={backdropStyle}
+          />
+          {children}
+        </Animated.View>
+      ) : (
+        children
+      )}
     </StyledKeyboardStickyView>
   );
 

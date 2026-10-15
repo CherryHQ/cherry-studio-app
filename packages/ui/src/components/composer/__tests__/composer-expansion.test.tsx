@@ -123,7 +123,7 @@ describe('Composer expansion', () => {
   });
 
   it('lets Back hide the keyboard before collapsing the editing surface', () => {
-    let back: (() => boolean | null | undefined) | undefined;
+    let back: Parameters<typeof BackHandler.addEventListener>[1] | undefined;
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_name, callback) => {
       back = callback;
       return { remove: jest.fn() };
@@ -132,14 +132,14 @@ describe('Composer expansion', () => {
 
     mockKeyboardVisible = true;
     act(() => {
-      expect(back?.()).toBe(true);
+      expect(back?.({ type: 'hardwareBackPress', timeStamp: 0 })).toBe(true);
     });
     expect(mockDismissKeyboard).toHaveBeenCalledTimes(1);
     expect(expansion.state.isExpanded).toBe(true);
 
     mockKeyboardVisible = false;
     act(() => {
-      expect(back?.()).toBe(true);
+      expect(back?.({ type: 'hardwareBackPress', timeStamp: 1 })).toBe(true);
     });
     expect(expansion.state.isExpanded).toBe(false);
   });
