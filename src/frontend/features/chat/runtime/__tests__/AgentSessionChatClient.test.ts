@@ -1038,6 +1038,26 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').liveMessages).toEqual([]);
   });
 
+  test('releases admitted user input even when its live timestamp follows the stored row', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_sessionId, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const persisted = userMessage();
+    const live = { ...persisted, updatedAt: '2026-08-25T00:00:01.000Z' };
+    publish({ type: 'message.created', message: live });
+
+    client.reconcilePersistedMessages('session-1', [{ ...persisted, turnId: 'previous-attempt' }]);
+    expect(client.getState('session-1').liveMessages).toEqual([live]);
+
+    client.reconcilePersistedMessages('session-1', [persisted]);
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    client.dispose();
+  });
+
   test.each([
     {
       liveStatus: 'cancelled',

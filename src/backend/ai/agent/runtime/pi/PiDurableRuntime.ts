@@ -559,12 +559,6 @@ export class PiDurableRuntime {
     await conversation.reset(handoff, context);
   }
 
-  async compact(sessionId: string, instructions?: string, context: Context = BACKGROUND_CONTEXT) {
-    const conversation = await this.requireSession(sessionId, context);
-    const id = await conversation.compact(instructions, context);
-    return this.harness.waitForTask(id, context);
-  }
-
   async stop(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     await conversation.abort(context, { background: true });

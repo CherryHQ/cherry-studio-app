@@ -14,6 +14,7 @@ import {
 } from '@cherrystudio/ai-runtime/runtime';
 import type { RequestContext } from '@cherrystudio/ai-runtime/tools';
 import type {
+  FinishReason,
   LanguageModelUsage,
   ModelMessage,
   StopCondition,
@@ -107,7 +108,8 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
   async generate(
     input: { messages: ModelMessage[] } | { prompt: string },
     signal?: AbortSignal,
-  ): Promise<{ text: string; usage: LanguageModelUsage }> {
+    onText?: (text: string) => void,
+  ): Promise<{ finishReason: FinishReason; text: string; usage: LanguageModelUsage }> {
     const hooks = this.composedHooks();
     try {
       await safeCall('onStart', hooks.onStart);
@@ -117,7 +119,27 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
         'prompt' in input
           ? { prompt: input.prompt, ...(signal ? { abortSignal: signal } : {}) }
           : { messages: input.messages, ...(signal ? { abortSignal: signal } : {}) };
-      const result = await aiAgent.generate(generateInput);
+      const result = await (async () => {
+        if (!onText) return aiAgent.generate(generateInput);
+        const stream = await aiAgent.stream(generateInput);
+        let text = '';
+        for await (const part of stream.fullStream) {
+          signal?.throwIfAborted();
+          if (part.type === 'error') throw part.error;
+          if (part.type === 'abort') throw new Error('Text generation was aborted.');
+          if (part.type === 'text-delta') {
+            text += part.text;
+            onText(text);
+          }
+        }
+        signal?.throwIfAborted();
+        return {
+          finishReason: await stream.finishReason,
+          text,
+          usage: await stream.totalUsage,
+          steps: await stream.steps,
+        };
+      })();
       signal?.throwIfAborted();
       const terminalError = resolveToolLoopTerminalError({
         steps: result.steps ?? [],
@@ -125,7 +147,7 @@ export class AiSdkGenerator<Key extends AppProviderKey = AppProviderKey> {
       });
       if (terminalError) throw terminalError;
       await safeCall('onFinish', hooks.onFinish);
-      return { text: result.text, usage: result.usage };
+      return { finishReason: result.finishReason, text: result.text, usage: result.usage };
     } catch (error) {
       const isCancellation =
         signal?.aborted === true && (error === signal.reason || isAbortError(error));

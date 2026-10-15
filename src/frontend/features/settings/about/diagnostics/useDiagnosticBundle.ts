@@ -21,10 +21,7 @@ const FAILURE_KEYS = {
   submission_rejected: 'settings.about.diagnostics.failures.submission_rejected',
 } satisfies Record<DiagnosticUploadFailureReason, string>;
 const ERROR_KEYS = {
-  INSPECT_FAILED: 'settings.about.diagnostics.errors.INSPECT_FAILED',
   BUNDLE_BUILD_FAILED: 'settings.about.diagnostics.errors.BUNDLE_BUILD_FAILED',
-  SAVE_FAILED: 'settings.about.diagnostics.errors.SAVE_FAILED',
-  NATIVE_UNAVAILABLE: 'settings.about.diagnostics.errors.NATIVE_UNAVAILABLE',
 } satisfies Record<DiagnosticError['code'], string>;
 
 type FeedbackState =
@@ -55,9 +52,6 @@ export function useDiagnosticBundle(screenshotId?: string) {
       const result = await module.uploadBundle({
         description,
         ...(isScreenshotIncluded ? { screenshotId } : {}),
-        range: '24h',
-        includeLogs: true,
-        includeTraces: true,
       });
       if (result.status === 'uploaded') {
         try {

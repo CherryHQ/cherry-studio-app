@@ -47,13 +47,13 @@ surface, border, or extra icon. Token counts use a locale-independent compact nu
 such as `27k Tokens`. The entire summary remains tappable.
 
 The detail sheet retains localized exact counts. It opens at medium height and expands through
-large to full height. The model and provider remain at the top, followed by total tokens and the
-input/cache and output/reasoning measurements in two columns. A neutral segmented bar shows the
-relative input/output counts only when both are known and their sum is positive. Performance
-measurements follow without an explanatory paragraph, then costs. The message's creation date and
-time appear at the bottom, formatted for the current locale in the device's local time zone with
-seconds. Missing or invalid dates are omitted. The groups retain their theme tokens and scalable
-text. Missing counts stay unavailable and a measured zero remains visible.
+large to full height. The model and provider remain at the top, followed by total tokens, request
+counts, and the input/cache and output/reasoning measurements in two columns. A neutral segmented
+bar shows the relative input/output counts only when both are known and their sum is positive.
+Performance measurements follow without an explanatory paragraph, then costs. The message's
+creation date and time appear at the bottom, formatted for the current locale in the device's local
+time zone with seconds. Missing or invalid dates are omitted. The groups retain their theme tokens
+and scalable text. Missing counts stay unavailable and a measured zero remains visible.
 
 Message rows do not register a long-press copy menu. Copy is an explicit assistant toolbar action.
 The usage button uses CherryUI's release-time press action.

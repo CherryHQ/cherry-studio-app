@@ -564,11 +564,16 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
       name: `cherry.capabilities:${sessionId}`,
+      acceptsImages:
+        this.models.getModel(configuration.model, configuration.kind)?.input.includes('image') ??
+        false,
       ...(this.codemodeSandbox && configuration.kind !== 'image'
         ? {
             codemode: createCodemodeExtension({
               sandbox: this.codemodeSandbox,
               models: false,
+              // Keep a few useful signatures for scripts; discover the rest instead of duplicating all schemas.
+              inlineBudget: 600,
               // MCP provider names share this prefix. Earlier tool_search results also named the
               // group "mcp", so scripts in migrated conversations filter by it.
               namespaces: [

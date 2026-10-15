@@ -5,6 +5,7 @@ import MailIcon from '@cherrystudio/app-icons/icons/mail';
 import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Chip, Image, Section, useToast } from '@cherrystudio/ui/components';
+import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { useRouter } from 'expo-router';
@@ -17,11 +18,8 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useAppUpdateCheck } from './useAppUpdateCheck';
 
-const APP_VERSION = Constants.expoConfig?.version?.trim();
-const APP_BUILD = Platform.select({
-  android: Constants.expoConfig?.android?.versionCode?.toString(),
-  ios: Constants.platform?.ios?.buildNumber ?? Constants.expoConfig?.ios?.buildNumber,
-});
+const APP_VERSION = Application.nativeApplicationVersion?.trim();
+const APP_BUILD = Application.nativeBuildVersion;
 const APP_PROFILE = Constants.expoConfig?.extra?.sentryEnvironment;
 const SUPPORT_EMAIL = 'support@cherry-ai.com';
 // Exact desktop `src/renderer/assets/images/logo.png`; the launcher icon is a

@@ -1,16 +1,22 @@
 import { ImageGenerationModeSchema, imageParamsSchema } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
+import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
+import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
  * and failures. Every shape is JSON-safe and validated at the boundary; see
  * `./index.ts` for the protocol overview.
  */
-
 import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
-import { SkillActivationSchema, SkillTextReferenceSchema } from '@/shared/data/types/skill';
+import {
+  SkillActionSchema,
+  SkillActivationSchema,
+  SkillTextReferenceSchema,
+} from '@/shared/data/types/skill';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -217,6 +223,8 @@ export const AgentTurnViewSchema = z.strictObject({
   ]),
   assistantMessageId: z.string().min(1),
   error: AgentErrorViewSchema.nullable(),
+  /** A provider attempt failed and is being retried; its error is not final. */
+  isRetrying: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });
@@ -232,6 +240,9 @@ export const AgentSessionStatusSchema = z
 export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
 
 export const AgentToolResultSchema = z.strictObject({
+  mcpSource: McpResultSourceSchema.optional(),
+  mcpApp: McpAppReferenceSchema.optional(),
+  modelContent: McpModelContentSchema.optional(),
   value: JsonValueSchema,
   /** Host-issued compact model value; full value remains available for activity inspection. */
   modelValue: JsonValueSchema.optional(),
@@ -359,7 +370,7 @@ export const AgentMessagePartSchema = z.union([
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
-    skillAction: z.literal('find-and-install').optional(),
+    skillAction: SkillActionSchema.optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({

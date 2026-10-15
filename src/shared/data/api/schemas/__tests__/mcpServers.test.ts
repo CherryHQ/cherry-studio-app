@@ -1,6 +1,21 @@
 import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@/shared/data/api/schemas/mcpServers';
 
 describe('MCP server DTO schemas', () => {
+  it('keeps native OAuth grant references out of ordinary configuration mutations', () => {
+    const oauth = {
+      authorizationId: 'e9654c74-e8fb-4437-91e2-8f55e6f86832',
+      clientId: 'public-client',
+    };
+    expect(UpdateMcpServerSchema.safeParse({ oauth }).success).toBe(false);
+    expect(
+      CreateMcpServerSchema.safeParse({
+        name: 'Example',
+        endpointUrl: 'https://example.com/mcp',
+        oauth,
+      }).success,
+    ).toBe(false);
+  });
+
   it('creates from an endpoint and a name, with the enable switch optional', () => {
     expect(
       CreateMcpServerSchema.parse({

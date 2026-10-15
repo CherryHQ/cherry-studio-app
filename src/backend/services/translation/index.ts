@@ -1,0 +1,1 @@
+export { createTranslationModule } from './createTranslationModule';

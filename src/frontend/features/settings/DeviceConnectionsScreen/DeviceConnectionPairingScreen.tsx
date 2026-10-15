@@ -11,6 +11,7 @@ import type { FirstUseSetupIntent } from '@/frontend/appShell/navigation';
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { desktopConnectionErrorMessage } from '../desktopConnectionError';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { pairingCancelDestination } from './pairingCancelDestination';
 import { useDesktopPairing } from './useDesktopPairing';
 
 export function DeviceConnectionPairingScreen({
@@ -36,6 +37,8 @@ export function DeviceConnectionPairingScreen({
       params: input?.connectionId ? { connectionId: input.connectionId } : {},
     });
 
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, input?.connectionId));
+
   const finish = () => {
     if (!connection) return;
     if (setupIntent === 'chat' && connection.capabilities.includes('configuration')) {
@@ -44,7 +47,7 @@ export function DeviceConnectionPairingScreen({
         params: { connectionId: connection.id },
       });
     } else if (setupIntent === 'chat') {
-      router.dismissTo('/onboarding');
+      router.replace('/onboarding');
     } else {
       router.replace({
         pathname: '/settings/device-connections/[connectionId]',
@@ -56,7 +59,7 @@ export function DeviceConnectionPairingScreen({
   return (
     <SettingsScrollPage
       contentClassName="flex-grow gap-8"
-      headerProps={{ title: t('settings.deviceConnections.pairing.title') }}
+      headerProps={{ onBack: cancel, title: t('settings.deviceConnections.pairing.title') }}
     >
       {!input ? (
         <ContentState.Empty
@@ -147,7 +150,7 @@ export function DeviceConnectionPairingScreen({
                   {t('common.done')}
                 </Button>
               ) : (
-                <Button onPress={() => router.back()} size="sm" variant="secondary">
+                <Button onPress={cancel} size="sm" variant="secondary">
                   {t('common.cancel')}
                 </Button>
               )}

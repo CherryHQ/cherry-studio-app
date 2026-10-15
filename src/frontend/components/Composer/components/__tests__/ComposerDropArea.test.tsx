@@ -3,13 +3,10 @@ import type { NativeSyntheticEvent } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ImageDropEvent } from '../../../../../../modules/image-drop-target';
-import {
-  ComposerProvider,
-  useComposerActions,
-  useComposerState,
-} from '../../context/ComposerProvider';
+import { useComposerActions, useComposerState } from '../../context/ComposerProvider';
 import type { ComposerAttachmentDraft } from '../../utils/composerAttachments';
 import { ComposerDropArea } from '../ComposerDropArea';
+import { ComposerTestProvider } from './_composerTestProvider';
 
 type MockNativeViewProps = {
   children?: ReactNode;
@@ -116,12 +113,12 @@ let renderer: ReactTestRenderer | undefined;
 async function renderDropArea(props: { enabled?: boolean } = {}) {
   await act(async () => {
     renderer = create(
-      <ComposerProvider>
+      <ComposerTestProvider>
         <ComposerDropArea {...props}>
           <AttachmentsProbe />
           <ActionsProbe />
         </ComposerDropArea>
-      </ComposerProvider>,
+      </ComposerTestProvider>,
     );
   });
 }

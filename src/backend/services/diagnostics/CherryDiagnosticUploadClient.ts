@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   diagnosticDescriptionByteLength,
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
+  DiagnosticReportIdSchema,
   normalizeDiagnosticDescription,
   type DiagnosticUploadFailureReason,
 } from '@/shared/contracts/diagnostics';
@@ -13,7 +14,7 @@ import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 const ARCHIVE_LIMIT_BYTES = 100 * 1024 * 1024;
 const CLIENT_ID = 'cherry-studio';
 const UploadResponseSchema = z.object({
-  id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+  id: DiagnosticReportIdSchema,
   status: z.literal('pending'),
 });
 const ErrorResponseSchema = z.object({ error: z.object({ code: z.string() }) });

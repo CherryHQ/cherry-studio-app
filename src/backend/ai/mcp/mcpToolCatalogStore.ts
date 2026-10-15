@@ -22,9 +22,10 @@ const logger = loggerService.withContext('McpToolCatalogStore');
 const StoredMcpToolCatalogSchema = z.object({
   connectionKey: z.string().min(1),
   discoveredAt: z.number().int().nonnegative(),
+  expiresAt: z.number().finite().nonnegative(),
   serverId: z.string().min(1),
   tools: z.array(z.looseObject({ name: z.string().min(1) })),
-  version: z.literal(1),
+  version: z.literal(2),
 });
 
 export type StoredMcpToolCatalog = Omit<z.infer<typeof StoredMcpToolCatalogSchema>, 'tools'> & {
@@ -37,6 +38,7 @@ type McpConnectionFingerprintInput = {
   authorizationId?: string;
   endpointUrl: string | null;
   headers?: Readonly<Record<string, string>>;
+  oauth?: { authorizationId: string };
 };
 
 const SAFE_SERVER_ID = /^[A-Za-z0-9_-]+$/;
@@ -64,6 +66,7 @@ export async function createMcpConnectionKey(
   const headers = normalizeMcpHeaders(config.headers);
   const material = JSON.stringify([
     config.endpointUrl ?? '',
+    config.oauth?.authorizationId ?? '',
     Object.keys(headers)
       .sort()
       .map((name) => [name.toLowerCase(), headers[name]]),

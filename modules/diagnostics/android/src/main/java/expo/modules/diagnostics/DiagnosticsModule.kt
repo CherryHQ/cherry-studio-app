@@ -1,7 +1,5 @@
 package expo.modules.diagnostics
 
-import android.app.Activity
-import android.content.Intent
 import android.content.Context
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -17,18 +15,10 @@ import java.io.File
 import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 
-private const val SAVE_REQUEST = 48271
 private const val SECRET_SUFFIX = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
 class DiagnosticsModule : Module() {
-  @Volatile private var pending: Pair<String, Promise>? = null
-  @Volatile private var copying = false
-  private val scope = CoroutineScope(Dispatchers.IO)
   @Volatile private var upload: DiagnosticUpload? = null
   private var observingMotion = false
   private var sensorManager: SensorManager? = null
@@ -78,14 +68,7 @@ class DiagnosticsModule : Module() {
         "fileKey" to "${stat.st_dev}:${stat.st_ino}")
     }
 
-    Function("cancelOperations") {
-      upload?.cancel()
-      appContext.currentActivity?.runOnUiThread {
-        appContext.currentActivity?.finishActivity(SAVE_REQUEST)
-        // A copy already in progress owns its streams until it finishes.
-        if (!copying) { pending?.second?.resolve(null); pending = null }
-      }
-    }
+    Function("cancelOperations") { upload?.cancel() }
 
     Function("isUploadConfigured") {
       val context = appContext.reactContext
@@ -125,60 +108,10 @@ class DiagnosticsModule : Module() {
       hmac.doFinal(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
-    AsyncFunction("saveFile") { uri: String, name: String, promise: Promise ->
-      if (pending != null) { promise.reject("ERR_BUSY", "A document export is already open", null) }
-      else {
-        pending = uri to promise
-        try {
-          appContext.throwingActivity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/zip"
-            putExtra(Intent.EXTRA_TITLE, name)
-          }, SAVE_REQUEST)
-        } catch (error: Exception) {
-          pending = null
-          promise.reject("ERR_SAVE", "Unable to open document export", error)
-        }
-      }
-    }
-
-    OnActivityResult { _, (requestCode, resultCode, intent) ->
-      if (requestCode == SAVE_REQUEST) {
-        val request = pending
-        val resolver = appContext.reactContext?.contentResolver
-        if (request != null) {
-          val destination = intent?.data
-          if (resultCode != Activity.RESULT_OK || destination == null) {
-            pending = null
-            request.second.resolve(null)
-          } else {
-            copying = true
-            scope.launch {
-              try {
-                val output = resolver?.openOutputStream(destination, "wt") ?: error("Cannot open destination")
-                output.use { target ->
-                  File(Uri.parse(request.first).path!!).inputStream().use { it.copyTo(target) }
-                }
-                request.second.resolve(destination.toString())
-              } catch (error: Exception) {
-                request.second.reject("ERR_SAVE", "Unable to write document", error)
-              } finally {
-                pending = null
-                copying = false
-              }
-            }
-          }
-        }
-      }
-    }
-
     OnDestroy {
       observingMotion = false
       stopMotion()
       upload?.cancel()
-      pending?.second?.reject("ERR_DESTROYED", "Document export was interrupted", null)
-      pending = null
-      scope.cancel()
     }
   }
 }

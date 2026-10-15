@@ -6,7 +6,6 @@ type NativeDiagnostics = {
     event: 'onAcceleration',
     listener: (sample: AccelerationSample) => void,
   ): { remove(): void };
-  saveFile(uri: string, name: string): Promise<string | null>;
   isUploadConfigured(): boolean;
   sha256(uri: string): Promise<string>;
   sign(value: string): Promise<string>;

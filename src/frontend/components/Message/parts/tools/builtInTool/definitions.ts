@@ -15,10 +15,11 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
-  search_local_skills: { iconName: 'fileText', titleKey: 'skills.search' },
+  list_local_skills: { iconName: 'fileText', titleKey: 'skills.activity.list' },
   load_skill: { iconName: 'fileText', titleKey: 'skills.activity.load' },
   list_skill_files: { iconName: 'fileText', titleKey: 'skills.activity.listFiles' },
   read_skill_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.file.read' },
@@ -48,7 +49,6 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     titleKey: 'chat.builtinTool.location.current',
   },
   health_get_summary: {
-    // Historical transcript display only; health tools are absent from the executable catalog.
     iconName: 'health',
     titleKey: 'chat.builtinTool.health.summary',
   },

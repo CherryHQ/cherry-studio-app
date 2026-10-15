@@ -1,7 +1,7 @@
 Pod::Spec.new do |s|
   s.name = 'Diagnostics'
   s.version = '1.0.0'
-  s.summary = 'Diagnostic archive upload and system document export'
+  s.summary = 'Diagnostic archive upload'
   s.description = s.summary
   s.author = 'Cherry Studio'
   s.homepage = 'https://github.com/CherryHQ/cherry-studio-app'

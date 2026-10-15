@@ -1,6 +1,7 @@
 import * as z from 'zod';
 
-import { HttpError } from '@/backend/services/http';
+import { createHttpClient, HttpError, isHttpError } from '@/backend/services/http';
+import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   WebSearchCapability,
@@ -26,6 +27,7 @@ const SEARCH_TIMEOUT_MS = 25_000;
 const FETCH_TIMEOUT_MS = 60_000;
 // Matches the service's maximum per-page character allowance before token cutoff.
 const FETCH_MAX_CHARACTERS = 24_000;
+const MAX_HTTP_ERROR_TEXT_LENGTH = 500;
 const logger = loggerService.withContext('ExaMcpProvider');
 
 type ExaResult = Pick<WebSearchResult, 'title' | 'url' | 'content'>;
@@ -95,52 +97,59 @@ export class ExaMcpProvider extends BaseWebSearchProvider {
   private async callTool(
     capability: WebSearchCapability,
     args: Record<string, unknown>,
-    upstreamSignal?: AbortSignal | null,
+    signal?: AbortSignal | null,
   ): Promise<string[]> {
-    const url = resolveProviderApiHost(this.provider, capability);
+    const target = new URL(resolveProviderApiHost(this.provider, capability));
     const apiKey = this.resolveApiKey(false);
     const isFetch = capability === 'fetchUrls';
     const timeoutMs = isFetch ? FETCH_TIMEOUT_MS : SEARCH_TIMEOUT_MS;
     const operation = isFetch ? 'fetch' : 'search';
-    const timeoutController = new AbortController();
-    const timeoutError = new DOMException(
-      `Exa MCP ${operation} timed out after ${timeoutMs}ms`,
-      'TimeoutError',
-    );
-    const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
-    const signal = upstreamSignal
-      ? AbortSignal.any([timeoutController.signal, upstreamSignal])
-      : timeoutController.signal;
+    const client = createHttpClient({ baseUrl: target.origin, headers: defaultAppHeaders() });
 
     try {
-      signal.throwIfAborted();
-      const response = await fetch(url, {
+      const response = await client.request<string>({
         method: 'POST',
-        headers: this.buildHeaders({
+        path: target.pathname + target.search,
+        headers: {
           accept: 'application/json, text/event-stream',
           'content-type': 'application/json',
           ...(apiKey ? { 'x-api-key': apiKey } : {}),
-        }),
-        body: JSON.stringify({
+        },
+        body: {
           jsonrpc: '2.0',
           id: 1,
           method: 'tools/call',
           params: { name: isFetch ? 'web_fetch_exa' : 'web_search_exa', arguments: args },
+        },
+        responseType: 'text',
+        errorDecoder: ({ data, status }) => ({
+          message: formatHttpErrorMessage(`Exa MCP ${operation} failed`, status, data),
         }),
-        signal,
+        signal: signal ?? undefined,
+        timeoutMs,
       });
-      if (!response.ok) {
-        await this.throwHttpError(`Exa MCP ${operation} failed`, response);
-      }
-      return readMcpTexts(await response.text());
+      return readMcpTexts(response.data);
     } catch (error) {
-      // React Native may drop abort reasons; only our timeout owns this classification.
-      if (timeoutController.signal.aborted && !upstreamSignal?.aborted) throw timeoutError;
+      // Lookup diagnostics report which operation hit its deadline.
+      if (isHttpError(error) && error.kind === 'timeout') {
+        throw new DOMException(
+          `Exa MCP ${operation} timed out after ${timeoutMs}ms`,
+          'TimeoutError',
+        );
+      }
       throw error;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
+}
+
+function formatHttpErrorMessage(prefix: string, status: number, body: unknown): string {
+  const text = typeof body === 'string' ? body.trim() : '';
+  if (!text) return `${prefix}: HTTP ${status}`;
+  const truncated =
+    text.length > MAX_HTTP_ERROR_TEXT_LENGTH
+      ? `${text.slice(0, MAX_HTTP_ERROR_TEXT_LENGTH)}... [truncated]`
+      : text;
+  return `${prefix}: HTTP ${status} ${truncated}`;
 }
 
 function parseSearchText(raw: string): ExaResult[] {

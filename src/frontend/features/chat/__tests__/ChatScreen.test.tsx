@@ -53,6 +53,10 @@ jest.mock('@/frontend/components/Composer', () => ({
   },
 }));
 
+jest.mock('@/frontend/components/McpApp', () => ({
+  McpAppConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
   useComposerPresentationActions: () => ({ dismissInput: mockDismissInput }),
   useComposerPresentationState: () => ({ isEditing: true }),

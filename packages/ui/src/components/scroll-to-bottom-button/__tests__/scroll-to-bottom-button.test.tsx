@@ -12,7 +12,7 @@ jest.mock('../../../motion', () => ({
   easing: { settle: 'settle' },
 }));
 
-jest.mock('../../surface/surface-frame', () => {
+jest.mock('../../surface/surface-frame/surface-frame', () => {
   const React = jest.requireActual('react');
 
   return {

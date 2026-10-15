@@ -17,6 +17,7 @@ import {
 } from '@/shared/data/api/schemas/desktopConnections';
 
 import { useDesktopPairingInput } from './DesktopPairingProvider';
+import { pairingCancelDestination } from './pairingCancelDestination';
 import { useScannerPermissions } from './useScannerPermissions';
 
 export function DeviceConnectionScannerScreen({
@@ -36,6 +37,8 @@ export function DeviceConnectionScannerScreen({
   const { setInput } = useDesktopPairingInput();
   const isReady = isActive && !isPreparing;
   const showCamera = !isPreparing && !scanError && camera?.state === 'granted';
+
+  const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
 
   const retryScan = () => {
     scanInFlight.current = false;
@@ -87,6 +90,7 @@ export function DeviceConnectionScannerScreen({
   return (
     <View className="flex-1 bg-grouped-background">
       <RouteHeader
+        onBack={cancel}
         title={t(
           connectionId
             ? 'settings.deviceConnections.location.scan'

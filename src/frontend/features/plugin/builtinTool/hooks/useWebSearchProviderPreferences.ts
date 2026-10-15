@@ -12,7 +12,10 @@ import type {
   WebSearchProviderOverride,
 } from '@/shared/data/types/webSearch';
 
-import { mergeWebSearchProviderOverride } from '../utils/providerSettings';
+import {
+  getWebSearchProviderDisplayName,
+  mergeWebSearchProviderOverride,
+} from '../utils/providerSettings';
 
 type SettingOption<TValue extends string> = { label: string; value: TValue };
 
@@ -47,11 +50,10 @@ export function useWebSearchProviderPreferences() {
 
   const fetchUrlsProviderOptions = useMemo(
     () =>
-      fetchUrlsOptions.map((option) =>
-        option.value === 'fetch'
-          ? { ...option, label: t('settings.websearch.provider.localExtraction') }
-          : option,
-      ),
+      fetchUrlsOptions.map((option) => ({
+        ...option,
+        label: getWebSearchProviderDisplayName(t, option.value),
+      })),
     [t],
   );
 

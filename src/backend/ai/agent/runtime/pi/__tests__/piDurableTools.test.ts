@@ -20,8 +20,9 @@ import {
   type ToolTaskCheckpoint,
 } from '@earendil-works/pi-durable';
 
-import type { RuntimeArtifact, RuntimeTool } from '../../types';
+import type { RuntimeArtifact, RuntimeTool, RuntimeToolResult } from '../../types';
 import { PiCodemodeArtifactsEntry, PiCodemodeFiles } from '../piCodemodeFiles';
+import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
@@ -152,6 +153,78 @@ async function toolTask(
 }
 
 describe('durable capability boundary', () => {
+  test('defers Skill installation and adaptation without MCP while retaining all readers and call permissions', async () => {
+    const names = [
+      'load_skill',
+      'list_local_skills',
+      'find_skills',
+      'install_skill',
+      'adapt_skill',
+      'list_skill_files',
+      'read_skill_file',
+      'load_workflow',
+    ];
+    const execute = jest.fn(async () => ({ value: 'Adapted', artifacts: [] }));
+    const approve = jest.fn(async () => true);
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: names.map((name) =>
+        capability({
+          ref: { source: 'builtin', capabilityId: name },
+          providerName: name,
+          execute,
+        }),
+      ),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      expect(agent.tools.map((tool) => tool.name)).toEqual([
+        'load_skill',
+        'list_local_skills',
+        'list_skill_files',
+        'read_skill_file',
+        'load_workflow',
+        'tool_search',
+      ]);
+      expect(agent.deferred.map((tool) => tool.name)).toEqual([
+        'find_skills',
+        'install_skill',
+        'adapt_skill',
+      ]);
+      expect(agent.callable.map((tool) => tool.name)).toEqual(names);
+      await harness.waitForTask(
+        await toolTask(conversation, 'tool_search', { query: 'adapt_skill', limit: 1 }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        content: [expect.objectContaining({ text: expect.stringContaining('adapt_skill') })],
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(approve).not.toHaveBeenCalled();
+      await conversation.commit(
+        (tx) =>
+          configure(tx, conversation.id, {
+            modelTools: { add: [extension.tools!.find((tool) => tool.name === 'adapt_skill')!] },
+          }),
+        BACKGROUND_CONTEXT,
+      );
+      expect(
+        (await conversation.agent(BACKGROUND_CONTEXT)).tools.map((tool) => tool.name),
+      ).toContain('adapt_skill');
+      await harness.waitForTask(await toolTask(conversation, 'adapt_skill'), BACKGROUND_CONTEXT);
+      expect(approve).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledWith(expect.objectContaining({ turnId: 'turn' }));
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
     let conversation!: Conversation;
     const codes: (string | undefined)[] = [];
@@ -490,6 +563,156 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test.each(['completed', 'cancelled'])(
+    'nested MCP app results survive a %s parent and reopening, outside the script/model channel',
+    async (outcome) => {
+      const app = {
+        serverId: 'server',
+        agentId: 'agent',
+        toolName: 'widget',
+        resourceUri: 'ui://widget',
+        connectionKey: `remote:${'a'.repeat(64)}`,
+      };
+      const stored: RuntimeToolResult = {
+        value: {
+          content: [
+            { type: 'text', text: 'ready' },
+            { type: 'text', text: 'UI_ONLY_TEXT', annotations: { audience: ['user'] } },
+          ],
+          _meta: { privateState: 'UI_ONLY_META' },
+          structuredContent: { counter: 0, _meta: { secret: 'UI_ONLY_STRUCTURED_META' } },
+        },
+        artifacts: [],
+        mcpApp: app,
+        mcpSource: { serverId: app.serverId, connectionKey: app.connectionKey },
+        modelContent: [
+          { type: 'text' as const, text: 'ready' },
+          { type: 'text' as const, text: '{"counter":0}' },
+        ],
+      };
+      let finished!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        finished = resolve;
+      });
+      const execute = jest.fn(async () => stored);
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          scriptCapability(),
+          capability({
+            ref: { source: 'mcp', serverId: 'server', rawToolName: 'widget' },
+            providerName: 'mcp_widget',
+            displayName: 'Widget',
+            approval: 'auto',
+            execute,
+          }),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              parameters: { type: 'object' } as TSchema,
+              description: 'Show a widget.',
+              replay: 'safe',
+              async execute(_args, api, context) {
+                const result = await api.executeTool('mcp_widget', { name: 'dashboard' }, context, {
+                  key: 'c1',
+                });
+                expect(result.isError).toBe(false);
+                expect(result.structuredOutput).toEqual({
+                  value: { content: stored.modelContent },
+                  artifacts: [],
+                });
+                finished();
+                if (outcome === 'cancelled') return cancelled(context);
+                return {
+                  output: [{ type: 'text', text: JSON.stringify(result.structuredOutput) }],
+                };
+              },
+            }),
+          ],
+        }),
+      });
+      const storage = new ReopenableMemoryStorage();
+      const harness = await open(storage, extension);
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const id = await toolTask(conversation, 'codemode', {});
+      try {
+        harness.resume();
+        await ready;
+        if (outcome === 'cancelled') await harness.abortTask(id, BACKGROUND_CONTEXT);
+        await harness.waitForTask(id, BACKGROUND_CONTEXT);
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+      const reopened = await open(storage, extension);
+      try {
+        const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
+        const entries = (
+          await restored.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        const receipts = entries.filter(PiCodemodeMcpResultEntry.is);
+        expect(receipts).toHaveLength(1);
+        expect(receipts[0]).toMatchObject({
+          data: {
+            parentCallId: 'call',
+            callId: 'call/c1',
+            input: { name: 'dashboard' },
+            output: stored,
+          },
+        });
+        expect(receipts[0].model).toBeUndefined();
+        const messages = (await restored.context(BACKGROUND_CONTEXT)).messages;
+        expect(messages.filter((message) => message.role === 'toolResult')).toHaveLength(1);
+        const content = JSON.stringify(messages.map((message) => message.content));
+        expect(content).not.toContain('UI_ONLY');
+        expect(content).not.toContain('mcpApp');
+        const turn = projectPiTurn({
+          sessionId: 'session',
+          entries: JSON.parse(JSON.stringify(entries)),
+          record: {
+            id: 1,
+            type: 'input',
+            status: 'unanswered',
+            entry: 1,
+          } as unknown as SubmissionRecord,
+          metadata: {
+            kind: 'cherry.input',
+            version: 1,
+            requestId: 'request',
+            turnId: 'turn',
+            userMessageId: 'user',
+            assistantMessageId: 'assistant',
+            createdAt: 1,
+            metadata: {},
+            tools: [],
+          },
+        });
+        expect(turn.parts).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'tool',
+              toolCallId: 'call/c1',
+              providerName: 'mcp_widget',
+              toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'widget' },
+              state: 'output-available',
+              input: { name: 'dashboard' },
+              output: stored,
+            }),
+          ]),
+        );
+        expect(execute).toHaveBeenCalledTimes(1);
+      } finally {
+        await reopened.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
+
   test('image pixels reach model content without being copied into structured output or UI details', async () => {
     const extension = capabilityExtension({
       name: 'cherry',
@@ -676,6 +899,59 @@ describe('durable capability boundary', () => {
       await reopened.close(BACKGROUND_CONTEXT);
     }
   });
+  test('a tool requiring a guide is refused before approval until a trusted loader retains it', async () => {
+    const approve = jest.fn(async () => true);
+    const execute = jest.fn(async () => ({ value: 'Created', artifacts: [] }));
+    const refusal = 'Load the plugin guide first.';
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve,
+      tools: [
+        capability({ requiredInstructions: { key: 'workflow:plugin:server', refusal }, execute }),
+        capability({
+          ref: { source: 'builtin', capabilityId: 'load_workflow' },
+          providerName: 'load_workflow',
+          approval: 'auto',
+          execute: async () => ({
+            value: { status: 'ok' },
+            instructions: { key: 'workflow:plugin:server', text: 'Read before writing.' },
+            artifacts: [],
+          }),
+        }),
+      ],
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'early'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        role: 'toolResult',
+        isError: true,
+        content: [expect.objectContaining({ text: expect.stringContaining(refusal) })],
+      });
+      await harness.waitForTask(
+        await toolTask(conversation, 'load_workflow', { name: 'plugin:server' }, 'load'),
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(
+        await toolTask(conversation, 'create_file', { name: 'note.txt' }, 'after'),
+        BACKGROUND_CONTEXT,
+      );
+      expect(approve).toHaveBeenCalledTimes(1);
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('native MCP discovery preserves approval, artifact admission and untrusted result boundaries', async () => {
     const result = {
       value: 'Created',
@@ -757,7 +1033,11 @@ describe('durable capability boundary', () => {
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
         role: 'toolResult',
         isError: false,
-        content: [{ type: 'text', text: JSON.stringify(result) }],
+        // MCP results reach the model through their own channel; saved files stay addressable.
+        content: [
+          { type: 'text', text: JSON.stringify(result.value) },
+          { type: 'text', text: JSON.stringify({ artifacts: result.artifacts }) },
+        ],
         details: {
           kind: 'cherry.tool-result',
           ref: { source: 'mcp', serverId: 'server', rawToolName: 'create_file' },

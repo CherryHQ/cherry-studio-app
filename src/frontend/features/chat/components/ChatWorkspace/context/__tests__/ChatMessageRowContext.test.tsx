@@ -85,6 +85,15 @@ describe('ChatMessageRowContext', () => {
     });
   });
 
+  test('notifies only the affected row when deferred content becomes complete', () => {
+    const display = message('a').display;
+    render([message('a', { completeness: 'partial', display }), message('b')], new Set());
+    render([message('a', { completeness: 'complete', display }), message('b')], new Set());
+    expect(latest('a')?.completeness).toBe('complete');
+    expect(seen.get('a')).toHaveLength(2);
+    expect(seen.get('b')).toHaveLength(1);
+  });
+
   test('shows a timestamp on a row before its source message arrives', () => {
     render([message('a')], new Set());
     expect(latest('pending')?.showsTimestamp).toBe(false);

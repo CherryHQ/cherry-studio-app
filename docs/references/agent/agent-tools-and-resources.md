@@ -2,14 +2,14 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, location, web search and fetch, image
+The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
 generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
@@ -74,7 +74,8 @@ own platform, permission, application-configuration, base approval, capability-g
 and auto-approval eligibility. The Agent editor enables or disables capability groups
 (`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota.
+auto-approval eligible: enabling the image group is not consent to spend provider quota. Health
+tools are also ineligible: each call requires explicit consent to share health data with AI.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
 installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
@@ -162,10 +163,17 @@ discovery. A send arriving during that local cache handoff waits for it through 
 preparation path. The temporary validation client is closed; actual tool calls still use a
 grant-bound client and its live routing checks.
 
-There is no timed refresh: the catalog is reconciled where the network is already in
-use, when a fresh connection lists tools before its first call and whenever the settings screens
-read live. A catalog with partial-discovery warnings is served immediately and never written to
-disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+There is no timed refresh: a catalog is only worth refreshing when a turn is about to use it. A
+remote catalog carries a freshness window, the server's `ttlMs` bounded to between five minutes and
+one hour, or five minutes when the server supplies none. A turn that finds the window elapsed still
+receives the cached catalog at once and, while the app is in the foreground, starts a background
+refresh for the next turn.
+A tools-list notification and a call the server rejects as unknown or invalid refresh the same way.
+Bundled plugin catalogs do not age; their grant changes invalidate them. Nothing refreshes on a
+timer or on return to the foreground, and an elapsed window never delays a call. Modern
+subscriptions close in the background and reopen in the foreground. A fresh connection lists tools
+before its first call, and settings screens read live. A catalog with partial-discovery warnings
+is served immediately and never written to disk. Both partial and failed discoveries back off before a send can trigger another attempt;
 partial catalogs refresh in the background after that delay. Consecutive failures start at 30
 seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
 screens may still probe the server. The file stores a
@@ -177,7 +185,8 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities register as upstream `deferred` tools. Upstream `tool_search` ranks names,
+MCP capabilities and low-frequency Skill installation/adaptation tools register as upstream `deferred`
+tools. Upstream `tool_search` ranks names,
 descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
@@ -194,6 +203,17 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
 `callers` independently controls model and script access. Application callbacks provide structured
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
+For MCP calls, `value.content` contains the bounded model-visible content, including serialized
+structured output and managed image references. UI-only metadata never enters this script channel.
+Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
+carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
+rest through the discovery helpers.
+The initial prompt retains plugin capability overviews, critical constraints, and shared operation
+rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
+connection's tools are refused before approval until its guide is present. Loading ends its tool
+round; dependent actions are planned only after the next request supplies the complete instructions.
+Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
+their full routing descriptions retain the existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -260,13 +280,22 @@ artifacts, and it does so after creating and validating each entry and granting 
 ledger.
 
 Cherry-persisted tool details never contain absolute device paths or image base64 payloads.
-Explicit image reads carry pixels only in Pi’s model output, not in those details. The Pi adapter projects
-the typed outer envelope as the model's tool result, so an application artifact's bounded managed
-ref remains available for a follow-up tool call while an MCP payload with similar keys stays nested
-under `value`. Each artifact is also projected into a Runtime file part; the Host persists it as an
+Explicit image reads carry pixels only in Pi’s model output, not in those details. Ordinary tools
+project their typed outer envelope to the model, so an application artifact's bounded managed ref
+remains available for a follow-up tool call. MCP results instead carry an explicit bounded
+`modelContent` projection: text excludes `_meta` recursively and user-only content; supported images
+reference managed files. Structured content that a text block already serializes is sent once. Text
+over the 64K-character budget is cut with both sizes stated, and the whole text is retained as a
+managed text artifact the model can page through with `read_file`. The MCP importer alone can
+create artifacts from bounded image, audio, and embedded binary content; their managed refs follow
+the model content so a follow-up call can read them. Remote JSON never becomes an artifact merely
+by resembling one. Temporary `modelImages` bytes reach image-capable models but
+are removed from canonical results. Older MCP history uses the same metadata-stripping projection.
+Each artifact is also projected into a Runtime file part; the Host persists it as an
 Agent Protocol file part with `purpose: 'artifact'` so the transcript retains its reference and
-display metadata. Its content is not automatically projected as a model attachment in later
-history. If the managed entry still exists, a user may explicitly attach it again or the model may
+display metadata. Artifact file parts are not implicit later model attachments. An MCP result
+may explicitly retain an image in `modelContent`; the Host re-resolves that managed artifact for
+image-capable models, with a text fallback if it is missing or unsupported. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 `write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
@@ -307,13 +336,25 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### Streamable HTTP MCP
 
-- Persistence retains desktop-compatible `stdio`, `sse`, `streamableHttp`, `inMemory`, and unknown
-  transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
+- Custom remote servers use Streamable HTTP. The official TypeScript client negotiates modern
+  `2026-07-28` or legacy protocols automatically; bundled direct-API plugins keep their existing
+  adapters. Direct stdio and the separate deprecated HTTP+SSE transport are not exposed.
 - `McpRuntimeService` owns clients, live discovery state, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
-  a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
+  a 256 KiB JSON result projection. Remote payloads stay under `value`; a separate bounded native
+  importer may retain binary results as managed artifacts.
+- Tool calls share the server's pooled connection. A failure is classified by what it proves. A
+  call that never left the device, an authorization failure, an HTTP client error, and a JSON-RPC
+  rejection of the tool or its arguments all mean the tool did not run. After transmission, a
+  timeout or transport failure is retryable for a bundled read or a remote tool annotated read-only
+  or idempotent, an unconfirmed write for a bundled write, and an unknown outcome otherwise: the
+  model retries only when repeating the call is harmless. A wrong remote annotation costs one
+  repeated call and never widens approval. No failure replays a tool call.
+- A redirect is followed only within the endpoint's origin, or to its HTTPS form, and only when it
+  keeps the method, which covers path canonicalization. A redirect to another origin fails with the
+  target address so the user can update the connection; headers and tokens never follow it.
 - The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
   generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
@@ -322,6 +363,60 @@ retry; cancellation still propagates without becoming a cached failure.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.
+
+### Remote Authorization, Content, And Apps
+
+Custom remote connections support headers or browser-based public-client OAuth. The native owner
+uses protected-resource and authorization-server discovery, PKCE S256, resource indicators, state
+and issuer validation, and endpoint-bound grants. Access and refresh tokens stay in native secure
+storage; SQLite keeps only the grant reference and public client ID. Refresh is shared, revocation
+wins over a pending refresh, and a rejected token requires authorization again without replaying
+an operation. Servers may use a pre-registered public client ID or hosted Client ID Metadata
+Document URL; dynamic registration is used only when the server offers it. The app does not publish
+a Client ID Metadata Document for every server or replace provider-specific plugin authorization.
+
+The grant reference is validated before persistence and rejects extra fields. OAuth connections
+cannot store a manual `Authorization` header. Disabling a connection retains its grant; removing
+OAuth authorization clears both the grant reference and client ID and disables the connection.
+
+OAuth metadata, registration, token exchange, and refresh use origin-scoped `HttpClient` routes
+through `mcpOAuthFetch`. The shared transport owns query serialization, response bounds, HTTP
+timeouts, redirect rejection, and safe transport errors. The native authorization owner retains
+the overall operation deadline and grant policy. The initial MCP challenge probe reads only
+response headers through streaming fetch, because that endpoint can return a long-lived event
+stream; it cancels the body immediately.
+
+The composer lists resources, URI templates, and prompts for enabled custom servers. Selecting an
+entry reads it through its own server, previews it, and adds it to the user draft only after Add.
+Prompt roles remain quoted user content. Bounded binary content becomes managed attachments;
+neither listing nor preview starts an Agent turn. Tool-returned resource links use the same preview
+flow. Their host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
+sends the URI to that server even when the URI uses HTTPS or is absent from its resource list.
+An edited connection cannot reinterpret an old link. Form and URL elicitation need an operation in
+flight. A question asked during tool calls belongs to its server, the scope the consent dialog
+names: every call in flight on that server pauses its network budget until the user answers, and the
+question is withdrawn when none remains. Content reads keep a connection of their own. Both legacy
+server requests and modern input-required rounds use the same native consent queue. Discovery cannot
+prompt. Cancellation or the ten-minute consent deadline removes the request. Passwords and credentials belong in the
+service's browser flow, not in a form.
+
+MCP Apps uses the official `io.modelcontextprotocol/ui` extension and `AppBridge`. Tool visibility
+filters the model catalog; a tool's `ui://` resource produces a lazy interactive-view action in its
+result card. Opening revalidates the original endpoint/grant fingerprint and Agent binding, reads
+`text/html;profile=mcp-app`, and starts a fresh live view. History never executes a tool or restores
+an old bridge automatically. Apps can list/call allowed tools and list/read resources on their
+originating server. Every App tool call gets explicit consent and repeats availability, binding,
+visibility, and schema checks. Duplicate request IDs cannot execute a second write.
+
+The native WebView shell isolates server HTML in an opaque-origin sandbox and restricts network
+and resource origins using declared CSP domains. It denies nested frames, custom origins, browser
+device permissions, forms, popups, and direct navigation. External HTTPS links and messages require
+native confirmation. Messages are staged in the composer; text/structured model-context updates
+remain visible and removable until the user's next submission. Theme, locale, dimensions, and
+teardown use the Apps protocol. Closing, backgrounding, revocation, or route disposal ends the view.
+The inline native shell enforces CSP through meta directives; this is a mobile implementation
+constraint, not evidence of complete CSP-header or Apps conformance. iOS/Android WebView behavior,
+real OAuth providers, protocol negotiation, and third-party Apps still require acceptance.
 
 ### System Calendar
 
@@ -354,14 +449,29 @@ retry; cancellation still propagates without becoming a cached failure.
   batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
   until its native callback settles.
 
-### Retired Health Capability
+### Health And Fitness
 
-The first App Store release omits health access. The executable catalog, Agent capability groups,
-permission settings, native dependencies, entitlements, and usage descriptions contain no health
-capability. Persisted Agent deny-lists drop the retired `health` id on read using the existing
-unknown-capability guard. Existing conversations retain health tool result labels and icons for
-historical display; those entries do not register executable tools or request permissions.
-Restoring health access requires a separate native feature and App Store submission.
+Health is an iOS-only built-in tool group, not a separate page. System permissions own read
+authorization; `health_get_summary` and `health_list_workouts` belong to the `health` Agent
+capability. Android has no Health Connect bridge, native health module or health entry.
+The Agent created during first-run onboarding enables health; manually created Agents start with
+it disabled. Existing Agents retain their stored capability preferences without a data migration.
+Both tools always require application approval, including in automatic approval mode.
+The approval sheet identifies the receiving model service and explains sharing and conversation
+retention. It blocks approval if the receiving service cannot be resolved; denial remains available.
+The data is for the user's health and fitness management, not medical diagnosis.
+
+`modules/health-access` owns read authorization for eight types and never requests writing,
+background delivery or extended history. HealthKit reports whether authorization was requested,
+not whether reading was granted. The `requested` status permits a read attempt without claiming
+access; missing records remain null rather than becoming zero. Summary tools can use a subset
+of available metrics. Native aggregate queries avoid unbounded raw quantity fetches, disable the
+library cache, and daily queries stop between days when the turn is cancelled. The dependency
+patch removes native logs of health values.
+
+The initial App Store release removed this integration after a Guideline 2.5.1 finding. Restoring
+it requires a new native binary and a new submission; store metadata and review notes must describe
+the Agent health analysis and how to reach it. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 
@@ -488,6 +598,8 @@ response. The Code Mode prompt section states this limit. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
+Confirmed MCP child results have separate display receipts, preserving their App launchers, resource
+authority and media in the transcript even when the parent is cancelled or its task documents retire.
 
 Each script has a fresh native VM, a 64 MiB heap and a dedicated 8 MiB thread stack with a 7 MiB
 QuickJS stack limit. Across turns the service runs at most two scripts and, in a separate pool, two
@@ -646,11 +758,16 @@ but cannot start chatting. The model derives instructions from the conversation 
 `ask_user_question` for material missing requirements.
 
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+bindings (`skillId` and `isEnabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
 writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
-latest definition. Changes to the active Agent apply to future turns only.
+latest definition. `changes.skills` applies only the listed bindings: `isEnabled: true` binds and
+enables, `false` binds and disables, and `null` removes a binding. Unlisted bindings are preserved;
+this does not change the Skill library's global enablement. Definition edits and requested binding
+changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
+apply to future turns only.
 
 Create/update publish committed Data API cache invalidations, including when a turn has no visible
 chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is

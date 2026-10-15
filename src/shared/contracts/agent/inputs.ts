@@ -6,7 +6,7 @@ import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk
 import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
-import { SkillIdSchema } from '@/shared/data/types/skill';
+import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
 import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
@@ -36,7 +36,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
    */
   skillIds: z.array(SkillIdSchema).max(8).optional(),
   /** App-owned composer action; no installation occurs until the user sends the request. */
-  skillAction: z.literal('find-and-install').optional(),
+  skillAction: SkillActionSchema.optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
@@ -57,7 +57,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
    */
   skillIds: z.array(SkillIdSchema).max(8).optional(),
   /** App-owned composer action; no installation occurs until the user sends the request. */
-  skillAction: z.literal('find-and-install').optional(),
+  skillAction: SkillActionSchema.optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({

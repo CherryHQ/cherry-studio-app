@@ -1,5 +1,5 @@
 import { ImagePreview } from '../components/image-preview';
-import { QuickLookPreview } from '../components/quick-look-preview.ios';
+import { QuickLookPreview } from '../components/quick-look-preview/quick-look-preview.ios';
 import type { FilePreviewComponent, FilePreviewPlugin } from '../file-preview.types';
 
 /**

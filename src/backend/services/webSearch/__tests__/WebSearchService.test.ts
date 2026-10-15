@@ -12,18 +12,18 @@ jest.mock('../http/requestWebSearchJson', () => ({
 }));
 jest.mock('../http/downloadWebPage', () => ({ downloadWebPage: jest.fn() }));
 
+// Hosted Exa MCP is the only driver here that reaches the shared transport.
+const mockFetch = jest.fn();
+jest.mock('expo/fetch', () => ({ fetch: (...args: unknown[]) => mockFetch(...args) }));
+
 const requestWebSearchJsonMock =
   requestWebSearchJson as jest.MockedFunction<WebSearchJsonRequester>;
 
 describe('WebSearchService', () => {
-  const originalFetch = global.fetch;
   beforeEach(() => {
     requestWebSearchJsonMock.mockReset();
     jest.mocked(downloadWebPage).mockReset();
-    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
-  });
-  afterEach(() => {
-    global.fetch = originalFetch;
+    mockFetch.mockReset().mockRejectedValue(new Error('offline'));
   });
 
   test.each([
@@ -46,7 +46,7 @@ describe('WebSearchService', () => {
       await expect(service.isConfigured('fetchUrls')).resolves.toBe(ready);
       expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
       expect(downloadWebPage).not.toHaveBeenCalled();
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
     },
   );
 
@@ -61,7 +61,7 @@ describe('WebSearchService', () => {
     await expect(service.isConfigured('searchKeywords')).resolves.toBe(false);
     await expect(service.isConfigured('fetchUrls')).resolves.toBe(true);
     expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   test('reads through Jina with fresh-install defaults and no provider keys', async () => {
@@ -73,13 +73,13 @@ describe('WebSearchService', () => {
     const response = await service.fetchUrls({ urls: ['https://example.com'] });
 
     expect(response).toMatchObject({ providerId: 'jina', results: [{ content: 'Page body' }] });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
     const headers = requestWebSearchJsonMock.mock.calls[0]?.[0]?.headers;
     expect(headers).not.toHaveProperty('Authorization');
   });
 
   test('searches with fresh-install defaults without discarding hosted Highlights', async () => {
-    global.fetch = jest.fn().mockResolvedValue(
+    mockFetch.mockResolvedValue(
       new Response(
         JSON.stringify({
           result: {
@@ -114,12 +114,11 @@ describe('WebSearchService', () => {
       failures: [{ input: 'https://example.com', kind: 'timeout', message: 'Jina timed out' }],
     });
     expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(1);
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   test('keeps partial results and failures from the selected provider without switching', async () => {
-    global.fetch = jest
-      .fn()
+    mockFetch
       .mockResolvedValueOnce(exaPageResponse('https://example.com/a', 'First'))
       .mockRejectedValueOnce(new Error('unavailable'));
     requestWebSearchJsonMock.mockResolvedValue({
@@ -139,9 +138,14 @@ describe('WebSearchService', () => {
     expect(response.results.map((result) => result.content)).toEqual(['First']);
     expect(response.providerId).toBe('exa-mcp');
     expect(response.failures).toEqual([
-      { input: 'https://example.com/b', kind: 'unknown', message: 'unavailable' },
+      {
+        input: 'https://example.com/b',
+        kind: 'network',
+        code: 'NETWORK_ERROR',
+        message: 'HTTP request could not reach the server.',
+      },
     ]);
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(requestWebSearchJsonMock).not.toHaveBeenCalled();
   });
 
@@ -163,7 +167,7 @@ describe('WebSearchService', () => {
         message: 'Jina unavailable',
       })),
     });
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
     expect(requestWebSearchJsonMock).toHaveBeenCalledTimes(2);
   });
 
@@ -178,7 +182,7 @@ describe('WebSearchService', () => {
     await expect(
       service.fetchUrls({ urls: ['https://example.com'] }, { signal: controller.signal }),
     ).rejects.toBeDefined();
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   test('checks provider with temporary selected api key', async () => {

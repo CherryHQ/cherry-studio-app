@@ -579,7 +579,9 @@ export class DurableAgentHost implements AgentProtocol {
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
-        plan.agent.mode === 'standard' ? buildInitialSkillInstructions(plan.skills) : [],
+        plan.agent.mode === 'standard'
+          ? [...buildInitialSkillInstructions(plan.skills), ...plan.workflowInstructions]
+          : [],
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
@@ -1733,7 +1735,7 @@ function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
         left.rawToolName === right.rawToolName)
   );
 }
-/** Explicit Skill selections and the find-and-install action recorded on a submitted message. */
+/** Explicit Skill selections and app-owned Skill actions recorded on a submitted message. */
 function submittedSkills(parts: AgentMessageView['parts']) {
   const text = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
   const skillIds = text.flatMap((part) =>

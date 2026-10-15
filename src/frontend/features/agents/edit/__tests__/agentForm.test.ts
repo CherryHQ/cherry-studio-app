@@ -34,7 +34,7 @@ describe('createAgentFormState', () => {
   it('starts a new agent with no avatar draft and the device groups and Agent management off', () => {
     expect(createAgentFormState()).toMatchObject({
       avatarUri: null,
-      disabledCapabilities: ['agents', 'calendar', 'location', 'reminders'],
+      disabledCapabilities: ['agents', 'calendar', 'health', 'location', 'reminders'],
       mode: 'standard',
       toolApprovalMode: 'auto',
     });

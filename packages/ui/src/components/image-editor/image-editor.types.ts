@@ -22,7 +22,6 @@ export type ImageEditorLabels = {
   loading: string;
   saving: string;
   title: string;
-  hint: string;
   reset: string;
   rotate: string;
   undo: string;

@@ -14,7 +14,7 @@ import {
 import type { CSSProperties } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { PageBridge, post } from './page-bridge';
+import { PageBridge, post } from './PageBridge';
 import {
   FILE_PREVIEW_PAGE_GLOBAL,
   type FilePreviewRenderOptions,

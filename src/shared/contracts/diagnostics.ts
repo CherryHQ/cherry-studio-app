@@ -4,8 +4,6 @@ export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
 export const DIAGNOSTIC_SCREENSHOT_DIRECTORY = 'FeedbackScreenshots';
 export const DIAGNOSTIC_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
-export const DiagnosticRangeSchema = z.enum(['24h', '3d', '7d']);
-export type DiagnosticRange = z.infer<typeof DiagnosticRangeSchema>;
 export const DIAGNOSTIC_API_ORIGIN = 'https://api.cherry-ai.com';
 export const DiagnosticReportIdSchema = z
   .string()
@@ -53,14 +51,7 @@ export function diagnosticDescriptionByteLength(value: string): number {
   return new TextEncoder().encode(normalizeDiagnosticDescription(value)).byteLength;
 }
 
-export const DiagnosticBundleInputSchema = z.strictObject({
-  includeLogs: z.boolean(),
-  includeTraces: z.boolean(),
-  range: DiagnosticRangeSchema,
-});
-export type DiagnosticBundleInput = z.infer<typeof DiagnosticBundleInputSchema>;
-
-export const DiagnosticReportInputSchema = DiagnosticBundleInputSchema.extend({
+export const DiagnosticReportInputSchema = z.strictObject({
   screenshotId: z.uuidv4().optional(),
   description: z
     .string()
@@ -69,29 +60,6 @@ export const DiagnosticReportInputSchema = DiagnosticBundleInputSchema.extend({
     .refine((value) => diagnosticDescriptionByteLength(value) <= DIAGNOSTIC_DESCRIPTION_MAX_BYTES),
 });
 export type DiagnosticReportInput = z.infer<typeof DiagnosticReportInputSchema>;
-
-export type DiagnosticInspection = {
-  hasWarnings: boolean;
-  sourceLimitBytes: number;
-  sources: {
-    logs: { available: boolean; estimatedBytes: number; fileCount: number };
-    traces: { available: boolean; estimatedBytes: number; fileCount: number };
-  };
-};
-
-export type DiagnosticSavedBundle = {
-  status: 'saved';
-  archiveBytes: number;
-  bundleId: string;
-  fileName: string;
-  /** System document URI selected by the user, never an internal staging path. */
-  filePath: string;
-  hasWarnings: boolean;
-  includedFileCount: number;
-  omittedFileCount: number;
-};
-
-export type DiagnosticExportResult = DiagnosticSavedBundle | { status: 'busy' | 'canceled' };
 
 export type DiagnosticUploadFailureReason =
   | 'not_configured'
@@ -113,7 +81,7 @@ export type DiagnosticUploadResult =
 
 export class DiagnosticError extends Error {
   constructor(
-    readonly code: 'INSPECT_FAILED' | 'BUNDLE_BUILD_FAILED' | 'SAVE_FAILED' | 'NATIVE_UNAVAILABLE',
+    readonly code: 'BUNDLE_BUILD_FAILED',
     options?: ErrorOptions,
   ) {
     super(code, options);
@@ -122,8 +90,6 @@ export class DiagnosticError extends Error {
 }
 
 export interface DiagnosticsModule {
-  inspect(range: DiagnosticRange): Promise<DiagnosticInspection>;
-  exportBundle(input: DiagnosticReportInput): Promise<DiagnosticExportResult>;
   uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult>;
   getReportStatus(reportId: string, signal?: AbortSignal): Promise<DiagnosticReportStatusResult>;
 }

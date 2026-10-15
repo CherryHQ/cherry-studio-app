@@ -13,12 +13,14 @@ import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
+import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
   avatarUri?: null | string;
+  emoji?: string;
   name: string;
 }>;
 
@@ -47,6 +49,7 @@ function renderChatAssistantMessage(
         <AgentAvatar
           accessibilityLabel={presentation.name}
           avatar={presentation.avatar}
+          emoji={presentation.emoji}
           name={presentation.name}
           size={24}
           uri={presentation.avatarUri}
@@ -76,6 +79,7 @@ function renderChatAssistantMessage(
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}
+        <MessageTranslationContent message={message} />
       </AssistantMessage>
     </View>
   );

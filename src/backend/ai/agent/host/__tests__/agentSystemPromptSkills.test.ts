@@ -50,7 +50,7 @@ describe('agent system prompt Skills section', () => {
     });
     expect(prompt).toContain('45 automatically discoverable Skills');
     expect(prompt).toContain('45 enabled, bound and readable Skill packages');
-    expect(prompt).toContain('query: ""');
+    expect(prompt).toContain('`list_local_skills`');
     expect(prompt).toContain('include_manual: true');
     expect(prompt).toContain('`total` for the count');
     expect(prompt).toContain('until `nextCursor` is null');
@@ -67,10 +67,15 @@ describe('agent system prompt Skills section', () => {
       },
     });
     expect(prompt).toContain(description);
+    expect(prompt).toContain(
+      'by meaning, including across languages; shared keywords are not required',
+    );
+    expect(prompt).toContain('When the catalog below is complete, use it directly');
+    expect(prompt).not.toContain('cursor: "');
     expect(prompt).not.toContain('<skill_instructions>');
   });
 
-  it('bounds the catalog by whole entries and directs discovery to metadata search', () => {
+  it('bounds the catalog by whole entries and directs discovery to unfiltered metadata listing', () => {
     const entries = Array.from({ length: 20 }, (_, index) =>
       entry(`skill-${index}`, { description: `${'Context. '.repeat(105)}Use for task ${index}.` }),
     );
@@ -84,7 +89,12 @@ describe('agent system prompt Skills section', () => {
     expect([...lines.join('\n')].length).toBeLessThanOrEqual(12_000);
     for (const [index, line] of lines.entries()) expect(line).toContain(`Use for task ${index}.`);
     expect(prompt).toContain(`### Available Skills (${lines.length} of 20)`);
-    expect(prompt).toContain('omitted entries remain discoverable through search_local_skills');
+    expect(prompt).toContain(
+      `Call list_local_skills with \`cursor: "${lines.length}"\` to list unfiltered metadata for the rest`,
+    );
+    expect(prompt).toContain(
+      'until `nextCursor` is null before concluding that no local Skill fits',
+    );
   });
 
   it('lists model-invocable Skills and routes explicit selections to current system sections', () => {
@@ -116,6 +126,7 @@ describe('agent system prompt Skills section', () => {
     expect(prompt).toContain('- manual (skill_id: manual)');
     expect(prompt).not.toContain('Follow the manual.');
     expect(prompt).toContain('read the needed references or templates with `read_skill_file`');
+    expect(prompt).toContain('through tool_search by exact name when needed');
     expect(prompt).toContain('repeat `load_skill` to recover a missing instruction body');
     expect(prompt).not.toContain('without another loading call, file lookup');
     expect(prompt).toContain('built-in tools exposed directly to you');

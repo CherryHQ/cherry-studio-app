@@ -22,7 +22,6 @@ import {
   encodeReasoningInvocation,
   type ResolvedReasoningInvocation,
 } from './reasoningSerializers';
-import { getWebSearchParams } from './websearch';
 
 type OpenAIVerbosity = 'low' | 'medium' | 'high' | null | undefined;
 type GroqServiceTier = 'auto' | 'on_demand' | 'flex' | null | undefined;
@@ -184,27 +183,6 @@ function getVerbosity(model: Model, provider: Provider): OpenAIVerbosity {
   return undefined;
 }
 
-function mergeRecords<T extends Record<string, unknown>>(...items: T[]): T {
-  const result: Record<string, unknown> = {};
-  for (const item of items) {
-    for (const [key, value] of Object.entries(item)) {
-      if (
-        value &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        result[key] &&
-        typeof result[key] === 'object' &&
-        !Array.isArray(result[key])
-      ) {
-        result[key] = mergeRecords(result[key] as T, value as T);
-      } else {
-        result[key] = value;
-      }
-    }
-  }
-  return result as T;
-}
-
 export function extractAiSdkStandardParams(customParams: Record<string, any>): {
   standardParams: Partial<Record<string, any>>;
   providerParams: Record<string, any>;
@@ -238,10 +216,7 @@ function shouldNormalizeOpenAICompatibleReasoning(
 export function buildCapabilityProviderOptions(
   model: Model,
   actualProvider: Provider,
-  capabilities: Pick<
-    ProviderCapabilities,
-    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
-  >,
+  capabilities: Pick<ProviderCapabilities, 'enableReasoning' | 'enableGenerateImage'>,
   context: {
     aiSdkProviderId: AppProviderId;
     runtimeProviderId: AppProviderId;
@@ -298,15 +273,10 @@ export function buildCapabilityProviderOptions(
       );
       break;
     case 'google':
-      providerSpecificOptions = buildGeminiProviderOptions(
-        model,
-        capabilities,
-        reasoningOptions.options,
-      );
+      providerSpecificOptions = buildGeminiProviderOptions(capabilities, reasoningOptions.options);
       break;
     case 'google-vertex':
       providerSpecificOptions = buildGeminiProviderOptions(
-        model,
         capabilities,
         reasoningOptions.options,
         providerOptionsKey,
@@ -341,8 +311,6 @@ export function buildCapabilityProviderOptions(
     default:
       providerSpecificOptions = buildGenericProviderOptions(
         reasoningOptions.providerId,
-        model,
-        capabilities,
         reasoningOptions.options,
       );
       providerSpecificOptions = {
@@ -420,10 +388,7 @@ function normalizeOpenAICompatibleParams(params: Record<string, any>): Record<st
 
 function buildOpenAIProviderOptions(
   model: Model,
-  capabilities: Pick<
-    ProviderCapabilities,
-    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
-  >,
+  capabilities: Pick<ProviderCapabilities, 'enableReasoning' | 'enableGenerateImage'>,
   provider: Provider,
   serviceTier: OpenAIServiceTier,
   textVerbosity?: OpenAIVerbosity,
@@ -465,11 +430,7 @@ function buildAnthropicProviderOptions(
 }
 
 function buildGeminiProviderOptions(
-  model: Model,
-  capabilities: Pick<
-    ProviderCapabilities,
-    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
-  >,
+  capabilities: Pick<ProviderCapabilities, 'enableReasoning' | 'enableGenerateImage'>,
   reasoningOptions: Record<string, unknown>,
   providerOptionsKey = 'google',
 ): Record<string, Record<string, unknown>> {
@@ -483,9 +444,6 @@ function buildGeminiProviderOptions(
     ],
   };
   providerOptions = { ...providerOptions, ...reasoningOptions };
-  if (capabilities.enableWebSearch) {
-    providerOptions = mergeRecords(providerOptions, getWebSearchParams(model));
-  }
   if (capabilities.enableGenerateImage) {
     providerOptions = { ...providerOptions, ...buildGeminiGenerateImageParams() };
   }
@@ -512,28 +470,14 @@ function buildOllamaProviderOptions(
 
 function buildGenericProviderOptions(
   providerId: string,
-  model: Model,
-  capabilities: Pick<
-    ProviderCapabilities,
-    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
-  >,
   reasoningOptions: Record<string, unknown>,
 ): Record<string, Record<string, unknown>> {
-  let providerOptions: Record<string, unknown> = { ...reasoningOptions };
-
-  if (capabilities.enableWebSearch) {
-    providerOptions = mergeRecords(providerOptions, getWebSearchParams(model));
-  }
-
-  return { [providerId]: providerOptions };
+  return { [providerId]: { ...reasoningOptions } };
 }
 
 function buildAiGatewayOptions(
   model: Model,
-  capabilities: Pick<
-    ProviderCapabilities,
-    'enableReasoning' | 'enableWebSearch' | 'enableGenerateImage'
-  >,
+  capabilities: Pick<ProviderCapabilities, 'enableReasoning' | 'enableGenerateImage'>,
   provider: Provider,
   serviceTier: OpenAIServiceTier,
   textVerbosity?: OpenAIVerbosity,
@@ -547,7 +491,7 @@ function buildAiGatewayOptions(
     case ENDPOINT_TYPE.ANTHROPIC_MESSAGES:
       return buildAnthropicProviderOptions(reasoning.options);
     case ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT:
-      return buildGeminiProviderOptions(model, capabilities, reasoning.options);
+      return buildGeminiProviderOptions(capabilities, reasoning.options);
     case ENDPOINT_TYPE.OPENAI_RESPONSES:
       return buildOpenAIProviderOptions(
         model,
@@ -559,12 +503,7 @@ function buildAiGatewayOptions(
       );
     case ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS:
     case ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION:
-      return buildGenericProviderOptions(
-        reasoning.providerId,
-        model,
-        capabilities,
-        reasoning.options,
-      );
+      return buildGenericProviderOptions(reasoning.providerId, reasoning.options);
   }
   return { [reasoning.providerId]: reasoning.options };
 }

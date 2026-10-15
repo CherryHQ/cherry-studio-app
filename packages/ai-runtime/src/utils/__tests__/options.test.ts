@@ -65,7 +65,7 @@ describe('applyFastModeToProviderOptions', () => {
     const result = buildCapabilityProviderOptions(
       createModel({ contextWindow: 32_768 }),
       createProvider('ollama'),
-      { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },
+      { enableGenerateImage: false, enableReasoning: true },
       {
         aiSdkProviderId: 'ollama',
         endpointType: ENDPOINT_TYPE.OLLAMA_CHAT,
@@ -86,7 +86,7 @@ describe('applyFastModeToProviderOptions', () => {
     const result = buildCapabilityProviderOptions(
       createModel(),
       createProvider('vertexai'),
-      { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },
+      { enableGenerateImage: false, enableReasoning: true },
       {
         aiSdkProviderId: 'google-vertex',
         endpointType: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
@@ -112,7 +112,7 @@ describe('applyFastModeToProviderOptions', () => {
     const result = buildCapabilityProviderOptions(
       createModel({ modelId: 'claude-sonnet-4-5' }),
       { ...createProvider('aws-bedrock'), authType: 'iam-aws' },
-      { enableGenerateImage: false, enableReasoning: true, enableWebSearch: false },
+      { enableGenerateImage: false, enableReasoning: true },
       {
         aiSdkProviderId: 'bedrock',
         endpointType: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,

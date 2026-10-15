@@ -1,13 +1,7 @@
-import Constants from 'expo-constants';
-import {
-  CryptoDigestAlgorithm,
-  CryptoEncoding,
-  digestStringAsync,
-  getRandomBytes,
-} from 'expo-crypto';
 import * as z from 'zod';
 
 import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { createPkceChallenge, nativeCallbackUrl, randomOauthValue } from '@/backend/utils/oauth';
 import { PluginError } from '@/shared/contracts/plugins';
 
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
@@ -28,12 +22,10 @@ export type GithubApplication = z.infer<typeof GithubApplicationSchema>;
 
 /** GitHub documents this as a public-client credential, not a confidential application secret. */
 export function getGithubApplication(): GithubApplication | undefined {
-  const configuredScheme = Constants.expoConfig?.scheme;
-  const scheme = Array.isArray(configuredScheme) ? configuredScheme[0] : configuredScheme;
   const parsed = GithubApplicationSchema.safeParse({
     clientId: process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_ID,
     clientSecret: process.env.EXPO_PUBLIC_GITHUB_OAUTH_CLIENT_SECRET,
-    redirectUrl: `${scheme}://plugins/github/callback`,
+    redirectUrl: nativeCallbackUrl('plugins/github/callback'),
   });
   return parsed.success ? parsed.data : undefined;
 }
@@ -160,19 +152,10 @@ async function get(path: string, token: string, signal: AbortSignal) {
   }
 }
 
-const base64Url = (value: string) =>
-  value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
-
 export const githubOauth = {
   async challenge(application: GithubApplication) {
-    const state = randomValue();
-    const verifier = randomValue();
-    const challenge = base64Url(
-      await digestStringAsync(CryptoDigestAlgorithm.SHA256, verifier, {
-        encoding: CryptoEncoding.BASE64,
-      }),
-    );
+    const state = randomOauthValue();
+    const { verifier, challenge } = await createPkceChallenge();
     const url = new URL('https://github.com/login/oauth/authorize');
     url.search = new URLSearchParams({
       client_id: application.clientId,

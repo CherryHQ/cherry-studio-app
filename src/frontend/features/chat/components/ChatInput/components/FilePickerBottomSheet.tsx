@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import {
   type ComposerAttachmentReady,
+  createReadyAttachmentDraft,
   isComposerAttachmentReady,
   isComposerImageMediaType,
 } from '@/frontend/components/Composer/utils/composerAttachments';
@@ -247,18 +248,7 @@ function FilePickerRow({
 }
 
 function toLibraryAttachment({ entry, uri }: ResolvedFileEntry): ComposerAttachmentReady | null {
-  return uri
-    ? {
-        fileEntryId: entry.id,
-        id: `file-entry:${entry.id}`,
-        kind: isComposerImageMediaType(entry.mediaType) ? 'image' : 'file',
-        mediaType: entry.mediaType,
-        name: entry.filename,
-        size: entry.size,
-        status: 'ready',
-        uri,
-      }
-    : null;
+  return uri ? createReadyAttachmentDraft({ entry, uri }, `file-entry:${entry.id}`) : null;
 }
 
 const styles = StyleSheet.create({

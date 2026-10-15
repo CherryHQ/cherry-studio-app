@@ -4,6 +4,7 @@ type McpConnectionConfigLike = {
   builtinId?: string;
   authorizationId?: string;
   headers?: Readonly<Record<string, string>>;
+  oauth?: { authorizationId: string; clientId: string };
 };
 
 export function normalizeMcpHeaders(
@@ -36,7 +37,10 @@ export function isSameMcpConnectionConfig(
       left.authorizationId === right.authorizationId
     );
   }
-  if (left.endpointUrl !== right.endpointUrl) {
+  if (
+    left.endpointUrl !== right.endpointUrl ||
+    left.oauth?.authorizationId !== right.oauth?.authorizationId
+  ) {
     return false;
   }
 

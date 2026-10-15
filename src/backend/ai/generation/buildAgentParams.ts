@@ -130,7 +130,6 @@ export async function buildAgentParams({
     {
       enableGenerateImage: false,
       enableReasoning: request.reasoningEffort !== undefined,
-      enableWebSearch: false,
     },
     {
       aiSdkProviderId: sdkConfig.providerId,
@@ -181,7 +180,11 @@ export async function buildAgentParams({
     getUsagePlugins: getRepairUsagePlugins,
   });
   const overridden = applyCallOverrides(
-    { providerOptions, standardParams: {} },
+    {
+      providerOptions,
+      standardParams:
+        model.maxOutputTokens !== undefined ? { maxOutputTokens: model.maxOutputTokens } : {},
+    },
     request.callOverrides,
     model,
   );

@@ -61,11 +61,11 @@ describe('skill tools', () => {
     tools = createSkillTools(scope);
   });
 
-  it('searches only model-invocable Skills inside the scope with stable paging', async () => {
-    const search = toolNamed(tools, 'search_local_skills');
-    expect(await run(search, { query: '' })).toMatchObject({
+  it('lists only model-invocable Skills inside the scope', async () => {
+    const list = toolNamed(tools, 'list_local_skills');
+    expect(await run(list, {})).toMatchObject({
       total: 2,
-      matched: 2,
+      automaticTotal: 2,
       returned: 2,
       nextCursor: null,
       skills: [
@@ -73,19 +73,34 @@ describe('skill tools', () => {
         { skill_id: 'b', name: 'research-brief' },
       ],
     });
-    expect(await run(search, { query: 'RESEARCH' })).toMatchObject({
-      matched: 1,
-      skills: [{ skill_id: 'b' }],
+  });
+
+  it('returns complete multilingual descriptions for model selection without loading instructions', async () => {
+    const entries = [
+      entry({
+        id: 'minutes',
+        name: 'meeting-notes',
+        description: `${'Meeting context. '.repeat(100)}Use to summarize discussions and extract action items.`,
+      }),
+      entry({ id: 'travel', name: '旅行计划', description: '规划行程，安排交通和住宿。' }),
+    ];
+    const readInstructions = jest.fn(async () => null);
+    const list = toolNamed(
+      createSkillTools({ ...createScope(entries), readInstructions }),
+      'list_local_skills',
+    );
+    expect(await run(list, {})).toMatchObject({
+      total: 2,
+      skills: entries.map(({ id, name, description }) => ({ skill_id: id, name, description })),
     });
-    expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+    expect(readInstructions).not.toHaveBeenCalled();
   });
 
   it('includes manual-only metadata for an explicit inventory without granting loading access', async () => {
-    const search = toolNamed(tools, 'search_local_skills');
-    expect(await run(search, { query: '', include_manual: true })).toMatchObject({
+    const list = toolNamed(tools, 'list_local_skills');
+    expect(await run(list, { include_manual: true })).toMatchObject({
       total: 3,
       automaticTotal: 2,
-      matched: 3,
       returned: 3,
       skills: [
         { skill_id: 'a', invocation: { modelInvocable: true, userInvocable: true } },
@@ -97,7 +112,10 @@ describe('skill tools', () => {
     expect(await run(toolNamed(tools, 'load_skill'), { skill_id: 'manual' })).toMatchObject({
       status: 'error',
     });
-    expect(await run(search, { query: 'manual' })).toMatchObject({ matched: 0, skills: [] });
+    expect(await run(list, {})).toMatchObject({
+      total: 2,
+      skills: [{ skill_id: 'a' }, { skill_id: 'b' }],
+    });
   });
 
   it('enumerates every page and refreshes the count after a conversation installation', async () => {
@@ -105,14 +123,13 @@ describe('skill tools', () => {
       entry({ id: `skill-${index}`, name: `skill-${index}` }),
     );
     const expanding = createExpandingSkillScope(createScope(entries));
-    const search = toolNamed(createSkillTools(expanding.scope), 'search_local_skills');
+    const list = toolNamed(createSkillTools(expanding.scope), 'list_local_skills');
     const ids: string[] = [];
     let cursor: string | null = null;
     const pageSizes: number[] = [];
     do {
-      const page = await run(search, { query: '', ...(cursor ? { cursor } : {}) });
+      const page = await run(list, cursor ? { cursor } : {});
       expect(page.total).toBe(45);
-      expect(page.matched).toBe(45);
       pageSizes.push(page.returned as number);
       ids.push(...(page.skills as { skill_id: string }[]).map(({ skill_id }) => skill_id));
       cursor = page.nextCursor as string | null;
@@ -124,11 +141,10 @@ describe('skill tools', () => {
     expect(expanding.include(createScope([installed]), installed.id, installed.contentHash)).toBe(
       true,
     );
-    expect(await run(search, { query: 'installed' })).toMatchObject({
+    expect(await run(list, { cursor: '40' })).toMatchObject({
       total: 46,
-      matched: 1,
-      returned: 1,
-      skills: [{ skill_id: 'installed' }],
+      returned: 6,
+      skills: [...entries.slice(40), installed].map(({ id }) => ({ skill_id: id })),
       nextCursor: null,
     });
   });

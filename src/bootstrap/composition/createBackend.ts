@@ -63,14 +63,16 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import {
-  createBundledSkillSource,
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
+  createCherryinSkillClient,
+  createCherryinSkillSource,
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
+import { createTranslationModule } from '@/backend/services/translation';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -267,9 +269,14 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
+  const cherryinClient = createCherryinSkillClient();
+  const cherryinSkills = createCherryinSkillSource(cherryinClient);
   let skillStorageWrites = 0;
   const skills = createSkillsModule({
-    marketplace: createSkillMarketplace(githubSkills),
+    marketplace: createSkillMarketplace(githubSkills, {
+      client: cherryinClient,
+      source: cherryinSkills,
+    }),
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
@@ -282,10 +289,11 @@ export function createBackend(
       },
     },
     skills: services.agentGlobalSkill,
+    readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
     sources: {
-      bundled: createBundledSkillSource(),
       github: githubSkills,
+      cherryin: cherryinSkills,
     },
     agentExists: (agentId) =>
       services.agentData.getById(agentId).then(
@@ -336,6 +344,11 @@ export function createBackend(
       profile,
       providers,
       skills,
+      translation: createTranslationModule({
+        ai: services.ai,
+        preference: services.preference,
+        models: services.model,
+      }),
       webSearch: services.webSearch,
     },
     dataApiDependencies: {

@@ -112,9 +112,9 @@ export function useCompleteOnboarding() {
       } else {
         agent = await createAgent({
           avatar: CHERRY_AGENT_AVATAR,
-          // The default Agent can manage Agents; other new Agents opt in from the editor.
+          // The initial Agent has Agent management and health; editor-created Agents opt in.
           disabledCapabilities: DEFAULT_DISABLED_AGENT_CAPABILITIES.filter(
-            (capability) => capability !== 'agents',
+            (capability) => capability !== 'agents' && capability !== 'health',
           ),
           model: modelId,
           name: t('agent.default.name'),
@@ -129,7 +129,6 @@ export function useCompleteOnboarding() {
       signal.throwIfAborted();
       await queryClient.invalidateQueries({ queryKey: ['/models'] });
       signal.throwIfAborted();
-      router.dismissAll();
       router.replace(chatHref({ agentId: agent.id, kind: 'draft' }));
     } catch {
       if (!signal.aborted)

@@ -1,0 +1,142 @@
+name: OTA Update
+
+# Publishes a JavaScript-only fix to installed release builds. Native changes need a version tag.
+# See docs/guides/app-updates.md.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or commit to publish (normally a hotfix branch from the release tag)
+        required: true
+        type: string
+      targets:
+        description: Release channels to update
+        required: true
+        default: all
+        type: choice
+        options: [all, apk, google-play, ios]
+      message:
+        description: Update message shown on EAS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One publication at a time; never cancel a run that may already have published.
+concurrency:
+  group: ota-update
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check native compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      targets: ${{ steps.source.outputs.targets }}
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      TARGETS: ${{ inputs.targets }}
+
+    steps:
+      - name: Checkout requested source
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve source and changes since the release tag
+        id: source
+        run: |
+          sha="$(git rev-parse HEAD)"
+          tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD)"
+          changes="$(git log --format='- %h %s' "$tag..HEAD")"
+          if [[ -z "$changes" ]]; then
+            echo "::error::$sha is the release tag $tag itself; its builds already contain this code."
+            exit 1
+          fi
+          if [[ "$TARGETS" == all ]]; then targets='["apk","google-play","ios"]'; else targets="[\"$TARGETS\"]"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+          {
+            echo "## OTA update from \`$sha\`"
+            echo
+            echo "Changes since \`$tag\` that installed builds will receive:"
+            echo
+            echo "$changes"
+            echo
+            echo "### Receiving builds"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Every target must pass before any target publishes.
+      - name: Require a release build with the same runtime on every channel
+        env:
+          SELECTED: ${{ steps.source.outputs.targets }}
+        run: |
+          for target in $(jq -r '.[]' <<< "$SELECTED"); do
+            node --import tsx scripts/publishUpdate.ts check "$target"
+          done
+
+  publish:
+    name: Publish ${{ matrix.target }}
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.check.outputs.targets) }}
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    steps:
+      - name: Checkout checked commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.check.outputs.sha }}
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.19.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish update and upload source maps
+        env:
+          TARGET: ${{ matrix.target }}
+          MESSAGE: ${{ inputs.message }}
+        run: node --import tsx scripts/publishUpdate.ts publish "$TARGET" --message "$MESSAGE"
+
+      - name: Keep the exact export
+        if: ${{ !cancelled() && hashFiles('dist/**') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-${{ matrix.target }}-${{ needs.check.outputs.sha }}-attempt-${{ github.run_attempt }}
+          path: dist/
+          retention-days: 90

@@ -193,10 +193,15 @@ type AgentTurnView = {
     | 'interrupted'
   assistantMessageId: string
   error: AgentErrorView | null
+  isRetrying?: boolean
   startedAt: string
   endedAt: string | null
 }
 ```
+
+`isRetrying` marks a running turn whose provider attempt failed and is being retried
+automatically. A failed attempt does not produce `error` or a transcript error until the run ends
+with a failure or interruption.
 
 Version 1 has one execution per turn and at most one active turn per Session. It has no execution
 entity, follow-up queue, steering, autonomous turn, or background task.
@@ -311,7 +316,9 @@ metadata that differs from the entry, and persists the authoritative name and me
 `purpose: 'input-attachment'`. A tool that produces an Office
 document, image, or edited file keeps its structured tool result and also emits a part with
 `purpose: 'artifact'` so the assistant message durably owns the reference. Artifact content is not
-automatically projected as a model attachment in later history. See
+automatically projected as a model attachment in later history. MCP results can separately retain
+explicit managed image references in `modelContent`; only those verified artifacts may be
+rehydrated for an image-capable model. `modelImages` bytes never cross this persisted protocol. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 
 Current JPEG, PNG, GIF, and WebP inputs are admitted only when the authoritative entry and blob,
@@ -338,6 +345,8 @@ persisted tool call, `output-available`, `denied`, `error`, and `interrupted` ar
 a paired normalized `RuntimeToolResult` JSON projection. A built-in result may retain a full display
 `value` plus an optional compact `modelValue` for replay when its instructions are already supplied
 in the system context; runtime-only instruction contribution metadata is not a protocol field.
+Optional MCP `modelContent`, host-issued `mcpApp` linkage, and `mcpSource` resource fingerprints
+survive persistence; these grant no authority without current connection and Agent checks.
 No finalized message contains a tool left
 in `input-streaming`, `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch
 persists only its requested target name and normalized error, never unresolved parameters.
@@ -628,6 +637,9 @@ Persisted transcript pagination remains a normal data read and is not duplicated
 snapshot. The snapshot contains only live state that must be composed over persisted messages. An
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
+
+`contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
+runs ahead of the threshold in the background does not delay the reply and is not reported.
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished

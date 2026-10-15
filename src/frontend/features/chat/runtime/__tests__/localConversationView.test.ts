@@ -104,6 +104,49 @@ test('a changed approval payload under the same id rejects the earlier decision'
   expect(f.client.respondApproval).toHaveBeenCalledWith('session', 'approval', 'deny');
 });
 
+test('health sharing identifies the executing turn model and never matches an MCP name collision', () => {
+  const assistant = {
+    ...message('answer'),
+    inferenceSnapshot: {
+      status: 'supported' as const,
+      snapshot: {
+        version: 1 as const,
+        model: {
+          uniqueModelId: 'openai::gpt-test' as never,
+          providerId: 'openai',
+          modelId: 'gpt-test',
+          name: 'Test',
+        },
+        parameters: {},
+        tools: [],
+      },
+    },
+  };
+  const healthApproval = {
+    ...approval,
+    toolRef: { source: 'builtin' as const, capabilityId: 'health_get_summary' },
+  };
+  const f = fixture({ liveMessages: [assistant], pendingApprovals: [healthApproval] });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing).toEqual({
+    providerId: 'openai',
+  });
+  f.set({ liveMessages: [] });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing).toEqual({
+    providerId: null,
+  });
+  f.set({
+    pendingApprovals: [
+      {
+        ...approval,
+        toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'health_get_summary' },
+      },
+    ],
+  });
+  expect(
+    f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing,
+  ).toBeUndefined();
+});
+
 test.each(
   [
     { selectedOptionIds: ['a'], text: 'more context', skipped: false },

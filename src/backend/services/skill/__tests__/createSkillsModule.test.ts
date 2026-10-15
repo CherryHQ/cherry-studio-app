@@ -3,10 +3,11 @@ import type {
   SkillInstallRecord,
 } from '@/backend/data/services/AgentGlobalSkillService';
 import type { Skill } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
-import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
-import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
+import type { SkillPackageFiles } from '../skillPackage';
+import type { SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
 jest.mock('@/backend/services/http', () => ({
@@ -14,24 +15,21 @@ jest.mock('@/backend/services/http', () => ({
   isHttpError: () => false,
 }));
 
-const reviewed: BundledSkillDefinition = {
+/** A package served by the fake GitHub source; `files` are read on every acquisition. */
+type TestPackage = { name: string; files: Record<string, string> };
+
+const reviewed: TestPackage = {
   name: 'notes',
-  revision: 1,
-  requiredTools: [],
-  workflowScope: 'Notes',
   files: {
     'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nWrite notes.',
     'references/t.md': '# T',
   },
 };
-const needsWeb: BundledSkillDefinition = {
-  ...reviewed,
+const needsWeb: TestPackage = {
   name: 'web-notes',
-  requiredTools: ['web_search'],
   files: { 'SKILL.md': '---\nname: web-notes\ndescription: Web notes\n---\nSearch first.' },
 };
-const needsPython: BundledSkillDefinition = {
-  ...reviewed,
+const needsPython: TestPackage = {
   name: 'py-notes',
   files: {
     'SKILL.md':
@@ -45,6 +43,8 @@ function createFakes() {
   const rows = new Map<string, Skill>();
   const published: string[] = [];
   const staged = new Set<string>();
+  const stageFiles = new Map<string, SkillPackageFiles>();
+  const revisionFiles = new Map<string, SkillPackageFiles>();
   let nextId = 1;
   const toSkill = (record: SkillInstallRecord, id: string, folderName: string): Skill => ({
     ...record,
@@ -92,25 +92,22 @@ function createFakes() {
       [...rows.values()].map((s) => ({ folderName: s.folderName, contentHash: s.contentHash })),
   } as unknown as AgentGlobalSkillService;
   const storage: SkillStorage = {
-    stage: async () => {
+    stage: async (files) => {
       const handle = `stage-${staged.size + 1}`;
       staged.add(handle);
+      stageFiles.set(handle, files);
       return handle;
     },
     discardStaging: (handle) => void staged.delete(handle),
     publish: async (handle, ref) => {
       if (!staged.delete(handle)) throw new Error('missing staging');
       published.push(`${ref.folderName}/${ref.contentHash}`);
+      revisionFiles.set(`${ref.folderName}/${ref.contentHash}`, stageFiles.get(handle)!);
+      stageFiles.delete(handle);
     },
     hasRevision: () => true,
-    readFile: async () => null,
-    listFiles: () => [],
-    removeSkill: (folderName) =>
-      void published.splice(
-        0,
-        published.length,
-        ...published.filter((p) => !p.startsWith(`${folderName}/`)),
-      ),
+    readFile: async (ref, path) =>
+      revisionFiles.get(`${ref.folderName}/${ref.contentHash}`)?.get(path) ?? null,
     reconcile: jest.fn(),
   };
   const fakes = {
@@ -131,39 +128,54 @@ const marketplace = {
   popular: async () => [],
   resolveUrl: async () => [],
   search: async () => [],
+  searchSkillsSh: async () => [],
+  listCherryin: async () => ({ items: [], nextOffset: null }),
+  getCherryin: async (): Promise<never> => {
+    throw new Error('unused');
+  },
 };
 
-function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
+function createModule(fakes: Fakes, packages: TestPackage[]) {
   const candidates = (): SkillSourceCandidate[] =>
-    createBundledSkillSource(definitions)
-      .list()
-      .map((candidate) => ({
-        ...candidate,
-        candidateId: `github:${candidate.name}@${candidate.version}`,
-        source: {
-          ...candidate.source,
-          registry: 'github',
-          locator: `github:owner/repo/${candidate.name}`,
-          url: `https://github.com/owner/repo/blob/main/${candidate.name}/SKILL.md`,
-        },
-      }));
+    packages.map((pkg) => ({
+      candidateId: `github:${pkg.name}`,
+      name: pkg.name,
+      description: '',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'github',
+        locator: `github:owner/repo/${pkg.name}`,
+        url: `https://github.com/owner/repo/blob/main/${pkg.name}/SKILL.md`,
+        revision: 'commit',
+      },
+    }));
   return createSkillsModule({
+    readAuthor: async () => 'Current user',
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
     db: fakes.db,
     skills: fakes.skills,
     storage: fakes.storage,
     sources: {
-      bundled: createBundledSkillSource([]),
       github: {
         registry: 'github',
         resolve: async () => {
           throw new Error('unused');
         },
-        acquire: (candidate, signal) =>
-          createBundledSkillSource(definitions).acquire(
-            { ...candidate, source: { ...candidate.source, locator: `bundled:${candidate.name}` } },
-            signal,
-          ),
+        acquire: async (candidate) => {
+          const pkg = packages.find((item) => item.name === candidate.name);
+          if (!pkg) throw new Error('not found');
+          return {
+            expectedName: pkg.name,
+            files: new Map(
+              Object.entries(pkg.files).map(([path, text]) => [
+                path,
+                new TextEncoder().encode(text),
+              ]),
+            ),
+          };
+        },
         resolveUrl: async (url) => {
           const candidate = candidates().find((item) => item.source.url === url);
           if (!candidate) throw new Error('not found');
@@ -176,33 +188,98 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
 }
 
 describe('createSkillsModule', () => {
-  it('refuses to expose system workflows as installable candidates', async () => {
+  it('preserves a CherryIN installation when an upstream update changes its declared name', async () => {
     const fakes = createFakes();
-    const bundled = createBundledSkillSource();
+    let name = 'notes';
+    const candidate = (): SkillSourceCandidate => ({
+      candidateId: `cherryin:${name}`,
+      name,
+      description: 'Take notes',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'cherryin',
+        locator: cherryinSkillLocator('notes', 'SKILL.md'),
+        url: cherryinSkillUrl('notes', 'SKILL.md'),
+        revision: name,
+      },
+    });
     const module = createSkillsModule({
-      marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
-      db: fakes.db,
-      skills: fakes.skills,
-      storage: fakes.storage,
+      ...fakes,
+      readAuthor: async () => 'Current user',
+      marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
       sources: {
-        bundled,
         github: {
-          ...bundled,
           registry: 'github',
+          resolve: async () => {
+            throw new Error('unused');
+          },
           resolveUrl: async () => {
             throw new Error('unused');
           },
+          acquire: async () => {
+            throw new Error('unused');
+          },
+        },
+        cherryin: {
+          registry: 'cherryin',
+          resolve: async () => candidate(),
+          acquire: async () => ({
+            expectedName: name,
+            files: new Map([
+              [
+                'SKILL.md',
+                new TextEncoder().encode(
+                  `---\nname: ${name}\ndescription: Take notes\n---\nWrite notes.`,
+                ),
+              ],
+            ]),
+          }),
         },
       },
       agentExists: async () => true,
     });
-    await expect(module.resolve('https://github.com/owner/repo')).rejects.toMatchObject({
-      code: 'source-invalid',
+    const [resolved] = await module.resolve(cherryinSkillUrl('notes'));
+    const installed = await module.install({ candidateId: resolved!.candidateId });
+    name = 'renamed-notes';
+    await expect(module.update(installed.id)).resolves.toMatchObject({
+      outcome: 'rejected',
+      inspection: { issues: [{ code: 'name-mismatch' }] },
     });
-    await expect(module.inspect(bundled.list()[0]!.candidateId)).rejects.toMatchObject({
-      code: 'candidate-expired',
+    expect(await fakes.skills.getById(installed.id)).toEqual(installed);
+    expect(fakes.published).toHaveLength(1);
+  });
+
+  it('saves generated content with the current author and no Agent binding', async () => {
+    const fakes = createFakes();
+    const module = createModule(fakes, []);
+    const changed = jest.fn();
+    module.subscribeChanges(changed);
+    const input = {
+      name: 'my-notes',
+      description: 'When asked for notes',
+      instructions: 'Keep notes concise.',
+      allowedTools: ['write_file'],
+      tags: ['notes'],
+    };
+    const saved = await module.create(input);
+    expect(saved).toMatchObject({
+      source: 'marketplace',
+      sourceUrl: null,
+      name: input.name,
+      author: 'Current user',
+      version: '1.0',
+      tags: ['notes'],
+      profile: { declaredTools: ['write_file'] },
     });
-    expect(fakes.rows.size).toBe(0);
+    expect(await module.instructionReader.read(saved)).toBe(input.instructions);
+    expect(fakes.bound).toEqual([]);
+    expect(changed).toHaveBeenCalledTimes(1);
+    await expect(module.create(input)).rejects.toMatchObject({ code: 'already-installed' });
+    expect(fakes.rows.size).toBe(1);
+    expect(fakes.bound).toEqual([]);
+    await expect(module.update(saved.id)).rejects.toMatchObject({ code: 'source-invalid' });
   });
 
   it('reads the complete instruction body from the supplied immutable revision without an interpreter', async () => {
@@ -252,7 +329,11 @@ describe('createSkillsModule', () => {
     expect(inspection).toMatchObject({
       issues: [],
       limitations: { scripts: [], unavailableTools: [] },
-      package: { name: 'notes', manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }] },
+      package: {
+        name: 'notes',
+        instructions: 'Write notes.',
+        manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }],
+      },
     });
     expect(await module.inspect(py!.candidateId)).toMatchObject({
       limitations: { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] },
@@ -307,16 +388,15 @@ describe('createSkillsModule', () => {
 
   it('updates despite execution limitations, preserves the last valid package, and uninstalls', async () => {
     const fakes = createFakes();
-    const definitions: BundledSkillDefinition[] = [reviewed];
-    const module = createModule(fakes, definitions);
+    const packages = [reviewed];
+    const module = createModule(fakes, packages);
     const [notes] = await module.resolve('https://github.com/owner/repo');
     const installed = await module.install({ candidateId: notes!.candidateId });
 
     expect(await module.update(installed.id)).toMatchObject({ outcome: 'unchanged' });
 
-    definitions[0] = {
+    packages[0] = {
       ...reviewed,
-      revision: 2,
       files: { ...reviewed.files, 'references/t.md': '# T2' },
     };
     const updated = await module.update(installed.id);
@@ -327,19 +407,16 @@ describe('createSkillsModule', () => {
     expect(updated.skill.contentHash).not.toBe(installed.contentHash);
     expect(fakes.published).toHaveLength(2);
 
-    definitions[0] = {
-      ...needsPython,
+    packages[0] = {
       name: 'notes',
-      revision: 3,
       files: { 'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun python.' },
     };
     const pythonUpdate = await module.update(installed.id);
     expect(pythonUpdate.outcome).toBe('updated');
     expect(fakes.published).toHaveLength(3);
 
-    definitions[0] = {
+    packages[0] = {
       ...reviewed,
-      revision: 4,
       files: { 'SKILL.md': '---\nname: notes\n---\nMissing description.' },
     };
     expect(await module.update(installed.id)).toMatchObject({
@@ -378,12 +455,12 @@ describe('createSkillsModule', () => {
       },
     };
     const module = createSkillsModule({
+      readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => [candidate] },
       db: fakes.db,
       skills: fakes.skills,
       storage: fakes.storage,
       sources: {
-        bundled: createBundledSkillSource([]),
         github: {
           registry: 'github',
           acquire: async () => ({

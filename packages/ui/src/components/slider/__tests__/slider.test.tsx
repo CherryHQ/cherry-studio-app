@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Slider } from '../slider';
 
-jest.mock('../slider-control', () => {
+jest.mock('../slider-control/slider-control', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
 
@@ -34,8 +34,10 @@ jest.mock('heroui-native', () => {
   return { Slider: Root };
 });
 
-const { SliderControl: FallbackSliderControl } = jest.requireActual('../slider-control.tsx') as {
-  SliderControl: (typeof import('../slider-control'))['SliderControl'];
+const { SliderControl: FallbackSliderControl } = jest.requireActual(
+  '../slider-control/slider-control.tsx',
+) as {
+  SliderControl: (typeof import('../slider-control/slider-control'))['SliderControl'];
 };
 
 describe('Slider', () => {
