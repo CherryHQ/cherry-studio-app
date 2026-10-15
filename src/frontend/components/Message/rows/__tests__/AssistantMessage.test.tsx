@@ -24,6 +24,15 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+const answeredQuestion = {
+  type: 'dynamic-tool',
+  toolName: 'ask_user_question',
+  toolCallId: 'question',
+  state: 'output-available',
+  input: {},
+  output: {},
+} as const;
+
 function createAssistantMessage(
   status: MessageListItem['status'],
   parts: MessageListItem['data']['parts'] = [],
@@ -161,6 +170,30 @@ describe('AssistantMessage', () => {
         },
       ],
       waiting: true,
+    },
+    {
+      name: 'reasoning above an answered question',
+      parts: [answeredQuestion, { type: 'reasoning', state: 'streaming', text: '' }],
+      waiting: true,
+    },
+    {
+      name: 'a running tool above an answered question',
+      parts: [
+        answeredQuestion,
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'input-available',
+          input: {},
+        },
+      ],
+      waiting: true,
+    },
+    {
+      name: 'an answer streaming below an answered question',
+      parts: [answeredQuestion, { type: 'text', state: 'streaming', text: 'Done.' }],
+      waiting: false,
     },
   ] satisfies {
     name: string;

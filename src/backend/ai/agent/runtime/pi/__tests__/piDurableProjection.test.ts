@@ -253,6 +253,7 @@ describe('Pi turn projection', () => {
           id: 3,
           conversationId: 1,
           kind: 'pi.tool-result',
+          data: { diagnostics: [] },
           model: [
             {
               role: 'toolResult',

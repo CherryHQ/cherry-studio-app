@@ -3,12 +3,14 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
 
+import type { CherryMessagePart } from '@/shared/data/types/message';
 import {
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
 } from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
+import { findLatestActivityPart, partitionMessageParts } from '../parts/partitionMessageParts';
 import {
   getToolDisplayState,
   isProviderWebSearchToolPart,
@@ -38,28 +40,7 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   const isPendingEmptyMessage =
     isPending &&
     !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
-  const latestActivityPart = isPending
-    ? parts.findLast(
-        (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
-      )
-    : undefined;
-  const isWaitingForResponse =
-    isPending &&
-    !parts.some((part) => {
-      if (part.type === 'data-compaction-anchor') return part.data.status === 'compacting';
-      if (isToolMessagePart(part)) {
-        return (
-          part.state === 'approval-requested' ||
-          (!isProviderWebSearchToolPart(part) && getToolDisplayState(part) === 'running')
-        );
-      }
-      return (
-        part === latestActivityPart &&
-        (part.type === 'text' || part.type === 'reasoning') &&
-        part.state === 'streaming' &&
-        (part.type === 'reasoning' || part.text.trim().length > 0)
-      );
-    });
+  const isWaitingForResponse = isPending && !showsLiveActivity(parts);
 
   if (isPendingEmptyMessage && message.imageGeneration) {
     return <PendingImageMessage settings={message.imageGeneration} />;
@@ -74,6 +55,35 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
     </>
   );
 });
+
+/**
+ * Whether an unfinished reply already shows its own live feedback. Body parts render after the
+ * process group, so process activity is hidden above any of them, such as an answered question.
+ */
+function showsLiveActivity(parts: readonly CherryMessagePart[]) {
+  const latestActivityPart = findLatestActivityPart(parts);
+  const { body } = partitionMessageParts(parts);
+  const isAtBottom = (part: CherryMessagePart) =>
+    body.length === 0 || body.some((item) => item.part === part);
+  return parts.some((part) => {
+    if (part.type === 'data-compaction-anchor') return part.data.status === 'compacting';
+    if (isToolMessagePart(part)) {
+      return (
+        part.state === 'approval-requested' ||
+        (!isProviderWebSearchToolPart(part) &&
+          getToolDisplayState(part) === 'running' &&
+          isAtBottom(part))
+      );
+    }
+    return (
+      part === latestActivityPart &&
+      (part.type === 'text' || part.type === 'reasoning') &&
+      part.state === 'streaming' &&
+      (part.type === 'reasoning' || part.text.trim().length > 0) &&
+      isAtBottom(part)
+    );
+  });
+}
 
 export const AssistantMessage = memo(function AssistantMessage({
   children,

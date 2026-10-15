@@ -188,7 +188,8 @@ render no separate message-list content.
 
 An unfinished assistant row keeps the pending indicator after completed content while waiting for
 the next model response. Active reasoning, visible running tools, and pending user questions or
-approvals supply their own feedback instead. An empty streaming reasoning block stays visible;
+approvals supply their own feedback instead, unless that reasoning or tool renders in the process
+group above a body part such as an answered question. An empty streaming reasoning block stays visible;
 settled empty blocks remain hidden. Retry feedback clears only when the next attempt has response
 content, not when an empty text or thinking block starts.
 
