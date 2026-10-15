@@ -125,7 +125,7 @@ export function useDeletePaintings() {
       restoreQuerySnapshot(queryClient, context?.paintingIds);
       restoreQuerySnapshot(queryClient, context?.paintings);
     },
-    refresh: ['/paintings', '/paintings/ids'],
+    refresh: ['/paintings', '/paintings/ids', '/painting-boards/*'],
   });
   const deletePaintings = mutation.trigger;
 

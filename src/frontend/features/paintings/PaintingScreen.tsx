@@ -28,7 +28,11 @@ export function PaintingScreen() {
   // the user has already navigated away, and the router's version would write
   // into whatever route is focused by then.
   const navigation = useNavigation<{
-    setParams(params: { handoff: undefined; paintingId: string | undefined }): void;
+    setParams(params: {
+      fileEntryId: undefined;
+      handoff: undefined;
+      paintingId: string | undefined;
+    }): void;
   }>();
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
@@ -43,10 +47,14 @@ export function PaintingScreen() {
     handoffToken ? undefined : getSingleRouteParam(params.paintingId),
   );
   const [initialFileEntryId] = useState(() => getSingleRouteParam(params.fileEntryId));
-  const paintingQuery = usePainting(opening);
+  const [openingBoardId, setOpeningBoardId] = useState<string>();
+  const paintingQuery = usePainting(openingBoardId ? undefined : opening);
+  // Once located, the board outlives the opening painting, which may be deleted on this page.
+  if (!openingBoardId && paintingQuery.data) setOpeningBoardId(paintingQuery.data.boardId);
   const constantWhite = useThemeColor('constant-white');
   const handleReceipt = useCallback(
-    (paintingId: string) => navigation.setParams({ handoff: undefined, paintingId }),
+    (paintingId: string | undefined) =>
+      navigation.setParams({ fileEntryId: undefined, handoff: undefined, paintingId }),
     [navigation],
   );
   const close = useCallback(() => {
@@ -55,7 +63,7 @@ export function PaintingScreen() {
   }, [router]);
 
   let content;
-  if (opening && !paintingQuery.data) {
+  if (opening && !openingBoardId) {
     content = paintingQuery.isLoading ? (
       <View className="flex-1 items-center justify-center">
         <Spinner
@@ -84,7 +92,7 @@ export function PaintingScreen() {
   } else {
     content = (
       <PaintingBoardWorkspace
-        boardId={paintingQuery.data?.boardId}
+        boardId={openingBoardId}
         handoff={handoff}
         initialFocus={
           opening ? { fileEntryId: initialFileEntryId, paintingId: opening } : undefined

@@ -36,7 +36,9 @@ composer's + menu, in one generation-settings sheet.
 
 Sending moves the focus to the new receipt, which shows the loader until its job finishes; the
 generation runs as a durable job, so the user can keep browsing the board. A stopped generation
-shows its failure in place with retry. Stopping a running generation discards its receipt.
+shows its failure in place with retry. Stopping a running generation discards its receipt. If it
+was the board's last generation, the next send creates a fresh board on the same page. Removing a
+version refreshes the board and moves its focus and route to a surviving generation.
 
 ## Notes
 

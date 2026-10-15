@@ -82,7 +82,7 @@ export function PaintingBoardWorkspace({
   handoff?: PaintingDraftHandoff;
   initialFocus?: { fileEntryId?: string; paintingId: string };
   onClose: () => void;
-  onReceipt: (paintingId: string) => void;
+  onReceipt: (paintingId: string | undefined) => void;
 }) {
   return (
     <ComposerSessionProvider
@@ -114,16 +114,16 @@ function PaintingBoardContent({
   initialFocus?: { fileEntryId?: string; paintingId: string };
   initialParamValues?: ImageParamDraft;
   onClose: () => void;
-  onReceipt: (paintingId: string) => void;
+  onReceipt: (paintingId: string | undefined) => void;
 }) {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const [boardId, setBoardId] = useState(initialBoardId);
+  const generation = usePaintingBoardGeneration(initialBoardId);
+  const { boardId } = generation;
   const board = usePaintingBoard(boardId);
-  const generation = usePaintingBoardGeneration();
   const deletePaintings = useDeletePaintings();
   const reportError = useComposerSendError({ sendFailedLabel: t('painting.input.generateFailed') });
   const { setDraft } = useComposerActions();
@@ -184,8 +184,7 @@ function PaintingBoardContent({
 
   const handleGenerate = useCallback(
     async (input: PaintingInputSubmission) => {
-      const started = await generation.generate(input, boardId);
-      if (!boardId) setBoardId(started.boardId);
+      const started = await generation.generate(input);
       if (annotationKey && input.attachments.some((item) => item.fileEntryId === annotationKey)) {
         annotation.clearSubmitted(annotationKey);
       }
@@ -194,38 +193,43 @@ function PaintingBoardContent({
       onReceipt(started.paintingId);
       return started;
     },
-    [annotation, annotationKey, boardId, focusNode, generation, onReceipt],
+    [annotation, annotationKey, focusNode, generation, onReceipt],
+  );
+
+  const handlePaintingRemoved = useCallback(
+    (paintingId: string) => {
+      const parents = paintingNodeParents(board.graph, paintingNodeId(paintingId));
+      const nextPainting =
+        board.paintings.find(({ id }) => parents.includes(paintingNodeId(id))) ??
+        board.paintings.findLast(({ id }) => id !== paintingId);
+      setPending(null);
+      setFocus(nextPainting ? { imageIndex: 0, nodeId: paintingNodeId(nextPainting.id) } : null);
+      onReceipt(nextPainting?.id);
+    },
+    [board.graph, board.paintings, onReceipt],
   );
 
   const handleCancel = useCallback(() => {
     if (!focusedPainting) return;
-    const nodeId = paintingNodeId(focusedPainting.id);
-    const parent = paintingNodeParents(board.graph, nodeId).find((id) =>
-      id.startsWith('painting:'),
-    );
     void generation
-      .cancel(focusedPainting.id)
-      .then(() => setFocus(parent ? { imageIndex: 0, nodeId: parent } : null))
+      .cancel(focusedPainting.id, board.paintings.length === 1)
+      .then(() => handlePaintingRemoved(focusedPainting.id))
       .catch(reportError);
-  }, [board.graph, focusedPainting, generation, reportError]);
+  }, [board.paintings.length, focusedPainting, generation, handlePaintingRemoved, reportError]);
 
   const confirmDeleteNode = useCallback(() => {
     if (!focusedPainting) return;
-    const nodeId = paintingNodeId(focusedPainting.id);
     alert.confirm({
       confirmLabel: t('common.delete'),
       description: t('painting.focus.deleteMessage', {
         count: focusedPainting.files.output.length,
       }),
       onConfirm: async () => {
-        const parent = paintingNodeParents(board.graph, nodeId).find((id) =>
-          id.startsWith('painting:'),
-        );
         const isLast = board.paintings.length <= 1;
         try {
           await deletePaintings([focusedPainting.id]);
           if (isLast) onClose();
-          else setFocus(parent ? { imageIndex: 0, nodeId: parent } : null);
+          else handlePaintingRemoved(focusedPainting.id);
         } catch {
           toast.show({ label: t('painting.focus.deleteFailed'), variant: 'danger' });
         }
@@ -235,10 +239,10 @@ function PaintingBoardContent({
     });
   }, [
     alert,
-    board.graph,
     board.paintings.length,
     deletePaintings,
     focusedPainting,
+    handlePaintingRemoved,
     onClose,
     t,
     toast,

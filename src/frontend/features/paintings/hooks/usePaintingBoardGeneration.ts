@@ -1,6 +1,6 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 import type { PaintingInputSubmission } from '@/frontend/components/PaintingInput';
 import { queryKeys, useBackendModule } from '@/frontend/data';
@@ -49,7 +49,8 @@ export function retryableJobInput(job: JobSnapshot | undefined): RetryableJobInp
  * jobs: the board observes them through the job ledger, so several can run at
  * once and survive leaving the screen.
  */
-export function usePaintingBoardGeneration() {
+export function usePaintingBoardGeneration(initialBoardId: string | undefined) {
+  const [boardId, setBoardId] = useState(initialBoardId);
   const paintings = useBackendModule('paintings');
   const queryClient = useQueryClient();
   const deletePaintings = useDeletePaintings();
@@ -65,7 +66,7 @@ export function usePaintingBoardGeneration() {
   }, [queryClient]);
 
   const generate = useCallback(
-    async (input: PaintingInputSubmission, boardId: string | undefined) => {
+    async (input: PaintingInputSubmission) => {
       const started: PaintingGenerationStart = await paintings.startGeneration({
         ...(boardId ? { boardId } : {}),
         ...(input.displayPrompt ? { brief: input.displayPrompt } : {}),
@@ -76,18 +77,21 @@ export function usePaintingBoardGeneration() {
         paramValues: input.paramValues,
         prompt: input.prompt,
       });
+      setBoardId(started.boardId);
       refresh();
       return started;
     },
-    [paintings, refresh],
+    [boardId, paintings, refresh],
   );
 
   /** Stopping discards the receipt: a generation nobody waited for leaves no node behind. */
   const cancel = useCallback(
-    async (paintingId: string) => {
+    async (paintingId: string, isLastPainting: boolean) => {
       const job = activeByPaintingId.get(paintingId);
       if (job) await paintings.cancelGeneration(job.id);
       await deletePaintings([paintingId]);
+      // Removing the final receipt also deletes its board. The next send must create a new one.
+      if (isLastPainting) setBoardId(undefined);
       refresh();
     },
     [activeByPaintingId, deletePaintings, paintings, refresh],
@@ -115,5 +119,5 @@ export function usePaintingBoardGeneration() {
     [paintings, refresh],
   );
 
-  return { cancel, generate, retry };
+  return { boardId, cancel, generate, retry };
 }
