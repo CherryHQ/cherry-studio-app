@@ -333,6 +333,8 @@
   "chat.history.loading": "Se încarcă mesajele...",
   "chat.history.messageUnavailable": "Acest mesaj nu mai este disponibil.",
   "chat.history.returnToLatest": "Reveniți la cele mai recente mesaje",
+  "chat.input.action.collapseEditor": "Restrânge editorul",
+  "chat.input.action.expandEditor": "Extinde editorul",
   "chat.input.action.sendMessage": "Trimite mesaj",
   "chat.input.action.stopGenerating": "Opriți generarea",
   "chat.input.attachmentNoText": "Nu a fost găsit niciun text care poate fi citit în document. Fișierele scanate sau numai imagini necesită recunoaștere text înainte de trimitere.",

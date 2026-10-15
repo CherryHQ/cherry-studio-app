@@ -22,6 +22,8 @@ jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressArea: ({ children, ...props }: { children?: React.ReactNode }) =>
     jest.requireActual('react').createElement('BackgroundPressArea', props, children),
   composerContentGap: 8,
+  Composer: { Expansion: ({ children }: { children?: React.ReactNode }) => children },
+  useComposerExpansion: () => null,
   ContentState: {
     Error: () => null,
   },
@@ -178,7 +180,7 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('keeps the composer in normal flow and shares only keyboard geometry', () => {
+  it('reserves the expandable composer separately from message-list keyboard geometry', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
@@ -188,7 +190,7 @@ describe('ChatScreen composer dock wiring', () => {
       keyboardOffset: 26,
     });
     expect(dockProps).toMatchObject({
-      layoutMode: 'flow',
+      layoutMode: 'expandable',
     });
     expect(dockProps?.onHeightChange).toBeUndefined();
     expect(chatInputProps).toMatchObject({

@@ -325,6 +325,8 @@
   "chat.history.loading": "正在加載消息…",
   "chat.history.messageUnavailable": "這條消息已不存在。",
   "chat.history.returnToLatest": "返回最新消息",
+  "chat.input.action.collapseEditor": "收合編輯區",
+  "chat.input.action.expandEditor": "展開編輯區",
   "chat.input.action.sendMessage": "發送消息",
   "chat.input.action.stopGenerating": "停止生成",
   "chat.input.attachmentNoText": "文檔中沒有可讀取的文字。掃描件或純圖片文檔需要先進行文字識別再發送。",

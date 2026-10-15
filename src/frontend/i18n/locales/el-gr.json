@@ -329,6 +329,8 @@
   "chat.history.loading": "Φόρτωση μηνυμάτων...",
   "chat.history.messageUnavailable": "Αυτό το μήνυμα δεν είναι πλέον διαθέσιμο.",
   "chat.history.returnToLatest": "Επιστροφή στα πιο πρόσφατα μηνύματα",
+  "chat.input.action.collapseEditor": "Σύμπτυξη επεξεργαστή",
+  "chat.input.action.expandEditor": "Ανάπτυξη επεξεργαστή",
   "chat.input.action.sendMessage": "Αποστολή μηνύματος",
   "chat.input.action.stopGenerating": "Σταματήστε τη δημιουργία",
   "chat.input.attachmentNoText": "Δεν βρέθηκε αναγνώσιμο κείμενο στο έγγραφο. Τα σαρωμένα αρχεία ή τα αρχεία μόνο με εικόνα χρειάζονται αναγνώριση κειμένου πριν από την αποστολή.",

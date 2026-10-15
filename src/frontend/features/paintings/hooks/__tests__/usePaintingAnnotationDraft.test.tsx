@@ -46,6 +46,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
     return null;
   },
   useToast: () => ({ toast: { show: jest.fn() } }),
+  useComposerExpansion: () => null,
   useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));

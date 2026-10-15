@@ -333,6 +333,8 @@
   "chat.history.loading": "Chargement des messages...",
   "chat.history.messageUnavailable": "Ce message n'est plus disponible.",
   "chat.history.returnToLatest": "Retour aux derniers messages",
+  "chat.input.action.collapseEditor": "Réduire l’éditeur",
+  "chat.input.action.expandEditor": "Agrandir l’éditeur",
   "chat.input.action.sendMessage": "Envoyer un message",
   "chat.input.action.stopGenerating": "Arrêter de générer",
   "chat.input.attachmentNoText": "Aucun texte lisible n'a été trouvé dans le document. Les fichiers numérisés ou contenant uniquement des images nécessitent une reconnaissance de texte avant d'être envoyés.",

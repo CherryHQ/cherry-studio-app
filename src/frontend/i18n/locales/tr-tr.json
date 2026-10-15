@@ -329,6 +329,8 @@
   "chat.history.loading": "Mesajlar yükleniyor...",
   "chat.history.messageUnavailable": "Bu mesaj artık mevcut değil.",
   "chat.history.returnToLatest": "En son mesajlara dön",
+  "chat.input.action.collapseEditor": "Düzenleyiciyi daralt",
+  "chat.input.action.expandEditor": "Düzenleyiciyi genişlet",
   "chat.input.action.sendMessage": "Mesaj gönder",
   "chat.input.action.stopGenerating": "Oluşturmayı durdur",
   "chat.input.attachmentNoText": "Belgede okunabilir metin bulunamadı. Taranan veya yalnızca resim içeren dosyaların gönderilmeden önce metin tanıması gerekir.\n\n[0003]] Bir ek mevcut değil veya değişti.",

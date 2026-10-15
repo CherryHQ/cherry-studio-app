@@ -329,6 +329,8 @@
   "chat.history.loading": "Nachrichten werden geladen...",
   "chat.history.messageUnavailable": "Diese Nachricht ist nicht mehr verfügbar.",
   "chat.history.returnToLatest": "Zurück zu den neuesten Nachrichten",
+  "chat.input.action.collapseEditor": "Editor verkleinern",
+  "chat.input.action.expandEditor": "Editor erweitern",
   "chat.input.action.sendMessage": "Nachricht senden",
   "chat.input.action.stopGenerating": "Stoppen Sie die Generierung",
   "chat.input.attachmentNoText": "Im Dokument wurde kein lesbarer Text gefunden. Gescannte oder reine Bilddateien benötigen vor dem Senden eine Texterkennung.",

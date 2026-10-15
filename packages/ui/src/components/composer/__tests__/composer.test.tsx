@@ -5,6 +5,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Composer } from '../components/composer';
 import type { ComposerInputHandle, ComposerProps } from '../composer.types';
 
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
+
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = require('tailwind-merge');
 

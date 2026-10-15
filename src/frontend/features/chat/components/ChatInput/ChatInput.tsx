@@ -34,7 +34,7 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
+import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
@@ -360,15 +360,17 @@ function TextChatInput({
                     streaming={isBusy}
                     testID="chat-composer"
                   >
-                    <View
-                      accessibilityElementsHidden={isPickerVisible}
-                      importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
-                      pointerEvents={isPickerVisible ? 'none' : 'auto'}
-                      style={isPickerVisible ? foldedAttachmentsStyle : undefined}
-                    >
-                      <ComposerAttachments />
-                      {mode === 'standard' ? <McpAppContextNotice /> : null}
-                    </View>
+                    <ChatInputAccessories>
+                      <View
+                        accessibilityElementsHidden={isPickerVisible}
+                        importantForAccessibility={isPickerVisible ? 'no-hide-descendants' : 'auto'}
+                        pointerEvents={isPickerVisible ? 'none' : 'auto'}
+                        style={isPickerVisible ? foldedAttachmentsStyle : undefined}
+                      >
+                        <ComposerAttachments />
+                        {mode === 'standard' ? <McpAppContextNotice /> : null}
+                      </View>
+                    </ChatInputAccessories>
                     <ChatInputSurface
                       streaming={isBusy}
                       placeholder={

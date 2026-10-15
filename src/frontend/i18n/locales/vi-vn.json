@@ -325,6 +325,8 @@
   "chat.history.loading": "Đang tải tin nhắn...",
   "chat.history.messageUnavailable": "Tin nhắn này không còn tồn tại.",
   "chat.history.returnToLatest": "Quay lại tin nhắn mới nhất",
+  "chat.input.action.collapseEditor": "Thu gọn trình soạn thảo",
+  "chat.input.action.expandEditor": "Mở rộng trình soạn thảo",
   "chat.input.action.sendMessage": "Gửi tin nhắn",
   "chat.input.action.stopGenerating": "Dừng tạo",
   "chat.input.attachmentNoText": "Không tìm thấy văn bản có thể đọc được trong tài liệu. Các tệp được quét hoặc chỉ có hình ảnh cần nhận dạng văn bản trước khi gửi.",

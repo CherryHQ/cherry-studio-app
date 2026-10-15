@@ -1,4 +1,4 @@
-import { Composer, useToast } from '@cherrystudio/ui/components';
+import { Composer, useComposerExpansion, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -62,6 +62,8 @@ export function ComposerSurface({
 }: ComposerSurfaceProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const expansion = useComposerExpansion();
+  const collapseEditor = expansion?.actions.collapse;
   const reportSendError = useComposerSendError({
     getSendErrorLabel,
     sendFailedLabel: labels?.sendFailed,
@@ -96,6 +98,7 @@ export function ComposerSurface({
 
     setDraft('');
     clearAttachments();
+    collapseEditor?.();
     if (dismissKeyboardOnSend) {
       // Native blur preserves the system keyboard transition that the dock follows.
       dismissInput();
@@ -115,6 +118,7 @@ export function ComposerSurface({
   }, [
     beginSendAttempt,
     clearAttachments,
+    collapseEditor,
     dismissInput,
     dismissKeyboardOnSend,
     endSendAttempt,

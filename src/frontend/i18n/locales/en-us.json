@@ -329,6 +329,8 @@
   "chat.history.loading": "Loading messages...",
   "chat.history.messageUnavailable": "This message is no longer available.",
   "chat.history.returnToLatest": "Return to latest messages",
+  "chat.input.action.collapseEditor": "Collapse editor",
+  "chat.input.action.expandEditor": "Expand editor",
   "chat.input.action.sendMessage": "Send message",
   "chat.input.action.stopGenerating": "Stop generating",
   "chat.input.attachmentNoText": "No readable text was found in the document. Scanned or image-only files need text recognition before sending.",

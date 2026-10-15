@@ -1,4 +1,5 @@
-import { type PropsWithChildren } from 'react';
+import { useComposerExpansion } from '@cherrystudio/ui/components';
+import { type PropsWithChildren, useEffect } from 'react';
 
 import { ComposerProvider } from '../context/ComposerProvider';
 import { useManagedComposerAttachments } from '../hooks/useManagedComposerAttachments';
@@ -17,6 +18,9 @@ export function ComposerSessionProvider({
   initialDraft,
 }: ComposerSessionProviderProps) {
   const attachmentStore = useManagedComposerAttachments(initialAttachments);
+  const collapseEditor = useComposerExpansion()?.actions.collapse;
+
+  useEffect(() => collapseEditor?.(), [collapseEditor]);
 
   return (
     <ComposerProvider attachmentStore={attachmentStore} initialDraft={initialDraft}>

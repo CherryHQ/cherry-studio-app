@@ -337,6 +337,8 @@
   "chat.history.loading": "Загрузка сообщений...",
   "chat.history.messageUnavailable": "Это сообщение больше недоступно.",
   "chat.history.returnToLatest": "Вернуться к последним сообщениям",
+  "chat.input.action.collapseEditor": "Свернуть редактор",
+  "chat.input.action.expandEditor": "Развернуть редактор",
   "chat.input.action.sendMessage": "Отправить сообщение",
   "chat.input.action.stopGenerating": "Прекратить создание",
   "chat.input.attachmentNoText": "В документе не найдено читаемого текста. Перед отправкой отсканированных файлов или файлов, содержащих только изображения, требуется распознавание текста.",
