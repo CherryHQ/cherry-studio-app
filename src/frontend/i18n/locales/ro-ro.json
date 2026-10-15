@@ -1610,7 +1610,6 @@
   "settings.permissions.purpose.photos": "Folosit pentru a afișa fotografiile recente.",
   "settings.permissions.purpose.reminders": "Vizualizează și gestionează Mementourile Apple la cererea dvs.",
   "settings.permissions.readAccess": "Permite accesul la citire",
-  "settings.permissions.reason.native-unavailable": "Actualizați aplicația pentru a gestiona accesul la sănătate",
   "settings.permissions.reason.service-disabled": "Serviciile de localizare sunt dezactivate",
   "settings.permissions.reason.unsupported": "Acest dispozitiv nu acceptă această caracteristică",
   "settings.permissions.requestHint": "Afișează cererea de permisiune de sistem",

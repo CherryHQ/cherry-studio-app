@@ -1598,7 +1598,6 @@
   "settings.permissions.purpose.photos": "Used to show your recent photos.",
   "settings.permissions.purpose.reminders": "View and manage Apple Reminders when you ask.",
   "settings.permissions.readAccess": "Allow read access",
-  "settings.permissions.reason.native-unavailable": "Update the app to manage health access",
   "settings.permissions.reason.service-disabled": "Location services are off",
   "settings.permissions.reason.unsupported": "This device does not support this feature",
   "settings.permissions.requestHint": "Show the system permission request",

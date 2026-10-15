@@ -13,6 +13,5 @@ HealthKit exposes whether authorization needs to be requested, never whether rea
 completed inquiry is `requested`, not `granted`; an empty query cannot distinguish denial from no
 records. Permission management instructions point users to Apple Health.
 
-Native changes require a new development build. JavaScript updates alone cannot install this
-bridge; an older client reports `native-unavailable` rather than claiming the device lacks health
-support.
+Native changes require a new development build. The fingerprint runtime version keeps OTA updates
+containing health code away from clients built without this bridge.

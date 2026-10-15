@@ -1586,7 +1586,6 @@
   "settings.permissions.purpose.photos": "最近の写真を表示するために使用します。",
   "settings.permissions.purpose.reminders": "指示に応じて Apple リマインダーを表示・管理します。",
   "settings.permissions.readAccess": "読み取りアクセスを許可する",
-  "settings.permissions.reason.native-unavailable": "アプリを更新して健康へのアクセスを管理する",
   "settings.permissions.reason.service-disabled": "位置情報サービスがオフになっています",
   "settings.permissions.reason.unsupported": "このデバイスはこの機能をサポートしていません",
   "settings.permissions.requestHint": "システム許可リクエストを表示します",

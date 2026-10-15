@@ -1622,7 +1622,6 @@
   "settings.permissions.purpose.photos": "Используется для показа ваших недавних фото.",
   "settings.permissions.purpose.reminders": "Просмотр и управление Напоминаниями Apple по вашему запросу.",
   "settings.permissions.readAccess": "Разрешить доступ на чтение",
-  "settings.permissions.reason.native-unavailable": "Обновите приложение, чтобы управлять доступом к медицинским данным.",
   "settings.permissions.reason.service-disabled": "Службы определения местоположения отключены",
   "settings.permissions.reason.unsupported": "Данное устройство не поддерживает данную функцию",
   "settings.permissions.requestHint": "Показать запрос разрешения системы",

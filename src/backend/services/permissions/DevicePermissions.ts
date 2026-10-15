@@ -212,7 +212,7 @@ export class DevicePermissions implements PermissionsModule {
     if (Platform.OS !== 'ios') return fill(unsupported);
     try {
       const health = this.loadHealthAccess();
-      if (!health) return fill({ ...failed, reason: 'native-unavailable' });
+      if (!health) throw new Error('Health access native module is missing');
       const availability = await health.getAvailability();
       if (availability !== 'available') {
         return fill({ state: 'unavailable', canAskAgain: false, reason: availability });

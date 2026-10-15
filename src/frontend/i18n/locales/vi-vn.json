@@ -1586,7 +1586,6 @@
   "settings.permissions.purpose.photos": "Dùng để hiển thị ảnh gần đây của bạn.",
   "settings.permissions.purpose.reminders": "Xem và quản lý Lời nhắc của Apple theo yêu cầu của bạn.",
   "settings.permissions.readAccess": "Cho phép truy cập đọc",
-  "settings.permissions.reason.native-unavailable": "Cập nhật ứng dụng quản lý quyền truy cập sức khỏe",
   "settings.permissions.reason.service-disabled": "Dịch vụ định vị đang tắt",
   "settings.permissions.reason.unsupported": "Thiết bị này không hỗ trợ tính năng này",
   "settings.permissions.requestHint": "Hiển thị yêu cầu cấp phép hệ thống",

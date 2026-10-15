@@ -217,10 +217,10 @@ describe('DevicePermissions', () => {
     expect(health.getStatuses).not.toHaveBeenCalled();
   });
 
-  test('a missing native module needs an app update, not another permission request', async () => {
+  test('a missing native module fails closed as a lookup error', async () => {
     service = new DevicePermissions(() => null);
     await expect(service.getStatuses(['health.steps.read'])).resolves.toEqual({
-      'health.steps.read': { state: 'error', canAskAgain: false, reason: 'native-unavailable' },
+      'health.steps.read': { state: 'error', canAskAgain: false },
     });
   });
 

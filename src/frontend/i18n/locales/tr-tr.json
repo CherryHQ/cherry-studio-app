@@ -1598,7 +1598,6 @@
   "settings.permissions.purpose.photos": "Son fotoğraflarınızı göstermek için kullanılır.",
   "settings.permissions.purpose.reminders": "İsteğiniz üzerine Apple Hatırlatıcılar'ı görüntüler ve yönetir.",
   "settings.permissions.readAccess": "Okuma erişimine izin ver",
-  "settings.permissions.reason.native-unavailable": "Sağlık erişimini yönetmek için uygulamayı güncelleyin",
   "settings.permissions.reason.service-disabled": "Konum hizmetleri kapalı",
   "settings.permissions.reason.unsupported": "Bu cihaz bu özelliği desteklemiyor",
   "settings.permissions.requestHint": "Sistem izin isteğini göster",

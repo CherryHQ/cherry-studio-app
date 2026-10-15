@@ -61,8 +61,5 @@ describe('permission settings', () => {
     expect(
       getPermissionAction({ state: 'unavailable', canAskAgain: false, reason: 'unsupported' }),
     ).toBeUndefined();
-    expect(
-      getPermissionAction({ state: 'error', canAskAgain: false, reason: 'native-unavailable' }),
-    ).toBeUndefined();
   });
 });

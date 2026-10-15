@@ -1586,7 +1586,6 @@
   "settings.permissions.purpose.photos": "用於顯示最近的照片。",
   "settings.permissions.purpose.reminders": "按你的指令查看和管理提醒事項。",
   "settings.permissions.readAccess": "允許讀取",
-  "settings.permissions.reason.native-unavailable": "請更新應用以管理健康訪問",
   "settings.permissions.reason.service-disabled": "系統定位服務已關閉",
   "settings.permissions.reason.unsupported": "此設備不支持此功能",
   "settings.permissions.requestHint": "顯示系統授權請求",

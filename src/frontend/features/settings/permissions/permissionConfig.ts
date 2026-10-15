@@ -80,8 +80,7 @@ export function isPermissionSupported(kind: PermissionKind, statuses: Permission
 export function getPermissionAction(
   status: DevicePermissionStatus | undefined,
 ): PermissionAction | undefined {
-  if (!status || status.reason === 'unsupported' || status.reason === 'native-unavailable')
-    return undefined;
+  if (!status || status.reason === 'unsupported') return undefined;
   if (status.state === 'error') return 'retry';
   if (canRequestDevicePermission(status)) return 'request';
   return 'open-settings';

@@ -1598,7 +1598,6 @@
   "settings.permissions.purpose.photos": "Wird verwendet, um Ihre neuesten Fotos anzuzeigen.",
   "settings.permissions.purpose.reminders": "Apple Erinnerungen auf Ihre Anweisung anzeigen und verwalten.",
   "settings.permissions.readAccess": "Lesezugriff zulassen",
-  "settings.permissions.reason.native-unavailable": "Aktualisieren Sie die App, um den Gesundheitszugriff zu verwalten",
   "settings.permissions.reason.service-disabled": "Ortungsdienste sind deaktiviert",
   "settings.permissions.reason.unsupported": "Dieses Gerät unterstützt diese Funktion nicht",
   "settings.permissions.requestHint": "Zeigt die Systemberechtigungsanfrage an",

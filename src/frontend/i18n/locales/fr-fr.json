@@ -1610,7 +1610,6 @@
   "settings.permissions.purpose.photos": "Utilisé pour afficher vos photos récentes.",
   "settings.permissions.purpose.reminders": "Consulte et gère Rappels d’Apple à votre demande.",
   "settings.permissions.readAccess": "Autoriser l'accès en lecture",
-  "settings.permissions.reason.native-unavailable": "Mettre à jour l'application pour gérer l'accès à la santé",
   "settings.permissions.reason.service-disabled": "Les services de localisation sont désactivés",
   "settings.permissions.reason.unsupported": "Cet appareil ne prend pas en charge cette fonctionnalité",
   "settings.permissions.requestHint": "Afficher la demande d'autorisation du système",

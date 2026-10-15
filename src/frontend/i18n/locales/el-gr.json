@@ -1598,7 +1598,6 @@
   "settings.permissions.purpose.photos": "Χρησιμοποιείται για την εμφάνιση των πρόσφατων φωτογραφιών σας.",
   "settings.permissions.purpose.reminders": "Προβολή και διαχείριση των Υπενθυμίσεων Apple όταν το ζητάτε.",
   "settings.permissions.readAccess": "Να επιτρέπεται η πρόσβαση ανάγνωσης",
-  "settings.permissions.reason.native-unavailable": "Ενημερώστε την εφαρμογή για να διαχειριστείτε την πρόσβαση υγείας",
   "settings.permissions.reason.service-disabled": "Οι υπηρεσίες τοποθεσίας είναι απενεργοποιημένες",
   "settings.permissions.reason.unsupported": "Αυτή η συσκευή δεν υποστηρίζει αυτήν τη δυνατότητα",
   "settings.permissions.requestHint": "Εμφάνιση του αιτήματος άδειας συστήματος",
