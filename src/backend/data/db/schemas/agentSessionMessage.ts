@@ -8,14 +8,16 @@ import type {
   JsonValue,
 } from '@/shared/contracts/agent';
 import type { MessageStats } from '@/shared/data/types/message';
+import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentSessionTable } from './agentSession';
 import { userModelTable } from './userModel';
 
-/** Persisted protocol parts. The database migration journal owns format upgrades. */
+/** Protocol parts and optional reading aids. The migration journal owns format upgrades. */
 export type AgentMessageData = {
   parts: AgentMessagePart[];
+  translations?: MessageTranslations;
 };
 
 /**

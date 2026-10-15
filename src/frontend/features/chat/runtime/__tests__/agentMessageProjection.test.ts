@@ -28,6 +28,35 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('a stale history page cannot replace newer message-owned translations', () => {
+    const older = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '旧译文', createdAt: 1 } },
+    };
+    const newer = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '新译文', createdAt: 2 } },
+    };
+    const persisted = message('answer', { status: 'success', translations: older });
+    const live = message('answer', {
+      status: 'success',
+      translations: newer,
+      updatedAt: '2026-08-25T00:00:01.000Z',
+    });
+    expect(mergeAgentMessageViews([persisted], [live])[0]).toBe(live);
+  });
+  test('keeps newly persisted translations when an older live snapshot covers the same message', () => {
+    const translations = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '译文', createdAt: 1 } },
+    };
+    const persisted = message('answer', { status: 'success', translations });
+    const live = message('answer', { status: 'success' });
+    const merged = mergeAgentMessageViews([persisted], [live]);
+    expect(toAgentMessageListItem(merged[0])?.data.translations).toEqual(translations);
+    expect(merged[0].parts).toBe(live.parts);
+    expect(live.translations).toBeUndefined();
+  });
   test.each(['output-available', 'denied'] as const)(
     'preserves canonical MCP identity for %s tools with opaque runtime names',
     (state) => {

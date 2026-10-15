@@ -353,16 +353,19 @@ export function toAgentMessageListItem(
   const model = resolveMessageModel(message);
   const item = {
     createdAt: message.createdAt,
-    data: toDisplayParts(
-      message.status === 'cancelled'
-        ? message.parts.filter(
-            (part) =>
-              part.type !== 'data-error' ||
-              (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
-          )
-        : message.parts,
-      cache,
-    ),
+    data: {
+      ...toDisplayParts(
+        message.status === 'cancelled'
+          ? message.parts.filter(
+              (part) =>
+                part.type !== 'data-error' ||
+                (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
+            )
+          : message.parts,
+        cache,
+      ),
+      ...(message.translations ? { translations: message.translations } : {}),
+    },
     id: message.id,
     ...(message.inferenceSnapshot?.status === 'supported' &&
     message.inferenceSnapshot.snapshot.imageGeneration
@@ -439,7 +442,15 @@ export function mergeAgentMessageViews(
     while (liveIndex < newLive.length && compareMessages(newLive[liveIndex], message) < 0) {
       merged.push(newLive[liveIndex++]);
     }
-    merged.push(liveById.get(message.id) ?? message);
+    const active = liveById.get(message.id);
+    merged.push(
+      active &&
+        message.translations &&
+        active.translations !== message.translations &&
+        (!active.translations || message.updatedAt >= active.updatedAt)
+        ? { ...active, translations: message.translations }
+        : (active ?? message),
+    );
   }
   merged.push(...newLive.slice(liveIndex));
   return merged;

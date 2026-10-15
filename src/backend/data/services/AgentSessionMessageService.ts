@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
@@ -10,7 +11,15 @@ import {
   type AgentSessionMessagePage,
   type ListAgentSessionMessagesQueryParams,
   ListAgentSessionMessagesQuerySchema,
+  SaveAgentMessageTranslationSchema,
+  type SaveAgentMessageTranslation,
 } from '@/shared/data/api/schemas/agentSessionMessages';
+import {
+  readMessageTranslations,
+  type MessageTranslations,
+} from '@/shared/data/types/messageTranslation';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import {
   agentMessageViewColumns,
@@ -20,10 +29,62 @@ import {
 } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
-/** SQL-only window and selected-ID reads for the durable linear transcript. */
+/** Durable transcript reads and message-owned reading aids. */
 export class AgentSessionMessageService {
   private get db() {
     return application.get('DbService').getDb();
+  }
+
+  /** Merge one completed language without replacing message parts or other languages. */
+  async saveTranslation(
+    sessionId: string,
+    messageId: string,
+    input: SaveAgentMessageTranslation,
+  ): Promise<MessageTranslations> {
+    SaveAgentMessageTranslationSchema.parse(input);
+    const translations = await application.get('DbService').withWriteTx(async (tx) => {
+      const [message] = await tx
+        .select({
+          data: agentSessionMessageTable.data,
+          role: agentSessionMessageTable.role,
+          status: agentSessionMessageTable.status,
+        })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.id, messageId),
+            eq(agentSessionMessageTable.sessionId, sessionId),
+          ),
+        )
+        .limit(1);
+      if (!message) throw DataApiErrorFactory.notFound('AgentSessionMessage', messageId);
+      const text = messageTranslationText(message.data.parts);
+      if (
+        message.role !== 'assistant' ||
+        message.status !== 'success' ||
+        !text ||
+        sha256HexOfText(text) !== input.sourceHash
+      )
+        throw DataApiErrorFactory.conflict(
+          'The translation source has changed',
+          'AgentSessionMessage',
+        );
+      const previous = readMessageTranslations(message.data.translations);
+      const translations: MessageTranslations = {
+        sourceHash: input.sourceHash,
+        results: {
+          ...(previous?.sourceHash === input.sourceHash ? previous.results : {}),
+          [input.language]: { content: input.content, createdAt: Date.now() },
+        },
+      };
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ data: { ...message.data, translations } })
+        .where(eq(agentSessionMessageTable.id, messageId));
+      return translations;
+    });
+    publishDataApiChanges([`/agent-sessions/${sessionId}/messages`]);
+    return translations;
   }
 
   async listByCursor(

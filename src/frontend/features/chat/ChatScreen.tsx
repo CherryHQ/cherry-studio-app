@@ -148,6 +148,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               </View>
             ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
               <ChatWorkspace
+                isTranslationEnabled
                 renderUsage={renderLocalUsage}
                 snapshot={snapshot}
                 messages={messages}

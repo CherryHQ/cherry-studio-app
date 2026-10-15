@@ -23,6 +23,8 @@ import {
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
@@ -504,7 +506,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionMessageTable)
         .set({
           turnId,
-          data: { parts: input.userParts },
+          data: { ...user.data, parts: input.userParts },
           searchableText: toSearchableText(input.userParts),
         })
         .where(eq(agentSessionMessageTable.id, user.id))
@@ -518,7 +520,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const values = {
         turnId,
         status: 'pending',
-        data: { parts: retainedParts },
+        data: { ...source.data, parts: retainedParts },
         searchableText: toSearchableText(retainedParts),
         error: null,
         // The only summary that could cover the replaced answer is its own:
@@ -734,11 +736,17 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       }
       if (input.turnId !== undefined && existing.turnId !== input.turnId)
         throw new Error('Cannot finalize a replaced execution.');
+      const data = { ...existing.data, parts: input.parts };
+      if (input.status === 'success' && data.translations) {
+        const text = messageTranslationText(input.parts);
+        if (!text || data.translations.sourceHash !== sha256HexOfText(text))
+          delete data.translations;
+      }
       const [row] = await tx
         .update(agentSessionMessageTable)
         .set({
           status: input.status,
-          data: { parts: input.parts },
+          data,
           searchableText: toSearchableText(input.parts),
           stats: finalizeMessageStats(existing.stats, input),
           error: input.error,

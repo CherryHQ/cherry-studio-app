@@ -46,8 +46,8 @@ type ChatWorkspaceProps = {
   snapshot: ConversationSnapshot;
   onShare?: (messageId: string) => void;
   sessionId?: string;
-  /** Stable pairing scope for desktop conversations; local Sessions use the default. */
-  translationScope?: string;
+  /** Translation is available only for locally owned Agent messages. */
+  isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -69,7 +69,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
-  translationScope = 'local',
+  isTranslationEnabled = false,
   renderUsage,
 }: ChatWorkspaceProps) {
   const {
@@ -255,7 +255,7 @@ export function ChatWorkspace({
   return (
     <View className="flex-1 bg-chat-background">
       <MessageTranslationProvider
-        scope={translationScope}
+        isEnabled={isTranslationEnabled}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >

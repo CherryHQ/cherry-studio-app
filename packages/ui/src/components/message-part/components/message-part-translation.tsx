@@ -1,4 +1,3 @@
-import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import { View } from 'react-native';
 
 import type { MessagePartTranslationProps } from '../message-part.types';
@@ -6,11 +5,7 @@ import type { MessagePartTranslationProps } from '../message-part.types';
 export function MessagePartTranslation({ children }: MessagePartTranslationProps) {
   return (
     <View className="gap-2">
-      <View className="flex-row items-center gap-3">
-        <View className="h-px flex-1 bg-border" />
-        <LanguagesIcon className="size-3.5 text-muted-foreground" />
-        <View className="h-px flex-1 bg-border" />
-      </View>
+      <View className="h-px bg-border" />
       {children}
     </View>
   );
