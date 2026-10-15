@@ -98,9 +98,10 @@ switch/
 ├── index.ts                    public exports only
 ├── switch.tsx                 shared behavior, events, and composition
 ├── switch.types.ts            public product contract
-├── switch-control.types.ts    private adapter props shared by every implementation
-├── switch-control.tsx         Cherry control for Android, Web, and tooling
-├── switch-control.ios.tsx     iOS provider or system primitive
+├── switch-control/           private platform adapter family
+│   ├── switch-control.types.ts    props shared by every implementation
+│   ├── switch-control.tsx         Cherry control for Android, Web, and tooling
+│   └── switch-control.ios.tsx     iOS provider or system primitive
 └── switch-indicator.tsx       private shared implementation helper
 ```
 

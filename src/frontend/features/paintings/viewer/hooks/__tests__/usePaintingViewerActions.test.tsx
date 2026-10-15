@@ -8,6 +8,7 @@ import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { Painting } from '@/shared/data/types/painting';
 
+import { registerPaintingWorkspace } from '../../../utils/paintingWorkspaceSession';
 import { usePaintingViewerActions } from '../usePaintingViewerActions';
 
 const mockRouterPush = jest.fn();
@@ -98,6 +99,7 @@ let queryClient: QueryClient;
 
 let actions: ReturnType<typeof usePaintingViewerActions> | undefined;
 let renderer: ReactTestRenderer | undefined;
+let unregisterWorkspace: (() => void) | undefined;
 
 function Probe() {
   const currentActions = usePaintingViewerActions({
@@ -106,6 +108,7 @@ function Probe() {
       uri: 'file:///painting.png',
     },
     painting,
+    workspaceId: 'workspace',
   });
 
   useEffect(() => {
@@ -148,6 +151,8 @@ describe('usePaintingViewerActions', () => {
   });
 
   afterEach(async () => {
+    unregisterWorkspace?.();
+    unregisterWorkspace = undefined;
     await act(async () => renderer?.unmount());
     queryClient.clear();
   });
@@ -335,6 +340,53 @@ describe('usePaintingViewerActions', () => {
       attachments: [{ id: 'painting-output' }],
       draft: '',
     });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      params: { handoff: 'handoff', paintingId: painting.id },
+      pathname: '/paintings',
+    });
+  });
+
+  it('resumes the originating workspace for edits instead of starting another timeline', () => {
+    const edit = jest.fn();
+    unregisterWorkspace = registerPaintingWorkspace('workspace', edit);
+    actions?.edit();
+    expect(edit).toHaveBeenCalledWith({
+      output: {
+        fileEntryId: '00000000-0000-7000-8000-000000000002',
+        uri: 'file:///painting.png',
+      },
+    });
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).not.toHaveBeenCalled();
+    expect(mockCreatePaintingDraftHandoff).not.toHaveBeenCalled();
+  });
+
+  it('returns resize parameters to the originating workspace without rewriting the registry value', () => {
+    const edit = jest.fn();
+    unregisterWorkspace = registerPaintingWorkspace('workspace', edit);
+    actions?.resize('16:9', { aspectRatio: 'ASPECT_16_9' });
+    expect(edit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: 'painting.viewer.resizePrompt',
+        modelId: painting.modelId,
+        paramValues: { aspectRatio: 'ASPECT_16_9' },
+      }),
+    );
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it('returns to the existing timeline for generation details', () => {
+    unregisterWorkspace = registerPaintingWorkspace('workspace', jest.fn());
+    actions?.viewConversation();
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).not.toHaveBeenCalled();
+  });
+
+  it('starts an independent edit if the source workspace was closed', () => {
+    registerPaintingWorkspace('workspace', jest.fn())();
+    actions?.edit();
+    expect(mockRouterBack).not.toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { handoff: 'handoff', paintingId: painting.id },
       pathname: '/paintings',

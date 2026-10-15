@@ -11,7 +11,7 @@ import {
 import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
 import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
-const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
+const mockGenerate = jest.fn(async () => ({ finishReason: 'stop', text: 'ok', usage: undefined }));
 const mockGeneratorConstructor = jest.fn();
 
 jest.mock('@cherrystudio/ai-core', () => ({
@@ -226,7 +226,7 @@ describe('AiService.checkModel', () => {
     expect(mockGeneratorConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: model.modelId, system: 'test' }),
     );
-    expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal));
+    expect(mockGenerate).toHaveBeenCalledWith({ prompt: 'hi' }, expect.any(AbortSignal), undefined);
     expect(mockGeneratorConstructor.mock.calls[0][0].providerSettings.headers).not.toHaveProperty(
       'x-opencode-session',
     );

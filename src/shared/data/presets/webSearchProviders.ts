@@ -209,7 +209,7 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 
-export const PRESETS_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
+const PRESETS_WEB_SEARCH_PROVIDERS: readonly WebSearchProviderPreset[] =
   WEB_SEARCH_PROVIDER_IDS.map((id) => ({ id, ...WEB_SEARCH_PROVIDER_PRESET_MAP[id] }));
 
 export function getWebSearchProviderPresetsByCapability(capability: WebSearchCapability) {

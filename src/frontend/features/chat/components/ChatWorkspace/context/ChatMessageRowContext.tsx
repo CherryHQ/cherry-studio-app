@@ -17,6 +17,8 @@ import type { ConversationMessage } from '@/frontend/appShell/conversation';
  */
 export type ChatMessageRowState = Readonly<
   Pick<ConversationMessage, 'attachments' | 'tools'> & {
+    /** Deferred source text cannot be translated until the full answer has arrived. */
+    completeness?: ConversationMessage['completeness'];
     /** Tool status follows the source message, which can settle without new display parts. */
     messageState?: ConversationMessage['state'];
     showsTimestamp: boolean;
@@ -30,6 +32,7 @@ const TIMESTAMP_ONLY_ROW: ChatMessageRowState = { showsTimestamp: true };
 
 function isSameRow(left: ChatMessageRowState, right: ChatMessageRowState) {
   return (
+    left.completeness === right.completeness &&
     left.attachments === right.attachments &&
     left.messageState === right.messageState &&
     left.showsTimestamp === right.showsTimestamp &&
@@ -46,6 +49,7 @@ function reconcileRows(
   const next = new Map<string, ChatMessageRowState>();
   for (const message of messages) {
     const candidate: ChatMessageRowState = {
+      completeness: message.completeness,
       attachments: message.attachments,
       messageState: message.state,
       showsTimestamp: timestampMessageIds.has(message.key),

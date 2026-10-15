@@ -154,7 +154,7 @@ function SidebarSelectionHeader() {
         testID="sidebar-select-all"
       >
         <Text className="text-right text-sidebar-foreground text-sm">
-          {t(allSelected ? 'session.selection.deselectAll' : 'common.selection.selectAll')}
+          {t(allSelected ? 'common.selection.deselectAll' : 'common.selection.selectAll')}
         </Text>
       </Pressable>
     </>

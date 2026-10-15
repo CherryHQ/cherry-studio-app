@@ -62,11 +62,22 @@ Desktop pairing, provider export, and remote Agent discovery use credential-scop
 Current production consumers include the provider-registry updater's separate GitCode and GitHub
 routes, plus the non-streaming Web Search JSON adapter. Web Search drivers continue to own provider
 request/response schemas and credentials; the adapter owns URL routing, query serialization, safe
-HTTP error decoding, and the shared transport call.
+HTTP error decoding, and the shared transport call. The hosted Exa MCP driver reads its JSON-RPC
+reply as text over the same transport because the service may answer with a buffered event stream.
 
-Provider account OAuth uses origin-scoped routes through `providerAccountFetch`, with bounded text
-responses and rejected redirects. Pi retains account protocol polling and refresh; credentials
-remain on individual requests and never become shared route defaults.
+`createFetchBridge()` adapts SDKs that expect a non-streaming `fetch` to this transport. It accepts
+only `GET` and `POST`, serializes `URLSearchParams` bodies, creates one `statusPolicy: 'all'` route
+per origin, requests bounded text responses with rejected redirects, and returns every status to
+the SDK without replay. Credentials remain on individual requests and never become route defaults.
+Each domain supplies its destination validation, its unsupported-method error, its response cap,
+and an optional timeout.
+
+Provider account OAuth uses the bridge through `providerAccountFetch` with HTTPS-only destinations
+and a 1 MiB cap; Pi retains account protocol polling and refresh. Remote MCP OAuth metadata,
+registration, token exchange, and refresh use it through `mcpOAuthFetch`, which also allows
+loopback HTTP, caps responses at 512 KiB, and times out after 30 seconds. The MCP runtime owns
+refresh and cancellation. Only the initial challenge probe against the MCP endpoint uses streaming
+fetch: it reads the response headers and cancels a potentially open event stream.
 
 ## Interceptors
 

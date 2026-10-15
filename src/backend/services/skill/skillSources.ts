@@ -7,9 +7,10 @@
 import { createHttpClient, type HttpClient, isHttpError } from '@/backend/services/http';
 import { SkillsError } from '@/shared/contracts/skills';
 import type { Skill, SkillSource } from '@/shared/data/types/skill';
+import { cherryinSkillLocator, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
-import { BUNDLED_SKILLS, bundledSkillLocator, type BundledSkillDefinition } from './bundled';
 import {
+  parseSkillEntry,
   SKILL_FILE_MAX_BYTES,
   SKILL_PACKAGE_MAX_BYTES,
   SKILL_PACKAGE_MAX_FILES,
@@ -24,6 +25,8 @@ export type SkillSourceCandidate = {
   version: string | null;
   tags: string[];
   source: SkillSource;
+  /** Already downloaded immutable bytes, retained only for the candidate's bounded lifetime. */
+  acquisition?: SkillAcquisition;
 };
 
 export type SkillAcquisition = {
@@ -37,53 +40,6 @@ export interface SkillSourceAdapter {
   /** Re-resolves a locator to its current exact revision. */
   resolve(locator: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
   acquire(candidate: SkillSourceCandidate, signal?: AbortSignal): Promise<SkillAcquisition>;
-}
-
-const encoder = new TextEncoder();
-
-export function createBundledSkillSource(
-  definitions: readonly BundledSkillDefinition[] = BUNDLED_SKILLS,
-): SkillSourceAdapter & { list(): SkillSourceCandidate[] } {
-  const toCandidate = (definition: BundledSkillDefinition): SkillSourceCandidate => {
-    const entry = definition.files['SKILL.md'] ?? '';
-    const description =
-      /^description:\s*(.+)$/m.exec(entry)?.[1]?.trim() ?? definition.workflowScope;
-    return {
-      candidateId: `bundled:${definition.name}@${definition.revision}`,
-      name: definition.name,
-      description,
-      author: 'Cherry Studio',
-      version: String(definition.revision),
-      tags: [],
-      source: {
-        registry: 'bundled',
-        locator: bundledSkillLocator(definition.name),
-        url: null,
-        revision: String(definition.revision),
-      },
-    };
-  };
-  const byLocator = new Map(definitions.map((d) => [bundledSkillLocator(d.name), d] as const));
-  return {
-    registry: 'bundled',
-    list: () => definitions.map(toCandidate),
-    async resolve(locator) {
-      const definition = byLocator.get(locator);
-      if (!definition) throw new SkillsError('not-found', `Unknown bundled Skill: ${locator}`);
-      return toCandidate(definition);
-    },
-    async acquire(candidate) {
-      const definition = byLocator.get(candidate.source.locator);
-      if (!definition)
-        throw new SkillsError('not-found', `Unknown bundled Skill: ${candidate.source.locator}`);
-      return {
-        expectedName: definition.name,
-        files: new Map(
-          Object.entries(definition.files).map(([path, text]) => [path, encoder.encode(text)]),
-        ),
-      };
-    },
-  };
 }
 
 /** Exact `SKILL.md` file URL on github.com; the containing directory is the Skill root. */
@@ -113,10 +69,9 @@ export function githubSkillLocator(
 }
 
 /** The origin identity an installed Skill was resolved from; equals its candidates' locator. */
-export function installedSkillLocator(
-  skill: Pick<Skill, 'folderName' | 'source' | 'sourceUrl'>,
-): string | null {
-  if (skill.source === 'builtin') return bundledSkillLocator(skill.folderName);
+export function installedSkillLocator(skill: Pick<Skill, 'sourceUrl'>): string | null {
+  const cherryin = skill.sourceUrl ? parseCherryinSkillUrl(skill.sourceUrl) : null;
+  if (cherryin?.entryPath) return cherryinSkillLocator(cherryin.id, cherryin.entryPath);
   const location = skill.sourceUrl ? parseGithubSkillUrl(skill.sourceUrl) : null;
   return location ? githubSkillLocator(location) : null;
 }
@@ -170,17 +125,14 @@ export function createGithubSkillSource(clients: GithubSkillSourceClients): Skil
   ): Promise<SkillSourceCandidate> {
     const sha = await resolveCommit(clients.api, location, signal);
     const entryPath = location.directory ? `${location.directory}/SKILL.md` : 'SKILL.md';
-    const entryText = await downloadText(clients.raw, location, sha, entryPath, signal);
-    const name =
-      /^name:\s*(.+)$/m
-        .exec(entryText)?.[1]
-        ?.trim()
-        .replace(/^["']|["']$/g, '') ?? '';
+    const entry = parseSkillEntry(
+      await downloadText(clients.raw, location, sha, entryPath, signal),
+    );
+    // Invalid frontmatter still lists the candidate; inspection reports the package issue.
+    const frontmatter = entry && 'frontmatter' in entry ? entry.frontmatter : {};
+    const name = typeof frontmatter.name === 'string' ? frontmatter.name.trim() : '';
     const description =
-      /^description:\s*(.+)$/m
-        .exec(entryText)?.[1]
-        ?.trim()
-        .replace(/^["']|["']$/g, '') ?? '';
+      typeof frontmatter.description === 'string' ? frontmatter.description.trim() : '';
     const directoryName = location.directory.split('/').pop()!;
     return {
       candidateId: `github:${location.owner}/${location.repo}/${sha}/${location.directory}`,

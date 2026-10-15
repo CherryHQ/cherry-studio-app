@@ -8,19 +8,22 @@ import { View } from 'react-native';
 
 import { useBackgroundTaskNotifications } from '@/frontend/appShell/backgroundActivity';
 import { RouteHeader } from '@/frontend/appShell/header';
+import { useModelPickerData } from '@/frontend/components/ModelPicker';
 import {
   type ResolvedPaintingAttachment,
   usePainting,
   useResolvedPaintingFiles,
 } from '@/frontend/data/paintings/usePaintings';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { paintingViewer } from '@/frontend/utils/constants';
 import { paintingOutputAccessibilityLabel } from '@/frontend/utils/paintingAccessibility';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
+import { isUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
+import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
-import { PaintingViewerChrome } from './components/PaintingViewerChrome';
-import { PaintingViewerImage } from './components/PaintingViewerImage';
+import { paintingResizeOptions } from '../utils/paintingResizeOptions';
+import { PaintingViewerChrome } from './components/PaintingViewerChrome/PaintingViewerChrome';
+import { PaintingViewerImage } from './components/PaintingViewerImage/PaintingViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
@@ -29,6 +32,7 @@ export function PaintingViewerScreen() {
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     paintingId?: string | string[];
+    workspaceId?: string | string[];
   }>();
   const paintingId = getSingleRouteParam(params.paintingId);
   const fileEntryId = getSingleRouteParam(params.fileEntryId);
@@ -96,6 +100,7 @@ export function PaintingViewerScreen() {
         outputCount={outputs.length}
         outputIndex={currentIndex + 1}
         painting={painting.data}
+        workspaceId={getSingleRouteParam(params.workspaceId)}
       />
     </View>
   );
@@ -106,28 +111,41 @@ function PaintingViewerContent({
   outputCount,
   outputIndex,
   painting,
+  workspaceId,
 }: {
   current: ResolvedPaintingAttachment;
   outputCount: number;
   outputIndex: number;
   painting: Painting;
+  workspaceId?: string;
 }) {
   const { t } = useTranslation();
   const actions = usePaintingViewerActions({
     currentOutput: current,
     painting,
+    workspaceId,
   });
+  const models = useModelPickerData({ modelType: 'image' });
+  const model =
+    painting.modelId && isUniqueModelId(painting.modelId)
+      ? models.getModelItem(painting.modelId)?.model
+      : undefined;
+  const resizeOptions = paintingResizeOptions(
+    createPaintingGenerationStrategy(model).resolveParameters(1),
+  );
 
   return (
     <>
       <PaintingViewerChrome
-        aspectRatios={paintingViewer.aspectRatios}
+        aspectRatios={resizeOptions.map((option) => option.ratio)}
         canShare={actions.canShare}
         onShare={() => void actions.share()}
         onDelete={() => void actions.remove()}
         onDownload={() => void actions.download()}
         onEdit={actions.edit}
-        onResizeSelect={actions.resize}
+        onResizeSelect={(ratio) =>
+          actions.resize(ratio, resizeOptions.find((option) => option.ratio === ratio)?.paramValues)
+        }
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">

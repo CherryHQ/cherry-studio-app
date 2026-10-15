@@ -70,7 +70,7 @@ export function OnboardingScreen() {
         if (action === 'skip') {
           router.replace(agentId ? chatHref({ agentId, kind: 'draft' }) : '/agents');
         } else
-          router.push(
+          router.replace(
             action === 'desktop' ? '/onboarding/device-connections' : '/onboarding/provider',
           );
       }

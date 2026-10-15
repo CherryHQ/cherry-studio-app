@@ -4,6 +4,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import type { ImageEditInput } from '@/shared/contracts/fileImageEdit';
 import { imageEditGeometry } from '@/shared/utils/imageEditGeometry';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 /** CPU rendering keeps source resolution and shares the exact preview transform. */
 export async function renderEditedImage(
@@ -71,9 +72,7 @@ export async function renderEditedImage(
     signal?.throwIfAborted();
     const directory = new Directory(Paths.cache, 'ImageEdits');
     directory.create({ idempotent: true, intermediates: true });
-    const extension =
-      mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/webp' ? 'webp' : 'png';
-    output = new File(directory, `${randomUUID()}.${extension}`);
+    output = new File(directory, `${randomUUID()}.${generatedImageExtension(mediaType)}`);
     output.write(bytes);
     const completed = output;
     return {

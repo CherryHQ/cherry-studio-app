@@ -26,7 +26,6 @@ import { sha256Hex } from '@/shared/utils/sha256';
 export const SKILL_PACKAGE_MAX_FILES = 200;
 export const SKILL_PACKAGE_MAX_BYTES = 8 * 1024 * 1024;
 export const SKILL_FILE_MAX_BYTES = 2 * 1024 * 1024;
-export const SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS = 1_200;
 
 /** Package-relative POSIX path to file bytes. */
 export type SkillPackageFiles = ReadonlyMap<string, Uint8Array>;
@@ -239,14 +238,6 @@ export function computeContentHash(files: SkillPackageFiles): string {
     offset += chunk.byteLength;
   }
   return `${SKILL_CONTENT_HASH_PREFIX}${sha256Hex(data)}`;
-}
-
-/** Bounded head of the instruction body for detail views. */
-export function previewInstructions(instructions: string): string {
-  const characters = [...instructions];
-  return characters.length <= SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS
-    ? instructions
-    : `${characters.slice(0, SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS).join('')}…`;
 }
 
 /**

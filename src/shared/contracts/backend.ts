@@ -17,6 +17,7 @@ import type { RemoteAgentModule } from './remoteAgent';
 import type { RemoteAssistantModule } from './remoteAssistant';
 import type { SkillsModule } from './skills';
 import type { SystemEntryModule } from './systemEntry';
+import type { TranslationModule } from './translation';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
@@ -39,6 +40,7 @@ export interface Backend {
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
   readonly skills: SkillsModule;
+  readonly translation: TranslationModule;
   readonly webSearch: WebSearchModule;
 }
 

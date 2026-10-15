@@ -1,7 +1,11 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import type { TFunction } from 'i18next';
 
-import type { ImageParamDraft, ImageParamField } from '@/shared/utils/imageGenerationParams';
+import {
+  parseImageRatio,
+  type ImageParamDraft,
+  type ImageParamField,
+} from '@/shared/utils/imageGenerationParams';
 
 const PARAM_LABEL_KEYS = {
   addWatermark: 'painting.settings.param.addWatermark',
@@ -127,6 +131,8 @@ export function imageParamLabel(t: TFunction, key: CanonicalParamKey): string {
 }
 
 export function imageParamOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
+  const ratio = key === 'aspectRatio' ? parseImageRatio(value) : undefined;
+  if (ratio) return `${ratio.width}:${ratio.height}`;
   const translationKey = OPTION_LABEL_KEYS[key]?.[value];
   return translationKey ? t(translationKey) : value;
 }

@@ -62,6 +62,7 @@ exports[`AiService.generateText AI SDK contract uses the explicit system prompt 
 
 exports[`AiService.generateText AI SDK contract uses the explicit system prompt and returns text with recorded usage: prompt result 1`] = `
 {
+  "finishReason": "stop",
   "text": "Contract title",
   "usage": {
     "cachedInputTokens": 2,

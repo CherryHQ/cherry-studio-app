@@ -35,12 +35,11 @@ export function resolveImageGenerationMode(
  * in the registry, hence the square fallback.
  */
 export function imageParamsAspectRatio(values: ParamValues | undefined): number {
-  const ratio = parseRatio(values?.aspectRatio);
-  if (ratio !== undefined) {
-    return ratio;
-  }
-  const size = parseSize(values?.size) ?? parseSize(values?.imageResolution);
-  return size ?? 1;
+  const ratio =
+    parseImageRatio(values?.aspectRatio) ??
+    parseImageRatio(values?.size) ??
+    parseImageRatio(values?.imageResolution);
+  return ratio ? ratio.width / ratio.height : 1;
 }
 
 /** Human-readable resolution for the generation loader's badge. */
@@ -61,21 +60,17 @@ export function imageParamsResolutionLabel(values: ParamValues | undefined): str
   return undefined;
 }
 
-function parseRatio(value: unknown): number | undefined {
-  return typeof value === 'string' ? toRatio(value.split(':')) : undefined;
-}
-
-function parseSize(value: unknown): number | undefined {
-  return typeof value === 'string' ? toRatio(value.toLowerCase().split('x')) : undefined;
-}
-
-function toRatio(parts: string[]): number | undefined {
-  if (parts.length !== 2) {
+/** Read registry ratios and pixel sizes without changing their request values. */
+export function parseImageRatio(value: unknown): { width: number; height: number } | undefined {
+  if (typeof value !== 'string') return undefined;
+  const sides = value
+    .trim()
+    .replace(/^ASPECT_/i, '')
+    .split(/[:x×_]/i)
+    .map(Number);
+  if (sides.length !== 2 || !sides.every((side) => Number.isFinite(side) && side > 0))
     return undefined;
-  }
-  const width = Number(parts[0]);
-  const height = Number(parts[1]);
-  return width > 0 && height > 0 ? width / height : undefined;
+  return { width: sides[0], height: sides[1] };
 }
 
 export function getImageParamFields(

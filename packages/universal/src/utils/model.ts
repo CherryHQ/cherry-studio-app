@@ -92,14 +92,9 @@ export const isDeepSeekModel = (model?: Model): boolean => {
 export const isOpenAILLMModel = (model: Model): boolean =>
   isOpenAIModel(model) && !getLowerBaseModelName(getRawModelId(model)).includes('gpt-4o-image');
 
-export const isOpenAIWebSearchChatCompletionOnlyModel = (model: Model): boolean => {
+const isOpenAIWebSearchChatCompletionOnlyModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model));
   return id.includes('gpt-4o-search-preview') || id.includes('gpt-4o-mini-search-preview');
-};
-
-export const isOpenAIDeepResearchModel = (model: Model): boolean => {
-  if (model.providerId !== 'openai' && model.providerId !== 'openai-chat') return false;
-  return /deep[-_]?research/.test(getLowerBaseModelName(getRawModelId(model), '/'));
 };
 
 export const isGPT5FamilyModel = (model: Model): boolean =>
@@ -126,11 +121,6 @@ export const isSupportFlexServiceTierModel = (model: Model): boolean => {
 export const isSupportedThinkingTokenClaudeModel = (model: Model): boolean =>
   isAnthropicModel(model) && isSupportedThinkingTokenModel(model);
 
-export const isClaude4SeriesModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return /claude-(sonnet|opus|haiku)-4(?:[.-]\d+)?(?:[@\-:][\w\-:]+)?$/i.test(id);
-};
-
 export const isClaude46SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-(?:opus|sonnet)-4[.-]6(?:[@\-:][\w\-:]+)?$/i.test(id);
@@ -139,11 +129,6 @@ export const isClaude46SeriesModel = (model: Model): boolean => {
 export const isClaude47SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-opus-4[.-]7(?:[@\-:][\w\-:]+)?$/i.test(id);
-};
-
-export const isClaude45ReasoningModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
 };
 
 export const isClaudeReasoningModel = (model: Model): boolean =>

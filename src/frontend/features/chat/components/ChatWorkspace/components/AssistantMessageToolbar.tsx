@@ -15,6 +15,7 @@ import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
 } from '../context/AssistantMessageActionsProvider';
+import { MessageTranslationAction } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
@@ -84,6 +85,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
+      <MessageTranslationAction message={message} />
       {forkFromAssistantMessage ? (
         <Button
           accessibilityLabel={t('chat.messageActions.fork')}

@@ -37,6 +37,43 @@ const TEXT_MODEL: RuntimeModelPreflight = {
 };
 
 describe('turn attachments', () => {
+  test('rehydrates only MCP images explicitly retained in both the model channel and managed artifacts', async () => {
+    const image = fact(FIRST_ID, 'tool.png', 'image/png');
+    const files = resolver(new Map([[FIRST_ID, image]]));
+    const history = messageWithFile(image);
+    history.role = 'assistant';
+    history.parts = [
+      {
+        id: 'tool-part',
+        type: 'dynamic-tool',
+        toolCallId: 'call',
+        toolName: 'mcp_widget',
+        title: 'Widget',
+        toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'widget' },
+        state: 'output-available',
+        input: {},
+        output: {
+          value: { content: [] },
+          modelContent: [
+            { type: 'image', fileEntryId: FIRST_ID, mimeType: 'image/png' },
+            { type: 'image', fileEntryId: SECOND_ID, mimeType: 'image/png' },
+          ],
+          artifacts: [
+            {
+              ref: { kind: 'managed-file', fileEntryId: FIRST_ID },
+              mediaType: 'image/png',
+              name: image.name,
+              kind: 'created',
+            },
+          ],
+        },
+      },
+    ];
+    const result = await resolveManagedInput(files, [], [history], new AbortController().signal);
+    expect(files.resolveAvailable).toHaveBeenCalledWith([FIRST_ID]);
+    expect(result.availableFiles.has(FIRST_ID)).toBe(true);
+    expect(result.inputFiles.size).toBe(0);
+  });
   test.each([
     ['report.pdf', 'application/pdf'],
     ['report.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],

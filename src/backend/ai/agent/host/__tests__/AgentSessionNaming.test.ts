@@ -1,4 +1,4 @@
-import type { AiService } from '@/backend/ai/AiService';
+import type { AiGenerateResult, AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
@@ -26,7 +26,10 @@ function createNaming(input: {
   signal?: AbortSignal;
 }) {
   const store = new InMemoryAgentSessionStore();
-  const generateText = jest.fn(input.generateText ?? (async () => ({ text: 'Generated summary' })));
+  const generateText = jest.fn<
+    ReturnType<AiService['generateText']>,
+    Parameters<AiService['generateText']>
+  >(input.generateText ?? (async () => ({ finishReason: 'stop', text: 'Generated summary' })));
   const defaultModelId =
     input.defaultModelId === undefined ? DEFAULT_NAMING_MODEL_ID : input.defaultModelId;
   const preference = {
@@ -156,7 +159,7 @@ describe('AgentSessionNaming', () => {
 
   test('does not overwrite a manual rename that wins the generation race', async () => {
     const generationStarted = deferred<void>();
-    const generated = deferred<{ text: string }>();
+    const generated = deferred<AiGenerateResult>();
     const { naming, store } = createNaming({
       generateText: async () => {
         generationStarted.resolve();
@@ -174,7 +177,7 @@ describe('AgentSessionNaming', () => {
     });
     await generationStarted.promise;
     await store.renameSession(session.id, 'My title');
-    generated.resolve({ text: 'Too late' });
+    generated.resolve({ finishReason: 'stop', text: 'Too late' });
 
     await expect(summary).resolves.toBeNull();
     await expect(store.getSession(session.id)).resolves.toMatchObject({

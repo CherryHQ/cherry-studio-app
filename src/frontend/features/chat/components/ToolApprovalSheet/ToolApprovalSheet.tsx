@@ -20,6 +20,7 @@ type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
   isOpen: boolean;
   canRespond?: boolean;
+  canApprove?: boolean;
   children?: ReactNode;
   onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
 };
@@ -29,6 +30,7 @@ export function ToolApprovalSheet({
   approvals,
   isOpen,
   canRespond = true,
+  canApprove = true,
   children,
   onRespond,
 }: ToolApprovalSheetProps) {
@@ -56,7 +58,7 @@ export function ToolApprovalSheet({
   const canDecide = isCurrent && canRespond && !response.isSubmitting;
   const submit = async (approved: boolean) => {
     const { approvalId } = approval;
-    if (!canDecide || submitting.current.has(approvalId)) {
+    if (!canDecide || (approved && !canApprove) || submitting.current.has(approvalId)) {
       return;
     }
     submitting.current.add(approvalId);
@@ -77,6 +79,7 @@ export function ToolApprovalSheet({
       footer={
         <ToolApprovalSheetActions
           canRespond={canDecide}
+          canApprove={canApprove}
           isSubmitting={response.isSubmitting}
           onRespond={(approved) => void submit(approved)}
         />
@@ -109,10 +112,12 @@ export function ToolApprovalSheet({
 
 function ToolApprovalSheetActions({
   canRespond,
+  canApprove,
   isSubmitting,
   onRespond,
 }: {
   canRespond: boolean;
+  canApprove: boolean;
   isSubmitting: boolean;
   onRespond: (approved: boolean) => void;
 }) {
@@ -127,7 +132,7 @@ function ToolApprovalSheetActions({
       </View>
       <View className="flex-1">
         <Button
-          disabled={!canRespond}
+          disabled={!canRespond || !canApprove}
           loading={isSubmitting}
           onPress={() => onRespond(true)}
           variant="default"

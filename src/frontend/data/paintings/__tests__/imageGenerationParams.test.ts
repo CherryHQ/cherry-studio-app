@@ -8,6 +8,7 @@ import {
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
   imageParamsAspectRatio,
+  parseImageRatio,
   imageParamsResolutionLabel,
   isImageParamDraftValid,
   prepareImageParamValues,
@@ -234,6 +235,8 @@ function model(overrides: Partial<Model> = {}): Model {
 describe('placeholder tile sizing', () => {
   it('prefers an explicit ratio, then a pixel size, and squares off when neither is set', () => {
     expect(imageParamsAspectRatio({ aspectRatio: '16:9' })).toBeCloseTo(16 / 9);
+    expect(imageParamsAspectRatio({ aspectRatio: 'ASPECT_16_9' })).toBeCloseTo(16 / 9);
+    expect(parseImageRatio('ASPECT_3_4')).toEqual({ width: 3, height: 4 });
     expect(imageParamsAspectRatio({ size: '1024x768' })).toBeCloseTo(4 / 3);
     expect(imageParamsAspectRatio({ imageResolution: '512X1024' })).toBeCloseTo(0.5);
     // Ratio wins: `size` may be the provider's own pixel spelling of it.

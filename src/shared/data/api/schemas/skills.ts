@@ -4,7 +4,6 @@ import { AgentIdSchema } from '@/shared/data/types/agent';
 import {
   type AgentSkillBinding,
   AgentSkillBindingSchema,
-  type Skill,
   SkillIdSchema,
   type SkillListItem,
   SkillListItemSchema,
@@ -44,11 +43,6 @@ export const ListSkillsResponseSchema = z.strictObject({
 });
 export type ListSkillsResponse = z.infer<typeof ListSkillsResponseSchema>;
 
-export const UpdateSkillSchema = z.strictObject({
-  isEnabled: z.boolean(),
-});
-export type UpdateSkillDto = z.infer<typeof UpdateSkillSchema>;
-
 /** Current installed instruction body, pinned to the revision returned by this read. */
 export const SkillInstructionsResponseSchema = z.strictObject({
   skillId: SkillIdSchema,
@@ -86,11 +80,6 @@ export type SkillSchemas = {
     GET: {
       params: { skillId: string };
       response: SkillListItem;
-    };
-    PATCH: {
-      body: UpdateSkillDto;
-      params: { skillId: string };
-      response: Skill;
     };
   };
   '/skills/:skillId/instructions': {

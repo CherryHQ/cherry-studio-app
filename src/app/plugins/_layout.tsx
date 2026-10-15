@@ -17,6 +17,7 @@ export default function PluginsStackLayout() {
         contentStyle: { backgroundColor: background },
       }}
     >
+      <Stack.Screen name="mcp/oauth-callback" options={{ animation: 'none', headerShown: false }} />
       <Stack.Screen
         name="[pluginId]/callback"
         options={{ animation: 'none', headerShown: false }}

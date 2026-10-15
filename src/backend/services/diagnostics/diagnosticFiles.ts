@@ -1,15 +1,10 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+/** Daily log file, with a numeric suffix for each rotated shard. */
+export const LOG_NAME = /^app-error\.(\d{4}-\d{2}-\d{2})\.log(?:\.(\d+))?$/;
+
 export function diagnosticDirectory(kind: 'logs'): Directory {
   return new Directory(Paths.document, 'Diagnostics', `${kind}-v1`);
-}
-
-/** Delete only legacy, app-owned diagnostic sources; user-exported archives are elsewhere. */
-export function removeLegacyDiagnosticData(): void {
-  for (const kind of ['logs', 'traces', 'crashes']) {
-    const directory = new Directory(Paths.document, 'Diagnostics', kind);
-    if (directory.exists) directory.delete();
-  }
 }
 
 export function createDiagnosticTemporaryDirectory(id: string): Directory {

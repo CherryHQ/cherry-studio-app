@@ -77,7 +77,7 @@ export function PaintingScreen() {
 
   return (
     <ReadingContentFrame>
-      <RouteHeader />
+      {openState !== 'ready' ? <RouteHeader /> : null}
       {openState === 'loading' ? (
         <View className="flex-1 justify-center">
           <ContentState.Loading />

@@ -11,12 +11,25 @@ Standalone painting supplies an optional painting and uses a local image model s
 chat supplies a controlled `modelSelection`, which permits switching between text and image models.
 The shared controls do not create painting jobs, navigate, or persist conversation messages.
 
+`PaintingInput` is the existing Agent-chat presentation. `PaintingWorkspaceInput` composes the same
+surface, native field, add menu and send protocol into one row; reference previews and common
+registry parameters use the shared composer popover. `PaintingImageInput` uses that row with a
+fixed editing source: attachment pickers and image pasting are unavailable while the annotated image
+is the reference. Advanced and custom parameters keep the existing parameter sheet. Local model
+selection lives in `PaintingInputProvider` so switching presentations does not reset it; controlled
+Agent model selection still belongs to its caller.
+
+An optional `preparePrompt` freezes image-local instructions before prompt validation and asynchronous
+file preparation. It does not bypass the generation strategy or change parameter admission. The
+frontend-only `displayPrompt` on a submission belongs to the caller's current transcript; backend
+requests and persisted painting prompts use `prompt`.
+
 `createPaintingGenerationStrategy` in shared utilities resolves the callable mode, image limits,
 prompt requirements and strict parameter admission from model capabilities. Both backend execution
 owners use the same strategy before persisting work, with authoritative managed-file metadata.
-`usePaintingInput` applies this policy to the session; `PaintingInput` retains the existing controls
-and layout. Readiness checks govern submission without adding persistent inline status copy, new
-action rows, or model capability subtitles. Rejected submissions use the existing feedback flow.
+`usePaintingInput` applies this policy to every presentation. Readiness checks and rejected submissions
+use the existing feedback flow; the compact layout does not add model capability subtitles or a
+parallel parameter-validation policy.
 
 A valid single output becomes an automatic reference only for compatible models and untouched
 next-turn input. Multiple outputs remain optional candidates. Generate-only models pause automatic

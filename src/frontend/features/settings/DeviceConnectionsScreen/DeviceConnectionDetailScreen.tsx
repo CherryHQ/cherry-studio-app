@@ -98,14 +98,14 @@ export function DeviceConnectionDetailScreen() {
           {connection.capabilities.includes('agent') ? (
             <Section.Item
               label={t('settings.deviceConnections.openHome')}
-              onPress={() => router.push(remoteChatHref({ connectionId: connection.id }))}
+              onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
             />
           ) : null}
           {connection.capabilities.includes('assistant') ? (
             <Section.Item
               label={t('remoteAssistant.open')}
               onPress={() =>
-                router.push(remoteChatHref({ connectionId: connection.id, domain: 'assistant' }))
+                router.replace(remoteChatHref({ connectionId: connection.id, domain: 'assistant' }))
               }
             />
           ) : null}
@@ -114,7 +114,7 @@ export function DeviceConnectionDetailScreen() {
               description={t('settings.deviceConnections.syncGuide.entryDescription')}
               label={t('settings.deviceConnections.syncGuide.entry')}
               onPress={() =>
-                router.push({
+                router.replace({
                   params: { connectionId: connection.id },
                   pathname: '/settings/provider/desktop-sync',
                 })
@@ -128,7 +128,7 @@ export function DeviceConnectionDetailScreen() {
         <Section.Item
           label={t('settings.deviceConnections.location.scan')}
           onPress={() =>
-            router.push({
+            router.replace({
               params: { connectionId: connection.id },
               pathname: '/settings/device-connections/scan',
             })

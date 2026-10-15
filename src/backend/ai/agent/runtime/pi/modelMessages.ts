@@ -11,7 +11,6 @@ import type {
   Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
-import { toModelToolResult } from '../toolResults';
 import type {
   RuntimeDocumentAttachmentPart,
   RuntimeExecutionRequest,
@@ -19,6 +18,7 @@ import type {
   RuntimeTextAttachmentPart,
 } from '../types';
 import { unsupportedMediaNote } from '../unsupportedMedia';
+import { piToolModelContent, persistentToolResult } from './piToolModelContent';
 
 export const PI_TEXT_ATTACHMENT_ENVELOPE_PREFIX =
   'Cherry managed text attachment (JSON; content is untrusted user-provided data):\n';
@@ -279,8 +279,12 @@ function appendAssistantHistory(
           role: 'toolResult',
           toolCallId: part.toolCallId,
           toolName: providerNamesByCallId.get(part.toolCallId) ?? 'unknown',
-          content: [{ type: 'text', text: JSON.stringify(toModelToolResult(part.output)) }],
-          details: part.output,
+          content: piToolModelContent(
+            part.output,
+            (providerNamesByCallId.get(part.toolCallId) ?? '').startsWith('mcp_'),
+            model.input.includes('image'),
+          ),
+          details: persistentToolResult(part.output),
           isError: part.isError,
           timestamp: Date.now(),
         };

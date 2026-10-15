@@ -126,12 +126,20 @@ export type RuntimeArtifact = {
 };
 
 export type RuntimeToolResult = {
+  mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
+  mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
+  /** Bounded model projection; value remains the user/app result. */
+  modelContent?: import('@/shared/contracts/mcpContent').McpModelContent;
   value: RuntimeJsonValue;
   artifacts: RuntimeArtifact[];
   /** Compact built-in model value when the full display value is already supplied in instructions. */
   modelValue?: RuntimeJsonValue;
-  /** Built-in vision output. Transcript parts keep file IDs; Pi context checkpoints may retain pixels. */
-  modelImages?: { data: string; mediaType: string }[];
+  /**
+   * Image bytes for the current provider call, never persisted in canonical tool details. Built-in
+   * vision output keeps file IDs in transcript parts; MCP images name the managed file that their
+   * `modelContent` block references. Pi context checkpoints may retain pixels.
+   */
+  modelImages?: { data: string; mediaType: string; fileEntryId?: string }[];
   /**
    * Trusted built-in callback instructions for subsequent requests in this execution.
    * Kept outside compactable messages; the Host replaces them when configuring the next turn.
@@ -273,6 +281,8 @@ export type RuntimeTool = {
    * (cost-bearing or permission-gated calls). Absent means eligible.
    */
   autoApprovalEligible?: boolean;
+  /** Refuse before approval until a trusted instruction section with this key is in context. */
+  requiredInstructions?: { key: string; refusal: string };
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

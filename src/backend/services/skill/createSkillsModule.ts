@@ -25,6 +25,7 @@ import {
 } from '@/shared/contracts/skills';
 import { ErrorCode, isDataApiError } from '@/shared/data/api/errors';
 import type { Skill, SkillCandidate } from '@/shared/data/types/skill';
+import { cherryinSkillUrl, parseCherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
 import { adaptSkillPackage } from './skillAdaptation';
 import { authorSkillPackage } from './skillAuthoring';
@@ -33,7 +34,6 @@ import type { SkillMarketplace } from './skillMarketplace';
 import {
   decodeUtf8,
   parseSkillEntry,
-  previewInstructions,
   validateSkillPackage,
   type ValidatedSkillPackage,
 } from './skillPackage';
@@ -45,6 +45,7 @@ import {
 import type { SkillStorage } from './skillStorage';
 
 const CANDIDATE_TTL_MS = 30 * 60 * 1000;
+const CANDIDATE_MAX_BYTES = 64 * 1024 * 1024;
 
 export type SkillsModuleDependencies = {
   marketplace: SkillMarketplace;
@@ -52,10 +53,10 @@ export type SkillsModuleDependencies = {
   skills: AgentGlobalSkillService;
   storage: SkillStorage;
   sources: {
-    bundled: SkillSourceAdapter;
     github: SkillSourceAdapter & {
       resolveUrl(url: string, signal?: AbortSignal): Promise<SkillSourceCandidate>;
     };
+    cherryin?: SkillSourceAdapter;
   };
   agentExists(agentId: string): Promise<boolean>;
   readAuthor(): Promise<string>;
@@ -103,9 +104,20 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
   }
 
   function remember(candidate: SkillSourceCandidate): SkillSourceCandidate {
-    if (candidates.size >= 64 && !candidates.has(candidate.candidateId))
-      candidates.delete(candidates.keys().next().value!);
+    for (const [id, entry] of candidates) {
+      if (Date.now() - entry.resolvedAt > CANDIDATE_TTL_MS) candidates.delete(id);
+    }
     candidates.set(candidate.candidateId, { candidate, resolvedAt: Date.now() });
+    const size = (value: SkillSourceCandidate) =>
+      value.acquisition
+        ? [...value.acquisition.files.values()].reduce((sum, file) => sum + file.byteLength, 0)
+        : 0;
+    let bytes = [...candidates.values()].reduce((sum, entry) => sum + size(entry.candidate), 0);
+    while (candidates.size > 256 || bytes > CANDIDATE_MAX_BYTES) {
+      const oldest = candidates.keys().next().value!;
+      bytes -= size(candidates.get(oldest)!.candidate);
+      candidates.delete(oldest);
+    }
     return candidate;
   }
 
@@ -188,7 +200,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           invocation: pkg.invocation,
           manifest: pkg.manifest,
           contentHash: pkg.contentHash,
-          instructionsPreview: previewInstructions(pkg.instructions),
+          instructions: pkg.instructions,
         },
         issues: [],
         limitations: evaluateSkillLimitations({
@@ -208,7 +220,7 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     return {
       name: pkg.name,
       description: pkg.description,
-      source: candidate.source.registry === 'bundled' ? 'builtin' : 'marketplace',
+      source: 'marketplace',
       sourceUrl: candidate.source.url,
       author: pkg.author ?? candidate.author,
       version: pkg.version ?? candidate.version,
@@ -246,14 +258,26 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
     },
 
     popular: (signal) => deps.marketplace.popular(signal),
+    searchSkillsSh: (query, signal) => deps.marketplace.searchSkillsSh(query, signal),
+    listCherryin: (input, signal) => deps.marketplace.listCherryin(input, signal),
+    async getCherryin(id, signal) {
+      const [detail, installed] = await Promise.all([
+        deps.marketplace.getCherryin(id, signal),
+        deps.skills.listBySourcePrefix(`${cherryinSkillUrl(id)}#`),
+      ]);
+      return {
+        ...detail,
+        installed: installed.flatMap((skill) => {
+          const location = skill.sourceUrl ? parseCherryinSkillUrl(skill.sourceUrl) : null;
+          return location?.entryPath
+            ? [{ skillId: skill.id, name: skill.name, entryPath: location.entryPath }]
+            : [];
+        }),
+      };
+    },
 
     async resolve(url, signal) {
       const resolved = await deps.marketplace.resolveUrl(url, signal);
-      if (resolved.some((candidate) => candidate.source.registry !== 'github'))
-        throw new SkillsError(
-          'source-invalid',
-          'System Skills are not available for installation.',
-        );
       return Promise.all(resolved.map((candidate) => toPublicCandidate(remember(candidate))));
     },
 
@@ -289,11 +313,6 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
           throw new SkillsError(
             'already-installed',
             'An existing revision needs an explicit update or repair.',
-          );
-        if (!existing.isEnabled)
-          throw new SkillsError(
-            'admission-setup-required',
-            'This Skill is globally disabled. Enable it in the Skill library first.',
           );
         await deps.db.withWriteTx(async (tx) => {
           for (const agentId of input.agentIds ?? [])
@@ -331,13 +350,24 @@ export function createSkillsModule(deps: SkillsModuleDependencies): SkillsBacken
       const locator = installedSkillLocator(current);
       if (!locator) throw new SkillsError('source-invalid', 'This Skill source is unavailable.');
       const resolved =
-        current.source === 'builtin'
-          ? await deps.sources.bundled.resolve(locator, signal)
+        locator.startsWith('cherryin:') && deps.sources.cherryin
+          ? await deps.sources.cherryin.resolve(locator, signal)
           : await deps.sources.github.resolveUrl(current.sourceUrl!, signal);
       const candidate = remember(resolved);
       const { inspection, package: pkg, files } = await acquireAndInspect(candidate, signal);
       if (!pkg || !files) {
         return { outcome: 'rejected', skill: current, inspection };
+      }
+      if (pkg.name !== current.folderName) {
+        return {
+          outcome: 'rejected',
+          skill: current,
+          inspection: {
+            ...inspection,
+            package: null,
+            issues: [{ code: 'name-mismatch', subject: current.folderName }],
+          },
+        };
       }
       if (pkg.contentHash === current.contentHash && deps.storage.hasRevision(current)) {
         return { outcome: 'unchanged', skill: current };

@@ -50,8 +50,8 @@ Native and ownership assessments.
 
 Mobile imports the published `ai-core` package through the private implementation behind
 `AiService`. Production consumers use provider construction, non-conversation text generation,
-model probes, and image generation. `packages/ai-runtime` owns Mobile's provider configuration and
-web-search option types that the published package does not expose.
+model probes, and image generation. `packages/ai-runtime` owns Mobile's provider configuration
+types that the published package does not expose.
 
 The published package also contains Desktop context and Agent helpers. They have no Mobile
 conversation consumer: that execution and context are owned by

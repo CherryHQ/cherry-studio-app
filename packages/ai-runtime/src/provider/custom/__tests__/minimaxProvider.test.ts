@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MinimaxImageModel } from '../minimax/minimaxImageModel';
+import { MinimaxImageModel } from '../minimax/MinimaxImageModel';
 import { createMinimaxProvider } from '../minimax/minimaxProvider';
 
 describe('createMinimaxProvider', () => {

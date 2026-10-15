@@ -96,7 +96,7 @@ function RemoteChatUnavailable({
             description={t('settings.deviceConnections.emptyDescription')}
             primaryAction={{
               children: t('settings.deviceConnections.scan.action'),
-              onPress: () => router.push('/settings/device-connections/scan'),
+              onPress: () => router.replace('/settings/device-connections/scan'),
             }}
           />
         )}
@@ -230,12 +230,14 @@ function RemoteChatSession({ target }: { target: RemoteChatTarget }) {
               />
             ) : (
               <ChatWorkspace
+                translationScope={JSON.stringify([target.connectionId, source.draftScope])}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}
                 snapshot={snapshot}
                 messageWindow={history}
                 sessionId={target.sessionId}
+                assistantEmoji={agent?.emoji}
                 assistantName={agent?.name}
                 isAssistantToolbarEnabled
                 contentBottomInset={composerContentGap}

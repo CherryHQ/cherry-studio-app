@@ -12,7 +12,7 @@ let mockDiscoveryReceive: (event: DiscoveryEvent) => void;
 
 jest.mock('@cherrystudio/remote-transport', () => ({}));
 jest.mock('../remoteSocket', () => ({ openWebSocketStream: jest.fn() }));
-jest.mock('../desktopDiscovery', () => ({
+jest.mock('../DesktopDiscovery', () => ({
   DesktopDiscovery: class {
     constructor(receive: (event: DiscoveryEvent) => void) {
       mockDiscoveryReceive = receive;

@@ -3,10 +3,19 @@ import {
   type DevicePermission,
   type DevicePermissionScope,
   type DevicePermissionStatus,
+  HEALTH_PERMISSION_SCOPES,
   type PermissionStatuses,
+  summarizeDevicePermissions,
 } from '@/shared/contracts';
 
-export const permissionKinds = ['location', 'calendar', 'reminders', 'camera', 'photos'] as const;
+export const permissionKinds = [
+  'location',
+  'calendar',
+  'reminders',
+  'health',
+  'camera',
+  'photos',
+] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
 export type PermissionAction = 'open-settings' | 'request' | 'retry';
 
@@ -22,6 +31,11 @@ export const permissionConfig: Record<
     permission: 'calendar',
     scopes: ['calendar.read', 'calendar.write'],
     requestScopes: ['calendar.read'],
+  },
+  health: {
+    permission: 'health',
+    scopes: HEALTH_PERMISSION_SCOPES,
+    requestScopes: HEALTH_PERMISSION_SCOPES,
   },
   location: { permission: 'location', scopes: ['location.read'], requestScopes: ['location.read'] },
   reminders: {
@@ -55,7 +69,8 @@ export function getPermissionStatus(
     return first;
   }
   // Photo saving and browsing are separate: permission to save must not imply library access.
-  return first;
+  if (kind !== 'health') return first;
+  return summarizeDevicePermissions(permissionConfig[kind].scopes, statuses);
 }
 
 export function isPermissionSupported(kind: PermissionKind, statuses: PermissionStatuses): boolean {

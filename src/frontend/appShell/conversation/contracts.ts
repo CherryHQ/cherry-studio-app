@@ -118,6 +118,8 @@ export type ConversationInteraction = {
   kind: 'decision' | 'question';
   title: string;
   state: 'pending' | 'approved' | 'denied' | 'expired';
+  /** Local health tools disclose the receiving model service before approval. */
+  healthDataSharing?: { providerId: string | null };
   input: ResourceRead;
   desktopRequired?: boolean;
   respond?: ConversationAction<ConversationInteractionResponse, void>;

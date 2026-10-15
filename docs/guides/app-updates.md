@@ -74,8 +74,10 @@ eas channel:create production-ios
 ```
 
 Keep `PROFILE`, `APK_UPDATES_ENABLED`, `ANDROID_COMPRESS_NATIVE_LIBS`, and
-`EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments. Build profiles in `eas.json` own
-these values; remote variables can otherwise override publication configuration.
+`EXPO_PUBLIC_STORYBOOK_ENABLED` out of shared EAS environments; remote variables can otherwise
+override publication configuration. Build profiles in `eas.json` own `PROFILE` and
+`ANDROID_COMPRESS_NATIVE_LIBS`. `APK_UPDATES_ENABLED` and `EXPO_PUBLIC_STORYBOOK_ENABLED` are local
+development switches; packaged APKs gate update checks on the native `production-apk` channel.
 Other service settings and credentials still come from the selected environment. Client/config
 values must be readable during both builds and updates; Secret-only values cannot be read by
 EAS Update.

@@ -179,10 +179,10 @@ describe('Pi durable request diagnostics', () => {
     { code: 'insufficient_quota', status: 429, retryable: false, category: 'quota' },
     { code: 'rate_limit_exceeded', status: 429, retryable: true, category: 'rate_limit' },
     { code: 'runtime_error', status: 402, retryable: false, category: 'quota' },
-    { code: 'runtime_error', status: 401, retryable: false, category: 'authentication' },
+    { code: 'runtime_error', status: 401, retryable: false, category: 'auth' },
     { code: 'permission_error', retryable: false, category: 'permission' },
-    { code: 'api_error', retryable: false, category: 'provider' },
-    { code: 'runtime_error', status: 503, retryable: true, category: 'provider' },
+    { code: 'api_error', retryable: false, category: 'provider_unavailable' },
+    { code: 'runtime_error', status: 503, retryable: true, category: 'provider_unavailable' },
     { code: 'runtime_error', retryable: false, category: 'unknown' },
   ])('records structured $category failures without changing the response', async (failure) => {
     const { traces, records } = createTraceRecorder();
@@ -390,7 +390,7 @@ describe('Pi durable request diagnostics', () => {
       attributes: {
         'http.status_code': 401,
         'error.stage': 'stream',
-        'error.category': 'authentication',
+        'error.category': 'auth',
       },
     });
     expect(JSON.stringify(records)).not.toContain('private');

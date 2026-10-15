@@ -10,18 +10,13 @@ import {
   type CredentialStore,
   type OAuthAuth,
 } from '@earendil-works/pi-ai/native-oauth';
-import {
-  CryptoDigestAlgorithm,
-  CryptoEncoding,
-  digestStringAsync,
-  getRandomBytes,
-} from 'expo-crypto';
 
 import type { ProviderAccountService } from '@/backend/data/services/ProviderAccountService';
 import { isHttpError } from '@/backend/services/http';
 import type { ProviderAccountAdapter } from '@/backend/services/providers/account/providerAccountAdapter';
 import { createProviderAccountFetch } from '@/backend/services/providers/account/providerAccountFetch';
 import { providerAccountStorage } from '@/backend/services/providers/account/providerAccountStorage';
+import { createPkceChallenge } from '@/backend/utils/oauth';
 import {
   ProviderAccountError,
   type ProviderAccountIdentity,
@@ -46,19 +41,9 @@ const SIGNED_OUT: ProviderAccountStatus = {
 };
 type AccountProvider = Awaited<ReturnType<ProviderAccountService['get']>>;
 
-const base64Url = (value: string) =>
-  value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 configureOAuthPlatform({
   fetch: createProviderAccountFetch(),
-  async generatePKCE() {
-    const verifier = base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
-    const challenge = base64Url(
-      await digestStringAsync(CryptoDigestAlgorithm.SHA256, verifier, {
-        encoding: CryptoEncoding.BASE64,
-      }),
-    );
-    return { verifier, challenge };
-  },
+  generatePKCE: createPkceChallenge,
 });
 
 /** Owned by ProviderAccountRuntime. Credentials and locks belong to concrete app provider instances. */
