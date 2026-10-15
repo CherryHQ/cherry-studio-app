@@ -11,6 +11,7 @@ import { fileEntryTable } from './file';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { paintingTable } from './painting';
+import { paintingBoardTable } from './paintingBoard';
 import { pluginAuthorizationTable } from './pluginAuthorization';
 import { preferenceTable } from './preference';
 import { userModelTable } from './userModel';
@@ -28,6 +29,7 @@ export { monotonicUpdateTimestamp } from './_columnHelpers';
 export * from './job';
 export * from './mcpServer';
 export * from './painting';
+export * from './paintingBoard';
 export * from './pluginAuthorization';
 export * from './userModel';
 export * from './userProvider';
@@ -58,6 +60,7 @@ export const schema = {
   mcpServerTable,
   pluginAuthorizationTable,
   paintingTable,
+  paintingBoardTable,
   preferenceTable,
   userModelTable,
   userProviderTable,

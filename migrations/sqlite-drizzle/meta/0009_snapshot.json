@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "19c94ed5-b431-4420-9a30-cbe250648bd8",
+  "id": "83052e63-afc7-4638-8454-ba0d210914e0",
   "prevId": "6ebaaf05-1868-44d5-83ff-26100ad343f4",
   "tables": {
     "app_state": {
@@ -114,11 +114,6 @@
         "fe_created_at_idx": {
           "name": "fe_created_at_idx",
           "columns": ["created_at"],
-          "isUnique": false
-        },
-        "fe_deleted_at_idx": {
-          "name": "fe_deleted_at_idx",
-          "columns": ["deleted_at"],
           "isUnique": false
         }
       },
@@ -705,13 +700,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "forked_from_session_id": {
           "name": "forked_from_session_id",
           "type": "text",
@@ -736,11 +724,6 @@
         "agent_session_last_activity_at_idx": {
           "name": "agent_session_last_activity_at_idx",
           "columns": ["last_activity_at"],
-          "isUnique": false
-        },
-        "agent_session_deleted_at_idx": {
-          "name": "agent_session_deleted_at_idx",
-          "columns": ["deleted_at"],
           "isUnique": false
         }
       },
@@ -1734,6 +1717,13 @@
           "notNull": true,
           "autoincrement": false
         },
+        "board_id": {
+          "name": "board_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
         "provider_id": {
           "name": "provider_id",
           "type": "text",
@@ -1753,6 +1743,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "brief": {
+          "name": "brief",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "order_key": {
@@ -1790,8 +1787,68 @@
           "name": "painting_order_key_idx",
           "columns": ["order_key"],
           "isUnique": false
+        },
+        "painting_board_id_idx": {
+          "name": "painting_board_id_idx",
+          "columns": ["board_id"],
+          "isUnique": false
         }
       },
+      "foreignKeys": {
+        "painting_board_id_painting_board_id_fk": {
+          "name": "painting_board_id_painting_board_id_fk",
+          "tableFrom": "painting",
+          "tableTo": "painting_board",
+          "columnsFrom": ["board_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "painting_board": {
+      "name": "painting_board",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "focus_painting_id": {
+          "name": "focus_painting_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},

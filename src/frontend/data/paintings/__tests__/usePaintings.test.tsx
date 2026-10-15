@@ -29,6 +29,8 @@ jest.mock('../usePaintingJobs', () => ({
 }));
 
 const painting: Painting = {
+  boardId: 'board-1',
+  brief: null,
   createdAt: '2026-08-11T00:00:00.000Z',
   files: { input: [], output: ['output-1'] },
   id: 'painting-1',

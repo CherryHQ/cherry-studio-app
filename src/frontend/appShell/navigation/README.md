@@ -17,8 +17,8 @@ domains.
   installations and lets skipped/completed users enter chat normally.
   It uses `useLatestAgentSession` to recognize existing conversations, without selecting the chat
   destination. Background refreshes do not unmount the admitted chat.
-- `getRootHeaderStyle`, `getTransparentHeaderStyle`, and `paintingViewerHeaderShown` expose the
-  platform policy consumed by root stack configuration.
+- `getRootHeaderStyle` and `getTransparentHeaderStyle` expose the platform policy consumed by root
+  stack configuration.
 
 ## Organization
 
