@@ -255,6 +255,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .insert(agentSessionTable)
         .values({
           agentId: source.agentId,
+          workspaceFolderId: source.workspaceFolderId,
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its
           // own. Keep the last included message's original activity time.

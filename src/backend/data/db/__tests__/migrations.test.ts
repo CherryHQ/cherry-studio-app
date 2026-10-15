@@ -6,6 +6,43 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds logical identities without renaming legacy duplicates or dropping trash history', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0011_file_library',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('one', 'Report.md', 'text/markdown', 5, 1, 1, NULL), ('two', 'Report.md', 'text/markdown', 5, 2, 2, 123);`);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare('SELECT id, filename, library_file_id, trashed_with FROM file_entry ORDER BY id')
+          .all(),
+      ).toEqual([
+        { id: 'one', filename: 'Report.md', library_file_id: 'one', trashed_with: null },
+        { id: 'two', filename: 'Report.md', library_file_id: 'two', trashed_with: 'two' },
+      ]);
+      expect(
+        database
+          .prepare(
+            'SELECT id, folder_id, current_entry_id, deleted_at FROM library_file ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        { id: 'one', folder_id: null, current_entry_id: 'one', deleted_at: null },
+        { id: 'two', folder_id: null, current_entry_id: 'two', deleted_at: 123 },
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('indexes file trash without changing existing history or file deletion marks', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -654,7 +691,9 @@ describe('bundled SQLite migrations', () => {
         'app_state',
         'desktop_connection',
         'file_entry',
+        'file_folder',
         'job',
+        'library_file',
         'mcp_server',
         'painting',
         'painting_board',
@@ -716,6 +755,8 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'deleted_at',
         'provenance',
+        'library_file_id',
+        'trashed_with',
       ]);
       expect(columnNames(database, 'painting')).toEqual([
         'id',
@@ -745,7 +786,7 @@ describe('bundled SQLite migrations', () => {
       ).toEqual(['created_at', 'id']);
 
       // Agent persistence (docs/references/agent/agent-persistence.md): four
-      // tables, no turn or pending-approval table, no workspace or runtime id.
+      // tables, no turn or pending-approval table, and an optional library folder reference.
       expect(columnNames(database, 'agent')).toEqual([
         'id',
         'name',
@@ -771,6 +812,7 @@ describe('bundled SQLite migrations', () => {
         'forked_from_session_id',
         'fork_boundary_message_id',
         'runtime_revision',
+        'workspace_folder_id',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -819,6 +861,7 @@ describe('bundled SQLite migrations', () => {
       expect(indexNames(database, 'file_entry').sort()).toEqual([
         'fe_created_at_idx',
         'fe_deleted_at_idx',
+        'fe_library_file_idx',
       ]);
       expect(indexNames(database, 'painting')).toContain('painting_order_key_idx');
       expect(indexNames(database, 'agent_tool_binding')).toEqual(
@@ -860,7 +903,14 @@ describe('bundled SQLite migrations', () => {
           }),
         ]),
       );
-      expect(getForeignKeys(database, 'agent_session')).toHaveLength(2);
+      expect(getForeignKeys(database, 'agent_session')).toHaveLength(3);
+      expect(getForeignKeys(database, 'agent_session')).toContainEqual(
+        expect.objectContaining({
+          from: 'workspace_folder_id',
+          table: 'file_folder',
+          on_delete: 'SET NULL',
+        }),
+      );
       expect(getForeignKeys(database, 'agent_session_message')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

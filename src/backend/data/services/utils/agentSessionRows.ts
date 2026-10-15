@@ -31,6 +31,7 @@ export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
     agentId: row.agentId,
     name: row.name,
     isNameManuallyEdited: row.isNameManuallyEdited,
+    workspaceFolderId: row.workspaceFolderId,
     forkBoundaryMessageId: row.forkBoundaryMessageId,
     forkedFromSessionId: row.forkedFromSessionId,
     createdAt: timestampToISO(row.createdAt),

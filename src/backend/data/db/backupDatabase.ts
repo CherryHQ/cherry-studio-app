@@ -6,6 +6,7 @@ import { BackupError } from '@/shared/contracts/backup';
 import { DEVICE_LOCAL_PREFERENCE_KEYS } from '@/shared/data/preference/preferenceSchema';
 
 import { customSqlStatements } from './customSql';
+import { validateFileLibraryDatabase } from './fileLibraryValidation';
 import { migrations } from './migrations';
 
 export type BackupMigration = { when: number; sha256: string };
@@ -162,11 +163,21 @@ export async function validateBackupDatabase(
       const integrity = await db.getFirstAsync<{ integrity_check: string }>(
         'PRAGMA integrity_check',
       );
+      if (integrity?.integrity_check !== 'ok') throw new BackupError('invalid');
+      const sessionKeys = await db.getAllAsync<{ id: number; from: string }>(
+        'PRAGMA foreign_key_list(agent_session)',
+      );
+      const workspaceKey = sessionKeys.find((key) => key.from === 'workspace_folder_id')?.id;
+      const violations = await db.getAllAsync<{ table: string; fkid: number }>(
+        'PRAGMA foreign_key_check',
+      );
       if (
-        integrity?.integrity_check !== 'ok' ||
-        (await db.getAllAsync('PRAGMA foreign_key_check')).length
+        violations.some(
+          (violation) => violation.table !== 'agent_session' || violation.fkid !== workspaceKey,
+        )
       )
         throw new BackupError('invalid');
+      await validateFileLibraryDatabase(db);
       await db.execAsync('PRAGMA query_only = OFF');
     });
   } finally {
@@ -202,6 +213,9 @@ export async function restoreDeviceState(
   await db.execAsync('PRAGMA foreign_keys = ON; BEGIN IMMEDIATE');
   try {
     const now = Date.now();
+    await db.runAsync(
+      'UPDATE agent_session SET workspace_folder_id = NULL WHERE workspace_folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_folder WHERE id = agent_session.workspace_folder_id)',
+    );
     await db.runAsync('DELETE FROM desktop_connection');
     await db.runAsync(
       "UPDATE agent_session_message SET status = 'interrupted', updated_at = ? WHERE status IN ('pending','streaming')",
@@ -233,6 +247,7 @@ export async function restoreDeviceState(
       );
     }
     if ((await db.getAllAsync('PRAGMA foreign_key_check')).length) throw new BackupError('invalid');
+    await validateFileLibraryDatabase(db);
     await db.execAsync('COMMIT');
   } catch (error) {
     await db.execAsync('ROLLBACK');

@@ -1,3 +1,4 @@
+import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
@@ -51,9 +52,25 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
+      'library_read_file',
+      'library_search_files',
       'read_file',
       'write_file',
     ]);
+  });
+
+  test('requires explicit approval for every file-library call and honors the group deny-list', async () => {
+    const tools = await resolve({});
+    for (const name of ['library_search_files', 'library_read_file']) {
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        autoApprovalEligible: false,
+      });
+    }
+    const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
+    expect(capabilityIds(disabled)).not.toContain('library_search_files');
+    expect(capabilityIds(disabled)).not.toContain('library_read_file');
+    expect(capabilityIds(disabled)).toContain('read_file');
   });
 
   test('offers run_js without approval only when the client has the interactive bridge', async () => {
@@ -76,6 +93,8 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
+      'library_read_file',
+      'library_search_files',
       'read_file',
       'write_file',
     ]);
@@ -119,6 +138,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
+      'library_read_file',
+      'library_search_files',
       'read_file',
       'write_file',
     ]);
@@ -367,6 +388,9 @@ describe('createSystemCapabilitySource', () => {
 
   test('grants an edited derivative before returning the built-in tool result', async () => {
     const sourceId = '00000000-0000-7000-8000-000000000001';
+    jest
+      .spyOn(fileLibraryService, 'fileForEntry')
+      .mockResolvedValue({ folderId: null, name: 'notes.txt' } as never);
     const entry = FileEntrySchema.parse({
       createdAt: 2,
       filename: 'notes.txt',
@@ -403,7 +427,7 @@ describe('createSystemCapabilitySource', () => {
       resources: {
         availableFiles: new Map(),
         draftFileEntryIds: new Set(),
-        fileEntryIds: new Set(),
+        fileEntryIds: new Set([sourceId]),
         grantFile,
       },
     });
@@ -426,6 +450,9 @@ describe('createSystemCapabilitySource', () => {
 
   test('rewrites a draft this turn produced instead of deriving a copy', async () => {
     const draftId = '00000000-0000-7000-8000-000000000001';
+    jest
+      .spyOn(fileLibraryService, 'fileForEntry')
+      .mockResolvedValue({ folderId: null, name: 'notes.txt' } as never);
     const entry = FileEntrySchema.parse({
       createdAt: 2,
       filename: 'notes.txt',
@@ -474,7 +501,7 @@ describe('createSystemCapabilitySource', () => {
     });
 
     expect(rewriteTextEntry).toHaveBeenCalledWith(
-      { data: 'new', id: draftId },
+      { data: 'new', id: draftId, baseUpdatedAt: undefined, workspaceFolderId: null },
       expect.any(AbortSignal),
     );
     expect(createTextEntry).not.toHaveBeenCalled();

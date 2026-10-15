@@ -122,6 +122,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <ComposerSessionProvider
+      workspaceSessionId={sessionId}
       key={composerSession.key}
       initialAttachments={composerHandoff?.attachments}
       initialDraft={initialDraft}

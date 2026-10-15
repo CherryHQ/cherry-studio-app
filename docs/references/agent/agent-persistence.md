@@ -94,15 +94,17 @@ Pi working copy, which persists between launches. A missing copy is rebuilt from
 historical reasoning is omitted because stored parts carry no signature. Migration `0005` drops the
 interim `replay` column, and the pre-Pi MMKV replay cache is cleared once at startup.
 
-**No workspace; controlled resources come from managed references.** A desktop workspace encodes a
-working directory and filesystem/shell execution environment; mobile has neither, so Sessions carry
-no workspace reference or execution-target column. Every file is imported into `file_entry` before
-submission or tool use. The Host
-initializes a turn resource ledger from managed file ids in the current input and Session transcript,
-then may add only validated entries created by application capabilities during that turn. Those
-durable references already live on messages, while the monotonic same-turn ledger is process-local,
-so no generic `resource_scope` column is added. Any broad Agent-to-library grant requires an explicit
-relation rather than a directory path or opaque JSON scope.
+**Workspace is a library relation.** `agent_session.workspaceFolderId` optionally references a
+library folder. It is independent of Session ownership and survives folder rename, move, and trash;
+trash makes it unavailable until restored, and permanent folder deletion clears the reference.
+Forks copy the binding. A turn captures the folder id, while each operation rechecks its availability
+and each write checks destination ancestry in its transaction. This is a logical namespace over
+managed files, with no shell, execution-target column, or device working directory.
+
+The Host initializes a turn resource ledger from managed ids in current input and Session history,
+then adds validated artifacts created during that turn. Workspace membership supplements that
+ledger for reads and edits. Approved outside-library reads permit copying the source into the
+workspace but do not grant general ledger access. No generic `resource_scope` column is added.
 
 **Turn is a projection, not a table.** Decomposed by requirement, a V1 Turn is three things and
 none of them needs a row of its own:
@@ -196,7 +198,7 @@ model selection with Agent definition edits and inactive query caches.
 **Desktop divergence is documented.** Mobile shares the desktop table names and the
 `agent → agent_session → agent_session_message` shape but owns its columns, per the #568
 authority split and the schema README's alignment rule: columns that presume a resumable
-external runtime (workspace, delivery, resume tokens) are deliberately absent, while
+external runtime (execution targets, delivery, resume tokens) are deliberately absent, while
 `turnId`/`error` and Agent soft delete are mobile-owned.
 
 ## Tables
@@ -242,6 +244,7 @@ listing/cascade and MCP server delete-time disabling.
 | `agentId` | text | NOT NULL, FK → `agent.id` ON DELETE RESTRICT | Agent soft-deletes first |
 | `name` | text | NOT NULL DEFAULT `''` | |
 | `isNameManuallyEdited` | integer (bool) | NOT NULL DEFAULT `false` | |
+| `workspaceFolderId` | text | FK → `file_folder.id` ON DELETE SET NULL | Optional shared library workspace; retained while trashed |
 | `runtimeRevision` | integer | NOT NULL DEFAULT `0` | Incremented on turn deletion/retry to invalidate Pi working copies |
 | `lastActivityAt` | integer | NOT NULL | Monotonic Session recency: reservation time or terminal `stats.runtimeTiming.completedAt` |
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |

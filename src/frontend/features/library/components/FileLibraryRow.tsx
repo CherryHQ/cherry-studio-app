@@ -47,7 +47,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
       accessibilityActions={
         isEditing ? undefined : [{ name: 'longpress', label: t('library.selection.start') }]
       }
-      accessibilityLabel={`${item.entry.filename}, ${description}`}
+      accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
       accessibilityRole={isEditing ? 'checkbox' : 'button'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
@@ -87,7 +87,7 @@ export const FileLibraryRow = memo(function FileLibraryRow({
       </View>
       <View className="min-w-0 flex-1 gap-1">
         <Text className="text-base text-foreground" numberOfLines={2}>
-          {item.entry.filename}
+          {item.libraryFile?.name ?? item.entry.filename}
         </Text>
         <Text className="text-sm text-muted-foreground">{description}</Text>
       </View>

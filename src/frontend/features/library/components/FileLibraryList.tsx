@@ -1,10 +1,11 @@
-import { ContentState, SelectionIndicator, Tabs } from '@cherrystudio/ui/components';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import { Button, ContentState, SelectionIndicator, Tabs } from '@cherrystudio/ui/components';
 import {
   LegendList,
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -24,6 +25,7 @@ import {
 import { useBackendModule } from '@/frontend/data';
 import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { LibraryFile } from '@/shared/data/types/fileLibrary';
 
 import {
   type FileLibraryEntry,
@@ -40,6 +42,9 @@ import { FILE_LIBRARY_ROW_ESTIMATED_SIZE, FileLibraryRow } from './FileLibraryRo
 import { FileLibrarySkeleton } from './FileLibrarySkeleton';
 
 type FileLibraryListProps = {
+  folderId: string | null;
+  header: ReactNode;
+  onManage: (file: LibraryFile) => void;
   filter: FileLibraryFilter;
   isDataLoadEnabled: boolean;
   onFilterChange: (filter: FileLibraryFilter) => void;
@@ -47,6 +52,8 @@ type FileLibraryListProps = {
 };
 
 type FileLibraryListExtraData = {
+  onManage: (file: LibraryFile) => void;
+  manageLabel: string;
   dateFormatter: Intl.DateTimeFormat;
   isEditing: boolean;
   onOpen: (file: ResolvedFile) => void;
@@ -71,6 +78,9 @@ const filterLabelKeys: Record<FileLibraryFilter, string> = {
  * tiles instead of hiding behind it.
  */
 export function FileLibraryList({
+  folderId,
+  header,
+  onManage,
   filter,
   isDataLoadEnabled,
   onFilterChange,
@@ -87,6 +97,7 @@ export function FileLibraryList({
   const { onLayout, width: listWidth } = useLayoutWidth();
   const { entries, error, isLoading, isLoadingMore, loadMore, refresh } = useFileEntries(filter, {
     enabled: isDataLoadEnabled,
+    folderId,
   });
   const visibleEntries = useMemo(
     () =>
@@ -136,7 +147,9 @@ export function FileLibraryList({
         )
       : fileLibraryGrid.minTileSize;
   const estimatedItemSize =
-    viewMode === 'grid' ? tileSize + fileLibraryGrid.tileGap : FILE_LIBRARY_ROW_ESTIMATED_SIZE;
+    viewMode === 'grid'
+      ? tileSize + fileLibraryGrid.tileGap + (isEditing ? 0 : 36)
+      : FILE_LIBRARY_ROW_ESTIMATED_SIZE;
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const dateFormatter = useMemo(
     () =>
@@ -160,6 +173,8 @@ export function FileLibraryList({
   const listExtraData = useMemo<FileLibraryListExtraData>(
     () => ({
       dateFormatter,
+      onManage,
+      manageLabel: t('library.manageFile'),
       isEditing,
       onOpen: (resolvedFile) => void openLibraryFile(resolvedFile),
       onStartSelection: handleStartSelection,
@@ -170,6 +185,8 @@ export function FileLibraryList({
     }),
     [
       dateFormatter,
+      onManage,
+      t,
       handleStartSelection,
       isEditing,
       openLibraryFile,
@@ -193,6 +210,7 @@ export function FileLibraryList({
     () =>
       isEditing ? null : (
         <View className="pt-2 pb-4">
+          {header}
           <Tabs
             accessibilityLabel={t('library.filter.label')}
             items={filterOrder.map((value) => ({ label: t(filterLabelKeys[value]), value }))}
@@ -202,7 +220,7 @@ export function FileLibraryList({
           />
         </View>
       ),
-    [filter, isEditing, onFilterChange, t],
+    [filter, header, isEditing, onFilterChange, t],
   );
   // A kind tab with nothing in it yet is still filling itself, so it shows the
   // same placeholders as the first load rather than claiming the library is
@@ -288,6 +306,8 @@ function fileEntryKeyExtractor(item: FileLibraryEntry) {
 
 function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibraryEntry>) {
   const {
+    onManage,
+    manageLabel,
     dateFormatter,
     isEditing,
     onOpen,
@@ -299,27 +319,44 @@ function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibra
   } = extraData as FileLibraryListExtraData;
   const isSelected = selectedIds.has(item.entry.id);
 
-  return viewMode === 'grid' ? (
-    <FileTile
-      isEditing={isEditing}
-      isSelected={isSelected}
-      item={item}
-      onOpen={onOpen}
-      onStartSelection={onStartSelection}
-      onToggle={onToggle}
-      size={tileSize}
-    />
-  ) : (
-    <View style={styles.row}>
-      <FileLibraryRow
+  const content =
+    viewMode === 'grid' ? (
+      <FileTile
         isEditing={isEditing}
         isSelected={isSelected}
         item={item}
-        modifiedDate={dateFormatter.format(item.entry.updatedAt)}
         onOpen={onOpen}
         onStartSelection={onStartSelection}
         onToggle={onToggle}
+        size={tileSize}
       />
+    ) : (
+      <View style={styles.row}>
+        <FileLibraryRow
+          isEditing={isEditing}
+          isSelected={isSelected}
+          item={item}
+          modifiedDate={dateFormatter.format(item.entry.updatedAt)}
+          onOpen={onOpen}
+          onStartSelection={onStartSelection}
+          onToggle={onToggle}
+        />
+      </View>
+    );
+  return (
+    <View className={viewMode === 'list' ? 'flex-row items-center' : undefined}>
+      <View className={viewMode === 'list' ? 'min-w-0 flex-1' : undefined}>{content}</View>
+      {!isEditing && item.libraryFile ? (
+        <View className="items-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<EllipsisIcon />}
+            accessibilityLabel={manageLabel}
+            onPress={() => onManage(item.libraryFile!)}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -350,7 +387,7 @@ const FileTile = memo(function FileTile({
       accessibilityActions={
         isEditing ? undefined : [{ name: 'longpress', label: t('library.selection.start') }]
       }
-      accessibilityLabel={item.entry.filename}
+      accessibilityLabel={item.libraryFile?.name ?? item.entry.filename}
       accessibilityRole={isEditing ? 'checkbox' : 'button'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="relative active:opacity-70"
@@ -382,7 +419,9 @@ const FileTile = memo(function FileTile({
           <FileEntrySkeleton size={size} variant="card" />
         ) : (
           <LoadedFileEntryPreview
-            entry={item.entry}
+            entry={
+              item.libraryFile ? { ...item.entry, filename: item.libraryFile.name } : item.entry
+            }
             previewUri={item.previewUri}
             size={size}
             uri={item.uri}

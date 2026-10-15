@@ -34,6 +34,7 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
+import { SessionWorkspaceButton } from '../SessionWorkspaceButton';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
@@ -138,6 +139,7 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
+      {sessionId ? <SessionWorkspaceButton sessionId={sessionId} disabled={isBusy} /> : null}
       {mode === 'standard' &&
       selectedModelItem &&
       isImageGenerationModel(selectedModelItem.model) &&

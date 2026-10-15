@@ -18,8 +18,11 @@ export type FileLibraryEntry = ResolvedFileEntry;
  * filter in the DataApi query — it would key independent page stacks that
  * cannot share a thing.
  */
-export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled: boolean }) {
-  const query = useFileEntryPages({ enabled });
+export function useFileEntries(
+  filter: FileLibraryFilter,
+  { enabled, folderId }: { enabled: boolean; folderId: string | null },
+) {
+  const query = useFileEntryPages({ enabled, folderId });
   const loadNext = query.loadNext;
   const entries = useMemo(
     () =>

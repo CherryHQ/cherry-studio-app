@@ -344,7 +344,7 @@ export async function prepareDurableTurn(
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'name'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name' | 'workspaceFolderId'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -407,6 +407,7 @@ export async function prepareResolvedTurn(
     }
   };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
+    workspaceFolderId: session.workspaceFolderId ?? null,
     instructions: agent.instructions,
     model: agent.model,
     parts,
@@ -506,6 +507,7 @@ export async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          workspaceFolderId: session.workspaceFolderId ?? null,
           agentId: agent.id,
           askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
@@ -530,6 +532,7 @@ export async function prepareResolvedTurn(
             if (!signal.aborted) toolDiscoveryWarnings.push(warning);
           },
           signal,
+          session.workspaceFolderId ?? null,
         ),
         signal,
       );
