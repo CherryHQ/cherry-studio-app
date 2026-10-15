@@ -7,7 +7,6 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.io.File
-import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -44,16 +43,6 @@ class DiagnosticsModule : Module() {
       } catch (error: Exception) {
         promise.reject("ERR_UPLOAD_PREPARATION", "Unable to prepare diagnostic upload", error)
       }
-    }
-
-    AsyncFunction("sha256") { uri: String ->
-      val hash = MessageDigest.getInstance("SHA-256")
-      File(Uri.parse(uri).path!!).inputStream().use { input ->
-        val buffer = ByteArray(64 * 1024)
-        var count = input.read(buffer)
-        while (count >= 0) { hash.update(buffer, 0, count); count = input.read(buffer) }
-      }
-      hash.digest().joinToString("") { "%02x".format(it) }
     }
 
     AsyncFunction("sign") { value: String ->

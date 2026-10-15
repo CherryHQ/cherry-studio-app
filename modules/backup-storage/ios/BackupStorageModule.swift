@@ -1,4 +1,3 @@
-import CryptoKit
 import Darwin
 import ExpoModulesCore
 import Foundation
@@ -41,16 +40,6 @@ public class BackupStorageModule: Module {
       try self.flush(parent)
       try self.flush(parent.deletingLastPathComponent())
     }
-    AsyncFunction("hashFile") { (uri: String) throws -> String in
-      let file = try self.privateFile(uri)
-      let handle = try FileHandle(forReadingFrom: file)
-      defer { try? handle.close() }
-      var digest = SHA256()
-      while let chunk = try handle.read(upToCount: 262144), !chunk.isEmpty {
-        digest.update(data: chunk)
-      }
-      return digest.finalize().map { String(format: "%02x", $0) }.joined()
-    }.runOnQueue(storageQueue)
     AsyncFunction("sealDirectory") { (uri: String) throws in
       let root = try self.privateFile(uri)
       try self.seal(root)
