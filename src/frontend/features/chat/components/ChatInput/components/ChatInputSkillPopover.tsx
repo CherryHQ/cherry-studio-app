@@ -10,11 +10,8 @@ import { useComposerMeta, useComposerState } from '@/frontend/components/Compose
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import {
-  createSkillMentionLabel,
-  createSkillMentionUrl,
-  readSkillMentions,
-} from '../utils/skillMentions';
+import { createMentionLabel } from '../utils/mentionLabels';
+import { createSkillMentionUrl, readSkillMentions } from '../utils/skillMentions';
 
 /** Uses the plugin picker's anchored menu and preserves the live composer keyboard. */
 export function ChatInputSkillPopover({
@@ -65,10 +62,7 @@ export function ChatInputSkillPopover({
     selectionAccepted.current = true;
     setShouldRestoreFocus(true);
     if (!isSelected) {
-      inputRef.current?.insertLink(
-        createSkillMentionLabel(skill.name),
-        createSkillMentionUrl(skill.id),
-      );
+      inputRef.current?.insertLink(createMentionLabel(skill.name), createSkillMentionUrl(skill.id));
       inputRef.current?.insertText(' ');
     }
     onClose();

@@ -38,10 +38,17 @@ const McpServerBaseSchema = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 
+/** Opaque device-local grant reference; tokens never enter connection records. */
+export const McpOAuthReferenceSchema = z.strictObject({
+  authorizationId: z.uuidv4(),
+  clientId: z.string().refine((value) => value.trim().length > 0, 'Client ID is required'),
+});
+
 export const RemoteMcpServerSchema = McpServerBaseSchema.extend({
   origin: z.literal('remote').optional(),
   endpointUrl: z.url(),
   headers: z.record(z.string(), z.string()).optional(),
+  oauth: McpOAuthReferenceSchema.optional(),
 });
 
 export const BuiltInMcpServerSchema = McpServerBaseSchema.extend({

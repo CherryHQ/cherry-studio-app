@@ -49,6 +49,10 @@ jest.mock('@/frontend/components/Message', () => {
   };
 });
 
+jest.mock('../../translation/MessageTranslation', () => ({
+  MessageTranslationContent: () => null,
+}));
+
 jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));

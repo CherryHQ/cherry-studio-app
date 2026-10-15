@@ -1,7 +1,9 @@
 import { ContentState, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
+import { Text } from 'react-native';
 
 import type { ConversationSnapshot } from '@/frontend/appShell/conversation';
+import { useQuery } from '@/frontend/data';
 
 import { useConversationResourceValue } from '../hooks/useConversationResourceValue';
 import { ToolApprovalSheet, type ToolApprovalRespondInput } from './ToolApprovalSheet';
@@ -15,6 +17,11 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const { toast } = useToast();
   const pending = snapshot.interactions.find((item) => item.state === 'pending');
   const interaction = pending?.kind === 'question' ? undefined : pending;
+  const healthDataSharing = interaction?.healthDataSharing;
+  const recipient = useQuery('/providers/:id', {
+    enabled: Boolean(healthDataSharing?.providerId),
+    params: { id: healthDataSharing?.providerId ?? '' },
+  });
   const retired = snapshot.freshness.state === 'retired';
   const input = useConversationResourceValue(interaction?.input, retired);
   const isOpen = Boolean(interaction) && !retired;
@@ -44,8 +51,28 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
       }
       isOpen={isOpen}
       canRespond={canRespond}
+      canApprove={!healthDataSharing || Boolean(recipient.data)}
       onRespond={respond}
     >
+      {healthDataSharing && recipient.data ? (
+        <Text className="text-base text-foreground">
+          {t('health.sharingConsent', { provider: recipient.data.name })}
+        </Text>
+      ) : null}
+      {healthDataSharing && !recipient.data ? (
+        recipient.isPending && healthDataSharing.providerId ? (
+          <ContentState.Loading title={t('remoteAgent.loading')} />
+        ) : (
+          <ContentState.Error
+            title={t('health.recipientUnavailable')}
+            primaryAction={
+              healthDataSharing.providerId
+                ? { children: t('common.retry'), onPress: () => void recipient.refetch() }
+                : undefined
+            }
+          />
+        )
+      ) : null}
       {input.isPending && interaction ? (
         <ContentState.Loading title={t('remoteAgent.loading')} />
       ) : null}

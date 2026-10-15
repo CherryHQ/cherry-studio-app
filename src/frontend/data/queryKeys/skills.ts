@@ -1,9 +1,3 @@
-export const skillQueryKeys = {
-  all: () => ['/skills'] as const,
-  detail: (skillId: string) => [`/skills/${skillId}`] as const,
-  agent: (agentId: string) => [`/agents/${agentId}/skills`] as const,
-};
-
 export function isSkillQuery(queryKey: readonly unknown[]): boolean {
   const resource = queryKey[0];
   return (

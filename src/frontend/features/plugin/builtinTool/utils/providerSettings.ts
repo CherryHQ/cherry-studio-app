@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
@@ -20,6 +22,16 @@ export function getWebSearchProviderPreset(providerId: WebSearchProviderId) {
     id: providerId,
     ...WEB_SEARCH_PROVIDER_PRESET_MAP[providerId],
   };
+}
+
+/** Local page extraction is presented by what it does rather than by its preset name. */
+export function getWebSearchProviderDisplayName(
+  t: TFunction,
+  providerId: WebSearchProviderId,
+): string {
+  return providerId === 'fetch'
+    ? t('settings.websearch.provider.localExtraction')
+    : WEB_SEARCH_PROVIDER_PRESET_MAP[providerId].name;
 }
 
 export function getWebSearchProviderCapability(

@@ -33,7 +33,9 @@ jest.mock('@/frontend/components/Composer', () => {
   return {
     ...context,
     // File importing is unrelated to this draft protocol; retain the real session and surface.
-    ComposerSessionProvider: context.ComposerProvider,
+    ComposerSessionProvider: jest.requireActual(
+      '@/frontend/components/Composer/components/__tests__/_composerTestProvider',
+    ).ComposerTestProvider,
     ComposerSurface: jest.requireActual('@/frontend/components/Composer/components/ComposerSurface')
       .ComposerSurface,
   };

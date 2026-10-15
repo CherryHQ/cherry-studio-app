@@ -5,10 +5,9 @@ import type {
 import type { Skill } from '@/shared/data/types/skill';
 import { cherryinSkillLocator, cherryinSkillUrl } from '@/shared/utils/cherryinSkills';
 
-import type { BundledSkillDefinition } from '../bundled';
 import { createSkillsModule } from '../createSkillsModule';
 import type { SkillPackageFiles } from '../skillPackage';
-import { createBundledSkillSource, type SkillSourceCandidate } from '../skillSources';
+import type { SkillSourceCandidate } from '../skillSources';
 import type { SkillStorage } from '../skillStorage';
 
 jest.mock('@/backend/services/http', () => ({
@@ -16,24 +15,21 @@ jest.mock('@/backend/services/http', () => ({
   isHttpError: () => false,
 }));
 
-const reviewed: BundledSkillDefinition = {
+/** A package served by the fake GitHub source; `files` are read on every acquisition. */
+type TestPackage = { name: string; files: Record<string, string> };
+
+const reviewed: TestPackage = {
   name: 'notes',
-  revision: 1,
-  requiredTools: [],
-  workflowScope: 'Notes',
   files: {
     'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nWrite notes.',
     'references/t.md': '# T',
   },
 };
-const needsWeb: BundledSkillDefinition = {
-  ...reviewed,
+const needsWeb: TestPackage = {
   name: 'web-notes',
-  requiredTools: ['web_search'],
   files: { 'SKILL.md': '---\nname: web-notes\ndescription: Web notes\n---\nSearch first.' },
 };
-const needsPython: BundledSkillDefinition = {
-  ...reviewed,
+const needsPython: TestPackage = {
   name: 'py-notes',
   files: {
     'SKILL.md':
@@ -112,13 +108,6 @@ function createFakes() {
     hasRevision: () => true,
     readFile: async (ref, path) =>
       revisionFiles.get(`${ref.folderName}/${ref.contentHash}`)?.get(path) ?? null,
-    listFiles: () => [],
-    removeSkill: (folderName) =>
-      void published.splice(
-        0,
-        published.length,
-        ...published.filter((p) => !p.startsWith(`${folderName}/`)),
-      ),
     reconcile: jest.fn(),
   };
   const fakes = {
@@ -146,20 +135,22 @@ const marketplace = {
   },
 };
 
-function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
+function createModule(fakes: Fakes, packages: TestPackage[]) {
   const candidates = (): SkillSourceCandidate[] =>
-    createBundledSkillSource(definitions)
-      .list()
-      .map((candidate) => ({
-        ...candidate,
-        candidateId: `github:${candidate.name}@${candidate.version}`,
-        source: {
-          ...candidate.source,
-          registry: 'github',
-          locator: `github:owner/repo/${candidate.name}`,
-          url: `https://github.com/owner/repo/blob/main/${candidate.name}/SKILL.md`,
-        },
-      }));
+    packages.map((pkg) => ({
+      candidateId: `github:${pkg.name}`,
+      name: pkg.name,
+      description: '',
+      author: null,
+      version: null,
+      tags: [],
+      source: {
+        registry: 'github',
+        locator: `github:owner/repo/${pkg.name}`,
+        url: `https://github.com/owner/repo/blob/main/${pkg.name}/SKILL.md`,
+        revision: 'commit',
+      },
+    }));
   return createSkillsModule({
     readAuthor: async () => 'Current user',
     marketplace: { ...marketplace, resolveUrl: async () => candidates() },
@@ -167,17 +158,24 @@ function createModule(fakes: Fakes, definitions: BundledSkillDefinition[]) {
     skills: fakes.skills,
     storage: fakes.storage,
     sources: {
-      bundled: createBundledSkillSource([]),
       github: {
         registry: 'github',
         resolve: async () => {
           throw new Error('unused');
         },
-        acquire: (candidate, signal) =>
-          createBundledSkillSource(definitions).acquire(
-            { ...candidate, source: { ...candidate.source, locator: `bundled:${candidate.name}` } },
-            signal,
-          ),
+        acquire: async (candidate) => {
+          const pkg = packages.find((item) => item.name === candidate.name);
+          if (!pkg) throw new Error('not found');
+          return {
+            expectedName: pkg.name,
+            files: new Map(
+              Object.entries(pkg.files).map(([path, text]) => [
+                path,
+                new TextEncoder().encode(text),
+              ]),
+            ),
+          };
+        },
         resolveUrl: async (url) => {
           const candidate = candidates().find((item) => item.source.url === url);
           if (!candidate) throw new Error('not found');
@@ -212,7 +210,6 @@ describe('createSkillsModule', () => {
       readAuthor: async () => 'Current user',
       marketplace: { ...marketplace, resolveUrl: async () => [candidate()] },
       sources: {
-        bundled: createBundledSkillSource([]),
         github: {
           registry: 'github',
           resolve: async () => {
@@ -285,36 +282,6 @@ describe('createSkillsModule', () => {
     await expect(module.update(saved.id)).rejects.toMatchObject({ code: 'source-invalid' });
   });
 
-  it('refuses to expose system workflows as installable candidates', async () => {
-    const fakes = createFakes();
-    const bundled = createBundledSkillSource();
-    const module = createSkillsModule({
-      readAuthor: async () => 'Current user',
-      marketplace: { ...marketplace, resolveUrl: async () => bundled.list() },
-      db: fakes.db,
-      skills: fakes.skills,
-      storage: fakes.storage,
-      sources: {
-        bundled,
-        github: {
-          ...bundled,
-          registry: 'github',
-          resolveUrl: async () => {
-            throw new Error('unused');
-          },
-        },
-      },
-      agentExists: async () => true,
-    });
-    await expect(module.resolve('https://github.com/owner/repo')).rejects.toMatchObject({
-      code: 'source-invalid',
-    });
-    await expect(module.inspect(bundled.list()[0]!.candidateId)).rejects.toMatchObject({
-      code: 'candidate-expired',
-    });
-    expect(fakes.rows.size).toBe(0);
-  });
-
   it('reads the complete instruction body from the supplied immutable revision without an interpreter', async () => {
     const fakes = createFakes();
     const module = createModule(fakes, [needsPython]);
@@ -362,7 +329,11 @@ describe('createSkillsModule', () => {
     expect(inspection).toMatchObject({
       issues: [],
       limitations: { scripts: [], unavailableTools: [] },
-      package: { name: 'notes', manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }] },
+      package: {
+        name: 'notes',
+        instructions: 'Write notes.',
+        manifest: [{ path: 'SKILL.md' }, { path: 'references/t.md' }],
+      },
     });
     expect(await module.inspect(py!.candidateId)).toMatchObject({
       limitations: { scripts: ['scripts/run.py'], unavailableTools: ['Bash'] },
@@ -417,16 +388,15 @@ describe('createSkillsModule', () => {
 
   it('updates despite execution limitations, preserves the last valid package, and uninstalls', async () => {
     const fakes = createFakes();
-    const definitions: BundledSkillDefinition[] = [reviewed];
-    const module = createModule(fakes, definitions);
+    const packages = [reviewed];
+    const module = createModule(fakes, packages);
     const [notes] = await module.resolve('https://github.com/owner/repo');
     const installed = await module.install({ candidateId: notes!.candidateId });
 
     expect(await module.update(installed.id)).toMatchObject({ outcome: 'unchanged' });
 
-    definitions[0] = {
+    packages[0] = {
       ...reviewed,
-      revision: 2,
       files: { ...reviewed.files, 'references/t.md': '# T2' },
     };
     const updated = await module.update(installed.id);
@@ -437,19 +407,16 @@ describe('createSkillsModule', () => {
     expect(updated.skill.contentHash).not.toBe(installed.contentHash);
     expect(fakes.published).toHaveLength(2);
 
-    definitions[0] = {
-      ...needsPython,
+    packages[0] = {
       name: 'notes',
-      revision: 3,
       files: { 'SKILL.md': '---\nname: notes\ndescription: Take notes\n---\nRun python.' },
     };
     const pythonUpdate = await module.update(installed.id);
     expect(pythonUpdate.outcome).toBe('updated');
     expect(fakes.published).toHaveLength(3);
 
-    definitions[0] = {
+    packages[0] = {
       ...reviewed,
-      revision: 4,
       files: { 'SKILL.md': '---\nname: notes\n---\nMissing description.' },
     };
     expect(await module.update(installed.id)).toMatchObject({
@@ -494,7 +461,6 @@ describe('createSkillsModule', () => {
       skills: fakes.skills,
       storage: fakes.storage,
       sources: {
-        bundled: createBundledSkillSource([]),
         github: {
           registry: 'github',
           acquire: async () => ({

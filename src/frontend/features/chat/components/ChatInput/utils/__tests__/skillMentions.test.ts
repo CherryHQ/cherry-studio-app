@@ -1,7 +1,7 @@
+import { createMentionLabel } from '../mentionLabels';
 import { readPluginMentions } from '../pluginMentions';
 import {
   createSkillActionMention,
-  createSkillMentionLabel,
   createSkillMentionUrl,
   readSkillMentions,
   removeSkillMentions,
@@ -13,7 +13,7 @@ describe('composer Skill references', () => {
   test('a Skill reference keeps its identity and label without sending the inline icon marker', () => {
     expect(
       readSkillMentions(
-        `[${createSkillMentionLabel('grill-me')}](${createSkillMentionUrl(SKILL_ID)}) 帮我完善方案`,
+        `[${createMentionLabel('grill-me')}](${createSkillMentionUrl(SKILL_ID)}) 帮我完善方案`,
       ),
     ).toEqual({
       skills: [{ id: SKILL_ID, name: 'grill-me' }],
@@ -45,7 +45,7 @@ describe('composer Skill references', () => {
 
   test('installed references retain display text and select UUID identities only once', () => {
     const url = createSkillMentionUrl(SKILL_ID);
-    const draft = `[${createSkillMentionLabel('笔记')}](${url}) [Notes](${url.toUpperCase()})`;
+    const draft = `[${createMentionLabel('笔记')}](${url}) [Notes](${url.toUpperCase()})`;
     expect(readSkillMentions(draft)).toEqual({
       skills: [{ id: SKILL_ID, name: '笔记' }],
       skillReferences: [

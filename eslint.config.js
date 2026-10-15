@@ -339,6 +339,15 @@ module.exports = defineConfig([
       // Reanimated SharedValue.value mutation is idiomatic inside worklets and
       // gesture callbacks, but the React Compiler rule cannot distinguish it.
       'react-hooks/immutability': 'off',
+      // Jest runs on Node, which has toSorted, but the app's Hermes engine does not,
+      // so a call passes tests and then throws on device.
+      'no-restricted-properties': [
+        'error',
+        {
+          property: 'toSorted',
+          message: 'Hermes lacks Array.prototype.toSorted. Sort a copy with [...items].sort().',
+        },
+      ],
     },
   },
   {

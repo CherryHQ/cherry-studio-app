@@ -401,11 +401,15 @@ export class AgentSessionChatClient {
       const persistedMessage = persistedById.get(messageId);
       if (
         persistedMessage &&
+        persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&
         persistedMessage.turnId === liveMessage.turnId &&
         persistedMessage.status === liveMessage.status &&
-        Date.parse(persistedMessage.updatedAt) >= Date.parse(liveMessage.updatedAt)
+        // User input is immutable within a turn. Its live projection carries
+        // the execution's timestamp, which can outlive the stored user row.
+        (liveMessage.role === 'user' ||
+          Date.parse(persistedMessage.updatedAt) >= Date.parse(liveMessage.updatedAt))
       ) {
         // Late usage can advance a terminal row beyond the finalized event.
         entry.liveMessages.delete(messageId);

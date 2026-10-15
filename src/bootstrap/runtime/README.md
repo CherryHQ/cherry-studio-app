@@ -32,8 +32,8 @@ provider catalogs, transcript history, diagnostics, and other feature work stay 
 critical path unless a separate startup decision proves otherwise.
 
 The process log sink is installed before router imports to capture startup failure. It holds no
-open file handles or timers and survives application-host replacement. Source inspection, scan,
-ZIP creation, and upload still run only on an explicit frontend diagnostic operation.
+open file handles or timers and survives application-host replacement. Source collection, ZIP
+creation, and upload still run only on an explicit feedback submission.
 
 ## Ownership Rules
 

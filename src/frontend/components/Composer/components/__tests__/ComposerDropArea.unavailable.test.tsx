@@ -2,8 +2,8 @@ import { type ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ImageDropTargetView } from '../../../../../../modules/image-drop-target';
-import { ComposerProvider } from '../../context/ComposerProvider';
 import { ComposerDropArea } from '../ComposerDropArea';
+import { ComposerTestProvider } from './_composerTestProvider';
 
 jest.mock('expo', () => {
   const React = jest.requireActual('react');
@@ -58,11 +58,11 @@ describe('ComposerDropArea with the native view unavailable', () => {
 
     await act(async () => {
       renderer = create(
-        <ComposerProvider>
+        <ComposerTestProvider>
           <ComposerDropArea>
             <MountProbe />
           </ComposerDropArea>
-        </ComposerProvider>,
+        </ComposerTestProvider>,
       );
     });
 

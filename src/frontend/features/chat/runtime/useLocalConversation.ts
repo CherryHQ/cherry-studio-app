@@ -47,9 +47,11 @@ export function useLocalConversation(input: {
     setOwned({ sessionId, client, projector });
   }
   const { messages: history } = window;
+  // Live rows can arrive or settle after the history already holds them, so
+  // reconcile on live changes too, not only on history refetches.
   useEffect(() => {
     if (sessionId) client.reconcilePersistedMessages(sessionId, history);
-  }, [client, history, sessionId]);
+  }, [client, history, sessionId, state.liveMessages]);
   const snapshot = useMemo<ConversationSnapshot>(
     () =>
       projector

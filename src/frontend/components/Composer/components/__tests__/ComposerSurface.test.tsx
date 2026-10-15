@@ -4,17 +4,14 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 
-import {
-  ComposerProvider,
-  useComposerActions,
-  useComposerState,
-} from '../../context/ComposerProvider';
+import { useComposerActions, useComposerState } from '../../context/ComposerProvider';
 import type {
   ComposerAttachmentDraft,
   ComposerAttachmentReady,
 } from '../../utils/composerAttachments';
 import { ComposerAttachments } from '../ComposerAttachments';
 import { ComposerSurface } from '../ComposerSurface';
+import { ComposerTestProvider } from './_composerTestProvider';
 
 type MockComposerProps = {
   canSend?: boolean;
@@ -129,11 +126,11 @@ describe('ComposerSurface', () => {
       });
       act(() => {
         renderer?.update(
-          <ComposerProvider>
+          <ComposerTestProvider>
             <ComposerSurface key="workspace" onSend={nextSend} onStop={jest.fn()} streaming={false}>
               <StateProbe />
             </ComposerSurface>
-          </ComposerProvider>,
+          </ComposerTestProvider>,
         );
       });
       act(() => mockComposerActions?.setDraft('new draft'));
@@ -172,11 +169,11 @@ describe('ComposerSurface', () => {
     act(() => mockComposerActions?.setDraft('first draft'));
     act(() =>
       renderer?.update(
-        <ComposerProvider initialDraft="first">
+        <ComposerTestProvider initialDraft="first">
           <ComposerSurface onSend={onSend} onStop={onStop} streaming={false}>
             <StateProbe />
           </ComposerSurface>
-        </ComposerProvider>,
+        </ComposerTestProvider>,
       ),
     );
     expect(mockComposerProps?.value).toBe('first draft');
@@ -395,9 +392,9 @@ describe('ComposerSurface', () => {
   ) {
     act(() => {
       renderer = create(
-        <ComposerProvider initialAttachments={initialAttachments} initialDraft={initialDraft}>
+        <ComposerTestProvider initialAttachments={initialAttachments} initialDraft={initialDraft}>
           {children}
-        </ComposerProvider>,
+        </ComposerTestProvider>,
       );
     });
   }

@@ -23,6 +23,7 @@ import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
 import { PI_TOOL_BUDGET } from './piToolBudget';
 import {
@@ -30,10 +31,12 @@ import {
   retainToolInstructions,
   toolInstructionsSection,
 } from './piToolInstructions';
+import { piToolModelContent } from './piToolModelContent';
 
 type PiDurableToolOptions = {
   name: string;
   tools: readonly RuntimeTool[];
+  acceptsImages?: boolean;
   codemode?: Extension;
   previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
   admitCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<boolean>;
@@ -160,10 +163,28 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         }
       }
       await options.onResult?.(tool, stored, api, context);
-      if (stored.artifacts.length) {
+      if (stored.artifacts.length || tool.ref.source === 'mcp') {
         const task = await api.getTask(api.taskId, context);
         const input = task?.input as ToolTaskInput | undefined;
-        if (input?.kind === 'nested')
+        if (input?.kind === 'nested') {
+          if (tool.ref.source === 'mcp') {
+            const ref = tool.ref;
+            await api.commit(
+              (tx) =>
+                tx.appendEntry(PiCodemodeMcpResultEntry, api.conversationId, {
+                  data: {
+                    parentCallId: input.parentCallId,
+                    callId: api.callId,
+                    ref,
+                    providerName: tool.providerName,
+                    displayName: tool.displayName,
+                    input: RuntimeJsonValueSchema.parse(input.call.arguments),
+                    output: RuntimeJsonValueSchema.parse(stored),
+                  },
+                }),
+              context,
+            );
+          }
           await retainPiCodemodeArtifacts(
             api,
             input.parent,
@@ -171,8 +192,12 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             stored.artifacts,
             context,
           );
+        }
       }
-      return tool.ref.source === 'builtin' && modelImages ? { ...stored, modelImages } : stored;
+      // Built-in vision output decides its own model support; MCP images follow the model's.
+      return modelImages && (tool.ref.source === 'builtin' || options.acceptsImages !== false)
+        ? { ...stored, modelImages }
+        : stored;
     } catch (error) {
       signal.throwIfAborted();
       const failure = { ...normalizeAiError(error), origin: 'tool' as const };
@@ -381,17 +406,30 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
     ...(tool.failureGroup ? { failureGroup: tool.failureGroup } : {}),
   };
   return {
-    output: [
-      { type: 'text', text: JSON.stringify(toModelToolResult(stored)) },
-      ...(modelImages ?? []).map((item) => ({
-        type: 'image' as const,
-        data: item.data,
-        mimeType: item.mediaType,
-      })),
-    ],
+    output:
+      tool.ref.source === 'mcp'
+        ? piToolModelContent(output, true)
+        : [
+            { type: 'text', text: JSON.stringify(toModelToolResult(stored)) },
+            ...(modelImages ?? []).map((item) => ({
+              type: 'image' as const,
+              data: item.data,
+              mimeType: item.mediaType,
+            })),
+          ],
     // Error values may have a different shape from a capability's success schema.
     ...(!output.failure
-      ? { structuredOutput: { value: output.value, artifacts: output.artifacts } }
+      ? {
+          structuredOutput: {
+            // Scripts can print or forward this value to a model. Use the same bounded channel
+            // as direct calls; the durable details keep UI metadata and managed media intact.
+            value:
+              tool.ref.source === 'mcp'
+                ? RuntimeJsonValueSchema.parse({ content: piToolModelContent(output, true, false) })
+                : output.value,
+            artifacts: output.artifacts,
+          },
+        }
       : {}),
     isError: output.failure !== undefined,
     details: JSON.parse(JSON.stringify(details)) as JsonValue,

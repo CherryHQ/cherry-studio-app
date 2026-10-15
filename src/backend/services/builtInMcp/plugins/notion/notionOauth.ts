@@ -1,13 +1,7 @@
-import Constants from 'expo-constants';
-import {
-  CryptoDigestAlgorithm,
-  CryptoEncoding,
-  digestStringAsync,
-  getRandomBytes,
-} from 'expo-crypto';
 import * as z from 'zod';
 
 import { createHttpClient, isHttpError, type HttpRequest } from '@/backend/services/http';
+import { createPkceChallenge, nativeCallbackUrl, randomOauthValue } from '@/backend/utils/oauth';
 import { PluginError } from '@/shared/contracts/plugins';
 
 import type { PluginAuthorizationStore } from '../../authorization/pluginAuthorization';
@@ -74,10 +68,8 @@ const MetadataSchema = z.object({
 });
 
 function redirectUrl() {
-  const schemes = Constants.expoConfig?.scheme;
-  const scheme = Array.isArray(schemes) ? schemes[0] : schemes;
   const result = NotionApplicationSchema.shape.redirectUrl.safeParse(
-    `${scheme}://plugins/notion/callback`,
+    nativeCallbackUrl('plugins/notion/callback'),
   );
   if (!result.success)
     throw new PluginError('unavailable', 'Notion requires a Cherry native application.');
@@ -165,20 +157,11 @@ async function exchange(
   });
 }
 
-const base64Url = (value: string) =>
-  value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
-
 export const notionOauth = {
   getApplication,
   async challenge(application: NotionApplication) {
-    const state = randomValue();
-    const verifier = randomValue();
-    const challenge = base64Url(
-      await digestStringAsync(CryptoDigestAlgorithm.SHA256, verifier, {
-        encoding: CryptoEncoding.BASE64,
-      }),
-    );
+    const state = randomOauthValue();
+    const { verifier, challenge } = await createPkceChallenge();
     const url = new URL(application.authorizationEndpoint);
     url.search = new URLSearchParams({
       client_id: application.clientId,

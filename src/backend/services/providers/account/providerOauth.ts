@@ -1,12 +1,7 @@
-import {
-  CryptoDigestAlgorithm,
-  CryptoEncoding,
-  digestStringAsync,
-  getRandomBytes,
-} from 'expo-crypto';
 import * as z from 'zod';
 
 import { createHttpClient, isHttpError } from '@/backend/services/http';
+import { createPkceChallenge, randomOauthValue } from '@/backend/utils/oauth';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 
 const secret = z.string().min(1).max(16_384).regex(/^\S+$/);
@@ -48,10 +43,6 @@ export function providerAccountError(error: unknown, signal?: AbortSignal): Prov
   }
   return new ProviderAccountError('request');
 }
-
-const base64Url = (value: string) =>
-  value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-const randomValue = () => base64Url(btoa(String.fromCharCode(...getRandomBytes(32))));
 
 function httpsUrl(value: string) {
   const url = new URL(value);
@@ -120,13 +111,8 @@ export function createProviderOauthClient(config: {
 
   return {
     async challenge(application: ProviderOauthApplication) {
-      const state = randomValue();
-      const verifier = randomValue();
-      const challenge = base64Url(
-        await digestStringAsync(CryptoDigestAlgorithm.SHA256, verifier, {
-          encoding: CryptoEncoding.BASE64,
-        }),
-      );
+      const state = randomOauthValue();
+      const { verifier, challenge } = await createPkceChallenge();
       const url = new URL(authorizationUrl);
       for (const [name, value] of Object.entries({
         response_type: 'code',

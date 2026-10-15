@@ -9,6 +9,7 @@ import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
   type ComposerAttachmentDraft,
   type ComposerAttachmentReady,
+  createReadyAttachmentDraft,
 } from '../utils/composerAttachments';
 
 type ComposerAttachmentStripProps = {
@@ -79,16 +80,7 @@ function ManagedAttachmentTile({
         onImageReplace={
           onReplace
             ? (sourceId, file) =>
-                onReplace(attachment.id, sourceId, {
-                  id: attachment.id,
-                  fileEntryId: file.entry.id,
-                  kind: 'image',
-                  mediaType: file.entry.mediaType,
-                  name: file.entry.filename,
-                  size: file.entry.size,
-                  status: 'ready',
-                  uri: file.uri,
-                })
+                onReplace(attachment.id, sourceId, createReadyAttachmentDraft(file, attachment.id))
             : undefined
         }
       />

@@ -9,6 +9,8 @@ import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
+import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
+import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
 import type { RuntimeDurableSubmission, RuntimeDurableTurn } from '../durableTypes';
@@ -27,6 +29,7 @@ import type {
   RuntimeUsage,
 } from '../types';
 import { PiCodemodeArtifactsEntry } from './piCodemodeFiles';
+import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { readPiWebResult } from './PiWebResponse';
 import { PI_WEB_FAILURE_GROUP } from './piWebTools';
 
@@ -109,6 +112,9 @@ const ErrorSchema = z.object({
     .optional(),
 });
 const OutputSchema = z.object({
+  mcpSource: McpResultSourceSchema.optional(),
+  mcpApp: McpAppReferenceSchema.optional(),
+  modelContent: McpModelContentSchema.optional(),
   value: RuntimeJsonValueSchema,
   modelValue: RuntimeJsonValueSchema.optional(),
   artifacts: z.array(
@@ -488,11 +494,33 @@ export function projectPiTurn(options: {
       });
   }
 
-  for (const entry of entries)
+  for (const entry of entries) {
+    if (
+      PiCodemodeMcpResultEntry.is(entry) &&
+      toolsByCall.has(entry.data.parentCallId) &&
+      !toolsByCall.has(entry.data.callId)
+    ) {
+      const output = OutputSchema.parse(entry.data.output);
+      const part: Extract<RuntimeOutputPart, { type: 'tool' }> = {
+        id: `pi:${entry.id}:mcp-result`,
+        type: 'tool',
+        toolCallId: entry.data.callId,
+        toolRef: entry.data.ref,
+        providerName: entry.data.providerName,
+        displayName: entry.data.displayName,
+        input: entry.data.input,
+        output,
+        state: output.failure ? 'error' : 'output-available',
+        ...(output.failure ? { error: output.failure.error } : {}),
+      };
+      parts.push(part);
+      toolsByCall.set(part.toolCallId, part);
+    }
     for (const message of entry.model ?? []) {
       if (message.role === 'assistant') assistant(message, `pi:${entry.id}`, false);
       else if (message.role === 'toolResult') toolResult(entry, message);
     }
+  }
   if (options.partial)
     assistant(options.partial, options.partialId ?? `pi:live:${record.id}`, true);
   // These verified receipts survive parent cancellation and task-document retirement. Keep the

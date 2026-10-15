@@ -316,7 +316,9 @@ metadata that differs from the entry, and persists the authoritative name and me
 `purpose: 'input-attachment'`. A tool that produces an Office
 document, image, or edited file keeps its structured tool result and also emits a part with
 `purpose: 'artifact'` so the assistant message durably owns the reference. Artifact content is not
-automatically projected as a model attachment in later history. See
+automatically projected as a model attachment in later history. MCP results can separately retain
+explicit managed image references in `modelContent`; only those verified artifacts may be
+rehydrated for an image-capable model. `modelImages` bytes never cross this persisted protocol. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
 
 Current JPEG, PNG, GIF, and WebP inputs are admitted only when the authoritative entry and blob,
@@ -343,6 +345,8 @@ persisted tool call, `output-available`, `denied`, `error`, and `interrupted` ar
 a paired normalized `RuntimeToolResult` JSON projection. A built-in result may retain a full display
 `value` plus an optional compact `modelValue` for replay when its instructions are already supplied
 in the system context; runtime-only instruction contribution metadata is not a protocol field.
+Optional MCP `modelContent`, host-issued `mcpApp` linkage, and `mcpSource` resource fingerprints
+survive persistence; these grant no authority without current connection and Agent checks.
 No finalized message contains a tool left
 in `input-streaming`, `input-available`, `awaiting-approval`, or `running`. A failed catalog dispatch
 persists only its requested target name and normalized error, never unresolved parameters.

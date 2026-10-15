@@ -63,7 +63,6 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import {
-  createBundledSkillSource,
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
@@ -73,6 +72,7 @@ import {
   skillStorage,
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
+import { createTranslationModule } from '@/backend/services/translation';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -292,7 +292,6 @@ export function createBackend(
     readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
     sources: {
-      bundled: createBundledSkillSource(),
       github: githubSkills,
       cherryin: cherryinSkills,
     },
@@ -345,6 +344,11 @@ export function createBackend(
       profile,
       providers,
       skills,
+      translation: createTranslationModule({
+        ai: services.ai,
+        preference: services.preference,
+        models: services.model,
+      }),
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
