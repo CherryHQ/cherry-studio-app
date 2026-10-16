@@ -5,7 +5,7 @@ import * as z from 'zod';
  *
  * Intentionally diverges from Cherry Desktop's file types: mobile has no
  * external-path entries, no content hashing, and no per-file cleanup policies.
- * The unified trash retains deleted entries for 30 days. Every entry is a Cherry-owned blob that
+ * The file trash retains deleted entries for 30 days. Every entry is a Cherry-owned blob that
  * is immutable once the Agent turn producing it ends; that turn may rewrite its
  * own draft, and any other "edit" creates a new version entry.
  */

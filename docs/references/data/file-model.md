@@ -5,7 +5,7 @@
 How Cherry Mobile stores user- and generation-owned files. This model is mobile-native and
 deliberately diverges from Cherry Desktop's `FileEntry`: desktop's external-path entries, content
 hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
-[unified trash](./trash.md) for recoverable user deletion. Terms follow [Domain Language](../domain-language.md).
+[file trash](./trash.md) for recoverable user deletion. Terms follow [Domain Language](../domain-language.md).
 
 ## Invariants
 
@@ -250,8 +250,8 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 tab selects `provenance: 'document-export'` without reclassifying historical rows. See
 [Document Export](../document-export.md).
 General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
-bytes and previews. The [unified trash](./trash.md) restores entries, permanently deletes them, and
-clears a category or the whole trash. It shows total trashed file bytes; storage settings expose the
+bytes and previews. The [file trash](./trash.md) restores entries, permanently deletes them, and
+clears the whole trash. Storage settings show total trashed file bytes and expose the
 same Empty trash action. Files older than 30 days in trash are permanently deleted at app startup
 and foreground entry, without a timer or background task. No reverse-reference warning is needed:
 existing messages and paintings show their unavailable placeholder until a file is restored.

@@ -7,18 +7,12 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
-import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { TrashService } from '@/backend/data/services/TrashService';
 import { deleteInternalEntry, notifyFileChange } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import {
-  TRASH_RETENTION_MS,
-  type TrashFilter,
-  type TrashItem,
-  type TrashKind,
-} from '@/shared/data/api/schemas/trash';
+import { TRASH_RETENTION_MS, type TrashItem } from '@/shared/data/api/schemas/trash';
 
 const logger = loggerService.withContext('TrashRuntime');
 
@@ -53,23 +47,23 @@ export class TrashRuntime extends BaseService {
     return this.pending > 0;
   }
 
-  restore(kind: TrashKind, id: string) {
+  restore(id: string) {
     return this.mutate(async () => {
-      await this.entries.restore(kind, id);
-      this.notify({ kind, id });
+      await this.entries.restore(id);
+      notifyFileChange(id);
     });
   }
 
-  delete(kind: TrashKind, id: string) {
+  delete(id: string) {
     return this.mutate(async () => {
-      await this.purge(await this.entries.get(kind, id));
+      await this.purge(await this.entries.get(id));
     });
   }
 
-  empty(kind: TrashFilter = 'all') {
+  empty() {
     return this.mutate(async () => {
       const failures: unknown[] = [];
-      for (const item of await this.entries.candidates(kind)) {
+      for (const item of await this.entries.candidates()) {
         try {
           await this.purge(item);
         } catch (error) {
@@ -83,7 +77,7 @@ export class TrashRuntime extends BaseService {
 
   sweep() {
     return this.mutate(async () => {
-      for (const item of await this.entries.candidates('all', Date.now() - TRASH_RETENTION_MS)) {
+      for (const item of await this.entries.candidates(Date.now() - TRASH_RETENTION_MS)) {
         if (this.stopped) break;
         try {
           await this.purge(item);
@@ -103,24 +97,7 @@ export class TrashRuntime extends BaseService {
 
   private async purge(item: TrashItem) {
     storageMutationGate.assertWritable();
-    const removed =
-      item.kind === 'file'
-        ? await deleteInternalEntry(this.files, item.id, item.deletedAt)
-        : await this.entries.deleteSession(item);
-    if (removed) this.notify(item);
-  }
-
-  private notify(item: Pick<TrashItem, 'kind' | 'id'>) {
-    if (item.kind === 'file') notifyFileChange(item.id);
-    publishDataApiChanges([
-      '/trash',
-      '/trash/summary',
-      '/agent-sessions',
-      `/agent-sessions/${item.id}`,
-      `/agent-sessions/${item.id}/messages`,
-      '/search/entities',
-      '/search/contents',
-    ]);
+    await deleteInternalEntry(this.files, item.id, item.deletedAt);
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {

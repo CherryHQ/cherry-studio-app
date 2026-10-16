@@ -705,13 +705,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "forked_from_session_id": {
           "name": "forked_from_session_id",
           "type": "text",
@@ -736,11 +729,6 @@
         "agent_session_last_activity_at_idx": {
           "name": "agent_session_last_activity_at_idx",
           "columns": ["last_activity_at"],
-          "isUnique": false
-        },
-        "agent_session_deleted_at_idx": {
-          "name": "agent_session_deleted_at_idx",
-          "columns": ["deleted_at"],
           "isUnique": false
         }
       },

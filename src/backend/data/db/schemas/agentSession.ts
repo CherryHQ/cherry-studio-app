@@ -8,8 +8,8 @@ import { agentTable } from './agent';
  * (docs/references/agent/agent-persistence.md).
  *
  * No workspace reference: mobile has no working directory or shell
- * environment. The Host owns the local Runtime binding. Sessions move to trash; permanent deletion
- * cascades their messages; list ordering is recency (`lastActivityAt`), so
+ * environment. The Host owns the local Runtime binding. Sessions hard-delete and
+ * cascade their messages; list ordering is recency (`lastActivityAt`), so
  * there is no order key.
  */
 export const agentSessionTable = sqliteTable(
@@ -32,8 +32,6 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .$defaultFn(() => Date.now()),
     ...createUpdateTimestamps,
-    /** Time moved to the unified trash; messages survive until permanent removal. */
-    deletedAt: integer(),
     // Fork provenance (agent-protocol.md "Branching" rule 2). SET NULL, not
     // CASCADE: deleting the source must drop the lineage claim, never the
     // forked Session.
@@ -49,7 +47,6 @@ export const agentSessionTable = sqliteTable(
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),
     index('agent_session_last_activity_at_idx').on(t.lastActivityAt),
-    index('agent_session_deleted_at_idx').on(t.deletedAt),
   ],
 );
 

@@ -2,7 +2,7 @@ import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { ContentState } from '@cherrystudio/ui/components';
 import { LegendList } from '@legendapp/list/react-native';
-import { useFocusEffect, useIsFocused, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useIsFocused } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AppState, Text, View } from 'react-native';
@@ -11,19 +11,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useInfiniteQuery, useQuery } from '@/frontend/data/hooks';
 import { useTrashActions } from '@/frontend/hooks/trash';
-import type { TrashFilter } from '@/shared/data/api/schemas/trash';
 
 import { TrashEntryRow } from './components/TrashEntryRow';
 
-const filters = ['all', 'session', 'file'] as const;
-const filterLabels = { all: 'trash.all', session: 'trash.sessions', file: 'trash.files' };
-
 export function TrashScreen() {
   const { t, i18n } = useTranslation();
-  const { kind } = useLocalSearchParams<{ kind?: string }>();
-  const [filter, setFilter] = useState<TrashFilter>(
-    kind === 'file' || kind === 'session' ? kind : 'all',
-  );
   const focused = useIsFocused();
   const [now, setNow] = useState(Date.now);
   useFocusEffect(
@@ -36,7 +28,7 @@ export function TrashScreen() {
     }, []),
   );
   const insets = useSafeAreaInsets();
-  const list = useInfiniteQuery('/trash', { enabled: focused, query: { kind: filter }, limit: 30 });
+  const list = useInfiniteQuery('/trash', { enabled: focused, limit: 30 });
   const summary = useQuery('/trash/summary', { enabled: focused });
   const actions = useTrashActions();
   const entries = useMemo(() => list.pages.flatMap((page) => page.items), [list.pages]);
@@ -44,13 +36,6 @@ export function TrashScreen() {
     () => new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: 'medium' }),
     [i18n.resolvedLanguage],
   );
-  const categoryCount = !summary.data
-    ? 0
-    : filter === 'file'
-      ? summary.data.files
-      : filter === 'session'
-        ? summary.data.sessions
-        : summary.data.files + summary.data.sessions;
   const refresh = () => Promise.all([list.refresh(), summary.refetch()]);
   const error = list.error ?? summary.error;
   const rightActions: HeaderToolbarAction[] = [
@@ -60,22 +45,12 @@ export function TrashScreen() {
       key: 'trash-menu',
       type: 'menu',
       items: [
-        ...filters.map((value) => ({
-          checked: value === filter,
-          group: 'filter',
-          id: `trash-filter-${value}`,
-          label: t(filterLabels[value]),
-          onPress: () => setFilter(value),
-        })),
         {
           destructive: true,
-          disabled: actions.isPending || categoryCount === 0 || Boolean(summary.error),
-          group: 'empty',
+          disabled: actions.isPending || !summary.data?.files || Boolean(summary.error),
           id: 'trash-empty',
-          label: t(filter === 'all' ? 'trash.emptyAll' : 'trash.emptyCategory', {
-            category: t(filterLabels[filter]),
-          }),
-          onPress: () => actions.requestEmpty(filter),
+          label: t('trash.emptyAll'),
+          onPress: () => actions.requestEmpty(),
         },
       ],
     },
@@ -83,14 +58,7 @@ export function TrashScreen() {
 
   return (
     <>
-      <RouteHeader
-        rightActions={rightActions}
-        title={
-          filter === 'all'
-            ? t('trash.title')
-            : t('trash.filteredTitle', { category: t(filterLabels[filter]) })
-        }
-      />
+      <RouteHeader rightActions={rightActions} title={t('trash.title')} />
       <View className="flex-1" style={{ paddingLeft: insets.left, paddingRight: insets.right }}>
         <LegendList
           style={{ flex: 1 }}
@@ -102,7 +70,7 @@ export function TrashScreen() {
           contentInsetAdjustmentBehavior="automatic"
           data={entries}
           recycleItems
-          keyExtractor={(item) => `${item.kind}:${item.id}`}
+          keyExtractor={(item) => item.id}
           extraData={{ actions, dateFormatter, now }}
           ListHeaderComponent={
             <View className="pt-2 pb-4">

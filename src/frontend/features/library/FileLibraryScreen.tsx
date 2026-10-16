@@ -54,7 +54,7 @@ function FileLibraryScreenBody() {
           {
             id: 'library-trash',
             label: t('trash.title'),
-            onPress: () => router.push({ pathname: '/trash', params: { kind: 'file' } }),
+            onPress: () => router.push('/trash'),
           },
           {
             checked: viewMode === 'grid',

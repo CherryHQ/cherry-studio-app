@@ -28,12 +28,9 @@ export function StorageSettingsScreen() {
           label={t('trash.emptyAll')}
           showChevron={false}
           disabled={
-            actions.isPending ||
-            !summary.data ||
-            Boolean(summary.error) ||
-            summary.data.files + summary.data.sessions === 0
+            actions.isPending || !summary.data || Boolean(summary.error) || summary.data.files === 0
           }
-          onPress={() => actions.requestEmpty('all')}
+          onPress={() => actions.requestEmpty()}
         />
       </Section>
       {summary.error ? (

@@ -2,23 +2,17 @@ import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { useMutation } from '@/frontend/data/hooks';
-import type { TrashFilter, TrashItem } from '@/shared/data/api/schemas/trash';
+import type { TrashItem } from '@/shared/data/api/schemas/trash';
 
-const refresh = [
-  '/trash',
-  '/trash/summary',
-  '/agent-sessions',
-  '/search/entities',
-  '/search/contents',
-];
+const refresh = ['/trash', '/trash/summary'];
 
 /** Shared user decisions for the trash page and storage settings. */
 export function useTrashActions() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const restoreMutation = useMutation('POST', '/trash/:kind/:id/restore', { refresh });
-  const deleteMutation = useMutation('DELETE', '/trash/:kind/:id', { refresh });
+  const restoreMutation = useMutation('POST', '/trash/:id/restore', { refresh });
+  const deleteMutation = useMutation('DELETE', '/trash/:id', { refresh });
   const emptyMutation = useMutation('DELETE', '/trash', { refresh });
 
   async function perform(operation: () => Promise<unknown>, success: string) {
@@ -31,38 +25,29 @@ export function useTrashActions() {
   }
 
   function restore(item: TrashItem) {
-    return perform(
-      () => restoreMutation.trigger({ params: { kind: item.kind, id: item.id } }),
-      t('trash.restored'),
-    );
+    return perform(() => restoreMutation.trigger({ params: { id: item.id } }), t('trash.restored'));
   }
 
   function requestDelete(item: TrashItem) {
     alert.confirm({
       title: t('trash.deleteTitle'),
-      description: t('trash.deleteDescription', { name: item.title || t('session.list.untitled') }),
+      description: t('trash.deleteDescription', { name: item.title }),
       confirmLabel: t('trash.deletePermanently'),
       role: 'destructive',
       onConfirm: () => {
-        void perform(
-          () => deleteMutation.trigger({ params: { kind: item.kind, id: item.id } }),
-          t('trash.deleted'),
-        );
+        void perform(() => deleteMutation.trigger({ params: { id: item.id } }), t('trash.deleted'));
       },
     });
   }
 
-  function requestEmpty(kind: TrashFilter) {
-    const category = t(
-      kind === 'all' ? 'trash.all' : kind === 'file' ? 'trash.files' : 'trash.sessions',
-    );
+  function requestEmpty() {
     alert.confirm({
-      title: t(kind === 'all' ? 'trash.emptyAll' : 'trash.emptyCategory', { category }),
-      description: t('trash.emptyDescription', { category }),
+      title: t('trash.emptyAll'),
+      description: t('trash.emptyDescription'),
       confirmLabel: t('trash.deletePermanently'),
       role: 'destructive',
       onConfirm: () => {
-        void perform(() => emptyMutation.trigger({ query: { kind } }), t('trash.emptied'));
+        void perform(() => emptyMutation.trigger(), t('trash.emptied'));
       },
     });
   }

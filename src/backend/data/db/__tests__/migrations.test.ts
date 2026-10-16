@@ -6,7 +6,7 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
-  test('adds nullable Session trash state without changing existing history or file deletion marks', () => {
+  test('indexes file trash without changing existing history or file deletion marks', () => {
     const database = new DatabaseSync(':memory:');
     try {
       database.exec('PRAGMA foreign_keys = ON');
@@ -26,16 +26,17 @@ describe('bundled SQLite migrations', () => {
         VALUES ('file', 'notes.txt', 'text/plain', 5, 1, 1, 123);
       `);
       for (const sql of files.slice(index)) applyMigrationSql(database, sql);
-      expect(
-        database.prepare('SELECT name, deleted_at, last_activity_at FROM agent_session').get(),
-      ).toEqual({ name: 'Keep history', deleted_at: null, last_activity_at: 2 });
+      expect(database.prepare('SELECT name, last_activity_at FROM agent_session').get()).toEqual({
+        name: 'Keep history',
+        last_activity_at: 2,
+      });
       expect(database.prepare('SELECT data FROM agent_session_message').get()).toEqual({
         data: '{"parts":[]}',
       });
       expect(database.prepare('SELECT deleted_at FROM file_entry').get()).toEqual({
         deleted_at: 123,
       });
-      expect(indexNames(database, 'agent_session')).toContain('agent_session_deleted_at_idx');
+      expect(columnNames(database, 'agent_session')).not.toContain('deleted_at');
       expect(indexNames(database, 'file_entry')).toContain('fe_deleted_at_idx');
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
@@ -770,7 +771,6 @@ describe('bundled SQLite migrations', () => {
         'forked_from_session_id',
         'fork_boundary_message_id',
         'runtime_revision',
-        'deleted_at',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',

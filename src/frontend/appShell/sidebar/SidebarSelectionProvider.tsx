@@ -263,8 +263,6 @@ function createSelectionStore() {
       update({
         ...state,
         isDeleting: false,
-        // The refreshed catalog owns membership again, including later trash restorations.
-        deletedIds: new Set(),
         ...(generation === selection ? { selectedIds: failed, isSelecting: failed.size > 0 } : {}),
       });
     },

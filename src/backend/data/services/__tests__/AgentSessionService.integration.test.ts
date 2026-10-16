@@ -54,16 +54,6 @@ describe('AgentSessionService persistence', () => {
     });
   });
 
-  test('hides trashed sessions from ordinary reads and title search', async () => {
-    insertSession(sqlite, { agentId: 'agent-1', id: 'session-a', lastActivityAt: 100 });
-    sqlite.prepare('UPDATE agent_session SET deleted_at = 200 WHERE id = ?').run('session-a');
-    await expect(agentSessionService.getById('session-a')).rejects.toMatchObject({
-      code: 'NOT_FOUND',
-    });
-    expect((await agentSessionService.listByCursor()).items).toEqual([]);
-    expect((await agentSessionService.listByCursor({ q: 'session' })).items).toEqual([]);
-  });
-
   test('rejects an unknown session', async () => {
     await expect(agentSessionService.getById('missing')).rejects.toMatchObject({
       details: { id: 'missing', resource: 'AgentSession' },

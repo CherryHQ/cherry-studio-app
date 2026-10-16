@@ -1,5 +1,4 @@
 import FileIcon from '@cherrystudio/app-icons/icons/file';
-import MessageSquareTextIcon from '@cherrystudio/app-icons/icons/message-square-text';
 import { ActionMenu, Image, type MenuItem } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -22,7 +21,7 @@ export function TrashEntryRow({
   onRestore: (item: TrashItem) => Promise<void>;
 }) {
   const { t } = useTranslation();
-  const title = item.title || t('session.list.untitled');
+  const title = item.title;
   const canRestore = !isPending && item.state === 'trashed';
   const items: MenuItem[] = [
     {
@@ -60,7 +59,7 @@ export function TrashEntryRow({
           if (nativeEvent.actionName === 'restore' && canRestore) void onRestore(item);
           if (nativeEvent.actionName === 'delete' && !isPending) onDelete(item);
         }}
-        testID={`trash-entry-${item.kind}-${item.id}`}
+        testID={`trash-entry-${item.id}`}
       >
         <TrashThumbnail item={item} />
         <View className="min-w-0 flex-1 gap-0.5">
@@ -79,14 +78,13 @@ export function TrashEntryRow({
 function TrashThumbnail({ item }: { item: TrashItem }) {
   const file = useBackendModule('file');
   const thumbnail = useQuery({
-    enabled: item.kind === 'file' && item.state === 'trashed',
+    enabled: item.state === 'trashed',
     networkMode: 'always',
     queryFn: async () => ({ uri: await file.getTrashThumbnailUri(item.id, item.deletedAt) }),
     queryKey: queryKeys.files.trashThumbnailUri(item.id, item.deletedAt),
     retry: false,
     staleTime: Infinity,
   });
-  const Icon = item.kind === 'session' ? MessageSquareTextIcon : FileIcon;
 
   return (
     <View
@@ -95,8 +93,8 @@ function TrashThumbnail({ item }: { item: TrashItem }) {
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
     >
-      <Icon className="size-6 text-foreground" />
-      {item.kind === 'file' && item.state === 'trashed' && thumbnail.data?.uri ? (
+      <FileIcon className="size-6 text-foreground" />
+      {item.state === 'trashed' && thumbnail.data?.uri ? (
         <Image
           accessible={false}
           className="absolute inset-0 size-full"

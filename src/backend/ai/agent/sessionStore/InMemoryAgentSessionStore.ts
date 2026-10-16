@@ -149,10 +149,6 @@ function reserveInTranscript(
 @ServicePhase(Phase.PostReady)
 @AppStatePolicy('not-applicable')
 export class InMemoryAgentSessionStore extends BaseService implements AgentSessionStore {
-  private readonly trash = new Map<
-    string,
-    { session: AgentSessionView; messages: StoredMessage[]; deletedAt: number }
-  >();
   private readonly sessions = new Map<string, AgentSessionView>();
   private readonly runtimeRevisions = new Map<string, number>();
   /** Insertion-ordered per Session, which is the transcript order. */
@@ -169,7 +165,6 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
 
   protected override onDestroy(): void {
     this.sessions.clear();
-    this.trash.clear();
     this.runtimeRevisions.clear();
     this.messages.clear();
   }
@@ -226,16 +221,23 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    if (!session) return false;
-    this.trash.set(sessionId, {
-      session,
-      messages: this.messages.get(sessionId) ?? [],
-      deletedAt: Date.now(),
-    });
-    this.sessions.delete(sessionId);
+    if (!this.sessions.delete(sessionId)) {
+      return false;
+    }
     this.messages.delete(sessionId);
     this.runtimeRevisions.delete(sessionId);
+    // Mirrors the durable adapter's ON DELETE SET NULL: a fork outlives its
+    // source and only loses the lineage claim.
+    for (const [forkId, session] of this.sessions) {
+      if (session.forkedFromSessionId === sessionId) {
+        this.sessions.set(forkId, {
+          ...session,
+          forkBoundaryMessageId: null,
+          forkedFromSessionId: null,
+          updatedAt: nowIso(),
+        });
+      }
+    }
     return true;
   }
 

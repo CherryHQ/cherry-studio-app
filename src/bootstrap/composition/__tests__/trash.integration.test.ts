@@ -99,40 +99,19 @@ test('file trash preserves bytes and previews, hides ordinary reads, and restore
   await expect(resolveFileEntry(files, fileId)).resolves.toBeNull();
   expect(await files.findTrashedById(fileId, now)).toMatchObject({ id: fileId });
   expect(await files.findTrashedById(fileId, now - 1)).toBeNull();
-  expect((await runtime.entries.list({ kind: 'file' })).items).toEqual([
-    { id: fileId, kind: 'file', title: 'notes.txt', deletedAt: now, size: 123, state: 'trashed' },
+  expect((await runtime.entries.list()).items).toEqual([
+    { id: fileId, title: 'notes.txt', deletedAt: now, size: 123, state: 'trashed' },
   ]);
-  await runtime.restore('file', fileId);
+  await runtime.restore(fileId);
   expect(await files.findTrashedById(fileId, now)).toBeNull();
   expect((await resolveFileEntry(files, fileId))?.uri).toBe(bytes);
   expect(mockFiles.has(preview)).toBe(true);
-  expect(await runtime.entries.summary()).toEqual({ files: 0, sessions: 0, fileBytes: 0 });
+  expect(await runtime.entries.summary()).toEqual({ files: 0, fileBytes: 0 });
 });
 
-test('session trash preserves transcript, activity, and fork lineage for restoration', async () => {
+test('session deletion removes messages immediately without trashing independent files', async () => {
   await sessions.deleteSession(sourceId);
   expect(await sessions.getSession(sourceId)).toBeNull();
-  expect(await sessions.getRuntimeRevision(sourceId)).toBeNull();
-  expect(await sessions.listMessages(sourceId)).toEqual([]);
-  expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
-    count: 1,
-  });
-  expect((await sessions.getSession(forkId))?.forkedFromSessionId).toBe(sourceId);
-  await runtime.restore('session', sourceId);
-  expect(await sessions.listMessages(sourceId)).toHaveLength(1);
-  expect(
-    sqlite
-      .prepare(
-        'SELECT last_activity_at, deleted_at, runtime_revision FROM agent_session WHERE id = ?',
-      )
-      .get(sourceId),
-  ).toEqual({ last_activity_at: 1, deleted_at: null, runtime_revision: 1 });
-});
-
-test('permanent session deletion cascades messages and clears surviving lineage without deleting files', async () => {
-  await expect(runtime.delete('session', sourceId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-  await sessions.deleteSession(sourceId);
-  await runtime.delete('session', sourceId);
   expect(sqlite.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
     count: 0,
   });
@@ -140,63 +119,59 @@ test('permanent session deletion cascades messages and clears surviving lineage 
     forkedFromSessionId: null,
     forkBoundaryMessageId: null,
   });
+  expect((await runtime.entries.list()).items).toEqual([]);
   expect(await files.findById(fileId)).not.toBeNull();
   expect(mockFiles.has(bytes)).toBe(true);
 });
 
-test('mixed pagination is stable across kind/id collisions and category filters', async () => {
-  // A session and file may have the same id: pagination must include the kind in its tie-break.
-  sqlite.prepare('UPDATE agent_session SET id = ? WHERE id = ?').run(fileId, forkId);
-  await sessions.deleteSession(fileId);
+test('pagination includes each file when deletion timestamps match', async () => {
+  sqlite.exec(`
+    INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+    VALUES ('${sourceId}', 'other.txt', 'text/plain', 5, 1, 1);
+  `);
   await trashInternalEntry(files, fileId);
+  await trashInternalEntry(files, sourceId);
   const first = await runtime.entries.list({ limit: 1 });
   const second = await runtime.entries.list({ limit: 1, cursor: first.nextCursor });
-  expect([first.items[0].kind, second.items[0].kind].sort()).toEqual(['file', 'session']);
+  expect([first.items[0].id, second.items[0].id].sort()).toEqual([fileId, sourceId].sort());
   expect(second.nextCursor).toBeUndefined();
-  expect((await runtime.entries.list({ kind: 'file' })).items.map((item) => item.kind)).toEqual([
-    'file',
-  ]);
-  expect(await runtime.entries.summary()).toEqual({ files: 1, sessions: 1, fileBytes: 123 });
+  expect(await runtime.entries.summary()).toEqual({ files: 2, fileBytes: 128 });
 });
 
 test('automatic removal uses a strict 30-day boundary and deletes file bytes and previews', async () => {
   const cutoff = now - TRASH_RETENTION_MS;
-  sqlite.prepare('UPDATE agent_session SET deleted_at = ? WHERE id = ?').run(cutoff, sourceId);
+  sqlite.prepare('UPDATE file_entry SET deleted_at = ? WHERE id = ?').run(cutoff, fileId);
+  await runtime.sweep();
+  expect((await runtime.entries.list()).items.map((item) => item.id)).toEqual([fileId]);
+  expect(mockFiles.has(bytes)).toBe(true);
+  expect(mockFiles.has(preview)).toBe(true);
   sqlite.prepare('UPDATE file_entry SET deleted_at = ? WHERE id = ?').run(cutoff - 1, fileId);
   await runtime.sweep();
   expect(mockFiles.has(bytes)).toBe(false);
   expect(mockFiles.has(preview)).toBe(false);
-  expect((await runtime.entries.list()).items.map((item) => item.id)).toEqual([sourceId]);
+  expect((await runtime.entries.list()).items).toEqual([]);
   expect(await sessions.getSession(forkId)).not.toBeNull();
 });
 
 test('stale deletion snapshots cannot remove restored records', async () => {
-  await sessions.deleteSession(sourceId);
   await trashInternalEntry(files, fileId);
-  const candidates = await runtime.entries.candidates('all');
-  await runtime.restore('session', sourceId);
-  await runtime.restore('file', fileId);
+  const candidates = await runtime.entries.candidates();
+  await runtime.restore(fileId);
   for (const item of candidates) {
-    const removed =
-      item.kind === 'file'
-        ? await deleteInternalEntry(files, item.id, item.deletedAt)
-        : await runtime.entries.deleteSession(item);
-    expect(removed).toBe(false);
+    expect(await deleteInternalEntry(files, item.id, item.deletedAt)).toBe(false);
   }
-  expect(await sessions.listMessages(sourceId)).toHaveLength(1);
   expect(mockFiles.has(bytes)).toBe(true);
 });
 
-test('emptying a category keeps the other category and a failed restore leaves membership intact', async () => {
-  await sessions.deleteSession(sourceId);
+test('a failed restore leaves membership intact and emptying trash leaves sessions intact', async () => {
   await trashInternalEntry(files, fileId);
   db.failNextWriteTx(new Error('disk full'));
-  await expect(runtime.restore('file', fileId)).rejects.toThrow('disk full');
+  await expect(runtime.restore(fileId)).rejects.toThrow('disk full');
   expect(await files.findById(fileId)).toBeNull();
-  await runtime.empty('session');
-  expect(await runtime.entries.summary()).toEqual({ files: 1, sessions: 0, fileBytes: 123 });
-  await runtime.empty('all');
-  expect(await runtime.entries.summary()).toEqual({ files: 0, sessions: 0, fileBytes: 0 });
+  expect(await runtime.entries.summary()).toEqual({ files: 1, fileBytes: 123 });
+  await runtime.empty();
+  expect(await runtime.entries.summary()).toEqual({ files: 0, fileBytes: 0 });
+  expect(await sessions.listMessages(sourceId)).toHaveLength(1);
   expect(await sessions.getSession(forkId)).not.toBeNull();
 });
 
@@ -204,9 +179,9 @@ test('backup freeze prevents trash mutations and cleanup', async () => {
   await trashInternalEntry(files, fileId);
   const release = storageMutationGate.freeze();
   try {
-    expect(() => runtime.empty('all')).toThrow();
+    expect(() => runtime.empty()).toThrow();
     expect(() => runtime.sweep()).toThrow();
-    expect(() => runtime.restore('file', fileId)).toThrow();
+    expect(() => runtime.restore(fileId)).toThrow();
     expect(mockFiles.has(bytes)).toBe(true);
   } finally {
     release();
@@ -226,7 +201,7 @@ test('a queued deletion prevents a later draft edit from changing the recoverabl
   ).rejects.toThrow('Draft file entry does not exist');
   release();
   await Promise.all([blocking, deleting, editing]);
-  await runtime.restore('file', fileId);
+  await runtime.restore(fileId);
   expect(mockContents.get(bytes)).toBe('x'.repeat(123));
   expect(await files.getById(fileId)).toMatchObject({ size: 123, updatedAt: 1 });
 });
@@ -236,7 +211,7 @@ test('an admitted draft edit commits matching metadata before the queued deletio
   const editing = rewriteInternalTextEntry(files, { id: fileId, data: 'changed' });
   const deleting = trashInternalEntry(files, fileId);
   await Promise.all([editing, deleting]);
-  await runtime.restore('file', fileId);
+  await runtime.restore(fileId);
   expect(mockContents.get(bytes)).toBe('changed');
   expect(await files.getById(fileId)).toMatchObject({ size: 7, updatedAt: now });
 });
@@ -246,14 +221,14 @@ test.each(['blob', 'preview'])(
   async (resource) => {
     await trashInternalEntry(files, fileId);
     mockUnlinkFailures.add(resource === 'blob' ? bytes : preview);
-    await expect(runtime.delete('file', fileId)).rejects.toThrow('unlink failed');
+    await expect(runtime.delete(fileId)).rejects.toThrow('unlink failed');
     expect(await files.findById(fileId)).toBeNull();
-    expect(await runtime.entries.get('file', fileId)).toMatchObject({
+    expect(await runtime.entries.get(fileId)).toMatchObject({
       state: 'deleting',
       size: 123,
     });
-    expect(await runtime.entries.summary()).toEqual({ files: 1, sessions: 0, fileBytes: 123 });
-    await expect(runtime.restore('file', fileId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(await runtime.entries.summary()).toEqual({ files: 1, fileBytes: 123 });
+    await expect(runtime.restore(fileId)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await runtime._doStop();
     runtime = new TrashRuntime(db.dbService);
     mockUnlinkFailures.clear();
@@ -261,7 +236,7 @@ test.each(['blob', 'preview'])(
     await runtime.sweep();
     expect(mockFiles.has(bytes)).toBe(false);
     expect(mockFiles.has(preview)).toBe(false);
-    expect(await runtime.entries.summary()).toEqual({ files: 0, sessions: 0, fileBytes: 0 });
+    expect(await runtime.entries.summary()).toEqual({ files: 0, fileBytes: 0 });
   },
 );
 
@@ -280,35 +255,40 @@ test('an interruption after recording permanent deletion leaves a receipt the ne
 test('a failed deletion commit preserves the recoverable entry and its bytes', async () => {
   await trashInternalEntry(files, fileId);
   db.failWriteTxCommit(new Error('commit failed'));
-  await expect(runtime.delete('file', fileId)).rejects.toThrow('commit failed');
-  expect(await runtime.entries.get('file', fileId)).toMatchObject({ state: 'trashed' });
+  await expect(runtime.delete(fileId)).rejects.toThrow('commit failed');
+  expect(await runtime.entries.get(fileId)).toMatchObject({ state: 'trashed' });
   expect(mockFiles.has(bytes)).toBe(true);
   expect(mockFiles.has(preview)).toBe(true);
-  await runtime.restore('file', fileId);
+  await runtime.restore(fileId);
   expect(await files.findById(fileId)).not.toBeNull();
 });
 
 test('retries acknowledgement after bytes were removed but the receipt could not be cleared', async () => {
   await trashInternalEntry(files, fileId);
   db.failWriteTxCommit(new Error('commit failed'), 1);
-  await expect(runtime.delete('file', fileId)).rejects.toThrow('commit failed');
+  await expect(runtime.delete(fileId)).rejects.toThrow('commit failed');
   expect(mockFiles.has(bytes)).toBe(false);
   expect(mockFiles.has(preview)).toBe(false);
-  expect(await runtime.entries.get('file', fileId)).toMatchObject({ state: 'deleting' });
-  await runtime.delete('file', fileId);
+  expect(await runtime.entries.get(fileId)).toMatchObject({ state: 'deleting' });
+  await runtime.delete(fileId);
   expect((await runtime.entries.list()).items).toEqual([]);
 });
 
 test('emptying continues past unlink failures and retries only the remaining receipt', async () => {
   await trashInternalEntry(files, fileId);
-  await sessions.deleteSession(sourceId);
+  sqlite.exec(`
+    INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+    VALUES ('${sourceId}', 'other.txt', 'text/plain', 5, 1, 1);
+  `);
+  await trashInternalEntry(files, sourceId);
   mockUnlinkFailures.add(bytes);
-  await expect(runtime.empty('all')).rejects.toThrow('Some trash items could not be removed');
+  await expect(runtime.empty()).rejects.toThrow('Some trash items could not be removed');
   expect((await runtime.entries.list()).items).toEqual([
     expect.objectContaining({ id: fileId, state: 'deleting' }),
   ]);
+  expect(await files.findTrashedById(sourceId, now)).toBeNull();
   mockUnlinkFailures.clear();
-  await runtime.empty('file');
+  await runtime.empty();
   expect((await runtime.entries.list()).items).toEqual([]);
 });
 

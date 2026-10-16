@@ -529,11 +529,6 @@ navigates to it and observes it like any other Session.
 and the Host has no locale: it resolves the app language only to tell a naming model which language
 to write in, and never composes user-visible text itself.
 
-`deleteSession` stops and drains running work, then moves the local Session and its messages to the
-[unified trash](../data/trash.md) for 30 days. It retires the execution binding immediately. Restore
-makes the transcript readable again; a later submission rebuilds its working copy from Cherry.
-Session deletion never deletes the independent file library. Single-turn deletion remains permanent.
-
 `deleteTurn` removes one settled turn from a Session. The unit is the turn because replayed
 history pairs every `tool-call` with its `tool-result`; the client resolves the pressed message to
 its turn rather than deleting a row, and offers the action from the assistant toolbar rather than
@@ -551,7 +546,7 @@ answer is [Manual answer retry](#manual-answer-retry), and reopening an earlier 
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;
 the protocol does not need event sequence, host epoch, replay buffers, or revision counters in
 version 1. Observation admission is serialized with Session deletion: an observation already
-loading must finish or fail before the Session is marked as trashed, and one overlapping the deletion barrier fails
+loading must finish or fail before rows are removed, and one overlapping the deletion barrier fails
 with `SESSION_BUSY` rather than returning a snapshot for a deleted Session.
 
 ## Events

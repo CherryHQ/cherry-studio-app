@@ -123,10 +123,7 @@ export class EntitySearchService {
 
   private async searchSessions(q: string, limit: number, updatedAtFrom?: number, agentId?: string) {
     const pattern = likePattern(q);
-    const conditions: SQL[] = [
-      isNull(agentSessionTable.deletedAt),
-      sql`${agentSessionTable.name} LIKE ${pattern} ESCAPE '\\'`,
-    ];
+    const conditions: SQL[] = [sql`${agentSessionTable.name} LIKE ${pattern} ESCAPE '\\'`];
     if (agentId) conditions.push(eq(agentSessionTable.agentId, agentId));
     if (updatedAtFrom !== undefined) {
       conditions.push(gte(agentSessionTable.updatedAt, updatedAtFrom));

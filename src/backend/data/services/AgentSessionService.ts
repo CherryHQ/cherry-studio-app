@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
@@ -31,7 +31,7 @@ export class AgentSessionService {
     const [row] = await this.db
       .select()
       .from(agentSessionTable)
-      .where(and(eq(agentSessionTable.id, id), isNull(agentSessionTable.deletedAt)))
+      .where(eq(agentSessionTable.id, id))
       .limit(1);
     if (!row) {
       throw DataApiErrorFactory.notFound('AgentSession', id);
@@ -51,7 +51,6 @@ export class AgentSessionService {
       tie: 'desc',
     });
     const condition = and(
-      isNull(agentSessionTable.deletedAt),
       query.agentId ? eq(agentSessionTable.agentId, query.agentId) : undefined,
       query.q
         ? sql`${agentSessionTable.name} LIKE ${`%${query.q.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`
@@ -64,7 +63,7 @@ export class AgentSessionService {
         SELECT id, agent_id AS "agentId", name,
           is_name_manually_edited AS "isNameManuallyEdited",
           last_activity_at AS "lastActivityAt", created_at AS "createdAt", updated_at AS "updatedAt",
-          runtime_revision AS "runtimeRevision", deleted_at AS "deletedAt",
+          runtime_revision AS "runtimeRevision",
           forked_from_session_id AS "forkedFromSessionId", fork_boundary_message_id AS "forkBoundaryMessageId"
         FROM ${agentSessionTable}
         WHERE ${condition ?? sql`1 = 1`}
