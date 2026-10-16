@@ -4,6 +4,7 @@ import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Backend, ResolvedFile } from '@/shared/contracts';
+import { FileEntrySchema } from '@/shared/data/types/file';
 import type { Painting } from '@/shared/data/types/painting';
 
 import { BackendProvider } from '../BackendProvider';
@@ -16,15 +17,15 @@ import {
 jest.mock('expo-image', () => ({ Image: { loadAsync: jest.fn() } }));
 
 const file: ResolvedFile = {
-  entry: {
-    id: 'output-1',
+  entry: FileEntrySchema.parse({
+    id: '00000000-0000-7000-8000-000000000001',
     filename: 'generated.png',
     mediaType: 'image/png',
     provenance: 'generated',
     size: 1024,
     createdAt: 1,
     updatedAt: 1,
-  },
+  }),
   uri: 'file:///generated.png',
 };
 const painting: Painting = {
