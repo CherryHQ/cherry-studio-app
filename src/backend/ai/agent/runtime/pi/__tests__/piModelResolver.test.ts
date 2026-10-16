@@ -231,47 +231,61 @@ describe('Pi model resolver', () => {
     expect(mockResolveApiKey).not.toHaveBeenCalled();
   });
 
-  test('preserves header-owned Kimi authentication and redacts the raw bearer token', async () => {
-    jest
-      .spyOn(piOAuthModels, 'resolveOAuthPiModel')
-      .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
-    const provider = makeProvider(
-      ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
-      'https://api.kimi.com/coding',
-      'anthropic',
-    );
-    provider.presetProviderId = 'kimi-coding';
-    provider.authMethods = ['oauth'];
-    mockGetProviderById.mockResolvedValue(provider);
-    mockGetModelById.mockResolvedValue(
-      makeModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES, { apiModelId: 'kimi-for-coding' }),
-    );
-    resolver = createPiModelResolver({
-      resolveAuth: async () => ({
-        id: 'kimi-coding',
-        auth: { headers: { Authorization: 'Bearer kimi-access' } },
-        availableModelIds: undefined,
-      }),
-    });
-    const resolution = await resolve(resolver);
-    expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'kimi-coding' }),
-      'kimi-for-coding',
-    );
-    expect(mockBindPiStream).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        apiKey: undefined,
-        headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
-      }),
-    );
-    expect(resolution.model).toMatchObject({
-      provider: 'kimi-coding',
-      compat: { forceAdaptiveThinking: true },
-    });
-    expect(resolution.redactionValues).toContain('kimi-access');
-    expect(mockResolveApiKey).not.toHaveBeenCalled();
-  });
+  test.each([
+    {
+      endpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+      baseUrl: 'https://api.kimi.com/coding',
+      family: 'anthropic',
+    },
+    {
+      endpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      baseUrl: 'https://api.kimi.com/coding/v1',
+      family: 'openai-compatible',
+    },
+  ])(
+    'uses the official Kimi protocol and authentication for saved $endpoint settings',
+    async ({ endpoint, baseUrl, family }) => {
+      jest
+        .spyOn(piOAuthModels, 'resolveOAuthPiModel')
+        .mockResolvedValueOnce(KIMI_CODING_MODELS['kimi-for-coding']);
+      const provider = makeProvider(endpoint, baseUrl, family);
+      provider.presetProviderId = 'kimi-coding';
+      provider.authMethods = ['oauth'];
+      mockGetProviderById.mockResolvedValue(provider);
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { apiModelId: 'kimi-for-coding' }));
+      resolver = createPiModelResolver({
+        resolveAuth: async () => ({
+          id: 'kimi-coding',
+          auth: { headers: { Authorization: 'Bearer kimi-access' } },
+          availableModelIds: undefined,
+        }),
+      });
+      const resolution = await resolve(resolver);
+      expect(piOAuthModels.resolveOAuthPiModel).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'kimi-coding' }),
+        'kimi-for-coding',
+      );
+      expect(mockBindPiStream).toHaveBeenCalledWith(
+        expect.objectContaining({ api: 'openai-completions' }),
+        expect.objectContaining({
+          apiKey: undefined,
+          headers: expect.objectContaining({ Authorization: 'Bearer kimi-access' }),
+        }),
+      );
+      expect(resolution.model).toMatchObject({
+        provider: 'kimi-coding',
+        api: 'openai-completions',
+        baseUrl: 'https://api.kimi.com/coding/v1',
+        compat: {
+          requiresReasoningContentOnAssistantMessages: true,
+          supportsMidConvoSystemMessages: true,
+          supportsMidConvoToolAdditions: true,
+        },
+      });
+      expect(resolution.redactionValues).toContain('kimi-access');
+      expect(mockResolveApiKey).not.toHaveBeenCalled();
+    },
+  );
 
   test('never falls back to manual API keys after a stored OAuth refresh fails', async () => {
     mockGetProviderById.mockResolvedValue(
