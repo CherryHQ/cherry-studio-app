@@ -899,6 +899,7 @@
   "painting.board.nodeCount_other": "{{count}} узла",
   "painting.board.rename": "Переименовать доску",
   "painting.board.renameFailed": "Не удалось переименовать доску. Попробуйте ещё раз.",
+  "painting.board.showPrompt": "Показать запрос полностью",
   "painting.board.unavailable": "Не удалось открыть доску",
   "painting.board.unavailableDescription": "Возможно, рисунок был удалён. Вернитесь и попробуйте снова.",
   "painting.editor.annotation": "Пометка {{number}}",

@@ -553,7 +553,7 @@ continues to target the native field.
 
 `InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
 `children` are presentation-only; the component owns the tap and exposes the caller's
-`accessibilityLabel`. Callers supply `text`; the panel displays only that content.
+`accessibilityLabel`, which names the action rather than repeating `text`. Callers supply `text`; the panel displays only that content.
 It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
 taps, system back, and viewport changes dismiss it without changing the underlying layout.
 

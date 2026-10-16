@@ -888,6 +888,7 @@
   "painting.board.nodeCount_other": "{{count}} nœuds",
   "painting.board.rename": "Renommer le tableau",
   "painting.board.renameFailed": "Impossible de renommer le tableau. Réessayez.",
+  "painting.board.showPrompt": "Afficher la demande complète",
   "painting.board.unavailable": "Impossible d’ouvrir ce tableau",
   "painting.board.unavailableDescription": "Le dessin a peut-être été supprimé. Revenez en arrière et réessayez.",
   "painting.editor.annotation": "Note {{number}}",

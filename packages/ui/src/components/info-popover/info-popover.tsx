@@ -1,9 +1,10 @@
-import { type ReactNode, useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getAnchoredPanelLayout } from '../menu/anchored-panel-layout';
+import { AnchoredTrigger } from '../menu/anchored-trigger';
 import { useMenuInteraction } from '../menu/menu-interaction';
 import { MenuOverlay } from '../menu/menu-overlay';
 import { MenuSurface } from '../menu/menu-surface';
@@ -12,6 +13,7 @@ import { useMenuMotion } from '../menu/use-menu-motion';
 import { useMenuState } from '../menu/use-menu-state';
 
 export type InfoPopoverProps = {
+  /** Names the trigger's action; the panel announces `text` itself. */
   accessibilityLabel: string;
   children: ReactNode;
   testID?: string;
@@ -25,28 +27,15 @@ export function InfoPopover({ children, ...props }: InfoPopoverProps) {
 
   return (
     <>
-      <Pressable
+      <AnchoredTrigger
         accessibilityLabel={props.accessibilityLabel}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: isOpen }}
-        className="active:opacity-60"
-        collapsable={false}
-        onPress={() => {
-          triggerRef.current?.measureInWindow((pageX, pageY, width, height) => {
-            open({ height, pageX, pageY, width });
-          });
-        }}
-        ref={triggerRef}
+        isOpen={isOpen}
+        onOpen={open}
         testID={props.testID ? `${props.testID}-trigger` : undefined}
+        triggerRef={triggerRef}
       >
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          pointerEvents="none"
-        >
-          {children}
-        </View>
-      </Pressable>
+        {children}
+      </AnchoredTrigger>
       {anchor ? (
         <InfoPopoverPanel
           {...props}
@@ -125,12 +114,12 @@ function InfoPopoverPanel({
 
 function InfoPopoverText({ text }: { text: string }) {
   const { registerItem } = useMenuInteraction();
+  const register = useCallback(
+    (target: View | null) => (target ? registerItem?.(target) : undefined),
+    [registerItem],
+  );
   return (
-    <View
-      accessibilityLabel={text}
-      accessible
-      ref={(target) => (target ? registerItem?.(target) : undefined)}
-    >
+    <View accessibilityLabel={text} accessible ref={register}>
       <Text className="text-base text-popover-foreground">{text}</Text>
     </View>
   );

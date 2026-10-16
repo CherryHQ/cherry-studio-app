@@ -28,9 +28,10 @@ const COMPOSER_SPACE = 120;
 
 /**
  * The whole board as a node canvas: generations top to bottom, edges from each
- * input image to what was made from it. Drag to pan, pinch to zoom, tap a node
- * to focus it. A board that fits opens whole and centred; a larger one opens
- * with the focused node in its upper third.
+ * input image to what was made from it. Drag to pan, pinch to zoom, tap a
+ * thumbnail to focus its node or a caption to read its full prompt. A board
+ * that fits opens whole and centred; a larger one opens with the focused node
+ * in its upper third.
  */
 export function PaintingBoardOverview({
   board,
@@ -187,7 +188,7 @@ export function PaintingBoardOverview({
         <MaskedView
           maskElement={
             <LinearGradient
-              colors={[edgeColor, edgeColor, 'transparent']}
+              colors={['black', 'black', 'transparent']}
               locations={[0, 0.6, 1]}
               style={StyleSheet.absoluteFill}
             />
@@ -286,7 +287,7 @@ function BoardNodeCard({
       </Pressable>
       {prompt ? (
         <InfoPopover
-          accessibilityLabel={prompt}
+          accessibilityLabel={t('painting.board.showPrompt')}
           testID={`painting-prompt-${node.id}`}
           text={prompt}
         >

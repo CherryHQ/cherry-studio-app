@@ -866,6 +866,7 @@
   "painting.board.nodeCount_other": "{{count}} nút",
   "painting.board.rename": "Đổi tên bảng vẽ",
   "painting.board.renameFailed": "Không thể đổi tên bảng vẽ. Hãy thử lại.",
+  "painting.board.showPrompt": "Xem toàn bộ yêu cầu",
   "painting.board.unavailable": "Không thể mở bảng vẽ này",
   "painting.board.unavailableDescription": "Bản vẽ có thể đã bị xóa. Hãy quay lại và thử lại.",
   "painting.editor.annotation": "Ghi chú {{number}}",
