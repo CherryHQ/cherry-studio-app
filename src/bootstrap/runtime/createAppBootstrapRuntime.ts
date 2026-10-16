@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
@@ -137,7 +137,9 @@ export function createAppBootstrapRuntime(
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
-  const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
+  const languageServing = host.container.get<
+    LanguageServingSupport & AgentRuntime & RuntimeTextGenerator
+  >('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',

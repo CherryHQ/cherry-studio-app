@@ -7,19 +7,23 @@ import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { buildBaseOptions } from '@earendil-works/pi-ai/api/simple-options';
 import { GITHUB_COPILOT_MODELS } from '@earendil-works/pi-ai/providers/github-copilot.models';
 import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
+import { OPENAI_CODEX_MODELS } from '@earendil-works/pi-ai/providers/openai-codex.models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import { buildRuntimeEndpointConfigs } from '@/backend/data/services/providerRegistryProjection';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { installProviderRegistryTestSnapshot } from '@/backend/data/services/providerRegistryTestSnapshot';
+import { createTranslationModule } from '@/backend/services/translation';
 import { ProviderAccountError } from '@/shared/contracts/providerAccounts';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
+import { generatePiText } from '../generatePiText';
 import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
 import type { PiRuntimeDependencies } from '../piModelTypes';
 import * as piOAuthModels from '../piOAuthModels';
+import { emptyAssistantMessage } from '../piStreamEvents';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
@@ -108,6 +112,83 @@ describe('Pi model resolver', () => {
     });
     mockBindPiStream.mockResolvedValue(mockBoundStreamFn);
     resolver = createPiModelResolver();
+  });
+
+  test('translates with the OpenAI OAuth account and Codex transport when no API key exists', async () => {
+    const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
+    const provider = makeProvider(
+      ENDPOINT_TYPE.OPENAI_RESPONSES,
+      'https://chatgpt.com/backend-api',
+      'openai-codex',
+    );
+    provider.presetProviderId = 'openai-codex';
+    provider.authMethods = ['oauth'];
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, { apiModelId: oauthModel.id }),
+    );
+    mockResolveApiKey.mockRejectedValue(new Error('This provider has no manual API keys.'));
+    resolver = createPiModelResolver({
+      resolveAuth: async () => ({
+        id: 'openai-codex',
+        auth: { apiKey: 'oauth-access' },
+        availableModelIds: [oauthModel.id],
+      }),
+    });
+    const message = {
+      ...emptyAssistantMessage(oauthModel),
+      content: [{ type: 'text' as const, text: '你好' }],
+    };
+    const source = new AssistantMessageEventStream();
+    source.push({ type: 'done', reason: 'stop', message });
+    mockBoundStreamFn.mockReturnValueOnce(source);
+    const translator = createTranslationModule({
+      ai: { generateText: (...args) => generatePiText(resolver, ...args) },
+      preference: { get: async () => 'test-provider::test-model' },
+      models: { getById: mockGetModelById },
+    });
+
+    await expect(translator.translate({ text: 'Hello', language: 'zh-CN' })).resolves.toBe('你好');
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'openai-codex-responses' }),
+      expect.objectContaining({ apiKey: 'oauth-access', temperature: undefined }),
+    );
+    const [sentModel, context] = mockBoundStreamFn.mock.calls[0];
+    expect(sentModel.provider).toBe('openai-codex');
+    expect(context.messages).toEqual([
+      expect.objectContaining({ role: 'system', content: expect.stringContaining('简体中文') }),
+      expect.objectContaining({ role: 'user', content: 'Hello' }),
+    ]);
+  });
+
+  test('keeps ordinary API-key translation on its configured protocol', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://api.openai.com/v1', 'openai'),
+    );
+    mockGetModelById.mockResolvedValue(makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES));
+    mockBoundStreamFn.mockImplementationOnce((model) => {
+      const source = new AssistantMessageEventStream();
+      source.push({
+        type: 'done',
+        reason: 'stop',
+        message: {
+          ...emptyAssistantMessage(model),
+          content: [{ type: 'text', text: '你好' }],
+        },
+      });
+      return source;
+    });
+    const translator = createTranslationModule({
+      ai: { generateText: (...args) => generatePiText(resolver, ...args) },
+      preference: { get: async () => 'test-provider::test-model' },
+      models: { getById: mockGetModelById },
+    });
+    await expect(translator.translate({ text: 'Hello', language: 'zh-CN' })).resolves.toBe('你好');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.objectContaining({ api: 'openai-responses' }),
+      expect.objectContaining({ apiKey: 'secret-key' }),
+    );
   });
 
   test('retains canonical Copilot identity, model API, and credential-specific base URL', async () => {
