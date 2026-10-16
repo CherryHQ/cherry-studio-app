@@ -11,6 +11,7 @@ import { accessibilityLabel as accessibilityLabelModifier } from '@expo/ui/swift
 import { useEffect } from 'react';
 import { useUniwind } from 'uniwind';
 
+import { useNavigationOverlay } from '../../../portal/overlay-navigation';
 import type { AlertProps } from '../../alert.types';
 
 export function Alert({
@@ -22,6 +23,7 @@ export function Alert({
   testID,
   title,
 }: AlertProps) {
+  useNavigationOverlay(isOpen);
   const { theme } = useUniwind();
   const inputValue = input?.value ?? '';
   const nativeInputValue = useNativeState(inputValue);

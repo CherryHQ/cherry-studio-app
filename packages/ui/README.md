@@ -5,6 +5,14 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
+read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
+dismissible sheets and Cherry-rendered menus close
+through their existing owners, and navigation waits until they are gone. Alerts, decision dialogs,
+non-dismissible sheets, newly appearing overlays, and cancellation return false without approving
+or discarding a user decision. The caller owns navigation and any temporary resources; the provider
+does not know about feedback or screenshots. Component previews may omit this coordination provider.
+
 Runtime imports use the component-only entry point so Metro does not traverse the icon registries:
 
 ```tsx
@@ -990,3 +998,9 @@ pnpm install --lockfile-only
 
 `MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
 iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.
+
+Toast options accept translated `actions` and an optional `dismissLabel`. Selecting an action
+hides that toast before invoking its callback; callers own persistence and outcome feedback.
+`show` returns an ID for scoped `hide`, so a workflow can remove its own hint on route or lifecycle
+changes without clearing unrelated notices. Bottom placement follows the keyboard and accepts a
+screen-measured `bottomOffset` for dock clearance. Default text-only toasts retain top placement.
