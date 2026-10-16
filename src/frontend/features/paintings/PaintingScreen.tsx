@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { ScopedTheme } from 'uniwind';
+import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePainting } from '@/frontend/data/paintings/usePaintings';
@@ -23,6 +23,7 @@ import { PaintingBoardWorkspace } from './components/PaintingBoardWorkspace';
  */
 export function PaintingScreen() {
   const { t } = useTranslation();
+  const { theme } = useUniwind();
   const router = useRouter();
   // Screen-scoped rather than `router.setParams`: the receipt can land after
   // the user has already navigated away, and the router's version would write
@@ -51,7 +52,7 @@ export function PaintingScreen() {
   const paintingQuery = usePainting(openingBoardId ? undefined : opening);
   // Once located, the board outlives the opening painting, which may be deleted on this page.
   if (!openingBoardId && paintingQuery.data) setOpeningBoardId(paintingQuery.data.boardId);
-  const constantWhite = useThemeColor('constant-white');
+  const foreground = useThemeColor('foreground');
   const handleReceipt = useCallback(
     (paintingId: string | undefined) =>
       navigation.setParams({ fileEntryId: undefined, handoff: undefined, paintingId }),
@@ -69,7 +70,7 @@ export function PaintingScreen() {
         <Spinner
           accessibilityLabel={t('painting.board.loading')}
           accessibilityRole="progressbar"
-          color={constantWhite}
+          color={foreground}
         />
       </View>
     ) : (
@@ -104,11 +105,9 @@ export function PaintingScreen() {
   }
 
   return (
-    <ScopedTheme theme="dark">
-      <View className="flex-1 bg-constant-black">
-        <StatusBar style="light" />
-        {content}
-      </View>
-    </ScopedTheme>
+    <View className="flex-1 bg-background">
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
+      {content}
+    </View>
   );
 }

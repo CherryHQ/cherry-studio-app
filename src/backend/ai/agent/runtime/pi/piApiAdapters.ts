@@ -1,6 +1,6 @@
 import { formatApiHost, withoutTrailingApiVersion } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { CacheRetention, FetchFunction } from '@earendil-works/pi-ai';
+import type { CacheRetention, FetchFunction, ProviderHeaders } from '@earendil-works/pi-ai';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { PiStreamFn } from './piModelTypes';
@@ -174,9 +174,20 @@ export async function bindPiStream(
   return (model, context, options) => {
     const maxTokens = options?.maxTokens ?? binding.maxTokens;
     const temperature = options?.temperature ?? binding.temperature;
+    const headers: ProviderHeaders = { ...options?.headers, ...binding.headers };
+    if (binding.apiKey === '') {
+      // SDKs require a key even for unauthenticated gateways. Suppress only generated auth.
+      for (const name of adapter.authHeaderNames) {
+        if (!Object.keys(headers).some((header) => header.toLowerCase() === name)) {
+          // Google's SDK flattens null overrides; an empty key header suppresses its default.
+          headers[name] =
+            adapter.api === 'google-generative-ai' && name === 'x-goog-api-key' ? '' : null;
+        }
+      }
+    }
     const streamOptions = {
       ...options,
-      apiKey: binding.apiKey,
+      apiKey: binding.apiKey === '' ? 'unused' : binding.apiKey,
       cacheRetention: binding.cacheRetention ?? options?.cacheRetention,
       sessionId: binding.sessionId ?? options?.sessionId,
       ...(adapter.api === 'openai-codex-responses' ? { transport: 'sse' } : {}),
@@ -184,7 +195,7 @@ export async function bindPiStream(
         ? { azureApiVersion: binding.azureApiVersion }
         : {}),
       fetch,
-      headers: { ...options?.headers, ...binding.headers },
+      headers,
       maxRetries: binding.maxRetries,
       maxTokens,
       onPayload: async (payload, requestModel) => {

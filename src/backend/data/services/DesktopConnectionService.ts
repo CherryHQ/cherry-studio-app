@@ -149,7 +149,14 @@ function getProviderImportRejection(
     return account?.apiKeys && hasUsableKey ? undefined : 'unsupported-auth';
   }
   if (!acceptsApiKey) return 'unsupported-auth';
-  return provider.authOptional || hasUsableKey ? undefined : 'missing-api-key';
+  const authConfig = parseSupportedAuthConfig(provider.authConfig);
+  const authOptional =
+    provider.authOptional ??
+    (authConfig?.type === 'api-key' && authConfig.required !== undefined
+      ? !authConfig.required
+      : providerRegistryService.getProviderDisplayMetadata(provider.id, provider.presetProviderId)
+          .authOptional);
+  return authOptional || hasUsableKey ? undefined : 'missing-api-key';
 }
 
 /** Run the real mapping up front so a provider that cannot be written is disabled, not attempted. */
@@ -211,13 +218,17 @@ function mapProvider(
   const defaultChatEndpoint =
     provider.defaultChatEndpoint ??
     (provider.apiHost ? endpointFromProviderType(provider.type) : null);
+  let authConfig =
+    account?.apiKeys && provider.authType === 'oauth'
+      ? { type: 'api-key' as const }
+      : parseSupportedAuthConfig(provider.authConfig);
+  if (provider.authOptional !== undefined && (!authConfig || authConfig.type === 'api-key')) {
+    authConfig = { ...authConfig, required: !provider.authOptional, type: 'api-key' };
+  }
   return {
     apiFeatures: mapApiFeatures(provider),
     apiKeys: provider.apiKeys,
-    authConfig:
-      account?.apiKeys && provider.authType === 'oauth'
-        ? { type: 'api-key' }
-        : parseSupportedAuthConfig(provider.authConfig),
+    authConfig,
     defaultChatEndpoint,
     endpointConfigs: mapEndpointConfigs(provider),
     isEnabled: true,

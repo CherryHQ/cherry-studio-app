@@ -77,9 +77,14 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   as painting settings, use the same action. An alternative field passes its blur handle to
   `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
   ownership on its next focus.
+- `ComposerEditor` and `ComposerEditorAccessories` connect CherryUI's shared compact-to-editing
+  layout and large-editor controls to the app field and translated labels. Callers compose the
+  toolbar and decide what activates editing: chat includes attachments, while painting keeps its
+  automatic reference compact until focus or draft text. The compact accessory is a preview only;
+  attachment preview and removal stay in `ComposerAttachmentStrip` above the active field.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. Chat uses its `expandable` layout: a compact-height placeholder reserves
-  transcript space while the same dock overlays the conversation during manual expansion.
+  `Composer.Dock`. Chat and painting use its `expandable` layout: a compact-height placeholder
+  reserves content space while the same dock overlays the page during manual expansion.
   Other floating surfaces can use CherryUI's `useComposerDockLayout` inset primitive.
 - `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
   child controls cancel the press inside CherryUI's native `BackgroundPressArea`, including a touch
@@ -137,7 +142,7 @@ walk to verify it.
 
 ## Behavior notes
 
-- Chat's screen-local `Composer.Expansion` owns manual large-editor presentation separately from
+- Each chat or painting screen's `Composer.Expansion` owns manual large-editor presentation separately from
   editing and draft state. Expand/collapse never moves the editor into a portal or requests native
   focus/blur. Sending and a newly mounted composer session collapse the large editor. Native
   keyboard hiding and input replacements retain its size choice; only field focus reconnects

@@ -47,6 +47,7 @@ export type {
   RuntimeToolInputPreview,
   RuntimeToolRef,
   RuntimeToolResult,
+  RuntimeTextGenerator,
   RuntimeUsage,
   RuntimeUsageContext,
   RuntimeUsageReport,

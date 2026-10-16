@@ -227,7 +227,7 @@ export function PaintingFocusCanvas({
           >
             {failedUri === uri ? (
               <View className="flex-1 items-center justify-center px-8">
-                <Text className="text-center text-sm text-constant-white/70">
+                <Text className="text-center text-muted-foreground text-sm">
                   {t('painting.focus.imageUnavailable')}
                 </Text>
               </View>

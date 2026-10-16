@@ -123,7 +123,7 @@ describe('service registry', () => {
       expect.arrayContaining(['AgentHostDependencies']),
     );
     expect(getDependencies(services.AgentHostDependencies)).toEqual(
-      expect.arrayContaining(['McpRuntimeService', 'WebSearchService']),
+      expect.arrayContaining(['McpRuntimeService', 'WebSearchService', 'AgentRuntime']),
     );
 
     // MCP and the Host share PostReady, so their dependency layers carry the
@@ -131,6 +131,7 @@ describe('service registry', () => {
     // before every PostReady service, and global teardown reverses that order.
     expect(layerOf('McpRuntimeService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('McpRuntimeService')).toBeLessThan(layerOf('MobileAgentHost'));
+    expect(layerOf('AgentRuntime')).toBeLessThan(layerOf('AgentHostDependencies'));
     expect(getPhase(services.WebSearchService)).toBe(Phase.Gate);
     expect(getPhase(services.MobileAgentHost)).toBe(Phase.PostReady);
   });

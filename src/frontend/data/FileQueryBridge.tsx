@@ -5,7 +5,7 @@ import { useBackendModule } from './BackendProvider';
 import { useApiClient } from './DataApiProvider';
 import { queryKeys } from './queryKeys';
 
-/** Refresh lists and the changed file's detail/content, including background draft edits. */
+/** Refresh file reads and dependent painting projections after committed changes. */
 export function FileQueryBridge() {
   const file = useBackendModule('file');
   const queryClient = useQueryClient();
@@ -16,10 +16,11 @@ export function FileQueryBridge() {
       const listPath = queryKeys.files.entries()[0];
       const detailPath = `${listPath}/${entryId}`;
       void queryClient.invalidateQueries({
-        predicate: ({ queryKey: [resource, idOrKind, entries] }) =>
+        predicate: ({ queryKey: [resource, idOrKind, entries], meta }) =>
           resource === '/files/library' ||
           resource === listPath ||
           resource === detailPath ||
+          (Array.isArray(meta?.fileEntryIds) && meta.fileEntryIds.includes(entryId)) ||
           (resource === 'files' &&
             (idOrKind === entryId ||
               (idOrKind === 'preview-uri-page' &&
