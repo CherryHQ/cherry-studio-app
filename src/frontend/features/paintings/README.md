@@ -27,7 +27,9 @@ created by its first generation, titled from the request, and renamable from the
   the current image, and what was made from it; tapping a cell walks the edge and holding one
   previews it in place for comparison.
 - **Overview** draws every node and edge; drag to pan, pinch to zoom, double tap to reset, tap a
-  node to focus it. Its composer starts a new root that references nothing.
+  thumbnail to focus it. Tap its caption to read the complete prompt in an anchored information
+  popover; long prompts scroll inside it without changing the board's layout or viewport. Its
+  composer starts a new root that references nothing.
 
 The composer stays mounted across both layers so a draft survives moving around the board. The
 focused image is attached as the next generation's reference (`usePaintingFocusReference`); removing

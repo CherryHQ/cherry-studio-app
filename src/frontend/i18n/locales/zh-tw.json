@@ -866,6 +866,7 @@
   "painting.board.nodeCount_other": "{{count}} 個節點",
   "painting.board.rename": "重新命名畫板",
   "painting.board.renameFailed": "畫板重新命名失敗，請重試。",
+  "painting.board.showPrompt": "查看完整提示詞",
   "painting.board.unavailable": "無法開啟這個畫板",
   "painting.board.unavailableDescription": "繪圖可能已被刪除。請返回後重試。",
   "painting.editor.annotation": "標註 {{number}}",

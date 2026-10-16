@@ -877,6 +877,7 @@
   "painting.board.nodeCount_other": "{{count}} düğüm",
   "painting.board.rename": "Panoyu yeniden adlandır",
   "painting.board.renameFailed": "Pano yeniden adlandırılamadı. Tekrar deneyin.",
+  "painting.board.showPrompt": "İsteğin tamamını göster",
   "painting.board.unavailable": "Bu pano açılamadı",
   "painting.board.unavailableDescription": "Çizim silinmiş olabilir. Geri dönüp tekrar deneyin.",
   "painting.editor.annotation": "Not {{number}}",

@@ -888,6 +888,7 @@
   "painting.board.nodeCount_other": "{{count}} nós",
   "painting.board.rename": "Mudar o nome do quadro",
   "painting.board.renameFailed": "Não foi possível mudar o nome do quadro. Tente novamente.",
+  "painting.board.showPrompt": "Mostrar o pedido completo",
   "painting.board.unavailable": "Não foi possível abrir este quadro",
   "painting.board.unavailableDescription": "O desenho pode ter sido eliminado. Volte e tente novamente.",
   "painting.editor.annotation": "Nota {{number}}",
