@@ -168,6 +168,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
     : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -213,6 +214,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               </View>
             ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
               <ChatWorkspace
+                feedbackHintBottomOffset={composerHeight}
                 isTranslationEnabled
                 renderUsage={renderLocalUsage}
                 snapshot={snapshot}
@@ -239,7 +241,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="expandable">
+            <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
               <View>
                 <ChatInput
                   agentId={resolvedAgentId}

@@ -21,7 +21,6 @@ import type {
 } from '@/shared/contracts/diagnostics';
 
 import { SettingsScrollPage } from '../../components/SettingsScrollPage';
-import { FeedbackDialog } from './FeedbackDialog';
 import { feedbackHistoryRecords, FEEDBACK_HISTORY_KEY, forgetFeedback } from './feedbackHistory';
 import { feedbackStatusQueryOptions } from './feedbackStatusQuery';
 
@@ -44,7 +43,6 @@ export function FeedbackHistoryScreen() {
   const [stored] = usePersistCache(FEEDBACK_HISTORY_KEY);
   const records = feedbackHistoryRecords(stored);
   const [page, setPage] = useState(0);
-  const [isFeedbackOpen, setFeedbackOpen] = useState(false);
   const pageCount = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount - 1);
   const visible = records.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
@@ -64,7 +62,6 @@ export function FeedbackHistoryScreen() {
   });
 
   function openReport(reportId: string) {
-    setFeedbackOpen(false);
     router.push({ pathname: '/settings/about/feedback/[reportId]', params: { reportId } });
   }
 
@@ -202,15 +199,12 @@ export function FeedbackHistoryScreen() {
               description={t('settings.about.feedback.history.emptyDescription')}
               primaryAction={{
                 children: t('settings.about.feedback.title'),
-                onPress: () => setFeedbackOpen(true),
+                onPress: () => router.push('/settings/about/feedback/new'),
               }}
             />
           </View>
         )}
       </SettingsScrollPage>
-      {isFeedbackOpen && (
-        <FeedbackDialog onClose={() => setFeedbackOpen(false)} onViewReport={openReport} />
-      )}
     </>
   );
 }

@@ -9,14 +9,13 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Platform, Text, View } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
-import { FeedbackDialog } from './diagnostics/FeedbackDialog';
 import { useAppUpdateCheck } from './useAppUpdateCheck';
 
 const APP_VERSION = Application.nativeApplicationVersion?.trim();
@@ -34,7 +33,6 @@ const ABOUT_LINKS = {
 export default function AboutSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [isFeedbackOpen, setFeedbackOpen] = useState(false);
   const { toast } = useToast();
   const { checkForUpdates, hasAvailableUpdate, isEnabled, isFetching } = useAppUpdateCheck();
   const versionLabel = APP_VERSION ? `v${APP_VERSION}` : t('settings.about.version.unknown');
@@ -119,7 +117,7 @@ export default function AboutSettingsScreen() {
             accessibilityHint={t('settings.about.feedback.description')}
             label={t('settings.about.feedback.title')}
             leading={<MessageSquareTextIcon className="size-4 text-foreground" />}
-            onPress={() => setFeedbackOpen(true)}
+            onPress={() => router.push('/settings/about/feedback/new')}
             showChevron={false}
           />
           <Section.Item
@@ -141,15 +139,6 @@ export default function AboutSettingsScreen() {
           />
         </Section>
       </SettingsScrollPage>
-      {isFeedbackOpen && (
-        <FeedbackDialog
-          onClose={() => setFeedbackOpen(false)}
-          onViewReport={(reportId) => {
-            setFeedbackOpen(false);
-            router.push({ pathname: '/settings/about/feedback/[reportId]', params: { reportId } });
-          }}
-        />
-      )}
     </>
   );
 }

@@ -39,6 +39,7 @@ import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
+import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
@@ -138,33 +139,36 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
-      {mode === 'standard' &&
-      selectedModelItem &&
-      isImageGenerationModel(selectedModelItem.model) &&
-      !skillAction ? (
-        <PaintingInput
-          canSend={canSend}
-          dismissKeyboardOnSend={dismissKeyboardOnSend}
-          modelSelection={modelSelection}
-          onCancel={cancelGeneration}
-          onGenerate={generateImage}
-          status={isBusy ? 'generating' : 'idle'}
-        />
-      ) : (
-        <TextChatInput
-          mode={mode}
-          agentId={agentId}
-          skillAction={skillAction}
-          controls={controls}
-          dismissKeyboardOnSend={dismissKeyboardOnSend}
-          providerSetupReturnTo={providerSetupReturnTo}
-          reasoningEfforts={reasoningEfforts}
-          reasoningSelection={reasoningSelection}
-          selectedModelId={selectedModelId}
-          selectedModelItem={selectedModelItem}
-          selectModel={selectModel}
-        />
-      )}
+      <View className="gap-2">
+        <ChatInputQueue sessionId={sessionId} />
+        {mode === 'standard' &&
+        selectedModelItem &&
+        isImageGenerationModel(selectedModelItem.model) &&
+        !skillAction ? (
+          <PaintingInput
+            canSend={canSend}
+            dismissKeyboardOnSend={dismissKeyboardOnSend}
+            modelSelection={modelSelection}
+            onCancel={cancelGeneration}
+            onGenerate={generateImage}
+            status={isBusy ? 'generating' : 'idle'}
+          />
+        ) : (
+          <TextChatInput
+            mode={mode}
+            agentId={agentId}
+            skillAction={skillAction}
+            controls={controls}
+            dismissKeyboardOnSend={dismissKeyboardOnSend}
+            providerSetupReturnTo={providerSetupReturnTo}
+            reasoningEfforts={reasoningEfforts}
+            reasoningSelection={reasoningSelection}
+            selectedModelId={selectedModelId}
+            selectedModelItem={selectedModelItem}
+            selectModel={selectModel}
+          />
+        )}
+      </View>
     </PaintingInputProvider>
   );
 }

@@ -18,6 +18,16 @@ describe('message window query contract', () => {
     expect(ListAgentSessionMessagesQuerySchema.parse({ ids })).toEqual({ ids });
   });
 
+  test.each([true, false])(
+    'preserves settledOnly=%s in a serialized window request',
+    (settledOnly) => {
+      const query = { limit: 12, settledOnly };
+      expect(ListAgentSessionMessagesQuerySchema.parse(JSON.parse(JSON.stringify(query)))).toEqual(
+        query,
+      );
+    },
+  );
+
   test.each([
     { aroundMessageId: 'message', cursor: '100:message' },
     { aroundMessageId: 'message', direction: 'newer' },
@@ -31,6 +41,8 @@ describe('message window query contract', () => {
     { ids: ['message'], direction: 'older' },
     { ids: ['message'], aroundMessageId: 'message' },
     { ids: ['message'], limit: 1 },
+    { ids: ['message'], settledOnly: true },
+    { settledOnly: 'false' },
   ])('rejects ambiguous or unbounded query %j', (query) => {
     expect(ListAgentSessionMessagesQuerySchema.safeParse(query).success).toBe(false);
   });

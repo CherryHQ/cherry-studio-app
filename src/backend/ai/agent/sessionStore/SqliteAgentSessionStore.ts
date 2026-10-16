@@ -366,6 +366,34 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async discardQueuedTurn(input: DeleteTurnInput): Promise<string[]> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const rows = await tx
+        .select({
+          id: agentSessionMessageTable.id,
+          role: agentSessionMessageTable.role,
+          status: agentSessionMessageTable.status,
+        })
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        );
+      if (!rows.some((row) => row.role === 'assistant' && row.status === 'pending')) return [];
+      await tx
+        .delete(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            eq(agentSessionMessageTable.turnId, input.turnId),
+          ),
+        );
+      return rows.map((row) => row.id);
+    });
+  }
+
   async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
     const result = await this.dbService.withWriteTx(async (tx): Promise<DeleteTurnResult> => {
       const [session] = await tx

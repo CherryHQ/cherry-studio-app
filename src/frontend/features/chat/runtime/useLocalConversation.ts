@@ -31,7 +31,7 @@ export function useLocalConversation(input: {
   const { sessionId, title, navigation } = input;
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
-  const window = useAgentMessageHistoryWindow(sessionId, navigation);
+  const window = useAgentMessageHistoryWindow(sessionId, navigation, { settledOnly: true });
   const [owned, setOwned] = useState(() => ({
     sessionId,
     client,

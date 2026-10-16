@@ -30,6 +30,7 @@ import {
   type AgentMessageView,
   type AgentPendingQuestion,
   type AgentProtocol,
+  type AgentQueuedInput,
   type AgentSessionObservation,
   type AgentSessionStatus,
   type AgentSessionView,
@@ -807,6 +808,25 @@ export class DurableAgentHost implements AgentProtocol {
     await this.conversations.abort(parsed.sessionId);
   }
 
+  async cancelQueuedInput(
+    input: Parameters<AgentProtocol['cancelQueuedInput']>[0],
+  ): ReturnType<AgentProtocol['cancelQueuedInput']> {
+    const { sessionId, turnId } = AgentCancelTurnInputSchema.parse(input);
+    storageMutationGate.assertWritable();
+    if (!(await this.isCurrentConversation(sessionId))) return 'not-found';
+    const state = await this.attach(sessionId);
+    const queued = state.queue.find((turn) => turn.identity.turnId === turnId);
+    if (!queued) return state.active?.identity.turnId === turnId ? 'already-started' : 'not-found';
+    const result = await this.conversations.withdraw(sessionId, queued.identity.requestId);
+    // The Runtime checks placement and withdrawal in one transaction. Never turn a lost race
+    // into abort(sessionId), which would stop the active input and every remaining follow-up.
+    if (result === 'already-placed') return 'already-started';
+    // Another admission may have reserved its rows without reaching Pi yet. Only reconcile the
+    // input whose withdrawal was confirmed; a session-wide recovery would interrupt that receipt.
+    if (result === 'aborted') await this.persistTurn({ ...queued, status: 'cancelled' });
+    return result === 'aborted' ? 'withdrawn' : 'not-found';
+  }
+
   async cancelSubmission(input: Parameters<AgentProtocol['cancelSubmission']>[0]) {
     const { sessionId } = AgentCancelSubmissionInputSchema.parse(input);
     this.admissions.get(sessionId)?.controller.abort(
@@ -857,6 +877,7 @@ export class DurableAgentHost implements AgentProtocol {
       session,
       capabilities: this.conversations.descriptor.capabilities,
       activeTurn: view ? this.turnStatus(view.turn, state!) : null,
+      queuedInputs: this.queuedInputs(state?.queue ?? []),
       activeUserMessage: view?.user ?? null,
       streamingMessage: view?.assistant ?? null,
       hasHistoryBeforeActiveTurn: state?.active
@@ -1185,6 +1206,21 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private async persistTurn(turn: RuntimeDurableTurn) {
+    if (turn.status === 'cancelled' && turn.inputBoundary === null) {
+      // A withdrawn inbox item never entered model context. Remove its reservation without
+      // invalidating the working copy; reconciliation retries this after a process interruption.
+      const sessionId = turn.identity.sessionId;
+      const messageIds = await this.store.discardQueuedTurn({
+        sessionId,
+        turnId: turn.identity.turnId,
+      });
+      if (messageIds.length) {
+        this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
+        this.ports.durableStorage?.notifyTranscript(sessionId);
+      }
+      this.prepared.delete(executionKey(sessionId, turn.identity.requestId));
+      return;
+    }
     const { assistant, turn: view } = projectDurableHostTurn(turn);
     const status = turn.status;
     if (!assistant || status === 'running' || status === 'queued') return;
@@ -1274,11 +1310,10 @@ export class DurableAgentHost implements AgentProtocol {
         else pending.push(event);
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
-      state.queue = observed.snapshot.queue;
       state.contextStatus = observed.snapshot.contextStatus ?? null;
-      this.recordQueue(sessionId, state.queue, []);
       state.unsubscribe = observed.unsubscribe;
       this.live.set(sessionId, state);
+      this.updateQueue(sessionId, state, observed.snapshot.queue);
       if (state.active) this.present(state.active);
       installed = true;
       for (const event of pending) this.consume(sessionId, state, event);
@@ -1295,8 +1330,7 @@ export class DurableAgentHost implements AgentProtocol {
   private consume(sessionId: string, state: LiveSession, event: RuntimeConversationEvent) {
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
-      this.recordQueue(sessionId, event.snapshot.queue, state.queue);
-      state.queue = event.snapshot.queue;
+      this.updateQueue(sessionId, state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
       if (state.active) this.present(state.active);
@@ -1304,11 +1338,18 @@ export class DurableAgentHost implements AgentProtocol {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
     } else if (event.type === 'queue.updated') {
-      this.recordQueue(sessionId, event.queue, state.queue);
-      state.queue = event.queue;
-      for (const turn of event.queue) this.publishRows(turn);
+      this.updateQueue(sessionId, state, event.queue);
     } else {
       const turn = this.timed(event.turn);
+      if (
+        turn.status !== 'queued' &&
+        state.queue.some((item) => item.identity.turnId === turn.identity.turnId)
+      )
+        this.updateQueue(
+          sessionId,
+          state,
+          state.queue.filter((item) => item.identity.turnId !== turn.identity.turnId),
+        );
       if (turn.status === 'running') state.active = turn;
       this.present(turn);
       if (
@@ -1342,10 +1383,11 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private presentSettled(turn: RuntimeDurableTurn) {
+    if (turn.status === 'queued' || (turn.status === 'cancelled' && turn.inputBoundary === null))
+      return;
     const sessionId = turn.identity.sessionId;
     const state = this.live.get(sessionId);
     this.publishRows(turn);
-    if (turn.status === 'queued') return;
     const view = projectDurableHostTurn(turn);
     const projected = state ? this.turnStatus(view.turn, state) : view.turn;
     const terminal = turn.status !== 'running';
@@ -1652,6 +1694,27 @@ export class DurableAgentHost implements AgentProtocol {
         )
         ?.end('ok');
     }
+  }
+
+  private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
+    return queue.map((turn) => ({
+      turnId: turn.identity.turnId,
+      userMessage: projectDurableHostTurn(turn).user,
+      assistantMessageId: turn.assistantMessageId,
+    }));
+  }
+
+  private updateQueue(sessionId: string, state: LiveSession, queue: readonly RuntimeDurableTurn[]) {
+    if (
+      state.queue.length === queue.length &&
+      state.queue.every(
+        (turn, index) => turn.identity.requestId === queue[index].identity.requestId,
+      )
+    )
+      return;
+    this.recordQueue(sessionId, queue, state.queue);
+    state.queue = queue;
+    this.publish(sessionId, { type: 'queue.updated', inputs: this.queuedInputs(queue) });
   }
 
   private async traceOperation<Value>(

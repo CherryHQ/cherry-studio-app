@@ -194,6 +194,12 @@ export interface AgentSessionStore {
    */
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
 
+  /**
+   * Remove an unexecuted reservation after the Runtime confirms withdrawal. Unlike deleting
+   * history, this cannot invalidate the current context or another input's execution.
+   */
+  discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
+
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 
   /**

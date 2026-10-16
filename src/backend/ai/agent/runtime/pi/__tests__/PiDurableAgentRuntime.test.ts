@@ -163,6 +163,69 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('starts the next queued input after a terminal provider failure without resubmission', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    const firstStream = new AssistantMessageEventStream();
+    const started = deferred<void>();
+    let calls = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        calls++;
+        if (calls === 1) {
+          started.resolve();
+          return firstStream;
+        }
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason: 'stop',
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        });
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    const completed = deferred<void>();
+    const observed = await runtime.observe(seed.sessionId, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'second' &&
+        event.turn.status === 'completed'
+      )
+        completed.resolve();
+    });
+    try {
+      await runtime.submit(seed.sessionId, input('first'));
+      await started.promise;
+      await runtime.submit(seed.sessionId, input('second'));
+      firstStream.push(
+        providerErrorEvent(emptyAssistantMessage(wire), {
+          message: 'Invalid request',
+          retryable: false,
+        }),
+      );
+      await completed.promise;
+      const history = await runtime.history(seed.sessionId, { limit: 10 });
+      expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
+        ['second', 'completed'],
+        ['first', 'failed'],
+      ]);
+      expect(calls).toBe(2);
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
   test.each(['openai-completions', 'openai-responses'] as const)(
     'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {
@@ -531,53 +594,68 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('rebuilds independent history from Cherry parts without model requests', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
-      await runtime.discardConversation('session');
-      expect(await runtime.hasConversation('session')).toBe(false);
-      await runtime.ensureConversation({
-        ...seed,
-        revision: 1,
-        history: {
-          history: [
-            {
-              turnId: 'first',
-              messages: [
-                { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
-                {
-                  role: 'assistant',
-                  parts: [
-                    { type: 'reasoning', text: 'Unsigned thought, never resent.' },
-                    { type: 'text', text: 'Response 1' },
-                  ],
-                },
-              ],
-            },
-          ],
-          contextCheckpoint: null,
-          referencedFileEntryIds: ['retained-file'],
-        },
-      });
-      expect(state.requests).toHaveLength(1);
-      expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
-      await submitAndWait(runtime, input('next'));
-      expect(state.requests[1]?.messages).toContainEqual(
-        expect.objectContaining({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Response 1' }],
-        }),
-      );
-      expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
-    } finally {
-      await runtime.close();
-    }
-  });
+  test.each([false, true])(
+    'rebuilds independent history with the system baseline first (compacted: %s)',
+    async (compacted) => {
+      const state = fixture();
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
+        await runtime.discardConversation('session');
+        expect(await runtime.hasConversation('session')).toBe(false);
+        await runtime.ensureConversation({
+          ...seed,
+          revision: 1,
+          history: {
+            history: [
+              {
+                turnId: 'first',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
+                  {
+                    role: 'assistant',
+                    parts: [
+                      { type: 'reasoning', text: 'Unsigned thought, never resent.' },
+                      { type: 'text', text: 'Response 1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+            contextCheckpoint: compacted
+              ? {
+                  version: 1,
+                  anchorTurnId: 'earlier',
+                  payload: {
+                    kind: 'pi-context-compaction',
+                    summary: 'Earlier user preferences.',
+                    tokensBefore: 8000,
+                  },
+                }
+              : null,
+            referencedFileEntryIds: ['retained-file'],
+          },
+        });
+        expect(state.requests).toHaveLength(1);
+        expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
+        await submitAndWait(runtime, input('next'));
+        expect(state.requests[1]?.messages[0]?.role).toBe('system');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('Help.');
+        expect(state.requests[1]?.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Response 1' }],
+          }),
+        );
+        expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
 
   test('detaching a UI observer preserves the active native execution', async () => {
     const state = fixture();
