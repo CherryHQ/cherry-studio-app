@@ -8,13 +8,13 @@ import { queryKeys, useBackendModule } from '@/frontend/data';
 import type { TrashItem } from '@/shared/data/api/schemas/trash';
 
 export function TrashEntryRow({
-  date,
+  daysLeft,
   isPending,
   item,
   onDelete,
   onRestore,
 }: {
-  date: string;
+  daysLeft: string;
   isPending: boolean;
   item: TrashItem;
   onDelete: (item: TrashItem) => void;
@@ -22,10 +22,9 @@ export function TrashEntryRow({
 }) {
   const { t } = useTranslation();
   const title = item.title;
-  const canRestore = !isPending && item.state === 'trashed';
   const items: MenuItem[] = [
     {
-      disabled: !canRestore,
+      disabled: isPending,
       id: 'restore',
       label: t('trash.restore'),
       onPress: () => void onRestore(item),
@@ -42,22 +41,23 @@ export function TrashEntryRow({
   return (
     <ActionMenu items={items}>
       <Pressable
-        accessibilityActions={[
-          ...(canRestore
-            ? [{ name: 'restore', label: t('trash.restoreNamed', { name: title }) }]
-            : []),
-          ...(!isPending
-            ? [{ name: 'delete', label: t('trash.deleteNamed', { name: title }) }]
-            : []),
-        ]}
-        accessibilityHint={t('trash.deletedAt', { date })}
+        accessibilityActions={
+          isPending
+            ? []
+            : [
+                { name: 'restore', label: t('trash.restoreNamed', { name: title }) },
+                { name: 'delete', label: t('trash.deleteNamed', { name: title }) },
+              ]
+        }
+        accessibilityHint={daysLeft}
         accessibilityLabel={title}
         accessibilityRole="button"
         className="min-h-12 flex-row items-center gap-4 active:opacity-60"
         disabled={isPending}
         onAccessibilityAction={({ nativeEvent }) => {
-          if (nativeEvent.actionName === 'restore' && canRestore) void onRestore(item);
-          if (nativeEvent.actionName === 'delete' && !isPending) onDelete(item);
+          if (isPending) return;
+          if (nativeEvent.actionName === 'restore') void onRestore(item);
+          if (nativeEvent.actionName === 'delete') onDelete(item);
         }}
         testID={`trash-entry-${item.id}`}
       >
@@ -66,9 +66,7 @@ export function TrashEntryRow({
           <Text className="text-base text-foreground" numberOfLines={2}>
             {title}
           </Text>
-          <Text className="text-sm text-muted-foreground">
-            {item.state === 'deleting' ? t('trash.deletionPending') : date}
-          </Text>
+          <Text className="text-sm text-muted-foreground">{daysLeft}</Text>
         </View>
       </Pressable>
     </ActionMenu>
@@ -78,7 +76,6 @@ export function TrashEntryRow({
 function TrashThumbnail({ item }: { item: TrashItem }) {
   const file = useBackendModule('file');
   const thumbnail = useQuery({
-    enabled: item.state === 'trashed',
     networkMode: 'always',
     queryFn: async () => ({ uri: await file.getTrashThumbnailUri(item.id, item.deletedAt) }),
     queryKey: queryKeys.files.trashThumbnailUri(item.id, item.deletedAt),
@@ -94,7 +91,7 @@ function TrashThumbnail({ item }: { item: TrashItem }) {
       pointerEvents="none"
     >
       <FileIcon className="size-6 text-foreground" />
-      {item.state === 'trashed' && thumbnail.data?.uri ? (
+      {thumbnail.data?.uri ? (
         <Image
           accessible={false}
           className="absolute inset-0 size-full"

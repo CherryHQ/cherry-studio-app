@@ -4,7 +4,6 @@ import * as z from 'zod';
 import { application } from '@/backend/core/application/Application';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
-import { appStateTable } from '@/backend/data/db/schemas/appState';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { FileEntryListQuery } from '@/shared/data/api/schemas/files';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -33,13 +32,6 @@ export type CreateFileEntry = z.input<typeof CreateFileEntrySchema>;
 
 const defaultLimit = 30;
 const maxLimit = 100;
-
-/** Durable unlink receipts; only permanently deleted entries leave the library for this journal. */
-export const FILE_CLEANUP_KEY_PREFIX = 'file-cleanup:';
-const FileCleanupSchema = z.strictObject({
-  entry: FileEntrySchema,
-  deletedAt: z.int().nonnegative(),
-});
 
 export class FileEntryService {
   constructor(private readonly hostDbService?: DbService) {}
@@ -187,30 +179,6 @@ export class FileEntryService {
 
   async deleteTx(tx: Database, id: FileEntryId): Promise<void> {
     await tx.delete(fileEntryTable).where(eq(fileEntryTable.id, id));
-  }
-
-  /** Commit the unlink receipt with row removal, before any irreversible filesystem work. */
-  async beginDeletionTx(tx: Database, id: FileEntryId, deletedAt?: number) {
-    const key = `${FILE_CLEANUP_KEY_PREFIX}${id}`;
-    const entry = await this.findByIdTx(tx, id, deletedAt);
-    if (entry) {
-      const cleanup = { entry, deletedAt: deletedAt ?? Date.now() };
-      await tx.insert(appStateTable).values({ key, value: cleanup });
-      await this.deleteTx(tx, id);
-      return cleanup;
-    }
-    const [row] = await tx.select().from(appStateTable).where(eq(appStateTable.key, key)).limit(1);
-    if (!row) return null;
-    const cleanup = FileCleanupSchema.parse(row.value);
-    return deletedAt === undefined || cleanup.deletedAt === deletedAt ? cleanup : null;
-  }
-
-  async finishDeletion(id: FileEntryId) {
-    await this.withWriteTx(async (tx) => {
-      await tx
-        .delete(appStateTable)
-        .where(eq(appStateTable.key, `${FILE_CLEANUP_KEY_PREFIX}${id}`));
-    });
   }
 }
 

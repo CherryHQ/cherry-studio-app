@@ -336,28 +336,36 @@ export async function rewriteInternalTextEntry(
 }
 
 /**
- * Permanently remove ownership before unlinking bytes and previews. The same transaction
- * records an unlink receipt, retained on failure or process death for the next trash sweep.
+ * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
+ * best-effort (a leftover blob is reclaimable by the future cache-cleanup
+ * sweep, while a dangling row would not be). A `deletedAt` limits removal to that trash
+ * incarnation, so a concurrent restore wins over stale cleanup.
  */
 export async function deleteInternalEntry(
-  entries: Pick<FileEntryService, 'beginDeletionTx' | 'finishDeletion' | 'withWriteTx'>,
+  entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   id: FileEntryId,
   deletedAt?: number,
 ): Promise<boolean> {
-  const cleanup = await entries.withWriteTx((tx) => entries.beginDeletionTx(tx, id, deletedAt));
+  const deletedEntry = await entries.withWriteTx(async (tx) => {
+    const entry = await entries.findByIdTx(tx, id, deletedAt);
+    if (!entry) {
+      return null;
+    }
+    await entries.deleteTx(tx, id);
+    return entry;
+  });
 
-  if (!cleanup) {
+  if (!deletedEntry) {
     return false;
   }
 
   try {
-    deleteInternalFile(cleanup.entry);
-    deleteFilePreview(cleanup.entry);
-    await entries.finishDeletion(id);
-  } finally {
-    // Row removal is committed even when unlinking fails; readers must not retain its content.
-    notifyFileChange(id);
+    deleteInternalFile(deletedEntry);
+    deleteFilePreview(deletedEntry);
+  } catch (error) {
+    logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
+  notifyFileChange(id);
   return true;
 }
 

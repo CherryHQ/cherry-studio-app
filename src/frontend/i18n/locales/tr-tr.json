@@ -2177,18 +2177,17 @@
   "skills.translation.translate": "Yapay zekâ çevirisi",
   "skills.translation.translating": "Çevriliyor…",
   "skills.working": "İşleniyor…",
-  "storage.title": "Depolama",
   "systemEntry.failed": "Bu paylaşım açılamadı. İçeriği yeniden paylaşın.",
   "translation.error.failed": "Çeviri başarısız oldu. Lütfen tekrar deneyin.",
   "translation.error.modelUnavailable": "Ayarlarda kullanılabilir bir çeviri modeli veya varsayılan model seçin.",
   "trash.actionFailed": "İşlem başarısız oldu. Tekrar deneyin.",
+  "trash.daysLeft_one": "{{count}} gün kaldı",
+  "trash.daysLeft_other": "{{count}} gün kaldı",
   "trash.deleteDescription": "“{{name}}” kalıcı olarak silinsin mi? Bu işlem geri alınamaz.",
   "trash.deleteNamed": "{{name}} öğesini kalıcı olarak sil",
   "trash.deletePermanently": "Kalıcı olarak sil",
   "trash.deleteTitle": "Kalıcı olarak silinsin mi?",
   "trash.deleted": "Kalıcı olarak silindi",
-  "trash.deletedAt": "Silinme tarihi: {{date}}",
-  "trash.deletionPending": "Silme tamamlanmadı. Tekrar deneyin.",
   "trash.emptied": "Çöp kutusu boşaltıldı",
   "trash.empty": "Son silinen dosya yok",
   "trash.emptyAll": "Çöp kutusunu boşalt",
@@ -2199,6 +2198,5 @@
   "trash.restoreNamed": "{{name}} öğesini geri yükle",
   "trash.restored": "Geri yüklendi",
   "trash.retention": "Dosyalar 30 gün saklanır, ardından kalıcı olarak silinir.",
-  "trash.title": "Son silinenler",
-  "trash.today": "Bugün"
+  "trash.title": "Son silinenler"
 }

@@ -17,7 +17,7 @@ export function createTrashHandlers(
 ): HandlersFor<TrashSchemas> {
   return {
     '/trash': {
-      GET: ({ query, signal }) => entries.list(query ?? {}, signal),
+      GET: ({ query }) => entries.list(query ?? {}),
       DELETE: () => mutations.empty(),
     },
     '/trash/summary': { GET: () => entries.summary() },

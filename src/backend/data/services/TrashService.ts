@@ -1,7 +1,6 @@
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, lt, sql } from 'drizzle-orm';
 
 import type { DbService } from '@/backend/data/db/DbService';
-import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
 import { fileEntryTable } from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
@@ -10,38 +9,38 @@ import {
   type TrashSummary,
 } from '@/shared/data/api/schemas/trash';
 
-import { FILE_CLEANUP_KEY_PREFIX } from './FileEntryService';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
-const trashRows = sql`(
-  SELECT id, filename AS title, deleted_at, size, 'trashed' AS state FROM file_entry WHERE deleted_at IS NOT NULL
-  UNION ALL
-  SELECT json_extract(value, '$.entry.id') AS id,
-    json_extract(value, '$.entry.filename') AS title, json_extract(value, '$.deletedAt') AS deleted_at,
-    json_extract(value, '$.entry.size') AS size, 'deleting' AS state
-  FROM app_state WHERE key GLOB ${`${FILE_CLEANUP_KEY_PREFIX}*`}
-) AS trashed`;
+const trashColumns = {
+  id: fileEntryTable.id,
+  title: fileEntryTable.filename,
+  // Only trashed rows are selected, so the column is never null here.
+  deletedAt: sql<number>`${fileEntryTable.deletedAt}`,
+  size: fileEntryTable.size,
+};
+const trashed = isNotNull(fileEntryTable.deletedAt);
 
-/** Recoverable rows and committed unlink receipts share one trash projection. */
+/** Projects trashed file rows; `file_entry.deletedAt` owns trash membership. */
 export class TrashService {
   constructor(private readonly dbService: DbService) {}
 
-  async list(params: unknown = {}, signal?: AbortSignal) {
+  private get db() {
+    return this.dbService.getDb();
+  }
+
+  async list(params: unknown = {}) {
     const query = TrashQuerySchema.parse(params);
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'trash');
-    const ordering = keysetOrdering(sql`deleted_at`, sql`id`, {
+    const ordering = keysetOrdering(fileEntryTable.deletedAt, fileEntryTable.id, {
       major: 'desc',
       tie: 'desc',
     });
-    const condition = cursor ? ordering.where(cursor) : undefined;
-    const rows = await readSqliteRows<TrashItem>(
-      this.dbService.getSqlite(),
-      sql`
-      SELECT id, title, deleted_at AS "deletedAt", size, state FROM ${trashRows}
-      WHERE ${condition ?? sql`1 = 1`} ORDER BY ${sql.join(ordering.orderBy, sql`, `)} LIMIT ${query.limit + 1}
-    `,
-      signal,
-    );
+    const rows: TrashItem[] = await this.db
+      .select(trashColumns)
+      .from(fileEntryTable)
+      .where(and(trashed, cursor ? ordering.where(cursor) : undefined))
+      .orderBy(...ordering.orderBy)
+      .limit(query.limit + 1);
     const items = rows.slice(0, query.limit);
     const tail = items.at(-1);
     return {
@@ -53,37 +52,32 @@ export class TrashService {
   }
 
   async summary(): Promise<TrashSummary> {
-    const [row] = await readSqliteRows<TrashSummary>(
-      this.dbService.getSqlite(),
-      sql`
-      SELECT count(*) AS files,
-        coalesce(sum(size), 0) AS "fileBytes" FROM ${trashRows}
-    `,
-    );
+    const [row] = await this.db
+      .select({
+        files: sql<number>`count(*)`,
+        fileBytes: sql<number>`coalesce(sum(${fileEntryTable.size}), 0)`,
+      })
+      .from(fileEntryTable)
+      .where(trashed);
     return row;
   }
 
   async get(id: string): Promise<TrashItem> {
-    const [row] = await readSqliteRows<TrashItem>(
-      this.dbService.getSqlite(),
-      sql`
-      SELECT id, title, deleted_at AS "deletedAt", size, state FROM ${trashRows} WHERE id = ${id}
-    `,
-    );
+    const [row] = await this.db
+      .select(trashColumns)
+      .from(fileEntryTable)
+      .where(and(eq(fileEntryTable.id, id), trashed))
+      .limit(1);
     if (!row) throw DataApiErrorFactory.notFound('TrashItem', id);
     return row;
   }
 
   /** Snapshot the exact deletion time so a concurrent restore/re-delete cannot be purged. */
-  async candidates(before?: number) {
-    const condition =
-      before === undefined ? undefined : sql`(state = 'deleting' OR deleted_at < ${before})`;
-    return readSqliteRows<TrashItem>(
-      this.dbService.getSqlite(),
-      sql`
-      SELECT id, title, deleted_at AS "deletedAt", size, state FROM ${trashRows} WHERE ${condition ?? sql`1 = 1`}
-    `,
-    );
+  candidates(before?: number): Promise<TrashItem[]> {
+    return this.db
+      .select(trashColumns)
+      .from(fileEntryTable)
+      .where(and(trashed, before === undefined ? undefined : lt(fileEntryTable.deletedAt, before)));
   }
 
   async restore(id: string) {
@@ -91,7 +85,7 @@ export class TrashService {
       const rows = await tx
         .update(fileEntryTable)
         .set({ deletedAt: null, updatedAt: sql`${fileEntryTable.updatedAt}` })
-        .where(and(eq(fileEntryTable.id, id), isNotNull(fileEntryTable.deletedAt)))
+        .where(and(eq(fileEntryTable.id, id), trashed))
         .returning({ id: fileEntryTable.id });
       if (!rows.length) throw DataApiErrorFactory.notFound('TrashItem', id);
     });

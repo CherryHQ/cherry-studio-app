@@ -816,7 +816,7 @@ describe('bundled SQLite migrations', () => {
           'user_model_provider_model_unique',
         ]),
       );
-      expect(indexNames(database, 'file_entry')).toEqual([
+      expect(indexNames(database, 'file_entry').sort()).toEqual([
         'fe_created_at_idx',
         'fe_deleted_at_idx',
       ]);

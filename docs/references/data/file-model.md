@@ -217,12 +217,10 @@ Storage queues draft edits with deletion and restoration, checking availability 
 inside the write transaction before the synchronous file write. Once bytes have changed, the size
 update finishes in the same transaction even if the turn is cancelled.
 
-**Delete** — `deleteInternalEntry` removes the row and writes a `file-cleanup:<id>` receipt into
-`app_state` in one transaction, then unlinks bytes and preview before clearing the receipt. A failed
-unlink remains visible as pending permanent deletion, cannot be restored, and is retried by the
-next trash sweep or explicit deletion. Its bytes remain counted until cleanup completes. Cancelling an
-attachment does not call it. User deletion calls `moveToTrash`; permanent trash removal and
-compensating cleanup use the hard-delete path.
+**Delete** — `deleteInternalEntry` removes the row first, then unlinks bytes and preview
+best-effort; a leftover blob is reclaimable by orphan-blob sweeping, while a dangling row would not
+be. Cancelling an attachment does not call it. User deletion calls `moveToTrash`; permanent trash
+removal and compensating cleanup use the hard-delete path.
 
 **Missing bytes** — a current submission fails before admission; an already-persisted reference
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
@@ -251,8 +249,7 @@ tab selects `provenance: 'document-export'` without reclassifying historical row
 [Document Export](../document-export.md).
 General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
 bytes and previews. The [file trash](./trash.md) restores entries, permanently deletes them, and
-clears the whole trash. Storage settings show total trashed file bytes and expose the
-same Empty trash action. Files older than 30 days in trash are permanently deleted at app startup
+clears the whole trash. Files older than 30 days in trash are permanently deleted at app startup
 and foreground entry, without a timer or background task. No reverse-reference warning is needed:
 existing messages and paintings show their unavailable placeholder until a file is restored.
 Backups include trashed rows and bytes with the original deletion time; the next sweep removes

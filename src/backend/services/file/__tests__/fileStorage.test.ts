@@ -556,8 +556,8 @@ describe('fileStorage', () => {
     testState.files.set(previewUri, 1);
     const tx = {};
     const entries = {
-      beginDeletionTx: jest.fn(async () => ({ entry, deletedAt: 1 })),
-      finishDeletion: jest.fn(async () => undefined),
+      deleteTx: jest.fn(async () => undefined),
+      findByIdTx: jest.fn(async () => entry),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
         const result = await callback(tx);
         expect(onFileChange).not.toHaveBeenCalled();
@@ -567,8 +567,8 @@ describe('fileStorage', () => {
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(true);
 
-    expect(entries.beginDeletionTx).toHaveBeenCalledWith(tx, entry.id, undefined);
-    expect(entries.finishDeletion).toHaveBeenCalledWith(entry.id);
+    expect(entries.findByIdTx).toHaveBeenCalledWith(tx, entry.id, undefined);
+    expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
     expect(testState.files.has(previewUri)).toBe(false);
     expect(onFileChange).toHaveBeenCalledTimes(1);
@@ -715,13 +715,13 @@ describe('fileStorage', () => {
   test('reports a missing entry row without deleting anything', async () => {
     const entry = internalEntry();
     const entries = {
-      beginDeletionTx: jest.fn(async () => null),
-      finishDeletion: jest.fn(),
+      deleteTx: jest.fn(async () => undefined),
+      findByIdTx: jest.fn(async () => null),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(false);
-    expect(entries.finishDeletion).not.toHaveBeenCalled();
+    expect(entries.deleteTx).not.toHaveBeenCalled();
     expect(onFileChange).not.toHaveBeenCalled();
   });
 

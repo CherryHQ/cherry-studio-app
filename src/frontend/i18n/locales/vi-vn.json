@@ -2161,18 +2161,16 @@
   "skills.translation.translate": "Dịch bằng AI",
   "skills.translation.translating": "Đang dịch…",
   "skills.working": "Đang xử lý…",
-  "storage.title": "Bộ nhớ",
   "systemEntry.failed": "Không thể mở nội dung chia sẻ này. Hãy chia sẻ lại.",
   "translation.error.failed": "Dịch thất bại. Vui lòng thử lại.",
   "translation.error.modelUnavailable": "Chọn mô hình dịch hoặc mô hình mặc định khả dụng trong Cài đặt.",
   "trash.actionFailed": "Thao tác thất bại. Vui lòng thử lại.",
+  "trash.daysLeft_other": "Còn {{count}} ngày",
   "trash.deleteDescription": "Xóa vĩnh viễn “{{name}}”? Không thể hoàn tác thao tác này.",
   "trash.deleteNamed": "Xóa vĩnh viễn {{name}}",
   "trash.deletePermanently": "Xóa vĩnh viễn",
   "trash.deleteTitle": "Xóa vĩnh viễn?",
   "trash.deleted": "Đã xóa vĩnh viễn",
-  "trash.deletedAt": "Đã xóa: {{date}}",
-  "trash.deletionPending": "Chưa xóa xong. Vui lòng thử lại.",
   "trash.emptied": "Đã dọn sạch thùng rác",
   "trash.empty": "Không có tệp nào bị xóa gần đây",
   "trash.emptyAll": "Dọn sạch thùng rác",
@@ -2183,6 +2181,5 @@
   "trash.restoreNamed": "Khôi phục {{name}}",
   "trash.restored": "Đã khôi phục",
   "trash.retention": "Các tệp được giữ trong 30 ngày, sau đó bị xóa vĩnh viễn.",
-  "trash.title": "Đã xóa gần đây",
-  "trash.today": "Hôm nay"
+  "trash.title": "Đã xóa gần đây"
 }

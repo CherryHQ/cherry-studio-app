@@ -10,9 +10,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useInfiniteQuery, useQuery } from '@/frontend/data/hooks';
-import { useTrashActions } from '@/frontend/hooks/trash';
+import { TRASH_RETENTION_MS } from '@/shared/data/api/schemas/trash';
 
 import { TrashEntryRow } from './components/TrashEntryRow';
+import { useTrashActions } from './hooks/useTrashActions';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function TrashScreen() {
   const { t, i18n } = useTranslation();
@@ -32,9 +35,8 @@ export function TrashScreen() {
   const summary = useQuery('/trash/summary', { enabled: focused });
   const actions = useTrashActions();
   const entries = useMemo(() => list.pages.flatMap((page) => page.items), [list.pages]);
-  const dateFormatter = useMemo(
-    () => new Intl.DateTimeFormat(i18n.resolvedLanguage, { dateStyle: 'medium' }),
-    [i18n.resolvedLanguage],
+  const size = new Intl.NumberFormat(i18n.resolvedLanguage, { maximumFractionDigits: 1 }).format(
+    (summary.data?.fileBytes ?? 0) / 1_000_000,
   );
   const refresh = () => Promise.all([list.refresh(), summary.refetch()]);
   const error = list.error ?? summary.error;
@@ -71,22 +73,28 @@ export function TrashScreen() {
           data={entries}
           recycleItems
           keyExtractor={(item) => item.id}
-          extraData={{ actions, dateFormatter, now }}
+          extraData={{ actions, now }}
           ListHeaderComponent={
             <View className="pt-2 pb-4">
-              <View className="rounded-xl border border-border px-4 py-3">
+              <View className="gap-1 rounded-xl border border-border px-4 py-3">
                 <Text className="text-base text-muted-foreground">{t('trash.retention')}</Text>
+                {summary.data?.files ? (
+                  <Text className="text-sm text-muted-foreground">
+                    {t('trash.fileBytes', { size })}
+                  </Text>
+                ) : null}
               </View>
             </View>
           }
           renderItem={({ item }) => (
             <View className="py-3">
               <TrashEntryRow
-                date={
-                  new Date(item.deletedAt).toDateString() === new Date(now).toDateString()
-                    ? t('trash.today')
-                    : dateFormatter.format(item.deletedAt)
-                }
+                daysLeft={t('trash.daysLeft', {
+                  count: Math.max(
+                    1,
+                    Math.ceil((item.deletedAt + TRASH_RETENTION_MS - now) / DAY_MS),
+                  ),
+                })}
                 isPending={actions.isPending}
                 item={item}
                 onDelete={actions.requestDelete}

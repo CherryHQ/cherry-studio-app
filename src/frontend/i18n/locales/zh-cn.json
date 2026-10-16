@@ -2161,18 +2161,16 @@
   "skills.translation.translate": "AI 翻译",
   "skills.translation.translating": "正在翻译…",
   "skills.working": "处理中…",
-  "storage.title": "存储空间",
   "systemEntry.failed": "无法打开此分享，请重新分享内容。",
   "translation.error.failed": "翻译失败，请重试。",
   "translation.error.modelUnavailable": "请在设置中配置可用的翻译模型或默认模型。",
   "trash.actionFailed": "操作失败，请重试。",
+  "trash.daysLeft_other": "剩 {{count}} 天",
   "trash.deleteDescription": "永久删除“{{name}}”？此操作无法撤销。",
   "trash.deleteNamed": "永久删除{{name}}",
   "trash.deletePermanently": "永久删除",
   "trash.deleteTitle": "永久删除？",
   "trash.deleted": "已永久删除",
-  "trash.deletedAt": "删除时间：{{date}}",
-  "trash.deletionPending": "删除未完成，请重试。",
   "trash.emptied": "已清空回收站",
   "trash.empty": "没有最近删除的文件",
   "trash.emptyAll": "清空回收站",
@@ -2183,6 +2181,5 @@
   "trash.restoreNamed": "恢复{{name}}",
   "trash.restored": "已恢复",
   "trash.retention": "文件保留 30 天，之后永久删除。",
-  "trash.title": "最近删除",
-  "trash.today": "今天"
+  "trash.title": "最近删除"
 }

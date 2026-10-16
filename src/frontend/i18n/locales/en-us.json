@@ -2177,18 +2177,17 @@
   "skills.translation.translate": "AI translation",
   "skills.translation.translating": "Translating…",
   "skills.working": "Working…",
-  "storage.title": "Storage",
   "systemEntry.failed": "Could not open this share. Share the content again.",
   "translation.error.failed": "Translation failed. Please try again.",
   "translation.error.modelUnavailable": "Set an available translation model or default model in Settings.",
   "trash.actionFailed": "The action failed. Try again.",
+  "trash.daysLeft_one": "{{count}} day left",
+  "trash.daysLeft_other": "{{count}} days left",
   "trash.deleteDescription": "Permanently delete “{{name}}”? This cannot be undone.",
   "trash.deleteNamed": "Permanently delete {{name}}",
   "trash.deletePermanently": "Delete permanently",
   "trash.deleteTitle": "Permanently delete?",
   "trash.deleted": "Permanently deleted",
-  "trash.deletedAt": "Deleted: {{date}}",
-  "trash.deletionPending": "Deletion incomplete. Try again.",
   "trash.emptied": "Trash cleared",
   "trash.empty": "No recently deleted files",
   "trash.emptyAll": "Empty trash",
@@ -2199,6 +2198,5 @@
   "trash.restoreNamed": "Restore {{name}}",
   "trash.restored": "Restored",
   "trash.retention": "Files are kept for 30 days, then permanently deleted.",
-  "trash.title": "Recently deleted",
-  "trash.today": "Today"
+  "trash.title": "Recently deleted"
 }

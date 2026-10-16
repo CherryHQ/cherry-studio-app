@@ -6,7 +6,7 @@ import type { TrashItem } from '@/shared/data/api/schemas/trash';
 
 const refresh = ['/trash', '/trash/summary'];
 
-/** Shared user decisions for the trash page and storage settings. */
+/** Trash restore/delete/empty decisions with confirmation and feedback. */
 export function useTrashActions() {
   const { t } = useTranslation();
   const { alert } = useAlert();

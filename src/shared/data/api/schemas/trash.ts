@@ -11,11 +11,8 @@ export type TrashItem = {
   id: string;
   title: string;
   deletedAt: number;
-  /** Permanent deletion has committed once state is `deleting`; only unlinking can be retried. */
-  state: 'trashed' | 'deleting';
   size: number;
 };
-/** Pending unlinks remain counted until both the blob and preview have been removed. */
 export type TrashSummary = { files: number; fileBytes: number };
 export type TrashSchemas = {
   '/trash': {

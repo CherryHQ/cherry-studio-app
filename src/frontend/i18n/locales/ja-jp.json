@@ -2161,18 +2161,16 @@
   "skills.translation.translate": "AI 翻訳",
   "skills.translation.translating": "翻訳中…",
   "skills.working": "処理中…",
-  "storage.title": "ストレージ",
   "systemEntry.failed": "この共有を開けませんでした。もう一度共有してください。",
   "translation.error.failed": "翻訳に失敗しました。もう一度お試しください。",
   "translation.error.modelUnavailable": "設定で利用可能な翻訳モデルまたはデフォルトモデルを選択してください。",
   "trash.actionFailed": "操作に失敗しました。再試行してください。",
+  "trash.daysLeft_other": "残り {{count}} 日",
   "trash.deleteDescription": "「{{name}}」を完全に削除しますか？元に戻せません。",
   "trash.deleteNamed": "{{name}}を完全に削除",
   "trash.deletePermanently": "完全に削除",
   "trash.deleteTitle": "完全に削除しますか？",
   "trash.deleted": "完全に削除しました",
-  "trash.deletedAt": "削除日：{{date}}",
-  "trash.deletionPending": "削除が完了していません。再試行してください。",
   "trash.emptied": "ゴミ箱を空にしました",
   "trash.empty": "最近削除したファイルはありません",
   "trash.emptyAll": "ゴミ箱を空にする",
@@ -2183,6 +2181,5 @@
   "trash.restoreNamed": "{{name}}を復元",
   "trash.restored": "復元しました",
   "trash.retention": "ファイルは30日間保存された後、完全に削除されます。",
-  "trash.title": "最近削除した項目",
-  "trash.today": "今日"
+  "trash.title": "最近削除した項目"
 }
