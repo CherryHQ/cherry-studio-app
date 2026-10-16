@@ -6,6 +6,7 @@ export {
   useAgentChatClient,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
+  useAgentQueuedInputs,
   useAgentSessionState,
 } from './ChatProvider';
 export { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';

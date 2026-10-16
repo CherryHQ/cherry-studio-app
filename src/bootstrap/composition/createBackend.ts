@@ -1,7 +1,7 @@
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
@@ -108,7 +108,7 @@ export function createBackend(
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
     diagnostics: DiagnosticsModule;
-    languageServing: LanguageServingSupport & AgentRuntime;
+    languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
   },
 ): BackendComposition {
@@ -330,8 +330,10 @@ export function createBackend(
         createInternalEntry: services.fileContent.createInternalEntry,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
+        moveToTrash: services.fileContent.moveToTrash,
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
+        getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
         subscribeChanges: services.fileContent.subscribeChanges,
@@ -345,7 +347,25 @@ export function createBackend(
       providers,
       skills,
       translation: createTranslationModule({
-        ai: services.ai,
+        ai: {
+          generateText: (request, options) =>
+            infrastructure.languageServing.generateText(request, {
+              ...options,
+              onUsage: async (report) => {
+                try {
+                  await services.aiUsageRecord.recordInvocation({
+                    ...report,
+                    context: { ...report.context, messageRef: null, source: null },
+                    modality: 'language',
+                  });
+                } catch {
+                  loggerService
+                    .withContext('TranslationModule')
+                    .warn('Failed to record translation usage');
+                }
+              },
+            }),
+        },
         preference: services.preference,
         models: services.model,
       }),

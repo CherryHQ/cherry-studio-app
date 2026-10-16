@@ -459,6 +459,18 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return cloneJson({ ...reserved, session: activeSession });
   }
 
+  async discardQueuedTurn(input: DeleteTurnInput): Promise<string[]> {
+    const rows = this.messages.get(input.sessionId) ?? [];
+    const selected = rows.filter((row) => row.view.turnId === input.turnId);
+    if (!selected.some((row) => row.view.role === 'assistant' && row.view.status === 'pending'))
+      return [];
+    this.messages.set(
+      input.sessionId,
+      rows.filter((row) => row.view.turnId !== input.turnId),
+    );
+    return selected.map((row) => row.view.id);
+  }
+
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     const transcript = this.messages.get(input.sessionId);
     if (!transcript) {

@@ -32,7 +32,7 @@ const message = (id: string, status: AgentMessageView['status'] = 'success'): Ag
   id,
   role: 'assistant',
   sessionId: 'session',
-  turnId: 'turn',
+  turnId: `${id}-turn`,
   status,
   parts: [{ id: `${id}-text`, type: 'text', text: id, state: 'done' }],
   createdAt: '2026-09-24T00:00:00.000Z',
@@ -55,7 +55,16 @@ beforeEach(() => {
   mockState = {
     sessionId: 'session',
     status: 'ready',
-    activeTurn: null,
+    activeTurn: {
+      id: 'live-turn',
+      sessionId: 'session',
+      assistantMessageId: 'live',
+      status: 'running',
+      startedAt: '2026-09-24T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    },
+    queuedInputs: [],
     liveMessages: [message('live', 'streaming')],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -63,7 +72,7 @@ beforeEach(() => {
   };
   mockWindow = {
     dataKey: 'session',
-    messages: [message('older'), message('live', 'pending')],
+    messages: [message('older')],
     hasNewerMessages: false,
     hasOlderMessages: false,
     isLoadingInitial: false,
@@ -80,6 +89,8 @@ afterEach(() => {
 });
 
 it('merges live rows over history by id and hands persisted pages back to the client', () => {
+  // Persistence may finish before the live observer delivers the terminal message.
+  mockWindow.messages = [...mockWindow.messages, message('live')];
   act(() => {
     renderer = create(<Probe sessionId="session" />);
   });
@@ -102,8 +113,7 @@ it('excludes live rows from an older search window and projects nothing without 
   act(() => {
     renderer = create(<Probe sessionId="session" />);
   });
-  expect(result.messages.map((row) => row.key)).toEqual(['older', 'live']);
-  expect(result.messages[1].state).toBe('pending');
+  expect(result.messages.map((row) => row.key)).toEqual(['older']);
   act(() => renderer.update(<Probe />));
   expect(result.messages).toEqual([]);
   expect(result.snapshot.liveMessages).toEqual([]);

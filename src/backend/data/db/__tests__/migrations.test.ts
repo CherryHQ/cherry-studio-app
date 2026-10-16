@@ -11,7 +11,7 @@ describe('bundled SQLite migrations', () => {
     try {
       const files = readMigrationSqlFiles();
       const index = readMigrationJournal().entries.findIndex(
-        ({ tag }) => tag === '0010_conversation_paths',
+        ({ tag }) => tag === '0011_conversation_paths',
       );
       expect(index).toBeGreaterThan(0);
       for (const migration of files.slice(0, index)) applyMigrationSql(database, migration);
@@ -50,6 +50,44 @@ describe('bundled SQLite migrations', () => {
       expect(database.prepare('SELECT conversation_state FROM agent_session').get()).toEqual({
         conversation_state: state,
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  test('indexes file trash without changing existing history or file deletion marks', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0010_fearless_jubilee',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 'Keep history', 2, 1, 2);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('message', 'session', 'user', '{"parts":[]}', 'success', 1, 1);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('file', 'notes.txt', 'text/plain', 5, 1, 1, 123);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT name, last_activity_at FROM agent_session').get()).toEqual({
+        name: 'Keep history',
+        last_activity_at: 2,
+      });
+      expect(database.prepare('SELECT data FROM agent_session_message').get()).toEqual({
+        data: '{"parts":[]}',
+      });
+      expect(database.prepare('SELECT deleted_at FROM file_entry').get()).toEqual({
+        deleted_at: 123,
+      });
+      expect(columnNames(database, 'agent_session')).not.toContain('deleted_at');
+      expect(indexNames(database, 'file_entry')).toContain('fe_deleted_at_idx');
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     } finally {
       database.close();
     }
@@ -827,7 +865,10 @@ describe('bundled SQLite migrations', () => {
           'user_model_provider_model_unique',
         ]),
       );
-      expect(indexNames(database, 'file_entry')).toEqual(['fe_created_at_idx']);
+      expect(indexNames(database, 'file_entry').sort()).toEqual([
+        'fe_created_at_idx',
+        'fe_deleted_at_idx',
+      ]);
       expect(indexNames(database, 'painting')).toContain('painting_order_key_idx');
       expect(indexNames(database, 'agent_tool_binding')).toEqual(
         expect.arrayContaining([

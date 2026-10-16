@@ -127,4 +127,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
+- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
+  row shows the original text/attachment summary and can withdraw that one waiting input. The
+  queue comes from the Session observation snapshot and `queue.updated` events, so route changes
+  and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
+  Queue removal never falls back to stopping an active turn when placement wins the race.
+  Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
+  deletes their unexecuted message pair without invalidating the current model context. Steering
+  remains outside this composer.

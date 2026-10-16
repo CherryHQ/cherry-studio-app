@@ -14,6 +14,11 @@ import { ComposerAction } from './composer-action';
 import { ComposerCollapsible } from './composer-collapsible';
 import { ComposerDock } from './composer-dock';
 import {
+  ComposerEditor,
+  ComposerEditorAccessories,
+  ComposerEditorSecondary,
+} from './composer-editor';
+import {
   ComposerExpansion,
   ComposerExpansionBackground,
   ComposerExpansionMeasure,
@@ -118,6 +123,9 @@ export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
   Collapsible: ComposerCollapsible,
   Dock: ComposerDock,
+  Editor: ComposerEditor,
+  EditorAccessories: ComposerEditorAccessories,
+  EditorSecondary: ComposerEditorSecondary,
   Expansion: ComposerExpansion,
   ExpansionMeasure: ComposerExpansionMeasure,
   Input: ComposerInput,

@@ -50,15 +50,14 @@ export function PaintingOverviewChrome({
 
   return (
     <HeaderChrome
-      actionTone="inverse"
       leftActions={leftActions}
       rightActions={rightActions}
       titleElement={
         <View accessibilityRole="header" accessible className="max-w-56 items-center">
-          <Text className="font-semibold text-base text-constant-white" numberOfLines={1}>
+          <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
             {title}
           </Text>
-          <Text className="text-constant-white/55 text-xs">
+          <Text className="text-muted-foreground text-xs">
             {t('painting.board.nodeCount', { count: nodeCount })}
           </Text>
         </View>

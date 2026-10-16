@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notExists, notInArray, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
@@ -115,7 +116,10 @@ export class AgentSessionMessageService {
       session.state && query.pathId
         ? { ...session.state, activePathId: query.pathId }
         : session.state;
-    const condition = activeConversationCondition(state);
+    const condition = and(
+      activeConversationCondition(state),
+      this.settledTurnFilter(query.settledOnly ?? false),
+    );
     if (query.ids) {
       const rows = await this.db
         .select(agentMessageViewColumns)
@@ -269,6 +273,27 @@ export class AgentSessionMessageService {
       )
       .orderBy(...ordering.orderBy)
       .limit(limit);
+  }
+
+  private settledTurnFilter(settledOnly: boolean) {
+    if (!settledOnly) return undefined;
+    const unsettled = alias(agentSessionMessageTable, 'unsettled_turn');
+    return and(
+      notInArray(agentSessionMessageTable.status, ['pending', 'streaming']),
+      notExists(
+        this.db
+          .select({ id: unsettled.id })
+          .from(unsettled)
+          .where(
+            and(
+              eq(unsettled.sessionId, agentSessionMessageTable.sessionId),
+              eq(unsettled.turnId, agentSessionMessageTable.turnId),
+              eq(unsettled.role, 'assistant'),
+              inArray(unsettled.status, ['pending', 'streaming']),
+            ),
+          ),
+      ),
+    );
   }
 }
 

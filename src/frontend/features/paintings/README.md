@@ -22,8 +22,8 @@ created by its first generation, titled from the request, and renamable from the
 - **Focus** fills the screen with the focused image. Tap shows or hides the chrome, long press drops
   a positional note (or removes the one under the finger), pinch and double tap zoom, and a
   horizontal swipe moves between the images of one generation. The header carries back (to wherever
-  the board was opened from), the board pill (to the overview), save, and a menu with share, change
-  ratio, generation info, and delete-this-version. Below the image, the lineage strip shows sources,
+  the board was opened from), the board pill (to the overview), save, and a menu with share,
+  generation info, and delete-this-version. Below the image, the lineage strip shows sources,
   the current image, and what was made from it; tapping a cell walks the edge and holding one
   previews it in place for comparison.
 - **Overview** draws every node and edge; drag to pan, pinch to zoom, double tap to reset, tap a
@@ -33,6 +33,18 @@ The composer stays mounted across both layers so a draft survives moving around 
 focused image is attached as the next generation's reference (`usePaintingFocusReference`); removing
 it means "generate something new" until the focus moves. Model and parameters live behind the
 composer's + menu, in one generation-settings sheet.
+
+The resting composer keeps the reference as a thumbnail without a remove badge. Focusing it opens
+the shared full-width editor and moves references into chat's attachment area for preview and
+removal. The upper-right action enlarges the same field; the board header and canvas controls stay
+hidden and inaccessible through its close transition. Sending collapses the editor through the
+shared send boundary.
+
+Image-editing ratios live in a single horizontally scrolling shortcut row above the composer, with
+shape previews and ratio-only labels. They follow the composer's selected model and parameter
+draft, hide when references are removed or the large editor is presented, and never send directly.
+Choosing one saves any selected note and prepares a whole-image request; user-authored text stays
+intact, while untouched shortcut text follows subsequent ratio choices.
 
 Sending moves the focus to the new receipt, which shows the loader until its job finishes; the
 generation runs as a durable job, so the user can keep browsing the board. A stopped generation
@@ -50,8 +62,9 @@ reference-image contract; they are not masks.
 
 ## Organization
 
-- `PaintingScreen.tsx` resolves the route into a board, scoped to the dark theme because the chrome
-  sits over uncontrolled image content.
+- `PaintingScreen.tsx` resolves the route into a board and follows the app theme, including its
+  background, status bar, chrome, composer, and sheets. Image badges and annotation outlines retain
+  fixed contrast over uncontrolled image content.
 - `components/` holds the workspace, the focus canvas and chrome, the overview and its chrome, the
   lineage strip, and the generation info sheet.
 - `hooks/` holds board data, generation control, the focus reference, and annotation drafts.

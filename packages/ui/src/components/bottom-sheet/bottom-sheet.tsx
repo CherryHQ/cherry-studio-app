@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
+import { useNavigationOverlay } from '../portal/overlay-navigation';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
@@ -149,6 +150,8 @@ export function BottomSheet(props: BottomSheetProps) {
     Keyboard.dismiss();
     setIndex(CLOSED_INDEX);
   }, [dismissible]);
+
+  useNavigationOverlay(open, dismissible ? requestClose : undefined);
 
   const handleHardwareBackPress = useCallback(() => {
     if (backAction) {

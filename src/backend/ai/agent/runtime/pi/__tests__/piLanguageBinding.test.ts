@@ -147,6 +147,37 @@ describe('resolvePiLanguageBinding', () => {
 });
 
 describe('supportsPiLanguageModel', () => {
+  it('accepts Ollama models using a compatible endpoint while rejecting its native protocol', () => {
+    const provider = createProvider({
+      id: 'ollama',
+      presetProviderId: 'ollama',
+      authOptional: true,
+      defaultChatEndpoint: ENDPOINT_TYPE.OLLAMA_CHAT,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OLLAMA_CHAT]: {
+          adapterFamily: 'ollama',
+          baseUrl: 'http://localhost:11434',
+        },
+        [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+          adapterFamily: 'anthropic',
+          baseUrl: 'http://localhost:11434',
+        },
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'http://localhost:11434/v1',
+        },
+      },
+    });
+
+    expect(supportsPiLanguageModel(provider, createModel(ENDPOINT_TYPE.OLLAMA_CHAT))).toBe(false);
+    expect(supportsPiLanguageModel(provider, createModel(ENDPOINT_TYPE.ANTHROPIC_MESSAGES))).toBe(
+      true,
+    );
+    expect(
+      supportsPiLanguageModel(provider, createModel(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS)),
+    ).toBe(true);
+  });
+
   it('accepts a model on a Pi-compatible endpoint', () => {
     const provider = createProvider();
     expect(supportsPiLanguageModel(provider, createModel(ENDPOINT_TYPE.OPENAI_RESPONSES))).toBe(

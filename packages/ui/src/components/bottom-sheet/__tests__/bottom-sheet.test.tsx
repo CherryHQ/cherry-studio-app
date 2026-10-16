@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useState, type ReactNode } from 'react';
 import { BackHandler, Dimensions, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
+import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/overlay-navigation';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
@@ -68,6 +69,41 @@ describe('BottomSheet', () => {
     act(() => renderer?.unmount());
     renderer = undefined;
     backHandlerSpy.mockRestore();
+  });
+
+  test('navigation waits for sheet settlement and owner closure', async () => {
+    let prepare!: ReturnType<typeof useOverlayNavigation>['prepareForNavigation'];
+    function Sheet() {
+      const [open, setOpen] = useState(true);
+      const navigation = useOverlayNavigation();
+      useLayoutEffect(() => {
+        prepare = navigation.prepareForNavigation;
+      });
+      return (
+        <BottomSheet onClose={() => setOpen(false)} open={open} size="medium" title="Files">
+          <Text>Files</Text>
+        </BottomSheet>
+      );
+    }
+    act(() => {
+      renderer = create(
+        <OverlayNavigationProvider>
+          <Sheet />
+        </OverlayNavigationProvider>,
+      );
+    });
+    const navigated = jest.fn();
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = prepare(new AbortController().signal).then(navigated);
+    });
+    expect(mockBottomSheetProps.index).toBe(0);
+    expect(navigated).not.toHaveBeenCalled();
+    await act(async () => {
+      (mockBottomSheetProps.onSettle as (index: number) => void)(0);
+    });
+    await pending;
+    expect(navigated).toHaveBeenCalledWith(true);
   });
 
   test('reports one user dismissal after the close motion settles', () => {

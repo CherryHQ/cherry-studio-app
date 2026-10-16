@@ -1,6 +1,6 @@
 # Agent Architecture
 
-> Status: the local experimental branch uses Pi Durable 1.2.0; authorized runtime and device
+> Status: the local experimental branch uses Pi Durable 1.3.0; authorized runtime and device
 > acceptance is pending. The separate PC Agent Controller version 2 keeps its existing behavior.
 
 This directory documents Cherry Mobile's conversation execution boundary. For mobile-originated

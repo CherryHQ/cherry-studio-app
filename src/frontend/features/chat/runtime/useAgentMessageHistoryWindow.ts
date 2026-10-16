@@ -58,7 +58,7 @@ function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMe
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
   navigation: MessageNavigation = {},
-  pathId?: string,
+  { pathId, settledOnly = false }: { pathId?: string; settledOnly?: boolean } = {},
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
   const { messageId, messageRequestId } = navigation;
@@ -97,6 +97,7 @@ export function useAgentMessageHistoryWindow(
             ...pageParam,
             ...(pathId ? { pathId } : {}),
             limit: messageWindowPolicy.initialFetchCount,
+            settledOnly,
           },
           signal,
         },
@@ -111,6 +112,7 @@ export function useAgentMessageHistoryWindow(
         ...(pathId ? { pathId } : {}),
         ...(aroundMessageId ? { messageRequestId } : {}),
         limit: messageWindowPolicy.initialFetchCount,
+        settledOnly,
       },
     ],
     staleTime: messageWindowPolicy.staleTimeMs,

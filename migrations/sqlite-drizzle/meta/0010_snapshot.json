@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fe8b2cb5-396a-491b-98ad-64294197d7b3",
+  "id": "0e847715-9709-4076-80db-a80b2481ac4c",
   "prevId": "83052e63-afc7-4638-8454-ba0d210914e0",
   "tables": {
     "app_state": {
@@ -114,6 +114,11 @@
         "fe_created_at_idx": {
           "name": "fe_created_at_idx",
           "columns": ["created_at"],
+          "isUnique": false
+        },
+        "fe_deleted_at_idx": {
+          "name": "fe_deleted_at_idx",
+          "columns": ["deleted_at"],
           "isUnique": false
         }
       },
@@ -678,13 +683,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "conversation_state": {
-          "name": "conversation_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "last_activity_at": {
           "name": "last_activity_at",

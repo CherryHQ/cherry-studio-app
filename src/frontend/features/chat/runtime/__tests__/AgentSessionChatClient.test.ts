@@ -21,6 +21,7 @@ function deferred<TValue>() {
 function snapshot(): AgentSessionSnapshot {
   return {
     activeTurn: null,
+    queuedInputs: [],
     activeUserMessage: null,
     agent: { id: 'agent-1', name: 'Agent' },
     capabilities: { approvals: true, attachments: false, reasoning: true, tools: true },
@@ -40,6 +41,50 @@ function snapshot(): AgentSessionSnapshot {
     streamingMessage: null,
   };
 }
+
+test('observes a removable queue without inventing an active execution and reconciles placement races', async () => {
+  const queued = {
+    turnId: 'waiting',
+    userMessage: { ...userMessage(), id: 'waiting-user', turnId: 'waiting' },
+    assistantMessageId: 'waiting-answer',
+  };
+  let listener: ((event: AgentEvent) => void) | undefined;
+  let current: AgentSessionSnapshot = { ...snapshot(), queuedInputs: [queued] };
+  const protocol = protocolWithObservation(
+    jest.fn(async (_sessionId: string, next: (event: AgentEvent) => void) => {
+      listener = next;
+      return { snapshot: current, unsubscribe() {} };
+    }),
+  );
+  const client = new AgentSessionChatClient(protocol);
+  const unsubscribe = client.subscribe('session-1', () => {});
+  try {
+    await client.observe('session-1');
+    expect(client.getState('session-1').activeTurn).toBeNull();
+    expect(client.getState('session-1').queuedInputs).toEqual([queued]);
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    expect(isAgentSessionBusy(client.getState('session-1'))).toBe(true);
+    listener!({ type: 'queue.updated', inputs: [] });
+    expect(isAgentSessionBusy(client.getState('session-1'))).toBe(false);
+    const active: AgentTurnView = {
+      id: 'waiting',
+      sessionId: 'session-1',
+      assistantMessageId: 'waiting-answer',
+      status: 'running',
+      startedAt: '2026-10-16T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    current = { ...snapshot(), activeTurn: active, queuedInputs: [] };
+    protocol.cancelQueuedInput.mockResolvedValueOnce('already-started');
+    await expect(client.cancelQueuedInput('session-1', 'waiting')).resolves.toBe('already-started');
+    expect(client.getState('session-1').activeTurn).toEqual(active);
+    expect(protocol.cancelTurn).not.toHaveBeenCalled();
+  } finally {
+    unsubscribe();
+    client.dispose();
+  }
+});
 
 function userMessage(): AgentMessageView {
   return {
@@ -79,6 +124,10 @@ function protocolWithObservation(
   return {
     cancelSubmission: jest.fn(),
     cancelTurn: jest.fn(),
+    cancelQueuedInput: jest.fn<
+      ReturnType<AgentProtocol['cancelQueuedInput']>,
+      Parameters<AgentProtocol['cancelQueuedInput']>
+    >(async () => 'withdrawn'),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
     forkSession: jest.fn(),

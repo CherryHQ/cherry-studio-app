@@ -3,6 +3,7 @@ import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/universal/data/ty
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_VERTEX_MODEL_PUBLISHERS } from '../listModels/vertex';
+import { AIHubMixModelsResponseSchema } from '../listModelsSchemas';
 import { makeProvider } from './fixtures';
 
 // The fetchers resolve the rotated API key (and, for Vertex, the iam-gcp auth
@@ -721,6 +722,23 @@ describe('listModels — gatewayFetcher (Vercel AI Gateway /v3/ai/config)', () =
 });
 
 describe('listModels — aiHubMixFetcher (configured base URL)', () => {
+  it('accepts a catalog containing models with null pricing', () => {
+    const response = AIHubMixModelsResponseSchema.parse({
+      data: [
+        { model_id: 'auto', pricing: { input: 2, output: 2 } },
+        { model_id: 'qwen-image-2.1-pro', pricing: null },
+        { model_id: 'qwen-image-2.1-turbo' },
+      ],
+      success: true,
+    });
+
+    expect(response.data.map((model) => model.model_id)).toEqual([
+      'auto',
+      'qwen-image-2.1-pro',
+      'qwen-image-2.1-turbo',
+    ]);
+  });
+
   it('builds the models URL from the configured base URL, stripping a trailing /v1', async () => {
     const provider = makeProvider({
       id: 'aihubmix',

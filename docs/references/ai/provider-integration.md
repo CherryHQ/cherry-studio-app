@@ -21,6 +21,9 @@ Pi is the only local Agent Runtime. It receives a normalized Agent transcript an
 selected Agent model through the Host-owned provider adapter. The current Pi binding supports
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
+Providers declaring optional API-key authentication can use these endpoints without a saved key.
+The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
+preserving explicitly configured authentication headers.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,
@@ -47,11 +50,13 @@ cancellation, output import, and cleanup. See
 
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
-- `generateText()` for short internal generations such as Session naming;
+- `generateText()` for internal AI SDK probes;
 - `listModels()` for provider discovery and `checkModel()` for internal AI SDK probes;
 - `generateImage()` for painting jobs.
 
 Settings and onboarding chat checks use the bound AgentRuntime through `Backend.models`.
+Translation and automatic session naming use its separate `RuntimeTextGenerator` capability,
+sharing chat's OAuth and protocol adapters without creating conversation history or tools.
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 

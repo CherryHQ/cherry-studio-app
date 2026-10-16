@@ -35,11 +35,10 @@ export function useLocalConversation(input: {
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
   const conversationState = state.snapshot?.session.conversationState;
-  const window = useAgentMessageHistoryWindow(
-    sessionId,
-    navigation,
-    conversationState?.activePathId ?? input.pathId,
-  );
+  const window = useAgentMessageHistoryWindow(sessionId, navigation, {
+    pathId: conversationState?.activePathId ?? input.pathId,
+    settledOnly: true,
+  });
   const [owned, setOwned] = useState(() => ({
     sessionId,
     client,

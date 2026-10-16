@@ -23,6 +23,8 @@ export {
   AgentMessageDeltaSchema,
   AgentEventSchema,
   AgentSessionSnapshotSchema,
+  AgentQueuedInputSchema,
+  type AgentQueuedInput,
   type AgentEvent,
   type AgentMessageDelta,
   type AgentSessionObservation,

@@ -394,7 +394,7 @@ async function* tracedStream(
   }
 }
 
-async function* measuredStream(
+export async function* measuredStream(
   source: AsyncIterable<AssistantMessageEvent>,
   startedAt: number,
   report: (

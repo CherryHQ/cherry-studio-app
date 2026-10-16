@@ -157,12 +157,12 @@ const mobileProviderExtensions: Record<string, Partial<MobileProviderConfig>> = 
   },
   'kimi-coding': {
     authMethods: ['oauth'],
-    defaultChatEndpoint: 'anthropic-messages',
+    defaultChatEndpoint: 'openai-chat-completions',
     description: 'Kimi Code - AI model provider',
     endpointConfigs: {
-      'anthropic-messages': {
-        adapterFamily: 'anthropic',
-        baseUrl: 'https://api.kimi.com/coding',
+      'openai-chat-completions': {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://api.kimi.com/coding/v1',
       },
     },
     id: 'kimi-coding',
