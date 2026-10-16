@@ -1124,6 +1124,27 @@ describe('Pi model resolver', () => {
     });
     expect(mockBindPiStream).not.toHaveBeenCalled();
   });
+
+  test.each(CASES)('resolves a keyless gateway using $endpointType', async (testCase) => {
+    const provider = makeProvider(testCase.endpointType, testCase.baseUrl, testCase.adapterFamily);
+    provider.authOptional = true;
+    mockGetProviderById.mockResolvedValue(provider);
+    mockGetModelById.mockResolvedValue(makeModel(testCase.endpointType));
+    mockResolveApiKey.mockResolvedValue({
+      apiKeySelection: { attribution: 'unknown' },
+      value: '',
+    });
+
+    const resolution = await resolve(resolver);
+
+    expect(resolution.model).toMatchObject({ api: testCase.api });
+    expect(resolution.usageContext.credentialReceipt).toEqual({ attribution: 'unknown' });
+    expect(resolution.redactionValues).not.toContain('unused');
+    expect(mockBindPiStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ apiKey: '' }),
+    );
+  });
 });
 
 function makeProvider(

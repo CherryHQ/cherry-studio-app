@@ -21,6 +21,9 @@ Pi is the only local Agent Runtime. It receives a normalized Agent transcript an
 selected Agent model through the Host-owned provider adapter. The current Pi binding supports
 API-key-authenticated Anthropic Messages, Google Generate Content, OpenAI Chat Completions, and
 OpenAI Responses endpoint families; other protocol or authentication families fail explicitly.
+Providers declaring optional API-key authentication can use these endpoints without a saved key.
+The Pi adapter supplies the SDK-only placeholder and suppresses generated credentials while
+preserving explicitly configured authentication headers.
 
 Pi rehydrates the selected model's reasoning profile from `ProviderRegistryService` on each turn.
 Its final payload adapter uses the shared reasoning interpreter, preserves `default` and `auto`,
