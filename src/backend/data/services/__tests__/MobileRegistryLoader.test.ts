@@ -302,6 +302,19 @@ describe('MobileRegistryLoader', () => {
     }
   });
 
+  it('defaults Kimi Code to the protocol and endpoint used by its Pi OAuth models', () => {
+    expect(new MobileRegistryLoader().findProvider('kimi-coding')).toMatchObject({
+      authMethods: ['oauth'],
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'openai-chat-completions': {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://api.kimi.com/coding/v1',
+        },
+      },
+    });
+  });
+
   it('keeps mixed api-key/OAuth providers selectable with their catalog metadata untouched', () => {
     const loader = downloadedLoader();
 

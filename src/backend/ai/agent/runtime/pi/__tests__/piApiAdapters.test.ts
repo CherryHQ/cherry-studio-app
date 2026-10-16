@@ -4,6 +4,7 @@ import {
   selectFormatWire,
 } from '@cherrystudio/provider-registry';
 import type { FetchFunction, Model as PiModel } from '@earendil-works/pi-ai';
+import { KIMI_CODING_MODELS } from '@earendil-works/pi-ai/providers/kimi-coding.models';
 import { normalizeContext } from '@earendil-works/pi-ai/utils/transcript';
 
 import type { Model } from '@/shared/data/types/model';
@@ -221,6 +222,37 @@ describe('Pi API adapters', () => {
       expect(result.errorMessage).toContain('Gateway received request');
     },
   );
+
+  test('sends Kimi Code OAuth credentials through its official Chat Completions endpoint', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS);
+    const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+      '@earendil-works/pi-ai/api/openai-completions',
+    );
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+    const fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(input instanceof Request ? input.url : String(input)).toBe(
+        'https://api.kimi.com/coding/v1/chat/completions',
+      );
+      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer kimi-access');
+      expect(JSON.parse(String(init?.body))).toMatchObject({ model: 'kimi-for-coding' });
+      return new Response(JSON.stringify({ error: { message: 'Kimi received request' } }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const streamFn = await bindPiStream(adapter, {
+      fetch,
+      headers: { Authorization: 'Bearer kimi-access' },
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+    const source = await streamFn(
+      KIMI_CODING_MODELS['kimi-for-coding'],
+      normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+    );
+    expect((await source.result()).errorMessage).toContain('Kimi received request');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 
   test('preserves configured authentication headers on a keyless gateway', async () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);

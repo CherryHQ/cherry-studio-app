@@ -531,53 +531,68 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('rebuilds independent history from Cherry parts without model requests', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
-      await runtime.discardConversation('session');
-      expect(await runtime.hasConversation('session')).toBe(false);
-      await runtime.ensureConversation({
-        ...seed,
-        revision: 1,
-        history: {
-          history: [
-            {
-              turnId: 'first',
-              messages: [
-                { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
-                {
-                  role: 'assistant',
-                  parts: [
-                    { type: 'reasoning', text: 'Unsigned thought, never resent.' },
-                    { type: 'text', text: 'Response 1' },
-                  ],
-                },
-              ],
-            },
-          ],
-          contextCheckpoint: null,
-          referencedFileEntryIds: ['retained-file'],
-        },
-      });
-      expect(state.requests).toHaveLength(1);
-      expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
-      await submitAndWait(runtime, input('next'));
-      expect(state.requests[1]?.messages).toContainEqual(
-        expect.objectContaining({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Response 1' }],
-        }),
-      );
-      expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
-    } finally {
-      await runtime.close();
-    }
-  });
+  test.each([false, true])(
+    'rebuilds independent history with the system baseline first (compacted: %s)',
+    async (compacted) => {
+      const state = fixture();
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
+        await runtime.discardConversation('session');
+        expect(await runtime.hasConversation('session')).toBe(false);
+        await runtime.ensureConversation({
+          ...seed,
+          revision: 1,
+          history: {
+            history: [
+              {
+                turnId: 'first',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
+                  {
+                    role: 'assistant',
+                    parts: [
+                      { type: 'reasoning', text: 'Unsigned thought, never resent.' },
+                      { type: 'text', text: 'Response 1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+            contextCheckpoint: compacted
+              ? {
+                  version: 1,
+                  anchorTurnId: 'earlier',
+                  payload: {
+                    kind: 'pi-context-compaction',
+                    summary: 'Earlier user preferences.',
+                    tokensBefore: 8000,
+                  },
+                }
+              : null,
+            referencedFileEntryIds: ['retained-file'],
+          },
+        });
+        expect(state.requests).toHaveLength(1);
+        expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
+        await submitAndWait(runtime, input('next'));
+        expect(state.requests[1]?.messages[0]?.role).toBe('system');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('Help.');
+        expect(state.requests[1]?.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Response 1' }],
+          }),
+        );
+        expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
 
   test('detaching a UI observer preserves the active native execution', async () => {
     const state = fixture();
