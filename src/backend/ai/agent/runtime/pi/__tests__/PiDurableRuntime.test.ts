@@ -4,6 +4,9 @@ import {
   createRegistry,
   defineDocFamily,
   Harness,
+  InboxDoc,
+  LiveDoc,
+  GenerationTask,
   MemoryStorage,
   ProviderDoc,
   UserEntry,
@@ -35,6 +38,106 @@ const seed = {
 };
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('reopening leaves an existing run and its waiting input in place', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+    const conversation = await first.createConversation(
+      { ownership: { kind: 'ownerless' } },
+      BACKGROUND_CONTEXT,
+    );
+    await conversation.commit(async (tx) => {
+      const inbox = await tx.doc(InboxDoc, conversation.id);
+      const live = await tx.doc(LiveDoc, conversation.id);
+      const entry = await tx.appendEntry(conversation.id, seed.entries[0]!);
+      const active = await tx.createSubmission({
+        conversationId: conversation.id,
+        type: 'input',
+        status: 'placed',
+        requestId: 'active',
+        entry: entry.id,
+      });
+      const taskId = await tx.createTask(
+        GenerationTask,
+        {},
+        {
+          ownership: { kind: 'conversation' },
+          conversationId: conversation.id,
+        },
+      );
+      live.run = { taskId, inputs: [active.id] };
+      const queued = await tx.createSubmission({
+        conversationId: conversation.id,
+        type: 'input',
+        status: 'queued',
+        requestId: 'waiting',
+      });
+      inbox.items.push({ id: queued.id, mode: 'followUp', content: 'Waiting' });
+    }, BACKGROUND_CONTEXT);
+    await first.close(BACKGROUND_CONTEXT);
+    const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+    try {
+      const inspected = await reopened.inspect(BACKGROUND_CONTEXT);
+      expect(inspected.submissions.map((record) => [record.requestId, record.status])).toEqual([
+        ['active', 'placed'],
+        ['waiting', 'queued'],
+      ]);
+      expect(inspected.tasks).toHaveLength(1);
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  test('reopens an idle durable inbox and advances every input after a predecessor fails', async () => {
+    class ReopenableStorage extends MemoryStorage {
+      override async close() {}
+    }
+    const storage = new ReopenableStorage();
+    const first = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+    const conversation = await first.createConversation(
+      { ownership: { kind: 'ownerless' } },
+      BACKGROUND_CONTEXT,
+    );
+    const ids = await conversation.commit(async (tx) => {
+      const inbox = await tx.doc(InboxDoc, conversation.id);
+      const ids = [];
+      for (const requestId of ['first', 'second']) {
+        const record = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'queued',
+          requestId,
+        });
+        inbox.items.push({ id: record.id, mode: 'followUp', content: requestId });
+        ids.push(record.id);
+      }
+      return ids;
+    }, BACKGROUND_CONTEXT);
+    await first.close(BACKGROUND_CONTEXT);
+    const reopened = await Harness.open(storage, options(), BACKGROUND_CONTEXT);
+    try {
+      // Recovery restores the first input's run without executing it before resume.
+      const initial = await reopened.inspect(BACKGROUND_CONTEXT);
+      expect(initial.submissions.map((record) => record.status)).toEqual(['placed', 'queued']);
+      expect(initial.tasks).toHaveLength(1);
+      reopened.resume();
+      await reopened.waitForIdle(BACKGROUND_CONTEXT);
+      const records = await Promise.all(
+        ids.map(async (id) =>
+          (await reopened.submission(id, BACKGROUND_CONTEXT))!.status(BACKGROUND_CONTEXT),
+        ),
+      );
+      // No model is configured: failure must release the next waiting input, not strand it.
+      expect(records.map((record) => record.status)).toEqual(['unanswered', 'unanswered']);
+      expect(records.every((record) => record.entry !== undefined)).toBe(true);
+      expect((await reopened.inspect(BACKGROUND_CONTEXT)).submissions).toEqual([]);
+    } finally {
+      await reopened.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('seeds selected instructions and replaces the entire applicable set on the next configuration', async () => {
     const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
     try {

@@ -163,6 +163,69 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('starts the next queued input after a terminal provider failure without resubmission', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    const firstStream = new AssistantMessageEventStream();
+    const started = deferred<void>();
+    let calls = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        calls++;
+        if (calls === 1) {
+          started.resolve();
+          return firstStream;
+        }
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason: 'stop',
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        });
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    const completed = deferred<void>();
+    const observed = await runtime.observe(seed.sessionId, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'second' &&
+        event.turn.status === 'completed'
+      )
+        completed.resolve();
+    });
+    try {
+      await runtime.submit(seed.sessionId, input('first'));
+      await started.promise;
+      await runtime.submit(seed.sessionId, input('second'));
+      firstStream.push(
+        providerErrorEvent(emptyAssistantMessage(wire), {
+          message: 'Invalid request',
+          retryable: false,
+        }),
+      );
+      await completed.promise;
+      const history = await runtime.history(seed.sessionId, { limit: 10 });
+      expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
+        ['second', 'completed'],
+        ['first', 'failed'],
+      ]);
+      expect(calls).toBe(2);
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
   test.each(['openai-completions', 'openai-responses'] as const)(
     'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {

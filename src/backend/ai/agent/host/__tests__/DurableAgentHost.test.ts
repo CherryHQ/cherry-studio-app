@@ -276,6 +276,98 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('durable tool diagnostics', () => {
+  test('recovery finishes withdrawal when the process stopped before the reservation was removed', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('cancelled')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    try {
+      await f.host.initialize();
+      expect(await f.store.listMessages(f.sessionId)).toEqual([]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(0);
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+    } finally {
+      await f.host.close();
+    }
+  });
+
+  test('restores a queued-only input with a withdrawal control and removes only its reservation', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('queued')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    await f.host.initialize();
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      expect(observation.snapshot.activeTurn).toBeNull();
+      expect(observation.snapshot.queuedInputs).toMatchObject([
+        {
+          turnId: turn.identity.turnId,
+          userMessage: { id: turn.userMessageId },
+          assistantMessageId: turn.assistantMessageId,
+        },
+      ]);
+      const revision = await f.store.getRuntimeRevision(f.sessionId);
+      jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+        f.emit({ ...turn, status: 'cancelled' });
+        return 'aborted';
+      });
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: turn.identity.turnId }),
+      ).resolves.toBe('withdrawn');
+      expect(await f.store.listMessages(f.sessionId)).toEqual([]);
+      expect(await f.store.getRuntimeRevision(f.sessionId)).toBe(revision);
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+      expect(events).toContainEqual({ type: 'queue.updated', inputs: [] });
+      expect(
+        events.some(
+          (event) => event.type === 'message.created' || event.type === 'message.finalized',
+        ),
+      ).toBe(false);
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
+  test('a queued removal that loses the placement race never aborts the active run', async () => {
+    const f = fixture();
+    const turn = {
+      ...(await f.reserve('queued')),
+      inputBoundary: null,
+      answerBoundary: null,
+      parts: [],
+    };
+    f.copies.get(f.sessionId)!.turns = [turn];
+    await f.host.initialize();
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.emit({ ...turn, status: 'running', inputBoundary: 'pi:1' });
+      return 'already-placed';
+    });
+    try {
+      await expect(
+        f.host.cancelQueuedInput({ sessionId: f.sessionId, turnId: turn.identity.turnId }),
+      ).resolves.toBe('already-started');
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+      expect(await f.store.listMessages(f.sessionId)).toHaveLength(2);
+      const observation = await f.host.observeSession(f.sessionId, () => {});
+      expect(observation.snapshot.queuedInputs).toEqual([]);
+      expect(observation.snapshot.activeTurn?.id).toBe(turn.identity.turnId);
+      observation.unsubscribe();
+    } finally {
+      await f.host.close();
+    }
+  });
+
   test('records returned installation errors without changing execution failure policy', async () => {
     const { traces, records } = createTraceRecorder();
     const output: RuntimeToolResult = {

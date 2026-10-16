@@ -25,6 +25,7 @@ const mockChatState: AgentSessionChatState = {
   status: 'ready',
   sessionId: 'session-1',
   activeTurn: null,
+  queuedInputs: [],
   liveMessages: [],
   pendingApprovals: [],
   pendingQuestion: null,
@@ -60,6 +61,9 @@ jest.mock('../AgentSessionChatClient', () => ({
   isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
     '../AgentSessionChatClient',
   ).isAgentSessionBusy,
+  isAgentSessionExecuting: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
+  ).isAgentSessionExecuting,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     cancelTurn: mockCancelTurn,
     dispose: mockDispose,
@@ -120,9 +124,21 @@ describe('ChatProvider Draft handoff', () => {
     imageResult = undefined;
     mockChatState.liveMessages = [];
     mockChatState.activeTurn = null;
+    mockChatState.queuedInputs = [];
     mockChatState.isSubmitting = false;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
+  });
+
+  it('keeps a queued-only composer sendable without showing an active-generation stop state', () => {
+    mockChatState.queuedInputs = [
+      { turnId: 'waiting', assistantMessageId: 'answer', userMessage: {} as AgentMessageView },
+    ];
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
   });
 
   afterEach(() => {
@@ -186,7 +202,7 @@ describe('ChatProvider Draft handoff', () => {
   });
 
   it.each([undefined, 'session-1'])(
-    'shows the same row IDs before %s sends complete and retains them until displayed',
+    'retains optimistic row IDs only for a new session after %s admission completes',
     async (sessionId) => {
       const admission = deferred<void>();
       mockStartSession.mockImplementation(async (input) => {
@@ -237,10 +253,12 @@ describe('ChatProvider Draft handoff', () => {
         admission.resolve();
         await sending;
       });
-      expect(currentControls().pendingSend).toMatchObject({
-        isSubmitting: false,
-        messages: pending.messages,
-      });
+      if (sessionId) expect(currentControls().pendingSend).toBeUndefined();
+      else
+        expect(currentControls().pendingSend).toMatchObject({
+          isSubmitting: false,
+          messages: pending.messages,
+        });
       expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();

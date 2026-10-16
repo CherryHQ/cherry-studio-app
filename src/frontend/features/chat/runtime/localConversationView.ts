@@ -9,7 +9,7 @@ import {
   ConversationReadError,
   localConversationFailure,
 } from '@/frontend/appShell/conversation';
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type { AgentMessageView, AgentQueuedInput } from '@/shared/contracts/agent';
 import { BUILT_IN_TOOL_DESCRIPTORS } from '@/shared/data/types/builtInTool';
 
 import {
@@ -25,6 +25,28 @@ import {
 import { localImageResult } from './localImageResult';
 
 export const LOCAL_CONVERSATION_SOURCE = { kind: 'local' } as const;
+
+/** Reservations are durable receipts, not transcript entries until the Runtime starts them. */
+export function filterQueuedTranscriptMessages(
+  messages: readonly AgentMessageView[],
+  queuedInputs: readonly AgentQueuedInput[],
+  activeTurnId: string | undefined,
+): readonly AgentMessageView[] {
+  const waiting = new Set(queuedInputs.map((input) => input.turnId));
+  // A cached page may still contain a withdrawn pair until its invalidation completes, or may
+  // arrive before observation. Hide both halves of every non-active pending reservation.
+  for (const message of messages)
+    if (
+      message.role === 'assistant' &&
+      message.turnId &&
+      message.turnId !== activeTurnId &&
+      (message.status === 'pending' || message.status === 'streaming')
+    )
+      waiting.add(message.turnId);
+  return waiting.size
+    ? messages.filter((message) => !message.turnId || !waiting.has(message.turnId))
+    : messages;
+}
 
 /** Approvals for these tools disclose the receiving model service. */
 const HEALTH_TOOL_IDS = new Set<string>(

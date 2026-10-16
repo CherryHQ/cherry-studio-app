@@ -449,6 +449,7 @@ interface AgentProtocol {
   retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
+  cancelQueuedInput(input: { sessionId: string; turnId: string }): Promise<'withdrawn' | 'already-started' | 'not-found'>
   cancelSubmission(input: { sessionId: string }): Promise<void>
 
   respondApproval(input: {
@@ -624,6 +625,7 @@ type AgentSessionSnapshot = {
   session: AgentSessionView
   capabilities: AgentCapabilities
   activeTurn: AgentTurnView | null
+  queuedInputs: { turnId: string; userMessage: AgentMessageView; assistantMessageId: string }[]
   activeUserMessage: AgentMessageView | null
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
@@ -637,6 +639,12 @@ Persisted transcript pagination remains a normal data read and is not duplicated
 snapshot. The snapshot contains only live state that must be composed over persisted messages. An
 active turn includes its user row and whether older history precedes it, so a newly created
 Session can render its first exchange immediately without waiting behind the history-layout cover.
+
+`queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
+membership. These inputs appear above the composer and do not create transcript rows in the live
+projection. Pending database reservations are hidden until their turn starts. `cancelQueuedInput`
+atomically withdraws only waiting work: `already-started` preserves the active run and asks the
+client to reconcile observation. The active-turn stop operation retains its existing semantics.
 
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.

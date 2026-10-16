@@ -1,7 +1,10 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
 import type { AgentSessionChatState } from '../AgentSessionChatClient';
-import { createLocalConversationProjector } from '../localConversationView';
+import {
+  createLocalConversationProjector,
+  filterQueuedTranscriptMessages,
+} from '../localConversationView';
 
 const message = (id: string, role: AgentMessageView['role'] = 'assistant'): AgentMessageView => ({
   id,
@@ -48,6 +51,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     sessionId: 'session',
     status: 'ready',
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -80,6 +84,31 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     },
   };
 }
+
+test('queued and withdrawn reservations stay outside history until their input starts', () => {
+  const old = { ...message('old'), turnId: 'old' };
+  const user = message('queued-user', 'user');
+  const assistant = { ...message('queued-answer'), status: 'pending' as const };
+  const rows = [old, user, assistant];
+  const queue = [{ turnId: 'turn', userMessage: user, assistantMessageId: assistant.id }];
+  expect(filterQueuedTranscriptMessages(rows, queue, undefined)).toEqual([old]);
+  // A stale Query page must not flash the removed input after the queue updates.
+  expect(filterQueuedTranscriptMessages(rows, [], undefined)).toEqual([old]);
+  expect(filterQueuedTranscriptMessages(rows, [], 'turn')).toEqual(rows);
+  expect(filterQueuedTranscriptMessages([old], [], undefined)).toEqual([old]);
+});
+
+test('a queued-only session blocks history edits while leaving its queue outside execution controls', () => {
+  const row = message('answer');
+  const f = fixture({
+    queuedInputs: [
+      { turnId: 'waiting', userMessage: message('waiting', 'user'), assistantMessageId: 'pending' },
+    ],
+  });
+  const projected = f.projector.message(row, f.state);
+  expect(projected.actions.remove?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
+});
 
 test('a changed approval payload under the same id rejects the earlier decision', async () => {
   const f = fixture({ pendingApprovals: [approval] });
