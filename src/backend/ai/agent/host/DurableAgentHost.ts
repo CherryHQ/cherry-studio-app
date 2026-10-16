@@ -820,7 +820,9 @@ export class DurableAgentHost implements AgentProtocol {
     // The Runtime checks placement and withdrawal in one transaction. Never turn a lost race
     // into abort(sessionId), which would stop the active input and every remaining follow-up.
     if (result === 'already-placed') return 'already-started';
-    await this.reconcileUnsettled(sessionId);
+    // Another admission may have reserved its rows without reaching Pi yet. Only reconcile the
+    // input whose withdrawal was confirmed; a session-wide recovery would interrupt that receipt.
+    if (result === 'aborted') await this.persistTurn({ ...queued, status: 'cancelled' });
     return result === 'aborted' ? 'withdrawn' : 'not-found';
   }
 

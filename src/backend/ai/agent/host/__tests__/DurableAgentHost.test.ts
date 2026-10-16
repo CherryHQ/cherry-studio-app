@@ -368,6 +368,61 @@ describe('durable tool diagnostics', () => {
     }
   });
 
+  test('withdrawing an input leaves a concurrent reservation pending until native admission', async () => {
+    const f = fixture();
+    const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
+    f.copies.get(f.sessionId)!.turns = [queued];
+    await f.host.initialize();
+    let reachedAdmission!: () => void;
+    const admissionStarted = new Promise<void>((resolve) => {
+      reachedAdmission = resolve;
+    });
+    let resumeAdmission!: () => void;
+    const admissionReleased = new Promise<void>((resolve) => {
+      resumeAdmission = resolve;
+    });
+    const submit = f.conversations.submit;
+    jest.spyOn(f.conversations, 'submit').mockImplementation(async (sessionId, input) => {
+      reachedAdmission();
+      await admissionReleased;
+      return submit(sessionId, input);
+    });
+    jest.spyOn(f.conversations, 'withdraw').mockImplementation(async () => {
+      f.emit({ ...queued, status: 'cancelled' });
+      return 'aborted';
+    });
+    const assistantMessageId = uuid();
+    const submitting = f.host.submitMessage({
+      sessionId: f.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId,
+      parts: [{ type: 'text', text: 'A concurrent follow-up' }],
+    });
+    try {
+      await admissionStarted;
+      await expect(
+        f.host.cancelQueuedInput({
+          sessionId: f.sessionId,
+          turnId: queued.identity.turnId,
+        }),
+      ).resolves.toBe('withdrawn');
+      const rows = await f.store.listMessages(f.sessionId);
+      expect(rows).toHaveLength(2);
+      expect(rows.find((row) => row.id === assistantMessageId)).toMatchObject({
+        status: 'pending',
+        parts: [],
+      });
+      expect(f.conversations.abort).not.toHaveBeenCalled();
+    } finally {
+      resumeAdmission();
+      try {
+        await submitting;
+      } finally {
+        await f.host.close();
+      }
+    }
+  });
+
   test('records returned installation errors without changing execution failure policy', async () => {
     const { traces, records } = createTraceRecorder();
     const output: RuntimeToolResult = {

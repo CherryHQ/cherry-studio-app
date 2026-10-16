@@ -642,9 +642,12 @@ Session can render its first exchange immediately without waiting behind the his
 
 `queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
 membership. These inputs appear above the composer and do not create transcript rows in the live
-projection. Pending database reservations are hidden until their turn starts. `cancelQueuedInput`
+projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
+and render-window selection; observation supplies the active pair until it settles. `cancelQueuedInput`
 atomically withdraws only waiting work: `already-started` preserves the active run and asks the
-client to reconcile observation. The active-turn stop operation retains its existing semantics.
+client to reconcile observation. Withdrawal cleans up only its own reservation, so another input
+being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
+retains its existing semantics.
 
 `contextStatus: 'compacting'` means the reply is waiting for context compaction. Compaction that
 runs ahead of the threshold in the background does not delay the reply and is not reported.

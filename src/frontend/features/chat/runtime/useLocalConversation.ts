@@ -8,10 +8,7 @@ import type {
 
 import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
-import {
-  createLocalConversationProjector,
-  filterQueuedTranscriptMessages,
-} from './localConversationView';
+import { createLocalConversationProjector } from './localConversationView';
 import {
   type MessageNavigation,
   useAgentMessageHistoryWindow,
@@ -34,7 +31,7 @@ export function useLocalConversation(input: {
   const { sessionId, title, navigation } = input;
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
-  const window = useAgentMessageHistoryWindow(sessionId, navigation);
+  const window = useAgentMessageHistoryWindow(sessionId, navigation, { settledOnly: true });
   const [owned, setOwned] = useState(() => ({
     sessionId,
     client,
@@ -68,22 +65,16 @@ export function useLocalConversation(input: {
           },
     [projector, state, title],
   );
-  const visibleHistory = useMemo(
-    () => filterQueuedTranscriptMessages(history, state.queuedInputs, state.activeTurn?.id),
-    [history, state.queuedInputs, state.activeTurn?.id],
-  );
   const historyMessages = useMemo(
-    () => (projector ? projector.history(visibleHistory, state) : []),
-    [projector, visibleHistory, state],
+    () => (projector ? projector.history(history, state) : []),
+    [projector, history, state],
   );
   const messages = useMemo(() => {
     if (!projector) return [];
     if (window.hasNewerMessages) return historyMessages;
-    return filterQueuedTranscriptMessages(
-      mergeAgentMessageViews(history, state.liveMessages),
-      state.queuedInputs,
-      state.activeTurn?.id,
-    ).map((message) => projector.message(message, state));
+    return mergeAgentMessageViews(history, state.liveMessages).map((message) =>
+      projector.message(message, state),
+    );
   }, [projector, history, historyMessages, state, window.hasNewerMessages]);
   const messageWindow = useMemo<ConversationHistoryView>(
     () => ({ ...window, messages: historyMessages }),
