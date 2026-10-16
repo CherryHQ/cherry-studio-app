@@ -1,7 +1,5 @@
-import {
-  attachmentDraftManifestSchema,
-  agentUploadLimits,
-} from '@cherrystudio/remote-protocol/agent';
+import { uploadLimits } from '@cherrystudio/remote-protocol';
+import { attachmentDraftManifestSchema } from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as z from 'zod';
@@ -14,13 +12,13 @@ import type {
 } from '@/shared/contracts/remoteAgent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import { RemoteAgentError } from './RemoteAgentError';
-import type { AgentRequest } from './remoteContent';
+import { RemoteConversationError } from './RemoteConversationError';
 import {
   uploadAttachments,
   uploadProgressSchema,
   type RemoteUploadFiles,
   type GetUploadTransport,
+  type RemoteUploadRequests,
 } from './remoteUploads';
 
 const fileSchema = z.object({
@@ -46,6 +44,7 @@ const recordSchema = z.object({
         z.object({ kind: z.literal('registered'), id: z.string() }),
       ]),
     }),
+    z.object({ assistantId: z.string() }),
   ]),
   sessionId: z.string().optional(),
   files: z.array(fileSchema),
@@ -59,6 +58,23 @@ const recordSchema = z.object({
   cancelled: z.boolean().optional(),
 });
 type RecordEntry = z.infer<typeof recordSchema>;
+export type RemoteAttachmentDraftOperations = {
+  create(
+    target: Exclude<RemoteAttachmentDraftTarget, { sessionId: string }>,
+    commandId: string,
+    signal: AbortSignal,
+  ): Promise<string>;
+  present(
+    input: {
+      selectionId: string;
+      sessionId: string;
+      sequence: string;
+      items: z.infer<typeof attachmentDraftManifestSchema>;
+    },
+    signal: AbortSignal,
+  ): Promise<unknown>;
+  uploads: RemoteUploadRequests;
+};
 
 /** Owns pre-send uploads independently of composer mounts and durable send commands. */
 export class RemoteAttachmentDrafts {
@@ -76,7 +92,7 @@ export class RemoteAttachmentDrafts {
     private readonly binding: string,
     private readonly journal: RemoteAgentCommandJournal,
     private readonly files: RemoteUploadFiles,
-    private readonly request: AgentRequest,
+    private readonly operations: RemoteAttachmentDraftOperations,
     private readonly signal: AbortSignal,
     private readonly changed: () => void,
     private readonly getTransport: GetUploadTransport,
@@ -133,14 +149,14 @@ export class RemoteAttachmentDrafts {
     if (notify) this.changed();
   }
   stage(key: string, target: RemoteAttachmentDraftTarget, attachments: RemoteAttachment[]) {
-    if (attachments.length > agentUploadLimits.files)
-      throw new RemoteAgentError('ATTACHMENT_LIMIT');
+    if (attachments.length > uploadLimits.files)
+      throw new RemoteConversationError('ATTACHMENT_LIMIT');
     let row = this.records.find((item) => item.key === key && !item.submitted && !item.cancelled);
     if (row && JSON.stringify(row.target) !== JSON.stringify(target))
-      throw new RemoteAgentError('CONFLICT');
+      throw new RemoteConversationError('CONFLICT');
     if (!row) {
       if (!attachments.length) return;
-      if (this.records.length >= 32) throw new RemoteAgentError('ACTION_LIMIT');
+      if (this.records.length >= 32) throw new RemoteConversationError('ACTION_LIMIT');
       row = {
         key,
         id: randomUUID(),
@@ -228,8 +244,9 @@ export class RemoteAttachmentDrafts {
       .then(() => this.advance(row, signal))
       .catch((error) => {
         if (!signal.aborted) {
-          row.blocked = !(error instanceof RemoteAgentError && error.retryable);
-          row.error = error instanceof RemoteAgentError ? error.code : 'RESOURCE_UNAVAILABLE';
+          row.blocked = !(error instanceof RemoteConversationError && error.retryable);
+          row.error =
+            error instanceof RemoteConversationError ? error.code : 'RESOURCE_UNAVAILABLE';
           for (const file of row.files) file.ready = false;
           this.persist();
         }
@@ -238,7 +255,7 @@ export class RemoteAttachmentDrafts {
             this.progress.set(file.attachmentId, {
               sent: this.progress.get(file.attachmentId)?.sent ?? 0,
               total: file.size ?? 0,
-              error: error instanceof RemoteAgentError ? error.code : 'RESOURCE_UNAVAILABLE',
+              error: error instanceof RemoteConversationError ? error.code : 'RESOURCE_UNAVAILABLE',
             });
         this.publish();
       })
@@ -260,30 +277,14 @@ export class RemoteAttachmentDrafts {
     signal.throwIfAborted();
     if (!row.sessionId) {
       if ('sessionId' in row.target) row.sessionId = row.target.sessionId;
-      else {
-        const receipt = await this.request(
-          'agent.sessions.create',
-          {
-            commandId: row.createId,
-            agentId: row.target.agentId,
-            workspace:
-              row.target.workspace.kind === 'system'
-                ? { kind: 'system' }
-                : { kind: 'registered', id: row.target.workspace.id },
-          },
-          signal,
-        );
-        if (receipt.status !== 'applied' || !receipt.sessionId)
-          throw new RemoteAgentError('CONFLICT');
-        row.sessionId = receipt.sessionId;
-      }
+      else row.sessionId = await this.operations.create(row.target, row.createId, signal);
       this.persist();
     }
     for (const file of row.files)
       if (file.size === undefined) {
         const resolved = await this.files.resolve(file.fileEntryId);
         signal.throwIfAborted();
-        if (!resolved) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
+        if (!resolved) throw new RemoteConversationError('RESOURCE_UNAVAILABLE');
         file.size = new File(resolved.uri).size;
       }
     for (const file of row.files) {
@@ -294,9 +295,10 @@ export class RemoteAttachmentDrafts {
       let expired = false;
       if (!modeChanged) {
         try {
-          await this.request('agent.uploads.get', { uploadId: file.uploadId }, signal);
+          await this.operations.uploads.get({ uploadId: file.uploadId }, signal);
         } catch (error) {
-          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
+          if (!(error instanceof RemoteConversationError) || error.code !== 'NOT_FOUND')
+            throw error;
           expired = true;
         }
         signal.throwIfAborted();
@@ -325,8 +327,7 @@ export class RemoteAttachmentDrafts {
     attachmentDraftManifestSchema.parse(items);
     row.sequence++;
     this.persist();
-    await this.request(
-      'agent.attachments.present',
+    await this.operations.present(
       {
         selectionId: row.id,
         sessionId: row.sessionId,
@@ -336,7 +337,7 @@ export class RemoteAttachmentDrafts {
       signal,
     );
     for (const file of [...row.removed]) {
-      await this.request('agent.uploads.cancel', { uploadId: file.uploadId }, signal);
+      await this.operations.uploads.cancel({ uploadId: file.uploadId }, signal);
       signal.throwIfAborted();
       row.removed = row.removed.filter((item) => item.uploadId !== file.uploadId);
       this.persist();
@@ -352,7 +353,7 @@ export class RemoteAttachmentDrafts {
       await uploadAttachments(
         [file],
         this.files,
-        this.request,
+        this.operations.uploads,
         signal,
         (sent, total, phase) => {
           signal.throwIfAborted();
@@ -381,7 +382,7 @@ export class RemoteAttachmentDrafts {
   async prepare(key: string, target: RemoteAttachmentDraftTarget, attachments: RemoteAttachment[]) {
     this.stage(key, target, attachments);
     const row = this.records.find((row) => row.key === key);
-    if (!row) throw new RemoteAgentError('CONFLICT');
+    if (!row) throw new RemoteConversationError('CONFLICT');
     await this.run(row);
     return this.ready(key, attachments);
   }
@@ -396,7 +397,7 @@ export class RemoteAttachmentDrafts {
         (file, index) => !file.ready || file.fileEntryId !== attachments[index].fileEntryId,
       )
     )
-      throw new RemoteAgentError('CONFLICT');
+      throw new RemoteConversationError('CONFLICT');
     return {
       sessionId: row.sessionId,
       selectionId: row.id,

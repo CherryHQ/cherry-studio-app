@@ -22,6 +22,14 @@ import {
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import {
+  RemoteAttachmentDrafts,
+  uploadAttachments,
+  type RemoteBackgroundExecution,
+  type RemoteUploadFiles,
+  type GetUploadTransport,
+  type RemoteUploadRequests,
+} from '@/backend/services/remoteConversation';
 import { linkAbortSignals } from '@/backend/utils/linkAbortSignals';
 import type {
   RemoteAgentSource,
@@ -30,7 +38,6 @@ import type {
   RemoteResourceValue,
 } from '@/shared/contracts/remoteAgent';
 
-import type { RemoteBackgroundExecution } from '../remoteConversation';
 import { RemoteAgentActions } from './RemoteAgentActions';
 import { RemoteAgentError } from './RemoteAgentError';
 import {
@@ -41,16 +48,10 @@ import {
   type MessageViewCache,
   type RemoteResourceDescriptor,
 } from './remoteAgentViews';
-import { RemoteAttachmentDrafts } from './RemoteAttachmentDrafts';
 import { decodeContent, integrity, readContent, type AgentRequest } from './remoteContent';
 import { createAttachmentDownloader } from './remoteDownloads';
 import { RemoteReadCoordinator } from './RemoteReadCoordinator';
 import type { RemoteSessionReadCache } from './RemoteSessionReadCache';
-import {
-  uploadAttachments,
-  type RemoteUploadFiles,
-  type GetUploadTransport,
-} from './remoteUploads';
 import { SessionSync } from './SessionSync';
 
 export type { RemoteBackgroundExecution } from '../remoteConversation';
@@ -99,6 +100,13 @@ const targetSchema = z.object({
 
 /** Agent-domain observation and command owner. The manager alone owns channel lifecycle. */
 export class RemoteAgentScope implements RemoteAgentSource {
+  private readonly uploads: RemoteUploadRequests = {
+    get: (params, signal) => this.request('agent.uploads.get', params, signal),
+    prepare: (params, signal) => this.request('agent.uploads.prepare', params, signal),
+    resume: (params, signal) => this.request('agent.uploads.resume', params, signal),
+    complete: (params, signal) => this.request('agent.uploads.complete', params, signal),
+    cancel: (params, signal) => this.request('agent.uploads.cancel', params, signal),
+  };
   readonly scope: string;
   readonly draftScope: string;
   private readonly reads = new RemoteReadCoordinator();
@@ -183,7 +191,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
           return await uploadAttachments(
             attachments,
             this.files,
-            this.request,
+            this.uploads,
             signal,
             (sent, total) => {
               this.state = { ...this.state, upload: { sent, total, ...owner } };
@@ -225,7 +233,21 @@ export class RemoteAgentScope implements RemoteAgentSource {
         `${lease.connectionId}:${lease.scope}:attachment-drafts`,
         journal,
         files,
-        this.request,
+        {
+          uploads: this.uploads,
+          create: async (target, commandId, signal) => {
+            if (!('agentId' in target)) throw new RemoteAgentError('INVALID_PARAMS');
+            const receipt = await this.request(
+              'agent.sessions.create',
+              { commandId, ...target },
+              signal,
+            );
+            if (receipt.status !== 'applied' || !receipt.sessionId)
+              throw new RemoteAgentError('CONFLICT');
+            return receipt.sessionId;
+          },
+          present: (params, signal) => this.request('agent.attachments.present', params, signal),
+        },
         lease.signal,
         () => {
           this.state = { ...this.state, attachmentDrafts: this.attachmentDrafts?.get() };

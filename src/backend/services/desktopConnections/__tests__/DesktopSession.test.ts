@@ -84,65 +84,73 @@ const options = (channels: Record<string, ReturnType<typeof fakeChannel>>) => {
 };
 
 describe('DesktopSession', () => {
-  it('keeps binary acknowledgements separate from RPC and bounds unacknowledged data', async () => {
-    const channel = fakeChannel({
-      'connection.hello': () => ({
-        ...hello['connection.hello'](),
-        protocolVersion: 1,
-        agentUploadsVersion: 1,
-      }),
-      'connection.ping': ({ nonce }: any) => ({ nonce, serverTime: new Date().toISOString() }),
-    });
-    Object.assign(channel, { protocolVersion: 1, offeredVersions: [1] });
-    const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
-    const rpcWrite = channel.write.bind(channel);
-    const chunks: any[] = [];
-    channel.write = async (value: any) => {
-      if (value.kind === 'upload') {
-        chunks.push(value);
-        return;
-      }
-      await rpcWrite(value);
-    };
-    const input = {
-      uploadId: 'upload',
-      writerEpoch: '1',
-      offset: '0',
-      bytes: new Uint8Array(1024 * 1024),
-    };
-    const signal = new AbortController().signal;
-    try {
-      const first = session.sendUploadChunk(input, signal);
-      const second = session.sendUploadChunk({ ...input, offset: '1048576' }, signal);
-      await expect(session.sendUploadChunk(input, signal)).rejects.toMatchObject({
-        reason: 'RESOURCE_EXHAUSTED',
+  it.each([undefined, 'assistant'] as const)(
+    'keeps %s binary acknowledgements separate from RPC and bounds unacknowledged data',
+    async (domain) => {
+      const channel = fakeChannel({
+        'connection.hello': () => ({
+          ...hello['connection.hello'](),
+          protocolVersion: domain ? 2 : 1,
+          ...(domain ? { uploadsVersion: 1, assistantVersion: 1 } : { agentUploadsVersion: 1 }),
+        }),
+        'connection.ping': ({ nonce }: any) => ({ nonce, serverTime: new Date().toISOString() }),
       });
-      await expect(
-        session.request('connection.ping', { nonce: 'responsive' }),
-      ).resolves.toMatchObject({ nonce: 'responsive' });
-      const ack = (chunk: any) =>
-        channel.deliver({
-          jsonrpc: '2.0',
-          method: 'agent.uploads.ack',
-          params: {
-            ok: true,
-            requestId: chunk.requestId,
-            uploadId: chunk.uploadId,
-            writerEpoch: chunk.writerEpoch,
-            committedOffset: String(Number(chunk.offset) + chunk.bytes.length),
-          },
+      Object.assign(channel, {
+        protocolVersion: domain ? 2 : 1,
+        offeredVersions: domain ? [2, 1] : [1],
+      });
+      const session = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      const rpcWrite = channel.write.bind(channel);
+      const chunks: any[] = [];
+      channel.write = async (value: any) => {
+        if (value.kind === 'upload') {
+          chunks.push(value);
+          return;
+        }
+        await rpcWrite(value);
+      };
+      const input = {
+        uploadId: 'upload',
+        writerEpoch: '1',
+        offset: '0',
+        bytes: new Uint8Array(1024 * 1024),
+        ...(domain ? { domain } : {}),
+      };
+      const signal = new AbortController().signal;
+      try {
+        const first = session.sendUploadChunk(input, signal);
+        const second = session.sendUploadChunk({ ...input, offset: '1048576' }, signal);
+        await expect(session.sendUploadChunk(input, signal)).rejects.toMatchObject({
+          reason: 'RESOURCE_EXHAUSTED',
         });
-      ack(chunks[1]);
-      ack(chunks[0]);
-      await expect(first).resolves.toMatchObject({ committedOffset: '1048576' });
-      await expect(second).resolves.toMatchObject({ committedOffset: '2097152' });
-      const disconnected = session.sendUploadChunk(input, signal);
-      session.close();
-      await expect(disconnected).rejects.toThrow();
-    } finally {
-      session.close();
-    }
-  });
+        await expect(
+          session.request('connection.ping', { nonce: 'responsive' }),
+        ).resolves.toMatchObject({ nonce: 'responsive' });
+        const ack = (chunk: any) =>
+          channel.deliver({
+            jsonrpc: '2.0',
+            method: domain ? 'uploads.ack' : 'agent.uploads.ack',
+            params: {
+              ok: true,
+              requestId: chunk.requestId,
+              uploadId: chunk.uploadId,
+              writerEpoch: chunk.writerEpoch,
+              committedOffset: String(Number(chunk.offset) + chunk.bytes.length),
+            },
+          });
+        expect(chunks.map((chunk) => chunk.domain)).toEqual([domain, domain]);
+        ack(chunks[1]);
+        ack(chunks[0]);
+        await expect(first).resolves.toMatchObject({ committedOffset: '1048576' });
+        await expect(second).resolves.toMatchObject({ committedOffset: '2097152' });
+        const disconnected = session.sendUploadChunk(input, signal);
+        session.close();
+        await expect(disconnected).rejects.toThrow();
+      } finally {
+        session.close();
+      }
+    },
+  );
 
   it('adopts pairing approval so address sync does not authenticate an already authenticated channel', async () => {
     const authorization = { grants: [{ domain: 'configuration', grantId: 'grant-1' }] };

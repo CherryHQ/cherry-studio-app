@@ -4,11 +4,25 @@ import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCo
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
 import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
 import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
-import { RemoteConversationError } from '@/backend/services/remoteConversation';
+import {
+  RemoteConversationError,
+  type RemoteUploadFiles,
+} from '@/backend/services/remoteConversation';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAssistantScope } from '../RemoteAssistantScope';
 import { checkpoint, projection } from './_checkpointFixture';
+
+jest.mock('expo-file-system', () => ({
+  File: class {
+    size = 3;
+    exists = true;
+    open() {
+      return { offset: 0, readBytes: () => new Uint8Array([1, 2, 3]), close() {} };
+    }
+  },
+}));
 
 const revision = 'a'.repeat(64);
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -22,6 +36,7 @@ afterEach(async () => {
 function setup(
   state: AssistantProjection = projection(),
   handlers: Record<string, (params: Record<string, unknown>) => unknown> = {},
+  files?: RemoteUploadFiles,
 ) {
   let connectionState: DesktopLeaseState = { status: 'ready' };
   const states = new Set<() => void>();
@@ -83,6 +98,8 @@ function setup(
     }
   });
   const session = {
+    uploadsVersion: undefined as number | undefined,
+    sendUploadChunk: jest.fn(),
     request,
     onNotification: (listener: (event: DesktopNotification) => void) => {
       notifications.add(listener);
@@ -125,6 +142,7 @@ function setup(
       remove: (key) => data.delete(key),
     }),
     background as never,
+    files,
   );
   scopes.push(scope);
   let latest: RemoteSessionSnapshot | undefined;
@@ -133,6 +151,7 @@ function setup(
   });
   return {
     scope,
+    session,
     request,
     lease,
     reply,
@@ -730,3 +749,95 @@ it('keeps recovering a created topic when first-send preparation repeatedly lose
     jest.useRealTimers();
   }
 });
+
+it.each(['first', 'continuation'] as const)(
+  'uploads a file-only %s message under the Assistant grant without Agent access',
+  async (kind) => {
+    const file = {
+      fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+      name: 'data.bin',
+      mediaType: 'application/octet-stream',
+    };
+    const resolved = {
+      uri: 'file:///data.bin',
+      entry: { id: file.fileEntryId, provenance: 'imported' },
+    };
+    const files = {
+      resolve: async () => resolved,
+      prepareUploadSource: async () => resolved,
+      hashFile: jest.fn(),
+    } as unknown as RemoteUploadFiles;
+    let upload: Record<string, unknown> | undefined;
+    const test = setup(
+      projection(),
+      {
+        'assistant.topics.create': (params) => ({
+          commandId: params.commandId,
+          method: 'assistant.topics.create',
+          status: 'applied',
+          topicId: 'topic',
+          admittedAt: '2026-10-14T00:00:00Z',
+        }),
+        'assistant.topics.get': () => ({ topic: projection().topic }),
+        'assistant.attachments.present': () => ({ accepted: true }),
+        'uploads.get': () => {
+          if (!upload) throw new RemoteFailureError({ reason: 'NOT_FOUND', message: 'No upload' });
+          return upload;
+        },
+        'uploads.prepare': (params) => {
+          upload = {
+            uploadId: params.uploadId,
+            state: 'receiving',
+            writerEpoch: '0',
+            committedOffset: '0',
+            expiresAt: '2099-01-01T00:00:00Z',
+          };
+          return upload;
+        },
+        'uploads.resume': () => (upload = { ...upload, writerEpoch: '1' }),
+        'uploads.complete': () => (upload = { ...upload, state: 'ready' }),
+      },
+      files,
+    );
+    test.session.uploadsVersion = 1;
+    test.session.sendUploadChunk.mockImplementation(async (input) => {
+      expect(input.domain).toBe('assistant');
+      expect([...input.bytes]).toEqual([1, 2, 3]);
+      upload = { ...upload, committedOffset: '3' };
+      return { ...upload, ok: true, requestId: 'chunk' };
+    });
+    await settle();
+    expect(test.scope.getState()).toMatchObject({ attachments: true, preupload: true });
+    const result =
+      kind === 'first'
+        ? await test.scope.start({
+            draftId: 'files',
+            agentId: 'assistant',
+            text: '',
+            attachments: [file],
+          })
+        : await test.scope.send(test.latest().sendTarget!, '', [file]);
+    expect(result).toMatchObject({ status: 'rejected', attachments: [file] });
+    const calls = test.request.mock.calls;
+    expect(calls.some(([method]) => method.startsWith('agent.'))).toBe(false);
+    const controls = calls.filter(([method]) => method.startsWith('uploads.'));
+    expect(controls.length).toBeGreaterThan(0);
+    for (const [, params] of controls) expect(params.domain).toBe('assistant');
+    expect(calls.filter(([method]) => method === 'assistant.topics.create')).toHaveLength(
+      kind === 'first' ? 1 : 0,
+    );
+    const sent = calls.find(([method]) => method === 'assistant.messages.send')![1];
+    expect(sent).toMatchObject({
+      text: '',
+      attachments: [{ uploadId: upload!.uploadId }],
+      selectionId: expect.any(String),
+    });
+    expect(test.scope.getState().attachmentDrafts).toEqual([]);
+    test.session.uploadsVersion = undefined;
+    test.changeConnection({ status: 'offline' });
+    expect(test.scope.getState()).toMatchObject({ attachments: false, preupload: false });
+    test.changeConnection({ status: 'ready' });
+    await settle();
+    expect(test.scope.getState()).toMatchObject({ attachments: false, preupload: false });
+  },
+);

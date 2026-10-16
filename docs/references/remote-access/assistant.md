@@ -7,18 +7,22 @@ workspace semantics. An Agent grant never authorizes Assistant requests.
 
 ## Product Scope
 
-- The sidebar separates desktop Agents and Assistants. Routes, query keys, drafts, notifications
+- The sidebar lists each desktop once, with an Assistants/Agents selector below the device name.
+  Both catalogs group their conversations by owner; the desktop sidebar has no flat session mode.
+  The phone's local sidebar retains its existing views. Routes, query keys, drafts, notifications
   and source handles retain the domain even when topic and session IDs match.
 - Assistant discovery exposes the configured default model. Topic discovery includes existing
   topics; history retains each message's recorded model, including multi-model replies.
-- Text-only first send creates a topic without a workspace. Later sends pin the assistant
+- The first text or file send creates a topic without a workspace. Later sends pin the assistant
   configuration revision, history revision and branch anchor from the observed view.
-- Busy or stale submissions are rejected and retain the user's text. Refreshing the current
+- Busy or stale submissions are rejected and retain the user's text and files. Refreshing the current
   view does not automatically resubmit or select a different branch.
 - Streaming, explicit cancellation and ordinary tool approval/denial use the shared chat UI.
   OAuth, forms and other desktop-required interactions direct the user to the desktop.
-- Existing attachments expose metadata. Uploads, model switching, assistant editing and branch
-  management are outside this mobile slice.
+- Camera, photos and managed files use the same composer and selection-time uploads as Agents.
+  Assistant uploads require `connection.hello.uploadsVersion === 1`; older desktops retain text input.
+  Existing attachments expose metadata. Model switching, assistant editing and branch management
+  are outside this mobile slice.
 
 ## Ownership And Recovery
 
@@ -46,13 +50,20 @@ first send remains attached to the created topic, including failures before send
 Reopening a source after process restart recovers its journal and current desktop state; the
 mobile database never becomes a second desktop transcript store.
 
+`remoteConversation/RemoteAttachmentDrafts` and `uploadAttachments` own upload progress, source
+snapshots, checksum verification and resume for both domains. Assistant control requests use
+`uploads.*` with `domain: 'assistant'`; binary DATA carries the same domain and receives `uploads.ack`.
+Selection presentation uses `assistant.attachments.present` and never needs an Agent grant or
+workspace. A staged first send reuses its prepared topic. The Assistant command journal freezes
+upload references and selection IDs before send, and reconciles admitted selections after restart.
+
 New pairing requests Assistant access only when the QR advertises protocol version 2. Rescanning
 an existing pairing with missing requested capabilities opens a fresh unauthenticated channel
 for explicit PC approval. Existing grants remain valid if that new claim is not approved.
 
 ## Local Protocol Package
 
-The current development override uses Desktop PR #21676 at `c4894c0038` because the published
+The current development override uses Desktop PR #21676 at `835952f124` because the published
 `@cherrystudio/remote-protocol@0.5.0` does not contain the Assistant export. This is a local
 integration dependency, not a published release requirement. Both Mobile and its published
 transport resolve the same tarball through `pnpm-workspace.yaml`.
@@ -61,17 +72,17 @@ To reproduce the current override, build and pack that desktop checkout after ob
 authorization, then install Mobile dependencies once:
 
 ```bash
-# In the desktop checkout at c4894c0038a1bd615d3b33da2e67e87423a1cf68:
+# In the desktop checkout at 835952f124fe42b21208417c156cfd8a051f9c70:
 pnpm --filter @cherrystudio/remote-protocol build
 cd packages/remote-protocol
-pnpm pack --pack-destination /absolute/mobile-workspace/.context/local-packages/c4894c0038
+pnpm pack --pack-destination /absolute/mobile-workspace/.context/local-packages/835952f124
 
 # In the mobile checkout:
 pnpm install --ignore-scripts
 ```
 
 The resulting local path is
-`.context/local-packages/c4894c0038/cherrystudio-remote-protocol-0.5.0.tgz`. Generated artifacts stay
+`.context/local-packages/835952f124/cherrystudio-remote-protocol-0.5.0.tgz`. Generated artifacts stay
 under `.context`; no desktop source deep-import is used. `.easignore` includes only this tarball
 from `.context` so local EAS builds can install the same dependency. Replace this temporary
 override, remove its `.easignore` exception and refresh the lockfile when an Assistant-capable
@@ -95,6 +106,7 @@ history, first send, continuation, cancellation, ordinary tool approval/denial, 
 after restart, and background recovery on both iOS and Android. iOS additionally recovered the
 existing pairing and continued its topic after a desktop restart. These runs used the local
 protocol package from `6c7f7fa6`; they have not been repeated after the `c4894c0038` ordering update.
+The later Assistant upload and drawer changes have not undergone device acceptance or test execution.
 
 - [iOS approval and denial results](images/assistant-ios.png)
 - [Android completed reply after returning from the background](images/assistant-android.png)

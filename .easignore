@@ -59,6 +59,6 @@ yarn-error.*
 .context/*
 !.context/local-packages
 .context/local-packages/*
-!.context/local-packages/c4894c0038
-.context/local-packages/c4894c0038/*
-!.context/local-packages/c4894c0038/cherrystudio-remote-protocol-0.5.0.tgz
+!.context/local-packages/835952f124
+.context/local-packages/835952f124/*
+!.context/local-packages/835952f124/cherrystudio-remote-protocol-0.5.0.tgz

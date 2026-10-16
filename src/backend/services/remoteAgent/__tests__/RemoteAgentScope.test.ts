@@ -8,6 +8,7 @@ import {
   RemoteFailureError,
   RemoteTransportError,
 } from '@/backend/services/desktopConnections/remoteErrors';
+import * as remoteUploads from '@/backend/services/remoteConversation/remoteUploads';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
@@ -15,7 +16,6 @@ import { RemoteAgentActions } from '../RemoteAgentActions';
 import { RemoteAgentScope, type RemoteBackgroundExecution } from '../RemoteAgentScope';
 import { integrity } from '../remoteContent';
 import { RemoteSessionReadCache } from '../RemoteSessionReadCache';
-import * as remoteUploads from '../remoteUploads';
 import { createCheckpointFixture } from './_checkpointFixture';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -1137,7 +1137,7 @@ it.each(['offline', 'suspended'] as const)(
           jest
             .mocked(test.lease.ready)
             .mockRejectedValueOnce(new DesktopUnreachableError([status]));
-          await request('agent.uploads.get', { uploadId: saved.metadata.uploadId }, signal);
+          await request.get({ uploadId: saved.metadata.uploadId }, signal);
           throw new Error('Offline request must fail');
         },
       )

@@ -3,6 +3,7 @@ import type {
   RemoteSessionSnapshot,
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { createRemoteConversationSource } from '../createRemoteConversationSource';
 import type { DraftId } from '../remoteContracts';
@@ -336,6 +337,50 @@ it('starts an Assistant topic without a workspace and preserves its domain in th
     text: 'Hello',
   });
   expect(source.ref).toEqual({ kind: 'desktop', domain: 'assistant', connectionId: 'pc' });
+  draft.dispose();
+  source.dispose();
+  test.source.dispose();
+});
+
+it('prepares an Assistant file-only first message without requiring an Agent workspace', async () => {
+  const test = fixture();
+  const file = {
+    fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+    name: 'report.pdf',
+    mediaType: 'application/pdf',
+  };
+  test.setState({ status: 'ready', attachments: true, preupload: true });
+  const stageAttachments = jest.fn();
+  const source = createRemoteConversationSource(
+    'pc',
+    { ...test.remote, listWorkspaces: undefined, stageAttachments },
+    'assistant',
+  );
+  const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const draft = await source.catalog.prepareDraft({ agent, draftId: 'files' as DraftId }, signal());
+  const state = draft.state.getSnapshot();
+  expect(state.inputPolicy.attachments).toBe(true);
+  expect(state.attachmentPreparation).toBeDefined();
+  state.attachmentPreparation!.stage([file]);
+  expect(stageAttachments).toHaveBeenCalledWith('draft:files', { assistantId: 'a' }, [file]);
+  await expect(
+    state.start.execute({
+      parts: [
+        {
+          type: 'file',
+          fileEntryId: file.fileEntryId,
+          filename: file.name,
+          mediaType: file.mediaType,
+        },
+      ],
+    }),
+  ).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    draftId: 'files',
+    agentId: 'a',
+    text: '',
+    attachments: [file],
+  });
   draft.dispose();
   source.dispose();
   test.source.dispose();

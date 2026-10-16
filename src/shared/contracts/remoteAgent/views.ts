@@ -8,6 +8,7 @@ export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { ki
 export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
 export type RemoteAttachmentDraftTarget =
   | { sessionId: string }
+  | { assistantId: string }
   | { agentId: string; workspace: RemoteWorkspaceSelection };
 export type RemoteAttachmentDraftView = {
   key: string;

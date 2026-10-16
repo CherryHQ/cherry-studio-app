@@ -1,8 +1,8 @@
+import type { UploadMethod } from '@cherrystudio/remote-protocol';
 import type { AgentMessage, AgentPart, ContentRef } from '@cherrystudio/remote-protocol/agent';
 import {
   assistantMethods,
   type AssistantMethod,
-  type AssistantParams,
   type AssistantResult,
   type AssistantProjection,
   type AssistantTopic,
@@ -12,7 +12,11 @@ import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections, DesktopDomainLease } from '@/backend/services/desktopConnections';
-import type { DesktopSession } from '@/backend/services/desktopConnections/DesktopSession';
+import type {
+  DesktopSession,
+  DesktopParams,
+  DesktopResult,
+} from '@/backend/services/desktopConnections/DesktopSession';
 import {
   DesktopUnreachableError,
   RemoteFailureError,
@@ -27,6 +31,10 @@ import {
   type RemoteResourceDescriptor,
   type RemoteBackgroundExecution,
   type PartViewCache,
+  RemoteAttachmentDrafts,
+  type RemoteUploadFiles,
+  type RemoteUploadRequests,
+  type GetUploadTransport,
 } from '@/backend/services/remoteConversation';
 import type { InteractionResponse } from '@/shared/contracts/interaction';
 import type {
@@ -42,7 +50,6 @@ import type {
 
 import type { BackgroundReplyTurn } from '../backgroundReply';
 import type { KeepAliveLease } from '../keepAlive/KeepAliveCoordinator';
-import type { AssistantRequest } from './assistantRequest';
 import { RemoteAssistantActions } from './RemoteAssistantActions';
 import { TopicSync } from './TopicSync';
 
@@ -106,6 +113,53 @@ export class RemoteAssistantScope implements RemoteConversationSource {
   private bodyBytes = 0;
   private readonly work = new Set<Promise<unknown>>();
   private readonly actions: RemoteAssistantActions;
+  private readonly attachmentDrafts?: RemoteAttachmentDrafts;
+  private readonly uploads: RemoteUploadRequests = {
+    get: (params, signal) =>
+      this.request('uploads.get', { ...params, domain: 'assistant' }, signal),
+    prepare: (params, signal) =>
+      this.request('uploads.prepare', { ...params, domain: 'assistant' }, signal),
+    resume: (params, signal) =>
+      this.request('uploads.resume', { ...params, domain: 'assistant' }, signal),
+    complete: (params, signal) =>
+      this.request('uploads.complete', { ...params, domain: 'assistant' }, signal),
+    cancel: (params, signal) =>
+      this.request('uploads.cancel', { ...params, domain: 'assistant' }, signal),
+  };
+  private readonly getUploadTransport: GetUploadTransport = async (signal) => {
+    this.assertActive();
+    const session = await this.lease.ready(signal).catch((error) => {
+      if (error instanceof DesktopUnreachableError || error instanceof RemoteTransportError)
+        throw new RemoteConversationError('CONNECTION_LOST', true, error.message);
+      throw error;
+    });
+    if (session.uploadsVersion !== 1) throw new RemoteConversationError('UPGRADE_REQUIRED');
+    return {
+      checksumAlgorithm: session.agentUploadChecksum,
+      write: async (input, caller) => {
+        try {
+          return await session.sendUploadChunk({ ...input, domain: 'assistant' }, caller);
+        } catch (error) {
+          if (error instanceof RemoteFailureError) {
+            if (error.reason === 'FORBIDDEN' || error.reason === 'GRANT_REVOKED')
+              await this.connections.revoke(
+                this.lease.connectionId,
+                'assistant',
+                this.lease.grantId,
+              );
+            throw new RemoteConversationError(
+              error.reason,
+              ['TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED', 'RATE_LIMITED'].includes(error.reason),
+              error.message,
+            );
+          }
+          if (error instanceof DesktopUnreachableError || error instanceof RemoteTransportError)
+            throw new RemoteConversationError('CONNECTION_LOST', true);
+          throw error;
+        }
+      },
+    };
+  };
   private readonly unsubscribe: () => void;
   private readonly unoperations: () => void;
   private recoveryTimer?: ReturnType<typeof setTimeout>;
@@ -119,6 +173,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     private readonly connections: DesktopConnections,
     journal: RemoteAgentCommandJournal,
     private readonly background?: RemoteBackgroundExecution,
+    private readonly files?: RemoteUploadFiles,
   ) {
     this.scope = `${lease.scope}:${randomUUID()}`;
     this.draftScope = lease.scope;
@@ -131,6 +186,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     );
     for (const command of this.actions.get()) this.commandStates.set(command.id, command.status);
     this.unoperations = this.actions.subscribe(() => {
+      this.attachmentDrafts?.reconcile(this.actions.admittedAttachmentDrafts());
       for (const command of this.actions.get()) {
         if (command.kind === 'create' || !command.sessionId) continue;
         const observation = this.observations.get(command.sessionId);
@@ -143,6 +199,42 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       }
       this.publishExecution();
     });
+    if (files)
+      this.attachmentDrafts = new RemoteAttachmentDrafts(
+        `${lease.connectionId}:assistant:${lease.scope}:attachment-drafts`,
+        journal,
+        files,
+        {
+          uploads: this.uploads,
+          create: async (target, commandId, signal) => {
+            if (!('assistantId' in target)) throw new RemoteConversationError('INVALID_PARAMS');
+            const receipt = await this.request(
+              'assistant.topics.create',
+              { commandId, ...target },
+              signal,
+            );
+            if (receipt.status !== 'applied' || !receipt.topicId)
+              throw new RemoteConversationError('CONFLICT');
+            return receipt.topicId;
+          },
+          present: ({ sessionId, ...params }, signal) =>
+            this.request(
+              'assistant.attachments.present',
+              { ...params, topicId: sessionId },
+              signal,
+            ),
+        },
+        AbortSignal.any([lease.signal, this.lifetime.signal]),
+        () => {
+          this.state = { ...this.state, attachmentDrafts: this.attachmentDrafts?.get() };
+          for (const listener of this.stateListeners) listener();
+          this.publishExecution();
+          this.scheduleRecovery();
+        },
+        this.getUploadTransport,
+      );
+    this.attachmentDrafts?.reconcile(this.actions.admittedAttachmentDrafts());
+    this.state = { ...this.state, attachmentDrafts: this.attachmentDrafts?.get() };
     this.unsubscribe = lease.subscribe(() => this.connectionChanged());
     this.connectionChanged();
   }
@@ -171,7 +263,11 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     void promise.finally(() => this.work.delete(promise)).catch(() => undefined);
     return promise;
   }
-  private request: AssistantRequest = async (method, params, caller) => {
+  private request = async <M extends AssistantMethod | UploadMethod>(
+    method: M,
+    params: DesktopParams<M>,
+    caller?: AbortSignal,
+  ): Promise<DesktopResult<M>> => {
     this.assertActive();
     const signal = AbortSignal.any([
       this.lease.signal,
@@ -187,13 +283,19 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       throw error;
     }
   };
-  private async call<M extends AssistantMethod>(
+  private async call<M extends AssistantMethod | UploadMethod>(
     session: DesktopSession,
     method: M,
-    params: AssistantParams<M>,
+    params: DesktopParams<M>,
     signal?: AbortSignal,
-  ): Promise<AssistantResult<M>> {
+  ): Promise<DesktopResult<M>> {
     try {
+      const attachments =
+        this.state.status === 'ready' && Boolean(this.files) && session.uploadsVersion === 1;
+      if (this.state.attachments !== attachments || this.state.preupload !== attachments) {
+        this.state = { ...this.state, attachments, preupload: attachments };
+        for (const listener of this.stateListeners) listener();
+      }
       return await this.track(session.request(method, params as never, signal));
     } catch (error) {
       if (error instanceof RemoteFailureError) {
@@ -214,7 +316,12 @@ export class RemoteAssistantScope implements RemoteConversationSource {
   }
   private connectionChanged() {
     if (this.stopped) return;
-    this.state = { ...this.lease.getSnapshot(), attachments: false };
+    this.state = {
+      ...this.state,
+      ...this.lease.getSnapshot(),
+      attachments: false,
+      preupload: false,
+    };
     if (this.state.status === 'ready') this.backgroundBlocked = false;
     for (const [id, observation] of this.observations) {
       this.stopObservation(observation);
@@ -234,10 +341,13 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       this.catalog.clear();
       this.topics.clear();
       this.actions.stop();
+      this.attachmentDrafts?.stop();
     }
     for (const listener of this.stateListeners) listener();
-    if (this.state.status === 'ready')
+    if (this.state.status === 'ready') {
       void this.track(this.actions.recover()).catch(() => undefined);
+      this.attachmentDrafts?.recover();
+    }
     this.scheduleRecovery();
     this.publishExecution();
   }
@@ -740,6 +850,16 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       throw new RemoteConversationError('CONFLICT');
     return target.params;
   }
+  stageAttachments: NonNullable<RemoteConversationSource['stageAttachments']> = (
+    key,
+    target,
+    files,
+  ) => {
+    this.assertActive();
+    if (!this.state.preupload || !this.attachmentDrafts)
+      throw new RemoteConversationError('UPGRADE_REQUIRED');
+    this.attachmentDrafts.stage(key, target, files);
+  };
   async start(input: RemoteStartInput) {
     this.assertActive();
     this.preparing++;
@@ -748,7 +868,17 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       const assistant = await this.readAssistant(input.agentId, this.lifetime.signal);
       if (!assistant?.available || !assistant.model)
         throw new RemoteConversationError('TARGET_UNAVAILABLE');
-      const result = await this.actions.start(input, assistant.configurationRevision);
+      if (input.attachments?.length && (!this.state.preupload || !this.attachmentDrafts))
+        throw new RemoteConversationError('UPGRADE_REQUIRED');
+      const prepared = input.attachments?.length
+        ? await this.attachmentDrafts!.prepare(
+            `draft:${input.draftId}`,
+            { assistantId: input.agentId },
+            input.attachments,
+          )
+        : undefined;
+      const result = await this.actions.start(input, assistant.configurationRevision, prepared);
+      if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
       if (result.sessionId) this.refresh(result.sessionId);
       return result;
     } finally {
@@ -761,24 +891,41 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     text: string,
     attachments?: Parameters<RemoteConversationSource['send']>[2],
   ) {
-    if (attachments?.length) throw new RemoteConversationError('INVALID_PARAMS');
     const params = this.target(target, 'send');
     assistantMethods['assistant.messages.send'].params.parse({
       ...params,
       commandId: 'validation',
       text,
+      ...(attachments?.length
+        ? { attachments: attachments.map((file) => ({ uploadId: file.fileEntryId })) }
+        : {}),
     });
     const id = params.topicId as string;
     this.trackTopic(id);
     this.preparing++;
     this.publishExecution();
     try {
-      return await this.actions.create(
+      if (attachments?.length && (!this.state.preupload || !this.attachmentDrafts))
+        throw new RemoteConversationError('UPGRADE_REQUIRED');
+      const prepared = attachments?.length
+        ? await this.attachmentDrafts!.prepare(`session:${id}`, { sessionId: id }, attachments)
+        : undefined;
+      const command = await this.actions.create(
         'send',
         'assistant.messages.send',
-        { ...params, text },
+        {
+          ...params,
+          text,
+          ...(prepared
+            ? { attachments: prepared.uploaded, selectionId: prepared.selectionId }
+            : {}),
+        },
         text,
+        randomUUID(),
+        attachments,
       );
+      if (prepared) this.attachmentDrafts!.submitted(prepared.selectionId);
+      return command;
     } finally {
       this.preparing--;
       this.publishExecution();
@@ -817,6 +964,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     if (this.stopped || this.state.status === 'retired') return false;
     return (
       this.preparing > 0 ||
+      Boolean(this.attachmentDrafts?.hasPending()) ||
       this.actions.get().some((command) => command.status === 'pending') ||
       this.actions.getStarts().some((start) => start.status === 'pending') ||
       [...this.observations.values()].some((observation) => observation.tracking)
@@ -926,6 +1074,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       !this.stopped &&
       !this.backgroundBlocked &&
       (this.preparing > 0 ||
+        Boolean(this.attachmentDrafts?.hasPending()) ||
         this.actions.get().some((command) => command.status === 'pending') ||
         this.actions.getStarts().some((start) => start.status === 'pending'));
     if (pending && this.background && !this.preparationLease)
@@ -950,9 +1099,11 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       !this.stopped &&
       this.state.status === 'ready' &&
       (this.actions.get().some((command) => command.status === 'pending') ||
-        this.actions.getStarts().some((start) => start.status === 'pending'))
+        this.actions.getStarts().some((start) => start.status === 'pending') ||
+        this.attachmentDrafts?.hasPending())
     )
       this.recoveryTimer = setTimeout(() => {
+        this.attachmentDrafts?.recover();
         void this.track(this.actions.recover())
           .catch(() => undefined)
           .finally(() => this.scheduleRecovery());
@@ -974,6 +1125,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     this.unsubscribe();
     this.unoperations();
     this.actions.stop();
+    this.attachmentDrafts?.stop();
     for (const observation of this.observations.values()) {
       this.stopObservation(observation);
       observation.reply?.retire();
@@ -992,6 +1144,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
   }
   async drain() {
     await this.actions.drain();
+    await this.attachmentDrafts?.drain();
     while (this.work.size) await Promise.allSettled([...this.work]);
   }
 }

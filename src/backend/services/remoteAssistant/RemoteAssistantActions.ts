@@ -1,3 +1,4 @@
+import { uploadReferencesSchema } from '@cherrystudio/remote-protocol';
 import { commandReceiptSchema } from '@cherrystudio/remote-protocol/agent';
 import { assistantMethods, type AssistantMutation } from '@cherrystudio/remote-protocol/assistant';
 import { randomUUID } from 'expo-crypto';
@@ -7,13 +8,20 @@ import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAg
 import { RemoteConversationError } from '@/backend/services/remoteConversation';
 import type {
   RemoteCommand,
+  RemoteAttachment,
   RemoteStartInput,
   RemoteStartOperation,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { AssistantRequest } from './assistantRequest';
 
 const status = z.enum(['pending', 'applied', 'rejected', 'interrupted']);
+const attachmentSchema = z.object({
+  fileEntryId: FileEntryIdSchema,
+  name: z.string(),
+  mediaType: z.string(),
+});
 const commandSchema = z.object({
   id: z.string(),
   kind: z.enum(['create', 'send', 'cancel', 'respond']),
@@ -22,6 +30,7 @@ const commandSchema = z.object({
   sessionId: z.string().optional(),
   interactionId: z.string().optional(),
   text: z.string().optional(),
+  attachments: z.array(attachmentSchema).optional(),
   error: z.string().optional(),
   errorMessage: z.string().optional(),
 });
@@ -45,6 +54,9 @@ const startSchema = z.object({
   draftId: z.string(),
   agentId: z.string(),
   text: z.string(),
+  attachments: z.array(attachmentSchema).optional(),
+  uploaded: uploadReferencesSchema.optional(),
+  selectionId: z.string().optional(),
   status,
   sessionId: z.string().optional(),
   error: z.string().optional(),
@@ -93,6 +105,14 @@ export class RemoteAssistantActions {
   }
   get = () => this.commands;
   getStarts = () => this.startViews;
+  admittedAttachmentDrafts(): ReadonlySet<string> {
+    return new Set([
+      ...this.starts.flatMap((entry) => (entry.selectionId ? [entry.selectionId] : [])),
+      ...this.records.flatMap((entry) =>
+        typeof entry.params?.selectionId === 'string' ? [entry.params.selectionId] : [],
+      ),
+    ]);
+  }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -102,7 +122,14 @@ export class RemoteAssistantActions {
   private updateViews() {
     this.commands = this.records.map((entry) => entry.view);
     this.startViews = this.starts.map(
-      ({ createId: _createId, sendId: _sendId, configurationRevision: _revision, ...view }) => view,
+      ({
+        createId: _createId,
+        sendId: _sendId,
+        configurationRevision: _revision,
+        uploaded: _uploaded,
+        selectionId: _selectionId,
+        ...view
+      }) => view,
     );
   }
   private commit(records = this.records, starts = this.starts) {
@@ -122,6 +149,7 @@ export class RemoteAssistantActions {
     params: Record<string, z.infer<ReturnType<typeof z.json>>>,
     text?: string,
     id = randomUUID(),
+    attachments?: RemoteAttachment[],
   ): Promise<RemoteCommand> {
     if (this.stopped) throw new RemoteConversationError('CLOSED');
     const existing = this.records.find((entry) => entry.view.id === id);
@@ -148,6 +176,7 @@ export class RemoteAssistantActions {
         kind,
         status: 'pending',
         text,
+        ...(attachments?.length ? { attachments } : {}),
         sessionId: params.topicId,
         agentId: params.assistantId,
         interactionId: params.interactionId,
@@ -210,8 +239,14 @@ export class RemoteAssistantActions {
   async start(
     input: RemoteStartInput,
     configurationRevision: string,
+    prepared?: {
+      sessionId: string;
+      selectionId: string;
+      uploaded: z.infer<typeof uploadReferencesSchema>;
+    },
   ): Promise<RemoteStartOperation> {
-    if (input.attachments?.length || input.workspace || input.workspaceId)
+    if (this.stopped) throw new RemoteConversationError('CLOSED');
+    if (input.workspace || input.workspaceId || (input.attachments?.length && !prepared))
       throw new RemoteConversationError('INVALID_PARAMS');
     assistantMethods['assistant.messages.send'].params.parse({
       commandId: 'validation',
@@ -221,10 +256,15 @@ export class RemoteAssistantActions {
       parentAnchorId: null,
       expectedHistoryRevision: '0',
       text: input.text,
+      ...(prepared ? { attachments: prepared.uploaded } : {}),
     });
     const old = this.starts.find((entry) => entry.draftId === input.draftId);
     if (old?.status === 'pending' || old?.sessionId) {
-      if (old.agentId !== input.agentId || old.text !== input.text)
+      if (
+        old.agentId !== input.agentId ||
+        old.text !== input.text ||
+        JSON.stringify(old.attachments ?? []) !== JSON.stringify(input.attachments ?? [])
+      )
         throw new RemoteConversationError('IDEMPOTENCY_CONFLICT');
       return this.advanceStart(old.id);
     }
@@ -234,6 +274,8 @@ export class RemoteAssistantActions {
       draftId: input.draftId,
       agentId: input.agentId,
       text: input.text,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      ...prepared,
       status: 'pending',
       createId: randomUUID(),
       sendId: randomUUID(),
@@ -302,9 +344,12 @@ export class RemoteAssistantActions {
             parentAnchorId: topic.parentAnchorId,
             expectedHistoryRevision: topic.historyRevision,
             text: entry.text,
+            ...(entry.uploaded ? { attachments: entry.uploaded } : {}),
+            ...(entry.selectionId ? { selectionId: entry.selectionId } : {}),
           },
           entry.text,
           entry.sendId,
+          entry.attachments,
         );
       }
       return this.saveStart({
@@ -332,6 +377,7 @@ export class RemoteAssistantActions {
                 kind: 'send',
                 sessionId: entry.sessionId,
                 text: entry.text,
+                attachments: entry.attachments,
                 status,
                 error: error.code,
                 errorMessage: error.detail,

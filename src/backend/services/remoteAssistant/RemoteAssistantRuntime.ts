@@ -11,7 +11,7 @@ import type { DesktopConnections } from '@/backend/services/desktopConnections';
 import type { RemoteConversationSource } from '@/shared/contracts/remoteAgent';
 import type { RemoteAssistantModule } from '@/shared/contracts/remoteAssistant';
 
-import type { RemoteBackgroundExecution } from '../remoteConversation';
+import type { RemoteBackgroundExecution, RemoteUploadFiles } from '../remoteConversation';
 import { RemoteConversationError } from '../remoteConversation';
 import { RemoteAssistantScope } from './RemoteAssistantScope';
 
@@ -29,6 +29,7 @@ export class RemoteAssistantRuntime extends BaseService implements RemoteAssista
     connections: DesktopConnections;
     journal: RemoteAgentCommandJournal;
     background?: RemoteBackgroundExecution;
+    files?: RemoteUploadFiles;
   };
   private readonly sources = new Map<string, Entry>();
   private readonly opening = new Map<string, Opening>();
@@ -63,6 +64,7 @@ export class RemoteAssistantRuntime extends BaseService implements RemoteAssista
                   dependencies.connections,
                   dependencies.journal,
                   dependencies.background,
+                  dependencies.files,
                 );
                 const created: Entry = { scope, users: 0, unwatch: () => undefined };
                 // Route disposal does not interrupt admitted commands; release demand once they settle.
@@ -164,6 +166,10 @@ export class RemoteAssistantRuntime extends BaseService implements RemoteAssista
       send: (...args) => {
         assertActive();
         return scope.send(...args);
+      },
+      stageAttachments: (...args) => {
+        assertActive();
+        scope.stageAttachments(...args);
       },
       cancel: (...args) => {
         assertActive();

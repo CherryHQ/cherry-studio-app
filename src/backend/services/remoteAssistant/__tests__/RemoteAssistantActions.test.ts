@@ -2,6 +2,7 @@ import type { AssistantMutation } from '@cherrystudio/remote-protocol/assistant'
 
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import { RemoteConversationError } from '@/backend/services/remoteConversation';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import type { AssistantRequest } from '../assistantRequest';
 import { RemoteAssistantActions } from '../RemoteAssistantActions';
@@ -223,4 +224,85 @@ it('cannot recover another grant or domain journal', async () => {
   await replacement.recover();
   expect(request).not.toHaveBeenCalled();
   expect(replacement.get()).toEqual([]);
+});
+
+it('recovers a file-only first send with its frozen upload references and original topic', async () => {
+  const { port, storage } = journal();
+  const file = {
+    fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+    name: 'report.pdf',
+    mediaType: 'application/pdf',
+  };
+  const prepared = {
+    sessionId: 'topic',
+    selectionId: 'selection',
+    uploaded: [{ uploadId: 'uploaded-file' }],
+  };
+  let original: Record<string, unknown> | undefined;
+  const first = new RemoteAssistantActions(
+    'pc',
+    port,
+    (async (method, params) => {
+      if (method === 'assistant.topics.get')
+        return {
+          topic: {
+            topicId: 'topic',
+            assistantId: 'assistant',
+            parentAnchorId: null,
+            historyRevision: '0',
+            activeExecutionIds: [],
+          },
+        };
+      if (method === 'assistant.messages.send') {
+        original = params;
+        const saved = JSON.parse(storage.get('pc')!);
+        expect(saved.starts[0]).toMatchObject({ ...prepared, attachments: [file] });
+        expect(saved.records[0].params).toEqual(params);
+        throw new RemoteConversationError('CONNECTION_LOST', true);
+      }
+      throw new Error(`Must reuse the prepared topic: ${method}`);
+    }) as AssistantRequest,
+    () => {},
+  );
+  expect(
+    await first.start(
+      {
+        draftId: 'file-draft',
+        agentId: 'assistant',
+        text: '',
+        attachments: [file],
+      },
+      revision,
+      prepared,
+    ),
+  ).toMatchObject({ status: 'pending', sessionId: 'topic', attachments: [file] });
+  expect(original).toMatchObject({
+    text: '',
+    attachments: prepared.uploaded,
+    selectionId: 'selection',
+  });
+  first.stop();
+  const replayed: unknown[] = [];
+  const recovered = new RemoteAssistantActions(
+    'pc',
+    port,
+    (async (method, params) => {
+      if (method === 'assistant.commands.get') throw new RemoteConversationError('NOT_FOUND');
+      if (method !== 'assistant.messages.send') throw new Error(`Unexpected recovery: ${method}`);
+      replayed.push(params);
+      return {
+        ...receipt((params as { commandId: string }).commandId, method),
+        status: 'rejected',
+        error: { reason: 'CONFLICT', message: 'Branch changed' },
+      };
+    }) as AssistantRequest,
+    () => {},
+  );
+  await recovered.recover();
+  expect(replayed).toEqual([original]);
+  expect(recovered.getStarts()[0]).toMatchObject({ status: 'rejected', attachments: [file] });
+  recovered.release(recovered.getStarts()[0].id);
+  expect(recovered.get()).toMatchObject([
+    { status: 'rejected', sessionId: 'topic', text: '', attachments: [file] },
+  ]);
 });

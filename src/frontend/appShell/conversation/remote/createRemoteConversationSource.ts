@@ -334,7 +334,9 @@ export function createRemoteConversationSource(
               attachments: remote.getState().attachments === true,
             },
             attachmentPreparation:
-              workspace && remote.getState().preupload && remote.stageAttachments
+              (domain === 'assistant' || workspace) &&
+              remote.getState().preupload &&
+              remote.stageAttachments
                 ? {
                     draft: remote
                       .getState()
@@ -342,7 +344,9 @@ export function createRemoteConversationSource(
                     stage: (files) =>
                       remote.stageAttachments!(
                         `draft:${input.draftId}`,
-                        { agentId, workspace },
+                        domain === 'assistant'
+                          ? { assistantId: agentId }
+                          : { agentId, workspace: workspace! },
                         files,
                       ),
                   }

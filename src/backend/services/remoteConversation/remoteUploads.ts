@@ -1,14 +1,15 @@
 import {
   uploadTransferLimits,
+  uploadLimits,
+  uploadMetadataSchema,
   type UploadChunk,
   type UploadAck,
+  type UploadMetadata,
+  type UploadState,
+  type UploadReference,
+  type UploadResume,
+  type UploadComplete,
 } from '@cherrystudio/remote-protocol';
-import {
-  agentUploadLimits,
-  uploadMetadataSchema,
-  type AgentUploadState,
-  type AgentUploadReference,
-} from '@cherrystudio/remote-protocol/agent';
 import { randomUUID } from 'expo-crypto';
 import { File } from 'expo-file-system';
 import * as z from 'zod';
@@ -18,8 +19,7 @@ import type { RemoteAttachment } from '@/shared/contracts/remoteAgent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
-import { RemoteAgentError } from './RemoteAgentError';
-import type { AgentRequest } from './remoteContent';
+import { RemoteConversationError } from './RemoteConversationError';
 
 const logger = loggerService.withContext('RemoteUploads');
 
@@ -46,22 +46,30 @@ export type UploadTransport = {
 };
 export type GetUploadTransport = (signal: AbortSignal) => Promise<UploadTransport>;
 export type SavedUpload = z.infer<typeof uploadProgressSchema>;
+export type RemoteUploadRequests = {
+  get(ref: UploadReference, signal: AbortSignal): Promise<UploadState>;
+  prepare(metadata: UploadMetadata, signal: AbortSignal): Promise<UploadState>;
+  resume(input: UploadResume, signal: AbortSignal): Promise<UploadState>;
+  complete(input: UploadComplete, signal: AbortSignal): Promise<UploadState>;
+  cancel(ref: UploadReference, signal: AbortSignal): Promise<unknown>;
+};
 
 /** Only stable local references and transfer identities enter the command journal. */
 export async function uploadAttachments(
   attachments: RemoteAttachment[],
   files: RemoteUploadFiles,
-  request: AgentRequest,
+  uploads: RemoteUploadRequests,
   signal: AbortSignal,
   progress: (sent: number, total: number, phase?: 'verifying') => void,
   saved: SavedUpload[],
   save: (value: SavedUpload[]) => void,
   getTransport: GetUploadTransport,
   uploadId?: string,
-): Promise<AgentUploadReference[]> {
+): Promise<UploadReference[]> {
   const startedAt = Date.now();
   let acknowledgedBytes = 0;
-  if (attachments.length > agentUploadLimits.files) throw new RemoteAgentError('ATTACHMENT_LIMIT');
+  if (attachments.length > uploadLimits.files)
+    throw new RemoteConversationError('ATTACHMENT_LIMIT');
   const transport = await getTransport(signal);
   const prepared: { attachment: RemoteAttachment; file: File; sourceFileEntryId: string }[] = [];
   let total = 0;
@@ -71,16 +79,16 @@ export async function uploadAttachments(
     const resolved = previous
       ? await files.resolve(previous.sourceFileEntryId)
       : await files.prepareUploadSource(attachment.fileEntryId);
-    if (!resolved) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
+    if (!resolved) throw new RemoteConversationError('RESOURCE_UNAVAILABLE');
     if (previous && !previous.expectedSha256 && resolved.entry.provenance !== 'imported')
-      throw new RemoteAgentError('UPLOAD_SOURCE_CHANGED');
+      throw new RemoteConversationError('UPLOAD_SOURCE_CHANGED');
     const file = new File(resolved.uri);
-    if (!file.exists) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
-    if (file.size > agentUploadLimits.fileBytes) throw new RemoteAgentError('ATTACHMENT_LIMIT');
+    if (!file.exists) throw new RemoteConversationError('RESOURCE_UNAVAILABLE');
+    if (file.size > uploadLimits.fileBytes) throw new RemoteConversationError('ATTACHMENT_LIMIT');
     total += file.size;
     prepared.push({ attachment, file, sourceFileEntryId: resolved.entry.id });
   }
-  if (total > agentUploadLimits.messageBytes) throw new RemoteAgentError('ATTACHMENT_LIMIT');
+  if (total > uploadLimits.messageBytes) throw new RemoteConversationError('ATTACHMENT_LIMIT');
   let records = saved;
   const remember = (entry: SavedUpload) => {
     signal.throwIfAborted();
@@ -88,7 +96,7 @@ export async function uploadAttachments(
     save(records);
   };
   progress(0, total);
-  const refs: AgentUploadReference[] = [];
+  const refs: UploadReference[] = [];
   let sent = 0;
   for (const { attachment, file, sourceFileEntryId } of prepared) {
     signal.throwIfAborted();
@@ -97,7 +105,7 @@ export async function uploadAttachments(
     try {
       let initialEntry = records.find((value) => value.fileEntryId === attachment.fileEntryId);
       if (initialEntry && initialEntry.metadata.byteLength !== size)
-        throw new RemoteAgentError('UPLOAD_SOURCE_CHANGED');
+        throw new RemoteConversationError('UPLOAD_SOURCE_CHANGED');
       if (!initialEntry) {
         const metadata = uploadMetadataSchema.safeParse({
           uploadId: uploadId ?? randomUUID(),
@@ -108,7 +116,7 @@ export async function uploadAttachments(
             ? { checksumAlgorithm: transport.checksumAlgorithm }
             : {}),
         });
-        if (!metadata.success) throw new RemoteAgentError('INVALID_ATTACHMENT');
+        if (!metadata.success) throw new RemoteConversationError('INVALID_ATTACHMENT');
         initialEntry = {
           fileEntryId: attachment.fileEntryId,
           sourceFileEntryId,
@@ -118,14 +126,15 @@ export async function uploadAttachments(
       }
       let entry: SavedUpload = initialEntry;
       if (entry.metadata.checksumAlgorithm !== transport.checksumAlgorithm)
-        throw new RemoteAgentError('UPGRADE_REQUIRED');
+        throw new RemoteConversationError('UPGRADE_REQUIRED');
       const recovering = saved.some((value) => value.fileEntryId === attachment.fileEntryId);
-      const transfer = async (signal: AbortSignal): Promise<AgentUploadState> => {
-        let state: AgentUploadState;
+      const transfer = async (signal: AbortSignal): Promise<UploadState> => {
+        let state: UploadState;
         try {
-          state = await request('agent.uploads.get', { uploadId: entry.metadata.uploadId }, signal);
+          state = await uploads.get({ uploadId: entry.metadata.uploadId }, signal);
         } catch (error) {
-          if (!(error instanceof RemoteAgentError) || error.code !== 'NOT_FOUND') throw error;
+          if (!(error instanceof RemoteConversationError) || error.code !== 'NOT_FOUND')
+            throw error;
           // This helper runs only before the immutable send parameters are recorded.
           entry = {
             ...entry,
@@ -133,8 +142,7 @@ export async function uploadAttachments(
             resume: undefined,
           };
           remember(entry);
-          state = await request(
-            'agent.uploads.prepare',
+          state = await uploads.prepare(
             {
               ...entry.metadata,
             },
@@ -151,7 +159,7 @@ export async function uploadAttachments(
           state.uploadId !== ref.uploadId ||
           state.checksumAlgorithm !== entry.metadata.checksumAlgorithm
         )
-          throw new RemoteAgentError('PROTOCOL_ERROR');
+          throw new RemoteConversationError('PROTOCOL_ERROR');
         if (state.state === 'receiving') {
           const resume = entry.resume ?? {
             resumeId: randomUUID(),
@@ -159,12 +167,12 @@ export async function uploadAttachments(
           };
           entry = { ...entry, resume };
           remember(entry);
-          state = await request('agent.uploads.resume', { ...ref, ...resume }, signal);
+          state = await uploads.resume({ ...ref, ...resume }, signal);
           entry = { ...entry, resume: undefined };
           remember(entry);
           let offset = Number(state.committedOffset);
           if (!Number.isSafeInteger(offset) || offset < 0 || offset > size)
-            throw new RemoteAgentError('PROTOCOL_ERROR');
+            throw new RemoteConversationError('PROTOCOL_ERROR');
           handle.offset = offset;
           progress(sent + offset, total);
           while (offset < size) {
@@ -176,7 +184,7 @@ export async function uploadAttachments(
                 const bytes = handle.readBytes(
                   Math.min(uploadTransferLimits.chunkBytes, size - offset),
                 );
-                if (!bytes.length) throw new RemoteAgentError('RESOURCE_UNAVAILABLE');
+                if (!bytes.length) throw new RemoteConversationError('RESOURCE_UNAVAILABLE');
                 const expected = offset + bytes.length;
                 writes.push(
                   transport
@@ -190,7 +198,7 @@ export async function uploadAttachments(
                         reply.writerEpoch !== state.writerEpoch ||
                         Number(reply.committedOffset) < expected
                       )
-                        throw new RemoteAgentError('PROTOCOL_ERROR');
+                        throw new RemoteConversationError('PROTOCOL_ERROR');
                       acknowledgedBytes += bytes.length;
                       return expected;
                     }),
@@ -218,16 +226,17 @@ export async function uploadAttachments(
         );
         return state;
       };
-      let state: AgentUploadState;
+      let state: UploadState;
       let expectedSha256: string | undefined;
       if (entry.metadata.checksumAlgorithm === 'sha256') {
         const abort = new AbortController();
         const taskSignal = AbortSignal.any([signal, abort.signal]);
         const hashing = files.hashFile(entry.sourceFileEntryId, taskSignal).then((digest) => {
           taskSignal.throwIfAborted();
-          if (!/^[a-f0-9]{64}$/.test(digest)) throw new RemoteAgentError('VERIFICATION_FAILED');
+          if (!/^[a-f0-9]{64}$/.test(digest))
+            throw new RemoteConversationError('VERIFICATION_FAILED');
           if (entry.expectedSha256 && entry.expectedSha256 !== digest)
-            throw new RemoteAgentError('UPLOAD_SOURCE_CHANGED');
+            throw new RemoteConversationError('UPLOAD_SOURCE_CHANGED');
           entry = { ...entry, expectedSha256: digest };
           remember(entry);
           logger.info('Upload source hashed', {
@@ -245,10 +254,10 @@ export async function uploadAttachments(
           abort.abort();
           await Promise.allSettled([hashing, sending]);
           signal.throwIfAborted();
-          if (error instanceof RemoteAgentError) throw error;
+          if (error instanceof RemoteConversationError) throw error;
           const code =
             error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-          throw new RemoteAgentError(
+          throw new RemoteConversationError(
             code === 'NATIVE_HASH_UNAVAILABLE' || code === 'RESOURCE_UNAVAILABLE'
               ? code
               : 'VERIFICATION_FAILED',
@@ -261,8 +270,7 @@ export async function uploadAttachments(
       const ref = { uploadId: entry.metadata.uploadId };
       progress(sent + size, total, 'verifying');
       if (state.state === 'receiving')
-        state = await request(
-          'agent.uploads.complete',
+        state = await uploads.complete(
           {
             ...ref,
             writerEpoch: state.writerEpoch,
@@ -273,10 +281,10 @@ export async function uploadAttachments(
       while (state.state === 'verifying') {
         await new Promise<void>((resolve) => setTimeout(resolve, 250));
         signal.throwIfAborted();
-        state = await request('agent.uploads.get', ref, signal);
+        state = await uploads.get(ref, signal);
       }
       if (state.state === 'failed')
-        throw new RemoteAgentError(state.failureCode ?? 'VERIFICATION_FAILED');
+        throw new RemoteConversationError(state.failureCode ?? 'VERIFICATION_FAILED');
       if (
         state.uploadId !== ref.uploadId ||
         state.state !== 'ready' ||
@@ -284,7 +292,7 @@ export async function uploadAttachments(
         state.checksumAlgorithm !== entry.metadata.checksumAlgorithm ||
         (entry.metadata.checksumAlgorithm === 'sha256' && state.sha256 !== expectedSha256)
       )
-        throw new RemoteAgentError('INVALID_ATTACHMENT');
+        throw new RemoteConversationError('INVALID_ATTACHMENT');
       refs.push(ref);
       sent += size;
       progress(sent, total);

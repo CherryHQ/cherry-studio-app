@@ -10,6 +10,7 @@ import { randomUUID } from 'expo-crypto';
 import * as z from 'zod';
 
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import { uploadProgressSchema, type SavedUpload } from '@/backend/services/remoteConversation';
 import { JsonValueSchema } from '@/shared/contracts/agent';
 import type {
   RemoteAttachment,
@@ -20,7 +21,6 @@ import type {
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentError } from './RemoteAgentError';
-import { uploadProgressSchema, type SavedUpload } from './remoteUploads';
 
 const AttachmentSchema = z.object({
   fileEntryId: FileEntryIdSchema,

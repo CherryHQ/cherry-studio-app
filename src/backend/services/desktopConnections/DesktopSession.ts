@@ -6,6 +6,7 @@ import {
   remoteLimits,
   uploadTransferLimits,
   uploadAckSchema,
+  uploadMethods,
   type UploadChunk,
   type UploadAck,
   type RemoteAuthorization,
@@ -44,6 +45,7 @@ export const desktopMethods = {
   ...configurationMethods,
   ...agentMethods,
   ...assistantMethods,
+  ...uploadMethods,
 };
 export type DesktopMethod = keyof typeof desktopMethods;
 export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMethods)[M]['params']>;
@@ -82,6 +84,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   assistantVersion?: number;
+  uploadsVersion?: number;
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
@@ -107,6 +110,7 @@ export class DesktopSession {
         options.signal,
       );
       session.assistantVersion = hello.assistantVersion;
+      session.uploadsVersion = hello.uploadsVersion;
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
@@ -131,7 +135,7 @@ export class DesktopSession {
   ): Promise<Extract<UploadAck, { ok: true }>> {
     signal.throwIfAborted();
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
-    if (this.agentUploadsVersion !== 1)
+    if (input.domain ? this.uploadsVersion !== 1 : this.agentUploadsVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Binary upload is unavailable',
@@ -226,6 +230,16 @@ export class DesktopSession {
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop does not support attachments',
+      });
+    if (
+      (method.startsWith('uploads.') ||
+        method === 'assistant.attachments.present' ||
+        (method === 'assistant.messages.send' && 'attachments' in params)) &&
+      this.uploadsVersion !== 1
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support shared uploads',
       });
     if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
       throw new RemoteFailureError({
@@ -350,7 +364,10 @@ export class DesktopSession {
     try {
       while (!this.closed) {
         const message = await this.channel.read();
-        if (isNotification(message) && message.method === 'agent.uploads.ack') {
+        if (
+          isNotification(message) &&
+          (message.method === 'agent.uploads.ack' || message.method === 'uploads.ack')
+        ) {
           const ack = uploadAckSchema.parse(message).params;
           this.uploads.get(ack.requestId)?.resolve(ack);
         } else if (isNotification(message)) {
