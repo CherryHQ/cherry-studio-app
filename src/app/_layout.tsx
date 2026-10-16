@@ -130,12 +130,7 @@ function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
 }
 
 function RootStack() {
-  const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
-    'background',
-    'foreground',
-    'constant-black',
-    'constant-white',
-  ]);
+  const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
 
   return (
     <Stack
@@ -189,12 +184,9 @@ function RootStack() {
         getId={({ params }) => paintingRouteId(params)}
         name="paintings/index"
         options={{
-          // The board runs images full-bleed, so its chrome sits on the photo
-          // rather than on a themed surface: black behind, white on top, in both
-          // themes. `PaintingBoardChrome` paints the same pair.
-          contentStyle: { backgroundColor: constantBlack },
+          // Keep the full-bleed board's native canvas in sync with the app theme.
+          contentStyle: { backgroundColor },
           headerStyle: { backgroundColor: 'transparent' },
-          headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',
         }}
@@ -202,11 +194,11 @@ function RootStack() {
       {/* Released task links and viewer routes redirect into the board. */}
       <Stack.Screen
         name="paintings/[paintingId]"
-        options={{ contentStyle: { backgroundColor: constantBlack }, headerShown: false }}
+        options={{ contentStyle: { backgroundColor }, headerShown: false }}
       />
       <Stack.Screen
         name="paintings/[paintingId]/conversation"
-        options={{ contentStyle: { backgroundColor: constantBlack }, headerShown: false }}
+        options={{ contentStyle: { backgroundColor }, headerShown: false }}
       />
     </Stack>
   );

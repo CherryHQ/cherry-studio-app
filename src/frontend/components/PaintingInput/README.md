@@ -11,9 +11,21 @@ control switches, and holds the local model selection so switching presentations
 + menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
 which permits switching between text and image models.
 
-`PaintingWorkspaceInput` is the painting board's single row: the + menu, the attached reference,
-the field, and send. Nothing in the row is a form control. The + menu offers photos, camera, and
-generation settings. That sheet is the only parameter surface, one continuous page: the model row
+`PaintingWorkspaceInput` uses the shared compact-to-editing composer. At rest it keeps one row:
+the + menu, a reference thumbnail without a remove badge, the field, and send. The thumbnail focuses
+the field; reference attachments alone never expand it. Editing or draft text opens the full-width
+field above the toolbar, with reference images in the ordinary attachment area for preview and
+removal. The upper-right expand action opens the same mounted field in the large editor; its
+collapse action shares the top attachment row, matching chat. Short localized placeholders keep
+the resting field compact. The + menu offers photos, camera, and generation settings.
+While references are attached, `PaintingRatioShortcuts` adds a single scrolling row above the
+composer: a shape and short ratio label per supported choice, with the selected ratio emphasized.
+The row follows the active model and parameter draft, preserves keyboard focus, and hides through
+the large editor's close transition. Choosing a ratio updates parameters and reports
+`onRatioChange`; the board owns whole-image prompt preparation and still requires an explicit send.
+Exact pixel sizes stay in settings rather than the visible shortcut labels.
+
+The settings sheet is the full parameter surface, one continuous page: the model row
 first, then shape, count, quality, and background, then the remaining registry parameters. Choices
 of up to four options are segmented controls; longer lists open their own page. Ratio cells show the
 ratio and the header adds the selected size's pixels. An unset parameter shows the value the model

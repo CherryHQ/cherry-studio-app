@@ -81,10 +81,4 @@ export function usePaintingFocusReference(image: { fileEntryId: string; uri: str
     references.length,
     setAttachments,
   ]);
-
-  return {
-    isDetached,
-    /** Re-attaches the focused image after the user chose to generate something new. */
-    reattach: () => setDetachedKey(null),
-  };
 }
