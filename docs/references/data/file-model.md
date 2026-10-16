@@ -279,10 +279,11 @@ image is named after its prompt through `readableFilename` (`sunset over the bay
 numeric suffix for siblings from one request). The `painting-{id}` fallback in `fileStorage` is a
 last resort for a caller that supplies no name, not a naming scheme.
 
-Office inputs are imported before inspection or editing, and every edit patches a copy into a new
-entry while preserving the source. Office and image tools follow the same rule for newly generated
-output. The file library is also the Version 1 artifact library; no parallel artifact blob store or
-external authoritative path exists. Raw picker, provider, and device URIs are transient import
+The planned [Office tools](../agent/office-tools-design.md) import inputs before inspection or
+editing, and every edit patches a copy into a new entry while preserving the source. Office tools
+will use the same managed-output boundary as image generation. The file library is also the
+Version 1 artifact library; no parallel artifact blob store or external authoritative path exists.
+Raw picker, provider, and device URIs are transient import
 sources; Agent protocol and tools receive only managed ids.
 
 The Runtime projects each result into an assistant-message file part containing its `fileEntryId`

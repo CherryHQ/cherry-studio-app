@@ -107,7 +107,8 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 
 - Mobile Skills support package installation, Agent bindings and progressive instruction loading;
   script execution and long-term activation-version retention remain out of scope.
-- Office generation, inspection, and patching tools are not implemented.
+- Office generation, inspection, and patching tools are not implemented. Their proposed scope and
+  delivery sequence are in [Office Tools Design](./office-tools-design.md).
 - Recovery and working-copy reclamation are implemented in source; tests, type checks, builds,
   provider/device lifecycle and backup acceptance for this ownership change remain unverified.
 - Provider coverage and model capability remain explicit; unsupported combinations fail before
@@ -122,6 +123,7 @@ ownership, and PC follow-ups are in [PC Agent Controller](./pc-agent-controller.
 | [Agent Runtime](./agent-runtime.md) | Historical per-turn contract |
 | [Agent Persistence](./agent-persistence.md) | Authoritative Cherry transcript schema, settlement and deletion |
 | [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | System capabilities, MCP bindings, approvals, managed files, and artifacts |
+| [Office Tools Design](./office-tools-design.md) | Proposed Office contracts, QuickJS execution, Pi Durable integration, and implementation slices |
 | [Built-In MCP Integrations](./built-in-mcp-design.md) | Current GitHub, Amap and Feishu cloud MCP connectors, Feishu browser authorization and the six-platform scope |
 | [Built-In MCP Roadmap](./built-in-mcp-roadmap.md) | Implemented authorization and bundled guides; future multi-account, HTTP reuse and Skill designs |
 | [Plugin Expansion Research](./plugin-expansion-research.md) | Official hosted-service availability, Feishu personal authorization, and CLI-to-JavaScript feasibility |

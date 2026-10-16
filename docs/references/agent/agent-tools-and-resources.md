@@ -13,8 +13,9 @@ health, location, agents) are enabled per Agent in the editor; the three file to
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
-diverges from carry an **As-built** note.
+Office generation, inspection, and editing are not implemented; their proposed contracts and
+delivery sequence live in [Office Tools Design](./office-tools-design.md). Sections that a shipped
+tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
