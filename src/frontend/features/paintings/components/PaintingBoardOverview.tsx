@@ -44,7 +44,7 @@ export function PaintingBoardOverview({
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const layout = useMemo(() => layoutPaintingBoard(board.graph, metrics), [board.graph]);
-  const [edgeColor, backdropColor] = useThemeColor(['constant-white', 'constant-black']);
+  const [edgeColor, backdropColor] = useThemeColor(['foreground', 'background']);
   const focused = focusedNodeId ? layout.nodes.get(focusedNodeId) : undefined;
   const contentPadding = 16;
   const top = insets.top + HEADER_SPACE;
@@ -197,7 +197,7 @@ function BoardNodeCard({
   y: number;
 }) {
   const { t } = useTranslation();
-  const constantWhite = useThemeColor('constant-white');
+  const foreground = useThemeColor('foreground');
   const thumbnail = node.images[0];
   const label =
     node.kind === 'import'
@@ -223,8 +223,8 @@ function BoardNodeCard({
       <View
         className={
           isFocused
-            ? 'items-center justify-center overflow-hidden rounded-lg border-2 border-constant-white bg-constant-white/10'
-            : 'items-center justify-center overflow-hidden rounded-lg border border-constant-white/15 bg-constant-white/10'
+            ? 'items-center justify-center overflow-hidden rounded-lg border-2 border-border-selected bg-secondary'
+            : 'items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary'
         }
         style={{ height: IMAGE_HEIGHT }}
       >
@@ -237,11 +237,11 @@ function BoardNodeCard({
             style={{ height: '100%', width: '100%' }}
           />
         ) : node.status.kind === 'generating' ? (
-          <Spinner color={constantWhite} />
+          <Spinner color={foreground} />
         ) : node.status.kind === 'stopped' ? (
           <CircleAlertIcon className="size-5 text-destructive" />
         ) : (
-          <ImageIcon className="size-5 text-constant-white/50" />
+          <ImageIcon className="size-5 text-muted-foreground" />
         )}
         {node.kind === 'import' ? (
           <View className="absolute top-1.5 left-1.5 flex-row items-center gap-1 rounded-full bg-constant-black/55 px-2 py-0.5">
@@ -257,7 +257,7 @@ function BoardNodeCard({
           </View>
         ) : null}
       </View>
-      <Text className="mt-1.5 text-xs text-constant-white/60" numberOfLines={1}>
+      <Text className="mt-1.5 text-muted-foreground text-xs" numberOfLines={1}>
         {label}
       </Text>
     </Pressable>

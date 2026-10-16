@@ -43,7 +43,7 @@ export function PaintingLineageStrip({
 
   return (
     <View className="items-center">
-      <View className="max-w-full overflow-hidden rounded-2xl border-[0.5px] border-constant-white/15 bg-constant-black/55">
+      <View className="max-w-full overflow-hidden rounded-2xl border-[0.5px] border-border-strong bg-card/95">
         <ScrollView
           contentContainerClassName="items-center gap-1.5 p-1.5"
           horizontal
@@ -61,7 +61,7 @@ export function PaintingLineageStrip({
 }
 
 function Separator() {
-  return <ChevronRightIcon className="size-3.5 text-constant-white/40" />;
+  return <ChevronRightIcon className="size-3.5 text-muted-foreground" />;
 }
 
 function LineageCell({
@@ -79,7 +79,7 @@ function LineageCell({
   onPress?: () => void;
   onPressOut?: () => void;
 }) {
-  const constantWhite = useThemeColor('constant-white');
+  const foreground = useThemeColor('foreground');
   const thumbnail = node.images[0];
   return (
     <Pressable
@@ -88,8 +88,8 @@ function LineageCell({
       accessibilityState={{ selected: isCurrent }}
       className={
         isCurrent
-          ? 'size-9 items-center justify-center overflow-hidden rounded-md border-2 border-constant-white'
-          : 'size-9 items-center justify-center overflow-hidden rounded-md bg-constant-white/10 opacity-70 active:opacity-100'
+          ? 'size-9 items-center justify-center overflow-hidden rounded-md border-2 border-border-selected'
+          : 'size-9 items-center justify-center overflow-hidden rounded-md bg-secondary opacity-70 active:opacity-100'
       }
       delayLongPress={250}
       disabled={!onPress}
@@ -106,7 +106,7 @@ function LineageCell({
           style={{ height: '100%', width: '100%' }}
         />
       ) : node.status.kind === 'generating' ? (
-        <Spinner color={constantWhite} size="sm" />
+        <Spinner color={foreground} size="sm" />
       ) : node.status.kind === 'stopped' ? (
         <CircleAlertIcon className="size-4 text-destructive" />
       ) : null}

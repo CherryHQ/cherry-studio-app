@@ -10,6 +10,7 @@ export { ComposerAttachments } from './components/ComposerAttachments';
 export { ComposerDropArea } from './components/ComposerDropArea';
 export { ComposerAttachmentStrip } from './components/ComposerAttachmentStrip';
 export { ComposerDock } from './components/ComposerDock';
+export { ComposerEditor, ComposerEditorAccessories } from './components/ComposerEditor';
 export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';

@@ -1,12 +1,14 @@
 import {
+  Composer,
   getComposerKeyboardStickyOffset,
   ImageGenerationLoader,
   useAlert,
+  useComposerExpansion,
   useToast,
 } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -26,7 +28,6 @@ import {
   PaintingInputProvider,
   type PaintingInputSubmission,
   PaintingWorkspaceInput,
-  usePaintingInputSession,
 } from '@/frontend/components/PaintingInput';
 import { useMutation } from '@/frontend/data';
 import { paintingJobParamValues } from '@/frontend/data/paintings/usePaintingJobs';
@@ -38,9 +39,7 @@ import {
   type ImageParamDraft,
   imageParamsAspectRatio,
   imageParamsResolutionLabel,
-  reconcileImageParamDraft,
 } from '@/shared/utils/imageGenerationParams';
-import { createPaintingGenerationStrategy } from '@/shared/utils/paintingGenerationStrategy';
 
 import { usePaintingAnnotationDraft } from '../hooks/usePaintingAnnotationDraft';
 import {
@@ -55,11 +54,10 @@ import {
   paintingNodeId,
   paintingNodeParents,
 } from '../utils/paintingBoardGraph';
-import { paintingResizeOptions } from '../utils/paintingResizeOptions';
 import { PaintingBoardOverview } from './PaintingBoardOverview';
 import { PaintingErrorMessage } from './PaintingErrorMessage';
 import { PaintingFocusCanvas } from './PaintingFocusCanvas';
-import { type PaintingResizeChoice, PaintingFocusChrome } from './PaintingFocusChrome';
+import { PaintingFocusChrome } from './PaintingFocusChrome';
 import { PaintingGenerationInfoSheet } from './PaintingGenerationInfoSheet';
 import { PaintingLineageStrip } from './PaintingLineageStrip';
 import { PaintingOverviewChrome } from './PaintingOverviewChrome';
@@ -90,16 +88,18 @@ export function PaintingBoardWorkspace({
       initialAttachments={handoff?.attachments ?? []}
       initialDraft={handoff?.draft ?? ''}
     >
-      {/* The board attaches the focused image itself; a sent image never lingers. */}
-      <PaintingInputProvider adoptSubmittedReference={false}>
-        <PaintingBoardContent
-          initialBoardId={boardId}
-          initialFocus={initialFocus}
-          initialParamValues={handoff?.paramValues}
-          onClose={onClose}
-          onReceipt={onReceipt}
-        />
-      </PaintingInputProvider>
+      <Composer.Expansion>
+        {/* The board attaches the focused image itself; a sent image never lingers. */}
+        <PaintingInputProvider adoptSubmittedReference={false}>
+          <PaintingBoardContent
+            initialBoardId={boardId}
+            initialFocus={initialFocus}
+            initialParamValues={handoff?.paramValues}
+            onClose={onClose}
+            onReceipt={onReceipt}
+          />
+        </PaintingInputProvider>
+      </Composer.Expansion>
     </ComposerSessionProvider>
   );
 }
@@ -131,7 +131,7 @@ function PaintingBoardContent({
   const { setDraft } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
   const { isEditing } = useComposerPresentationState();
-  const session = usePaintingInputSession();
+  const isEditorPresented = useComposerExpansion()?.state.isPresented ?? false;
   const models = useModelPickerData({ modelType: 'image' });
   const [mode, setMode] = useState<'focus' | 'overview'>('focus');
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -160,11 +160,12 @@ function PaintingBoardContent({
 
   const referenceImage =
     mode === 'focus' && focusedNode?.status.kind === 'ready' ? (focusedImage ?? null) : null;
-  const reference = usePaintingFocusReference(referenceImage);
+  usePaintingFocusReference(referenceImage);
   const annotationKey = referenceImage?.fileEntryId ?? null;
   const annotation = usePaintingAnnotationDraft(annotationKey);
   const hasAnnotations = annotation.annotations.length > 0;
   const showChrome = !isChromeHidden || isEditing || isGenerating || mode === 'overview';
+  const showBoardChrome = showChrome && !isEditorPresented;
 
   // Remember where the user was, so reopening the board lands there.
   const { trigger: updateBoard } = useMutation('PATCH', '/painting-boards/:id', {
@@ -296,39 +297,21 @@ function PaintingBoardContent({
     });
   }, [alert, board.paintings.length, boardId, deleteBoardRequest, onClose, t, toast]);
 
-  const resizeModel =
+  const focusedModel =
     focusedPainting?.modelId && isUniqueModelId(focusedPainting.modelId)
       ? models.getModelItem(focusedPainting.modelId)?.model
       : undefined;
-  const resizeMode = createPaintingGenerationStrategy(resizeModel).resolveParameters(1);
-  const resizeChoices = referenceImage ? paintingResizeOptions(resizeMode) : [];
-  const applyResize = useCallback(
-    (choice: PaintingResizeChoice) => {
-      // The new ratio applies to the focused image's model; its other drafts stay.
-      if (
-        resizeModel &&
-        resizeMode &&
-        focusedPainting?.modelId &&
-        isUniqueModelId(focusedPainting.modelId)
-      ) {
-        const key = JSON.stringify([resizeModel.id, resizeMode.mode]);
-        const previous =
-          session.parameterDrafts[key]?.values ??
-          (session.lastParameterDraft?.modelId === resizeModel.id
-            ? session.lastParameterDraft.values
-            : {});
-        session.selectLocalModel(focusedPainting.modelId);
-        session.setParameterDraft(key, {
-          modelId: resizeModel.id,
-          values: reconcileImageParamDraft({ ...previous, ...choice.paramValues }, resizeMode),
-        });
-      }
-      reference.reattach();
-      setDraft((current) =>
-        current.trim() ? current : t('painting.focus.resizePrompt', { ratio: choice.ratio }),
-      );
+  const lastRatioPrompt = useRef<string | null>(null);
+  const prepareRatioChange = useCallback(
+    (ratio: string) => {
+      // Ratio is a whole-image request; save a selected note before preparing it.
+      annotation.selectAnnotation(null);
+      const previous = lastRatioPrompt.current;
+      const prompt = t('painting.focus.resizePrompt', { ratio });
+      setDraft((current) => (!current.trim() || current === previous ? prompt : current));
+      lastRatioPrompt.current = prompt;
     },
-    [focusedPainting, reference, resizeMode, resizeModel, session, setDraft, t],
+    [annotation, setDraft, t],
   );
 
   const retryFocused = useCallback(() => {
@@ -364,7 +347,7 @@ function PaintingBoardContent({
   }));
 
   const boardTitle = board.board?.title ?? t('painting.board.newBoard');
-  const modelName = resizeModel?.name ?? focusedPainting?.modelId?.split('::').at(-1) ?? undefined;
+  const modelName = focusedModel?.name ?? focusedPainting?.modelId?.split('::').at(-1) ?? undefined;
   const generatingParams =
     (focusedNode?.status.kind === 'generating'
       ? paintingJobParamValues(focusedNode.status.job)
@@ -436,7 +419,7 @@ function PaintingBoardContent({
   } else if (focusedNode) {
     canvas = (
       <View className="flex-1 items-center justify-center px-8">
-        <Text className="text-center text-sm text-constant-white/70">
+        <Text className="text-center text-muted-foreground text-sm">
           {t('painting.focus.imageUnavailable')}
         </Text>
       </View>
@@ -444,10 +427,10 @@ function PaintingBoardContent({
   } else {
     canvas = (
       <Pressable className="flex-1 items-center justify-center gap-2 px-8" onPress={dismissInput}>
-        <Text className="font-semibold text-2xl text-constant-white">
+        <Text className="font-semibold text-2xl text-foreground">
           {t('painting.workspace.emptyTitle')}
         </Text>
-        <Text className="text-center text-sm text-constant-white/60">
+        <Text className="text-center text-muted-foreground text-sm">
           {t('painting.workspace.emptyDescription')}
         </Text>
       </Pressable>
@@ -456,7 +439,7 @@ function PaintingBoardContent({
 
   return (
     <View className="flex-1">
-      {showChrome ? (
+      {showBoardChrome ? (
         mode === 'overview' ? (
           <PaintingOverviewChrome
             nodeCount={board.graph.nodes.length}
@@ -472,16 +455,21 @@ function PaintingBoardContent({
             onBack={onClose}
             onDelete={focusedPainting ? confirmDeleteNode : undefined}
             onOpenOverview={boardId ? () => setMode('overview') : undefined}
-            onResize={applyResize}
             onShowInfo={focusedPainting ? () => setIsInfoOpen(true) : undefined}
-            resizeChoices={resizeChoices}
           />
         )
       ) : null}
       {/* iOS toolbar composition forces the native header visible while mounted. */}
-      <Stack.Screen options={{ headerShown: showChrome }} />
-      <View className="absolute inset-0">{canvas}</View>
-      {showChrome && mode === 'focus' ? (
+      <Stack.Screen options={{ headerShown: showBoardChrome }} />
+      <View
+        accessibilityElementsHidden={isEditorPresented}
+        className="absolute inset-0"
+        importantForAccessibility={isEditorPresented ? 'no-hide-descendants' : 'auto'}
+        pointerEvents={isEditorPresented ? 'none' : 'auto'}
+      >
+        {canvas}
+      </View>
+      {showBoardChrome && mode === 'focus' ? (
         <Animated.View
           className="absolute right-0 left-0 gap-2 px-4"
           pointerEvents="box-none"
@@ -524,11 +512,12 @@ function PaintingBoardContent({
         </Animated.View>
       ) : null}
       {showChrome ? (
-        <ComposerDock onHeightChange={(height) => dockHeight.set(height)}>
+        <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
           <PaintingWorkspaceInput
             initialParamValues={initialParamValues}
             onCancel={handleCancel}
             onGenerate={handleGenerate}
+            onRatioChange={prepareRatioChange}
             painting={focusedPainting}
             placeholder={
               mode === 'overview'
@@ -593,16 +582,16 @@ function AnnotationChip({
       accessibilityState={{ selected }}
       className={
         selected
-          ? 'h-8 justify-center rounded-full bg-constant-white px-3.5'
-          : 'h-8 justify-center rounded-full bg-constant-black/55 px-3.5 active:opacity-70'
+          ? 'h-8 justify-center rounded-full bg-foreground px-3.5'
+          : 'h-8 justify-center rounded-full bg-card/95 px-3.5 active:opacity-70'
       }
       onPress={onPress}
     >
       <Text
         className={
           selected
-            ? 'font-medium text-constant-black text-sm'
-            : 'font-medium text-constant-white/80 text-sm'
+            ? 'font-medium text-background text-sm'
+            : 'font-medium text-card-foreground text-sm'
         }
       >
         {label}

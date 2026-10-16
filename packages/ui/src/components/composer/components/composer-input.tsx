@@ -8,6 +8,7 @@ import type { ComposerInputHandle, ComposerInputProps } from '../composer.types'
 import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
 import { pasteWrapperStyle, textInputBoxStyle } from '../utils/composer-layout';
 import { composerTextStyle } from '../utils/composer-text-style/composer-text-style';
+import { useComposerEditorInput } from './composer-editor';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
 const fillWrapperStyle = { ...pasteWrapperStyle, height: '100%' } as const;
@@ -27,7 +28,7 @@ const fillInputStyle = { height: '100%', maxHeight: '100%' } as const;
  */
 export function ComposerInput({
   autoFocus = false,
-  layout = 'content',
+  layout,
   markdownStyle,
   onBlur,
   onFocus,
@@ -40,6 +41,10 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
   const { changeText } = useComposerActions('Composer.Input');
+  const editorInput = useComposerEditorInput();
+  const inputLayout = layout ?? editorInput?.layout ?? 'content';
+  const editorInset = editorInput?.style;
+  const fieldStyle = editorInput && inputLayout === 'fill' ? undefined : style;
   // The rich editor is a Fabric host rather than RN's TextInput, so Uniwind
   // cannot resolve a className on it. Resolve the two base text properties here
   // instead. Use the font-size-only utility deliberately: the upstream Android
@@ -62,8 +67,14 @@ export function ComposerInput({
   // object, not RN's `StyleProp`.
   const resolvedStyle = useMemo(
     () =>
-      StyleSheet.flatten([baseTextStyle, inputStyle, layout === 'fill' && fillInputStyle, style]),
-    [baseTextStyle, layout, style],
+      StyleSheet.flatten([
+        baseTextStyle,
+        inputStyle,
+        inputLayout === 'fill' && fillInputStyle,
+        fieldStyle,
+        editorInset,
+      ]),
+    [baseTextStyle, editorInset, fieldStyle, inputLayout],
   );
 
   const handleChangeMarkdown = useCallback(
@@ -95,7 +106,7 @@ export function ComposerInput({
     // paste support later would be debugging a layout change they didn't make.
     <TextInputWrapper
       onPaste={onPaste}
-      style={layout === 'fill' ? fillWrapperStyle : pasteWrapperStyle}
+      style={inputLayout === 'fill' ? fillWrapperStyle : pasteWrapperStyle}
     >
       <EnrichedMarkdownTextInput
         autoFocus={autoFocus}

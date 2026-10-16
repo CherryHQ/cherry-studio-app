@@ -17,12 +17,6 @@ import type { FileEntryId } from '@/shared/data/types/file';
 
 import type { PaintingBoardImage } from '../hooks/usePaintingBoard';
 
-export type PaintingResizeChoice = {
-  paramValues: Record<string, unknown>;
-  pixels?: string;
-  ratio: string;
-};
-
 /**
  * Focus chrome: back returns to wherever the board was opened from, the board
  * pill opens the overview, and the focused image's actions sit on the right —
@@ -34,18 +28,14 @@ export function PaintingFocusChrome({
   onBack,
   onDelete,
   onOpenOverview,
-  onResize,
   onShowInfo,
-  resizeChoices,
 }: {
   boardTitle: string;
   image: PaintingBoardImage | undefined;
   onBack: () => void;
   onDelete?: () => void;
   onOpenOverview?: () => void;
-  onResize: (choice: PaintingResizeChoice) => void;
   onShowInfo?: () => void;
-  resizeChoices: readonly PaintingResizeChoice[];
 }) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction(onBack);
@@ -67,16 +57,6 @@ export function PaintingFocusChrome({
         onPress: () => void share(),
       });
     }
-    for (const choice of resizeChoices) {
-      items.push({
-        group: 'resize',
-        id: `resize:${choice.ratio}`,
-        label: choice.pixels
-          ? t('painting.focus.resizeToPixels', { pixels: choice.pixels, ratio: choice.ratio })
-          : t('painting.focus.resizeTo', { ratio: choice.ratio }),
-        onPress: () => onResize(choice),
-      });
-    }
     if (onShowInfo) {
       items.push({
         group: 'info',
@@ -95,7 +75,7 @@ export function PaintingFocusChrome({
       });
     }
     return items;
-  }, [file.data, image, isSharing, onDelete, onResize, onShowInfo, resizeChoices, share, t]);
+  }, [file.data, image, isSharing, onDelete, onShowInfo, share, t]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
     const actions: HeaderToolbarAction[] = [];
@@ -123,20 +103,19 @@ export function PaintingFocusChrome({
 
   return (
     <HeaderChrome
-      actionTone="inverse"
       leftActions={leftActions}
       rightActions={rightActions}
       titleElement={
         <Pressable
           accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
           accessibilityRole="button"
-          className="max-w-56 flex-row items-center gap-1.5 rounded-full bg-constant-white/15 px-3.5 py-2 active:opacity-70"
+          className="max-w-56 flex-row items-center gap-1.5 rounded-full bg-card/95 px-3.5 py-2 active:opacity-70"
           disabled={!onOpenOverview}
           onPress={onOpenOverview}
         >
-          <NetworkIcon className="size-4 text-constant-white" />
+          <NetworkIcon className="size-4 text-card-foreground" />
           <Text
-            className="min-w-0 shrink font-semibold text-constant-white text-sm"
+            className="min-w-0 shrink font-semibold text-card-foreground text-sm"
             numberOfLines={1}
           >
             {boardTitle}
