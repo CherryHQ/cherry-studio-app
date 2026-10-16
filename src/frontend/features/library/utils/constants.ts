@@ -1,20 +1,11 @@
-import type { PreferenceSchema } from '@/shared/data/preference';
-
-export type FileLibraryViewMode = PreferenceSchema['ui.library.view_mode'];
+export type FileLibraryBrowseMode = 'recent' | 'folders';
 
 export const fileLibrarySelectionScope = 'file-library';
 
-/** Grid geometry and paging thresholds shared by the library's screen parts. */
-export const fileLibraryGrid = {
-  minTileSize: 180,
-  pageEdge: 16, // page margin outside the outermost tiles
-  skeletonTiles: 6, // placeholder tiles shown while a page is in flight
-  tileGap: 12, // gap between tiles, horizontally and vertically
+export const fileLibraryLayout = {
+  pageEdge: 16,
+  skeletonRows: 6,
 } as const;
 
-/**
- * Tiles a kind tab pulls pages for before it stops filling itself: enough to
- * cover a screen, so a sparse kind is not a near-empty grid with nothing to
- * scroll.
- */
-export const fileLibraryMinVisibleTiles = 10;
+/** Keep sparse filters paging until they cover a viewport or exhaust the library. */
+export const fileLibraryMinVisibleRows = 10;

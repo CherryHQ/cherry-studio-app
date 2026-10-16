@@ -1,3 +1,4 @@
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import { Button, useToast } from '@cherrystudio/ui/components';
 import { useState } from 'react';
@@ -30,18 +31,25 @@ export function SessionWorkspaceButton({
     }
   };
   return (
-    <View className="px-4">
+    <View className="max-w-full items-start gap-2">
       <Button
-        variant="ghost"
-        size="sm"
+        variant="tonal"
+        shape="pill"
+        size="xs"
         icon={<FolderIcon />}
         disabled={disabled || change.isLoading || workspace.isLoading}
         onPress={() => setIsOpen(true)}
-        accessibilityLabel={t('workspace.choose')}
+        accessibilityLabel={
+          workspace.data
+            ? t('workspace.named', { name: workspace.data.name })
+            : t('workspace.choose')
+        }
+        testID="session-workspace-button"
       >
-        {workspace.data
-          ? t('workspace.named', { name: workspace.data.name })
-          : t('workspace.choose')}
+        <Button.Label numberOfLines={1}>
+          {workspace.data ? workspace.data.name : t('workspace.choose')}
+        </Button.Label>
+        <ChevronDownIcon className="size-3 text-muted-foreground" />
       </Button>
       {workspace.data?.deletedAt !== null && workspace.data ? (
         <Text className="text-sm text-warning">{t('workspace.unavailable')}</Text>
@@ -53,6 +61,8 @@ export function SessionWorkspaceButton({
         <FileFolderPicker
           title={t('workspace.choose')}
           rootOption={t('workspace.none')}
+          selectedFolderId={workspace.data?.id ?? null}
+          isSaving={change.isLoading}
           onClose={() => setIsOpen(false)}
           onSelect={(folderId) => void select(folderId)}
         />

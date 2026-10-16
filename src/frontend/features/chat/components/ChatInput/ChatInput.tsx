@@ -139,7 +139,11 @@ export function ChatInput({
 
   return (
     <PaintingInputProvider result={latestImageResult}>
-      {sessionId ? <SessionWorkspaceButton sessionId={sessionId} disabled={isBusy} /> : null}
+      {sessionId ? (
+        <View className="items-start px-2 pb-2">
+          <SessionWorkspaceButton sessionId={sessionId} disabled={isBusy} />
+        </View>
+      ) : null}
       {mode === 'standard' &&
       selectedModelItem &&
       isImageGenerationModel(selectedModelItem.model) &&

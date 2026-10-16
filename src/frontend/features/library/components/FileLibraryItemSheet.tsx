@@ -1,7 +1,22 @@
-import { BottomSheet, Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import HistoryIcon from '@cherrystudio/app-icons/icons/history';
+import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
+import {
+  ActionMenu,
+  BottomSheet,
+  Button,
+  ContentState,
+  Section,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
+import { LegendList } from '@legendapp/list/react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import { FileFolderPicker } from '@/frontend/components/FileFolderPicker';
@@ -26,7 +41,7 @@ export function FileLibraryItemSheet({
   const { toast } = useToast();
   const files = useBackendModule('file');
   const { openFileEntry } = useOpenFileEntry();
-  const [moving, setMoving] = useState(false);
+  const [page, setPage] = useState<'actions' | 'history' | 'move'>('actions');
   const isFolder = selection.kind === 'folder';
   const item = isFolder ? selection.folder : selection.file;
   const editFolder = useMutation('PATCH', '/files/folders/:id');
@@ -37,9 +52,14 @@ export function FileLibraryItemSheet({
   });
   const history = useQuery('/files/history', {
     query: { id: item.id },
-    enabled: !isFolder,
+    enabled: !isFolder && page === 'history',
   });
   const [pending, setPending] = useState(false);
+  const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
   async function perform(action: () => Promise<unknown>, close = true) {
     if (pending) return;
     setPending(true);
@@ -60,6 +80,7 @@ export function FileLibraryItemSheet({
       setPending(false);
     }
   }
+
   function rename() {
     alert.prompt({
       title: t('common.rename'),
@@ -80,6 +101,7 @@ export function FileLibraryItemSheet({
       },
     });
   }
+
   function trash() {
     alert.confirm({
       title: t('library.trash.title'),
@@ -94,22 +116,42 @@ export function FileLibraryItemSheet({
         ),
     });
   }
+
+  function trashVersion(entry: FileEntry) {
+    alert.confirm({
+      title: t('library.trash.title'),
+      description: t('library.history.deleteDescription'),
+      confirmLabel: t('common.delete'),
+      role: 'destructive',
+      onConfirm: () =>
+        void perform(() => deleteVersion.trigger({ params: { id: entry.id } }), false),
+    });
+  }
+
   async function openVersion(entry: FileEntry) {
+    if (pending) return;
+    setPending(true);
     try {
       const uri = await files.getUri(entry.id);
       if (!uri) throw new Error('Unavailable');
+      onClose();
       openFileEntry({ entry, uri });
     } catch {
       toast.show({ label: t('filePreview.unavailable'), variant: 'danger' });
+    } finally {
+      setPending(false);
     }
   }
-  if (moving)
+
+  if (page === 'move')
     return (
       <FileFolderPicker
         title={t('library.move')}
         rootOption={t('library.root')}
         excludedFolderId={isFolder ? item.id : undefined}
-        onClose={() => setMoving(false)}
+        selectedFolderId={isFolder ? selection.folder.parentId : selection.file.folderId}
+        isSaving={pending}
+        onClose={() => setPage('actions')}
         onSelect={(folderId) => {
           void perform(() =>
             isFolder
@@ -119,89 +161,149 @@ export function FileLibraryItemSheet({
         }}
       />
     );
+
   return (
     <BottomSheet
-      open
-      title={item.name}
-      onClose={onClose}
+      backAction={
+        page === 'history'
+          ? { accessibilityLabel: t('navigation.back'), onPress: () => setPage('actions') }
+          : undefined
+      }
       closeAction={{ accessibilityLabel: t('common.close') }}
-      size="full"
+      onClose={onClose}
+      open
+      size={page === 'history' ? 'large' : 'compact'}
+      testID="file-library-item-sheet"
+      title={page === 'history' ? t('library.history.title') : item.name}
     >
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}>
-        <View className="gap-2">
-          <Button variant="ghost" disabled={pending} onPress={rename}>
-            {t('common.rename')}
-          </Button>
-          <Button variant="ghost" disabled={pending} onPress={() => setMoving(true)}>
-            {t('library.move')}
-          </Button>
-          <Button variant="ghost" disabled={pending} onPress={trash}>
-            {t('library.trash.title')}
-          </Button>
-        </View>
-        {!isFolder ? (
-          <View className="gap-3 pt-6">
-            <Text className="font-semibold text-lg text-foreground">
-              {t('library.history.title')}
-            </Text>
-            {history.error ? (
-              <ContentState.Error
-                title={t('library.loadFailed')}
-                primaryAction={{
-                  children: t('common.retry'),
-                  onPress: () => void history.refetch(),
-                }}
-              />
-            ) : history.isLoading ? (
-              <ContentState.Loading title={t('library.loading')} />
-            ) : (
-              history.data?.map((entry, index) => (
-                <View key={entry.id} className="flex-row items-center gap-2 py-2">
-                  <View className="min-w-0 flex-1 gap-1">
-                    <Text className="text-base text-foreground">
-                      {index === 0 ? t('library.history.current') : t('library.history.version')}
-                    </Text>
-                    <Text className="text-sm text-muted-foreground">
-                      {new Intl.DateTimeFormat(i18n.resolvedLanguage, {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      }).format(entry.createdAt)}
-                    </Text>
-                  </View>
-                  <Button
-                    variant="ghost"
-                    disabled={pending}
-                    onPress={() => void openVersion(entry)}
-                  >
-                    {t('library.open')}
-                  </Button>
-                  {index > 0 ? (
-                    <Button
-                      variant="ghost"
-                      disabled={pending}
-                      onPress={() =>
-                        alert.confirm({
-                          title: t('library.trash.title'),
-                          description: t('library.history.deleteDescription'),
-                          confirmLabel: t('common.delete'),
-                          role: 'destructive',
-                          onConfirm: () =>
-                            void perform(
-                              () => deleteVersion.trigger({ params: { id: entry.id } }),
-                              false,
-                            ),
-                        })
-                      }
-                    >
-                      {t('common.delete')}
-                    </Button>
-                  ) : null}
+      {page === 'history' ? (
+        <LegendList
+          contentContainerStyle={{ paddingBottom: 24 }}
+          data={history.data ?? []}
+          estimatedItemSize={80}
+          extraData={pending}
+          keyExtractor={(entry) => entry.id}
+          ListHeaderComponent={
+            <View className="px-5 pt-2 pb-5">
+              <Text className="font-medium text-base text-foreground">{item.name}</Text>
+            </View>
+          }
+          ListEmptyComponent={
+            <View className="px-5 py-6">
+              {history.error ? (
+                <ContentState.Error
+                  title={t('library.loadFailed')}
+                  primaryAction={{
+                    children: t('common.retry'),
+                    onPress: () => void history.refetch(),
+                  }}
+                />
+              ) : history.isLoading ? (
+                <ContentState.Loading title={t('library.loading')} />
+              ) : (
+                <ContentState.Empty title={t('library.empty')} />
+              )}
+            </View>
+          }
+          recycleItems
+          renderItem={({ item: entry, index }) => (
+            <View className="flex-row items-center gap-3 px-5">
+              <Pressable
+                accessibilityRole="button"
+                className="min-h-20 min-w-0 flex-1 flex-row items-center gap-4 py-3 active:opacity-60 disabled:opacity-40"
+                disabled={pending}
+                onPress={() => void openVersion(entry)}
+                testID={`file-library-version-${entry.id}`}
+              >
+                {index === 0 ? (
+                  <FileTextIcon className="size-6 text-foreground" />
+                ) : (
+                  <HistoryIcon className="size-6 text-muted-foreground" />
+                )}
+                <View className="min-w-0 flex-1 gap-1">
+                  <Text className="font-medium text-base text-foreground">
+                    {index === 0 ? t('library.history.current') : t('library.history.version')}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">
+                    {dateFormatter.format(entry.createdAt)}
+                  </Text>
                 </View>
-              ))
-            )}
-          </View>
-        ) : null}
-      </ScrollView>
+              </Pressable>
+              {index > 0 ? (
+                <ActionMenu
+                  items={[
+                    {
+                      id: 'open',
+                      label: t('library.open'),
+                      onPress: () => void openVersion(entry),
+                    },
+                    {
+                      destructive: true,
+                      id: 'trash',
+                      label: t('library.trash.title'),
+                      onPress: () => trashVersion(entry),
+                    },
+                  ]}
+                >
+                  <Button
+                    accessibilityLabel={t('library.manage', {
+                      name: dateFormatter.format(entry.createdAt),
+                    })}
+                    disabled={pending}
+                    hitSlop={6}
+                    icon={<EllipsisIcon />}
+                    size="sm"
+                    variant="ghost"
+                  />
+                </ActionMenu>
+              ) : null}
+            </View>
+          )}
+          style={{ flex: 1 }}
+        />
+      ) : (
+        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          <Section variant="plain">
+            <Section.Item
+              disabled={pending}
+              label={t('common.rename')}
+              leading={<PencilIcon className="size-5 text-muted-foreground" />}
+              onPress={rename}
+              showChevron={false}
+            />
+            <Section.Item
+              disabled={pending}
+              label={t('library.move')}
+              leading={<FolderIcon className="size-5 text-muted-foreground" />}
+              onPress={() => setPage('move')}
+            />
+            {!isFolder ? (
+              <Section.Item
+                disabled={pending}
+                label={t('library.history.title')}
+                leading={<HistoryIcon className="size-5 text-muted-foreground" />}
+                onPress={() => setPage('history')}
+                showChevron
+                trailing={
+                  <Text className="text-sm text-muted-foreground">
+                    {new Intl.NumberFormat(i18n.resolvedLanguage).format(
+                      history.data?.length ?? selection.file.versionCount,
+                    )}
+                  </Text>
+                }
+              />
+            ) : null}
+            <Section.Item
+              destructive
+              disabled={pending}
+              label={t('library.trash.title')}
+              leading={<Trash2Icon className="size-5 text-destructive" />}
+              onPress={trash}
+              showChevron={false}
+            />
+          </Section>
+        </ScrollView>
+      )}
     </BottomSheet>
   );
 }

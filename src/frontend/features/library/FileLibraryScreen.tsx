@@ -1,101 +1,120 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import { Button, ContentState, useAlert, useToast } from '@cherrystudio/ui/components';
+import { Chip, ContentState, Tabs } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { resolveHeaderContentInset } from '@/frontend/appShell/navigation';
+import {
+  FileFolderBreadcrumbs,
+  fileFolderAncestors,
+} from '@/frontend/components/FileFolderBreadcrumbs';
+import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import {
   SelectionControls,
   SelectionProvider,
   useSelectionActions,
   useSelectionState,
 } from '@/frontend/components/Selection';
-import { useMutation, usePreference, useQuery } from '@/frontend/data/hooks';
+import { useQuery } from '@/frontend/data/hooks';
+import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
 import { FileLibraryItemSheet, type LibrarySelection } from './components/FileLibraryItemSheet';
 import { FileLibraryList } from './components/FileLibraryList';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
-import { fileLibrarySelectionScope, type FileLibraryViewMode } from './utils/constants';
+import { fileLibrarySelectionScope, type FileLibraryBrowseMode } from './utils/constants';
 
-/**
- * The file library (`/library`), the sidebar's library destination: everything
- * Cherry has stored as a file — chat attachments, generated images, imported
- * documents — in a grid or list, filterable by kind. The root Stack pushes it above
- * chat, so its leading action returns to the chat surface.
- */
+const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document', 'sharing'];
+const filterLabelKeys: Record<FileLibraryFilter, string> = {
+  all: 'library.filter.all',
+  sharing: 'library.filter.sharing',
+  document: 'library.filter.documents',
+  image: 'library.filter.images',
+};
+
+/** Recents spans the library; directory browsing retains its own location. */
 function FileLibraryScreenBody() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
-  const { alert } = useAlert();
+  const contentTopInset = resolveHeaderContentInset(useHeaderHeight());
+  const [browseMode, setBrowseMode] = useState<FileLibraryBrowseMode>('recent');
+  const isBrowsingFolders = browseMode === 'folders';
   const [folderId, setFolderId] = useState<string | null>(null);
   const [selection, setSelection] = useState<LibrarySelection | null>(null);
   const folders = useQuery('/files/folders');
-  const createFolder = useMutation('POST', '/files/folders');
+  const { requestCreate, isCreating } = useCreateFileFolder(isBrowsingFolders ? folderId : null);
   const currentFolder = folders.data?.find((folder) => folder.id === folderId);
+  const childFolders = useMemo(
+    () => (folders.data ?? []).filter((folder) => folder.parentId === folderId),
+    [folderId, folders.data],
+  );
+  const folderPaths = useMemo(() => {
+    const byId = new Map((folders.data ?? []).map((folder) => [folder.id, folder]));
+    return new Map(
+      (folders.data ?? []).map((folder) => [
+        folder.id,
+        fileFolderAncestors(folder.id, byId)
+          .map((ancestor) => ancestor.name)
+          .join(' / '),
+      ]),
+    );
+  }, [folders.data]);
   const { left, right } = useSafeAreaInsets();
   const [filter, setFilter] = useState<FileLibraryFilter>('all');
-  const [viewMode, setViewMode] = usePreference('ui.library.view_mode');
-  const { exitEditing } = useSelectionActions();
+  const { enterEditing, exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
-  const addFolder = useCallback(() => {
-    alert.prompt({
-      title: t('library.folders.create'),
-      confirmLabel: t('common.save'),
-      input: { accessibilityLabel: t('library.folders.name'), maxLength: 255, autoFocus: true },
-      onConfirm: (name) => {
-        if (!name.trim()) return;
-        void createFolder
-          .trigger({ body: { parentId: folderId, name } })
-          .catch(() => toast.show({ label: t('library.actionFailed'), variant: 'danger' }));
-      },
-    });
-  }, [alert, createFolder, folderId, t, toast]);
 
-  const changeViewMode = useCallback(
-    (nextViewMode: FileLibraryViewMode) => {
-      if (nextViewMode === viewMode) return;
-      void setViewMode(nextViewMode).catch(() => {
-        toast.show({ label: t('library.view.saveFailed'), variant: 'danger' });
-      });
+  const openFolder = useCallback(
+    (id: string | null) => {
+      exitEditing();
+      setFolderId(id);
     },
-    [setViewMode, t, toast, viewMode],
+    [exitEditing],
+  );
+  const manageFolder = useCallback(
+    (folder: FileFolder) => setSelection({ kind: 'folder', folder }),
+    [],
+  );
+  const directory = useMemo(
+    () =>
+      isBrowsingFolders
+        ? { folders: childFolders, onOpen: openFolder, onManage: manageFolder }
+        : undefined,
+    [childFolders, isBrowsingFolders, manageFolder, openFolder],
   );
 
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('library.view.label'),
+        accessibilityLabel: t('common.more'),
         icon: EllipsisIcon,
         items: [
-          { id: 'new-folder', label: t('library.folders.create'), onPress: addFolder },
+          { id: 'library-select', label: t('library.selection.start'), onPress: enterEditing },
+          ...(isBrowsingFolders
+            ? [
+                {
+                  id: 'library-new-folder',
+                  label: t('library.folders.create'),
+                  disabled: isCreating,
+                  onPress: requestCreate,
+                },
+              ]
+            : []),
           {
             id: 'library-trash',
             label: t('trash.title'),
             onPress: () => router.push('/trash'),
           },
-          {
-            checked: viewMode === 'grid',
-            id: 'library-view-grid',
-            label: t('library.view.grid'),
-            onPress: () => changeViewMode('grid'),
-          },
-          {
-            checked: viewMode === 'list',
-            id: 'library-view-list',
-            label: t('library.view.list'),
-            onPress: () => changeViewMode('list'),
-          },
         ],
-        key: 'library-view',
+        key: 'library-actions',
         type: 'menu',
       },
     ],
-    [addFolder, changeViewMode, router, t, viewMode],
+    [enterEditing, isBrowsingFolders, isCreating, requestCreate, router, t],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -117,66 +136,82 @@ function FileLibraryScreenBody() {
         onBack={
           isEditing
             ? exitEditing
-            : folderId
+            : isBrowsingFolders && folderId
               ? () => setFolderId(currentFolder?.parentId ?? null)
               : undefined
         }
         rightActions={isEditing ? doneActions : rightActions}
-        title={currentFolder?.name ?? t('library.title')}
+        title={isBrowsingFolders ? (currentFolder?.name ?? t('library.title')) : t('library.title')}
       />
-      <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
-        <FileLibraryList
-          key={folderId ?? 'root'}
-          folderId={folderId}
-          onManage={(file) => setSelection({ kind: 'file', file })}
-          header={
-            <View className="gap-1 pb-3">
-              {folderId ? (
-                <Button
-                  variant="ghost"
-                  onPress={() => setFolderId(currentFolder?.parentId ?? null)}
-                >
-                  {t('library.folders.up')}
-                </Button>
-              ) : null}
-              {folders.error ? (
-                <ContentState.Error
-                  title={t('library.loadFailed')}
-                  primaryAction={{
-                    children: t('common.retry'),
-                    onPress: () => void folders.refetch(),
-                  }}
-                />
-              ) : null}
-              {(folders.data ?? [])
-                .filter((folder) => folder.parentId === folderId)
-                .map((folder) => (
-                  <View key={folder.id} className="flex-row items-center gap-2">
-                    <Pressable
-                      accessibilityRole="button"
-                      className="min-h-14 flex-1 flex-row items-center gap-3 py-2 active:opacity-60"
-                      onPress={() => {
-                        exitEditing();
-                        setFolderId(folder.id);
-                      }}
-                    >
-                      <FolderIcon className="size-6 text-muted-foreground" />
-                      <Text className="flex-1 text-base text-foreground">{folder.name}</Text>
-                    </Pressable>
-                    <Button
-                      variant="ghost"
-                      icon={<EllipsisIcon />}
-                      accessibilityLabel={t('library.manage', { name: folder.name })}
-                      onPress={() => setSelection({ kind: 'folder', folder })}
-                    />
-                  </View>
+      <View
+        className="flex-1"
+        style={{ paddingLeft: left, paddingRight: right, paddingTop: contentTopInset }}
+      >
+        {isEditing ? null : (
+          <View className="gap-4 px-4 pt-2 pb-4">
+            <Tabs
+              accessibilityLabel={t('library.browse.label')}
+              items={[
+                {
+                  label: t('library.browse.recent'),
+                  value: 'recent',
+                  testID: 'file-library-recent',
+                },
+                {
+                  label: t('library.browse.folders'),
+                  value: 'folders',
+                  testID: 'file-library-folders',
+                },
+              ]}
+              onValueChange={setBrowseMode}
+              testID="file-library-browse"
+              value={browseMode}
+            />
+            <ScrollView
+              accessibilityLabel={t('library.filter.label')}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+            >
+              <View className="flex-row items-center gap-2">
+                {filterOrder.map((value) => (
+                  <Chip.Selectable
+                    accessibilityRole="radio"
+                    hitSlop={6}
+                    key={value}
+                    onSelectedChange={() => setFilter(value)}
+                    selected={filter === value}
+                    testID={`file-library-filter-${value}`}
+                  >
+                    {t(filterLabelKeys[value])}
+                  </Chip.Selectable>
                 ))}
-            </View>
-          }
+              </View>
+            </ScrollView>
+            {isBrowsingFolders && folderId ? (
+              <FileFolderBreadcrumbs
+                folderId={folderId}
+                folders={folders.data ?? []}
+                onNavigate={openFolder}
+              />
+            ) : null}
+            {folders.error ? (
+              <ContentState.Error
+                title={t('library.loadFailed')}
+                primaryAction={{
+                  children: t('common.retry'),
+                  onPress: () => void folders.refetch(),
+                }}
+              />
+            ) : null}
+          </View>
+        )}
+        <FileLibraryList
+          key={isBrowsingFolders ? (folderId ?? 'root') : 'recent'}
+          directory={directory}
+          folderId={isBrowsingFolders ? folderId : undefined}
+          folderPaths={isBrowsingFolders ? undefined : folderPaths}
+          onManage={(file) => setSelection({ kind: 'file', file })}
           filter={filter}
-          isDataLoadEnabled
-          onFilterChange={setFilter}
-          viewMode={viewMode}
         />
         <SelectionControls scope={fileLibrarySelectionScope} />
       </View>

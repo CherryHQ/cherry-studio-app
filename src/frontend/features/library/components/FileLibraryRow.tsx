@@ -9,10 +9,11 @@ import {
   LoadedFileEntryPreview,
 } from '@/frontend/components/FileEntryPreview';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { LibraryFile } from '@/shared/data/types/fileLibrary';
 
 import type { FileLibraryEntry } from '../hooks/useFileEntries';
 
-const PREVIEW_SIZE = 48;
+const PREVIEW_SIZE = 40;
 
 // Rows grow with wrapped filenames and the user's text size; this is only a list estimate.
 export const FILE_LIBRARY_ROW_ESTIMATED_SIZE = 88;
@@ -22,30 +23,44 @@ export const FileLibraryRow = memo(function FileLibraryRow({
   isSelected,
   item,
   modifiedDate,
+  location,
   onOpen,
-  onStartSelection,
+  onManage,
   onToggle,
 }: {
   isEditing: boolean;
   isSelected: boolean;
   item: FileLibraryEntry;
   modifiedDate: string;
+  location?: string;
   onOpen: (file: ResolvedFile) => void;
-  onStartSelection: (fileEntryId: string) => void;
+  onManage: (file: LibraryFile) => void;
   onToggle: (fileEntryId: string) => void;
 }) {
   const { t } = useTranslation();
   const description = !item.uri
     ? t('filePreview.unavailable')
-    : t('library.modifiedAt', { date: modifiedDate });
+    : location
+      ? t('library.locationAndDate', { location, date: modifiedDate })
+      : t('library.modifiedAt', { date: modifiedDate });
 
-  // Keep one press target across the mode change. A stationary hold enters
-  // selection; movement still yields to the parent list, and releasing the
-  // completed long press cannot also open or toggle this row.
+  function manage() {
+    if (!isEditing && item.libraryFile) onManage(item.libraryFile);
+  }
+
+  // Opening, context actions, and selection retain one press target while drags
+  // yield to the result list. Selection is entered from the page's More menu.
   return (
     <Pressable
       accessibilityActions={
-        isEditing ? undefined : [{ name: 'longpress', label: t('library.selection.start') }]
+        isEditing
+          ? undefined
+          : [
+              {
+                name: 'longpress',
+                label: t('library.manage', { name: item.libraryFile?.name ?? item.entry.filename }),
+              },
+            ]
       }
       accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
       accessibilityRole={isEditing ? 'checkbox' : 'button'}
@@ -53,10 +68,10 @@ export const FileLibraryRow = memo(function FileLibraryRow({
       className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'longpress') {
-          onStartSelection(item.entry.id);
+          manage();
         }
       }}
-      onLongPress={() => onStartSelection(item.entry.id)}
+      onLongPress={manage}
       onPress={() => {
         if (isEditing) {
           onToggle(item.entry.id);
@@ -89,7 +104,9 @@ export const FileLibraryRow = memo(function FileLibraryRow({
         <Text className="text-base text-foreground" numberOfLines={2}>
           {item.libraryFile?.name ?? item.entry.filename}
         </Text>
-        <Text className="text-sm text-muted-foreground">{description}</Text>
+        <Text className="text-sm text-muted-foreground" ellipsizeMode="middle" numberOfLines={1}>
+          {description}
+        </Text>
       </View>
       {isEditing ? <SelectionIndicator selected={isSelected} /> : null}
     </Pressable>
