@@ -728,6 +728,28 @@ const dock = useComposerDockLayout();
 </Composer.Dock>;
 ```
 
+For a screen that supports manual large-editor presentation, wrap its content and header in
+`Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
+only compact input space; expansion stays in the same native subtree above the transcript.
+`useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
+returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
+while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
+The expanded dock removes its horizontal gutter and fills through the bottom safe area, keeping
+the footer and controls inside one opaque surface with only the top corners rounded.
+`Composer.Editor` owns the shared compact-to-editing frame, keeping primary actions in one resting
+row and moving the caller-composed toolbar below the full-width field during editing. Its `active`
+state is caller-owned; an optional action-sized `compactAccessory` previews an attachment without
+activating editing. The `field` stays mounted, and `Composer.Input` automatically adapts its
+native layout and action inset to the editor frame, including through app-specific field wrappers.
+`Composer.EditorSecondary` reveals secondary toolbar tools, and
+`Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
+The isolated frame retains the existing 250ms settle motion, interruptibility and system Reduce
+Motion behavior, without fading ancestors of native glass controls.
+
+For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height
+during expansion, and use `Composer.Input layout="fill"` inside the bounded large editing region.
+Its native ref and buffer remain mounted. Feature owners supply translated control labels.
+
 `getComposerActionCenterOffset(bottomInset)` exposes the toolbar action center's distance from the
 screen bottom with the keyboard closed, so adjacent controls can align without duplicating composer
 padding.

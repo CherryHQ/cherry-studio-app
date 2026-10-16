@@ -8,6 +8,13 @@ import { MessageParts } from '../MessageParts';
 
 jest.mock('@cherrystudio/ui/components', () => ({
   ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
+  MessagePart: {
+    Pending: (props: object) => jest.requireActual('react').createElement('Pending', props),
+  },
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 jest.mock('../MessagePartRenderer', () => {
@@ -50,7 +57,213 @@ jest.mock('../ProcessGroupPart', () => {
   };
 });
 
+const answeredQuestion = {
+  type: 'dynamic-tool',
+  toolName: 'ask_user_question',
+  toolCallId: 'question',
+  state: 'output-available',
+  input: {},
+  output: {},
+} as const;
+
 describe('MessageParts', () => {
+  test('shows waiting for an empty pending assistant message', () => {
+    const renderer = render(
+      <MessageParts message={{ ...makeMessage('pending'), data: { parts: [] } }} />,
+    );
+
+    expect(renderer.root.findByType('Pending').props.accessibilityLabel).toBe(
+      'chat.message.waitingForResponse',
+    );
+  });
+
+  test('keeps feedback below an answered question until the answer starts streaming', () => {
+    const question = {
+      type: 'dynamic-tool' as const,
+      toolName: 'ask_user_question',
+      toolCallId: 'question',
+      input: {},
+      state: 'input-available' as const,
+    };
+    const reasoning = { type: 'reasoning', state: 'streaming', text: '' } as const;
+    const tool = {
+      type: 'dynamic-tool',
+      toolName: 'write_file',
+      toolCallId: 'write',
+      state: 'input-available',
+      input: {},
+    } as const;
+    const renderer = render(
+      <MessageParts message={{ ...makeMessage('pending'), data: { parts: [question] } }} />,
+    );
+    const update = (
+      parts: NonNullable<MessageListItem['data']['parts']>,
+      status: MessageStatus = 'pending',
+    ) => {
+      act(() =>
+        renderer.update(<MessageParts message={{ ...makeMessage(status), data: { parts } }} />),
+      );
+    };
+    const feedbackOrder = () =>
+      renderer.root
+        .findAll(
+          (node) =>
+            node.type === 'ProcessGroupPart' ||
+            node.type === 'MessagePartRenderer' ||
+            node.type === 'Pending',
+        )
+        .map((node) => node.type);
+
+    expect(feedbackOrder()).toEqual(['MessagePartRenderer']);
+
+    update([answeredQuestion]);
+    expect(feedbackOrder()).toEqual(['MessagePartRenderer', 'Pending']);
+
+    update([answeredQuestion, reasoning]);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+
+    update([answeredQuestion, { ...reasoning, state: 'done' }, tool]);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+
+    const completed = [
+      answeredQuestion,
+      { ...tool, state: 'output-available', output: {} },
+    ] as const;
+    update(completed);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+
+    update([...completed, { type: 'text', state: 'streaming', text: 'Done.' }]);
+    expect(feedbackOrder()).toEqual([
+      'ProcessGroupPart',
+      'MessagePartRenderer',
+      'MessagePartRenderer',
+    ]);
+
+    update([...completed, { type: 'text', state: 'done', text: 'Done.' }], 'success');
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+  });
+
+  test.each(['success', 'error', 'paused'] as const)(
+    'removes waiting when a silent reply becomes %s',
+    (status) => {
+      const message = { ...makeMessage('pending'), data: { parts: [answeredQuestion] } };
+      const renderer = render(<MessageParts message={message} />);
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+
+      act(() => renderer.update(<MessageParts message={{ ...message, status }} />));
+
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+    },
+  );
+
+  test('does not show assistant waiting feedback for a pending user message', () => {
+    const renderer = render(<MessageParts message={{ ...makeMessage('pending'), role: 'user' }} />);
+
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+  });
+
+  test('keeps waiting when streaming text contains only a removed generated-image reference', () => {
+    const id = '01a0c213-4cfb-741d-807e-624fedfa1ab8';
+    const image = makeFilePart(id, 'result.png', 'image/png');
+    const text = {
+      type: 'text',
+      state: 'streaming',
+      text: `![Result](https://preview.cherry.ai/${id})`,
+    } as const;
+    const renderer = render(
+      <MessageParts message={{ ...makeMessage('pending'), data: { parts: [image, text] } }} />,
+    );
+
+    expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+
+    act(() => {
+      renderer.update(
+        <MessageParts
+          message={{
+            ...makeMessage('pending'),
+            data: { parts: [image, { ...text, text: `${text.text}\n\nHere is the result.` }] },
+          }}
+        />,
+      );
+    });
+
+    expect(renderer.root.findByType('MessagePartRenderer').props.part.text).toBe(
+      'Here is the result.',
+    );
+    expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+  });
+
+  test.each([
+    {
+      name: 'completed text',
+      parts: [{ type: 'text', state: 'done', text: 'Working on it.' }],
+      waiting: true,
+    },
+    {
+      name: 'empty streaming text',
+      parts: [{ type: 'text', state: 'streaming', text: '' }],
+      waiting: true,
+    },
+    {
+      name: 'empty streaming reasoning',
+      parts: [{ type: 'reasoning', state: 'streaming', text: '' }],
+      waiting: false,
+    },
+    {
+      name: 'running tool',
+      parts: [
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'input-available',
+          input: {},
+        },
+      ],
+      waiting: false,
+    },
+    {
+      name: 'pending approval',
+      parts: [
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'approval-requested',
+          input: {},
+          approval: { id: 'approval' },
+        },
+      ],
+      waiting: false,
+    },
+    {
+      name: 'earlier reasoning followed by a completed tool',
+      parts: [
+        { type: 'reasoning', state: 'streaming', text: 'Earlier reasoning' },
+        {
+          type: 'dynamic-tool',
+          toolName: 'write_file',
+          toolCallId: 'call',
+          state: 'output-available',
+          input: {},
+          output: {},
+        },
+      ],
+      waiting: true,
+    },
+  ] satisfies {
+    name: string;
+    parts: NonNullable<MessageListItem['data']['parts']>;
+    waiting: boolean;
+  }[])('shows waiting=$waiting for $name', ({ parts, waiting }) => {
+    const renderer = render(
+      <MessageParts message={{ ...makeMessage('pending'), data: { parts } }} />,
+    );
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(waiting ? 1 : 0);
+  });
+
   test.each([
     ['pending', true],
     ['success', false],

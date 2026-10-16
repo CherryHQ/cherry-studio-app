@@ -6,6 +6,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
+import type { MessageTranslations } from '@/shared/data/types/messageTranslation';
 import type { Model } from '@/shared/data/types/model';
 
 export type MessageListItem = Readonly<{
@@ -16,6 +17,7 @@ export type MessageListItem = Readonly<{
     partKeys?: readonly string[];
     attachmentReports?: Readonly<Record<string, FileAttachmentReport>>;
     parts?: readonly CherryMessagePart[];
+    translations?: MessageTranslations;
   }>;
   id: string;
   /** Image request settings captured by this message, independent of the current model. */

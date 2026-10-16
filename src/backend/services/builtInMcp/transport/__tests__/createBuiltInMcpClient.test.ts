@@ -18,6 +18,7 @@ function createBuiltInMcpClient(pluginId: string, authorizationId: string, signa
 }
 jest.mock('@/backend/services/http', () => ({
   createHttpClient: () => ({ request: jest.fn() }),
+  createFetchBridge: () => jest.fn(),
   isHttpError: () => false,
 }));
 jest.mock('@ai-sdk/mcp', () => {

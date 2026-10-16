@@ -89,16 +89,6 @@ public class DiagnosticsModule: Module {
       } catch { promise.reject("ERR_UPLOAD_PREPARATION", "Unable to prepare diagnostic upload") }
     }
 
-    AsyncFunction("sha256") { (uri: URL) -> String in
-      let file = try FileHandle(forReadingFrom: uri)
-      defer { try? file.close() }
-      var hash = SHA256()
-      while let bytes = try file.read(upToCount: 64 * 1024), !bytes.isEmpty {
-        hash.update(data: bytes)
-      }
-      return hash.finalize().map { String(format: "%02x", $0) }.joined()
-    }
-
     AsyncFunction("sign") { (value: String) -> String in
       guard
         let secret = Bundle.main.object(forInfoDictionaryKey: "CherryAIClientSecret") as? String,

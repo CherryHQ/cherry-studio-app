@@ -22,12 +22,16 @@ it already exists.
 | SHA-256 of bytes or text | `sha256Hex`, `sha256HexOfText` in `src/shared/utils/sha256.ts` |
 | Model and request failure reasons | `classifyAiFailureReason` in `src/shared/utils/aiFailure.ts` |
 | Inline bytes of MCP content blocks | `readMcpBinaryBlock` in `src/shared/contracts/mcpContent.ts` |
+| Whether an Agent binding enables a whole MCP server | `enablesMcpServer` in `src/shared/utils/agentMcpBinding.ts` |
 | Image media types and extensions | `src/shared/utils/imageFileTypes.ts` |
 | Importing a file into managed storage, including one-time image normalization | `fileContent.createInternalEntry` in `src/backend/services/file/fileContent.ts` |
 | App language and its fallback | `APP_LANGUAGES`, `resolveAppLanguage` in `src/shared/utils/languages.ts` |
 | Text translation | The translation module in `src/backend/services/translation` |
+| Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
+| Safe Markdown code fences | `createCodeBlockMarkdown` in `src/shared/utils/createCodeBlockMarkdown.ts` |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
+| Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
 
@@ -42,7 +46,10 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
+| Target-language menus for text translation | `useTranslationLanguageMenu` in `src/frontend/hooks/useTranslationLanguageMenu.ts`, rendered by CherryUI `ActionMenu` |
 | List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
+| Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
+| Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |

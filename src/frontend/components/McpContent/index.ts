@@ -1,1 +1,2 @@
-export { McpContentPicker } from './McpContentPicker';
+export { McpResourcePreview } from './McpResourcePreview';
+export { addMcpContentToDraft } from './addMcpContentToDraft';

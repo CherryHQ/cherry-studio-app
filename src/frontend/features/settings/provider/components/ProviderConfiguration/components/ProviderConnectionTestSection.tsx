@@ -19,12 +19,14 @@ import { useProviderModelCheck } from '../../../models/hooks/useProviderModelChe
  */
 export function ProviderConnectionTestSection({
   apiKeys,
+  authOptional = false,
   disabled,
   models,
   providerId,
   signedIn = false,
 }: {
   apiKeys: readonly ApiKeyEntry[];
+  authOptional?: boolean;
   disabled: boolean;
   models: readonly Model[];
   providerId: string;
@@ -45,7 +47,9 @@ export function ProviderConnectionTestSection({
     setIsModelPickerOpen(false);
   }, []);
 
-  if (!selectedModel || (!signedIn && !apiKeys.some((entry) => entry.isEnabled))) return null;
+  if (!selectedModel || (!signedIn && !authOptional && !apiKeys.some((entry) => entry.isEnabled))) {
+    return null;
+  }
 
   const result =
     isChecking || modelStatus?.status === 'checking' ? (

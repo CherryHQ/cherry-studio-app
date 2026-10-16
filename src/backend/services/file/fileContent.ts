@@ -8,7 +8,6 @@ import type {
   ResolvedFile,
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type FileEntry,
   type FileEntryId,
@@ -17,13 +16,16 @@ import {
   FileEntryProvenanceSchema,
   MediaTypeSchema,
   SafeNameSchema,
+  TimestampSchema,
 } from '@/shared/data/types/file';
 
 import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
+import { FileHashError, hashLocalFile } from './fileHash';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
+  getTrashedImagePreviewUri,
   resolveCachedFilePreviewUris,
 } from './filePreviewStorage';
 import {
@@ -35,19 +37,10 @@ import {
   resolveFileEntry,
   rewriteInternalTextEntry,
   subscribeFileChanges,
+  trashInternalEntry,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
-
-export class FileHashError extends Error {
-  constructor(
-    readonly code: 'NATIVE_HASH_UNAVAILABLE' | 'VERIFICATION_FAILED' | 'RESOURCE_UNAVAILABLE',
-  ) {
-    super(code);
-    this.name = 'FileHashError';
-  }
-}
-const hashLogger = loggerService.withContext('FileHash');
 
 const createInternalEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema.optional(),
@@ -76,26 +69,7 @@ export const fileContent = {
     signal.throwIfAborted();
     const source = await resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id));
     if (!source) throw new FileHashError('RESOURCE_UNAVAILABLE');
-    let native: typeof import('@preeternal/react-native-file-hash');
-    try {
-      native =
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- old clients lack this native module
-        require('@preeternal/react-native-file-hash') as typeof import('@preeternal/react-native-file-hash');
-    } catch (error) {
-      hashLogger.warn('Native file hashing is unavailable', { error });
-      signal.throwIfAborted();
-      throw new FileHashError('NATIVE_HASH_UNAVAILABLE');
-    }
-    try {
-      const digest = await native.fileHash(source.uri, { algorithm: 'SHA-256', signal });
-      signal.throwIfAborted();
-      if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid native SHA-256 result');
-      return digest;
-    } catch (error) {
-      signal.throwIfAborted();
-      hashLogger.warn('Native file hashing failed', { error });
-      throw new FileHashError('VERIFICATION_FAILED');
-    }
+    return hashLocalFile(source.uri, signal);
   },
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
@@ -213,6 +187,8 @@ export const fileContent = {
     if (!snapshot) throw new Error('Upload snapshot is unavailable');
     return snapshot;
   },
+  moveToTrash: (id: FileEntryId) =>
+    trashInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   /**
    * Replace a draft text entry's bytes in place. Only a turn's own artifact is
@@ -224,8 +200,26 @@ export const fileContent = {
       { data: input.data, id: FileEntryIdSchema.parse(input.id) },
       signal,
     ),
-  generatePreviewUri: generateFilePreviewUri,
+  generatePreviewUri: async (entry: FileEntry) =>
+    (await fileEntryService.findById(entry.id)) ? generateFilePreviewUri(entry) : undefined,
+  getTrashThumbnailUri: (id: FileEntryId, deletedAt: number) =>
+    getTrashedImagePreviewUri(
+      fileEntryService,
+      FileEntryIdSchema.parse(id),
+      TimestampSchema.parse(deletedAt),
+    ),
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
-  resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),
+  resolveUris: async (entries: readonly FileEntry[]) => {
+    const available = new Set(
+      (await fileEntryService.findAvailableByIds(entries.map((entry) => entry.id))).map(
+        (entry) => entry.id,
+      ),
+    );
+    return entries.map((entry) =>
+      available.has(entry.id)
+        ? resolveCachedFilePreviewUris(entry)
+        : { previewUri: undefined, uri: undefined },
+    );
+  },
   resolve: (id: FileEntryId) => resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id)),
 };

@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { TranscriptSnapshot } from '@/frontend/appShell/conversation';
 import type { useDocumentExport } from '@/frontend/appShell/documentExport';
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import type { ChatShareTarget } from '../chatShareTarget';
 import { useShareChat } from '../useShareChat';
@@ -26,8 +27,14 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 type ShareChat = ReturnType<typeof useShareChat>;
-function Probe({ ref }: { ref: Ref<ShareChat> }) {
-  const share = useShareChat(target);
+function Probe({
+  ref,
+  shareTarget = target,
+}: {
+  ref: Ref<ShareChat>;
+  shareTarget?: ChatShareTarget;
+}) {
+  const share = useShareChat(shareTarget);
   useImperativeHandle(ref, () => share, [share]);
   return null;
 }
@@ -105,6 +112,29 @@ test.each([{ ids: ['answer'] }, { ids: ['answer', 'answer'] }])(
     );
   },
 );
+
+test('the normal share flow retains expanded translations for every format and both thinking snapshots', async () => {
+  const answer = message('answer', 'assistant');
+  answer.parts.unshift({ id: 'thought', type: 'reasoning', text: 'Thought', state: 'done' });
+  mockPrepare.mockResolvedValueOnce({ messages: [answer] });
+  const shareTarget: ChatShareTarget = {
+    ...target,
+    translations: {
+      answer: { sourceHash: sha256HexOfText('answer'), language: 'zh-CN', content: '译文' },
+    },
+  };
+  const ref = createRef<ShareChat>();
+  await act(async () => {
+    renderer = create(<Probe ref={ref} shareTarget={shareTarget} />);
+  });
+  await act(async () => ref.current!.shareChat(['answer']));
+  const request = mockOpen.mock.calls[0][0];
+  expect(request.allowedFormats).toEqual(['image', 'html', 'markdown']);
+  expect(JSON.stringify(request.input)).toContain('译文');
+  expect(JSON.stringify(request.input)).toContain('Thought');
+  expect(JSON.stringify(request.option?.uncheckedInput)).toContain('译文');
+  expect(JSON.stringify(request.option?.uncheckedInput)).not.toContain('Thought');
+});
 
 test('does not open the export after preparation was cancelled', async () => {
   let finish!: (value: TranscriptSnapshot) => void;

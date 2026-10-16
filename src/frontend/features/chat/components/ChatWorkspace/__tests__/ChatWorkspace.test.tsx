@@ -43,6 +43,7 @@ jest.mock('../hooks/useConversationFeedbackHint', () => ({
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
   useMessageTranslation: () => undefined,
+  useMessageTranslationStore: () => null,
 }));
 
 jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => null }));

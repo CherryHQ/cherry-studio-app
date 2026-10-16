@@ -16,17 +16,23 @@ const attachment = (id: string): ComposerAttachmentReady => ({
   status: 'ready',
   uri: `file:///${id}.png`,
 });
-type Props = { ids: string[]; draft?: string; attachments?: ComposerAttachmentReady[] };
+type Props = {
+  adoptSubmitted?: boolean;
+  attachments?: ComposerAttachmentReady[];
+  draft?: string;
+  ids: string[];
+};
 const noAttachments: ComposerAttachmentReady[] = [];
 
 describe('painting reference intent', () => {
   let renderer: ReactTestRenderer;
   let reference: ReturnType<typeof usePaintingReference>;
-  function Probe({ ids, draft = '', attachments = noAttachments }: Props) {
+  function Probe({ adoptSubmitted, ids, draft = '', attachments = noAttachments }: Props) {
     reference = usePaintingReference(
       { id: ids.join(','), images: ids.map(image) },
       draft,
       attachments,
+      adoptSubmitted,
     );
     return null;
   }
@@ -104,6 +110,13 @@ describe('painting reference intent', () => {
     act(() => reference.rejectSubmission());
     expect(reference.selection?.image.fileEntryId).toBe('manual');
     update({ ids: [] }, 'session-2');
+    expect(reference.selection).toBeUndefined();
+  });
+
+  it('leaves a submitted image behind when the caller owns the reference', () => {
+    update({ adoptSubmitted: false, ids: [] }, 'board');
+    act(() => reference.beginSubmission([attachment('focused')]));
+    act(() => reference.rejectSubmission());
     expect(reference.selection).toBeUndefined();
   });
 });

@@ -1,6 +1,10 @@
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
+import { fileEntryTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
@@ -30,6 +34,28 @@ const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 const fileChanges = new Emitter<FileEntryId>();
+
+export function notifyFileChange(id: FileEntryId): void {
+  fileChanges.fire(id);
+  publishDataApiChanges(['/trash', '/trash/summary']);
+}
+
+export async function trashInternalEntry(
+  entries: Pick<FileEntryService, 'withWriteTx'>,
+  id: FileEntryId,
+): Promise<boolean> {
+  storageMutationGate.assertWritable();
+  const rows = await entries.withWriteTx(async (tx) => {
+    storageMutationGate.assertWritable();
+    return tx
+      .update(fileEntryTable)
+      .set({ deletedAt: Date.now(), updatedAt: sql`${fileEntryTable.updatedAt}` })
+      .where(and(eq(fileEntryTable.id, id), isNull(fileEntryTable.deletedAt)))
+      .returning({ id: fileEntryTable.id });
+  });
+  if (rows.length) notifyFileChange(id);
+  return rows.length > 0;
+}
 
 /** All managed-file writers notify here, after their entry changes commit. */
 export function subscribeFileChanges(listener: (entryId: FileEntryId) => void): () => void {
@@ -279,44 +305,49 @@ export async function discardInternalEntries(
  * updated ahead of its bytes would misreport content the blob never held.
  */
 export async function rewriteInternalTextEntry(
-  entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
+  entries: Pick<FileEntryService, 'findByIdTx' | 'updateSizeTx' | 'withWriteTx'>,
   input: { data: string; id: FileEntryId },
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const entry = await entries.findById(input.id);
-  signal?.throwIfAborted();
-  if (!entry) {
-    throw new Error(`Draft file entry does not exist: ${input.id}`);
-  }
-  if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
-  const file = managedFileForEntry(entry);
-  if (!file.exists) {
-    throw new Error(`Draft file bytes are missing: ${input.id}`);
-  }
-  // Expo writes text synchronously. Once the bytes change, finish recording
-  // their size even if the turn is cancelled while its DB write is queued.
-  file.write(input.data);
-  const size = file.size;
-  if (!Number.isSafeInteger(size) || size < 0) {
-    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
-  }
-  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
-  fileChanges.fire(entry.id);
+  const updatedEntry = await entries.withWriteTx(async (tx) => {
+    signal?.throwIfAborted();
+    const entry = await entries.findByIdTx(tx, input.id, null);
+    signal?.throwIfAborted();
+    if (!entry) {
+      throw new Error(`Draft file entry does not exist: ${input.id}`);
+    }
+    if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
+    const file = managedFileForEntry(entry);
+    if (!file.exists) {
+      throw new Error(`Draft file bytes are missing: ${input.id}`);
+    }
+    // Availability, synchronous bytes and metadata share the deletion write queue.
+    // Once bytes change, complete bookkeeping even if the caller cancels.
+    file.write(input.data);
+    const size = file.size;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+    }
+    return entries.updateSizeTx(tx, entry.id, size);
+  });
+  fileChanges.fire(updatedEntry.id);
   return updatedEntry;
 }
 
 /**
  * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
  * best-effort (a leftover blob is reclaimable by the future cache-cleanup
- * sweep, while a dangling row would not be).
+ * sweep, while a dangling row would not be). A `deletedAt` limits removal to that trash
+ * incarnation, so a concurrent restore wins over stale cleanup.
  */
 export async function deleteInternalEntry(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   id: FileEntryId,
+  deletedAt?: number,
 ): Promise<boolean> {
   const deletedEntry = await entries.withWriteTx(async (tx) => {
-    const entry = await entries.findByIdTx(tx, id);
+    const entry = await entries.findByIdTx(tx, id, deletedAt);
     if (!entry) {
       return null;
     }
@@ -334,7 +365,7 @@ export async function deleteInternalEntry(
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
-  fileChanges.fire(id);
+  notifyFileChange(id);
   return true;
 }
 

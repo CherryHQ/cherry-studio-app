@@ -1,7 +1,7 @@
 import FileTextIcon from '@cherrystudio/app-icons/icons/file-text';
 import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import { Spinner, useToast } from '@cherrystudio/ui/components';
-import { isCancelledError, useQuery } from '@tanstack/react-query';
+import { isCancelledError, skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,58 +9,69 @@ import type { RouteHeaderProps } from '@/frontend/appShell/header';
 import { MarkdownText } from '@/frontend/components/MarkdownText';
 import { useBackendModule } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { useTranslationLanguageMenu } from '@/frontend/hooks/useTranslationLanguageMenu';
 import { TranslationError } from '@/shared/contracts/translation';
-import { resolveAppLanguage, type AppLanguage } from '@/shared/utils/languages';
+import type { AppLanguage } from '@/shared/utils/languages';
 
 import { SkillPage } from './SkillPage';
-import { skillTranslationQueryOptions } from './skillTranslation';
+import {
+  getCachedSkillTranslationLanguage,
+  skillTranslationQueryOptions,
+} from './skillTranslation';
 
 type SkillDocumentPageProps = {
   children?: ReactNode;
   contentHash: string;
   description: string;
+  footer?: ReactNode;
   headerProps: RouteHeaderProps;
   instructions: string;
 };
 
 export function SkillDocumentPage(props: SkillDocumentPageProps) {
-  const { i18n } = useTranslation();
-  const language = resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language);
-  return (
-    <DocumentContent key={`${props.contentHash}:${language}`} {...props} language={language} />
-  );
+  return <DocumentContent key={props.contentHash} {...props} />;
 }
 
 function DocumentContent({
   children,
   contentHash,
   description,
+  footer,
   headerProps,
   instructions,
-  language,
-}: SkillDocumentPageProps & { language: AppLanguage }) {
+}: SkillDocumentPageProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const translator = useBackendModule('translation');
+  const [language, setLanguage] = useState<AppLanguage | undefined>(() =>
+    getCachedSkillTranslationLanguage(contentHash),
+  );
   const markdown = `${description}\n\n${instructions}`;
   const translation = useQuery({
-    ...skillTranslationQueryOptions(translator, { contentHash, language, text: markdown }),
+    ...(language
+      ? skillTranslationQueryOptions(translator, { contentHash, language, text: markdown })
+      : { queryKey: ['skillTranslation', contentHash, null], queryFn: skipToken }),
     enabled: false,
   });
-  const [showTranslation, setShowTranslation] = useState(() => Boolean(translation.data));
+  const [showTranslation, setShowTranslation] = useState(false);
 
-  async function toggleTranslation() {
-    if (translation.data) {
-      setShowTranslation((value) => !value);
-      return;
-    }
-    const result = await translation.refetch();
-    if (result.data) {
+  async function translate(nextLanguage: AppLanguage) {
+    setLanguage(nextLanguage);
+    try {
+      await queryClient.fetchQuery(
+        skillTranslationQueryOptions(translator, {
+          contentHash,
+          language: nextLanguage,
+          text: markdown,
+        }),
+      );
       setShowTranslation(true);
-    } else if (result.error && !isCancelledError(result.error)) {
+    } catch (error) {
+      if (isCancelledError(error)) return;
       toast.show({
         label: t(
-          result.error instanceof TranslationError && result.error.code === 'model-unavailable'
+          error instanceof TranslationError && error.code === 'model-unavailable'
             ? 'translation.error.modelUnavailable'
             : 'translation.error.failed',
         ),
@@ -68,9 +79,14 @@ function DocumentContent({
       });
     }
   }
+  const languageItems = useTranslationLanguageMenu({
+    onSelect: (nextLanguage) => void translate(nextLanguage),
+    selectedLanguage: language ?? null,
+  });
 
   return (
     <SkillPage
+      footer={footer}
       headerProps={{
         ...headerProps,
         rightActions: [
@@ -89,9 +105,10 @@ function DocumentContent({
                 ? FileTextIcon
                 : LanguagesIcon,
             key: 'skill-translation',
-            onPress: () => void toggleTranslation(),
             testID: 'skill-translation',
-            type: 'icon',
+            ...(translation.data
+              ? { onPress: () => setShowTranslation((shown) => !shown), type: 'icon' as const }
+              : { items: languageItems, type: 'menu' as const }),
           },
           ...(headerProps.rightActions ?? []),
         ],

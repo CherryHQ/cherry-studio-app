@@ -132,7 +132,7 @@ export async function createRemoteMcpClient(input: {
     signal: AbortSignal,
   ) => Promise<import('@/shared/contracts/mcpInteraction').McpElicitationResponse>;
   authorization: Pick<McpOAuthRuntime, 'token' | 'rejected'>;
-  onToolsChanged?: () => void;
+  onCatalogChanged?: () => void;
 }): Promise<
   McpRuntimeClient & {
     callTool: (input: {
@@ -158,6 +158,11 @@ export async function createRemoteMcpClient(input: {
       interactiveRequests -= 1;
     }
   };
+  // Tools and prompts form one catalog with one refresh path.
+  const catalogChanged = () => {
+    catalogExpiresAt = 0;
+    if (foreground && !closed) input.onCatalogChanged?.();
+  };
   const connectionAbort = new AbortController();
   const tools = new Map<string, Tool>();
   const client = new Client(
@@ -171,13 +176,8 @@ export async function createRemoteMcpClient(input: {
       inputRequired: { autoFulfill: Boolean(input.elicit), maxRounds: 8 },
       // Cherry owns refresh, persistence, and the immutable catalog used by each turn.
       listChanged: {
-        tools: {
-          autoRefresh: false,
-          onChanged: () => {
-            catalogExpiresAt = 0;
-            if (foreground && !closed) input.onToolsChanged?.();
-          },
-        },
+        tools: { autoRefresh: false, onChanged: catalogChanged },
+        prompts: { autoRefresh: false, onChanged: catalogChanged },
       },
     },
   );
@@ -290,19 +290,26 @@ export async function createRemoteMcpClient(input: {
     void current?.close().catch(() => undefined);
   };
   const startSubscription = () => {
+    const capabilities = client.getServerCapabilities();
     if (
       closed ||
       !foreground ||
       subscription ||
       subscriptionPending ||
       client.getProtocolEra() !== 'modern' ||
-      !client.getServerCapabilities()?.tools?.listChanged
+      (!capabilities?.tools?.listChanged && !capabilities?.prompts?.listChanged)
     )
       return;
     const generation = subscriptionGeneration;
     subscriptionPending = true;
     void client
-      .listen({ toolsListChanged: true }, { timeout: 15_000 })
+      .listen(
+        {
+          ...(capabilities?.tools?.listChanged ? { toolsListChanged: true } : {}),
+          ...(capabilities?.prompts?.listChanged ? { promptsListChanged: true } : {}),
+        },
+        { timeout: 15_000 },
+      )
       .then((value) => {
         if (closed || !foreground || generation !== subscriptionGeneration) {
           void value.close().catch(() => undefined);

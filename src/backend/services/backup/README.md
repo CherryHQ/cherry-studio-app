@@ -34,9 +34,11 @@ A finished export stays in the `exported` phase, carrying the archive URI and co
 until `cancel()` dismisses it. Dismissing deletes the archive, as does starting the next export;
 the user keeps only copies saved or shared from it.
 
-Hashing is native and streaming; ZIP processing uses bounded chunks. Limits are 1 GiB compressed,
-1 GiB expanded and 10,000 payload entries, with a 4 MiB manifest. Free space is checked while copying
-and extracting. Cancellation removes work owned by the operation before activation is committed.
+Hashing uses the file module's shared native streaming hash. ZIP processing uses the restricted
+reader and streaming writer in `src/backend/utils` (shared with Skill packages and diagnostics), in
+bounded chunks. Limits are 1 GiB compressed, 1 GiB expanded and 10,000 payload entries, with a
+4 MiB manifest. Free space is checked while copying and extracting. Cancellation removes work
+owned by the operation before activation is committed.
 
 ## Restore
 
@@ -62,9 +64,9 @@ WebDAV/S3, scheduled backups, encryption, partial restore and desktop interchang
 
 ## Verification
 
-Focused suites cover mutation admission, runtime progress state, serialized paths and limits, ZIP
-truncation/encryption, native-process state transitions, custom trigger comparison and SQLite
-normalization/rollback. Device acceptance must also
-exercise export/save/import on both platforms, cancellation, low disk, native termination during
-each restore phase, and the native module's durability. Those checks and native builds are not
-implied by editing this code.
+Focused suites cover mutation admission, runtime progress state, serialized paths and limits, a
+pack/unpack round trip, ZIP truncation/encryption (in the shared reader suite), native-process
+state transitions, custom trigger comparison and SQLite normalization/rollback. Device acceptance
+must also exercise export/save/import on both platforms, cancellation, low disk, native termination
+during each restore phase, and the native module's durability. Those checks and native builds are
+not implied by editing this code.

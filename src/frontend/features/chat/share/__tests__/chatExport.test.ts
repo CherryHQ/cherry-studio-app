@@ -1,5 +1,7 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { DOCUMENT_EXPORT_MAX_SECTIONS } from '@/shared/contracts/documentExport';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { prepareChatExport } from '../prepareChatExport';
 import {
@@ -19,6 +21,7 @@ const options: ChatExportOptions = {
     reasoning: 'Reasoning',
     file: 'File',
     status: 'Status',
+    translation: (language) => `Translation (${language})`,
     messageStatuses: {
       pending: 'Pending',
       streaming: 'Streaming',
@@ -64,6 +67,59 @@ const answer = message('b', 'assistant', [
 const question = message('a', 'user', [
   { id: 'question', type: 'text', text: 'Question?', state: 'done' },
 ]);
+
+test.each([false, true])(
+  'expanded translations follow selected messages independently of process visibility (%s)',
+  (includeProcess) => {
+    const document = toChatExportDocument([question, answer], {
+      ...options,
+      includeProcess,
+      translations: {
+        b: {
+          sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+          language: 'zh-CN',
+          content: '当前语言译文',
+        },
+        unselected: { sourceHash: 'a'.repeat(64), language: 'fr-FR', content: 'Unselected' },
+      },
+    });
+    expect(document.sections).toHaveLength(2);
+    expect(document.sections[1].blocks).toEqual(
+      expect.arrayContaining([
+        { kind: 'markdown', source: 'Final answer' },
+        { kind: 'markdown', source: '---\n\n### Translation (zh-CN)\n\n当前语言译文' },
+      ]),
+    );
+    expect(JSON.stringify(document.sections[0])).not.toContain('当前语言译文');
+    expect(JSON.stringify(document)).not.toContain('Unselected');
+  },
+);
+
+test('saved translations stay out of sharing when folded, and stale translations never accompany changed text', () => {
+  const saved: AgentMessageView = {
+    ...answer,
+    translations: {
+      sourceHash: sha256HexOfText(messageTranslationText(answer.parts)!),
+      results: {
+        'zh-CN': { content: '中文缓存', createdAt: 1 },
+        'fr-FR': { content: 'French cache', createdAt: 2 },
+      },
+    },
+  };
+  expect(JSON.stringify(toChatExportDocument([saved], options))).not.toContain('中文缓存');
+  const changed = {
+    ...answer,
+    parts: [{ id: 'new', type: 'text' as const, text: 'Changed', state: 'done' as const }],
+  };
+  const document = toChatExportDocument([changed], {
+    ...options,
+    translations: {
+      b: { sourceHash: saved.translations!.sourceHash, language: 'zh-CN', content: '旧译文' },
+    },
+  });
+  expect(JSON.stringify(document)).not.toContain('旧译文');
+  expect(JSON.stringify(document)).toContain('Changed');
+});
 
 test('exports native citations and preserves the final answer before source metadata', () => {
   const native = message('native', 'assistant', [

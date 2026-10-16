@@ -19,6 +19,13 @@ export type MessageProcessGroup<TItem extends MessageProcessItem> =
   | { kind: 'part'; item: TItem }
   | { kind: 'tools'; items: TItem[]; tools: ToolMessagePart[] };
 
+/** The newest text, reasoning, or tool part; only it can still be thinking or answering. */
+export function findLatestActivityPart(parts: readonly CherryMessagePart[]) {
+  return parts.findLast(
+    (part) => part.type === 'text' || part.type === 'reasoning' || isToolMessagePart(part),
+  );
+}
+
 /** Keep narration between tool calls inside the same disclosure. */
 export function groupMessageProcessItems<TItem extends MessageProcessItem>(
   items: readonly TItem[],

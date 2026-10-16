@@ -41,6 +41,27 @@ function database() {
   return { raw, adapter };
 }
 
+test('restore preserves message-owned translations together with the original parts', async () => {
+  const { raw, adapter } = database();
+  try {
+    const data = JSON.stringify({
+      parts: [],
+      translations: {
+        sourceHash: 'a'.repeat(64),
+        results: { 'zh-CN': { content: '保留译文', createdAt: 1 } },
+      },
+    });
+    raw.prepare('UPDATE agent_session_message SET data = ? WHERE id = ?').run(data, 'complete');
+    await restoreDeviceState(adapter, []);
+    expect(
+      raw.prepare("SELECT data FROM agent_session_message WHERE id = 'complete'").get(),
+    ).toEqual({ data });
+    expect(raw.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  } finally {
+    raw.close();
+  }
+});
+
 test('schema comparison includes extra triggers whose names resemble SQLite internals or FTS shadow tables', async () => {
   const { raw, adapter } = database();
   try {

@@ -69,6 +69,24 @@ matching Apple app identifiers, widget identifiers, App Groups, and provisioning
 project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
 in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
 
+## iOS HTTP Connections
+
+Cherry accepts user-configured AI provider and MCP server addresses, including self-hosted HTTP
+endpoints whose hosts are unknown at build time. `app.json` sets
+`NSAppTransportSecurity.NSAllowsArbitraryLoads` to `true` so these connections can reach the server.
+Prefer HTTPS with a valid certificate when configuring a public service.
+
+Do not add `NSAllowsLocalNetworking`, `NSAllowsArbitraryLoadsForMedia`, or
+`NSAllowsArbitraryLoadsInWebContent` alongside this setting: their presence makes iOS ignore
+`NSAllowsArbitraryLoads`, which can block public HTTP endpoints with `NSURLErrorDomain -1022`.
+See Apple's [ATS configuration rules](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowsarbitraryloads).
+The separate local-network permission description and Bonjour service declarations remain required.
+App Store review requires justification for this exception: users connect to their own servers,
+including servers that do not support HTTPS.
+
+ATS policy is embedded in the native installation package. Changing it requires a new iOS package;
+an OTA update cannot change the policy in an existing installation.
+
 ## APK Update Distribution
 
 Preview and production packages also include the EAS Update client for compatible code and asset

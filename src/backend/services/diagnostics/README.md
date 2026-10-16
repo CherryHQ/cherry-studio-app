@@ -152,8 +152,9 @@ Each upload attempt owns its temporary directory. A `finally` block removes the 
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
 remove staged files. There is no retained ZIP, save-original action, or automatic retry. The form
 retains its in-memory description and screenshot selection after a failed attempt; an uncertain
-result warns about duplicate reports. `modules/diagnostics` supplies file identity, hashing, signing,
-foreground upload and cancellation.
+result warns about duplicate reports. `modules/diagnostics` supplies file identity, signing,
+foreground upload and cancellation; the
+archive hash comes from the file module's shared native hash.
 
 ## Build Configuration
 

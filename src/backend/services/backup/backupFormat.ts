@@ -7,7 +7,6 @@ export const BACKUP_LIMITS = {
   expandedBytes: 1024 * 1024 * 1024,
   entries: 10_000,
   manifestBytes: 4 * 1024 * 1024,
-  chunkBytes: 64 * 1024,
 } as const;
 
 const HashSchema = z.string().regex(/^[0-9a-f]{64}$/);

@@ -560,6 +560,117 @@ describe('DesktopConnectionService provider synchronization', () => {
     ]);
   });
 
+  it.each([{ authOptional: true }, { authConfig: { required: false, type: 'api-key' } }])(
+    'persists optional authentication for a keyless custom gateway: %j',
+    async (authentication) => {
+      const data = DesktopProvidersSnapshotSchema.parse({
+        version: 1,
+        providers: [{ ...provider('gateway'), ...authentication, apiKeys: [] }],
+      });
+
+      expect((await service.preview(data)).providers[0]?.unavailableReason).toBeUndefined();
+      await importSnapshot(data);
+
+      const [row] = await testDb.database.select().from(userProviderTable);
+      expect(row).toMatchObject({
+        apiKeys: [],
+        authConfig: { required: false, type: 'api-key' },
+      });
+    },
+  );
+
+  it.each(['lmstudio', 'gpustack', 'ovms', 'ollama'])(
+    'accepts a keyless %s snapshot without an explicit authentication declaration',
+    async (providerId) => {
+      const data = DesktopProvidersSnapshotSchema.parse({
+        version: 1,
+        providers: [{ ...provider(providerId), apiKeys: [] }],
+      });
+
+      expect((await service.preview(data)).providers[0]?.unavailableReason).toBeUndefined();
+      await expect(importSnapshot(data)).resolves.toMatchObject({ providersAdded: 1 });
+    },
+  );
+
+  it('honors an explicit key requirement over an optional preset default', async () => {
+    const data = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [{ ...provider('lmstudio'), authOptional: false, apiKeys: [] }],
+    });
+
+    expect((await service.preview(data)).providers[0]?.unavailableReason).toBe('missing-api-key');
+    await expect(importSnapshot(data)).rejects.toMatchObject({
+      details: { reason: 'missing-api-key' },
+    });
+  });
+
+  it('imports every selectable provider from a mixed desktop preview and safely repeats the sync', async () => {
+    const data = DesktopProvidersSnapshotSchema.parse({
+      version: 1,
+      providers: [
+        provider('openai', ['gpt-5']),
+        {
+          ...provider('anthropic', ['claude-test']),
+          defaultChatEndpoint: ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
+        },
+        {
+          ...provider('gemini', ['gemini-test']),
+          defaultChatEndpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+        },
+        ...['lmstudio', 'gpustack', 'ovms', 'ollama'].map((id) => ({
+          ...provider(id, ['local-model']),
+          apiHost: 'http://localhost:11434',
+          apiKeys: [],
+          authOptional: true,
+        })),
+        {
+          ...provider('studio-copy', ['custom-model']),
+          apiKeys: [],
+          presetProviderId: 'lmstudio',
+        },
+        { ...provider('keyless-custom', []), apiKeys: [], authOptional: true },
+        { ...provider('missing-key'), apiKeys: [] },
+        { ...provider('disabled'), isEnabled: false },
+        {
+          ...provider('invalid-custom-endpoint'),
+          apiHost: undefined,
+          defaultChatEndpoint: undefined,
+        },
+      ],
+    });
+    const preview = await service.preview(data);
+    const input = {
+      selections: preview.providers
+        .filter((provider) => !provider.unavailableReason)
+        .map((provider) => ({ providerId: provider.id, mode: 'provider-models' as const })),
+    };
+    expect(input.selections).toHaveLength(9);
+
+    await expect(service.import(connectionId, data, input, signal())).resolves.toEqual({
+      providersAdded: 9,
+      providersUpdated: 0,
+      modelsAdded: 8,
+      modelsSkipped: 0,
+    });
+    await expect(service.import(connectionId, data, input, signal())).resolves.toEqual({
+      providersAdded: 0,
+      providersUpdated: 9,
+      modelsAdded: 0,
+      modelsSkipped: 8,
+    });
+    const providers = await testDb.database.select().from(userProviderTable);
+    expect(providers).toHaveLength(9);
+    expect(await testDb.database.select().from(userModelTable)).toHaveLength(8);
+    expect(providers.find((provider) => provider.providerId === 'ollama')?.endpointConfigs).toEqual(
+      {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'http://localhost:11434',
+        },
+      },
+    );
+  });
+
   it('does not delete models absent from the desktop snapshot', async () => {
     await importSnapshot(snapshot(provider('relay', ['mobile-only', 'shared'])));
     const before = await testDb.database.select().from(userModelTable);

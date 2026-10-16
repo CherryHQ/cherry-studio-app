@@ -1,66 +1,29 @@
-import { UriTemplate } from '@modelcontextprotocol/client';
-
-import type { McpContentEntry, McpContentPreview } from '@/shared/contracts/mcp';
+import type { McpContentEntry, McpContentPreview, McpPromptEntry } from '@/shared/contracts/mcp';
 import { readMcpBinaryBlock, stripMcpMetadata } from '@/shared/contracts/mcpContent';
 
 import type { McpRuntimeClient } from './mcpProtocolClient';
+import { McpRuntimeToolError } from './mcpRuntimeAdapter';
 
-export async function listMcpContent(
+export async function listMcpPrompts(
   client: McpRuntimeClient,
   signal: AbortSignal,
-): Promise<McpContentEntry[]> {
-  const [resources, templates, prompts] = await Promise.all([
-    client.protocolInfo?.resources
-      ? client.listResources?.(undefined, { signal, cacheMode: 'refresh' })
-      : undefined,
-    client.protocolInfo?.resources
-      ? client.listResourceTemplates?.(undefined, { signal, cacheMode: 'refresh' })
-      : undefined,
-    client.protocolInfo?.prompts
-      ? client.listPrompts?.(undefined, { signal, cacheMode: 'refresh' })
-      : undefined,
-  ]);
-  const result: McpContentEntry[] = [
-    ...(resources?.resources ?? []).map((item) => ({
-      kind: 'resource' as const,
-      key: item.uri,
-      title: item.title ?? item.name,
-      description: item.description,
-      arguments: [],
+): Promise<McpPromptEntry[]> {
+  if (!client.protocolInfo?.prompts || !client.listPrompts) return [];
+  const result = await client.listPrompts(undefined, { signal, cacheMode: 'refresh' });
+  const entries: McpPromptEntry[] = result.prompts.map((item) => ({
+    kind: 'prompt',
+    key: item.name,
+    title: item.title?.trim() || item.name,
+    description: item.description,
+    arguments: (item.arguments ?? []).map((arg) => ({
+      name: arg.name,
+      description: arg.description,
+      required: arg.required ?? false,
     })),
-    ...(templates?.resourceTemplates ?? []).flatMap((item) => {
-      try {
-        return [
-          {
-            kind: 'template' as const,
-            key: item.uriTemplate,
-            title: item.title ?? item.name,
-            description: item.description,
-            arguments: new UriTemplate(item.uriTemplate).variableNames.map((name) => ({
-              name,
-              required: true,
-            })),
-          },
-        ];
-      } catch {
-        return [];
-      }
-    }),
-    ...(prompts?.prompts ?? []).map((item) => ({
-      kind: 'prompt' as const,
-      key: item.name,
-      title: item.title ?? item.name,
-      description: item.description,
-      arguments: (item.arguments ?? []).map((arg) => ({
-        name: arg.name,
-        description: arg.description,
-        required: arg.required ?? false,
-      })),
-    })),
-  ];
-  if (result.length > 2000 || JSON.stringify(result).length > 2 * 1024 * 1024)
-    throw new Error('The MCP content catalog exceeds the size limit.');
-  return result;
+  }));
+  if (entries.length > 2000 || JSON.stringify(entries).length > 2 * 1024 * 1024)
+    throw new Error('The MCP prompt catalog exceeds the size limit.');
+  return entries;
 }
 
 export async function readMcpContent(
@@ -71,13 +34,17 @@ export async function readMcpContent(
   signal: AbortSignal,
 ): Promise<McpContentPreview> {
   if (entry.arguments.some((arg) => arg.required && !args[arg.name]?.trim()))
-    throw new Error('Missing content arguments.');
+    throw new McpRuntimeToolError('mcp_tool_input_invalid', 'Missing content arguments.', false);
   if (JSON.stringify(args).length > 64 * 1024)
-    throw new Error('Content arguments exceed the size limit.');
+    throw new McpRuntimeToolError(
+      'mcp_tool_input_invalid',
+      'Content arguments exceed the size limit.',
+      false,
+    );
   const blocks: unknown[] = [];
   if (entry.kind === 'prompt') {
     if (!client.protocolInfo?.prompts || !client.getPrompt)
-      throw new Error('Prompts are unavailable.');
+      throw new McpRuntimeToolError('mcp_tool_unavailable', 'Prompts are unavailable.', false);
     const result = await client.getPrompt(
       { name: entry.key, arguments: args },
       { signal, timeout: 10 * 60 * 1000 },
@@ -88,10 +55,9 @@ export async function readMcpContent(
     }
   } else {
     if (!client.protocolInfo?.resources || !client.readResource)
-      throw new Error('Resources are unavailable.');
-    const uri = entry.kind === 'template' ? new UriTemplate(entry.key).expand(args) : entry.key;
+      throw new McpRuntimeToolError('mcp_tool_unavailable', 'Resources are unavailable.', false);
     const result = await client.readResource(
-      { uri },
+      { uri: entry.key },
       { signal, cacheMode: 'refresh', timeout: 10 * 60 * 1000 },
     );
     blocks.push(...result.contents.map((resource) => ({ type: 'resource', resource })));
@@ -106,7 +72,11 @@ export async function readMcpContent(
     const binary = readMcpBinaryBlock(block);
     if (binary) {
       if (!binary.valid || binary.bytes > remaining)
-        throw new Error('The MCP file exceeds the size limit or has an invalid format.');
+        throw new McpRuntimeToolError(
+          'mcp_tool_result_invalid',
+          'The MCP file exceeds the size limit or has an invalid format.',
+          false,
+        );
       remaining -= binary.bytes;
       files.push({
         data: binary.data,
@@ -117,6 +87,11 @@ export async function readMcpContent(
     else if (typeof resource?.text === 'string') text += `${resource.uri}\n${resource.text}\n`;
     else text += `${JSON.stringify(stripMcpMetadata(block))}\n`;
   }
-  if (text.length > 256 * 1024) throw new Error('The MCP content exceeds the text limit.');
+  if (text.length > 256 * 1024)
+    throw new McpRuntimeToolError(
+      'mcp_tool_result_invalid',
+      'The MCP content exceeds the text limit.',
+      false,
+    );
   return { serverName, title: entry.title, text, files };
 }

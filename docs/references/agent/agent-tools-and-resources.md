@@ -386,11 +386,24 @@ the overall operation deadline and grant policy. The initial MCP challenge probe
 response headers through streaming fetch, because that endpoint can return a long-lived event
 stream; it cancels the body immediately.
 
-The composer lists resources, URI templates, and prompts for enabled custom servers. Selecting an
-entry reads it through its own server, previews it, and adds it to the user draft only after Add.
-Prompt roles remain quoted user content. Bounded binary content becomes managed attachments;
-neither listing nor preview starts an Agent turn. Tool-returned resource links use the same preview
-flow. Their host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
+Each custom-server catalog discovery lists prompt metadata alongside tools and stores both in the
+connection-fingerprinted catalog file, so prompts share the tool catalog's expiry, list-change, and
+rejection refreshes. A prompt-listing failure never blocks tools and keeps the last known prompts. A
+stored catalog written before prompt discovery refreshes on the next turn. The composer's MCP entry
+appears only when the current Agent has an enabled server-level binding to an enabled custom server
+with cached prompts. Both the entry and its compact menu read local metadata without connecting or
+listing remotely. Selecting a prompt fetches its messages through `prompts/get` on the server's
+shared connection, collecting arguments through the existing question bottom sheet when needed,
+then inserts the result into the draft. A prompt without arguments shows progress in its menu row;
+dismissing the menu abandons it. Required arguments must be answered; optional arguments may be
+skipped. The sheet retains answers across navigation and failed submissions, and cancellation
+leaves the draft unchanged. There is no separate preview step. The native owner rechecks the Agent
+binding and server configuration before resolving a cached prompt. Prompt roles remain quoted user
+content.
+
+Tool-returned resource links keep their preview and add content to the user draft only after Add.
+Bounded binary content becomes managed attachments; neither discovery nor preview starts an Agent
+turn. A link's host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
 sends the URI to that server even when the URI uses HTTPS or is absent from its resource list.
 An edited connection cannot reinterpret an old link. Form and URL elicitation need an operation in
 flight. A question asked during tool calls belongs to its server, the scope the consent dialog

@@ -46,7 +46,7 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
     already hidden, it detaches immediately. Only a new field focus reconnects it. Chat enables
     this behavior; its list does not dismiss the keyboard again.
 - `ComposerField` — the text field, plus pasting images into attachments. Focus activates the
-  shared editing state. It forwards `style`, `onFocus`, and `onBlur`; native blur alone does not
+  shared editing state. It forwards `layout`, `style`, `onLayout`, `onFocus`, and `onBlur`; native blur alone does not
   end editing, since a composer control may be taking over the interaction.
   Plugin and Skill references use the link color and stay inline at the field's font size. The
   native formatter marks their text range with the `com.cherryai.composer-mention-icon` attribute;
@@ -77,9 +77,15 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   as painting settings, use the same action. An alternative field passes its blur handle to
   `activateInput` on focus so background dismissal targets that field; the ordinary field resumes
   ownership on its next focus.
+- `ComposerEditor` and `ComposerEditorAccessories` connect CherryUI's shared compact-to-editing
+  layout and large-editor controls to the app field and translated labels. Callers compose the
+  toolbar and decide what activates editing: chat includes attachments, while painting keeps its
+  automatic reference compact until focus or draft text. The compact accessory is a preview only;
+  attachment preview and removal stay in `ComposerAttachmentStrip` above the active field.
 - `ComposerDock` — connects that input-context state to CherryUI's
-  `Composer.Dock`. Chat keeps it in normal parent flow; floating surfaces can pair it with
-  CherryUI's `useComposerDockLayout` measurement and content-inset primitive.
+  `Composer.Dock`. Chat and painting use its `expandable` layout: a compact-height placeholder
+  reserves content space while the same dock overlays the page during manual expansion.
+  Other floating surfaces can use CherryUI's `useComposerDockLayout` inset primitive.
 - `ComposerDismissArea` — ends editing on a completed, unhandled background press. Scrolling and
   child controls cancel the press inside CherryUI's native `BackgroundPressArea`, including a touch
   that stops momentum. Message text still dismisses; message controls and the scroll-to-bottom
@@ -96,8 +102,10 @@ it rejects, explain the outcome, log, and dismiss the input with its native keyb
 protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
 surface, so there is no way to compose a composer that skips it. A synchronous
-in-flight lock also prevents a repeated gesture from snapshotting and restoring
-the same draft twice. Failure restoration also retains text and attachments added while the send was pending. A rejection named `AbortError` is a send the user stopped: the draft is restored without a failure notice. Pasting is baked into `ComposerField` for the same reason.
+in-flight lock belongs to the composer session, so changing input presentations cannot
+start another send or clear a newer draft while the first is pending. `useComposerState().isSubmitting`
+covers preparation, admission, and failure recovery; it does not wait for background generation.
+Failure restoration also retains text and attachments added while the send was pending. A rejection named `AbortError` is a send the user stopped: the draft is restored without a failure notice. Pasting is baked into `ComposerField` for the same reason.
 
 The full checklist for it is the behaviour contract in
 `src/frontend/features/chat/components/ChatInput/README.md` — that is the screen you actually
@@ -134,6 +142,12 @@ walk to verify it.
 
 ## Behavior notes
 
+- Each chat or painting screen's `Composer.Expansion` owns manual large-editor presentation separately from
+  editing and draft state. Expand/collapse never moves the editor into a portal or requests native
+  focus/blur. Sending and a newly mounted composer session collapse the large editor. Native
+  keyboard hiding and input replacements retain its size choice; only field focus reconnects
+  keyboard tracking. `Composer.ExpansionMeasure` accounts for accessory height changes so the
+  editor stays below the top safe area when attachments grow or disappear.
 - Input surfaces have two policies. An overlay (the ＋ menu or chat effort
   slider) preserves field focus and the live keyboard. A replacement (model or
   settings Sheet, camera, photo library, or file picker) first disables dock

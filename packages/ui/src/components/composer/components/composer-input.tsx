@@ -8,8 +8,11 @@ import type { ComposerInputHandle, ComposerInputProps } from '../composer.types'
 import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
 import { pasteWrapperStyle, textInputBoxStyle } from '../utils/composer-layout';
 import { composerTextStyle } from '../utils/composer-text-style/composer-text-style';
+import { useComposerEditorInput } from './composer-editor';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
+const fillWrapperStyle = { ...pasteWrapperStyle, height: '100%' } as const;
+const fillInputStyle = { height: '100%', maxHeight: '100%' } as const;
 
 /**
  * The text field, growing with its content up to a capped height.
@@ -25,9 +28,11 @@ const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
  */
 export function ComposerInput({
   autoFocus = false,
+  layout,
   markdownStyle,
   onBlur,
   onFocus,
+  onLayout,
   onPaste,
   placeholder,
   ref,
@@ -36,6 +41,10 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
   const { changeText } = useComposerActions('Composer.Input');
+  const editorInput = useComposerEditorInput();
+  const inputLayout = layout ?? editorInput?.layout ?? 'content';
+  const editorInset = editorInput?.style;
+  const fieldStyle = editorInput && inputLayout === 'fill' ? undefined : style;
   // The rich editor is a Fabric host rather than RN's TextInput, so Uniwind
   // cannot resolve a className on it. Resolve the two base text properties here
   // instead. Use the font-size-only utility deliberately: the upstream Android
@@ -57,8 +66,15 @@ export function ComposerInput({
   // Flattened rather than passed as an array: this input takes a single style
   // object, not RN's `StyleProp`.
   const resolvedStyle = useMemo(
-    () => StyleSheet.flatten([baseTextStyle, inputStyle, style]),
-    [baseTextStyle, style],
+    () =>
+      StyleSheet.flatten([
+        baseTextStyle,
+        inputStyle,
+        inputLayout === 'fill' && fillInputStyle,
+        fieldStyle,
+        editorInset,
+      ]),
+    [baseTextStyle, editorInset, fieldStyle, inputLayout],
   );
 
   const handleChangeMarkdown = useCallback(
@@ -88,7 +104,10 @@ export function ComposerInput({
     // and the alternative — wrapping only when the prop is present — would make
     // the field's own view hierarchy depend on a callback, so a caller adding
     // paste support later would be debugging a layout change they didn't make.
-    <TextInputWrapper onPaste={onPaste} style={pasteWrapperStyle}>
+    <TextInputWrapper
+      onPaste={onPaste}
+      style={inputLayout === 'fill' ? fillWrapperStyle : pasteWrapperStyle}
+    >
       <EnrichedMarkdownTextInput
         autoFocus={autoFocus}
         cursorColor={typeof selectionTint === 'string' ? selectionTint : undefined}
@@ -103,6 +122,7 @@ export function ComposerInput({
         onBlur={onBlur}
         onChangeMarkdown={handleChangeMarkdown}
         onFocus={onFocus}
+        onLayout={onLayout}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

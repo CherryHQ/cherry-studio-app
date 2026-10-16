@@ -12,7 +12,13 @@ import { useMainHeaderAgent } from './MainHeaderAgentLabel';
 import { MainHeaderAgentPickerSheet } from './MainHeaderAgentPickerSheet';
 import { MainHeaderView } from './MainHeaderView/MainHeaderView';
 
-export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+export function MainHeader({
+  blurTarget,
+  hidden,
+}: {
+  blurTarget: RefObject<View | null>;
+  hidden?: boolean;
+}) {
   const { agent, openNewSession } = useMainHeaderAgent();
   const [pickerOpen, setPickerOpen] = useState(false);
   return (
@@ -20,6 +26,7 @@ export function MainHeader({ blurTarget }: { blurTarget: RefObject<View | null> 
       <MainHeaderView
         agent={agent}
         blurTarget={blurTarget}
+        hidden={hidden}
         onNewChat={openNewSession}
         onAgentPress={() => {
           Keyboard.dismiss();

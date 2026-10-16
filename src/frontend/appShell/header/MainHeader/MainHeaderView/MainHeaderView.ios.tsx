@@ -20,18 +20,21 @@ const HEADER_BLUR_BAND_HEIGHT_RATIOS = [1, 0.72, 0.46, 0.22] as const;
 const HEADER_BLUR_INTENSITY = 9;
 const legacyHeaderBackground = () => <LegacyHeaderBackground />;
 
-export function MainHeaderView({ agent, onAgentPress, onNewChat }: MainHeaderViewProps) {
+export function MainHeaderView({ agent, hidden, onAgentPress, onNewChat }: MainHeaderViewProps) {
   const isPreview = useIsPreview();
   const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
   if (isPreview) {
     return null;
   }
 
+  if (hidden) return <Stack.Screen options={{ ...headerScreenOptions, headerShown: false }} />;
+
   return (
     <>
       <Stack.Screen
         options={{
           ...headerScreenOptions,
+          headerShown: true,
           title: '',
           headerTransparent: true,
           headerBackground: isLiquidGlassAvailable ? undefined : legacyHeaderBackground,

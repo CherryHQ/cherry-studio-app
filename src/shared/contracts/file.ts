@@ -48,10 +48,14 @@ export interface FileModule {
   editImage(input: EditFileImageInput, signal?: AbortSignal): Promise<ResolvedFile>;
   /** Validates managed references and parses supported content only when the caller submits. */
   prepareAttachments(input: PrepareFileAttachmentsInput): Promise<PreparedFile[]>;
+  /** User deletion keeps bytes in the trash for 30 days. */
+  moveToTrash(id: FileEntryId): Promise<boolean>;
   /** Hard-delete: removes the entry row and its bytes. */
   delete(id: FileEntryId): Promise<boolean>;
-  /** Generates or reads one image preview without re-reading its database row. */
+  /** Generates or reads an image preview only while its entry is active. */
   generatePreviewUri(entry: FileEntry): Promise<string | undefined>;
+  /** Thumbnail-only access to the same recoverable deletion shown in the trash. */
+  getTrashThumbnailUri(id: FileEntryId, deletedAt: number): Promise<string | undefined>;
   /** Mobile URI equivalent of Cherry Desktop's getUrl. */
   getUri(id: FileEntryId): Promise<string | undefined>;
   /** Resolves a database page without re-reading entries one by one. */

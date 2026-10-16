@@ -22,12 +22,14 @@ import { createPastedImageAttachmentDraft } from '../utils/composerAttachments';
  */
 type ComposerFieldProps = Pick<
   ComposerInputProps,
-  'onBlur' | 'onFocus' | 'placeholder' | 'style' | 'testID'
+  'layout' | 'onBlur' | 'onFocus' | 'onLayout' | 'placeholder' | 'style' | 'testID'
 > & { attachmentMode?: 'images' | 'text-only' };
 
 export function ComposerField({
+  layout,
   onBlur,
   onFocus,
+  onLayout,
   placeholder,
   style,
   testID,
@@ -75,9 +77,11 @@ export function ComposerField({
 
   return (
     <Composer.Input
+      layout={layout}
       markdownStyle={markdownStyle}
       onBlur={onBlur}
       onFocus={handleFocus}
+      onLayout={onLayout}
       onPaste={handlePaste}
       placeholder={placeholder ?? t('chat.inputPlaceholder')}
       ref={inputRef}

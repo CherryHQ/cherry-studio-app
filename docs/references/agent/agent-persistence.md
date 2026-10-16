@@ -6,6 +6,13 @@ resumable execution working copies. Reads and search use Cherry directly; backup
 Cherry and managed resources. Pi copies persist across launches, are rebuilt from Cherry when
 missing, and are never a backup input.
 
+Local message translations are optional reading aids in `agent_session_message.data.translations`,
+beside the protocol `parts`: `{ sourceHash, results: { [language]: { content, createdAt } } }`.
+Old rows without this field remain valid. History reads carry it with the message; the message-owned
+translation mutation validates the current source and merges one completed language transactionally.
+Retry retains the reading aids until a successful answer has different source text. Forking, deletion,
+backup and restore follow the message data. Runtime history assembly consumes only `parts`.
+
 This document defines the durable SQLite schema and production adapter behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agent/sessionStore/AgentSessionStore.ts) port. It
 implements the storage side of the [Agent Protocol](./agent-protocol.md) and follows the authority

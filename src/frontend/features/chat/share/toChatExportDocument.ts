@@ -12,10 +12,16 @@ import {
 } from '@/shared/contracts/documentExport';
 import { CHERRY_AGENT_AVATAR } from '@/shared/data/types/agent';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
+import type { AppLanguage } from '@/shared/utils/languages';
+import { messageTranslationText } from '@/shared/utils/messageTranslation';
+import { sha256HexOfText } from '@/shared/utils/sha256';
+
+import type { ChatShareTranslations } from './chatShareHandoff';
 
 export type ChatExportOptions = {
   title: string;
   includeProcess: boolean;
+  translations?: ChatShareTranslations;
   labels: {
     user: string;
     assistant: string;
@@ -24,6 +30,7 @@ export type ChatExportOptions = {
     reasoning: string;
     file: string;
     status: string;
+    translation(language: AppLanguage): string;
     messageStatuses: Record<AgentMessageView['status'], string>;
   };
 };
@@ -130,6 +137,17 @@ export function toChatExportDocument(
       });
     for (const attachment of message.attachments ?? [])
       blocks.push({ kind: 'attachment', ...attachment });
+    const translation = options.translations?.[message.id];
+    const source =
+      translation &&
+      message.role === 'assistant' &&
+      message.status === 'success' &&
+      messageTranslationText(message.parts.filter((part) => part.type !== 'tool-summary'));
+    if (translation && source && sha256HexOfText(source) === translation.sourceHash)
+      blocks.push({
+        kind: 'markdown',
+        source: `---\n\n### ${options.labels.translation(translation.language)}\n\n${replaceChatCitations(translation.content, sources)}`,
+      });
     const metadata: { label: string; value: string }[] = [];
     if (message.status !== 'success')
       metadata.push({

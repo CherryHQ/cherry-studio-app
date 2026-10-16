@@ -64,6 +64,20 @@
       "when": 1791796001226,
       "tag": "0008_mcp_remote_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792064823964,
+      "tag": "0009_painting_boards",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792071479861,
+      "tag": "0010_fearless_jubilee",
+      "breakpoints": true
     }
   ]
 }

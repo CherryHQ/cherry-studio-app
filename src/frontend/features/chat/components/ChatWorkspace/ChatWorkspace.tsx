@@ -12,6 +12,7 @@ import { type MessageListItem } from '@/frontend/components/Message';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { type PendingChatSend } from '../../runtime';
+import type { ChatShareTranslations } from '../../share/chatShareHandoff';
 import { ConversationApprovals } from '../ConversationApprovals';
 import { ConversationQuestionSheet } from '../ConversationQuestionSheet';
 import { ChatTranscript } from './ChatTranscript';
@@ -46,10 +47,10 @@ type ChatWorkspaceProps = {
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
-  onShare?: (messageId: string) => void;
+  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   sessionId?: string;
-  /** Stable pairing scope for desktop conversations; local Sessions use the default. */
-  translationScope?: string;
+  /** Translation is available only for locally owned Agent messages. */
+  isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
 };
 
@@ -72,7 +73,7 @@ export function ChatWorkspace({
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
-  translationScope = 'local',
+  isTranslationEnabled = false,
   renderUsage,
 }: ChatWorkspaceProps) {
   const {
@@ -263,7 +264,7 @@ export function ChatWorkspace({
   return (
     <View className="flex-1 bg-chat-background">
       <MessageTranslationProvider
-        scope={translationScope}
+        isEnabled={isTranslationEnabled}
         sessionId={listKey ?? ''}
         messages={mergedMessages}
       >

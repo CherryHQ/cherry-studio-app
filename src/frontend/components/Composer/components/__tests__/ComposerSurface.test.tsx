@@ -52,6 +52,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
     Spinner: (props: Record<string, unknown>) => React.createElement('mock-spinner', props),
     useToast: () => ({ toast: mockToast }),
+    useComposerExpansion: () => null,
     useAlert: () => ({ alert: mockAlert }),
   };
 });
@@ -100,15 +101,60 @@ describe('ComposerSurface', () => {
     });
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(mockLoggerDebug).toHaveBeenCalledWith('Ignored duplicate message send', {
-      attemptId: 1,
-    });
+    expect(mockLoggerDebug).toHaveBeenCalledWith('Ignored duplicate message send');
 
     await act(async () => {
       pending.resolve();
       await Promise.all([firstSend, secondSend]);
     });
   });
+
+  it.each(['accepted', 'rejected'] as const)(
+    'keeps the pending send and newer draft across a surface remount (%s)',
+    async (outcome) => {
+      const pending = deferred<void>();
+      const firstSend = jest.fn(() => pending.promise);
+      const nextSend = jest.fn(async () => undefined);
+      render(
+        <ComposerSurface key="image-editor" onSend={firstSend} onStop={jest.fn()} streaming={false}>
+          <StateProbe />
+        </ComposerSurface>,
+        'first draft',
+      );
+      let sending: Promise<void> | undefined;
+      act(() => {
+        sending = Promise.resolve(mockComposerProps?.onSend());
+      });
+      act(() => {
+        renderer?.update(
+          <ComposerTestProvider>
+            <ComposerSurface key="workspace" onSend={nextSend} onStop={jest.fn()} streaming={false}>
+              <StateProbe />
+            </ComposerSurface>
+          </ComposerTestProvider>,
+        );
+      });
+      act(() => mockComposerActions?.setDraft('new draft'));
+
+      expect(mockComposerProps?.canSend).toBe(false);
+      await act(async () => mockComposerProps?.onSend());
+      expect(nextSend).not.toHaveBeenCalled();
+      expect(mockComposerState?.draft).toBe('new draft');
+
+      await act(async () => {
+        if (outcome === 'accepted') pending.resolve();
+        else pending.reject(new Error('request rejected'));
+        await sending;
+      });
+      const recoveredDraft = outcome === 'accepted' ? 'new draft' : 'first draft\nnew draft';
+      expect(mockComposerState?.draft).toBe(recoveredDraft);
+      expect(mockComposerProps?.canSend).toBe(true);
+      await act(async () => mockComposerProps?.onSend());
+      expect(nextSend).toHaveBeenCalledTimes(1);
+      expect(nextSend).toHaveBeenCalledWith({ attachments: [], text: recoveredDraft });
+      expect(firstSend).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('keeps its actions and labels while the draft and caller handlers change', async () => {
     const onSend = jest.fn(async () => undefined);
@@ -175,7 +221,11 @@ describe('ComposerSurface', () => {
     await act(async () => mockComposerProps?.onSend());
 
     expect(onSend).toHaveBeenCalledWith({ attachments: [attachment], text: 'hello' });
-    expect(mockComposerState).toEqual({ attachments: [attachment], draft: '  hello  ' });
+    expect(mockComposerState).toEqual({
+      attachments: [attachment],
+      draft: '  hello  ',
+      isSubmitting: false,
+    });
     expect(mockToastShow).toHaveBeenCalledTimes(1);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.input.sendFailed',
@@ -213,6 +263,7 @@ describe('ComposerSurface', () => {
     expect(mockComposerState).toEqual({
       draft: 'original\nnew text',
       attachments: [added, original],
+      isSubmitting: false,
     });
     expect(mockAlertShow).toHaveBeenCalledTimes(1);
     expect(mockAlertShow).toHaveBeenCalledWith({

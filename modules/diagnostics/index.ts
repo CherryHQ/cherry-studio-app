@@ -7,7 +7,6 @@ type NativeDiagnostics = {
     listener: (sample: AccelerationSample) => void,
   ): { remove(): void };
   isUploadConfigured(): boolean;
-  sha256(uri: string): Promise<string>;
   sign(value: string): Promise<string>;
   cancelOperations(): void;
   identifyFile(uri: string): { size: number; modifiedAt: number; fileKey: string };
