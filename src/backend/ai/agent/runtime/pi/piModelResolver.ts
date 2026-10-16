@@ -113,7 +113,7 @@ export function createPiModelResolver(accounts?: {
       const selectedApiKey = oauth
         ? { value: oauth.auth.apiKey ?? '', apiKeySelection: { attribution: 'unknown' as const } }
         : await providerService.resolveApiKey(provider.id, apiKeyOverride);
-      if (!oauth && !selectedApiKey.value.trim()) {
+      if (!oauth && !provider.authOptional && !selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',
           'Pi Runtime requires an API key from the selected provider.',
@@ -227,7 +227,7 @@ export function createPiModelResolver(accounts?: {
           }
         : configuredPiModel;
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
-        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value,
+        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value.trim() ? selectedApiKey.value : '',
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
         fetch: expoFetch as unknown as FetchFunction,

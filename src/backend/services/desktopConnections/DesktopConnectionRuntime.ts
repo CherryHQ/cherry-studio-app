@@ -42,14 +42,7 @@ type ConnectionStore = Pick<
   | 'import'
   | 'addEndpoint'
 >;
-const EXCLUDED_PROVIDER_IDS = new Set([
-  'cherryai',
-  'gpustack',
-  'lmstudio',
-  'local-embedding',
-  'ollama',
-  'ovms',
-]);
+const EXCLUDED_PROVIDER_IDS = new Set(['cherryai', 'local-embedding']);
 const CLAIM_POLL_MS = 2_000;
 const EXPORT_PAGE_BYTES = 24_576;
 const logger = loggerService.withContext('DesktopConnection');
@@ -264,7 +257,13 @@ export class DesktopConnectionRuntime extends BaseService implements DesktopConn
     return this.run('preview', signal, async (store, signal) => {
       const snapshot = await this.loadSnapshot(store, id, signal);
       signal.throwIfAborted();
-      return store.preview(snapshot);
+      const preview = await store.preview(snapshot);
+      // The sync picker imports models too; prepare its dependency before offering confirmation.
+      if (preview.providers.some((provider) => !provider.unavailableReason)) {
+        await this.ensureModelRegistryReady!();
+      }
+      signal.throwIfAborted();
+      return preview;
     });
   }
 
