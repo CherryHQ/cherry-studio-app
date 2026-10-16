@@ -46,7 +46,8 @@ function database() {
 test('restore clears orphan workspace bindings while preserving existing trashed folders', async () => {
   const { raw, adapter } = database();
   try {
-    raw.exec("UPDATE agent_session SET workspace_folder_id = 'missing'");
+    // A restored backup can carry a dangling binding; node:sqlite enforces keys by default.
+    raw.exec("PRAGMA foreign_keys = OFF; UPDATE agent_session SET workspace_folder_id = 'missing'");
     await restoreDeviceState(adapter, []);
     expect(raw.prepare('SELECT workspace_folder_id FROM agent_session').get()).toEqual({
       workspace_folder_id: null,

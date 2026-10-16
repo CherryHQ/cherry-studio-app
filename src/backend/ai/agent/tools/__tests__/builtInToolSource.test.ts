@@ -52,8 +52,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
-      'library_read_file',
       'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
@@ -93,8 +93,8 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
-      'library_read_file',
       'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
@@ -138,8 +138,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
-      'library_read_file',
       'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
