@@ -889,6 +889,7 @@
   "painting.board.nodeCount_other": "{{count}} 個のノード",
   "painting.board.rename": "ボード名を変更",
   "painting.board.renameFailed": "ボード名を変更できませんでした。もう一度お試しください。",
+  "painting.board.showPrompt": "プロンプト全体を表示",
   "painting.board.unavailable": "このボードを開けません",
   "painting.board.unavailableDescription": "絵が削除された可能性があります。戻ってもう一度お試しください。",
   "painting.editor.annotation": "注釈 {{number}}",

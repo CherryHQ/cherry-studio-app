@@ -911,6 +911,7 @@
   "painting.board.nodeCount_other": "{{count}} de noduri",
   "painting.board.rename": "Redenumiți tabla",
   "painting.board.renameFailed": "Tabla nu a putut fi redenumită. Încercați din nou.",
+  "painting.board.showPrompt": "Afișează solicitarea completă",
   "painting.board.unavailable": "Tabla nu a putut fi deschisă",
   "painting.board.unavailableDescription": "Este posibil ca desenul să fi fost șters. Reveniți și încercați din nou.",
   "painting.editor.annotation": "Notă {{number}}",

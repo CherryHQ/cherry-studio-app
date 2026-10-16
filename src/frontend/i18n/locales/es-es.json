@@ -911,6 +911,7 @@
   "painting.board.nodeCount_other": "{{count}} nodos",
   "painting.board.rename": "Cambiar nombre del tablero",
   "painting.board.renameFailed": "No se pudo cambiar el nombre del tablero. Inténtalo de nuevo.",
+  "painting.board.showPrompt": "Mostrar la solicitud completa",
   "painting.board.unavailable": "No se puede abrir este tablero",
   "painting.board.unavailableDescription": "Puede que el dibujo se haya eliminado. Vuelve e inténtalo de nuevo.",
   "painting.editor.annotation": "Nota {{number}}",

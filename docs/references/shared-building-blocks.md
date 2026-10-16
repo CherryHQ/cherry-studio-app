@@ -43,6 +43,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |

@@ -900,6 +900,7 @@
   "painting.board.nodeCount_other": "{{count}} Knoten",
   "painting.board.rename": "Board umbenennen",
   "painting.board.renameFailed": "Das Board konnte nicht umbenannt werden. Versuchen Sie es erneut.",
+  "painting.board.showPrompt": "Vollständige Anfrage anzeigen",
   "painting.board.unavailable": "Dieses Board kann nicht geöffnet werden",
   "painting.board.unavailableDescription": "Die Zeichnung wurde möglicherweise gelöscht. Gehen Sie zurück und versuchen Sie es erneut.",
   "painting.editor.annotation": "Notiz {{number}}",

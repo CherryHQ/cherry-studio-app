@@ -900,6 +900,7 @@
   "painting.board.nodeCount_other": "{{count}} nodes",
   "painting.board.rename": "Rename board",
   "painting.board.renameFailed": "Couldn't rename the board. Try again.",
+  "painting.board.showPrompt": "Show full request",
   "painting.board.unavailable": "Couldn't open this board",
   "painting.board.unavailableDescription": "The painting may have been deleted. Go back and try again.",
   "painting.editor.annotation": "Note {{number}}",

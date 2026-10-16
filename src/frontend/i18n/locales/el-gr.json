@@ -900,6 +900,7 @@
   "painting.board.nodeCount_other": "{{count}} κόμβοι",
   "painting.board.rename": "Μετονομασία πίνακα",
   "painting.board.renameFailed": "Η μετονομασία του πίνακα απέτυχε. Δοκιμάστε ξανά.",
+  "painting.board.showPrompt": "Εμφάνιση πλήρους αιτήματος",
   "painting.board.unavailable": "Δεν ήταν δυνατό το άνοιγμα του πίνακα",
   "painting.board.unavailableDescription": "Το σχέδιο μπορεί να έχει διαγραφεί. Επιστρέψτε και δοκιμάστε ξανά.",
   "painting.editor.annotation": "Σημείωση {{number}}",

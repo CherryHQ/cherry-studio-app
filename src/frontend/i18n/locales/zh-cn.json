@@ -889,6 +889,7 @@
   "painting.board.nodeCount_other": "{{count}} 个节点",
   "painting.board.rename": "重命名画板",
   "painting.board.renameFailed": "画板重命名失败，请重试。",
+  "painting.board.showPrompt": "查看完整提示词",
   "painting.board.unavailable": "无法打开这个画板",
   "painting.board.unavailableDescription": "绘图可能已被删除。请返回后重试。",
   "painting.editor.annotation": "标注 {{number}}",

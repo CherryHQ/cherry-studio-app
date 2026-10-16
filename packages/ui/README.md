@@ -551,6 +551,12 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
+`InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
+`children` are presentation-only; the component owns the tap and exposes the caller's
+`accessibilityLabel`, which names the action rather than repeating `text`. Callers supply `text`; the panel displays only that content.
+It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
+taps, system back, and viewport changes dismiss it without changing the underlying layout.
+
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
