@@ -60,6 +60,7 @@ module.exports = {
     '^@earendil-works/chord$': '<rootDir>/node_modules/@earendil-works/chord/dist/index.js',
     '^@earendil-works/chord/(context|delta)$':
       '<rootDir>/node_modules/@earendil-works/chord/dist/$1/index.js',
+    '^@earendil-works/chord/output$': '<rootDir>/node_modules/@earendil-works/chord/dist/output.js',
     '^@earendil-works/pi-durable$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
     '^@earendil-works/pi-durable/storage/(.*)$':
