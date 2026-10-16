@@ -4,8 +4,8 @@
 
 How Cherry Mobile stores user- and generation-owned files. This model is mobile-native and
 deliberately diverges from Cherry Desktop's `FileEntry`: desktop's external-path entries, content
-hashing, cleanup policies, and entry-level trash have no mobile consumer, so none of them exist
-here. Terms follow [Domain Language](../domain-language.md).
+hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
+[file trash](./trash.md) for recoverable user deletion. Terms follow [Domain Language](../domain-language.md).
 
 ## Invariants
 
@@ -27,8 +27,9 @@ here. Terms follow [Domain Language](../domain-language.md).
    be re-encoded are stored untouched; send-time attachment limits remain their guard.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
-6. **Only the user deletes files.** Removing a composer attachment removes its reference, not the
-   library entry. Deletion belongs to the file library; there is no background garbage collection.
+6. **The user decides which files to delete.** Removing a composer attachment removes its reference,
+   not the library entry. Library deletion moves the file to trash for 30 days. The user may
+   permanently delete it sooner; the app removes expired trash on startup and foreground entry.
 7. **Owners hold their own file ids; there is no association table.** A message carries them in its
    part JSON, a painting in its `files` column. Nothing maintains a reverse index; the one reverse
    question asked — which painting produced an image the library opens — is answered by scanning
@@ -69,9 +70,9 @@ here. Terms follow [Domain Language](../domain-language.md).
   recording them as `imported` would state something the data does not support. The library's
   Sharing tab selects `document-export`; exported images/documents remain in their media-type tabs.
   This value extends the existing text column without a database migration or changes to old rows.
-- `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
-  attachment admission and direct preview reads already treat a marked row as unavailable, while
-  cleanup still must not infer ownership from it.
+- `deletedAt` is the time a user moved the file to trash. Library listing, attachment admission,
+  Agent reads/edits, and previews exclude marked rows. Restore clears it. Trash and restore preserve
+  `updatedAt`, which identifies the existing content/preview revision.
 
 ## Ownership
 
@@ -212,13 +213,14 @@ the new `size`. Bytes first: a crash in between leaves a row whose `size` lags t
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
-Storage checks cancellation after loading the draft entry, before the synchronous native text
-write. Once bytes have changed, the size update finishes even if the turn is cancelled while that
-metadata write is queued.
+Storage queues draft edits with deletion and restoration, checking availability and cancellation
+inside the write transaction before the synchronous file write. Once bytes have changed, the size
+update finishes in the same transaction even if the turn is cancelled.
 
-**Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
-bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. Cancelling an
-attachment does not call it; deletion and the future trash belong to the library.
+**Delete** — `deleteInternalEntry` removes the row first, then unlinks bytes and preview
+best-effort; a leftover blob is reclaimable by orphan-blob sweeping, while a dangling row would not
+be. Cancelling an attachment does not call it. User deletion calls `moveToTrash`; permanent trash
+removal and compensating cleanup use the hard-delete path.
 
 **Missing bytes** — a current submission fails before admission; an already-persisted reference
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
@@ -245,14 +247,13 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 **File library.** The library page is a query over `file_entry`; it needs no new table. The Sharing
 tab selects `provenance: 'document-export'` without reclassifying historical rows. See
 [Document Export](../document-export.md).
-General imported/generated provenance filters remain unshipped. Its future trash uses
-the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
-bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
-trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no
-"used by 2 Sessions" warning, because that would need the reverse index this model does without, and
-the user owns the consequences of their own deletion. The same iteration owns a cache-cleanup
-action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
-row).
+General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
+bytes and previews. The [file trash](./trash.md) restores entries, permanently deletes them, and
+clears the whole trash. Files older than 30 days in trash are permanently deleted at app startup
+and foreground entry, without a timer or background task. No reverse-reference warning is needed:
+existing messages and paintings show their unavailable placeholder until a file is restored.
+Backups include trashed rows and bytes with the original deletion time; the next sweep removes
+expired restored trash. Orphan-blob sweeping remains separate from trash retention.
 
 **Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text through the
 `'text'` source of `createInternalEntry`. `edit_file` strictly decodes a bounded UTF-8 source

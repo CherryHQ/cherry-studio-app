@@ -1,0 +1,1 @@
+export { TrashScreen } from './TrashScreen';

@@ -1,7 +1,11 @@
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { imageThumbnailCacheKey } from '../filePreviewCache';
-import { resolveCachedFilePreviewUris, resolveFilePreviewUris } from '../filePreviewStorage';
+import {
+  getTrashedImagePreviewUri,
+  resolveCachedFilePreviewUris,
+  resolveFilePreviewUris,
+} from '../filePreviewStorage';
 
 jest.mock('expo-file-system', () => {
   const directories = new Set<string>();
@@ -92,6 +96,42 @@ describe('filePreviewStorage', () => {
     jest.clearAllMocks();
     testState.directories.clear();
     testState.files.clear();
+  });
+
+  it('reuses the retained image thumbnail for the matching deletion timestamp', async () => {
+    const thumbnailUri = `file:///cache/FilePreviewImages/${imageThumbnailCacheKey(entry)}`;
+    testState.files.add(sourceUri);
+    testState.files.add(thumbnailUri);
+    const entries = { findTrashedById: jest.fn().mockResolvedValue(entry) };
+
+    await expect(getTrashedImagePreviewUri(entries, entry.id, 123)).resolves.toBe(thumbnailUri);
+    expect(entries.findTrashedById).toHaveBeenCalledWith(entry.id, 123);
+    expect(ImageManipulator.manipulate).not.toHaveBeenCalled();
+  });
+
+  it('falls back to retained image bytes without writing a new trash preview', async () => {
+    testState.files.add(sourceUri);
+    const entries = { findTrashedById: jest.fn().mockResolvedValue(entry) };
+
+    await expect(getTrashedImagePreviewUri(entries, entry.id, 123)).resolves.toBe(sourceUri);
+    expect(ImageManipulator.manipulate).not.toHaveBeenCalled();
+  });
+
+  it('does not expose a preview for a restored, re-deleted, or permanently removed entry', async () => {
+    testState.files.add(sourceUri);
+    const entries = { findTrashedById: jest.fn().mockResolvedValue(null) };
+
+    await expect(getTrashedImagePreviewUri(entries, entry.id, 123)).resolves.toBeUndefined();
+    expect(ImageManipulator.manipulate).not.toHaveBeenCalled();
+  });
+
+  it('keeps non-image trash on the metadata icon without parsing the file', async () => {
+    const entries = {
+      findTrashedById: jest.fn().mockResolvedValue({ ...entry, mediaType: 'application/pdf' }),
+    };
+
+    await expect(getTrashedImagePreviewUri(entries, entry.id, 123)).resolves.toBeUndefined();
+    expect(ImageManipulator.manipulate).not.toHaveBeenCalled();
   });
 
   it('generates and caches a bounded WebP thumbnail', async () => {

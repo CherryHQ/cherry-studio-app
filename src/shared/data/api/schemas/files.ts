@@ -9,7 +9,7 @@ import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 /**
- * One time-ordered stream of every entry. Media-type filtering is deliberately
+ * One time-ordered stream of active entries; trash has a separate cursor stream. Media-type filtering is deliberately
  * absent: the library's kind tabs partition what the client has already paged
  * in, so a per-kind cursor walk here would fragment that one stream into three
  * that cannot share their pages.
