@@ -1,6 +1,8 @@
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import { Image, Spinner } from '@cherrystudio/ui/components';
+import InfoIcon from '@cherrystudio/app-icons/icons/info';
+import { Image, InfoPopover, Spinner } from '@cherrystudio/ui/components';
+import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,9 +19,7 @@ import { layoutPaintingBoard } from '../utils/paintingBoardGraph';
 
 const NODE_WIDTH = 112;
 const IMAGE_HEIGHT = 140;
-const LABEL_HEIGHT = 24;
-const NODE_HEIGHT = IMAGE_HEIGHT + LABEL_HEIGHT;
-const metrics = { columnGap: 17, nodeHeight: NODE_HEIGHT, nodeWidth: NODE_WIDTH, rowGap: 44 };
+const LABEL_HEIGHT = 44;
 const MIN_SCALE = 0.35;
 const MAX_SCALE = 2;
 const HEADER_SPACE = 64;
@@ -41,10 +41,21 @@ export function PaintingBoardOverview({
   focusedNodeId: string | null;
   onSelect: (nodeId: string) => void;
 }) {
-  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { fontScale, height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const layout = useMemo(() => layoutPaintingBoard(board.graph, metrics), [board.graph]);
-  const [edgeColor, backdropColor] = useThemeColor(['foreground', 'background']);
+  const labelHeight = LABEL_HEIGHT * Math.max(1, fontScale);
+  const nodeHeight = IMAGE_HEIGHT + labelHeight;
+  const layout = useMemo(
+    () =>
+      layoutPaintingBoard(board.graph, {
+        columnGap: 17,
+        nodeHeight,
+        nodeWidth: NODE_WIDTH,
+        rowGap: 44,
+      }),
+    [board.graph, nodeHeight],
+  );
+  const edgeColor = useThemeColor('foreground');
   const focused = focusedNodeId ? layout.nodes.get(focusedNodeId) : undefined;
   const contentPadding = 16;
   const top = insets.top + HEADER_SPACE;
@@ -108,7 +119,7 @@ export function PaintingBoardOverview({
     const target = board.nodes.get(edge.to);
     if (!from || !to) return [];
     const x1 = from.x + NODE_WIDTH / 2;
-    const y1 = from.y + NODE_HEIGHT + 4;
+    const y1 = from.y + nodeHeight + 4;
     const x2 = to.x + NODE_WIDTH / 2;
     const y2 = to.y - 4;
     const middle = (y1 + y2) / 2;
@@ -163,6 +174,7 @@ export function PaintingBoardOverview({
               <BoardNodeCard
                 isFocused={ref.id === focusedNodeId}
                 key={ref.id}
+                labelHeight={labelHeight}
                 node={node}
                 onPress={() => onSelect(ref.id)}
                 x={position.x}
@@ -171,13 +183,20 @@ export function PaintingBoardOverview({
             );
           })}
         </Animated.View>
-        {/* Nodes pan under the header; fade them so its title stays legible. */}
-        <LinearGradient
-          colors={[backdropColor, backdropColor, 'transparent']}
-          locations={[0, 0.6, 1]}
+        {/* Fade a themed surface through alpha only, so the header never picks up a dark band. */}
+        <MaskedView
+          maskElement={
+            <LinearGradient
+              colors={[edgeColor, edgeColor, 'transparent']}
+              locations={[0, 0.6, 1]}
+              style={StyleSheet.absoluteFill}
+            />
+          }
           pointerEvents="none"
           style={[styles.headerFade, { height: insets.top + HEADER_FADE }]}
-        />
+        >
+          <View className="flex-1 bg-background" />
+        </MaskedView>
       </View>
     </GestureDetector>
   );
@@ -185,12 +204,14 @@ export function PaintingBoardOverview({
 
 function BoardNodeCard({
   isFocused,
+  labelHeight,
   node,
   onPress,
   x,
   y,
 }: {
   isFocused: boolean;
+  labelHeight: number;
   node: PaintingBoardNode;
   onPress: () => void;
   x: number;
@@ -199,6 +220,7 @@ function BoardNodeCard({
   const { t } = useTranslation();
   const foreground = useThemeColor('foreground');
   const thumbnail = node.images[0];
+  const prompt = node.painting?.brief ?? node.painting?.prompt ?? '';
   const label =
     node.kind === 'import'
       ? t('painting.board.importedImage')
@@ -210,22 +232,27 @@ function BoardNodeCard({
                 ? 'painting.status.failed'
                 : 'painting.status.interrupted',
             )
-          : (node.painting?.brief ?? node.painting?.prompt ?? '');
+          : prompt;
+  const caption = (
+    <View className="flex-row items-center gap-1" style={{ height: labelHeight }}>
+      <Text className="min-w-0 flex-1 text-muted-foreground text-xs" numberOfLines={1}>
+        {label}
+      </Text>
+      {prompt ? <InfoIcon className="size-3 shrink-0 text-muted-foreground" /> : null}
+    </View>
+  );
   return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isFocused }}
-      className="absolute active:opacity-80"
-      onPress={onPress}
-      style={{ left: x, top: y, width: NODE_WIDTH }}
-    >
-      <View
+    <View className="absolute" style={{ left: x, top: y, width: NODE_WIDTH }}>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isFocused }}
         className={
           isFocused
-            ? 'items-center justify-center overflow-hidden rounded-lg border-2 border-border-selected bg-secondary'
-            : 'items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary'
+            ? 'items-center justify-center overflow-hidden rounded-lg border-2 border-border-selected bg-secondary active:opacity-80'
+            : 'items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary active:opacity-80'
         }
+        onPress={onPress}
         style={{ height: IMAGE_HEIGHT }}
       >
         {thumbnail ? (
@@ -256,11 +283,19 @@ function BoardNodeCard({
             </Text>
           </View>
         ) : null}
-      </View>
-      <Text className="mt-1.5 text-muted-foreground text-xs" numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
+      </Pressable>
+      {prompt ? (
+        <InfoPopover
+          accessibilityLabel={prompt}
+          testID={`painting-prompt-${node.id}`}
+          text={prompt}
+        >
+          {caption}
+        </InfoPopover>
+      ) : (
+        caption
+      )}
+    </View>
   );
 }
 

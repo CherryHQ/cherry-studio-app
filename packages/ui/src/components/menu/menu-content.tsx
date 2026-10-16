@@ -6,6 +6,7 @@ import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { cn } from '../../utils';
+import { getAnchoredPanelLayout } from './anchored-panel-layout';
 import type { MenuInteractionValue } from './menu-interaction';
 import { MenuOverlay } from './menu-overlay';
 import { MenuPanel } from './menu-panel';
@@ -31,28 +32,22 @@ export function MenuContent({
   const { height, width } = useWindowDimensions();
   const [panelHeight, setPanelHeight] = useState(0);
   const { progress, isVisible } = useMenuMotion(isOpen, panelHeight > 0);
-  const topInset = insets.top + 16;
-  const bottomEdge = height - insets.bottom - 16;
-  const maxHeight = Math.max(0, Math.min(480, bottomEdge - topInset));
-  const menuWidth = Math.max(0, Math.min(208, width - insets.left - insets.right - 32));
-  const visibleHeight = Math.min(panelHeight, maxHeight);
-  const spaceBelow = bottomEdge - anchor.pageY - anchor.height - 8;
-  const opensAbove = spaceBelow < visibleHeight && anchor.pageY - topInset - 8 > spaceBelow;
-  const top = Math.max(
-    topInset,
-    Math.min(
-      opensAbove ? anchor.pageY - visibleHeight - 8 : anchor.pageY + anchor.height + 8,
-      bottomEdge - visibleHeight,
-    ),
-  );
-  const preferredLeft =
-    anchor.width === 0 && anchor.height === 0
-      ? anchor.pageX
-      : anchor.pageX + anchor.width - menuWidth;
-  const left = Math.max(
-    insets.left + 16,
-    Math.min(preferredLeft, width - insets.right - 16 - menuWidth),
-  );
+  const {
+    left,
+    maxHeight,
+    opensAbove,
+    top,
+    visibleHeight,
+    width: menuWidth,
+  } = getAnchoredPanelLayout({
+    anchor,
+    height,
+    insets,
+    panelHeight,
+    preferredMaxHeight: 480,
+    preferredWidth: 208,
+    width,
+  });
 
   const containerStyle = useAnimatedStyle(() => {
     const animatedHeight = interpolate(progress.value, [0, 1], [32, visibleHeight]);
