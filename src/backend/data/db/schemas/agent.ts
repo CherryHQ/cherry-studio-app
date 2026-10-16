@@ -37,7 +37,7 @@ export const agentTable = sqliteTable(
       .$type<AgentMode>()
       .notNull()
       .default(DEFAULT_AGENT_MODE),
-    // Built-in Cherry emoji or file reference (agent-avatar-file:{agentId}.{uuid}.webp);
+    // Built-in Cherry emoji, managed image (agent-avatar-file:...), or avatar-resource:{uuid};
     // NULL renders the default avatar. Never an absolute file:// path.
     avatar: text(),
     // Default model: FK to user_model(id) — UniqueModelId "providerId::modelId"

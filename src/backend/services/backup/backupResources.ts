@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { withBackupDatabase } from '@/backend/data/db/backupDatabase';
 import { BackupError } from '@/shared/contracts/backup';
+import { avatarResourceFiles } from '@/shared/data/types/avatar';
 import { FileEntryIdSchema, filenameExtension } from '@/shared/data/types/file';
 import { SkillManifestEntrySchema, skillContentHashHex } from '@/shared/data/types/skill';
 
@@ -13,6 +14,8 @@ const RESOURCE_DIRECTORIES = {
   'avatars/user': ['user-avatar'],
   'avatars/agents': ['agent-avatars'],
   'avatars/providers': ['provider-avatars'],
+  'avatars/resources': ['avatar-resources'],
+  'avatars/characters': ['avatar-characters'],
 } as const;
 
 export function restoredFile(root: Directory, path: string): File {
@@ -61,6 +64,15 @@ export async function describeDatabase(database: File): Promise<{
     if (agents.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
     for (const agent of agents)
       requiredPaths.push(`avatars/agents/${agent.avatar.slice('agent-avatar-file:'.length)}`);
+    const dynamicAvatars = await db.getAllAsync<{ avatar: string }>(
+      "SELECT avatar FROM agent WHERE avatar LIKE 'avatar-resource:%' LIMIT ?",
+      BACKUP_LIMITS.entries + 1,
+    );
+    if (dynamicAvatars.length > BACKUP_LIMITS.entries) throw new BackupError('too-large');
+    for (const agent of dynamicAvatars) {
+      for (const file of avatarResourceFiles(agent.avatar))
+        requiredPaths.push(`avatars/resources/${file}`);
+    }
     const userAvatar = await db.getFirstAsync<{ value: string }>(
       "SELECT value FROM preference WHERE scope = 'default' AND key = 'app.user.avatar'",
     );

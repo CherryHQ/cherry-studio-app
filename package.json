@@ -84,6 +84,7 @@
     "@cherrystudio/ai-sdk-provider": "0.1.7",
     "@cherrystudio/analytics-client": "^1.4.0",
     "@cherrystudio/app-icons": "workspace:*",
+    "@cherrystudio/character-avatar": "workspace:*",
     "@cherrystudio/design-tokens": "workspace:*",
     "@cherrystudio/file-preview-webview": "workspace:*",
     "@cherrystudio/mcp-app-webview": "workspace:*",

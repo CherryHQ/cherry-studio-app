@@ -120,6 +120,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 
 | Module | Why it qualifies |
 | --- | --- |
+| `avatars` | Creates offline avatar drafts, validates recipes, and resolves managed covers without exposing device paths to callers |
 | `file` | Encapsulates managed-file import, Expo URI resolution, and user-triggered deletion |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |

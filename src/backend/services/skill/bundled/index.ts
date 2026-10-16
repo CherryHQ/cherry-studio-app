@@ -6,6 +6,7 @@
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
 
 import { parseSkillEntry } from '../skillPackage';
+import { characterStudioBundledSkill } from './characterStudio';
 import { dailyAgendaSkill } from './dailyAgenda';
 import { researchBriefSkill } from './researchBrief';
 import { structuredNotesSkill } from './structuredNotes';
@@ -20,6 +21,7 @@ export type BundledSkillDefinition = {
 };
 
 export const BUNDLED_SKILLS: readonly BundledSkillDefinition[] = [
+  characterStudioBundledSkill,
   dailyAgendaSkill,
   researchBriefSkill,
   structuredNotesSkill,

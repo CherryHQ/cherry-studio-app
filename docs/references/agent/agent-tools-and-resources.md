@@ -3,7 +3,8 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+generation and `image_process`, Agent management (including `avatar_character_save` and
+`agent_set_avatar`), `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
@@ -498,6 +499,21 @@ the Agent health analysis and how to reach it. See [Health Review](../../guides/
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
+
+### Image Processing And Avatar Characters
+
+`image_process` (image group, `auto`) runs deterministic pixel work on conversation images:
+`resize` onto a transparent square, `remove_background` (floods a flat colour from the border),
+`transplant` (copies the areas where an edited copy differs from the original, within a region,
+back onto the original) and `measure`. Pixel code is pure (`src/backend/utils/rgbaImage.ts`); Skia
+only decodes and encodes. Every operation except `measure` saves one derived PNG and returns its
+pixels in `modelImages`, so the model judges the result before continuing.
+
+`avatar_character_save` and `agent_set_avatar` (agents group, `ask`) are thin app shells over
+`@cherrystudio/character-avatar`: the package validates layers, derives anchors and draws covers;
+the tools move conversation files into the on-device character library and attach a character to
+an Agent through the avatar workflow. The bundled `character-studio` Skill, also shipped by the
+package, is offered only when these tools and `generate_image` are all present.
 
 ### Managed File Write And Edit
 

@@ -5,6 +5,16 @@ import { buildAgentDto, createAgentFormState, setAgentCapabilityEnabled } from '
 const baseForm = createAgentFormState();
 
 describe('createAgentFormState', () => {
+  it('keeps a dynamic resource reference so the editor can reopen its motion', () => {
+    const reference = 'avatar-resource:00000000-0000-4000-8000-000000000001';
+    const state = createAgentFormState({
+      avatar: reference,
+      avatarUri: 'file:///cover.png',
+      disabledCapabilities: [],
+    } as unknown as Agent);
+    expect(state.avatarUri).toBe(reference);
+  });
+
   it('hydrates only the editable agent definition fields', () => {
     const state = createAgentFormState({
       avatar: 'agent-avatar-file:a.b.webp',

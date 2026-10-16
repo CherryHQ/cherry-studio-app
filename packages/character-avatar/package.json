@@ -1,0 +1,47 @@
+{
+  "name": "@cherrystudio/character-avatar",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./manifest": {
+      "types": "./src/manifest.ts",
+      "react-native": "./src/manifest.ts",
+      "import": "./src/manifest.ts",
+      "default": "./src/manifest.ts"
+    },
+    "./layers": {
+      "types": "./src/layers.ts",
+      "react-native": "./src/layers.ts",
+      "import": "./src/layers.ts",
+      "default": "./src/layers.ts"
+    },
+    "./cover": {
+      "types": "./src/cover.ts",
+      "react-native": "./src/cover.ts",
+      "import": "./src/cover.ts",
+      "default": "./src/cover.ts"
+    },
+    "./skill": {
+      "types": "./src/skill/index.ts",
+      "react-native": "./src/skill/index.ts",
+      "import": "./src/skill/index.ts",
+      "default": "./src/skill/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "@shopify/react-native-skia": "*",
+    "react": "*",
+    "react-native": "*",
+    "react-native-reanimated": "*",
+    "zod": "*"
+  }
+}

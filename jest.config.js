@@ -83,6 +83,11 @@ module.exports = {
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@cherrystudio/mcp-app-webview$': '<rootDir>/packages/mcp-app-webview/src/index.ts',
+    '^@cherrystudio/character-avatar$': '<rootDir>/packages/character-avatar/src/index.ts',
+    '^@cherrystudio/character-avatar/skill$':
+      '<rootDir>/packages/character-avatar/src/skill/index.ts',
+    '^@cherrystudio/character-avatar/(manifest|layers|cover)$':
+      '<rootDir>/packages/character-avatar/src/$1.ts',
     '^@cherrystudio/ai-runtime/(.*)$': '<rootDir>/packages/ai-runtime/src/$1/index.ts',
     '^@shared/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@/assets/(.*)$': '<rootDir>/assets/$1',

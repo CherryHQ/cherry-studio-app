@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ProfileAvatarImage, ProfileEditableAvatar } from '..';
+import { ProfileAvatarImage, ProfileEditableAvatar } from '../components/ProfileAvatar';
 
 const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
 const mockAvatarBadge = jest.fn(({ children }: { children?: React.ReactNode }) => children);
