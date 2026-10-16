@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notExists, notInArray } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
@@ -117,7 +118,7 @@ export class AgentSessionMessageService {
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
     if (query.aroundMessageId) {
-      return this.readAround(sessionId, query.aroundMessageId, limit);
+      return this.readAround(sessionId, query.aroundMessageId, limit, query.settledOnly);
     }
 
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'agent-session-messages');
@@ -125,7 +126,13 @@ export class AgentSessionMessageService {
     if (isNewer && !cursor) {
       throw DataApiErrorFactory.validation({ cursor: ['Invalid message cursor'] });
     }
-    const rows = await this.readRows(sessionId, limit + 1, isNewer ? 'asc' : 'desc', cursor);
+    const rows = await this.readRows(
+      sessionId,
+      limit + 1,
+      isNewer ? 'asc' : 'desc',
+      cursor,
+      query.settledOnly,
+    );
     const selectedRows = rows.slice(0, limit);
     const pageRows = isNewer ? selectedRows.toReversed() : selectedRows;
     const head = pageRows[0];
@@ -178,7 +185,12 @@ export class AgentSessionMessageService {
     };
   }
 
-  private async readAround(sessionId: string, messageId: string, limit: number) {
+  private async readAround(
+    sessionId: string,
+    messageId: string,
+    limit: number,
+    settledOnly = false,
+  ) {
     const [target] = await this.db
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
@@ -186,6 +198,7 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           eq(agentSessionMessageTable.id, messageId),
+          this.settledTurnFilter(settledOnly),
         ),
       )
       .limit(1);
@@ -197,8 +210,8 @@ export class AgentSessionMessageService {
     const olderCount = Math.floor((limit - 1) / 2);
     const newerCount = limit - 1 - olderCount;
     const [older, newer] = await Promise.all([
-      this.readRows(sessionId, olderCount + 1, 'desc', boundary),
-      this.readRows(sessionId, newerCount + 1, 'asc', boundary),
+      this.readRows(sessionId, olderCount + 1, 'desc', boundary, settledOnly),
+      this.readRows(sessionId, newerCount + 1, 'asc', boundary, settledOnly),
     ]);
     const rows = [
       ...newer.slice(0, newerCount).toReversed(),
@@ -221,6 +234,7 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
+    settledOnly = false,
   ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
@@ -234,10 +248,32 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           cursor ? ordering.where(cursor) : undefined,
+          this.settledTurnFilter(settledOnly),
         ),
       )
       .orderBy(...ordering.orderBy)
       .limit(limit);
+  }
+
+  private settledTurnFilter(settledOnly: boolean) {
+    if (!settledOnly) return undefined;
+    const unsettled = alias(agentSessionMessageTable, 'unsettled_turn');
+    return and(
+      notInArray(agentSessionMessageTable.status, ['pending', 'streaming']),
+      notExists(
+        this.db
+          .select({ id: unsettled.id })
+          .from(unsettled)
+          .where(
+            and(
+              eq(unsettled.sessionId, agentSessionMessageTable.sessionId),
+              eq(unsettled.turnId, agentSessionMessageTable.turnId),
+              eq(unsettled.role, 'assistant'),
+              inArray(unsettled.status, ['pending', 'streaming']),
+            ),
+          ),
+      ),
+    );
   }
 }
 

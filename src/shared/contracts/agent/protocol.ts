@@ -60,6 +60,12 @@ export interface AgentProtocol {
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
 
+  /** Withdraw only waiting input; never abort a run that won the admission race. */
+  cancelQueuedInput(input: {
+    sessionId: string;
+    turnId: string;
+  }): Promise<'withdrawn' | 'already-started' | 'not-found'>;
+
   /**
    * Abandons a submission, retry, or Draft start that has not reserved its turn
    * yet; the pending call rejects with `CANCELLED`. A reserved turn is

@@ -48,6 +48,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     sessionId: 'session',
     status: 'ready',
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -80,6 +81,18 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     },
   };
 }
+
+test('a queued-only session blocks history edits while leaving its queue outside execution controls', () => {
+  const row = message('answer');
+  const f = fixture({
+    queuedInputs: [
+      { turnId: 'waiting', userMessage: message('waiting', 'user'), assistantMessageId: 'pending' },
+    ],
+  });
+  const projected = f.projector.message(row, f.state);
+  expect(projected.actions.remove?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
+});
 
 test('a changed approval payload under the same id rejects the earlier decision', async () => {
   const f = fixture({ pendingApprovals: [approval] });

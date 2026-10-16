@@ -42,7 +42,15 @@ export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentContextStatusSchema = z.enum(['compacting', 'compaction-failed']).nullable();
 
+export const AgentQueuedInputSchema = z.strictObject({
+  turnId: z.string().min(1),
+  userMessage: AgentMessageViewSchema,
+  assistantMessageId: z.string().min(1),
+});
+export type AgentQueuedInput = z.infer<typeof AgentQueuedInputSchema>;
+
 export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('queue.updated'), inputs: z.array(AgentQueuedInputSchema) }),
   z.strictObject({ type: z.literal('context.updated'), status: AgentContextStatusSchema }),
   z.strictObject({ type: z.literal('runtime.failed') }),
   z.strictObject({
@@ -78,6 +86,7 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   session: AgentSessionViewSchema,
   capabilities: AgentCapabilitiesSchema,
   activeTurn: AgentTurnViewSchema.nullable(),
+  queuedInputs: z.array(AgentQueuedInputSchema),
   activeUserMessage: AgentMessageViewSchema.nullable(),
   hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),

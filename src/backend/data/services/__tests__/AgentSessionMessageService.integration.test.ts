@@ -203,6 +203,111 @@ describe('AgentSessionMessageService persistence', () => {
     });
   });
 
+  test.each(['pending', 'streaming'] as const)(
+    'fills settled history pages past a whole page of %s reservations',
+    async (status) => {
+      const settledIds = Array.from({ length: 16 }, (_, index) => `settled-${index}`);
+      settledIds.forEach((id, index) =>
+        insertMessage(sqlite, { id, text: id, createdAt: index + 1 }),
+      );
+      for (let index = 0; index < 6; index++) {
+        const turnId = `waiting-${index}`;
+        insertMessage(sqlite, {
+          id: `${turnId}-user`,
+          text: 'Waiting',
+          createdAt: 100 + index * 2,
+          role: 'user',
+          turnId,
+        });
+        insertMessage(sqlite, {
+          id: `${turnId}-assistant`,
+          text: '',
+          createdAt: 101 + index * 2,
+          status,
+          turnId,
+        });
+      }
+      // The receipt reader still has every row; the chat window must fill from settled turns.
+      const receipts = await agentSessionMessageService.listByCursor('session-1', { limit: 12 });
+      expect(receipts.items).toHaveLength(12);
+      expect(receipts.items.every((row) => row.turnId?.startsWith('waiting-'))).toBe(true);
+      const latest = await agentSessionMessageService.listByCursor('session-1', {
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(latest.items.map((row) => row.id)).toEqual(settledIds.slice(4).toReversed());
+      const older = await agentSessionMessageService.listByCursor('session-1', {
+        cursor: latest.nextCursor,
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(older.items.map((row) => row.id)).toEqual(settledIds.slice(0, 4).toReversed());
+      expect(older.nextCursor).toBeUndefined();
+      const newer = await agentSessionMessageService.listByCursor('session-1', {
+        cursor: older.previousCursor,
+        direction: 'newer',
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(newer.items).toEqual(latest.items);
+      expect(newer.previousCursor).toBeUndefined();
+      const around = await agentSessionMessageService.listByCursor('session-1', {
+        aroundMessageId: 'settled-14',
+        limit: 3,
+        settledOnly: true,
+      });
+      expect(around.items.map((row) => row.id)).toEqual(['settled-15', 'settled-14', 'settled-13']);
+      expect(around.previousCursor).toBeUndefined();
+      await expect(
+        agentSessionMessageService.listByCursor('session-1', {
+          aroundMessageId: 'waiting-0-user',
+          settledOnly: true,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      // Settlement makes both halves visible together, without changing their cursor order.
+      sqlite
+        .prepare("UPDATE agent_session_message SET status = 'success' WHERE turn_id = ?")
+        .run('waiting-0');
+      const settled = await agentSessionMessageService.listByCursor('session-1', {
+        limit: 2,
+        settledOnly: true,
+      });
+      expect(settled.items.map((row) => row.id)).toEqual(['waiting-0-assistant', 'waiting-0-user']);
+    },
+  );
+
+  test('settled windows preserve uncorrelated history and scope turn matching to its session', async () => {
+    insertMessage(sqlite, { id: 'legacy', text: 'Legacy', createdAt: 1, turnId: null });
+    insertMessage(sqlite, {
+      id: 'user',
+      text: 'Visible',
+      createdAt: 2,
+      role: 'user',
+      turnId: 'shared',
+    });
+    insertMessage(sqlite, {
+      id: 'foreign',
+      text: '',
+      createdAt: 3,
+      status: 'pending',
+      turnId: 'shared',
+    });
+    insertMessage(sqlite, {
+      id: 'legacy-pending',
+      text: '',
+      createdAt: 4,
+      status: 'pending',
+      turnId: null,
+    });
+    insertSession(sqlite, 'session-2');
+    sqlite
+      .prepare('UPDATE agent_session_message SET session_id = ? WHERE id = ?')
+      .run('session-2', 'foreign');
+    const page = await agentSessionMessageService.listByCursor('session-1', { settledOnly: true });
+    expect(page.items.map((row) => row.id)).toEqual(['user', 'legacy']);
+  });
+
   test('resolves only selected IDs in timeline order within the requested session', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'old-a', text: 'A' });
     insertMessage(sqlite, { createdAt: 100, id: 'old-b', text: 'B' });
@@ -451,20 +556,29 @@ function insertSession(database: DatabaseSync, id: string): void {
 
 function insertMessage(
   database: DatabaseSync,
-  values: { createdAt: number; id: string; text: string },
+  values: {
+    createdAt: number;
+    id: string;
+    text: string;
+    role?: 'user' | 'assistant';
+    status?: 'success' | 'pending' | 'streaming';
+    turnId?: string | null;
+  },
 ): void {
   database
     .prepare(
       `INSERT INTO agent_session_message (
         id, session_id, turn_id, role, data, status, stats, created_at, updated_at
-      ) VALUES (?, 'session-1', ?, 'assistant', ?, 'success', ?, ?, ?)`,
+      ) VALUES (?, 'session-1', ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       values.id,
-      `turn-${values.id}`,
+      values.turnId === undefined ? `turn-${values.id}` : values.turnId,
+      values.role ?? 'assistant',
       JSON.stringify({
         parts: [{ id: `part-${values.id}`, type: 'text', text: values.text, state: 'done' }],
       }),
+      values.status ?? 'success',
       JSON.stringify({
         runtimeTiming: {
           startedAt: values.createdAt,

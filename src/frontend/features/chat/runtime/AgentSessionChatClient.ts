@@ -6,6 +6,7 @@ import type {
   AgentMessageDelta,
   AgentMessageView,
   AgentProtocol,
+  AgentQueuedInput,
   AgentRetryMessageInput,
   AgentSessionObservation,
   AgentSessionSnapshot,
@@ -25,6 +26,7 @@ export type AgentSessionChatState = {
   /** Answer awaiting its replacement turn; rendered as pending until it arrives. */
   retryingMessageId?: string;
   activeTurn: AgentTurnView | null;
+  queuedInputs: readonly AgentQueuedInput[];
   enteringUserMessageId?: string;
   error?: Error;
   hasHistoryBeforeActiveTurn?: boolean;
@@ -74,15 +76,17 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
  * treated as busy rather than silently unlocking the composer and retry action.
  */
 export function isAgentSessionBusy(state: AgentSessionChatState): boolean {
-  return Boolean(
-    state.isSubmitting ||
-    (state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status)),
-  );
+  return Boolean(state.isSubmitting || state.queuedInputs.length || isAgentSessionExecuting(state));
+}
+
+export function isAgentSessionExecuting(state: AgentSessionChatState): boolean {
+  return Boolean(state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status));
 }
 
 function createSessionState(sessionId: string): AgentSessionChatState {
   return {
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -437,6 +441,12 @@ export class AgentSessionChatClient {
     }
   }
 
+  async cancelQueuedInput(sessionId: string, turnId: string) {
+    const result = await this.protocol.cancelQueuedInput({ sessionId, turnId });
+    await this.refresh(sessionId);
+    return result;
+  }
+
   async respondQuestion(
     sessionId: string,
     toolCallId: string,
@@ -519,6 +529,7 @@ export class AgentSessionChatClient {
       isSubmitting: entry.state.isSubmitting,
       retryingMessageId: entry.state.retryingMessageId,
       activeTurn: snapshot.activeTurn,
+      queuedInputs: snapshot.queuedInputs,
       ...(snapshot.activeUserMessage
         ? { enteringUserMessageId: snapshot.activeUserMessage.id }
         : {}),
@@ -535,6 +546,9 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'queue.updated':
+        this.updateState(entry, { ...entry.state, queuedInputs: event.inputs });
+        return;
       case 'context.updated':
         this.updateState(entry, { ...entry.state, contextStatus: event.status });
         return;

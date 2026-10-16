@@ -178,6 +178,52 @@ describe.each([
     harness.cleanup();
   });
 
+  test('withdrawing a queued reservation preserves history, checkpoints and the current runtime revision', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'first', type: 'text', text: 'First', state: 'done' }],
+    });
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: first.turnId,
+      payload: { summary: 'Earlier context' },
+    };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      turnId: first.turnId,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const history = await store.listMessages(session.id);
+    const revision = await store.getRuntimeRevision(session.id);
+    const queued = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'queued', type: 'text', text: 'Later', state: 'done' }],
+    });
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [queued.userMessage.id, queued.assistantMessage.id],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
+    expect(await store.getRuntimeRevision(session.id)).toBe(revision);
+    expect((await store.getLatestContextCheckpoint(session.id))?.checkpoint).toEqual(checkpoint);
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [],
+    );
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: first.turnId })).toEqual(
+      [],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
+  });
+
   test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({

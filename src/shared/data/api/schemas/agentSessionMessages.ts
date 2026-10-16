@@ -17,6 +17,8 @@ export const AGENT_SESSION_MESSAGES_MAX_LIMIT = 200;
  * previousCursor is read with direction=newer. An initial aroundMessageId page
  * contains the target and its neighbors, bounded by limit in total.
  * ids resolves a bounded selection in the same order, without pagination.
+ * settledOnly excludes unsettled rows and their entire turn before pagination; live observation
+ * supplies the active turn separately from these persisted history pages.
  */
 export const ListAgentSessionMessagesQuerySchema = z
   .strictObject({
@@ -24,6 +26,7 @@ export const ListAgentSessionMessagesQuerySchema = z
     cursor: z.string().min(1).optional(),
     direction: z.enum(['older', 'newer']).optional(),
     limit: z.coerce.number().int().positive().max(AGENT_SESSION_MESSAGES_MAX_LIMIT).optional(),
+    settledOnly: z.boolean().optional(),
     ids: z
       .union([
         z
@@ -36,7 +39,12 @@ export const ListAgentSessionMessagesQuerySchema = z
   })
   .refine(
     (query) =>
-      !query.ids || (!query.aroundMessageId && !query.cursor && !query.direction && !query.limit),
+      !query.ids ||
+      (!query.aroundMessageId &&
+        !query.cursor &&
+        !query.direction &&
+        !query.limit &&
+        query.settledOnly === undefined),
     {
       message: 'ids cannot be combined with window or pagination options',
       path: ['ids'],

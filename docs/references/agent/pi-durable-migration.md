@@ -123,6 +123,16 @@ is no creation-seed replay or cross-database text-index repair. SQLite triggers 
 settled message rows. Pi serializes execution and accepts queued follow-ups, so multiple pending
 assistant reservations are allowed; one active execution is enforced by Pi's scheduler.
 
+The composer observes queued inputs separately from active execution. Waiting reservations stay
+out of the transcript, and an explicitly withdrawn input with no native input boundary has its
+Cherry reservation removed without changing the runtime revision. Reconciliation repeats that
+cleanup if a process stopped after native withdrawal but before the Cherry write.
+
+The Pi 1.3.0 patch advances the next queued input after a terminal model failure. On open, it also
+places waiting inputs of an ownerless conversation whose previous run has already ended. This
+creates a pending run before scheduling is enabled; capability reconstruction still precedes any
+execution. Existing live runs and task-owned conversations retain their normal recovery paths.
+
 ## Rebuilding Model Context
 
 A working copy is rebuilt only when none exists: the first continuation of a pre-Pi session, after
