@@ -58,10 +58,6 @@ export class FileEntryService {
    * browses, which its kind tabs then partition client-side. Ordered uuids
    * break `createdAt` ties in insertion order, so the tie-break direction
    * matches the major sort.
-   *
-   * `deletedAt` is deliberately not consulted: nothing writes it today (it is
-   * reserved for the future trash), so filtering on it here would encode a
-   * lifecycle the rest of the file model does not have yet.
    */
   async listByCursor(query: FileEntryListQuery = {}): Promise<CursorPaginationResponse<FileEntry>> {
     const limit = Math.min(Math.max(query.limit ?? defaultLimit, 1), maxLimit);
@@ -73,7 +69,7 @@ export class FileEntryService {
     const rows = await this.db
       .select()
       .from(fileEntryTable)
-      .where(cursor ? keyset.where(cursor) : undefined)
+      .where(and(isNull(fileEntryTable.deletedAt), cursor ? keyset.where(cursor) : undefined))
       .orderBy(...keyset.orderBy)
       .limit(limit + 1);
 
@@ -86,17 +82,39 @@ export class FileEntryService {
   }
 
   async findById(id: FileEntryId): Promise<FileEntry | null> {
-    return this.findByIdTx(this.db, id);
+    return (await this.findAvailableByIds([id]))[0] ?? null;
   }
 
-  async findByIdTx(tx: Database, id: FileEntryId): Promise<FileEntry | null> {
-    const [row] = await tx.select().from(fileEntryTable).where(eq(fileEntryTable.id, id)).limit(1);
+  findTrashedById(id: FileEntryId, deletedAt: number): Promise<FileEntry | null> {
+    return this.findByIdTx(this.db, id, deletedAt);
+  }
+
+  /** `null` requires an active entry; a timestamp requires the same trash incarnation. */
+  async findByIdTx(
+    tx: Database,
+    id: FileEntryId,
+    deletedAt?: number | null,
+  ): Promise<FileEntry | null> {
+    const [row] = await tx
+      .select()
+      .from(fileEntryTable)
+      .where(
+        and(
+          eq(fileEntryTable.id, id),
+          deletedAt === undefined
+            ? undefined
+            : deletedAt === null
+              ? isNull(fileEntryTable.deletedAt)
+              : eq(fileEntryTable.deletedAt, deletedAt),
+        ),
+      )
+      .limit(1);
     return row ? rowToFileEntry(row) : null;
   }
 
   /**
    * Batch lookup for submission-time owners. Soft-deleted rows are unavailable
-   * even though ordinary historical reads may still need their references.
+   * while historical owners retain their file ids for restoration.
    */
   async findAvailableByIds(ids: readonly FileEntryId[]): Promise<FileEntry[]> {
     const uniqueIds = [...new Set(ids.map((id) => FileEntryIdSchema.parse(id)))];
@@ -149,7 +167,7 @@ export class FileEntryService {
     const [row] = await tx
       .update(fileEntryTable)
       .set({ size: z.int().nonnegative().parse(size) })
-      .where(eq(fileEntryTable.id, id))
+      .where(and(eq(fileEntryTable.id, id), isNull(fileEntryTable.deletedAt)))
       .returning();
     if (!row) throw DataApiErrorFactory.notFound('FileEntry', id);
     return rowToFileEntry(row);
@@ -164,8 +182,7 @@ export class FileEntryService {
   }
 }
 
-// `deletedAt` stays DB-only: reserved for the future file-library trash, so the
-// serialized entry deliberately has no field for it.
+// Active file DTOs omit deletion state; the trash exposes its own metadata projection.
 function rowToFileEntry(row: FileEntryRow): FileEntry {
   return FileEntrySchema.parse({
     createdAt: row.createdAt,

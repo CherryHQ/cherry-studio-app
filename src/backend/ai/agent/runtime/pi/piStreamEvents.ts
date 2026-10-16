@@ -1,4 +1,5 @@
 import type {
+  Api,
   AssistantMessage,
   AssistantMessageEvent,
   JsonObject,
@@ -9,7 +10,7 @@ import type {
 export type PiStreamErrorEvent = Extract<AssistantMessageEvent, { type: 'error' }>;
 
 /** The partial result before a source emits anything, matching pi-ai's initial message. */
-export function emptyAssistantMessage(model: Model<string>): AssistantMessage {
+export function emptyAssistantMessage(model: Model<Api>): AssistantMessage {
   return {
     role: 'assistant',
     api: model.api,

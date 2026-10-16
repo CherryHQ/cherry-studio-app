@@ -127,6 +127,33 @@ describe('ProviderService', () => {
     });
   });
 
+  test.each([
+    { required: false, catalogOptional: undefined, expected: true },
+    { required: true, catalogOptional: true, expected: false },
+    { required: undefined, catalogOptional: true, expected: true },
+  ])('projects saved key requirements into authOptional: %j', async (testCase) => {
+    jest.mocked(providerRegistryService.isProviderExcluded).mockReturnValue(false);
+    jest.mocked(providerRegistryService.getProviderDisplayMetadata).mockReturnValueOnce({
+      authOptional: testCase.catalogOptional,
+    });
+    const row = createProviderRow(
+      {},
+      {
+        authConfig: { required: testCase.required, type: 'api-key' },
+      },
+    );
+    const service = await createReadService({
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [row] }) }),
+      }),
+    });
+
+    await expect(service.getByProviderId(row.providerId)).resolves.toMatchObject({
+      apiKeys: [],
+      authOptional: testCase.expected,
+    });
+  });
+
   test('drops removed API features from legacy provider rows', async () => {
     const row = createProviderRow(
       {},

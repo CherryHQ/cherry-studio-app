@@ -169,6 +169,78 @@ describe('Pi API adapters', () => {
     );
   });
 
+  test.each(CASES)(
+    'sends keyless $endpointType requests without generated authentication headers',
+    async (testCase) => {
+      const adapter = resolvePiApiAdapter(testCase.endpointType);
+      const { streamSimple } = jest.requireActual<{ streamSimple: PiStreamFn }>(
+        `@earendil-works/pi-ai/api/${testCase.api}`,
+      );
+      jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(streamSimple);
+      const fetch = jest.fn(async (_input: unknown, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        expect(headers.get('authorization')).toBeNull();
+        expect(headers.get('x-api-key')).toBeNull();
+        expect(headers.get('x-goog-api-key') || null).toBeNull();
+        expect(headers.get('x-app')).toBe('Cherry');
+        return new Response(JSON.stringify({ error: { message: 'Gateway received request' } }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+      const globalFetch = testCase.expectedFetch
+        ? undefined
+        : jest.spyOn(globalThis, 'fetch').mockImplementation(fetch);
+      const streamFn = await bindPiStream(adapter, {
+        apiKey: '',
+        fetch,
+        headers: { 'X-App': 'Cherry' },
+        maxRetries: 0,
+        maxTokens: 256,
+      });
+      const model = {
+        api: testCase.api,
+        provider: 'keyless-gateway',
+        id: 'test-model',
+        name: 'Test model',
+        baseUrl: testCase.expectedBaseUrl,
+        reasoning: false,
+        input: ['text'],
+        contextWindow: 4096,
+        maxTokens: 256,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      } as PiModel<SupportedPiApi>;
+      const source = await streamFn(
+        model,
+        normalizeContext({ messages: [{ role: 'user', content: 'Hello', timestamp: 1 }] }),
+      );
+      const result = await source.result();
+      globalFetch?.mockRestore();
+
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(result.errorMessage).toContain('Gateway received request');
+    },
+  );
+
+  test('preserves configured authentication headers on a keyless gateway', async () => {
+    const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
+    jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);
+    const streamFn = await bindPiStream(adapter, {
+      apiKey: '',
+      fetch: mockFetch,
+      headers: { aUtHoRiZaTiOn: 'Bearer gateway-token' },
+      maxRetries: 0,
+      maxTokens: 256,
+    });
+
+    await streamFn({ api: 'anthropic-messages' } as PiModel<SupportedPiApi>, context);
+
+    expect(mockAnthropicStreamSimple.mock.calls.at(-1)?.[2].headers).toEqual({
+      aUtHoRiZaTiOn: 'Bearer gateway-token',
+      'x-api-key': null,
+    });
+  });
+
   test('composes existing payload hooks and recomputes thinking budgets for each request cap', async () => {
     const adapter = resolvePiApiAdapter(ENDPOINT_TYPE.ANTHROPIC_MESSAGES);
     jest.spyOn(adapter, 'loadStreamSimple').mockResolvedValue(mockAnthropicStreamSimple);

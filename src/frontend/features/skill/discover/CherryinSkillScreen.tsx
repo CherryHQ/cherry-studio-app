@@ -218,7 +218,40 @@ function CherryinSkill({ id }: { id: string }) {
     ).length ?? 0;
 
   return (
-    <SkillPage headerProps={{ title: name }}>
+    <SkillPage
+      headerProps={{ title: name }}
+      footer={
+        singleInstalled ? (
+          <Button
+            size="lg"
+            onPress={() =>
+              router.push({ pathname: '/skills/[skillId]', params: { skillId: singleInstalled } })
+            }
+          >
+            {t('skills.candidate.openInstalled')}
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            loading={busy}
+            disabled={
+              !data.hasPackage ||
+              (Boolean(inspections) && Boolean(isCollection) && selectedCount === 0) ||
+              (inspections?.length === 1 && !inspections[0]?.package)
+            }
+            onPress={() => void act()}
+          >
+            {!data.hasPackage
+              ? t('skills.marketplace.noPackage')
+              : inspections && isCollection
+                ? t('skills.marketplace.installSelected', { total: selectedCount })
+                : isCollection
+                  ? t('skills.marketplace.viewCollection')
+                  : t('skills.candidate.install')}
+          </Button>
+        )
+      }
+    >
       <Text className="text-base text-foreground" selectable>
         {description}
       </Text>
@@ -326,35 +359,6 @@ function CherryinSkill({ id }: { id: string }) {
       {operationError ? (
         <Text className="text-sm text-error">{t(`skills.error.${operationError}`)}</Text>
       ) : null}
-      {singleInstalled ? (
-        <Button
-          size="lg"
-          onPress={() =>
-            router.push({ pathname: '/skills/[skillId]', params: { skillId: singleInstalled } })
-          }
-        >
-          {t('skills.candidate.openInstalled')}
-        </Button>
-      ) : (
-        <Button
-          size="lg"
-          loading={busy}
-          disabled={
-            !data.hasPackage ||
-            (Boolean(inspections) && Boolean(isCollection) && selectedCount === 0) ||
-            (inspections?.length === 1 && !inspections[0]?.package)
-          }
-          onPress={() => void act()}
-        >
-          {!data.hasPackage
-            ? t('skills.marketplace.noPackage')
-            : inspections && isCollection
-              ? t('skills.marketplace.installSelected', { total: selectedCount })
-              : isCollection
-                ? t('skills.marketplace.viewCollection')
-                : t('skills.candidate.install')}
-        </Button>
-      )}
       {data.installed.length > 0 && !singleInstalled ? (
         <Section title={t('skills.library')}>
           {data.installed.map((item) => (

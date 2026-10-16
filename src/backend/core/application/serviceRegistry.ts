@@ -28,6 +28,7 @@ import { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
 import { RemoteAssistantRuntime } from '@/backend/services/remoteAssistant';
+import { TrashRuntime } from '@/backend/services/trash';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -53,6 +54,7 @@ export const services = {
   CacheService,
   DbService,
   BackupRuntime,
+  TrashRuntime,
   DesktopConnectionManager,
   DesktopConnectionRuntime,
   ProviderAccountRuntime,

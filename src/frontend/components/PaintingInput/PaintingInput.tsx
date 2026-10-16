@@ -1,7 +1,6 @@
 import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
-import XIcon from '@cherrystudio/app-icons/icons/x';
 import { type ImageGenerationMode, type ParamValues } from '@cherrystudio/provider-registry';
-import { Button, Composer, Image } from '@cherrystudio/ui/components';
+import { Button, Composer } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -31,8 +30,10 @@ import { PaintingGenerationError } from '@/shared/utils/paintingGenerationStrate
 import { imageParamSummary } from './imageGenerationLabels';
 import { paintingInputIssueLabel } from './paintingInputFeedback';
 import { usePaintingInputSession } from './PaintingInputProvider';
+import { PaintingRatioShortcuts } from './PaintingRatioShortcuts';
 import { PaintingReferencePicker } from './PaintingReferencePicker';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
+import { PaintingWorkspaceEditor } from './PaintingWorkspaceEditor';
 import { usePaintingInput } from './usePaintingInput';
 
 export type PaintingInputSubmission = {
@@ -74,7 +75,9 @@ export function PaintingInput(props: PaintingInputProps) {
   return <PaintingInputControls {...props} presentation="chat" />;
 }
 
-export function PaintingWorkspaceInput(props: PaintingInputProps) {
+export function PaintingWorkspaceInput(
+  props: PaintingInputProps & { onRatioChange: (ratio: string) => void },
+) {
   return <PaintingInputControls {...props} presentation="workspace" />;
 }
 
@@ -85,12 +88,16 @@ function PaintingInputControls({
   modelSelection,
   onCancel,
   onGenerate,
+  onRatioChange,
   preparePrompt,
   placeholder,
   painting,
   status,
   presentation,
-}: PaintingInputProps & { presentation: 'chat' | 'workspace' }) {
+}: PaintingInputProps & {
+  presentation: 'chat' | 'workspace';
+  onRatioChange?: (ratio: string) => void;
+}) {
   const { t } = useTranslation();
   const [defaultPaintingModelId] = usePreference('feature.paintings.default_model_id');
   const initialModelId =
@@ -126,7 +133,6 @@ function PaintingInputControls({
     : input.attachments.filter((item) => item.id !== input.referenceAttachment?.id);
   const paramFields = getImageParamFields(input.resolvedMode);
   const settingsSummary = imageParamSummary(t, paramFields, input.paramValues);
-  const firstAttachment = visibleAttachments[0];
   const modelLabel =
     selectedModel?.name ?? historicalModelLabel(painting) ?? t('settings.model.painting.title');
   const handleModelSelect = useCallback(
@@ -161,7 +167,11 @@ function PaintingInputControls({
       streaming={status === 'generating'}
     >
       {presentation === 'workspace' ? (
-        <View className="flex-row items-center gap-2">
+        <PaintingWorkspaceEditor
+          attachments={visibleAttachments}
+          onAttachmentRemove={input.removeAttachment}
+          placeholder={placeholder ?? t('painting.workspace.placeholder')}
+        >
           <ComposerMenu media="images">
             <Composer.Menu.Item
               icon={<Settings2Icon className="size-5 text-foreground" />}
@@ -169,43 +179,7 @@ function PaintingInputControls({
               onPress={() => void runInputReplacement(() => setIsSettingsOpen(true))}
             />
           </ComposerMenu>
-          {firstAttachment ? (
-            <Composer.Action
-              accessibilityLabel={t('painting.input.removeReference')}
-              onPress={() => input.removeAttachment(firstAttachment.id)}
-            >
-              <View className="size-8">
-                <View className="size-8 overflow-hidden rounded-md bg-secondary">
-                  {firstAttachment.uri ? (
-                    <Image
-                      source={firstAttachment.uri}
-                      contentFit="cover"
-                      style={{ height: '100%', width: '100%' }}
-                    />
-                  ) : null}
-                </View>
-                <View className="absolute -top-1 -right-1 size-4 items-center justify-center rounded-full bg-foreground">
-                  <XIcon className="size-3 text-background" />
-                </View>
-                {visibleAttachments.length > 1 ? (
-                  <View className="absolute -bottom-1 -right-1 min-w-4 items-center rounded-full bg-foreground px-1">
-                    <Text className="font-semibold text-[10px] text-background">
-                      {visibleAttachments.length}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            </Composer.Action>
-          ) : null}
-          <View className="min-w-0 flex-1">
-            <ComposerField
-              attachmentMode="images"
-              placeholder={placeholder ?? t('painting.workspace.placeholder')}
-              style={{ maxHeight: 108 }}
-            />
-          </View>
-          <Composer.Send />
-        </View>
+        </PaintingWorkspaceEditor>
       ) : (
         <>
           {isReferenceVisible && reference.isPickerOpen && strategy.acceptsImages ? (
@@ -268,6 +242,19 @@ function PaintingInputControls({
   );
   return (
     <>
+      {presentation === 'workspace' ? (
+        <PaintingRatioShortcuts
+          mode={input.resolvedMode}
+          onSelect={(choice) => {
+            for (const [key, value] of Object.entries(choice.paramValues)) {
+              input.setParamValue(key, value);
+            }
+            onRatioChange?.(choice.ratio);
+          }}
+          values={input.paramValues}
+          visible={isReferenceVisible && input.attachments.length > 0}
+        />
+      ) : null}
       {composer}
       {isSettingsOpen ? (
         <PaintingSettingsBottomSheet

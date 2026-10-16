@@ -100,7 +100,10 @@ function createStore() {
       currentRow = { ...currentRow, learnedEndpoints: endpoints };
       return endpoints;
     }),
-    preview: jest.fn(async () => ({ providers: [] })),
+    preview: jest.fn<
+      ReturnType<DesktopConnectionService['preview']>,
+      Parameters<DesktopConnectionService['preview']>
+    >(async () => ({ providers: [] })),
     import: jest.fn(async () => ({
       providersAdded: 0,
       providersUpdated: 0,
@@ -579,6 +582,36 @@ describe('DesktopConnectionRuntime', () => {
     expect(store.preview).not.toHaveBeenCalled();
   });
 
+  it('retains HTTP providers and their addresses, including preset copies and legacy types', async () => {
+    const providers = [
+      { id: 'lmstudio', apiHost: 'http://localhost:1234' },
+      { id: 'gpustack', apiHost: 'http://192.168.1.2:8080/v1' },
+      { id: 'ovms', apiHost: 'http://127.0.0.1:8000/v3' },
+      { id: 'ollama', apiHost: 'http://192.168.1.2:11434' },
+      { id: 'studio-copy', presetProviderId: 'lmstudio', apiHost: 'https://gateway.test/v1' },
+      { id: 'legacy-copy', type: 'ollama', apiHost: 'http://localhost:11434' },
+    ].map((provider) => ({ ...provider, name: provider.id, models: [] }));
+    connect.mockResolvedValue(
+      createSession(
+        exportHandlers({
+          version: 1,
+          providers: [
+            ...providers,
+            { id: 'cherry-copy', presetProviderId: 'cherryai', name: 'CherryAI', models: [] },
+            { id: 'embedding-copy', type: 'local-embedding', name: 'Embedding', models: [] },
+          ],
+        }),
+      ) as never,
+    );
+
+    await runtime.preview(id, signal());
+
+    expect(store.preview).toHaveBeenCalledWith({
+      version: 1,
+      providers: providers.map((provider) => ({ ...provider, apiKeys: [] })),
+    });
+  });
+
   it('refuses configuration sync when the desktop did not grant it', async () => {
     store.getRow.mockResolvedValueOnce({ ...row, grants: [{ domain: 'agent', grantId: 'g' }] });
     await expect(runtime.preview(id, signal())).rejects.toMatchObject({
@@ -743,6 +776,59 @@ describe('DesktopConnectionRuntime', () => {
     ready.resolve();
     await request;
     expect(store.import).toHaveBeenCalledTimes(1);
+  });
+
+  it('prepares the model catalog before returning a selectable preview and retries failed preparation', async () => {
+    connect.mockImplementation(
+      async () => createSession(exportHandlers({ version: 1, providers: [] })) as never,
+    );
+    const preview = {
+      providers: [{ action: 'add' as const, id: 'openai', models: [], name: 'OpenAI' }],
+    };
+    store.preview.mockResolvedValue(preview);
+    ensureModelRegistryReady.mockRejectedValueOnce(new Error('registry unavailable'));
+
+    await expect(runtime.preview(id, signal())).rejects.toThrow('registry unavailable');
+    expect(store.import).not.toHaveBeenCalled();
+
+    const entered = deferred<void>();
+    const ready = deferred<void>();
+    ensureModelRegistryReady.mockImplementationOnce(async () => {
+      entered.resolve();
+      await ready.promise;
+    });
+    let returned = false;
+    const request = runtime.preview(id, signal()).then((result) => {
+      returned = true;
+      return result;
+    });
+    await entered.promise;
+    expect(returned).toBe(false);
+    ready.resolve();
+    await expect(request).resolves.toEqual(preview);
+  });
+
+  it('does not return a selectable preview cancelled during model catalog preparation', async () => {
+    connect.mockResolvedValue(
+      createSession(exportHandlers({ version: 1, providers: [] })) as never,
+    );
+    store.preview.mockResolvedValue({
+      providers: [{ action: 'add', id: 'openai', models: [], name: 'OpenAI' }],
+    });
+    const entered = deferred<void>();
+    const ready = deferred<void>();
+    ensureModelRegistryReady.mockImplementationOnce(async () => {
+      entered.resolve();
+      await ready.promise;
+    });
+    const controller = new AbortController();
+    const request = runtime.preview(id, controller.signal);
+    await entered.promise;
+    controller.abort();
+    ready.resolve();
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    expect(store.import).not.toHaveBeenCalled();
   });
 
   it('imports provider configuration without requiring the model catalog', async () => {
