@@ -12,6 +12,7 @@ import type {
 } from '@/shared/data/types/message';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
+import type { ChangeConversationPathInput } from './conversationPaths';
 import type { StoredSkillActivation } from './skillActivations';
 
 export type StoredRuntimeContextCheckpoint = {
@@ -63,6 +64,7 @@ export type ForkSessionInput = {
   sessionId: string;
   /** Inclusive fork point, identified by message rather than by turn. */
   fromMessageId: string;
+  candidateId?: string;
   /** Overrides the copied source name; the store never composes one itself. */
   name?: string;
 };
@@ -101,7 +103,8 @@ export type DeleteTurnResult =
   | { status: 'deleted'; deletedMessageIds: string[] }
   | { status: 'session-not-found' }
   | { status: 'turn-not-found' }
-  | { status: 'turn-unsettled' };
+  | { status: 'turn-unsettled' }
+  | { status: 'turn-has-continuations' };
 
 export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
@@ -125,16 +128,17 @@ export type FinalizeAssistantMessageInput = {
 };
 
 /**
- * Host-owned storage port for Agent Sessions and their linear transcripts
+ * Host-owned storage port for product conversations, paths, and transcript messages
  * (docs/references/agent/agent-persistence.md).
  *
- * The store persists messages only. The Turn is a Host projection: live turn
+ * The store persists messages and path selection. The Turn is a Host projection: live turn
  * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
  * process-local Host state by design, and terminal turn facts live on the
  * assistant message row. Multi-record operations are atomic at this boundary,
  * and the only Session creation operation reserves the first message pair with it.
  */
 export interface AgentSessionStore {
+  changeConversationPath(input: ChangeConversationPathInput): Promise<AgentSessionView>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   getRuntimeRevision(sessionId: string): Promise<number | null>;
   renameSession(sessionId: string, name: string): Promise<AgentSessionView | null>;

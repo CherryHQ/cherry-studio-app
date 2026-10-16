@@ -135,6 +135,7 @@ export type TurnPlan = {
   /** Canonicalized input parts: file parts rewritten to verified managed facts. */
   inputParts: AgentInputPart[];
   modelPreflight: RuntimeModelPreflight | null;
+  multiModelTargets?: { model: AgentDefinition['model']; modelId: string; name: string }[];
   imageGeneration?: AgentImageGenerationPlan;
   resources: TurnResourceLedger;
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null;
@@ -351,7 +352,26 @@ export async function prepareResolvedTurn(
   documentParserMode: DocumentParserMode,
   signal: AbortSignal,
 ): Promise<TurnPlan> {
-  const agent = applyTurnOverrides(configuredAgent, parsed);
+  const agent = { ...applyTurnOverrides(configuredAgent, parsed) };
+  if (
+    parsed.multiModelIds &&
+    (parsed.imageGeneration || parsed.skillAction || parsed.skillIds?.length)
+  )
+    fail(
+      'CAPABILITY_UNSUPPORTED',
+      'Multi-model replies accept chat models without tool workflows.',
+    );
+  const multiModelTargets = parsed.multiModelIds
+    ? await Promise.all(
+        parsed.multiModelIds.map(async (modelId) => {
+          const model = parseUniqueModelId(modelId);
+          const snapshot = await raceAbort(dependencies.inferenceModel(model), signal);
+          const preflight = await raceAbort(dependencies.runtime.preflightModel(model), signal);
+          return { model, modelId, name: snapshot.name, preflight };
+        }),
+      )
+    : undefined;
+  if (multiModelTargets) agent.model = multiModelTargets[0].model;
   if (agent.mode === 'minimal' && (parsed.skillIds?.length || parsed.skillAction)) {
     fail('CAPABILITY_UNSUPPORTED', 'Minimal mode does not support Skills.');
   }
@@ -406,14 +426,16 @@ export async function prepareResolvedTurn(
       fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.');
     }
   };
-  const imageGeneration = await dependencies.imageGeneration?.prepare({
-    instructions: agent.instructions,
-    model: agent.model,
-    parts,
-    resources,
-    settings: parsed.imageGeneration,
-    signal,
-  });
+  const imageGeneration = parsed.multiModelIds
+    ? undefined
+    : await dependencies.imageGeneration?.prepare({
+        instructions: agent.instructions,
+        model: agent.model,
+        parts,
+        resources,
+        settings: parsed.imageGeneration,
+        signal,
+      });
   if (imageGeneration) {
     if (agent.mode === 'minimal') {
       fail('CAPABILITY_UNSUPPORTED', 'Minimal mode requires a chat model.');
@@ -476,6 +498,7 @@ export async function prepareResolvedTurn(
   }
   // Desktop skips the whole function-tool catalog when the model cannot consume it.
   const canUseTools =
+    !multiModelTargets &&
     agent.mode === 'standard' &&
     runtime.descriptor.capabilities.tools &&
     modelPreflight.supportsTools;
@@ -610,15 +633,37 @@ export async function prepareResolvedTurn(
     );
   }
   const webTools =
-    runtime.descriptor.capabilities.tools && !agent.disabledCapabilities.includes('web')
+    runtime.descriptor.capabilities.tools &&
+    !multiModelTargets &&
+    !agent.disabledCapabilities.includes('web')
       ? await raceAbort(Promise.resolve(dependencies.webTools?.()), signal)
       : undefined;
   const inferenceModel = await resolveInferenceModel();
+  if (multiModelTargets) {
+    modelPreflight = {
+      ...modelPreflight,
+      contextWindow: Math.min(...multiModelTargets.map((target) => target.preflight.contextWindow)),
+      maxInputTokens: Math.min(
+        ...multiModelTargets.map((target) => target.preflight.maxInputTokens),
+      ),
+      maxOutputTokens: Math.min(
+        ...multiModelTargets.map((target) => target.preflight.maxOutputTokens),
+      ),
+      inputModalities: modelPreflight.inputModalities.filter((modality) =>
+        multiModelTargets.every((target) => target.preflight.inputModalities.includes(modality)),
+      ),
+    };
+  }
+  if (tools.length > 0 && !modelPreflight.supportsTools) {
+    fail('TOOL_CALLING_UNSUPPORTED', 'The selected model does not support native tool calling.');
+  }
   const inferenceSnapshot = createAgentInferenceSnapshot({
     model: inferenceModel,
     options: agent.options,
     tools,
   });
+
+  if (parsed.multiModelIds) inferenceSnapshot.multiModelIds = parsed.multiModelIds;
 
   assertAttachmentRequestSupported(
     runtime,
@@ -687,6 +732,13 @@ export async function prepareResolvedTurn(
     inferenceSnapshot,
     inputParts: parts,
     modelPreflight,
+    ...(multiModelTargets
+      ? {
+          multiModelTargets: multiModelTargets.map(
+            ({ preflight: _preflight, ...target }) => target,
+          ),
+        }
+      : {}),
     resources,
     runtimeContextCheckpoint,
     runtimeContentAttachments,

@@ -9,6 +9,7 @@ import { CODEMODE_TOOL_NAME } from '@earendil-works/pi-durable/codemode';
 import { TOOL_SEARCH_TOOL_NAME } from '@earendil-works/pi-durable/tool-search';
 import { z } from 'zod';
 
+import { MULTI_MODEL_TOOL_NAME, readMultiModelResult } from '@/shared/contracts/agent';
 import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
@@ -61,8 +62,17 @@ const WebToolRouteSchema = z.enum(['client', 'server', 'none']);
 
 export const PiConfigurationSchema = z.object({
   version: z.literal(1),
-  kind: z.enum(['language', 'image']).default('language'),
+  kind: z.enum(['language', 'image', 'multi-model']).default('language'),
   model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
+  multiModelTargets: z
+    .array(
+      z.object({
+        model: z.object({ providerId: z.string(), modelId: z.string() }),
+        modelId: z.string(),
+        name: z.string(),
+      }),
+    )
+    .optional(),
   instructions: z.string(),
   initialInstructions: z
     .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
@@ -268,6 +278,7 @@ export function projectPiTurn(options: {
     string,
     { parentCallId: string } & Omit<RuntimeToolProgress['calls'][number], 'id'>
   >;
+  toolDetails?: ReadonlyMap<string, unknown>;
 }): RuntimeDurableTurn {
   const stored = readPiSubmission(options.metadata);
   const { record, entries } = options;
@@ -370,6 +381,8 @@ export function projectPiTurn(options: {
           : (options.toolStates?.get(block.id) ?? 'input-available'),
         ...(inputPreview ? { inputPreview } : { input: RuntimeJsonValueSchema.parse(args) }),
       };
+      const progress = ToolDetailsSchema.safeParse(options.toolDetails?.get(block.id));
+      if (progress.success) part.output = progress.data.output;
       parts.push(part);
       toolsByCall.set(block.id, part);
       if (options.active && options.nestedTools) {
@@ -444,15 +457,32 @@ export function projectPiTurn(options: {
         : undefined;
     const diagnostics = ToolResultEntry.is(entry) ? entry.data.diagnostics : [];
     const diagnostic = diagnostics.find((item) => item.severity === 'error');
-    // An error result without a diagnostic states its reason in its own text, as a failed script
-    // does at the end of its output.
     const text = message.content
       .flatMap((block) => (block.type === 'text' ? [block.text] : []))
       .join('\n');
     const reason =
       diagnostic?.message ??
       (message.isError && text ? createTextPreview(text).text : 'The tool did not complete.');
-    if (diagnostic?.code === 'interrupted' || diagnostic?.code === 'aborted') {
+    const group =
+      output &&
+      part.toolRef.source === 'builtin' &&
+      part.toolRef.capabilityId === MULTI_MODEL_TOOL_NAME
+        ? readMultiModelResult(output.value)
+        : null;
+    if (group && output) {
+      part.state = 'output-available';
+      part.output = {
+        ...output,
+        value: {
+          ...group,
+          candidates: group.candidates.map((candidate) =>
+            (candidate.status === 'running' || candidate.status === 'queued') && message.isError
+              ? { ...candidate, status: 'interrupted' }
+              : candidate,
+          ),
+        },
+      };
+    } else if (diagnostic?.code === 'interrupted' || diagnostic?.code === 'aborted') {
       part.state = 'interrupted';
       part.output = createInterruptedToolResult(reason);
     } else if (diagnostic?.code === 'blocked') {

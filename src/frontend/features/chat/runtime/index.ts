@@ -3,9 +3,9 @@ export {
   ChatProvider,
   type PendingChatSend,
   useAgentChatControls,
+  useAgentChatClient,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
-  useAgentChatClient,
   useAgentSessionState,
 } from './ChatProvider';
 export { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';

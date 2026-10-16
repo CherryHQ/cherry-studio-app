@@ -18,13 +18,16 @@ import { userModelTable } from './userModel';
 export type AgentMessageData = {
   parts: AgentMessagePart[];
   translations?: MessageTranslations;
+  /** Missing on legacy/root history. Inherited prefixes are never duplicated. */
+  pathId?: string;
 };
 
 /**
- * Agent Session Message table - one row per linear transcript entry
+ * Agent Session Message table - one row per transcript entry
  * (docs/references/agent/agent-persistence.md).
  *
- * There is no message tree and no turn table: `turnId` is the correlation id
+ * Paths inherit prefixes through agent_session.conversationState; there is no turn table.
+ * `turnId` is the correlation id
  * shared by a submission's user/assistant pair, and the Host projects
  * `AgentTurnView` from the assistant row plus its live in-memory state.
  * searchableText is the visible plain text the store writes for FTS5

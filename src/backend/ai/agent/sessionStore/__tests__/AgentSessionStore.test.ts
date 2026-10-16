@@ -21,6 +21,7 @@ import { schema } from '@/backend/data/db/schemas';
 import type {
   AgentErrorView,
   AgentInferenceSnapshotV1,
+  AgentMessagePart,
   AgentSessionView,
 } from '@/shared/contracts/agent';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -611,6 +612,123 @@ describe.each([
       'plugin:notion',
       'plugin:github',
     ]);
+  });
+
+  test('forks only the active suffix, copies every candidate, and restores copied choices independently', async () => {
+    const source = await harness.createEmptySession({ agentId });
+    const append = async (sessionId: string, parts: AgentMessagePart[]) => {
+      const reserved = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId,
+        userParts: [{ id: 'question', type: 'text', text: 'Question', state: 'done' }],
+      });
+      await store.finalizeAssistantMessage({
+        assistantMessageId: reserved.assistantMessage.id,
+        status: 'success',
+        parts,
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: terminalTiming() },
+      });
+      return reserved.assistantMessage.id;
+    };
+    const workflowReceipt = (workflowId: string): AgentMessagePart => ({
+      id: `workflow-${workflowId}`,
+      type: 'dynamic-tool',
+      toolCallId: `workflow-${workflowId}`,
+      toolName: 'load_workflow',
+      title: 'Load workflow',
+      toolRef: { source: 'builtin', capabilityId: 'load_workflow' },
+      state: 'output-available',
+      input: { workflow_id: workflowId },
+      output: { value: { status: 'ok', workflow_id: workflowId }, artifacts: [] },
+    });
+    const group: AgentMessagePart[] = [
+      {
+        id: 'group',
+        type: 'dynamic-tool',
+        toolCallId: 'multi-call',
+        toolName: 'cherry_multi_model_reply',
+        title: 'Multi-model reply',
+        toolRef: { source: 'builtin', capabilityId: 'cherry_multi_model_reply' },
+        state: 'output-available',
+        input: {},
+        output: {
+          value: {
+            kind: 'multi-model-reply',
+            version: 1,
+            candidates: ['a', 'b'].map((id) => ({
+              id,
+              modelId: `mock-provider::${id}`,
+              name: id,
+              status: 'completed',
+              text: `Answer ${id}`,
+              reasoning: '',
+              attempt: 1,
+            })),
+          },
+          artifacts: [],
+        },
+      },
+    ];
+    const anchor = await append(source.id, group);
+    await store.changeConversationPath({
+      action: 'select',
+      sessionId: source.id,
+      messageId: anchor,
+      candidateId: 'a',
+    });
+    const aTail = await append(source.id, [
+      { id: 'a', type: 'text', text: 'A suffix', state: 'done' },
+      workflowReceipt('plugin:github'),
+    ]);
+    await store.changeConversationPath({
+      action: 'select',
+      sessionId: source.id,
+      messageId: anchor,
+      candidateId: 'b',
+    });
+    const bTail = await append(source.id, [
+      { id: 'b', type: 'text', text: 'B suffix', state: 'done' },
+      workflowReceipt('plugin:notion'),
+    ]);
+    expect(await store.loadWorkflowLoads(source.id)).toEqual(['plugin:notion']);
+    await store.changeConversationPath({
+      action: 'select',
+      sessionId: source.id,
+      messageId: anchor,
+      candidateId: 'a',
+    });
+    expect(await store.loadWorkflowLoads(source.id)).toEqual(['plugin:github']);
+    expect((await store.listMessages(source.id)).at(-1)?.id).toBe(aTail);
+    const result = await store.forkSession({ sessionId: source.id, fromMessageId: aTail });
+    expect(result.status).toBe('forked');
+    if (result.status !== 'forked') return;
+    const copied = await store.listMessages(result.session.id);
+    expect(copied).toHaveLength(4);
+    expect(copied[1].parts).toEqual(group);
+    expect(copied[1].selectedCandidateId).toBe('a');
+    expect(copied.some((message) => message.id === bTail)).toBe(false);
+    await store.changeConversationPath({
+      action: 'select',
+      sessionId: result.session.id,
+      messageId: copied[1].id,
+      candidateId: 'b',
+    });
+    expect(await store.listMessages(result.session.id)).toHaveLength(2);
+    expect(await store.loadWorkflowLoads(result.session.id)).toEqual([]);
+    await store.changeConversationPath({
+      action: 'select',
+      sessionId: result.session.id,
+      messageId: copied[1].id,
+      candidateId: 'a',
+    });
+    expect(await store.listMessages(result.session.id)).toHaveLength(4);
+    expect(await store.loadWorkflowLoads(result.session.id)).toEqual(['plugin:github']);
+    await store.deleteSession(source.id);
+    expect(await store.listMessages(result.session.id)).toHaveLength(4);
   });
 
   test('forkSession copies the transcript up to the fork point into an idle Session', async () => {

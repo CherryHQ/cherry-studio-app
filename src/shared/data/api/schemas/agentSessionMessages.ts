@@ -21,6 +21,8 @@ export const AGENT_SESSION_MESSAGES_MAX_LIMIT = 200;
 export const ListAgentSessionMessagesQuerySchema = z
   .strictObject({
     aroundMessageId: z.string().min(1).optional(),
+    /** Explicit path keeps in-flight pagination bound to its original continuation. */
+    pathId: z.string().min(1).optional(),
     cursor: z.string().min(1).optional(),
     direction: z.enum(['older', 'newer']).optional(),
     limit: z.coerce.number().int().positive().max(AGENT_SESSION_MESSAGES_MAX_LIMIT).optional(),

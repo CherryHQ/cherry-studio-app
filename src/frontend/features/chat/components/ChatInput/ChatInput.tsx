@@ -34,6 +34,7 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
+import { useMultiModelChatState, useMultiModelChatActions } from '../MultiModelChat';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
@@ -109,7 +110,9 @@ export function ChatInput({
     persistModel,
     handleModelPersistenceError,
   );
-  const selectedModelItem = modelPickerData.getModelItem(selectedModelId);
+  const multiModel = useMultiModelChatState();
+  const effectiveModelId = multiModel?.nextModelIds[0] ?? selectedModelId;
+  const selectedModelItem = modelPickerData.getModelItem(effectiveModelId);
   const reasoningEfforts = useChatInputReasoningEfforts(selectedModelItem?.model);
   const reasoningSelection = useChatInputReasoningEffortSelection(
     selectedModelItem ? reasoningEfforts : undefined,
@@ -143,7 +146,7 @@ export function ChatInput({
       isImageGenerationModel(selectedModelItem.model) &&
       !skillAction ? (
         <PaintingInput
-          canSend={canSend}
+          canSend={multiModel?.awaitingAdoption ? false : canSend}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           modelSelection={modelSelection}
           onCancel={cancelGeneration}
@@ -160,7 +163,7 @@ export function ChatInput({
           providerSetupReturnTo={providerSetupReturnTo}
           reasoningEfforts={reasoningEfforts}
           reasoningSelection={reasoningSelection}
-          selectedModelId={selectedModelId}
+          selectedModelId={effectiveModelId}
           selectedModelItem={selectedModelItem}
           selectModel={selectModel}
         />
@@ -196,7 +199,12 @@ function TextChatInput({
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
   const selectedModel = selectedModelItem?.model;
-  const selectedModelLabel = selectedModel?.name;
+  const multiModel = useMultiModelChatState();
+  const multiModelActions = useMultiModelChatActions();
+  const selectedModelLabel =
+    multiModel && multiModel.nextModelIds.length > 1
+      ? t('chat.multiModel.selectedModels', { count: multiModel.nextModelIds.length })
+      : selectedModel?.name;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
@@ -280,6 +288,9 @@ function TextChatInput({
         parts.push({ type: 'text', text: `[MCP App context: ${context.title}]\n${context.text}` });
       const result = await sendMessage({
         parts,
+        ...(multiModel && multiModel.nextModelIds.length > 1
+          ? { multiModelIds: [...multiModel.nextModelIds] }
+          : {}),
         ...(skillAction ? { skillAction } : {}),
         ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
@@ -294,9 +305,12 @@ function TextChatInput({
           : {}),
       });
       mcpApps?.consumed(appContexts);
+      multiModelActions?.clearModels();
       return result;
     },
     [
+      multiModel,
+      multiModelActions,
       isReasoningEffortSelected,
       mcpApps,
       mode,
@@ -348,6 +362,7 @@ function TextChatInput({
                 {(effortGauge) => (
                   <ChatInputComposer
                     canSend={
+                      !multiModel?.awaitingAdoption &&
                       selectedModelItem &&
                       (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
                         ? canSend
@@ -382,9 +397,23 @@ function TextChatInput({
                       fieldStyle={isPickerVisible ? compactInputStyle : undefined}
                       leadingAction={
                         <ChatInputMenu
+                          onPickModels={
+                            multiModelActions
+                              ? () =>
+                                  multiModelActions.chooseModels(
+                                    multiModel?.nextModelIds.length
+                                      ? multiModel.nextModelIds
+                                      : selectedModelId
+                                        ? [selectedModelId]
+                                        : [],
+                                  )
+                              : undefined
+                          }
                           media={mode === 'minimal' ? 'images' : 'all'}
                           onPickSkills={
-                            mode === 'standard' && agentId
+                            mode === 'standard' &&
+                            agentId &&
+                            !(multiModel && multiModel.nextModelIds.length > 1)
                               ? () => {
                                   setIsPluginPickerOpen(false);
                                   setIsPromptPickerOpen(false);
@@ -393,7 +422,8 @@ function TextChatInput({
                               : undefined
                           }
                           onPickPlugins={
-                            mode === 'standard'
+                            mode === 'standard' &&
+                            !(multiModel && multiModel.nextModelIds.length > 1)
                               ? () => {
                                   setIsSkillPickerOpen(false);
                                   setIsPromptPickerOpen(false);
@@ -425,7 +455,11 @@ function TextChatInput({
                             ) : undefined
                           }
                           label={selectedModelLabel}
-                          onPress={openModelPicker}
+                          onPress={
+                            multiModel?.nextModelIds.length && multiModelActions
+                              ? () => multiModelActions.chooseModels(multiModel.nextModelIds)
+                              : openModelPicker
+                          }
                         />
                       }
                       trailingAction={effortGauge}

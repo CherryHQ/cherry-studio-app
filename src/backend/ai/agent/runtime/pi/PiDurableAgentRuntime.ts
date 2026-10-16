@@ -20,6 +20,7 @@ import {
 import { createCodemodeExtension } from '@earendil-works/pi-durable/codemode';
 import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
+import { MULTI_MODEL_TOOL_NAME, AgentMultiModelCandidateSchema } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type {
@@ -54,6 +55,7 @@ import {
 import { PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
+import { createMultiModelCandidateTask, createMultiModelTool } from './piMultiModel';
 import {
   PI_TOOL_BUDGET,
   PI_TOOL_BUDGET_FINAL_RESPONSE,
@@ -98,6 +100,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   private delivery: Promise<void> = Promise.resolve();
   private readonly models: ReturnType<typeof createPiDurableModels>;
   private codemodeSandbox: CodemodeSandboxBase | undefined;
+  private readonly candidateTask: ReturnType<typeof createMultiModelCandidateTask>;
 
   constructor(
     private readonly dependencies: PiRuntimeDependencies,
@@ -142,6 +145,22 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       (signal) => signal !== undefined && this.toolFreeRequests.has(signal),
       (signal) => (signal ? this.webRequests.get(signal) : undefined),
     );
+    this.candidateTask = createMultiModelCandidateTask({
+      stream: (input, messages, signal) => {
+        this.requestOwners.set(signal, input.owner);
+        this.toolFreeRequests.add(signal);
+        const model = this.models.getModel(input.model);
+        if (!model) throw new Error('The candidate model is unavailable.');
+        return this.models.models.streamSimple(
+          model,
+          { messages },
+          {
+            sessionId: input.providerSessionId,
+            signal,
+          },
+        );
+      },
+    });
   }
 
   preflightModel(model: RuntimeConversationConfiguration['model']) {
@@ -152,6 +171,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (this.runtime) throw new Error('The durable Agent runtime is already initialized.');
     this.ports = ports;
     this.codemodeSandbox = createPiCodemodeSandbox(ports.scriptSandbox);
+    this.registry.install({ name: 'cherry.multi-model-runtime', tasks: [this.candidateTask] });
     let storage: Storage | undefined;
     try {
       storage = await this.createStorage(database);
@@ -304,6 +324,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       instructions: stored.instructions,
       initialInstructions: stored.initialInstructions,
       options: { ...stored.options },
+      ...(stored.multiModelTargets ? { multiModelTargets: stored.multiModelTargets } : {}),
       tools: stored.tools.map((tool) => this.toolTemplate(tool)),
       ...(stored.webTools ? { webTools: { ...stored.webTools } } : {}),
     };
@@ -343,6 +364,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     await runtime.ensureConversation({
       sessionId: seed.sessionId,
       revision: seed.revision,
+      pathId: seed.pathId,
       agent,
       options: configuration.options,
       configuration: detachedJson(configuration),
@@ -353,11 +375,86 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     await this.bindProvider(seed.sessionId);
   }
 
+  cancelCandidate(input: Parameters<NonNullable<DurableAgentRuntime['cancelCandidate']>>[0]) {
+    return this.requireRuntime().cancelCandidate(input);
+  }
+
+  async activatePath(input: Parameters<NonNullable<DurableAgentRuntime['activatePath']>>[0]) {
+    const runtime = this.requireRuntime();
+    const binding = await runtime.binding(input.sessionId);
+    if (!binding?.conversationId) return false;
+    const known =
+      binding.paths?.[input.pathId] ??
+      (input.pathId === (binding.activePathId ?? 'root') ? binding.conversationId : undefined);
+    let at: EntryId | undefined;
+    let edits: import('@earendil-works/pi-durable').EntryDraft | undefined;
+    if (
+      !known ||
+      (input.fromMessageId &&
+        (binding.activePathId === input.pathId ||
+          (!binding.activePathId && input.pathId === 'root')))
+    ) {
+      const source = input.fromMessageId
+        ? await this.message(input.sessionId, input.fromMessageId)
+        : undefined;
+      if (!source?.turn.answerBoundary) return false;
+      at = parseBoundary(source.turn.answerBoundary);
+      if (input.selection) {
+        const conversation = await runtime.conversation(input.sessionId);
+        const view = await conversation?.context(BACKGROUND_CONTEXT, { at });
+        const entry = view?.entries.find((entry) =>
+          entry.model?.some(
+            (message) =>
+              message.role === 'toolResult' && message.toolCallId === input.selection!.toolCallId,
+          ),
+        );
+        const message = entry?.model?.find(
+          (message) =>
+            message.role === 'toolResult' && message.toolCallId === input.selection!.toolCallId,
+        );
+        if (!entry || message?.role !== 'toolResult') return false;
+        // A summary of the old adoption cannot be repaired with a context edit. Rebuild from Cherry.
+        if (
+          (known || input.pathId === (binding.activePathId ?? 'root')) &&
+          !(await conversation?.context(BACKGROUND_CONTEXT))?.entries.some(
+            (item) => item.id === entry.id,
+          )
+        )
+          return false;
+        edits = {
+          kind: 'cherry.multi-model-selection',
+          data: { candidateId: input.selection.candidateId },
+          edits: [
+            {
+              target: entry.id,
+              action: 'replace',
+              messages: [
+                {
+                  ...message,
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify({ kind: 'multi-model-reply', adopted: input.selection }),
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        };
+      }
+    }
+    const activated = await runtime.activatePath({ ...input, at, edits });
+    if (activated) await this.bindProvider(input.sessionId);
+    return activated;
+  }
+
   async configure(sessionId: string, input: RuntimeConversationConfiguration): Promise<void> {
     const previous = this.configurations.get(sessionId);
     const configuration = await this.configurationBlueprint(input);
     const agent = await this.installConfiguration(sessionId, configuration);
     try {
+      await this.requireRuntime().materializePendingPath(sessionId);
       await this.requireRuntime().configure(
         sessionId,
         agent,
@@ -503,7 +600,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   async discardConversation(sessionId: string) {
     const runtime = this.requireRuntime();
     if (!(await runtime.conversation(sessionId))) return;
-    await runtime.stop(sessionId);
+    await runtime.stopAllPaths(sessionId);
     await this.drainUsage();
     await runtime.retireSession(sessionId);
     this.configurations.delete(sessionId);
@@ -539,7 +636,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       sessionId,
       record,
       metadata,
-      entries: await runtime.turnEntries(sessionId, record),
+      entries: await Promise.all(
+        (await runtime.turnEntries(sessionId, record)).map((entry) =>
+          runtime.refreshMultiModelEntry(entry),
+        ),
+      ),
       active,
       inherited: record.conversationId !== conversation.id,
     });
@@ -559,6 +660,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       // Historical reads stay available after a user removes a provider/model. A fresh configure
       // still preflights strictly, and Pi settles recovered requests with its native no-model result.
       if (!rehydrating) throw error;
+    }
+    for (const target of configuration.multiModelTargets ?? []) {
+      try {
+        await this.models.registerModel(target.model);
+      } catch (error) {
+        if (!rehydrating) throw error;
+      }
     }
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
@@ -612,7 +720,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         : {}),
       // A web capability reaches the model through one route: its function or the native tool.
       tools: selectPiClientTools(
-        configuration.tools.map((blueprint) => this.toolTemplate(blueprint)),
+        configuration.tools
+          .filter((tool) => tool.providerName !== MULTI_MODEL_TOOL_NAME)
+          .map((blueprint) => this.toolTemplate(blueprint)),
         routes,
       ),
       previousFailures: async (api, context) => {
@@ -703,8 +813,40 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         );
       },
     });
+    const multiTool = configuration.multiModelTargets
+      ? createMultiModelTool({
+          task: this.candidateTask,
+          targets: configuration.multiModelTargets.map((target) => ({
+            model: target.model,
+            candidate: AgentMultiModelCandidateSchema.parse({
+              id: target.modelId,
+              modelId: target.modelId,
+              name: target.name,
+              status: 'queued',
+              text: '',
+              reasoning: '',
+              attempt: 1,
+            }),
+          })),
+          input: async (api, context) => {
+            const owner = await this.taskIdentity(sessionId, api, context);
+            await this.requirePorts().assertExecutionAllowed(owner, requireSignal(context));
+            const conversation = await this.requireRuntime().conversation(sessionId, context);
+            const view = await conversation?.context(context);
+            const anchor = view?.entries.at(-1)?.id;
+            const providerSessionId = await this.requireRuntime().providerSessionId(
+              sessionId,
+              context,
+            );
+            if (anchor === undefined || !providerSessionId)
+              throw new Error('The multi-model input is unavailable.');
+            return { owner, sessionId, anchor, providerSessionId };
+          },
+        })
+      : undefined;
     this.registry.install({
       ...extension,
+      tools: [...(extension.tools ?? []), ...(multiTool ? [multiTool] : [])],
       hooks: [
         ...(extension.hooks ?? []),
         hook(GenerationTask, {

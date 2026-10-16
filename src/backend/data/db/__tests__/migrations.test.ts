@@ -6,6 +6,55 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('adds nullable app-owned paths without rewriting legacy messages or runtime revisions', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0010_conversation_paths',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const migration of files.slice(0, index)) applyMigrationSql(database, migration);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Agent', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, runtime_revision, last_activity_at, created_at, updated_at)
+          VALUES ('session', 'agent', 7, 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+          VALUES ('answer', 'session', 'assistant', '{"parts":[]}', 'success', 1, 1);
+      `);
+      for (const migration of files.slice(index)) applyMigrationSql(database, migration);
+      expect(
+        database.prepare('SELECT runtime_revision, conversation_state FROM agent_session').get(),
+      ).toEqual({ runtime_revision: 7, conversation_state: null });
+      expect(database.prepare('SELECT data, status FROM agent_session_message').get()).toEqual({
+        data: '{"parts":[]}',
+        status: 'success',
+      });
+      const state = JSON.stringify({
+        activePathId: 'root',
+        paths: [
+          {
+            id: 'root',
+            parentPathId: null,
+            sourceMessageId: null,
+            sourcePathId: null,
+            candidateId: null,
+            adopted: {},
+          },
+        ],
+        choices: {},
+      });
+      database
+        .prepare('UPDATE agent_session SET conversation_state = ? WHERE id = ?')
+        .run(state, 'session');
+      expect(database.prepare('SELECT conversation_state FROM agent_session').get()).toEqual({
+        conversation_state: state,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   test('places every existing painting on its own board and cascades board deletion', () => {
     const database = new DatabaseSync(':memory:');
     try {

@@ -88,7 +88,8 @@ export type RuntimeExecutionPorts = {
 
 export type RuntimeConversationConfiguration = {
   /** Direct image requests execute as a single unsafe capability, without a language-model request. */
-  kind?: 'language' | 'image';
+  kind?: 'language' | 'image' | 'multi-model';
+  multiModelTargets?: readonly { model: RuntimeModel; modelId: string; name: string }[];
   model: RuntimeModel;
   instructions: string;
   /** Host-owned replaceable system sections, seeded once for this configuration. */
@@ -104,6 +105,7 @@ export type RuntimeConversationSeed = {
   sessionId: string;
   /** Cherry-owned history revision. A different revision must never resume this working copy. */
   revision: number;
+  pathId?: string;
   configuration: RuntimeConversationConfiguration;
   history?: {
     history: RuntimeHistoryTurn[];
@@ -202,6 +204,20 @@ export interface DurableAgentRuntime {
   configuration(sessionId: string): Promise<RuntimeConversationConfiguration>;
   resourceFileEntryIds(sessionId: string): Promise<readonly string[]>;
   ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void>;
+  cancelCandidate?(input: {
+    sessionId: string;
+    toolCallId: string;
+    candidateId: string;
+  }): Promise<void>;
+  activatePath?(input: {
+    sessionId: string;
+    pathId: string;
+    revision: number;
+    fromMessageId?: string;
+    defer?: boolean;
+    fileEntryIds?: readonly string[];
+    selection?: { toolCallId: string; candidateId: string; text: string; modelId: string };
+  }): Promise<boolean>;
   configure(sessionId: string, configuration: RuntimeConversationConfiguration): Promise<void>;
   submit(sessionId: string, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
   observe(

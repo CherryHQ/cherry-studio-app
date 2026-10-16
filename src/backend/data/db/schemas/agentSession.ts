@@ -1,10 +1,12 @@
 import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { AgentConversationState } from '@/shared/contracts/agent';
+
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentTable } from './agent';
 
 /**
- * Agent Session table - one long-lived linear conversation
+ * Agent Session table - one product conversation with app-owned continuation paths
  * (docs/references/agent/agent-persistence.md).
  *
  * No workspace reference: mobile has no working directory or shell
@@ -25,6 +27,8 @@ export const agentSessionTable = sqliteTable(
     isNameManuallyEdited: integer({ mode: 'boolean' }).notNull().default(false),
     /** Invalidates disposable execution history in the same transaction as transcript edits. */
     runtimeRevision: integer().notNull().default(0),
+    /** App-owned paths and candidate adoption; Pi remains a disposable execution copy. */
+    conversationState: text({ mode: 'json' }).$type<AgentConversationState>(),
     // Dedicated conversation activity time: advances to reservation time or
     // terminal stats.runtimeTiming.completedAt, and is inherited by history forks.
     // Administrative mutations such as renames and forks must not stamp "now".

@@ -147,6 +147,10 @@ jest.mock('../components/ChatRouteResolver', () => ({
   },
 }));
 
+jest.mock('../components/MultiModelChat', () => ({
+  MultiModelChatProvider: ({ children }: { children?: React.ReactNode }) => children,
+}));
+
 jest.mock('../components/ChatWorkspace', () => ({
   AssistantMessageUsage: () => null,
   ChatDraftState: () => null,

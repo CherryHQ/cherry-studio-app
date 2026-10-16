@@ -7,7 +7,15 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { AgentErrorView, AgentMessageView, AgentSessionView } from '@/shared/contracts/agent';
+import {
+  createConversationState,
+  conversationSelections,
+  multiModelResultFromParts,
+  visibleConversationMessages,
+  type AgentErrorView,
+  type AgentMessageView,
+  type AgentSessionView,
+} from '@/shared/contracts/agent';
 
 import type { RuntimeContextCheckpoint } from '../runtime';
 import type {
@@ -23,6 +31,7 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
+import { changeConversationPath, type ChangeConversationPathInput } from './conversationPaths';
 import { finalizeMessageStats } from './messageSettlement';
 import { collectSkillActivations } from './skillActivations';
 
@@ -95,6 +104,7 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
 function reserveInTranscript(
   transcript: StoredMessage[],
   input: ReserveSubmissionInput,
+  pathId?: string,
 ): ReserveSubmissionResult {
   // Synchronous section: both message writes commit together or not at all.
   const timestamp = nowIso();
@@ -104,6 +114,7 @@ function reserveInTranscript(
     sessionId: input.sessionId,
     turnId,
     role: 'user',
+    ...(pathId ? { pathId } : {}),
     status: 'success',
     parts: cloneJson(input.userParts),
     stats: null,
@@ -117,6 +128,7 @@ function reserveInTranscript(
     sessionId: input.sessionId,
     turnId,
     role: 'assistant',
+    ...(pathId ? { pathId } : {}),
     status: 'pending',
     parts: [],
     stats: null,
@@ -180,6 +192,41 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   async getSession(sessionId: string): Promise<AgentSessionView | null> {
     const session = this.sessions.get(sessionId);
     return session ? cloneJson(session) : null;
+  }
+
+  async changeConversationPath(input: ChangeConversationPathInput): Promise<AgentSessionView> {
+    const session = this.sessions.get(input.sessionId);
+    if (!session) throw new Error('The conversation is unavailable.');
+    const transcript = this.messages.get(input.sessionId) ?? [];
+    if (transcript.some(({ view }) => UNSETTLED_MESSAGE_STATUSES.has(view.status)))
+      throw new Error('The conversation is busy.');
+    const state = changeConversationPath(
+      session.conversationState,
+      transcript.map(({ view }) => view),
+      input,
+      uuidv7(),
+    );
+    const updated = { ...session, conversationState: state, updatedAt: nowIso() };
+    this.sessions.set(input.sessionId, updated);
+    this.runtimeRevisions.set(
+      input.sessionId,
+      (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
+    );
+    for (const stored of transcript) stored.contextCheckpoint = null;
+    return cloneJson(updated);
+  }
+
+  private visibleTranscript(sessionId: string): StoredMessage[] {
+    const transcript = this.messages.get(sessionId) ?? [];
+    const state = this.sessions.get(sessionId)?.conversationState;
+    if (!state) return transcript;
+    const ids = new Set(
+      visibleConversationMessages(
+        transcript.map(({ view }) => view),
+        state,
+      ).map((view) => view.id),
+    );
+    return transcript.filter(({ view }) => ids.has(view.id));
   }
 
   async getRuntimeRevision(sessionId: string): Promise<number | null> {
@@ -247,7 +294,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return { status: 'session-not-found' };
     }
 
-    const transcript = this.messages.get(input.sessionId) ?? [];
+    const transcript = this.visibleTranscript(input.sessionId);
     const anchorIndex = transcript.findIndex((stored) => stored.view.id === input.fromMessageId);
     if (anchorIndex < 0) {
       return { status: 'message-not-found' };
@@ -256,6 +303,13 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return { status: 'fork-point-unsettled' };
     }
 
+    if (
+      input.candidateId &&
+      !multiModelResultFromParts(transcript[anchorIndex].view.parts)?.candidates.some(
+        (candidate) => candidate.id === input.candidateId && candidate.status === 'completed',
+      )
+    )
+      return { status: 'message-not-found' };
     // Synchronous section: the Session and its copied transcript commit
     // together or not at all.
     const session = createSessionView({
@@ -277,6 +331,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
         ...stored.view,
         id: uuidv7(),
         sessionId: session.id,
+        pathId: undefined,
+        selectedCandidateId: undefined,
         turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
         updatedAt: nowIso(),
       }),
@@ -284,6 +340,18 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const forkBoundaryMessageId = forkedTranscript.at(-1)?.view.id;
     if (!forkBoundaryMessageId) {
       throw new Error('Fork transcript is missing its settled boundary message.');
+    }
+    if (source.conversationState || input.candidateId) {
+      const state = createConversationState();
+      const selections = source.conversationState
+        ? conversationSelections(source.conversationState)
+        : {};
+      if (input.candidateId) selections[input.fromMessageId] = input.candidateId;
+      copied.forEach(({ view }, index) => {
+        if (selections[view.id])
+          state.paths[0].adopted[forkedTranscript[index].view.id] = selections[view.id];
+      });
+      session.conversationState = state;
     }
     const forkedSession = { ...session, forkBoundaryMessageId, updatedAt: nowIso() };
 
@@ -318,6 +386,13 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return { status: 'turn-unsettled' };
     }
 
+    const turnMessageIds = new Set(deleted.map(({ view }) => view.id));
+    if (
+      session.conversationState?.paths.some(
+        (path) => path.sourceMessageId && turnMessageIds.has(path.sourceMessageId),
+      )
+    )
+      return { status: 'turn-has-continuations' };
     // Synchronous section: the checkpoint reset and the removal commit
     // together or not at all.
     // A summary covers everything up to its anchor turn, so only a checkpoint
@@ -390,7 +465,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
     }
     this.assertNewMessageIds(input);
-    const reserved = reserveInTranscript(transcript, input);
+    const reserved = reserveInTranscript(
+      transcript,
+      input,
+      this.sessions.get(input.sessionId)?.conversationState?.activePathId,
+    );
     const session = this.sessions.get(input.sessionId);
     if (session) {
       this.sessions.set(input.sessionId, {
@@ -402,7 +481,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
-    const source = this.messages.get(input.sessionId) ?? [];
+    const source = this.visibleTranscript(input.sessionId);
     const assistant = source.at(-1);
     const user = source.at(-2);
     if (
@@ -454,7 +533,14 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
-    return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
+    const state = this.sessions.get(sessionId)?.conversationState;
+    const adopted = state ? conversationSelections(state) : {};
+    return cloneJson(
+      this.visibleTranscript(sessionId).map(({ view }) => ({
+        ...view,
+        selectedCandidateId: adopted[view.id],
+      })),
+    );
   }
 
   private assertNewMessageIds(input: ReserveSubmissionInput): void {
@@ -468,7 +554,8 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
-    const transcript = this.messages.get(sessionId) ?? [];
+    const views = await this.listMessages(sessionId);
+    const transcript = views.map((view) => ({ view }));
     let anchorIndex = -1;
     if (afterTurnId !== null) {
       for (let index = transcript.length - 1; index >= 0; index -= 1) {
@@ -499,13 +586,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async loadSkillActivations(sessionId: string) {
-    return cloneJson(
-      collectSkillActivations((this.messages.get(sessionId) ?? []).map(({ view }) => view)),
-    );
+    return cloneJson(collectSkillActivations(await this.listMessages(sessionId)));
   }
 
   async loadWorkflowLoads(sessionId: string) {
-    return (this.messages.get(sessionId) ?? []).flatMap(({ view }) =>
+    return (await this.listMessages(sessionId)).flatMap((view) =>
       view.role === 'assistant'
         ? view.parts.flatMap((part) => {
             if (
@@ -530,6 +615,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
   }
 
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
+    if (this.sessions.get(sessionId)?.conversationState) return null;
     const transcript = this.messages.get(sessionId) ?? [];
     for (let index = transcript.length - 1; index >= 0; index -= 1) {
       const stored = transcript[index];

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
+import type { AgentMultiModelResult } from '@/shared/contracts/agent';
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
@@ -20,6 +21,8 @@ export type MessageListItem = Readonly<{
     translations?: MessageTranslations;
   }>;
   id: string;
+  pathId?: string;
+  multiModel?: { result: AgentMultiModelResult; selectedCandidateId?: string };
   /** Image request settings captured by this message, independent of the current model. */
   imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */

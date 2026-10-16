@@ -58,17 +58,25 @@ function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMe
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
   navigation: MessageNavigation = {},
+  pathId?: string,
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
   const { messageId, messageRequestId } = navigation;
-  const navigationKey = JSON.stringify([sessionId, messageId, messageRequestId]);
+  const navigationKey = JSON.stringify([
+    sessionId,
+    messageId,
+    messageRequestId,
+    ...(pathId ? [pathId] : []),
+  ]);
   const [latestNavigationKey, setLatestNavigationKey] = useState<string>();
   const isReturningToLatest = latestNavigationKey === navigationKey;
   const aroundMessageId = isReturningToLatest ? undefined : messageId;
   const isAroundMessage = Boolean(aroundMessageId);
   const dataKey = messageId
     ? `${navigationKey}:${isAroundMessage ? 'message' : 'latest'}`
-    : (sessionId ?? '');
+    : pathId && pathId !== 'root'
+      ? `${sessionId ?? ''}:${pathId}`
+      : (sessionId ?? '');
   const initialPageParam: ListAgentSessionMessagesQueryParams = { aroundMessageId };
   const query = useInfiniteQuery({
     enabled: Boolean(sessionId),
@@ -85,7 +93,11 @@ export function useAgentMessageHistoryWindow(
       const page = await apiClient.get(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
         {
-          query: { ...pageParam, limit: messageWindowPolicy.initialFetchCount },
+          query: {
+            ...pageParam,
+            ...(pathId ? { pathId } : {}),
+            limit: messageWindowPolicy.initialFetchCount,
+          },
           signal,
         },
       );
@@ -96,6 +108,7 @@ export function useAgentMessageHistoryWindow(
       ...queryKeys.agentSessions.messages(sessionId ?? '__missing_session__'),
       {
         aroundMessageId,
+        ...(pathId ? { pathId } : {}),
         ...(aroundMessageId ? { messageRequestId } : {}),
         limit: messageWindowPolicy.initialFetchCount,
       },

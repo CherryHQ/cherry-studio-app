@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
@@ -22,6 +22,10 @@ import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import {
+  activeConversationCondition,
+  withConversationSelections,
+} from './utils/agentConversationPaths';
+import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
   toAgentSessionView,
@@ -29,7 +33,7 @@ import {
 } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
-/** Durable transcript reads and message-owned reading aids. */
+/** Durable transcript windows within a persisted path, with message-owned reading aids. */
 export class AgentSessionMessageService {
   private get db() {
     return application.get('DbService').getDb();
@@ -93,7 +97,7 @@ export class AgentSessionMessageService {
   ): Promise<AgentSessionMessagePage> {
     const query = ListAgentSessionMessagesQuerySchema.parse(params);
     const [session] = await this.db
-      .select({ id: agentSessionTable.id })
+      .select({ id: agentSessionTable.id, state: agentSessionTable.conversationState })
       .from(agentSessionTable)
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
@@ -101,6 +105,17 @@ export class AgentSessionMessageService {
       throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     }
 
+    if (
+      query.pathId &&
+      query.pathId !== 'root' &&
+      !session.state?.paths.some((path) => path.id === query.pathId)
+    )
+      throw DataApiErrorFactory.notFound('ConversationPath', query.pathId);
+    const state =
+      session.state && query.pathId
+        ? { ...session.state, activePathId: query.pathId }
+        : session.state;
+    const condition = activeConversationCondition(state);
     if (query.ids) {
       const rows = await this.db
         .select(agentMessageViewColumns)
@@ -109,15 +124,19 @@ export class AgentSessionMessageService {
           and(
             eq(agentSessionMessageTable.sessionId, sessionId),
             inArray(agentSessionMessageTable.id, query.ids),
+            condition,
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
-      return { items: toReadableAgentMessageViews(rows) };
+      return {
+        items: withConversationSelections(toReadableAgentMessageViews(rows), state),
+      };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
     if (query.aroundMessageId) {
-      return this.readAround(sessionId, query.aroundMessageId, limit);
+      const page = await this.readAround(sessionId, query.aroundMessageId, limit, condition);
+      return { ...page, items: withConversationSelections(page.items, state) };
     }
 
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'agent-session-messages');
@@ -125,13 +144,19 @@ export class AgentSessionMessageService {
     if (isNewer && !cursor) {
       throw DataApiErrorFactory.validation({ cursor: ['Invalid message cursor'] });
     }
-    const rows = await this.readRows(sessionId, limit + 1, isNewer ? 'asc' : 'desc', cursor);
+    const rows = await this.readRows(
+      sessionId,
+      limit + 1,
+      isNewer ? 'asc' : 'desc',
+      cursor,
+      condition,
+    );
     const selectedRows = rows.slice(0, limit);
     const pageRows = isNewer ? selectedRows.toReversed() : selectedRows;
     const head = pageRows[0];
     const tail = pageRows.at(-1);
     return {
-      items: toReadableAgentMessageViews(pageRows),
+      items: withConversationSelections(toReadableAgentMessageViews(pageRows), state),
       ...(tail && (isNewer ? cursor : rows.length > limit)
         ? { nextCursor: encodeCursor(tail.createdAt, tail.id) }
         : {}),
@@ -174,11 +199,14 @@ export class AgentSessionMessageService {
     return {
       assistantName: rows[0].assistantName ?? undefined,
       session: toAgentSessionView(rows[0].session),
-      messages: toReadableAgentMessageViews(messages),
+      messages: withConversationSelections(
+        toReadableAgentMessageViews(messages),
+        rows[0].session.conversationState,
+      ),
     };
   }
 
-  private async readAround(sessionId: string, messageId: string, limit: number) {
+  private async readAround(sessionId: string, messageId: string, limit: number, condition?: SQL) {
     const [target] = await this.db
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
@@ -186,6 +214,7 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           eq(agentSessionMessageTable.id, messageId),
+          condition,
         ),
       )
       .limit(1);
@@ -197,8 +226,8 @@ export class AgentSessionMessageService {
     const olderCount = Math.floor((limit - 1) / 2);
     const newerCount = limit - 1 - olderCount;
     const [older, newer] = await Promise.all([
-      this.readRows(sessionId, olderCount + 1, 'desc', boundary),
-      this.readRows(sessionId, newerCount + 1, 'asc', boundary),
+      this.readRows(sessionId, olderCount + 1, 'desc', boundary, condition),
+      this.readRows(sessionId, newerCount + 1, 'asc', boundary, condition),
     ]);
     const rows = [
       ...newer.slice(0, newerCount).toReversed(),
@@ -221,6 +250,7 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
+    condition?: SQL,
   ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
@@ -234,6 +264,7 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           cursor ? ordering.where(cursor) : undefined,
+          condition,
         ),
       )
       .orderBy(...ordering.orderBy)

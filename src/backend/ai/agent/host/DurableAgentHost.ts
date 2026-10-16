@@ -15,6 +15,13 @@ import {
   AgentEventSchema,
   AgentForkSessionInputSchema,
   AgentInputPartSchema,
+  MULTI_MODEL_TOOL_NAME,
+  AgentCancelCandidateInputSchema,
+  AgentSelectAnswerInputSchema,
+  AgentPrepareContinuationInputSchema,
+  AgentRestoreConversationPathInputSchema,
+  conversationSelections,
+  multiModelResultFromParts,
   AgentProtocolError,
   AgentRenameSessionInputSchema,
   AgentRespondApprovalInputSchema,
@@ -59,6 +66,7 @@ import {
   type RuntimeTurnTiming,
 } from '../runtime';
 import type { AgentSessionStore, ReserveSubmissionResult } from '../sessionStore/AgentSessionStore';
+import type { ChangeConversationPathInput } from '../sessionStore/conversationPaths';
 import { settleInterruptedAssistantParts } from '../sessionStore/messageSettlement';
 import type { MobileAgentHostNaming, MobileAgentHostPorts } from './agentHostTypes';
 import { buildInitialSkillInstructions, buildAgentSystemPrompt } from './agentSystemPrompt';
@@ -431,6 +439,18 @@ export class DurableAgentHost implements AgentProtocol {
       await this.requireSession(parsed.sessionId);
       await this.syncSession(parsed.sessionId);
       const native = await this.isCurrentConversation(parsed.sessionId);
+      if (
+        native &&
+        (await this.conversations.configuration(parsed.sessionId)).kind === 'multi-model'
+      ) {
+        const history = await this.store.listMessages(parsed.sessionId);
+        if (
+          history.some(
+            (message) => multiModelResultFromParts(message.parts) && !message.selectedCandidateId,
+          )
+        )
+          fail('ANSWER_SELECTION_REQUIRED', 'Adopt a multi-model reply before continuing.');
+      }
       const plan = native
         ? await prepareDurableTurn(
             this.preparation,
@@ -472,6 +492,7 @@ export class DurableAgentHost implements AgentProtocol {
         {
           sessionId: input.sessionId,
           revision: (await this.store.getRuntimeRevision(input.sessionId)) ?? 0,
+          pathId: session?.conversationState?.activePathId,
           configuration,
           ...(plan.history.length > 0 || plan.runtimeContextCheckpoint
             ? {
@@ -492,6 +513,8 @@ export class DurableAgentHost implements AgentProtocol {
     } else {
       const state = this.live.get(input.sessionId);
       if (state?.active || state?.queue.length) {
+        if (configuration.kind === 'multi-model')
+          fail('SESSION_BUSY', 'Wait for the multi-model round before continuing.');
         const current = await this.conversations.configuration(input.sessionId);
         if (configurationKey(current) !== configurationKey(configuration))
           fail('SESSION_BUSY', 'Wait for the current turn before changing its configuration.');
@@ -573,10 +596,27 @@ export class DurableAgentHost implements AgentProtocol {
 
   private configuration(plan: TurnPlan): RuntimeConversationSeed['configuration'] {
     return {
-      kind: plan.imageGeneration ? 'image' : 'language',
+      kind: plan.imageGeneration ? 'image' : plan.multiModelTargets ? 'multi-model' : 'language',
+      ...(plan.multiModelTargets ? { multiModelTargets: plan.multiModelTargets } : {}),
       model: plan.agent.model,
       options: plan.agent.options,
-      tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
+      tools: plan.imageGeneration
+        ? [this.imageTool(plan)]
+        : plan.multiModelTargets
+          ? [
+              {
+                ref: { source: 'builtin', capabilityId: MULTI_MODEL_TOOL_NAME },
+                providerName: MULTI_MODEL_TOOL_NAME,
+                displayName: 'Multi-model reply',
+                description: 'Generate independent replies with the selected models.',
+                inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+                approval: 'auto',
+                execute: async () => {
+                  throw new Error('Multi-model execution belongs to native Pi tasks.');
+                },
+              },
+            ]
+          : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
         plan.agent.mode === 'standard'
@@ -592,6 +632,102 @@ export class DurableAgentHost implements AgentProtocol {
         toolDiscoveryWarnings: plan.toolDiscoveryWarnings,
       }),
     };
+  }
+
+  async cancelCandidate(input: Parameters<AgentProtocol['cancelCandidate']>[0]) {
+    const parsed = AgentCancelCandidateInputSchema.parse(input);
+    storageMutationGate.assertWritable();
+    const state = this.live.get(parsed.sessionId);
+    const active = state?.active;
+    if (!active || active.assistantMessageId !== parsed.messageId)
+      fail('MESSAGE_NOT_FOUND', 'The candidate is no longer running.');
+    const tool = active.parts.find(
+      (part) => part.type === 'tool' && part.providerName === MULTI_MODEL_TOOL_NAME,
+    );
+    if (tool?.type !== 'tool' || !this.conversations.cancelCandidate)
+      fail('CAPABILITY_UNSUPPORTED', 'Candidate cancellation is unavailable.');
+    await this.conversations.cancelCandidate({
+      sessionId: parsed.sessionId,
+      toolCallId: tool.toolCallId,
+      candidateId: parsed.candidateId,
+    });
+  }
+
+  selectAnswer(input: Parameters<AgentProtocol['selectAnswer']>[0]) {
+    return this.changeConversation({
+      ...AgentSelectAnswerInputSchema.parse(input),
+      action: 'select',
+    });
+  }
+  prepareContinuation(input: Parameters<AgentProtocol['prepareContinuation']>[0]) {
+    return this.changeConversation({
+      ...AgentPrepareContinuationInputSchema.parse(input),
+      action: 'continue',
+    });
+  }
+  restoreConversationPath(input: Parameters<AgentProtocol['restoreConversationPath']>[0]) {
+    return this.changeConversation({
+      ...AgentRestoreConversationPathInputSchema.parse(input),
+      action: 'restore',
+    });
+  }
+  private changeConversation(input: ChangeConversationPathInput) {
+    this.assertIdle(input.sessionId);
+    return this.admit(input.sessionId, async () => {
+      await this.syncSession(input.sessionId, true);
+      await this.requireSession(input.sessionId);
+      const messages = await this.store.listMessages(input.sessionId);
+      const session = await this.store.changeConversationPath(input);
+      const state = session.conversationState!;
+      const context = await this.store.loadRuntimeTurnContext(input.sessionId, null);
+      const sourceId =
+        input.action === 'restore'
+          ? state.paths.find((path) => path.id === state.activePathId)?.sourceMessageId
+          : input.messageId;
+      const source =
+        context.history.find((message) => message.id === sourceId) ??
+        messages.find((message) => message.id === sourceId);
+      const result = source ? multiModelResultFromParts(source.parts) : null;
+      const selected = source ? conversationSelections(state)[source.id] : undefined;
+      const candidate = result?.candidates.find((candidate) => candidate.id === selected);
+      const tool = source?.parts.find(
+        (part) => part.type === 'dynamic-tool' && part.toolName === MULTI_MODEL_TOOL_NAME,
+      );
+      const live = this.live.get(input.sessionId);
+      await live?.unsubscribe();
+      live?.background?.retire();
+      this.live.delete(input.sessionId);
+      try {
+        const activated = await this.conversations.activatePath?.({
+          sessionId: input.sessionId,
+          pathId: state.activePathId,
+          defer: input.action !== 'continue',
+          fileEntryIds: context.referencedFileEntryIds,
+          revision: (await this.store.getRuntimeRevision(input.sessionId))!,
+          ...(source ? { fromMessageId: source.id } : {}),
+          ...(candidate && tool?.type === 'dynamic-tool'
+            ? {
+                selection: {
+                  toolCallId: tool.toolCallId,
+                  candidateId: candidate.id,
+                  modelId: candidate.modelId,
+                  text: candidate.text,
+                },
+              }
+            : {}),
+        });
+        if (!activated && (await this.conversations.hasConversation(input.sessionId)))
+          await this.conversations.discardConversation(input.sessionId);
+      } catch (error) {
+        // Cherry already committed the authoritative path. An execution-cache failure rebuilds on send.
+        logger.warn('Deferred conversation path rebuild', error as Error);
+        await this.detachConversation(input.sessionId);
+      }
+      this.setStatus(input.sessionId, null);
+      this.publish(input.sessionId, { type: 'session.updated', session });
+      this.ports.durableStorage?.notifyTranscript(input.sessionId);
+      return session;
+    });
   }
 
   async forkSession(input: Parameters<AgentProtocol['forkSession']>[0]) {
@@ -642,9 +778,14 @@ export class DurableAgentHost implements AgentProtocol {
         ...(assistant.modelId ? { modelId: assistant.modelId } : {}),
         ...submittedEffort(snapshot?.reasoningEffort),
         ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
+        ...(snapshot?.multiModelIds ? { multiModelIds: snapshot.multiModelIds } : {}),
       };
       // A successful answer stays in its source; regeneration uses an independent Cherry copy.
-      if (assistant.status === 'success' || index !== messages.length - 1) {
+      if (
+        assistant.status === 'success' ||
+        snapshot?.multiModelIds ||
+        index !== messages.length - 1
+      ) {
         const before = messages[index - 2];
         if (!before)
           return this.startSession({
@@ -725,6 +866,11 @@ export class DurableAgentHost implements AgentProtocol {
       if (result.status === 'turn-not-found')
         fail('MESSAGE_NOT_FOUND', 'The turn no longer exists.');
       if (result.status === 'turn-unsettled') fail('SESSION_BUSY', 'The turn has not settled.');
+      if (result.status === 'turn-has-continuations')
+        fail(
+          'TURN_HAS_CONTINUATIONS',
+          'This turn anchors saved continuations and cannot be removed.',
+        );
       // The same Cherry transaction invalidated the old revision. A crash before retirement is safe.
       await this.detachConversation(parsed.sessionId).catch((error: unknown) =>
         logger.warn('Deferred obsolete working-copy cleanup', error as Error),
@@ -933,6 +1079,9 @@ export class DurableAgentHost implements AgentProtocol {
             ...submittedSkills(facts.userParts),
             modelId: facts.inferenceSnapshot.model.uniqueModelId,
             ...submittedEffort(configuration.options.reasoningEffort),
+            ...(facts.inferenceSnapshot.multiModelIds
+              ? { multiModelIds: facts.inferenceSnapshot.multiModelIds }
+              : {}),
             ...(facts.inferenceSnapshot.imageGeneration
               ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
               : {}),
@@ -1702,6 +1851,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
   const facts = {
     kind: configuration.kind ?? 'language',
     model: configuration.model,
+    multiModelTargets: configuration.multiModelTargets,
     instructions: configuration.instructions,
     initialInstructions: configuration.initialInstructions ?? [],
     options: configuration.options,

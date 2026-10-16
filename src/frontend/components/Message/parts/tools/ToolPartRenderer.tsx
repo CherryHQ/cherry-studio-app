@@ -32,7 +32,8 @@ type ToolPartRendererProps = {
 
 export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRendererProps) {
   const renderTool = useToolRenderer();
-  if (renderTool) return renderTool(part);
+  const rendered = renderTool?.(part);
+  if (rendered !== undefined) return rendered;
 
   if (
     ['load_skill', 'find_skills', 'install_skill', 'adapt_skill'].includes(getToolName(part) ?? '')

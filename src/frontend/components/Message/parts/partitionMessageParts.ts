@@ -1,6 +1,8 @@
+import { MULTI_MODEL_TOOL_NAME } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
+  getToolName,
   isAgentMutationToolPart,
   isProviderWebSearchToolPart,
   isToolMessagePart,
@@ -132,7 +134,8 @@ export function partitionMessageParts(
     // A question and a saved Agent are outcomes the reader acts on, not process.
     if (
       isToolMessagePart(part) &&
-      (isUserQuestionToolPart(part) ||
+      (getToolName(part) === MULTI_MODEL_TOOL_NAME ||
+        isUserQuestionToolPart(part) ||
         ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
           part.state === 'output-available'))
     ) {

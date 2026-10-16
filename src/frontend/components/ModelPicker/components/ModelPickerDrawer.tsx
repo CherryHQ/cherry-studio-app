@@ -1,6 +1,6 @@
 import ListFilterIcon from '@cherrystudio/app-icons/icons/list-filter';
 import { ActionMenu, BottomSheet, Button, SearchField } from '@cherrystudio/ui/components';
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -29,12 +29,15 @@ type ModelPickerDrawerProps = {
   open: boolean;
   providerId?: string;
   selectedModelId: string | null;
+  selectedModelIds?: readonly string[];
+  children?: ReactNode;
   title?: string;
   variant?: ModelPickerDrawerVariant;
 };
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
+  children,
   emptyText,
   isModelVisible,
   modelType,
@@ -44,6 +47,7 @@ export function ModelPickerDrawer({
   open,
   providerId,
   selectedModelId,
+  selectedModelIds,
   title,
   variant = 'default',
 }: ModelPickerDrawerProps) {
@@ -81,12 +85,14 @@ export function ModelPickerDrawer({
           open={open}
           providerId={providerId}
           searchText={searchText}
+          selectedModelIds={selectedModelIds}
           selectedModelId={selectedModelId}
           selectedBadge={selectedBadge}
           setSelectedBadge={setSelectedBadge}
           variant={variant}
         />
       </ModelRegistryGate>
+      {children}
     </BottomSheet>
   );
 }
@@ -104,6 +110,7 @@ function ModelPickerDrawerContent({
   providerId,
   searchText,
   selectedModelId,
+  selectedModelIds,
   selectedBadge,
   setSelectedBadge,
   variant,
@@ -117,6 +124,7 @@ function ModelPickerDrawerContent({
   | 'open'
   | 'providerId'
   | 'selectedModelId'
+  | 'selectedModelIds'
   | 'variant'
 > & {
   deferredSearchText: string;
@@ -218,6 +226,7 @@ function ModelPickerDrawerContent({
           listItems={listItems}
           loadingText={t('settings.provider.models.loading')}
           onSelect={onSelect}
+          selectedModelIds={selectedModelIds}
           selectedModelId={selectedModelId}
           showBadges={variant === 'chat'}
         />

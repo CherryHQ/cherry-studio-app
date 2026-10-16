@@ -14,6 +14,10 @@ import { readSqliteRows } from '@/backend/data/db/readSqliteRows';
 import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
+  activeConversationCondition,
+  withConversationSelections,
+} from '@/backend/data/services/utils/agentConversationPaths';
+import {
   agentMessageViewColumns,
   agentMessageViewSqlColumns,
   fromAgentMessageViewSqlRow,
@@ -21,7 +25,13 @@ import {
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
-import { type AgentMessageView, type AgentSessionView } from '@/shared/contracts/agent';
+import {
+  createConversationState,
+  conversationSelections,
+  multiModelResultFromParts,
+  type AgentMessageView,
+  type AgentSessionView,
+} from '@/shared/contracts/agent';
 import { SkillActivationSchema } from '@/shared/data/types/skill';
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
@@ -41,6 +51,7 @@ import type {
   ReserveSubmissionInput,
   ReserveSubmissionResult,
 } from './AgentSessionStore';
+import { changeConversationPath, type ChangeConversationPathInput } from './conversationPaths';
 import { finalizeMessageStats } from './messageSettlement';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
@@ -104,6 +115,50 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
     return row ? toAgentSessionView(row) : null;
+  }
+
+  async changeConversationPath(input: ChangeConversationPathInput): Promise<AgentSessionView> {
+    const session = await this.dbService.withWriteTx(async (tx) => {
+      const [source] = await tx
+        .select()
+        .from(agentSessionTable)
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .limit(1);
+      if (!source) throw new Error('The conversation is unavailable.');
+      const rows = await tx
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+      if (
+        rows.some((row) =>
+          UNSETTLED_MESSAGE_STATUSES.includes(row.status as 'pending' | 'streaming'),
+        )
+      )
+        throw new Error('The conversation is busy.');
+      const state = changeConversationPath(
+        source.conversationState ?? undefined,
+        rows.map(toAgentMessageView),
+        input,
+        createOrderedUuid(),
+      );
+      const [updated] = await tx
+        .update(agentSessionTable)
+        .set({
+          conversationState: state,
+          runtimeRevision: sql`${agentSessionTable.runtimeRevision} + 1`,
+        })
+        .where(eq(agentSessionTable.id, input.sessionId))
+        .returning();
+      // Summaries can contain a formerly adopted answer. Rebuild after adoption changes.
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ contextCheckpoint: null })
+        .where(eq(agentSessionMessageTable.sessionId, input.sessionId));
+      return toAgentSessionView(updated);
+    });
+    publishDataApiChanges(['/agent-sessions', `/agent-sessions/${input.sessionId}`]);
+    return session;
   }
 
   async getRuntimeRevision(sessionId: string): Promise<number | null> {
@@ -201,14 +256,18 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
       const [session] = await tx
-        .select({ id: agentSessionTable.id })
+        .select({ id: agentSessionTable.id, state: agentSessionTable.conversationState })
         .from(agentSessionTable)
         .where(eq(agentSessionTable.id, input.sessionId))
         .limit(1);
       if (!session) {
         throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
       }
-      const { reservedAt, ...reserved } = await insertSubmission(tx, input);
+      const { reservedAt, ...reserved } = await insertSubmission(
+        tx,
+        input,
+        session.state?.activePathId,
+      );
       await tx
         .update(agentSessionTable)
         .set({ lastActivityAt: sql`max(${agentSessionTable.lastActivityAt}, ${reservedAt})` })
@@ -230,6 +289,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
       const [anchor] = await tx
         .select({
+          data: agentSessionMessageTable.data,
           createdAt: agentSessionMessageTable.createdAt,
           id: agentSessionMessageTable.id,
           role: agentSessionMessageTable.role,
@@ -241,6 +301,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           and(
             eq(agentSessionMessageTable.id, input.fromMessageId),
             eq(agentSessionMessageTable.sessionId, input.sessionId),
+            activeConversationCondition(source.conversationState),
           ),
         )
         .limit(1);
@@ -251,6 +312,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return { status: 'fork-point-unsettled' };
       }
 
+      if (
+        input.candidateId &&
+        !multiModelResultFromParts(anchor.data.parts)?.candidates.some(
+          (candidate) => candidate.id === input.candidateId && candidate.status === 'completed',
+        )
+      )
+        return { status: 'message-not-found' };
       const [forked] = await tx
         .insert(agentSessionTable)
         .values({
@@ -290,6 +358,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .where(
           and(
             eq(agentSessionMessageTable.sessionId, input.sessionId),
+            activeConversationCondition(source.conversationState),
             // An unsettled assistant row would arrive as a placeholder that
             // nothing will ever settle: boot reconciliation only reaches rows
             // that were unsettled when the process died.
@@ -313,6 +382,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       const copiedRows = copied.map((row) => {
         const copiedMessageId = createOrderedUuid();
         const copiedTurnId = reissueTurnId(forkedTurnIds, row.turnId);
+        const { pathId: _sourcePathId, ...copiedData } = row.data;
         messageCopies.push({
           source: { id: row.id, turnId: row.turnId },
           target: { id: copiedMessageId, turnId: copiedTurnId },
@@ -327,7 +397,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           // holds because createdAt is the major sort key and the reissued ids
           // break ties in the same direction as the source.
           createdAt: row.createdAt,
-          data: row.data,
+          data: copiedData,
           error: row.error,
           id: copiedMessageId,
           inferenceSnapshot: row.inferenceSnapshot,
@@ -352,9 +422,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       if (!forkBoundaryMessageId) {
         throw new Error('Fork transcript is missing its settled boundary message.');
       }
+      const state = createConversationState();
+      const selections = source.conversationState
+        ? conversationSelections(source.conversationState)
+        : {};
+      if (input.candidateId) selections[input.fromMessageId] = input.candidateId;
+      for (const copy of messageCopies) {
+        const candidateId = selections[copy.source.id];
+        if (candidateId) state.paths[0].adopted[copy.target.id] = candidateId;
+      }
       const [forkedWithBoundary] = await tx
         .update(agentSessionTable)
-        .set({ forkBoundaryMessageId })
+        .set({
+          forkBoundaryMessageId,
+          conversationState: source.conversationState || input.candidateId ? state : null,
+        })
         .where(eq(agentSessionTable.id, forked.id))
         .returning();
 
@@ -365,7 +447,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   async deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult> {
     const result = await this.dbService.withWriteTx(async (tx): Promise<DeleteTurnResult> => {
       const [session] = await tx
-        .select({ id: agentSessionTable.id })
+        .select({ id: agentSessionTable.id, state: agentSessionTable.conversationState })
         .from(agentSessionTable)
         .where(eq(agentSessionTable.id, input.sessionId))
         .limit(1);
@@ -398,6 +480,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         return { status: 'turn-unsettled' };
       }
 
+      const turnMessageIds = new Set(turnRows.map((row) => row.id));
+      if (
+        session.state?.paths.some(
+          (path) => path.sourceMessageId && turnMessageIds.has(path.sourceMessageId),
+        )
+      )
+        return { status: 'turn-has-continuations' };
       // Checkpoint summaries cover everything up to their anchor turn, and the
       // store cannot read inside the opaque payload. Any checkpoint whose
       // anchor does not sit strictly before this turn may therefore have
@@ -481,11 +570,17 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
+      const session = await this.getSession(input.sessionId);
       // The two trailing rows, newest first: only the latest answer is replaceable.
       const [source, user] = await tx
         .select(agentMessageViewColumns)
         .from(agentSessionMessageTable)
-        .where(eq(agentSessionMessageTable.sessionId, input.sessionId))
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, input.sessionId),
+            activeConversationCondition(session?.conversationState),
+          ),
+        )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
         .limit(2);
       if (
@@ -554,13 +649,19 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
+    const session = await this.getSession(sessionId);
     const rows = await this.dbService
       .getDb()
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
-      .where(eq(agentSessionMessageTable.sessionId, sessionId))
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          activeConversationCondition(session?.conversationState),
+        ),
+      )
       .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
-    return rows.map(toAgentMessageView);
+    return withConversationSelections(rows.map(toAgentMessageView), session?.conversationState);
   }
 
   /**
@@ -568,6 +669,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
    * reads synchronously, and these scan every message of the Session.
    */
   async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
+    const session = await this.getSession(sessionId);
+    const condition = activeConversationCondition(session?.conversationState, true) ?? sql`1 = 1`;
     const sqlite = this.dbService.getSqlite();
     const [anchor] =
       afterTurnId === null
@@ -575,8 +678,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         : await readSqliteRows<{ createdAt: number; id: string }>(
             sqlite,
             sql`
-              SELECT created_at AS "createdAt", id FROM agent_session_message
-              WHERE session_id = ${sessionId} AND turn_id = ${afterTurnId}
+              SELECT message.created_at AS "createdAt", message.id FROM agent_session_message AS message
+              WHERE message.session_id = ${sessionId} AND ${condition} AND message.turn_id = ${afterTurnId}
               ORDER BY created_at DESC, id DESC
               LIMIT 1
             `,
@@ -586,7 +689,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       sqlite,
       sql`
         SELECT ${agentMessageViewSqlColumns} FROM agent_session_message AS message
-        WHERE message.session_id = ${sessionId}
+        WHERE message.session_id = ${sessionId} AND ${condition}
           ${
             anchor
               ? sql`AND (message.created_at > ${anchor.createdAt}
@@ -598,7 +701,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     );
     const messageRows = await readSqliteRows<{ id: string }>(
       sqlite,
-      sql`SELECT id FROM agent_session_message WHERE session_id = ${sessionId} LIMIT 1`,
+      sql`SELECT message.id FROM agent_session_message AS message WHERE message.session_id = ${sessionId} AND ${condition} LIMIT 1`,
     );
     const fileRows = await readSqliteRows<{ fileEntryId: unknown }>(
       sqlite,
@@ -606,14 +709,17 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         SELECT DISTINCT json_extract(part.value, '$.fileEntryId') AS "fileEntryId"
         FROM agent_session_message AS message,
              json_each(json_extract(message.data, '$.parts')) AS part
-        WHERE message.session_id = ${sessionId}
+        WHERE message.session_id = ${sessionId} AND ${condition}
           AND json_extract(part.value, '$.type') = 'file'
       `,
     );
     return {
       anchorFound,
       hasMessages: messageRows.length > 0,
-      history: historyRows.map((row) => toAgentMessageView(fromAgentMessageViewSqlRow(row))),
+      history: withConversationSelections(
+        historyRows.map((row) => toAgentMessageView(fromAgentMessageViewSqlRow(row))),
+        session?.conversationState,
+      ),
       referencedFileEntryIds: fileRows
         .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
         .sort(),
@@ -622,6 +728,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
   /** Receipts across the complete transcript, without materializing its messages. */
   async loadSkillActivations(sessionId: string) {
+    const session = await this.getSession(sessionId);
+    const condition = activeConversationCondition(session?.conversationState, true) ?? sql`1 = 1`;
     const skillRows = await readSqliteRows<{ messageId: string; activation: string }>(
       this.dbService.getSqlite(),
       sql`
@@ -629,7 +737,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         SELECT message.id AS "messageId", message.created_at AS createdAt, part.key AS partIndex,
                0 AS receiptIndex, json_extract(part.value, '$.output.value.activation') AS activation
         FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
-        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+        WHERE message.session_id = ${sessionId} AND ${condition} AND message.role = 'assistant'
           AND json_extract(part.value, '$.type') = 'dynamic-tool'
           AND json_extract(part.value, '$.toolRef.source') = 'builtin'
           AND json_extract(part.value, '$.toolRef.capabilityId') = 'load_skill'
@@ -640,7 +748,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
                receipt.key AS receiptIndex, receipt.value AS activation
         FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part,
              json_each(json_extract(part.value, '$.skillSelections')) AS receipt
-        WHERE message.session_id = ${sessionId} AND message.role = 'user'
+        WHERE message.session_id = ${sessionId} AND ${condition} AND message.role = 'user'
           AND json_extract(part.value, '$.type') = 'text'
         ) ORDER BY createdAt, messageId, partIndex, receiptIndex
       `,
@@ -656,12 +764,14 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async loadWorkflowLoads(sessionId: string) {
+    const session = await this.getSession(sessionId);
+    const condition = activeConversationCondition(session?.conversationState, true) ?? sql`1 = 1`;
     const rows = await readSqliteRows<{ workflowId: unknown }>(
       this.dbService.getSqlite(),
       sql`
         SELECT json_extract(part.value, '$.output.value.workflow_id') AS "workflowId"
         FROM agent_session_message AS message, json_each(json_extract(message.data, '$.parts')) AS part
-        WHERE message.session_id = ${sessionId} AND message.role = 'assistant'
+        WHERE message.session_id = ${sessionId} AND ${condition} AND message.role = 'assistant'
           AND json_extract(part.value, '$.type') = 'dynamic-tool'
           AND json_extract(part.value, '$.toolRef.source') = 'builtin'
           AND json_extract(part.value, '$.toolRef.capabilityId') = 'load_workflow'
@@ -674,6 +784,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
+    if ((await this.getSession(sessionId))?.conversationState) return null;
     const [row] = await readSqliteRows<{ assistantMessageId: string; checkpointJson: string }>(
       this.dbService.getSqlite(),
       sql`
@@ -796,6 +907,7 @@ function reissueTurnId(reissued: Map<string, string>, turnId: string | null): st
 async function insertSubmission(
   tx: Database,
   input: ReserveSubmissionInput,
+  pathId?: string,
 ): Promise<ReserveSubmissionResult & { reservedAt: number }> {
   const turnId = createOrderedUuid();
   const [userRow] = await tx
@@ -806,7 +918,7 @@ async function insertSubmission(
       turnId,
       role: 'user',
       status: 'success',
-      data: { parts: input.userParts },
+      data: { parts: input.userParts, ...(pathId ? { pathId } : {}) },
       searchableText: toSearchableText(input.userParts),
     })
     .returning(agentMessageViewColumns);
@@ -818,7 +930,7 @@ async function insertSubmission(
       turnId,
       role: 'assistant',
       status: 'pending',
-      data: { parts: [] },
+      data: { parts: [], ...(pathId ? { pathId } : {}) },
       modelId: input.modelId,
       inferenceSnapshot: input.inferenceSnapshot,
     })

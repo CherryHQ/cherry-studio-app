@@ -11,6 +11,12 @@ import type {
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
+import type {
+  AgentCancelCandidateInput,
+  AgentSelectAnswerInput,
+  AgentPrepareContinuationInput,
+  AgentRestoreConversationPathInput,
+} from './multiModel';
 import type { AgentRespondQuestionInput } from './userQuestion';
 import type { AgentErrorView, AgentSessionStatus, AgentSessionView } from './views';
 
@@ -43,6 +49,10 @@ export interface AgentProtocol {
    * without claiming to undo the side effects recorded in its history.
    */
   forkSession(input: AgentForkSessionInput): Promise<AgentSessionView>;
+  cancelCandidate(input: AgentCancelCandidateInput): Promise<void>;
+  selectAnswer(input: AgentSelectAnswerInput): Promise<AgentSessionView>;
+  prepareContinuation(input: AgentPrepareContinuationInput): Promise<AgentSessionView>;
+  restoreConversationPath(input: AgentRestoreConversationPathInput): Promise<AgentSessionView>;
 
   /**
    * Removes one settled turn from the transcript and clears any context

@@ -531,3 +531,63 @@ describe('Turn Runtime input assembly', () => {
     ]);
   });
 });
+
+describe('multi-model context adoption', () => {
+  function multiModelMessage(): AgentMessageView {
+    return {
+      ...answer('multi', 'turn', undefined),
+      selectedCandidateId: 'a',
+      parts: [
+        {
+          id: 'tool',
+          type: 'dynamic-tool',
+          toolName: 'cherry_multi_model_reply',
+          title: 'Multi-model reply',
+          toolCallId: 'multi-call',
+          toolRef: { source: 'builtin', capabilityId: 'cherry_multi_model_reply' },
+          state: 'output-available',
+          input: {},
+          output: {
+            artifacts: [],
+            value: {
+              kind: 'multi-model-reply',
+              version: 1,
+              candidates: ['a', 'b'].map((id) => ({
+                id,
+                modelId: `provider::${id}`,
+                name: id,
+                status: 'completed',
+                text: `private-answer-${id}`,
+                reasoning: '',
+                attempt: 1,
+              })),
+            },
+          },
+        },
+      ],
+    };
+  }
+  test('keeps every reply in the record while exposing only the adopted body to the model', () => {
+    const message = multiModelMessage();
+    const parts = toRuntimeHistory([message])[0].messages[0].parts;
+    const result = parts.find((part) => part.type === 'tool-result');
+    expect(result?.type).toBe('tool-result');
+    if (result?.type !== 'tool-result') return;
+    expect(JSON.stringify(result.output.value)).toContain('private-answer-b');
+    expect(JSON.stringify(result.output.modelValue)).toContain('private-answer-a');
+    expect(JSON.stringify(result.output.modelValue)).not.toContain('private-answer-b');
+    expect(message.parts[0]).not.toHaveProperty('output.modelValue');
+  });
+  test('requires adoption before rebuilding a multi-model conversation', () => {
+    expect(() =>
+      toRuntimeHistory([{ ...multiModelMessage(), selectedCandidateId: undefined }]),
+    ).toThrow('Adopt a multi-model reply');
+  });
+  test('does not interpret a matching third-party tool payload as the built-in reply activity', () => {
+    const message = multiModelMessage();
+    const part = message.parts[0];
+    if (part.type !== 'dynamic-tool') throw new Error('Expected the fixture tool.');
+    part.toolRef = { source: 'mcp', serverId: 'server', rawToolName: 'external' };
+    expect(() => toRuntimeHistory([{ ...message, selectedCandidateId: undefined }])).not.toThrow();
+  });
+});

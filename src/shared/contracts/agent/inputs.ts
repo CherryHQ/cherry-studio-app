@@ -8,6 +8,7 @@ import * as z from 'zod';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
+import { AgentMultiModelIdsSchema } from './multiModel';
 import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
 /** Operation inputs, validated by the Host at the protocol boundary. */
@@ -29,6 +30,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
+  multiModelIds: AgentMultiModelIdsSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
    * enabled, and user-invocable for this Agent; the Host loads their
@@ -50,6 +52,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
+  multiModelIds: AgentMultiModelIdsSchema.optional(),
   /**
    * Skills the user selected explicitly in the composer. Each must be bound,
    * enabled, and user-invocable for this Agent; the Host loads their
@@ -64,6 +67,7 @@ export const AgentForkSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   /** Inclusive fork point; its turn must already be terminal. */
   fromMessageId: z.string().min(1),
+  candidateId: z.string().min(1).optional(),
   /**
    * Title for the new Session, defaulting to the source's. The client supplies
    * it because any derived wording is localized copy, and the Host has no

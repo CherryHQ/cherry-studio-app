@@ -16,12 +16,14 @@ const logger = loggerService.withContext('ChatInputMenu');
 /** Chat owns the library destination; the shared menu still owns media handoffs. */
 export function ChatInputMenu({
   media = 'all',
+  onPickModels,
   onPickPlugins,
   onPickPrompts,
   onPickSkills,
   triggerRef,
 }: {
   media?: 'all' | 'images';
+  onPickModels?: () => void;
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
   onPickSkills?: () => void;
@@ -50,6 +52,13 @@ export function ChatInputMenu({
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}
       >
+        {onPickModels ? (
+          <Composer.Menu.Item
+            label={t('chat.multiModel.title')}
+            onPress={onPickModels}
+            testID="chat-composer-multi-model"
+          />
+        ) : null}
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}

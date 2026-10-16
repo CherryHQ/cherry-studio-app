@@ -1,11 +1,12 @@
 import { memo, type ReactNode } from 'react';
 
-import type { MessageListItem } from '@/frontend/components/Message';
+import { ToolRendererProvider, type MessageListItem } from '@/frontend/components/Message';
 
 import {
   ConversationAttachments,
   ConversationMessageContent,
 } from '../../ConversationMessageContent';
+import { MultiModelReply } from '../../MultiModelChat';
 import { useChatMessageRow } from '../context/ChatMessageRowContext';
 import { type AssistantMessagePresentation, ChatMessage } from './ChatMessage';
 
@@ -26,7 +27,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
   renderUsage,
 }: ChatMessageRowProps) {
   const row = useChatMessageRow(message.id);
-  return (
+  const content = (
     <ConversationMessageContent messageState={row.messageState} tools={row.tools}>
       <ChatMessage
         assistantPresentation={assistantPresentation}
@@ -42,5 +43,14 @@ export const ChatMessageRow = memo(function ChatMessageRow({
         shouldShowTimestamp={row.showsTimestamp}
       />
     </ConversationMessageContent>
+  );
+  if (!message.multiModel) return content;
+  return (
+    <ToolRendererProvider
+      getToolTitle={(name) => name}
+      renderTool={() => <MultiModelReply message={message} />}
+    >
+      {content}
+    </ToolRendererProvider>
   );
 });

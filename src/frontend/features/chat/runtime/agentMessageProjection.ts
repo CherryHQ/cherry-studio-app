@@ -10,6 +10,7 @@ import {
   type AgentMessagePart,
   type AgentMessageView,
   type AgentSubmitMessageInput,
+  multiModelResultFromParts,
   AgentToolResultSchema,
 } from '@/shared/contracts/agent';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
@@ -318,7 +319,10 @@ function toDisplayParts(
 }
 
 export function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
-  if (message.inferenceSnapshot?.status !== 'supported') {
+  if (
+    message.inferenceSnapshot?.status !== 'supported' ||
+    message.inferenceSnapshot.snapshot.multiModelIds
+  ) {
     return undefined;
   }
 
@@ -351,7 +355,12 @@ export function toAgentMessageListItem(
   }
 
   const model = resolveMessageModel(message);
+  const multiModel = multiModelResultFromParts(message.parts);
   const item = {
+    ...(message.pathId ? { pathId: message.pathId } : {}),
+    ...(multiModel
+      ? { multiModel: { result: multiModel, selectedCandidateId: message.selectedCandidateId } }
+      : {}),
     createdAt: message.createdAt,
     data: {
       ...toDisplayParts(

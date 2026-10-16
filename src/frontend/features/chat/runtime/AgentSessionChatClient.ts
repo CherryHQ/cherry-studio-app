@@ -286,15 +286,46 @@ export class AgentSessionChatClient {
     }
   }
 
+  cancelCandidate(input: Parameters<AgentProtocol['cancelCandidate']>[0]) {
+    return this.protocol.cancelCandidate(input);
+  }
+
+  async selectAnswer(input: Parameters<AgentProtocol['selectAnswer']>[0]) {
+    const session = await this.protocol.selectAnswer(input);
+    await this.pathChanged(input.sessionId);
+    return session;
+  }
+  async prepareContinuation(input: Parameters<AgentProtocol['prepareContinuation']>[0]) {
+    const session = await this.protocol.prepareContinuation(input);
+    await this.pathChanged(input.sessionId);
+    return session;
+  }
+  async restoreConversationPath(input: Parameters<AgentProtocol['restoreConversationPath']>[0]) {
+    const session = await this.protocol.restoreConversationPath(input);
+    await this.pathChanged(input.sessionId);
+    return session;
+  }
+  private async pathChanged(sessionId: string) {
+    const entry = this.getEntry(sessionId);
+    entry.liveMessages.clear();
+    entry.pendingTextDeltas.clear();
+    this.updateState(entry, { ...entry.state, liveMessages: [], activeTurn: null });
+    this.options.onSessionChanged?.(sessionId);
+    this.options.onTranscriptChanged?.(sessionId);
+    await this.refresh(sessionId);
+  }
+
   async forkSession(
     sessionId: string,
     fromMessageId: string,
     title?: string,
+    candidateId?: string,
   ): Promise<AgentSessionView> {
     const session = await this.protocol.forkSession({
       fromMessageId,
       sessionId,
       ...(title ? { name: title } : {}),
+      ...(candidateId ? { candidateId } : {}),
     });
     // As with a new Session, the destination route owns observation.
     return session;

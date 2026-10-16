@@ -15,6 +15,8 @@ const SEND_ERROR_LABEL_KEYS: Partial<Record<AgentErrorView['code'], string>> = {
   CAPABILITY_UNSUPPORTED: 'chat.input.sendError.unsupported',
   EXECUTION_UNAVAILABLE: 'chat.input.sendError.executionUnavailable',
   INTERRUPTED: 'chat.errorPart.interrupted.message',
+  ANSWER_SELECTION_REQUIRED: 'chat.multiModel.adoptHint',
+  TURN_HAS_CONTINUATIONS: 'chat.multiModel.anchorHasContinuations',
   SESSION_BUSY: 'chat.input.sendError.sessionBusy',
   SESSION_NOT_FOUND: 'chat.input.sendError.sessionNotFound',
   TOOL_CALLING_UNSUPPORTED: 'chat.input.sendError.toolCallingUnsupported',

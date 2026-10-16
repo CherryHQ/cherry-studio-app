@@ -11,6 +11,7 @@ import { View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
+import { ReplyContinuationMenu } from '../../MultiModelChat';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -56,6 +57,13 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
+      {!message.multiModel && message.status === 'success' ? (
+        <ReplyContinuationMenu
+          messageId={message.id}
+          modelId={message.model?.id}
+          sourcePathId={message.pathId}
+        />
+      ) : null}
       {retryAssistantMessage && retryableMessageId === message.id ? (
         <Button
           accessibilityLabel={t(
