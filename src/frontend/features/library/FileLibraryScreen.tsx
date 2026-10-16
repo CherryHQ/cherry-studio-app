@@ -23,7 +23,6 @@ import {
 import { useQuery } from '@/frontend/data/hooks';
 
 import { FileLibraryList } from './components/FileLibraryList';
-import { FileVersionHistorySheet } from './components/FileVersionHistorySheet';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
 import { useFileLibraryItemActions } from './hooks/useFileLibraryItemActions';
 import { fileLibrarySelectionScope, type FileLibraryBrowseMode } from './utils/constants';
@@ -45,7 +44,7 @@ function FileLibraryScreenBody() {
   const isBrowsingFolders = browseMode === 'folders';
   const [folderId, setFolderId] = useState<string | null>(null);
   const itemActions = useFileLibraryItemActions();
-  const { surface } = itemActions;
+  const { moving } = itemActions;
   const folders = useQuery('/files/folders');
   const { requestCreate, isCreating } = useCreateFileFolder(isBrowsingFolders ? folderId : null);
   const currentFolder = folders.data?.find((folder) => folder.id === folderId);
@@ -209,22 +208,16 @@ function FileLibraryScreenBody() {
         />
         <SelectionControls scope={fileLibrarySelectionScope} />
       </View>
-      {surface?.page === 'move' ? (
+      {moving ? (
         <FileFolderPicker
-          excludedFolderId={
-            surface.selection.kind === 'folder' ? surface.selection.folder.id : undefined
-          }
+          excludedFolderId={moving.kind === 'folder' ? moving.folder.id : undefined}
           isSaving={itemActions.isPending}
-          onClose={itemActions.closeSurface}
-          onSelect={(destination) => void itemActions.move(surface.selection, destination)}
+          onClose={itemActions.closeMove}
+          onSelect={(destination) => void itemActions.move(moving, destination)}
           selectedFolderId={
-            surface.selection.kind === 'folder'
-              ? surface.selection.folder.parentId
-              : surface.selection.file.folderId
+            moving.kind === 'folder' ? moving.folder.parentId : moving.file.folderId
           }
         />
-      ) : surface?.page === 'history' ? (
-        <FileVersionHistorySheet file={surface.file} onClose={itemActions.closeSurface} />
       ) : null}
     </>
   );

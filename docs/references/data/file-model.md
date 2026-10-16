@@ -80,9 +80,9 @@ hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
 `library_file` stores a stable logical file id, folder id, display name, and `currentEntryId`.
 Every `file_entry.libraryFileId` joins one immutable version to that file. The current pointer and
 new version are committed in one serialized write transaction; messages and paintings continue
-referencing exact version ids. The library lists current versions and exposes older entries in
-history, where users can open or trash them independently. The current version is deleted by
-trashing the whole logical file.
+referencing exact version ids. The library shows only current versions; older versions are kept
+for those references and are not listed to users. The current version is deleted by trashing the
+whole logical file.
 
 Folders and files share a namespace within each folder, compared after NFC normalization and
 Unicode lowercasing. Rename rejects conflicts; imports, moves, and restoration choose a readable

@@ -10,17 +10,21 @@ export type LibrarySelection =
   | { kind: 'folder'; folder: FileFolder }
   | { kind: 'file'; file: LibraryFile };
 
-export type LibraryItemSurface =
-  | { page: 'move'; selection: LibrarySelection }
-  | { page: 'history'; file: LibraryFile };
-
-/** One change at a time, reported in place: success and repeatable failures are toasts. */
-export function useLibraryChange() {
+/** Row menus run quick actions directly; only moving needs a surface to pick the destination. */
+export function useFileLibraryItemActions() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { alert } = useAlert();
+  const files = useBackendModule('file');
+  const editFolder = useMutation('PATCH', '/files/folders/:id');
+  const editFile = useMutation('PATCH', '/files/library/:id');
+  const deleteFolder = useMutation('DELETE', '/files/folders/:id');
   const pendingRef = useRef(false);
   const [isPending, setIsPending] = useState(false);
+  const [moving, setMoving] = useState<LibrarySelection | null>(null);
+  const closeMove = useCallback(() => setMoving(null), []);
 
+  // One change at a time, reported in place: success and repeatable failures are toasts.
   const perform = useCallback(
     async (action: () => Promise<unknown>) => {
       if (pendingRef.current) return false;
@@ -47,21 +51,6 @@ export function useLibraryChange() {
     },
     [t, toast],
   );
-
-  return { isPending, perform };
-}
-
-/** Row menus run quick actions directly and open a surface only for move and history. */
-export function useFileLibraryItemActions() {
-  const { t } = useTranslation();
-  const { alert } = useAlert();
-  const files = useBackendModule('file');
-  const editFolder = useMutation('PATCH', '/files/folders/:id');
-  const editFile = useMutation('PATCH', '/files/library/:id');
-  const deleteFolder = useMutation('DELETE', '/files/folders/:id');
-  const { isPending, perform } = useLibraryChange();
-  const [surface, setSurface] = useState<LibraryItemSurface | null>(null);
-  const closeSurface = useCallback(() => setSurface(null), []);
 
   const rename = useCallback(
     (selection: LibrarySelection) => {
@@ -116,9 +105,9 @@ export function useFileLibraryItemActions() {
             })
           : editFile.trigger({ params: { id: selection.file.id }, body: { folderId } }),
       );
-      if (moved) closeSurface();
+      if (moved) closeMove();
     },
-    [closeSurface, editFile, editFolder, perform],
+    [closeMove, editFile, editFolder, perform],
   );
 
   const getMenuItems = useCallback(
@@ -133,17 +122,8 @@ export function useFileLibraryItemActions() {
         disabled: isPending,
         id: 'move',
         label: t('library.move'),
-        onPress: () => setSurface({ page: 'move', selection }),
+        onPress: () => setMoving(selection),
       },
-      ...(selection.kind === 'file'
-        ? [
-            {
-              id: 'history',
-              label: t('library.history.title'),
-              onPress: () => setSurface({ page: 'history', file: selection.file }),
-            },
-          ]
-        : []),
       {
         destructive: true,
         disabled: isPending,
@@ -155,5 +135,5 @@ export function useFileLibraryItemActions() {
     [isPending, rename, t, trash],
   );
 
-  return { closeSurface, getMenuItems, isPending, move, surface };
+  return { closeMove, getMenuItems, isPending, move, moving };
 }
