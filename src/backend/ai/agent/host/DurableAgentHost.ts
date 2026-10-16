@@ -1309,11 +1309,10 @@ export class DurableAgentHost implements AgentProtocol {
         else pending.push(event);
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
-      state.queue = observed.snapshot.queue;
       state.contextStatus = observed.snapshot.contextStatus ?? null;
-      this.recordQueue(sessionId, state.queue, []);
       state.unsubscribe = observed.unsubscribe;
       this.live.set(sessionId, state);
+      this.updateQueue(sessionId, state, observed.snapshot.queue);
       if (state.active) this.present(state.active);
       installed = true;
       for (const event of pending) this.consume(sessionId, state, event);

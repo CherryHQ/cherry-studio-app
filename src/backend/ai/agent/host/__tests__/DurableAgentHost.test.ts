@@ -18,6 +18,7 @@ import {
   type RuntimeToolResult,
 } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
+import { buildAgentSystemPrompt } from '../agentSystemPrompt';
 import { DurableAgentHost } from '../DurableAgentHost';
 import type { MobileAgentHostPorts } from '../MobileAgentHost';
 import type { SkillTurnScope } from '../skillScope';
@@ -276,6 +277,30 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('durable tool diagnostics', () => {
+  test('publishes the recovered queue to observations installed before initialization', async () => {
+    const f = fixture();
+    const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
+    f.copies.get(f.sessionId)!.turns = [queued];
+    const events: AgentEvent[] = [];
+    const observation = await f.host.observeSession(f.sessionId, (event) => events.push(event));
+    try {
+      expect(observation.snapshot.queuedInputs).toEqual([]);
+      await f.host.initialize();
+      expect(events).toContainEqual({
+        type: 'queue.updated',
+        inputs: [
+          expect.objectContaining({
+            turnId: queued.identity.turnId,
+            assistantMessageId: queued.assistantMessageId,
+          }),
+        ],
+      });
+    } finally {
+      observation.unsubscribe();
+      await f.host.close();
+    }
+  });
+
   test('recovery finishes withdrawal when the process stopped before the reservation was removed', async () => {
     const f = fixture();
     const turn = {
@@ -372,6 +397,14 @@ describe('durable tool diagnostics', () => {
     const f = fixture();
     const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };
     f.copies.get(f.sessionId)!.turns = [queued];
+    jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [],
+      }),
+    });
     await f.host.initialize();
     let reachedAdmission!: () => void;
     const admissionStarted = new Promise<void>((resolve) => {
@@ -381,7 +414,7 @@ describe('durable tool diagnostics', () => {
     const admissionReleased = new Promise<void>((resolve) => {
       resumeAdmission = resolve;
     });
-    const submit = f.conversations.submit;
+    const submit = jest.mocked(f.conversations.submit).getMockImplementation()!;
     jest.spyOn(f.conversations, 'submit').mockImplementation(async (sessionId, input) => {
       reachedAdmission();
       await admissionReleased;
