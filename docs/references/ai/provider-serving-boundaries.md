@@ -18,7 +18,7 @@ Provider + Model records
 ResolvedProviderConnection
         |
         +-- Language serving
-        |     +-- Pi binding (conversation, tool loop, and product chat checks)
+        |     +-- Pi binding (conversation, tool loop, product chat checks, translation, and naming)
         |     `-- AI SDK binding (generateText and SDK-only probes)
         |
         `-- Image serving
@@ -94,6 +94,12 @@ cancellation, and incremental results. A probe key is an ephemeral request overr
 selection still belongs to the binding, and neither traces nor persisted messages may contain it.
 `AiService.checkModel()` remains an internal AI SDK text-generation probe and does not establish
 chat readiness.
+
+Translation and automatic session naming use the bound `RuntimeTextGenerator` to share the selected
+model's OAuth and protocol adapters with chat. Each makes one provider invocation with its own
+instructions and source text, without creating a conversation or exposing tools. Normal terminal
+completion is required before saving a translation or summary title; cancellation, provider failures,
+and invocation usage remain part of the text-generation contract.
 
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. When a
 request fails before substantive content or a tool-call event is emitted, Pi tries every other

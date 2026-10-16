@@ -1,8 +1,9 @@
 # Mobile AI Adapters
 
 Two execution paths live here: the conversation turn, which runs on the Agent Runtime contract with
-Pi as its implementation, and non-conversation generation, which runs on the AI SDK behind
-`AiService`. Vendor adaptation for the second path lives in the private source package
+Pi as its implementation, and AI SDK generation behind `AiService`. Translation and session naming
+use the bound `RuntimeTextGenerator` to share chat's provider and OAuth support in one invocation without
+conversation storage or tools. Vendor adaptation for the AI SDK path lives in the private source package
 `@cherrystudio/ai-runtime`; this directory owns the mobile platform and application-service
 boundaries around it.
 
@@ -15,7 +16,9 @@ boundaries around it.
   configuration, model listing, Vertex authentication, execution, and mobile usage capture. Nothing
   outside `AiService.ts` imports it (ESLint-enforced). It owns no persisted turn state.
 - `agent/runtime/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the
-  Pi Runtime implementation (`docs/references/agent/agent-runtime.md`). This boundary must not
+  Pi Runtime implementation (`docs/references/agent/agent-runtime.md`). Its independent
+  `RuntimeTextGenerator` capability reuses provider resolution for text-only generation and keeps
+  terminal reasons, cancellation, and invocation usage without opening a conversation. This boundary must not
   import application protocol types, persistence, React, or Expo modules (ESLint-enforced). The one
   exception is `runtime/pi/piModelResolver.ts`, the single bridge that turns Provider and Model
   records into a Pi model; lint and the conformance harness draw that line at the same file.
@@ -25,6 +28,8 @@ boundaries around it.
   registration; the Host never constructs one.
   It also retains a small status snapshot for each Session that runs in the current generation,
   with status-only subscriptions for lists; transcript observation remains route-scoped.
+  Automatic summary naming uses the bound text generator with lifecycle cancellation and usage
+  capture; incomplete output leaves the temporary title intact.
 - `agent/modelCheck/` runs a bounded, cancellable chat connection probe through that same bound
   Runtime, without a persisted Session, history, or tools. Bootstrap injects it into the models
   workflow and records usage; only a closed failure category reaches the setup UI.

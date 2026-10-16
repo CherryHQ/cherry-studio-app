@@ -9,11 +9,14 @@ import type {
   RuntimeDescriptor,
   RuntimeModel,
   RuntimeModelPreflight,
+  RuntimeTextGenerator,
 } from '../types';
+import { generatePiText } from './generatePiText';
 import { PiDurableAgentRuntime } from './PiDurableAgentRuntime';
 import { supportsPiLanguageModel } from './piLanguageBinding';
 import { PiModelProbeRuntime } from './PiModelProbeRuntime';
 import { createPiModelResolver } from './piModelResolver';
+import type { PiRuntimeDependencies } from './piModelTypes';
 import { listPiOAuthModels } from './piOAuthModels';
 import { PiProviderAccountAdapter } from './PiProviderAccountAdapter';
 
@@ -29,24 +32,32 @@ import { PiProviderAccountAdapter } from './PiProviderAccountAdapter';
 @Injectable('AgentRuntime')
 @DependsOn(['ProviderAccountRuntime'])
 @ServicePhase(Phase.PostReady)
-export class PiRuntimeService extends BaseService implements AgentRuntime, LanguageServingSupport {
+export class PiRuntimeService
+  extends BaseService
+  implements AgentRuntime, LanguageServingSupport, RuntimeTextGenerator
+{
   private readonly runtime: AgentRuntime;
+  private readonly dependencies: PiRuntimeDependencies;
   readonly conversations: PiDurableAgentRuntime;
   readonly providerAccounts = new PiProviderAccountAdapter();
 
   constructor() {
     super();
-    const dependencies = createPiModelResolver({
+    this.dependencies = createPiModelResolver({
       resolveAuth: (provider, signal) => this.providerAccounts.resolveAuth(provider, signal),
     });
-    this.conversations = new PiDurableAgentRuntime(dependencies);
+    this.conversations = new PiDurableAgentRuntime(this.dependencies);
     // Short-lived provider probes retain their isolated, non-persistent session contract.
-    this.runtime = new PiModelProbeRuntime(dependencies);
+    this.runtime = new PiModelProbeRuntime(this.dependencies);
   }
 
   async listAuthenticatedModels(provider: Provider, signal: AbortSignal) {
     const auth = await this.providerAccounts.resolveAuth(provider, signal);
     return auth ? listPiOAuthModels(provider, auth, signal) : undefined;
+  }
+
+  generateText(...args: Parameters<RuntimeTextGenerator['generateText']>) {
+    return generatePiText(this.dependencies, ...args);
   }
 
   get descriptor(): RuntimeDescriptor {

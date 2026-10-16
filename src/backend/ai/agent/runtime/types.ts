@@ -67,6 +67,23 @@ export interface AgentRuntimeSession {
   close(): Promise<void>;
 }
 
+/** One text-only provider invocation, without conversation storage, history, or tools. */
+export interface RuntimeTextGenerator {
+  generateText(
+    request: {
+      model: RuntimeModel;
+      instructions: string;
+      text: string;
+      options: RuntimeOptions;
+    },
+    options?: {
+      signal?: AbortSignal;
+      onText?: (text: string) => void;
+      onUsage?: (report: RuntimeUsageReport) => Promise<void>;
+    },
+  ): Promise<{ finishReason: string; text: string }>;
+}
+
 export type RuntimeModel = {
   providerId: string;
   modelId: string;
