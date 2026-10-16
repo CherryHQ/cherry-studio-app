@@ -121,18 +121,17 @@ function SkillCandidate({ inspection }: { inspection: SkillInspection }) {
       <SkillDocumentPage
         contentHash={pkg.contentHash}
         description={pkg.description}
+        footer={installAction}
         headerProps={headerProps}
         instructions={pkg.instructions}
       >
-        {installAction}
         {limitations ? <SkillLimitationList limitations={limitations} /> : null}
       </SkillDocumentPage>
     );
   }
 
   return (
-    <SkillPage headerProps={headerProps}>
-      {installAction}
+    <SkillPage footer={installAction} headerProps={headerProps}>
       <View className="gap-3">
         <Text className="text-base text-foreground">{candidate.description}</Text>
         <Text className="text-sm text-error">{t('skills.candidate.invalidPackage')}</Text>

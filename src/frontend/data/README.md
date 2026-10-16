@@ -28,9 +28,11 @@ its query options live here instead of in either owner.
 Managed-file creation, draft rewrites, deletion, and rollback discards all notify through
 `fileStorage` with the affected entry id. The bridge invalidates every file-list page size and that
 entry's detail, URI, text, and preview caches, including pages containing it. Unchanged files retain
-their caches; content refresh does not rely on a draft's timestamp changing. Composer, painting, and
-Agent callers only perform their file operation. Library and picker readers reuse fresh pages and
-receive updates without owning focus or write refreshes.
+their caches; content refresh does not rely on a draft's timestamp changing. Painting file and
+gallery queries declare their referenced ids in `meta.fileEntryIds`, so trash and restore refresh
+only dependent projections, including cached missing files. Gallery reads honor invalidation of
+their file-resolution cache. Composer, painting, and Agent callers only perform their file operation.
+Library and picker readers reuse fresh pages and receive updates without owning focus or write refreshes.
 
 Preferences remain a separate client and hook family, matching Cherry Desktop. `BackendProvider`
 is reserved for multi-step workflows and long-lived sessions defined in `shared/contracts`; it is

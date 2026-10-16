@@ -14,6 +14,7 @@ const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
 const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
+const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
@@ -131,6 +132,7 @@ const createRuntime = () =>
     CacheService: mockCache,
     DbService: mockDb,
     BackupRuntime: mockBackup,
+    TrashRuntime: mockTrash,
     DesktopConnectionRuntime: mockDesktopConnections,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,

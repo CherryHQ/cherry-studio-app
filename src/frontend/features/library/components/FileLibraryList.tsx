@@ -103,7 +103,7 @@ export function FileLibraryList({
         deleteTitle: 'library.selection.deleteTitle',
       },
       deleteSelected: async (ids) => {
-        const results = await Promise.allSettled(ids.map((id) => file.delete(id)));
+        const results = await Promise.allSettled(ids.map((id) => file.moveToTrash(id)));
         // Keep optimistic hides until the list reflects every committed deletion,
         // including the successful files in a partially failed batch.
         await refresh();

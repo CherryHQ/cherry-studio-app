@@ -50,11 +50,13 @@ cancellation, output import, and cleanup. See
 
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
-- `generateText()` for short internal generations such as Session naming;
+- `generateText()` for internal AI SDK probes;
 - `listModels()` for provider discovery and `checkModel()` for internal AI SDK probes;
 - `generateImage()` for painting jobs.
 
 Settings and onboarding chat checks use the bound AgentRuntime through `Backend.models`.
+Translation and automatic session naming use its separate `RuntimeTextGenerator` capability,
+sharing chat's OAuth and protocol adapters without creating conversation history or tools.
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 

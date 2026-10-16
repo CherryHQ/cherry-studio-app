@@ -51,7 +51,7 @@ describe('FileEntryService integration', () => {
     await expect(service.findById(id(1))).resolves.toEqual(entry);
     await expect(service.get(id(1))).resolves.toEqual(entry);
     await expect(service.getById(id(1))).resolves.toEqual(entry);
-    // The row itself: v1 writes no deleted_at (reserved for the future trash).
+    // Newly created files are active.
     expect(testDatabase.sqlite.prepare('SELECT * FROM file_entry').get()).toEqual({
       created_at: now,
       deleted_at: null,
@@ -177,7 +177,8 @@ describe('FileEntryService integration', () => {
     await expect(service.findAvailableByIds([id(2), id(1), id(1), id(9)])).resolves.toEqual([
       available,
     ]);
-    await expect(service.findById(id(2))).resolves.toMatchObject({ id: id(2) });
+    await expect(service.findById(id(2))).resolves.toBeNull();
+    expect((await service.listByCursor()).items).toEqual([available]);
     await expect(service.getById(id(2))).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(service.findAvailableByIds([])).resolves.toEqual([]);
   });

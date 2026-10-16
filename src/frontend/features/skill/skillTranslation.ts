@@ -1,6 +1,17 @@
 import { cacheService } from '@/frontend/data/CacheService';
 import type { TranslationModule } from '@/shared/contracts/translation';
-import type { AppLanguage } from '@/shared/utils/languages';
+import { APP_LANGUAGES, type AppLanguage } from '@/shared/utils/languages';
+
+/** Restore the most recently saved target for this document revision. */
+export function getCachedSkillTranslationLanguage(contentHash: string): AppLanguage | undefined {
+  const saved = cacheService.getPersist('skills.translations');
+  for (const [key, text] of Object.entries(saved).toReversed()) {
+    if (typeof text !== 'string' || !text.trim()) continue;
+    const language = APP_LANGUAGES.find(({ value }) => key === `${contentHash}:${value}`);
+    if (language) return language.value;
+  }
+  return undefined;
+}
 
 export function skillTranslationQueryOptions(
   translation: TranslationModule,

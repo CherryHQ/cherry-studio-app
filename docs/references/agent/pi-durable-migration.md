@@ -4,12 +4,37 @@ The local entry uses `PiDurableAgentRuntime` behind `MobileAgentHost` and `Durab
 This branch implements Cherry-owned history with disposable Pi execution working copies. Runtime
 and device acceptance of this ownership change have not been run.
 
-## Pi 1.2.0 Upgrade
+## Pi 1.3.0 Upgrade
 
-`pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned together at `1.2.0`.
-The package-specific [Durable changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/durable/CHANGELOG.md)
-and [Chord changelog](https://github.com/earendil-works/pi/blob/v1.2.0/packages/chord/CHANGELOG.md)
+`pi-durable`, `pi-ai`, `pi-codemode`, and `chord` are pinned together at `1.3.0`, including the
+transitive `pi-telemetry` dependency. The package-specific
+[Durable changelog](https://github.com/earendil-works/pi/blob/v1.3.0/packages/durable/CHANGELOG.md),
+[Pi AI changelog](https://github.com/earendil-works/pi/blob/v1.3.0/packages/ai/CHANGELOG.md),
+and [Chord changelog](https://github.com/earendil-works/pi/blob/v1.3.0/packages/chord/CHANGELOG.md)
 describe additional breaking changes beyond the coding-agent-focused release notes.
+
+The system baseline now leads the model context after compaction or history import even when
+retained assistant messages precede it. Completed tool calls require complete JSON objects after
+supported string repairs: truncated input carries `argumentsError` and fails validation instead
+of executing a partial prefix.
+The streaming-JSON performance patch only changes partial previews and preserves this final-call
+boundary. Switching models drops the previous model's reasoning rather than converting it to text.
+
+Kimi Code's preset now defaults to OpenAI Chat Completions at `https://api.kimi.com/coding/v1`.
+Existing saved Anthropic endpoint settings remain readable: the Pi OAuth model catalog selects
+the actual request protocol, official URL, and compatibility options. The normal preset refresh
+adds the new endpoint without replacing user settings; no database migration is introduced.
+
+SQLite table prefixes remain unused with the independent `pi-agent.db`; the default table names
+and schema version are unchanged. Chord's host/reference API changes are outside Mobile's current
+integration. Code Mode uses the native launcher, whose stop still waits for native cleanup, rather
+than the Node/Bun worker launcher whose shutdown semantics changed in 1.3.0.
+
+GPT-6's cache-preserving effort changes remain disabled. This upgrade covers conversations that
+keep the same thinking level: with the same model and configuration, Cherry's request-parameter
+owner emits the same `reasoning.effort`, so rewriting that field does not introduce effort-related
+cache invalidation. Mid-conversation effort switching is outside this scope; no configuration
+update items or effort-history state are added.
 
 Summaries omit reasoning blocks, and a failed blocking compaction fails the generation rather than
 sending an oversized request. The default document retention is ten minutes; on runtimes without
@@ -23,12 +48,12 @@ Mobile compatibility changes and boundaries:
   `ToolResultMessage.content` and Cherry's full `details` remain unchanged.
 - Newly created `ToolTask` inputs carry `kind: 'model'`. Upstream migrates live version-1 `pi.tool`
   tasks to version 2; an unsafe execution intent still becomes an interrupted result after restart.
-  The published SQLite schema/migrations are unchanged, and no Cherry database migration is needed.
+  The SQLite schema version remains 1, and no Cherry database migration is needed.
   Do not assume a downgrade to 1.1 can resume tasks already migrated to version 2.
 - Chord replaced its host/service APIs, but Mobile uses the retained JSON, context, and delta APIs.
   The Hermes numeric-key patch remains necessary. Pi AI's native OAuth, Metro import isolation,
   structured provider errors, and streaming-JSON patches also remain necessary and are rebased
-  against the published 1.2.0 files.
+  against the published 1.3.0 files. None of the four functional patches is superseded upstream.
 - MCP discovery uses upstream deferred tools and `tool_search`; the custom discovery/dispatch layer
   is removed. A Unicode tokenization patch preserves Chinese lookup. The patch also exposes a
   managed output writer for Code Mode. `pi-codemode` gains a small native export containing its
@@ -51,8 +76,10 @@ Mobile compatibility changes and boundaries:
   it does not manufacture terminal Cherry messages or erase unfinished receipts. No automatic
   retry loop runs against failed storage. Subscriber errors are reported through `onReport`.
 
-Device acceptance for this upgrade covers queued-input recovery, tool approval, a Code Mode script
-that calls tools, long-context compaction, and storage-failure recovery.
+Acceptance for this upgrade covers queued-input recovery, tool approval, a Code Mode script that
+calls tools, long-context compaction and restored baselines, rejection of malformed final tool
+arguments, Kimi authentication/tool calls, and storage-failure recovery. Regression sources are
+updated; tests, type checks, builds, and device acceptance remain pending explicit authorization.
 
 ## Ownership
 
@@ -101,7 +128,7 @@ out of the transcript, and an explicitly withdrawn input with no native input bo
 Cherry reservation removed without changing the runtime revision. Reconciliation repeats that
 cleanup if a process stopped after native withdrawal but before the Cherry write.
 
-The Pi 1.2 patch advances the next queued input after a terminal model failure. On open, it also
+The Pi 1.3.0 patch advances the next queued input after a terminal model failure. On open, it also
 places waiting inputs of an ownerless conversation whose previous run has already ended. This
 creates a pending run before scheduling is enabled; capability reconstruction still precedes any
 execution. Existing live runs and task-owned conversations retain their normal recovery paths.

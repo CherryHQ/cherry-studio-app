@@ -217,9 +217,10 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
     () =>
       paintings.map((painting) =>
         queryOptions({
+          meta: { fileEntryIds: [...painting.files.input, ...painting.files.output] },
           queryKey: queryKeys.paintings.galleryFilesRevision(painting.id, painting.updatedAt),
           queryFn: async (): Promise<PaintingOutputGalleryItem[]> => {
-            const resolved = await queryClient.ensureQueryData(
+            const resolved = await queryClient.fetchQuery(
               resolvedPaintingFilesQueryOptions(paintingsBackend, painting),
             );
             return await Promise.all(
@@ -274,6 +275,7 @@ export function resolvedPaintingFilesQueryOptions(
   painting: Painting | undefined,
 ) {
   return queryOptions({
+    meta: { fileEntryIds: [...(painting?.files.input ?? []), ...(painting?.files.output ?? [])] },
     queryFn: async () =>
       painting ? await paintings.resolveFiles(painting) : { inputs: [], outputs: [] },
     queryKey: queryKeys.paintings.resolvedFilesRevision(

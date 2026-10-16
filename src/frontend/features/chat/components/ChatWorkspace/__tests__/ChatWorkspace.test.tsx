@@ -36,6 +36,10 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('../hooks/useConversationFeedbackHint', () => ({
+  useConversationFeedbackHint: jest.fn(),
+}));
+
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
   useMessageTranslation: () => undefined,

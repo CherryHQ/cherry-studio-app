@@ -2,6 +2,7 @@ import { Dialog as HeroDialog } from 'heroui-native';
 import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 
+import { useNavigationOverlay } from '../portal/overlay-navigation';
 import { usePortalBackgroundIsolation } from '../portal/portal-accessibility';
 
 export type DialogProps = {
@@ -15,6 +16,7 @@ export type DialogProps = {
 /** A controlled decision surface; caller-owned actions determine when it closes. */
 export function Dialog({ children, onOpenChange, open, testID, title }: DialogProps) {
   usePortalBackgroundIsolation(open);
+  useNavigationOverlay(open);
 
   return (
     <HeroDialog isOpen={open} onOpenChange={onOpenChange} testID={testID}>

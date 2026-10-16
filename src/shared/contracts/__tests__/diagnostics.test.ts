@@ -26,7 +26,7 @@ describe('diagnostic wire inputs', () => {
       record,
     );
   });
-  test('accepts only the feedback description', () => {
+  test('rejects unsupported feedback fields', () => {
     expect(
       DiagnosticReportInputSchema.safeParse({ description: 'a', includeChatRecords: true }).success,
     ).toBe(false);
@@ -46,4 +46,21 @@ describe('diagnostic wire inputs', () => {
       DiagnosticReportInputSchema.safeParse({ description: `${'a'.repeat(4094)}\nb` }).success,
     ).toBe(false);
   });
+});
+
+test('screenshot attachments accept opaque IDs, never arbitrary paths', () => {
+  const report = { description: 'feedback' };
+  expect(
+    DiagnosticReportInputSchema.parse({
+      ...report,
+      screenshotId: '550e8400-e29b-41d4-a716-446655440000',
+    }).screenshotId,
+  ).toBeDefined();
+  for (const screenshotId of [
+    '../private',
+    'file:///private.png',
+    'https://example.com/image.png',
+    '',
+  ])
+    expect(DiagnosticReportInputSchema.safeParse({ ...report, screenshotId }).success).toBe(false);
 });

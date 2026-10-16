@@ -10,11 +10,14 @@ export function useTranslationLanguageMenu({
   selectedLanguage,
 }: {
   onSelect: (language: AppLanguage) => void;
-  selectedLanguage?: AppLanguage;
+  /** Undefined follows the app language; null leaves every choice unchecked. */
+  selectedLanguage?: AppLanguage | null;
 }): readonly MenuItem[] {
   const { i18n } = useTranslation();
   const highlightedLanguage =
-    selectedLanguage ?? resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language);
+    selectedLanguage === undefined
+      ? resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language)
+      : selectedLanguage;
 
   return useMemo(
     () =>
