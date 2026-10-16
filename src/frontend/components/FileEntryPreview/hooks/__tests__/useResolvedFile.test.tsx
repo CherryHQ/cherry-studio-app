@@ -65,24 +65,32 @@ it('hides cached file references when trashed and revives them with the same id 
     );
   });
   try {
-    await act(async () => {
-      await snapshot.refetch();
-    });
+    await waitForCondition(() => snapshot.data?.uri === 'file:///managed/notes.txt');
     expect(snapshot.data?.uri).toBe('file:///managed/notes.txt');
     trashed = true;
     await act(async () => {
       changed(entry.id);
-      await snapshot.refetch();
     });
+    await waitForCondition(() => snapshot.data === null);
     expect(snapshot.data).toBeNull();
     trashed = false;
     await act(async () => {
       changed(entry.id);
-      await snapshot.refetch();
     });
+    await waitForCondition(() => snapshot.data?.uri === 'file:///managed/notes.txt');
     expect(snapshot.data).toEqual({ entry, uri: 'file:///managed/notes.txt' });
   } finally {
-    act(() => renderer.unmount());
+    await act(async () => renderer.unmount());
     client.clear();
   }
 });
+
+async function waitForCondition(predicate: () => boolean) {
+  for (let index = 0; index < 20; index += 1) {
+    if (predicate()) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+  throw new Error('Timed out waiting for the managed file reference');
+}
