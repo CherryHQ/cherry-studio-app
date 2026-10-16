@@ -30,7 +30,7 @@ function setup(state = projection()) {
       case 'assistant.subscriptions.close':
         return { closed: true };
       case 'assistant.interactions.list':
-        return { items: [], nextCursor: null };
+        return { items: Object.values(state.interactions), nextCursor: null };
       default:
         throw new Error(method);
     }
@@ -217,6 +217,79 @@ it('rebuilds after an event gap without granting actions from the incomplete pro
   );
   test.sync.stop();
   await test.sync.drain();
+});
+it('replaces stale approvals after a desktop decision and removes approvals outside the new branch', async () => {
+  const state = projection();
+  for (const id of ['first', 'second'])
+    state.interactions[id] = {
+      interactionId: id,
+      revision: '0',
+      executionId: 'approval:answer:0',
+      toolCallId: id,
+      status: 'pending',
+      summary: 'Allow tool',
+      inputDigest: 'b'.repeat(64),
+      input: { text: '{}' },
+      messageId: 'answer',
+      configurationRevision: 'a'.repeat(64),
+      respondable: true,
+      desktopRequired: false,
+    };
+  const test = setup(state);
+  try {
+    await test.sync.start();
+    for (const [id, interaction] of Object.entries(state.interactions))
+      state.interactions[id] = {
+        ...interaction,
+        revision: '1',
+        executionId: 'approval:answer:1',
+        status: id === 'first' ? 'approved' : 'pending',
+      };
+    test.notify({
+      method: 'assistant.events',
+      params: {
+        subscriptionId: 'sub-1',
+        topicId: 'topic',
+        streamEpoch: 'epoch',
+        events: [
+          { kind: 'topic.updated', seq: '1', topic: { ...state.topic, historyRevision: '1' } },
+        ],
+      },
+    });
+    await settle();
+    expect(test.publish.mock.calls.at(-1)).toMatchObject([
+      {
+        interactions: {
+          first: { status: 'approved', revision: '1' },
+          second: { status: 'pending', revision: '1', executionId: 'approval:answer:1' },
+        },
+      },
+      true,
+    ]);
+    state.interactions = {};
+    test.notify({
+      method: 'assistant.events',
+      params: {
+        subscriptionId: 'sub-1',
+        topicId: 'topic',
+        streamEpoch: 'epoch',
+        events: [
+          {
+            kind: 'topic.updated',
+            seq: '2',
+            topic: { ...state.topic, historyRevision: '2', parentAnchorId: 'other-branch' },
+          },
+        ],
+      },
+    });
+    await settle();
+    expect(test.publish.mock.calls.at(-1)?.[0].interactions).toEqual({});
+    expect(test.sync.current?.interactions).toEqual({});
+    expect(test.failed).not.toHaveBeenCalled();
+  } finally {
+    test.sync.stop();
+    await test.sync.drain();
+  }
 });
 it('does not activate corrupt checkpoint bytes', async () => {
   const test = setup();

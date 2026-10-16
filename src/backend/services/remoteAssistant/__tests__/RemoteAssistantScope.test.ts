@@ -3,6 +3,7 @@ import type { AssistantProjection } from '@cherrystudio/remote-protocol/assistan
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopDomainLease, DesktopLeaseState } from '@/backend/services/desktopConnections';
 import type { DesktopNotification } from '@/backend/services/desktopConnections/DesktopSession';
+import { RemoteFailureError } from '@/backend/services/desktopConnections/remoteErrors';
 import { RemoteConversationError } from '@/backend/services/remoteConversation';
 import type { RemoteSessionSnapshot } from '@/shared/contracts/remoteAgent';
 
@@ -429,19 +430,269 @@ it('offers one topic-wide stop and finishes background protection only after eve
   });
   test.notify([
     { kind: 'execution.updated', seq: '1', execution: completed('first') },
-    { kind: 'topic.updated', seq: '2', topic: { ...state.topic, activeExecutionIds: ['second'] } },
+    {
+      kind: 'topic.updated',
+      seq: '2',
+      topic: { ...state.topic, historyRevision: '1', activeExecutionIds: ['second'] },
+    },
   ]);
   await settle();
   expect(test.reply.finish).not.toHaveBeenCalled();
   expect(test.background.replies.startTurn).toHaveBeenCalledTimes(1);
   test.notify([
     { kind: 'execution.updated', seq: '3', execution: completed('second') },
-    { kind: 'topic.updated', seq: '4', topic: { ...state.topic, activeExecutionIds: [] } },
+    {
+      kind: 'topic.updated',
+      seq: '4',
+      topic: { ...state.topic, historyRevision: '1', activeExecutionIds: [] },
+    },
   ]);
   await settle();
   expect(test.reply.finish).toHaveBeenCalledTimes(1);
   expect(test.reply.finish).toHaveBeenCalledWith('completed');
 });
+
+it('keeps observing finalization after leaving the route and reports a later persistence failure', async () => {
+  const state = projection();
+  state.topic.activeExecutionIds = ['execution'];
+  state.executions.execution = {
+    executionId: 'execution',
+    messageId: 'answer',
+    status: 'running',
+    durable: false,
+  };
+  const test = setup(state);
+  await settle();
+  test.release();
+  test.notify([
+    {
+      kind: 'execution.updated',
+      seq: '1',
+      execution: { ...state.executions.execution, status: 'finalizing' },
+    },
+    { kind: 'topic.updated', seq: '2', topic: { ...state.topic, activeExecutionIds: [] } },
+  ]);
+  await settle();
+  expect(test.scope.hasPendingExecution()).toBe(true);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(true);
+  expect(test.reply.updateContent).toHaveBeenLastCalledWith(
+    expect.objectContaining({ detail: 'remoteAgent.finalizing' }),
+  );
+  expect(test.reply.finish).not.toHaveBeenCalled();
+  expect(
+    test.request.mock.calls.some(([method]) => method === 'assistant.subscriptions.close'),
+  ).toBe(false);
+  test.notify([
+    {
+      kind: 'execution.updated',
+      seq: '3',
+      execution: {
+        ...state.executions.execution,
+        status: 'completed',
+        persistenceFailure: {
+          message: 'Could not save the reply',
+          retryable: false,
+          failure: { version: 1, reasonCode: 'internal', source: { layer: 'host' } },
+        },
+      },
+    },
+  ]);
+  await settle();
+  expect(test.reply.finish).toHaveBeenCalledTimes(1);
+  expect(test.reply.finish).toHaveBeenCalledWith('failed');
+  expect(test.scope.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+  expect(test.request).toHaveBeenCalledWith(
+    'assistant.subscriptions.close',
+    { subscriptionId: 'sub-1' },
+    undefined,
+  );
+});
+
+it('keeps a background reply waiting for desktop approval and follows its continuation', async () => {
+  const state = projection();
+  state.topic.activeExecutionIds = ['execution'];
+  state.executions.execution = {
+    executionId: 'execution',
+    messageId: 'answer',
+    status: 'running',
+    durable: false,
+  };
+  const test = setup(state);
+  await settle();
+  test.release();
+  test.notify([
+    {
+      kind: 'execution.updated',
+      seq: '1',
+      execution: { ...state.executions.execution, status: 'finalizing' },
+    },
+    { kind: 'topic.updated', seq: '2', topic: { ...state.topic, activeExecutionIds: [] } },
+  ]);
+  await settle();
+  state.interactions.approval = {
+    interactionId: 'approval',
+    revision: '1',
+    executionId: 'approval:answer:1',
+    messageId: 'answer',
+    toolCallId: 'tool',
+    status: 'pending',
+    summary: 'Allow tool',
+    inputDigest: 'b'.repeat(64),
+    input: { text: '{}' },
+    configurationRevision: revision,
+    respondable: true,
+    desktopRequired: false,
+  };
+  test.notify([
+    {
+      kind: 'execution.updated',
+      seq: '3',
+      execution: {
+        ...state.executions.execution,
+        status: 'completed',
+        durable: true,
+        history: { historyRevision: '1', messageRevision: '1' },
+      },
+    },
+  ]);
+  await settle();
+  expect(test.scope.hasPendingExecution()).toBe(true);
+  expect(test.reply.finish).not.toHaveBeenCalled();
+  test.notify([
+    { kind: 'interaction.updated', seq: '4', interaction: state.interactions.approval },
+    {
+      kind: 'topic.updated',
+      seq: '5',
+      topic: { ...state.topic, historyRevision: '1', activeExecutionIds: [] },
+    },
+  ]);
+  await settle();
+  expect(test.scope.hasPendingExecution()).toBe(true);
+  expect(test.reply.finish).not.toHaveBeenCalled();
+  expect(test.reply.updateContent).toHaveBeenLastCalledWith(
+    expect.objectContaining({ phase: 'awaiting-approval' }),
+  );
+  state.interactions.approval = {
+    ...state.interactions.approval,
+    status: 'approved',
+    revision: '2',
+  };
+  test.notify([
+    { kind: 'interaction.updated', seq: '6', interaction: state.interactions.approval },
+    {
+      kind: 'execution.updated',
+      seq: '7',
+      execution: {
+        executionId: 'continuation',
+        messageId: 'continued',
+        status: 'running',
+        durable: false,
+      },
+    },
+    {
+      kind: 'topic.updated',
+      seq: '8',
+      topic: { ...state.topic, historyRevision: '2', activeExecutionIds: ['continuation'] },
+    },
+  ]);
+  await settle();
+  expect(test.background.replies.startTurn).toHaveBeenCalledTimes(1);
+  expect(test.reply.finish).not.toHaveBeenCalled();
+  test.notify([
+    {
+      kind: 'execution.updated',
+      seq: '9',
+      execution: {
+        executionId: 'continuation',
+        messageId: 'continued',
+        status: 'completed',
+        durable: true,
+        history: { historyRevision: '3', messageRevision: '3' },
+      },
+    },
+    {
+      kind: 'topic.updated',
+      seq: '10',
+      topic: { ...state.topic, historyRevision: '3', activeExecutionIds: [] },
+    },
+  ]);
+  await settle();
+  expect(test.scope.hasPendingExecution()).toBe(false);
+  expect(test.reply.finish).toHaveBeenCalledTimes(1);
+  expect(test.reply.finish).toHaveBeenCalledWith('completed');
+});
+
+it('retires an unconfirmed background reply when a new desktop checkpoint no longer contains its execution', async () => {
+  const state = projection();
+  state.topic.activeExecutionIds = ['execution'];
+  state.executions.execution = {
+    executionId: 'execution',
+    messageId: 'answer',
+    status: 'running',
+    durable: false,
+  };
+  const test = setup(state);
+  await settle();
+  test.release();
+  test.changeConnection({ status: 'offline' });
+  state.cursor.streamEpoch = 'restarted';
+  state.topic.activeExecutionIds = [];
+  state.executions = {};
+  test.changeConnection({ status: 'ready' });
+  await settle();
+  expect(test.reply.retire).toHaveBeenCalledTimes(1);
+  expect(test.reply.finish).not.toHaveBeenCalled();
+  expect(test.scope.hasPendingExecution()).toBe(false);
+  expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(false);
+});
+
+it.each([
+  ['NOT_FOUND', false],
+  ['RATE_LIMITED', true],
+  ['REVISION_EXPIRED', true],
+] as const)(
+  'handles %s after reconnect without retaining permanently missing topics',
+  async (reason, retries) => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });
+    const state = projection();
+    state.topic.activeExecutionIds = ['execution'];
+    state.executions.execution = {
+      executionId: 'execution',
+      messageId: 'answer',
+      status: 'running',
+      durable: false,
+    };
+    const test = setup(state);
+    try {
+      await settle();
+      test.release();
+      test.changeConnection({ status: 'offline' });
+      const request = test.request.getMockImplementation()!;
+      test.request.mockImplementation(async (method, params) => {
+        if (method === 'assistant.topics.subscribe')
+          throw new RemoteFailureError({ reason, message: 'Topic subscription failed' });
+        return request(method, params);
+      });
+      test.changeConnection({ status: 'ready' });
+      await settle();
+      expect(test.scope.hasPendingExecution()).toBe(retries);
+      expect(test.lease.setBackgroundRequired).toHaveBeenLastCalledWith(retries);
+      if (retries) expect(test.reply.finish).not.toHaveBeenCalled();
+      else expect(test.reply.finish).toHaveBeenCalledWith('failed');
+      const subscriptions = () =>
+        test.request.mock.calls.filter(([method]) => method === 'assistant.topics.subscribe')
+          .length;
+      expect(subscriptions()).toBe(2);
+      await jest.advanceTimersByTimeAsync(4000);
+      expect(subscriptions()).toBe(retries ? 4 : 2);
+    } finally {
+      test.scope.dispose();
+      await test.scope.drain();
+      jest.useRealTimers();
+    }
+  },
+);
 
 it('keeps recovering a created topic when first-send preparation repeatedly loses the connection', async () => {
   jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick'] });

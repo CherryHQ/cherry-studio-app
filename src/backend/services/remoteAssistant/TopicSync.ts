@@ -42,7 +42,6 @@ export class TopicSync {
   private readonly textCache = new Map<string, string>();
   private readonly materializedParts = new WeakMap<TextPart, TextPart>();
   private interactionRevision?: string;
-  private persistedInteractions: AssistantInteraction[] = [];
   constructor(
     readonly topicId: string,
     private readonly connection: Connection,
@@ -249,14 +248,11 @@ export class TopicSync {
     this.lifetime.signal.throwIfAborted();
     this.presentedAt = Date.now();
     const parts = { ...projection.parts };
+    let interactions = projection.interactions;
     const view = () => ({
       ...projection,
       parts: { ...parts },
-      interactions: Object.assign(
-        Object.create(null),
-        Object.fromEntries(this.persistedInteractions.map((item) => [item.interactionId, item])),
-        projection.interactions,
-      ),
+      interactions,
     });
     const retained = new Set<string>();
     const missing: { part: TextPart; ref: ContentRef; key: string }[] = [];
@@ -287,7 +283,7 @@ export class TopicSync {
     this.lifetime.signal.throwIfAborted();
     if (missing.length && refresh) this.publish(view(), false);
     if (refresh) {
-      const interactions: AssistantInteraction[] = [];
+      const items: AssistantInteraction[] = [];
       let cursor: string | undefined;
       do {
         const page = await this.connection.request(
@@ -295,10 +291,13 @@ export class TopicSync {
           { topicId: this.topicId, cursor },
           this.lifetime.signal,
         );
-        interactions.push(...page.items);
+        items.push(...page.items);
         cursor = page.nextCursor ?? undefined;
       } while (cursor);
-      this.persistedInteractions = interactions;
+      // History changes can update or remove approvals without an interaction event.
+      // Replace the baseline so later batches cannot resurrect the old branch's approvals.
+      interactions = Object.fromEntries(items.map((item) => [item.interactionId, item]));
+      this.projection = { ...projection, interactions };
       this.interactionRevision = projection.topic.historyRevision;
     }
     this.lifetime.signal.throwIfAborted();

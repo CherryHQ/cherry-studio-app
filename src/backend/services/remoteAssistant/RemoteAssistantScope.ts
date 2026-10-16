@@ -539,24 +539,41 @@ export class RemoteAssistantScope implements RemoteConversationSource {
                   )
                     this.publish(observation, projection, true);
                 }),
-              ).catch(() => this.retryObservation(id, observation));
+              ).catch((error: unknown) => {
+                if (observation.generation === generation)
+                  this.retryObservation(id, observation, error);
+              });
             } else this.publish(observation, projection, current);
           },
-          () => {
-            if (observation.generation === generation) this.retryObservation(id, observation);
+          (error) => {
+            if (observation.generation === generation)
+              this.retryObservation(id, observation, error);
           },
         );
         observation.sync = sync;
         observation.opening = false;
         await sync.start();
       })(),
-    ).catch(() => {
-      if (observation.generation === generation) this.retryObservation(id, observation);
+    ).catch((error: unknown) => {
+      if (observation.generation === generation) this.retryObservation(id, observation, error);
     });
   }
-  private retryObservation(id: string, observation: Observation) {
+  private retryObservation(id: string, observation: Observation, error: unknown) {
     this.stopObservation(observation);
     this.withdraw(observation);
+    if (
+      error instanceof RemoteConversationError &&
+      !error.retryable &&
+      !['CLOSED', 'REVISION_EXPIRED'].includes(error.code)
+    ) {
+      observation.reply?.finish('failed');
+      observation.reply = undefined;
+      observation.executionIds = undefined;
+      observation.tracking = false;
+      this.releaseObservation(id, observation);
+      this.publishExecution();
+      return;
+    }
     if (!this.stopped && this.state.status === 'ready')
       observation.retry = setTimeout(() => this.startObservation(id, observation), 2000);
   }
@@ -687,10 +704,6 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       })),
     };
     observation.snapshot = snapshot;
-    if (current) {
-      observation.tracking =
-        topic.activeExecutionIds.length > 0 || this.pendingTopic(topic.topicId);
-    }
     if (current) this.updateBackground(observation, projection);
     for (const listener of observation.listeners) listener(snapshot);
     this.publishExecution();
@@ -810,13 +823,35 @@ export class RemoteAssistantScope implements RemoteConversationSource {
     );
   }
   private updateBackground(observation: Observation, projection: AssistantProjection) {
-    if (!this.background || this.backgroundBlocked) return;
-    const active = Object.values(projection.executions).find((execution) =>
-      projection.topic.activeExecutionIds.includes(execution.executionId),
+    const executions = Object.values(projection.executions);
+    const unfinished = executions.filter((execution) =>
+      ['running', 'awaiting-approval', 'finalizing'].includes(execution.status),
     );
-    if (active) {
+    const approval = Object.values(projection.interactions).find(
+      (item) => item.status === 'pending',
+    );
+    // A terminal can arrive in an earlier batch than its saved history and approvals.
+    const awaitingHistory = executions.some(
+      (execution) =>
+        execution.history &&
+        BigInt(execution.history.historyRevision) > BigInt(projection.topic.historyRevision),
+    );
+    // Active IDs describe cancellable streams, not pending persistence or approval continuations.
+    const hasWork =
+      projection.topic.activeExecutionIds.length > 0 ||
+      unfinished.length > 0 ||
+      Boolean(approval) ||
+      awaitingHistory;
+    observation.tracking = hasWork || this.pendingTopic(projection.topic.topicId);
+    if (!this.background || this.backgroundBlocked) return;
+    const active =
+      unfinished.find((execution) =>
+        projection.topic.activeExecutionIds.includes(execution.executionId),
+      ) ?? unfinished[0];
+    if (hasWork) {
       if (!observation.reply) observation.executionIds = new Set();
       for (const id of projection.topic.activeExecutionIds) observation.executionIds!.add(id);
+      for (const execution of unfinished) observation.executionIds!.add(execution.executionId);
       observation.reply ??= this.background.replies.startTurn({
         connectionId: this.lease.connectionId,
         domain: 'assistant',
@@ -831,13 +866,12 @@ export class RemoteAssistantScope implements RemoteConversationSource {
           this.publishExecution();
         },
       });
-      const message = observation.snapshot?.messages.find((item) => item.id === active.messageId);
+      const message = observation.snapshot?.messages.find(
+        (item) => item.id === (active?.messageId ?? approval?.messageId),
+      );
       const preview = message?.parts
         .flatMap((part) => (part.kind === 'text' ? [part.text] : []))
         .join('\n');
-      const approval = Object.values(projection.interactions).some(
-        (item) => item.status === 'pending',
-      );
       const tool = message?.parts.some(
         (part) => part.kind === 'tool' && ['streaming', 'input-ready'].includes(part.state),
       );
@@ -851,7 +885,7 @@ export class RemoteAssistantScope implements RemoteConversationSource {
       observation.reply.updateContent({
         phase,
         detail: this.background.translate(
-          active.status === 'finalizing'
+          active?.status === 'finalizing'
             ? 'remoteAgent.finalizing'
             : phase === 'awaiting-approval'
               ? 'chat.backgroundReply.awaitingApproval'
@@ -863,22 +897,26 @@ export class RemoteAssistantScope implements RemoteConversationSource {
         ),
         ...(preview ? { preview: preview.slice(-160) } : {}),
       });
-    } else if (observation.reply && !this.pendingTopic(projection.topic.topicId)) {
+    } else if (observation.reply && !observation.tracking) {
       const terminals = [...(observation.executionIds ?? [])].flatMap(
         (id) => projection.executions[id] ?? [],
       );
-      observation.reply.finish(
-        terminals.some(
-          (terminal) =>
-            terminal.status === 'failed' ||
-            terminal.status === 'interrupted' ||
-            terminal.persistenceFailure,
-        )
-          ? 'failed'
-          : terminals.some((terminal) => terminal.status === 'cancelled')
-            ? 'cancelled'
-            : 'completed',
-      );
+      // A fresh desktop epoch can omit the old execution; absence is not a successful terminal.
+      if (!terminals.length || terminals.length !== observation.executionIds?.size)
+        observation.reply.retire();
+      else
+        observation.reply.finish(
+          terminals.some(
+            (terminal) =>
+              terminal.status === 'failed' ||
+              terminal.status === 'interrupted' ||
+              terminal.persistenceFailure,
+          )
+            ? 'failed'
+            : terminals.some((terminal) => terminal.status === 'cancelled')
+              ? 'cancelled'
+              : 'completed',
+        );
       observation.reply = undefined;
       observation.executionIds = undefined;
     }
