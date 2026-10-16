@@ -333,6 +333,7 @@ export function createBackend(
         moveToTrash: services.fileContent.moveToTrash,
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
+        getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
         subscribeChanges: services.fileContent.subscribeChanges,

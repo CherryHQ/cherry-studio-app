@@ -93,6 +93,10 @@ export class FileEntryService {
     return (await this.findAvailableByIds([id]))[0] ?? null;
   }
 
+  findTrashedById(id: FileEntryId, deletedAt: number): Promise<FileEntry | null> {
+    return this.findByIdTx(this.db, id, deletedAt);
+  }
+
   /** `null` requires an active entry; a timestamp requires the same trash incarnation. */
   async findByIdTx(
     tx: Database,

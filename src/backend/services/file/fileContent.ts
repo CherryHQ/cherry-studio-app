@@ -16,6 +16,7 @@ import {
   FileEntryProvenanceSchema,
   MediaTypeSchema,
   SafeNameSchema,
+  TimestampSchema,
 } from '@/shared/data/types/file';
 
 import { readDocumentUriText } from './documentText';
@@ -24,6 +25,7 @@ import { FileHashError, hashLocalFile } from './fileHash';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
+  getTrashedImagePreviewUri,
   resolveCachedFilePreviewUris,
 } from './filePreviewStorage';
 import {
@@ -200,6 +202,12 @@ export const fileContent = {
     ),
   generatePreviewUri: async (entry: FileEntry) =>
     (await fileEntryService.findById(entry.id)) ? generateFilePreviewUri(entry) : undefined,
+  getTrashThumbnailUri: (id: FileEntryId, deletedAt: number) =>
+    getTrashedImagePreviewUri(
+      fileEntryService,
+      FileEntryIdSchema.parse(id),
+      TimestampSchema.parse(deletedAt),
+    ),
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
   resolveUris: async (entries: readonly FileEntry[]) => {
     const available = new Set(

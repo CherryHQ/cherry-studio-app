@@ -54,6 +54,8 @@ export interface FileModule {
   delete(id: FileEntryId): Promise<boolean>;
   /** Generates or reads an image preview only while its entry is active. */
   generatePreviewUri(entry: FileEntry): Promise<string | undefined>;
+  /** Thumbnail-only access to the same recoverable deletion shown in the trash. */
+  getTrashThumbnailUri(id: FileEntryId, deletedAt: number): Promise<string | undefined>;
   /** Mobile URI equivalent of Cherry Desktop's getUrl. */
   getUri(id: FileEntryId): Promise<string | undefined>;
   /** Resolves a database page without re-reading entries one by one. */

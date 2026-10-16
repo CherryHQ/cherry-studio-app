@@ -97,10 +97,13 @@ test('file trash preserves bytes and previews, hides ordinary reads, and restore
   expect(mockFiles.has(preview)).toBe(true);
   expect((await files.listByCursor()).items).toEqual([]);
   await expect(resolveFileEntry(files, fileId)).resolves.toBeNull();
+  expect(await files.findTrashedById(fileId, now)).toMatchObject({ id: fileId });
+  expect(await files.findTrashedById(fileId, now - 1)).toBeNull();
   expect((await runtime.entries.list({ kind: 'file' })).items).toEqual([
     { id: fileId, kind: 'file', title: 'notes.txt', deletedAt: now, size: 123, state: 'trashed' },
   ]);
   await runtime.restore('file', fileId);
+  expect(await files.findTrashedById(fileId, now)).toBeNull();
   expect((await resolveFileEntry(files, fileId))?.uri).toBe(bytes);
   expect(mockFiles.has(preview)).toBe(true);
   expect(await runtime.entries.summary()).toEqual({ files: 0, sessions: 0, fileBytes: 0 });

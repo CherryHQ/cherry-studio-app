@@ -1,8 +1,11 @@
 # Unified Trash
 
-The trash retains user-deleted local Agent Sessions and library files for 30 days. `/trash` displays
-All, Sessions, and Files, with deletion dates, remaining days, and total trashed file bytes. The
-library menu opens Files; Settings → Storage opens the unified page and offers Empty trash.
+The trash retains user-deleted local Agent Sessions and library files for 30 days. `/trash` presents
+Recently deleted as compact thumbnail/name/date rows beneath one retention notice. Tapping a row
+opens Restore and Permanently delete; the header menu owns All, Sessions, and Files filters and
+category-scoped emptying. The library menu opens Files; Settings → Storage shows trashed file bytes
+and opens the unified page. Trash image thumbnails resolve only the matching deletion timestamp;
+ordinary file reads and attachments remain unavailable until restoration.
 
 ## Data And Operations
 
