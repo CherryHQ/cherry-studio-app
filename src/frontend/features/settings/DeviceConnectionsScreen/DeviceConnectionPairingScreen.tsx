@@ -145,12 +145,13 @@ export function DeviceConnectionPairingScreen({
             />
           ) : (
             <View className="flex-row flex-wrap items-center justify-center gap-3">
+              {/* Keep native label state separate when switching from Cancel to Done. */}
               {connection ? (
-                <Button onPress={finish} size="sm">
+                <Button key="finish" onPress={finish} size="sm">
                   {t('common.done')}
                 </Button>
               ) : (
-                <Button onPress={cancel} size="sm" variant="secondary">
+                <Button key="cancel" onPress={cancel} size="sm" variant="secondary">
                   {t('common.cancel')}
                 </Button>
               )}
