@@ -2,6 +2,7 @@ import {
   FILE_PREVIEW_BASE_URL,
   FILE_PREVIEW_PAGE_GLOBAL,
   type HostMessage,
+  type FilePreviewSelection,
   PageMessageSchema,
 } from '@cherrystudio/file-preview-webview/protocol';
 import { ContentState } from '@cherrystudio/ui/components';
@@ -45,6 +46,8 @@ export function FileDocumentPreview({
   onFailure,
   onTooLarge,
   onUnsupported,
+  onSelection,
+  bottomInset,
 }: {
   file: ResolvedFile;
   page: DocumentPreviewPage;
@@ -54,6 +57,8 @@ export function FileDocumentPreview({
   /** The PDF range fallback asked the host to open the file elsewhere. */
   onTooLarge: () => void;
   onUnsupported: () => void;
+  onSelection?: (selection: FilePreviewSelection | null) => void;
+  bottomInset?: number;
 }) {
   const { t, i18n } = useTranslation();
   const { theme } = useUniwind();
@@ -75,6 +80,7 @@ export function FileDocumentPreview({
   const { id: entryId, filename, mediaType, updatedAt } = file.entry;
   const renderMessage: HostMessage = {
     type: 'render',
+    captureSelection: Boolean(onSelection),
     source: { id: entryId, name: filename, mediaType },
     locale: i18n.language,
     isDark: theme === 'dark',
@@ -89,7 +95,7 @@ export function FileDocumentPreview({
       '--border-subtle': borderSubtle,
       '--ring': ring,
       '--file-preview-toolbar-button-size': TOOLBAR_BUTTON_SIZE,
-      '--file-preview-bottom-inset': `${bottom}px`,
+      '--file-preview-bottom-inset': `${bottomInset ?? bottom}px`,
     },
   };
   const serializedRender = JSON.stringify(renderMessage);
@@ -130,6 +136,22 @@ export function FileDocumentPreview({
     }
     const message = parsed.data;
     switch (message.type) {
+      case 'selection': {
+        if (!onSelection) return;
+        const selection = message.selection;
+        if (!selection) {
+          onSelection(null);
+          return;
+        }
+        if (
+          selection.sourceId !== entryId ||
+          selection.revision !== String(updatedAt) ||
+          selection.anchor.format === 'pdf'
+        )
+          return;
+        onSelection(selection);
+        return;
+      }
       case 'ready':
         isReadyRef.current = true;
         deliver(webViewRef.current, serializedRenderRef.current);

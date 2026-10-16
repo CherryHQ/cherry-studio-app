@@ -3,18 +3,20 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+`create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, inspection, and editing are not implemented; their proposed contracts and
-delivery sequence live in [Office Tools Design](./office-tools-design.md). Sections that a shipped
+Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
+Tests and native/Office acceptance remain pending; see [Office Tools Design](./office-tools-design.md)
+and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
 tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
@@ -499,6 +501,34 @@ the Agent health analysis and how to reach it. See [Health Review](../../guides/
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
+
+### Office Files
+
+`create_document`, `create_workbook`, and `create_presentation` create new DOCX, XLSX and PPTX entries
+from strict version 1 specs. They are core file capabilities with `auto` approval, absent when the
+native compute sandbox is unavailable, and discovered through Pi's deferred `tool_search` catalog.
+They remain callable from Code Mode and retain the ordinary unsafe replay and child-artifact
+receipt rules. Generation uses the separate compute pool, not the waiting Code Mode bridge.
+
+The [Office service](../../../src/backend/services/office/README.md) defines the supported elements,
+libraries and limits. Inputs contain only structured data and authorized managed image references.
+Results contain managed file metadata and a created artifact, never package bytes or device paths.
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
+source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
+hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
+original and unrelated package parts remain unchanged. All five use the same catalog, compute,
+file grants and durable receipt boundaries as generation. Workbook edits request recalculation;
+they do not calculate formulas themselves.
+
+The existing preview page hands selections and their original attachments to a new editable chat
+draft. Each `selection-ref` carries the managed file id, structural anchor and excerpt. The Agent
+reads the current referenced content and compares it with the excerpt before editing, following
+Desktop's workflow. Selection references do not widen file grants.
+
+Template filling, formula authoring/evaluation, arbitrary layouts, image changes in existing files
+and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
+pending; no runtime compatibility or preservation claims have been established by executed tests.
 
 ### Managed File Write And Edit
 

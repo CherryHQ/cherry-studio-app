@@ -65,6 +65,26 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
+  test('offers Office generation with the compute sandbox even without a Code Mode bridge', async () => {
+    const office = [
+      'create_document',
+      'create_workbook',
+      'create_presentation',
+      'inspect_office_file',
+      'read_office_content',
+      'edit_document',
+      'edit_workbook',
+      'edit_presentation',
+    ];
+    const absent = capabilityIds(await resolve({}));
+    expect(absent.some((id) => office.includes(id))).toBe(false);
+    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    for (const name of office) {
+      expect(capabilityIds(tools)).toContain(name);
+      expect(approvalOf(tools, name)).toBe('auto');
+    }
+  });
+
   test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([

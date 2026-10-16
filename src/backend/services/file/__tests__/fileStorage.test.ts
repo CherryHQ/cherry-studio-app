@@ -30,7 +30,7 @@ jest.mock('expo-file-system', () => {
   const copies: { destination: string; source: string }[] = [];
   const failures = new Set<string>();
   const writeFailures = new Set<string>();
-  const writes: { content: string; options?: unknown; uri: string }[] = [];
+  const writes: { content: string | Uint8Array; options?: unknown; uri: string }[] = [];
   const paths = { cache: { uri: 'file:///cache/' }, document: { uri: 'file:///documents/' } };
   const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
     const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
@@ -102,7 +102,7 @@ jest.mock('expo-file-system', () => {
       files.delete(this.uri);
     }
 
-    write(content: string, options?: unknown) {
+    write(content: string | Uint8Array, options?: unknown) {
       writes.push({ content, options, uri: this.uri });
       files.set(this.uri, content.length);
       if (writeFailures.has(this.uri)) {
@@ -134,7 +134,7 @@ type FileSystemTestState = {
   files: Map<string, number>;
   paths: { cache: { uri: string }; document: { uri: string } };
   writeFailures: Set<string>;
-  writes: { content: string; options?: unknown; uri: string }[];
+  writes: { content: string | Uint8Array; options?: unknown; uri: string }[];
 };
 
 const { testState } = jest.requireMock<{ testState: FileSystemTestState }>('expo-file-system');
@@ -214,58 +214,66 @@ describe('fileStorage', () => {
     ).toBe(true);
   });
 
-  test('discards unregistered bytes when cancelled after writing a new file', async () => {
-    const entries = createEntryStore();
-    const controller = new AbortController();
-    const cancelled = new Error('cancelled');
-    const creating = createInternalEntry(
-      entries,
-      {
-        data: 'draft',
-        mediaType: 'text/plain',
-        name: 'draft.txt',
-        provenance: 'generated',
-        source: 'text',
-      },
-      controller.signal,
-    );
-
-    expect(testState.writes).toHaveLength(1);
-    controller.abort(cancelled);
-
-    await expect(creating).rejects.toBe(cancelled);
-    expect(entries.create).not.toHaveBeenCalled();
-    expect(testState.files.size).toBe(0);
-    expect(onFileChange).not.toHaveBeenCalled();
-  });
-
-  test('cleans up bytes when entry creation rejects cancellation from its transaction', async () => {
-    const controller = new AbortController();
-    const cancelled = new Error('cancelled');
-    const entries = {
-      create: async (_values: unknown, signal?: AbortSignal) => {
-        controller.abort(cancelled);
-        signal?.throwIfAborted();
-        return internalEntry();
-      },
-    };
-
-    await expect(
-      createInternalEntry(
+  test.each(['text', 'bytes'] as const)(
+    'discards unregistered %s when cancelled after writing a new file',
+    async (source) => {
+      const entries = createEntryStore();
+      const controller = new AbortController();
+      const cancelled = new Error('cancelled');
+      const creating = createInternalEntry(
         entries,
         {
-          data: 'draft',
+          ...(source === 'text'
+            ? { source, data: 'draft' }
+            : { source, data: new Uint8Array([80, 75, 3, 4]) }),
           mediaType: 'text/plain',
           name: 'draft.txt',
           provenance: 'generated',
-          source: 'text',
         },
         controller.signal,
-      ),
-    ).rejects.toBe(cancelled);
-    expect(testState.files.size).toBe(0);
-    expect(onFileChange).not.toHaveBeenCalled();
-  });
+      );
+
+      expect(testState.writes).toHaveLength(1);
+      controller.abort(cancelled);
+
+      await expect(creating).rejects.toBe(cancelled);
+      expect(entries.create).not.toHaveBeenCalled();
+      expect(testState.files.size).toBe(0);
+      expect(onFileChange).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['text', 'bytes'] as const)(
+    'cleans up %s when entry creation rejects cancellation from its transaction',
+    async (source) => {
+      const controller = new AbortController();
+      const cancelled = new Error('cancelled');
+      const entries = {
+        create: async (_values: unknown, signal?: AbortSignal) => {
+          controller.abort(cancelled);
+          signal?.throwIfAborted();
+          return internalEntry();
+        },
+      };
+
+      await expect(
+        createInternalEntry(
+          entries,
+          {
+            ...(source === 'text'
+              ? { source, data: 'draft' }
+              : { source, data: new Uint8Array([80, 75, 3, 4]) }),
+            mediaType: 'text/plain',
+            name: 'draft.txt',
+            provenance: 'generated',
+          },
+          controller.signal,
+        ),
+      ).rejects.toBe(cancelled);
+      expect(testState.files.size).toBe(0);
+      expect(onFileChange).not.toHaveBeenCalled();
+    },
+  );
 
   test('uses the source extension when a camera display name has none', async () => {
     testState.files.set('file:///camera/IMG_0001.JPG', 128);
@@ -408,6 +416,26 @@ describe('fileStorage', () => {
       expect.objectContaining({ content: 'AAAA', options: { encoding: 'base64' } }),
     ]);
     expect(onFileChange).toHaveBeenCalledTimes(1);
+  });
+
+  test('stores binary output verbatim with the declared Office type and generated provenance', async () => {
+    const data = new Uint8Array([80, 75, 3, 4, 0, 255]);
+    const entry = await createInternalEntry(createEntryStore(), {
+      source: 'bytes',
+      data,
+      name: 'report.docx',
+      provenance: 'generated',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    expect(entry).toMatchObject({
+      filename: 'report.docx',
+      size: data.length,
+      provenance: 'generated',
+    });
+    expect(testState.writes).toEqual([
+      expect.objectContaining({ content: data, options: undefined }),
+    ]);
+    expect(onFileChange).toHaveBeenCalledWith(entry.id);
   });
 
   test('writes text verbatim under the caller-provided filename', async () => {

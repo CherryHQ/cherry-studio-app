@@ -1,8 +1,9 @@
 # Office Tools Design
 
-> Status: design. None of the Office tools below are implemented or registered. This document
-> defines the proposed scope, runtime integration, and delivery sequence. Current behavior remains
-> documented in
+> Status: bounded generation, inspection, reading, editing and preview-selection handoff are
+> implemented in source; tests and native/Office acceptance remain pending. All eight tools require
+> native QuickJS. Template filling and advanced content remain design. The exact implemented
+> contract is in the [Office service](../../../src/backend/services/office/README.md) and
 > [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
 
 ## Goal And Starting Point
@@ -31,7 +32,7 @@ file tools and runtime boundaries.
 See [File Model](../data/file-model.md), [File Preview And Viewer](../file-preview-and-viewer.md),
 and [HTML Conversion](../html-conversion.md) for these current capabilities.
 
-## Proposed Tool Surface
+## Tool Surface And Target Coverage
 
 | Tool | Input intent | Result |
 | --- | --- | --- |
@@ -44,9 +45,10 @@ and [HTML Conversion](../html-conversion.md) for these current capabilities.
 | `edit_workbook` | Managed source id and `WorkbookEditOperationV1[]` | New derived `.xlsx` |
 | `edit_presentation` | Managed source id and `PresentationEditOperationV1[]` | New derived `.pptx` |
 
-These are proposed logical names, not executable tools. Register each only when its format adapter
-and acceptance evidence exist. Generic inspection and reading may support fewer formats at first;
-their descriptions and returned capability matrix must identify the implemented subset.
+All eight names are registered in source. Creation uses version 1 specs; edits require top-level
+version 1 and an exact source SHA-256. Current inspection lists body paragraphs, sheets, and
+slides/shapes with bounded paging; exact reads resolve one supported anchor. These are narrower
+than the full target matrix above. Native and Office acceptance remain required before release.
 `read_file` remains the general reading tool. `read_office_content` exists for structural addresses
 needed by edits, not as a second plain-text extraction path.
 
@@ -57,8 +59,8 @@ operation matrix before enabling mutations on that format.
 
 | Format | Initial generation target | Initial edit target | Deferred |
 | --- | --- | --- | --- |
-| DOCX | Headings, paragraphs, lists, simple tables, managed images, and named style presets | Replace text in an inspected simple paragraph or table cell while preserving its supported style | Arbitrary page layout, tracked-change editing, fields, embedded objects, and complex mixed-format text |
-| XLSX | Named sheets, explicitly typed scalar cells, simple number formats, and column widths | Write or clear a bounded range of ordinary cells without changing sheet structure | Formula authoring/evaluation, row or column insertion, merges, charts, pivot tables, and external-data refresh |
+| DOCX | Headings, paragraphs, lists, simple tables, managed images, and named style presets | Replace a unique literal occurrence in an inspected body paragraph, preserving surrounding runs/hyperlinks | Word table/header editing, arbitrary page layout, tracked changes, fields and embedded objects |
+| XLSX | Named sheets, explicitly typed scalar cells, simple number formats, column widths and cell-anchored PNG/JPEG images | Write or clear a bounded range of ordinary cells without changing sheet structure | Formula authoring/evaluation, row or column insertion, merges, charts, pivot tables, and external-data refresh |
 | PPTX | Fixed layouts with editable title/body text, simple tables, and managed images | Replace text in an inspected supported text shape | Arbitrary shape/layout editing, animations, embedded media, charts, and master/theme editing |
 
 Deferred features in imported files are not automatically discarded or grounds to reject the whole
@@ -66,8 +68,8 @@ file. Inspection distinguishes an unsupported target from an untouched feature t
 preserve. Reject an operation when its effects cannot be bounded or preserved reliably.
 
 For XLSX, distinguish literal strings, numbers, booleans, and empty cells explicitly. A string
-beginning with `=` remains a string. Protect formula cells from initial range edits and preserve
-untouched formulas. If changing input cells invalidates calculated values, the implementation must
+beginning with `=` remains a string. Ordinary formulas may be explicitly replaced; reject shared, array and data-table formula groups
+and preserve untouched formulas. If changing input cells invalidates calculated values, the implementation must
 handle stale caches and request recalculation on opening; it must not report old cached values as
 newly calculated results. This is a prerequisite for enabling workbook edits.
 
@@ -90,7 +92,7 @@ payload, no shell, and no downloaded executable script.
 - Inputs use the existing `file_entry_id` tool convention for managed sources; outputs retain
   `fileEntryId`. Every referenced image or template must independently pass the same file scope
   and availability checks as the source.
-- Place format work behind a proposed `src/backend/services/office` public surface. Keep schemas
+- Place format work behind the `src/backend/services/office` public surface. Keep schemas
   and adapters there while their consumers are backend-only. Promote only contracts actually
   needed by another layer, following [Code Organization](../code-organization.md).
 - Tool adapters belong under `src/backend/ai/agent/tools` and receive narrow injected file and
@@ -115,7 +117,7 @@ Use two distinct roles for this existing environment:
 | Role | Proposed use | Boundary |
 | --- | --- | --- |
 | Model-written Code Mode script | Transform bounded source data, calculate values, construct a document spec or edit batch, and call Office tools | Existing script VM and durable nested-tool protocol; all effects pass through authorized tools |
-| Application-owned Office computation | Evaluate bundling a pure-JavaScript renderer or patch algorithm into a bounded native computation | Private implementation of the Office service; trusted, pinned library code, explicit input/output and cancellation budgets |
+| Application-owned Office computation | Run pinned JavaScript renderers and the Desktop-derived patch algorithms in bounded native computations | Private implementation of the Office service; trusted, pinned library code, explicit input/output and cancellation budgets |
 
 The first role is the integration baseline. For example, a script can read a sheet range, compute
 totals in JavaScript, and submit one range edit, or build slides from data and invoke
@@ -124,9 +126,8 @@ results need not become separate model-history messages. Use batch operations wi
 than one tool call per cell. A later failed call does not roll back earlier successful tools; the
 atomicity guarantee applies to one edit batch, not an entire script.
 
-The second role is a feasibility decision, not an existing Office engine. Compare a bundled
-QuickJS computation with an application-side library adapter using representative files. Reuse
-`createJsSandbox`'s separate compute pool if QuickJS is selected: the current service allows two
+The second role now uses native QuickJS computations for both generation and patching. This keeps
+ZIP/XML work off the React Native JavaScript thread. The sandbox service has two interactive
 bridge scripts and two bounded computations in separate pools, so a script waiting on an Office
 tool cannot occupy the only slot needed by that tool's computation. Do not launch another Code
 Mode script recursively or bypass its durable calls with a side-effecting script global.
@@ -304,16 +305,20 @@ keep the failing tools or operations unavailable rather than lowering the contra
 
 ## Selection Questions And Acceptance Plan
 
-Engine selection remains open. The repository already has `@e965/xlsx`, `fflate`, and
-`@xmldom/xmldom` in its Office text path, plus a narrow image-only PPTX writer in document export.
-Evaluate those owners before adding dependencies, but do not treat their current extraction or
-export use as evidence of preservation-safe edits. AnyDoc's reader output and the preview renderer
-also do not establish round-trip fidelity. No new library is selected yet.
+Generation uses pinned browser assets for docx 9.11.0, PptxGenJS 4.0.1 and SheetJS 0.20.3 in the
+QuickJS compute pool. Inputs are bounded to 128 KiB JSON and 2 MiB of managed PNG/JPEG images;
+outputs to 4 MiB, with 30-second/64-MiB native limits. See the service contract for exact shapes.
+The patch engine ports Cherry Desktop's `office-transform` package-copy and run-edit rules using
+pinned `fflate` and `@xmldom/xmldom` assets. Excel image generation adds DrawingML parts to newly
+created workbooks. Existing packages never round-trip through the generation libraries. The shared
+preview package already runs in Mobile's WebView; selection references carry managed file ids,
+structural anchors and excerpts for the Agent to compare with current content before editing.
+Desktop's Python execution and unrestricted library scripting are not available on Mobile.
 
-The first implementation slice must settle:
+Remaining feasibility and acceptance work must settle:
 
-- Which local generation and patch engines support each proposed operation on both iOS and
-  Android, including bundled QuickJS versus application-side execution, cancellation, memory use,
+- Whether the implemented generation and patch engines satisfy their contracts on both iOS and
+  Android, including native QuickJS compatibility, cancellation, memory use,
   bundle cost, and licensing. Follow [Dependencies](../../guides/development.md#dependencies) for
   any dependency work.
 - Exact style/layout presets, text-run replacement rules, structural selector encoding, numeric
@@ -340,4 +345,4 @@ Device and desktop Office acceptance should cover both mobile platforms, the exi
 opening output without a repair prompt, editable text/cells/shapes, and formulas recalculated by the
 target application where required. Follow [Testing And CI](../../guides/testing-and-ci.md) and
 [Parallel Device Testing](../../guides/parallel-device-testing.md).
-No builds, tests, or device acceptance are claimed by this design.
+Generation tests are written but have not been run. No builds or device/Office acceptance are claimed.

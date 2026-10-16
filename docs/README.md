@@ -48,7 +48,7 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
-| [Office Tools Design](./references/agent/office-tools-design.md) | Proposed DOCX/XLSX/PPTX generation and editing, QuickJS execution, Pi Durable integration, and delivery sequence (`Status: design`) |
+| [Office Tools Design](./references/agent/office-tools-design.md) | DOCX/XLSX/PPTX generation, bounded editing, preview selections and QuickJS/Pi Durable integration; acceptance pending |
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |
 | [Built-In MCP Roadmap](./references/agent/built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse, direct-API transport and instruction-resource designs |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |

@@ -15,6 +15,14 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  inspect_office_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.inspect' },
+  read_office_content: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.read' },
+  edit_document: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editDocument' },
+  edit_workbook: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editWorkbook' },
+  edit_presentation: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editPresentation' },
+  create_document: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.document' },
+  create_workbook: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.workbook' },
+  create_presentation: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.presentation' },
   create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
