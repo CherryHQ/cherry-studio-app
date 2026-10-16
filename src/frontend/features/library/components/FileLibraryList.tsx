@@ -1,5 +1,5 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { Button, ContentState } from '@cherrystudio/ui/components';
+import { ActionMenu, Button, ContentState, type MenuItem } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,13 +15,14 @@ import {
 } from '@/frontend/components/Selection';
 import { useBackendModule } from '@/frontend/data';
 import type { ResolvedFile } from '@/shared/contracts/file';
-import type { FileFolder, LibraryFile } from '@/shared/data/types/fileLibrary';
+import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
 import {
   type FileLibraryEntry,
   type FileLibraryFilter,
   useFileEntries,
 } from '../hooks/useFileEntries';
+import type { LibrarySelection } from '../hooks/useFileLibraryItemActions';
 import { useOpenLibraryFile } from '../hooks/useOpenLibraryFile';
 import { fileLibraryLayout, fileLibrarySelectionScope } from '../utils/constants';
 import { FileLibraryFolderItem } from './FileLibraryFolderItem';
@@ -33,10 +34,9 @@ type FileLibraryListProps = {
   directory?: {
     folders: readonly FileFolder[];
     onOpen: (folderId: string) => void;
-    onManage: (folder: FileFolder) => void;
   };
   folderPaths?: ReadonlyMap<string, string>;
-  onManage: (file: LibraryFile) => void;
+  getMenuItems: (selection: LibrarySelection) => MenuItem[];
   filter: FileLibraryFilter;
 };
 
@@ -47,8 +47,7 @@ type FileLibraryListItem =
 type FileLibraryListExtraData = {
   directory: FileLibraryListProps['directory'];
   folderPaths: FileLibraryListProps['folderPaths'];
-  rootLabel: string;
-  onManage: (file: LibraryFile) => void;
+  getMenuItems: (selection: LibrarySelection) => MenuItem[];
   getManageLabel: (name: string) => string;
   dateFormatter: Intl.DateTimeFormat;
   isEditing: boolean;
@@ -62,7 +61,7 @@ export function FileLibraryList({
   folderId,
   directory,
   folderPaths,
-  onManage,
+  getMenuItems,
   filter,
 }: FileLibraryListProps) {
   const { t, i18n } = useTranslation();
@@ -132,9 +131,8 @@ export function FileLibraryList({
     () => ({
       directory,
       folderPaths,
-      rootLabel: t('library.root'),
       dateFormatter,
-      onManage,
+      getMenuItems,
       getManageLabel: (name: string) => t('library.manage', { name }),
       isEditing,
       onOpen: (resolvedFile) => void openLibraryFile(resolvedFile),
@@ -145,7 +143,7 @@ export function FileLibraryList({
       directory,
       folderPaths,
       dateFormatter,
-      onManage,
+      getMenuItems,
       t,
       isEditing,
       openLibraryFile,
@@ -244,9 +242,9 @@ function renderLibraryItem({ extraData, item }: LegendListRenderItemProps<FileLi
     return data.directory ? (
       <FileLibraryFolderItem
         folder={item.folder}
+        menuItems={data.getMenuItems({ kind: 'folder', folder: item.folder })}
         modifiedDate={data.dateFormatter.format(item.folder.updatedAt)}
         onOpen={data.directory.onOpen}
-        onManage={data.directory.onManage}
       />
     ) : null;
   }
@@ -254,11 +252,14 @@ function renderLibraryItem({ extraData, item }: LegendListRenderItemProps<FileLi
 }
 
 function FileItem({ item, data }: { item: FileLibraryEntry; data: FileLibraryListExtraData }) {
-  const location = data.folderPaths
-    ? item.libraryFile?.folderId
-      ? data.folderPaths.get(item.libraryFile.folderId)
-      : data.rootLabel
+  // Files at the top level are simply in the library and need no location.
+  const location = item.libraryFile?.folderId
+    ? data.folderPaths?.get(item.libraryFile.folderId)
     : undefined;
+  const menuItems =
+    !data.isEditing && item.libraryFile
+      ? data.getMenuItems({ kind: 'file', file: item.libraryFile })
+      : [];
   return (
     <View className="flex-row items-center gap-2">
       <View className="min-w-0 flex-1">
@@ -267,22 +268,23 @@ function FileItem({ item, data }: { item: FileLibraryEntry; data: FileLibraryLis
           isSelected={data.selectedIds.has(item.entry.id)}
           item={item}
           location={location}
+          menuItems={menuItems}
           modifiedDate={data.dateFormatter.format(item.entry.updatedAt)}
-          onManage={data.onManage}
           onOpen={data.onOpen}
           onToggle={data.onToggle}
         />
       </View>
-      {!data.isEditing && item.libraryFile ? (
-        <Button
-          accessibilityLabel={data.getManageLabel(item.libraryFile.name)}
-          hitSlop={6}
-          icon={<EllipsisIcon />}
-          onPress={() => data.onManage(item.libraryFile!)}
-          size="sm"
-          testID={`file-library-manage-${item.libraryFile.id}`}
-          variant="ghost"
-        />
+      {menuItems.length > 0 && item.libraryFile ? (
+        <ActionMenu items={menuItems}>
+          <Button
+            accessibilityLabel={data.getManageLabel(item.libraryFile.name)}
+            hitSlop={6}
+            icon={<EllipsisIcon />}
+            size="sm"
+            testID={`file-library-manage-${item.libraryFile.id}`}
+            variant="ghost"
+          />
+        </ActionMenu>
       ) : null}
     </View>
   );

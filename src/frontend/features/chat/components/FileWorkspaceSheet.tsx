@@ -1,16 +1,9 @@
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleSlashIcon from '@cherrystudio/app-icons/icons/circle-slash';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import {
-  BottomSheet,
-  Button,
-  ContentState,
-  SearchField,
-  Section,
-  useToast,
-} from '@cherrystudio/ui/components';
+import { BottomSheet, Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useIsFocused } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -23,8 +16,6 @@ import {
   fileEntryPreviewKind,
   useOpenFileEntry,
 } from '@/frontend/components/FileEntryPreview';
-import { fileFolderAncestors } from '@/frontend/components/FileFolderBreadcrumbs';
-import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import { useAgentSessionStatus } from '@/frontend/hooks/agent';
 import {
   type FileWorkspaceAddress,
@@ -33,7 +24,11 @@ import {
 } from '@/frontend/hooks/file';
 import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
-type WorkspaceOption = { folder: FileFolder | null; path: string };
+/** One flattened line of the folder tree; expanded folders are followed by their contents. */
+type WorkspaceRow =
+  | { kind: 'none' }
+  | { kind: 'folder'; folder: FileFolder; depth: number }
+  | { kind: 'files'; folderId: string; depth: number; hasChildFolders: boolean };
 type WorkspaceListExtraData = {
   expandedIds: ReadonlySet<string>;
   isFocused: boolean;
@@ -43,6 +38,9 @@ type WorkspaceListExtraData = {
   onToggle: (id: string) => void;
 };
 const styles = StyleSheet.create({ list: { flex: 1 }, content: { paddingBottom: 24 } });
+// Each level starts where its parent's name starts: page edge, icon and gap.
+const ROW_EDGE = 20;
+const LEVEL_INDENT = 36;
 
 /** Directory selection, expansion and file preview have separate press targets. */
 export function FileWorkspaceSheet({
@@ -52,35 +50,37 @@ export function FileWorkspaceSheet({
   address: FileWorkspaceAddress;
   onClose: () => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const focused = useIsFocused();
   const workspace = useFileWorkspace(address);
   const selectWorkspace = workspace.select;
-  const { requestCreate, isCreating } = useCreateFileFolder(null);
-  const [search, setSearch] = useState('');
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const folders = workspace.availableFolders;
-  const locale = i18n.resolvedLanguage ?? i18n.language;
-  const noneLabel = t('workspace.none');
-  const noneDescription = t('workspace.noneDescription');
-  const rootLabel = t('library.title');
-  const options = useMemo(() => {
-    const byId = new Map(folders.map((folder) => [folder.id, folder]));
-    const needle = search.trim().toLocaleLowerCase(locale);
-    return [
-      { folder: null, path: noneDescription },
-      ...folders.map((folder) => ({
-        folder,
-        path: [
-          rootLabel,
-          ...fileFolderAncestors(folder.parentId, byId).map((parent) => parent.name),
-        ].join(' / '),
-      })),
-    ].filter(({ folder, path }) =>
-      `${folder?.name ?? noneLabel} ${path}`.toLocaleLowerCase(locale).includes(needle),
-    );
-  }, [folders, locale, noneDescription, noneLabel, rootLabel, search]);
+  const rows = useMemo(() => {
+    const childrenByParent = new Map<string | null, FileFolder[]>();
+    for (const folder of folders) {
+      const siblings = childrenByParent.get(folder.parentId) ?? [];
+      siblings.push(folder);
+      childrenByParent.set(folder.parentId, siblings);
+    }
+    const result: WorkspaceRow[] = [{ kind: 'none' }];
+    const visit = (parentId: string | null, depth: number) => {
+      for (const folder of childrenByParent.get(parentId) ?? []) {
+        result.push({ kind: 'folder', folder, depth });
+        if (!expandedIds.has(folder.id)) continue;
+        visit(folder.id, depth + 1);
+        result.push({
+          kind: 'files',
+          folderId: folder.id,
+          depth: depth + 1,
+          hasChildFolders: childrenByParent.has(folder.id),
+        });
+      }
+    };
+    visit(null, 0);
+    return result;
+  }, [expandedIds, folders]);
   const toggleFolder = useCallback((id: string) => {
     setExpandedIds((current) => {
       const next = new Set(current);
@@ -117,19 +117,6 @@ export function FileWorkspaceSheet({
 
   return (
     <BottomSheet
-      avoidKeyboard
-      closeAction={{ accessibilityLabel: t('common.cancel') }}
-      headerAction={
-        <Button
-          accessibilityLabel={t('library.folders.create')}
-          disabled={isCreating || workspace.isLoading || Boolean(workspace.error)}
-          icon={<PlusIcon />}
-          onPress={requestCreate}
-          size="sm"
-          testID="file-workspace-create"
-          variant="ghost"
-        />
-      }
       onClose={onClose}
       // Keep the list mounted under the existing file viewer. Controlled hiding
       // on route blur preserves expansion, loaded pages and the scroll position.
@@ -138,21 +125,10 @@ export function FileWorkspaceSheet({
       testID="file-workspace-sheet"
       title={t('workspace.title')}
     >
-      <View className="gap-2 px-5 pb-2">
-        <SearchField
-          accessibilityLabel={t('workspace.searchPlaceholder')}
-          clearAccessibilityLabel={t('common.clear')}
-          onChangeText={setSearch}
-          onClear={() => setSearch('')}
-          placeholder={t('workspace.searchPlaceholder')}
-          testID="file-workspace-search"
-          value={search}
-        />
-        {address.sessionId ? <WorkspaceTaskNotice sessionId={address.sessionId} /> : null}
-        {unavailable ? (
-          <Text className="text-sm text-warning">{t('workspace.unavailable')}</Text>
-        ) : null}
-      </View>
+      {address.sessionId ? <WorkspaceTaskNotice sessionId={address.sessionId} /> : null}
+      {unavailable ? (
+        <Text className="px-5 pb-2 text-sm text-warning">{t('workspace.unavailable')}</Text>
+      ) : null}
       {workspace.error ? (
         <ContentState.Error
           title={t('library.loadFailed')}
@@ -163,15 +139,16 @@ export function FileWorkspaceSheet({
       ) : (
         <LegendList
           contentContainerStyle={styles.content}
-          data={options}
-          estimatedItemSize={72}
+          data={rows}
+          estimatedItemSize={56}
           extraData={listExtraData}
-          keyExtractor={workspaceOptionKey}
+          getItemType={workspaceRowType}
+          keyExtractor={workspaceRowKey}
           ListEmptyComponent={<ContentState.Empty title={t('library.folders.noChildren')} />}
           maintainVisibleContentPosition={false}
           nestedScrollEnabled
           recycleItems
-          renderItem={renderWorkspaceOption}
+          renderItem={renderWorkspaceRow}
           style={styles.list}
           testID="file-workspace-options"
         />
@@ -180,55 +157,85 @@ export function FileWorkspaceSheet({
   );
 }
 
-function renderWorkspaceOption({ item, extraData }: LegendListRenderItemProps<WorkspaceOption>) {
+function renderWorkspaceRow({ item, extraData }: LegendListRenderItemProps<WorkspaceRow>) {
   const data = extraData as WorkspaceListExtraData;
+  if (item.kind === 'files') {
+    return (
+      <WorkspaceFolderFiles
+        key={item.folderId}
+        depth={item.depth}
+        enabled={data.isFocused}
+        folderId={item.folderId}
+        hasChildFolders={item.hasChildFolders}
+      />
+    );
+  }
+  const folder = item.kind === 'folder' ? item : undefined;
   return (
     <WorkspaceOptionRow
-      folder={item.folder}
-      path={item.path}
-      selectedId={data.selectedId}
-      isFocused={data.isFocused}
-      expanded={Boolean(item.folder && data.expandedIds.has(item.folder.id))}
+      folder={folder?.folder ?? null}
+      depth={folder?.depth ?? 0}
+      expanded={Boolean(folder && data.expandedIds.has(folder.folder.id))}
       isSaving={data.isSaving}
       onSelect={data.onSelect}
       onToggle={data.onToggle}
+      selectedId={data.selectedId}
     />
   );
 }
 
 const WorkspaceOptionRow = memo(function WorkspaceOptionRow({
   folder,
-  path,
-  selectedId,
-  isFocused,
+  depth,
   expanded,
   isSaving,
   onSelect,
   onToggle,
-}: WorkspaceOption & Omit<WorkspaceListExtraData, 'expandedIds'> & { expanded: boolean }) {
+  selectedId,
+}: {
+  folder: FileFolder | null;
+  depth: number;
+  expanded: boolean;
+  isSaving: boolean;
+  onSelect: (id: string | null) => Promise<void>;
+  onToggle: (id: string) => void;
+  selectedId: string | null;
+}) {
   const { t } = useTranslation();
   const id = folder?.id ?? null;
+  const name = folder?.name ?? t('workspace.none');
+  const selected = selectedId === id;
 
+  // The name selects the workspace; the chevron only reveals its contents.
   return (
     <View>
-      <View className="flex-row items-center">
-        <View className="min-w-0 flex-1">
-          <Section.RadioItem
-            description={path}
-            disabled={isSaving}
-            label={folder?.name ?? t('workspace.none')}
-            leading={
-              folder ? (
-                <FolderIcon className="size-6 text-muted-foreground" />
-              ) : (
-                <CircleSlashIcon className="size-6 text-muted-foreground" />
-              )
-            }
-            onPress={() => void onSelect(id)}
-            selected={selectedId === id}
-            testID={id ? `file-workspace-option-${id}` : 'file-workspace-unlink'}
-          />
-        </View>
+      <View
+        className="flex-row items-center pr-2"
+        style={{ paddingLeft: ROW_EDGE + depth * LEVEL_INDENT }}
+      >
+        <Pressable
+          accessibilityLabel={name}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: selected, disabled: isSaving }}
+          className="min-h-14 min-w-0 flex-1 flex-row items-center gap-3 py-2 active:opacity-60 disabled:opacity-40"
+          disabled={isSaving}
+          onPress={() => void onSelect(id)}
+          testID={id ? `file-workspace-option-${id}` : 'file-workspace-unlink'}
+        >
+          {folder ? (
+            <FolderIcon className="size-6 text-muted-foreground" />
+          ) : (
+            <CircleSlashIcon className="size-6 text-muted-foreground" />
+          )}
+          <Text
+            className="min-w-0 flex-1 text-base text-foreground"
+            ellipsizeMode="middle"
+            numberOfLines={1}
+          >
+            {name}
+          </Text>
+          {selected && folder ? <CheckIcon className="size-5 text-foreground" /> : null}
+        </Pressable>
         {folder ? (
           <Pressable
             accessibilityLabel={t(expanded ? 'workspace.collapse' : 'workspace.expand', {
@@ -237,10 +244,8 @@ const WorkspaceOptionRow = memo(function WorkspaceOptionRow({
             accessibilityRole="button"
             accessibilityState={{ expanded }}
             className="size-11 items-center justify-center rounded-lg active:bg-secondary"
-            onPress={() => {
-              if (id) onToggle(id);
-            }}
-            testID={`file-workspace-expand-${id}`}
+            onPress={() => onToggle(folder.id)}
+            testID={`file-workspace-expand-${folder.id}`}
           >
             {expanded ? (
               <ChevronDownIcon className="size-4 text-muted-foreground" />
@@ -249,37 +254,60 @@ const WorkspaceOptionRow = memo(function WorkspaceOptionRow({
             )}
           </Pressable>
         ) : (
-          <View className="w-11" />
+          // Without an expand control, the check takes that column to line up with the chevrons.
+          <View className="w-11 items-center">
+            {selected ? <CheckIcon className="size-5 text-foreground" /> : null}
+          </View>
         )}
       </View>
-      {expanded && id ? <WorkspaceFolderFiles key={id} folderId={id} enabled={isFocused} /> : null}
-      <View className="mx-5 h-px bg-border" />
     </View>
   );
 });
 
-function workspaceOptionKey({ folder }: WorkspaceOption) {
-  return folder?.id ?? 'none';
+function workspaceRowKey(row: WorkspaceRow) {
+  return row.kind === 'none'
+    ? 'none'
+    : row.kind === 'folder'
+      ? `folder:${row.folder.id}`
+      : `files:${row.folderId}`;
 }
 
-function WorkspaceFolderFiles({ folderId, enabled }: { folderId: string; enabled: boolean }) {
-  const { t, i18n } = useTranslation();
+function workspaceRowType(row: WorkspaceRow) {
+  return row.kind;
+}
+
+function WorkspaceFolderFiles({
+  depth,
+  enabled,
+  folderId,
+  hasChildFolders,
+}: {
+  depth: number;
+  enabled: boolean;
+  folderId: string;
+  hasChildFolders: boolean;
+}) {
+  const { t } = useTranslation();
   const { openFileEntry } = useOpenFileEntry();
   const query = useFileEntryPages({ folderId, enabled });
-  const dateFormatter = useMemo(
-    () => new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { dateStyle: 'medium' }),
-    [i18n.resolvedLanguage, i18n.language],
-  );
 
   return (
-    <View className="pl-12 pr-5 pb-3" testID={`file-workspace-files-${folderId}`}>
+    <View
+      className="pr-5"
+      style={{ paddingLeft: ROW_EDGE + depth * LEVEL_INDENT }}
+      testID={`file-workspace-files-${folderId}`}
+    >
       {query.entries.map((item) => {
         const name = item.libraryFile?.name ?? item.entry.filename;
         return (
           <Pressable
-            accessibilityLabel={t('workspace.preview', { name })}
+            accessibilityLabel={
+              item.uri
+                ? t('workspace.preview', { name })
+                : `${name}, ${t('filePreview.unavailable')}`
+            }
             accessibilityRole="button"
-            className="min-h-16 flex-row items-center gap-3 py-2 active:opacity-60 disabled:opacity-40"
+            className="min-h-14 flex-row items-center gap-3 py-2 active:opacity-60 disabled:opacity-40"
             disabled={!item.uri}
             key={item.entry.id}
             onPress={() => {
@@ -293,29 +321,24 @@ function WorkspaceFolderFiles({ folderId, enabled }: { folderId: string; enabled
               pointerEvents="none"
             >
               {fileEntryPreviewKind(item.entry) === 'image' && item.uri && !item.previewUri ? (
-                <FileEntrySkeleton size={28} variant="icon" />
+                <FileEntrySkeleton size={24} variant="icon" />
               ) : (
                 <LoadedFileEntryPreview
                   entry={item.entry}
                   previewUri={item.previewUri}
-                  size={28}
+                  size={24}
                   uri={item.uri}
                   variant="icon"
                 />
               )}
             </View>
-            <View className="min-w-0 flex-1 gap-1">
-              <Text className="text-sm text-foreground" numberOfLines={2}>
-                {name}
-              </Text>
-              <Text className="text-xs text-muted-foreground">
-                {item.uri
-                  ? t('chat.filePicker.modifiedAt', {
-                      date: dateFormatter.format(item.entry.updatedAt),
-                    })
-                  : t('filePreview.unavailable')}
-              </Text>
-            </View>
+            <Text
+              className="min-w-0 flex-1 text-base text-foreground"
+              ellipsizeMode="middle"
+              numberOfLines={1}
+            >
+              {name}
+            </Text>
           </Pressable>
         );
       })}
@@ -325,9 +348,11 @@ function WorkspaceFolderFiles({ folderId, enabled }: { folderId: string; enabled
           primaryAction={{ children: t('common.retry'), onPress: () => void query.refresh() }}
         />
       ) : query.isLoading || query.isLoadingMore ? (
-        <ContentState.Loading title={t('library.loading')} />
-      ) : query.entries.length === 0 ? (
-        <Text className="py-4 text-sm text-muted-foreground">{t('library.empty')}</Text>
+        <View className="py-2">
+          <ContentState.Loading layout="row" title={t('library.loading')} />
+        </View>
+      ) : query.entries.length === 0 && !hasChildFolders ? (
+        <Text className="py-3 text-sm text-muted-foreground">{t('library.empty')}</Text>
       ) : query.hasNext ? (
         <Button onPress={() => void query.loadNext()} size="sm" variant="ghost">
           {t('workspace.loadMore')}
@@ -342,6 +367,6 @@ function WorkspaceTaskNotice({ sessionId }: { sessionId: string }) {
   const { status } = useAgentSessionStatus(sessionId);
   return status &&
     ['running', 'awaiting-approval', 'awaiting-input', 'cancelling'].includes(status) ? (
-    <Text className="text-sm text-muted-foreground">{t('workspace.runningHint')}</Text>
+    <Text className="px-5 pb-2 text-sm text-muted-foreground">{t('workspace.runningHint')}</Text>
   ) : null;
 }

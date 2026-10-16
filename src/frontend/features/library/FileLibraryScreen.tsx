@@ -13,7 +13,7 @@ import {
   FileFolderBreadcrumbs,
   fileFolderAncestors,
 } from '@/frontend/components/FileFolderBreadcrumbs';
-import { useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
+import { FileFolderPicker, useCreateFileFolder } from '@/frontend/components/FileFolderPicker';
 import {
   SelectionControls,
   SelectionProvider,
@@ -21,11 +21,11 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useQuery } from '@/frontend/data/hooks';
-import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
-import { FileLibraryItemSheet, type LibrarySelection } from './components/FileLibraryItemSheet';
 import { FileLibraryList } from './components/FileLibraryList';
+import { FileVersionHistorySheet } from './components/FileVersionHistorySheet';
 import type { FileLibraryFilter } from './hooks/useFileEntries';
+import { useFileLibraryItemActions } from './hooks/useFileLibraryItemActions';
 import { fileLibrarySelectionScope, type FileLibraryBrowseMode } from './utils/constants';
 
 const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document', 'sharing'];
@@ -44,7 +44,8 @@ function FileLibraryScreenBody() {
   const [browseMode, setBrowseMode] = useState<FileLibraryBrowseMode>('recent');
   const isBrowsingFolders = browseMode === 'folders';
   const [folderId, setFolderId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<LibrarySelection | null>(null);
+  const itemActions = useFileLibraryItemActions();
+  const { surface } = itemActions;
   const folders = useQuery('/files/folders');
   const { requestCreate, isCreating } = useCreateFileFolder(isBrowsingFolders ? folderId : null);
   const currentFolder = folders.data?.find((folder) => folder.id === folderId);
@@ -75,16 +76,9 @@ function FileLibraryScreenBody() {
     },
     [exitEditing],
   );
-  const manageFolder = useCallback(
-    (folder: FileFolder) => setSelection({ kind: 'folder', folder }),
-    [],
-  );
   const directory = useMemo(
-    () =>
-      isBrowsingFolders
-        ? { folders: childFolders, onOpen: openFolder, onManage: manageFolder }
-        : undefined,
-    [childFolders, isBrowsingFolders, manageFolder, openFolder],
+    () => (isBrowsingFolders ? { folders: childFolders, onOpen: openFolder } : undefined),
+    [childFolders, isBrowsingFolders, openFolder],
   );
 
   const rightActions = useMemo<HeaderToolbarAction[]>(
@@ -210,13 +204,27 @@ function FileLibraryScreenBody() {
           directory={directory}
           folderId={isBrowsingFolders ? folderId : undefined}
           folderPaths={isBrowsingFolders ? undefined : folderPaths}
-          onManage={(file) => setSelection({ kind: 'file', file })}
+          getMenuItems={itemActions.getMenuItems}
           filter={filter}
         />
         <SelectionControls scope={fileLibrarySelectionScope} />
       </View>
-      {selection ? (
-        <FileLibraryItemSheet selection={selection} onClose={() => setSelection(null)} />
+      {surface?.page === 'move' ? (
+        <FileFolderPicker
+          excludedFolderId={
+            surface.selection.kind === 'folder' ? surface.selection.folder.id : undefined
+          }
+          isSaving={itemActions.isPending}
+          onClose={itemActions.closeSurface}
+          onSelect={(destination) => void itemActions.move(surface.selection, destination)}
+          selectedFolderId={
+            surface.selection.kind === 'folder'
+              ? surface.selection.folder.parentId
+              : surface.selection.file.folderId
+          }
+        />
+      ) : surface?.page === 'history' ? (
+        <FileVersionHistorySheet file={surface.file} onClose={itemActions.closeSurface} />
       ) : null}
     </>
   );

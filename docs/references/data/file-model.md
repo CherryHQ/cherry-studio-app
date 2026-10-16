@@ -96,8 +96,9 @@ No Session creates or owns a folder automatically. New attachments are imported 
 workspace; choosing an existing outside library version copies it there and preserves the source.
 Without a workspace, outputs and new imports land in the library root.
 
-The conversation header's folder action opens a workspace sheet. Folder names select the workspace;
-separate arrows expand each folder's files. File rows open the shared file viewer without attaching
+The conversation header's folder action opens a workspace sheet showing the folder tree. Folder names
+select the workspace; separate arrows expand a folder in place to show its subfolders, then its files.
+File rows open the shared file viewer without attaching
 files or changing the workspace. The sheet stays mounted while the viewer is open, preserving its
 expansion and scroll state on return. The no-workspace option is a peer row. Association is optional and
 can be changed or removed at any time; it never moves existing files. An unsent draft holds its

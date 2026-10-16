@@ -1,31 +1,27 @@
-import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { BottomSheet, Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { LegendList } from '@legendapp/list/react-native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { FileFolderBreadcrumbs } from '@/frontend/components/FileFolderBreadcrumbs';
 import { useQuery } from '@/frontend/data/hooks';
 
 import { useCreateFileFolder } from './useCreateFileFolder';
 
-/** Browse a destination before confirming it; opening a folder never changes the binding. */
+/**
+ * Browse to a destination, then confirm the level being shown. The first level
+ * is the library itself, so it needs no separate option.
+ */
 export function FileFolderPicker({
-  title,
   excludedFolderId,
   selectedFolderId,
-  rootOption,
   isSaving = false,
   onClose,
   onSelect,
 }: {
-  title: string;
   excludedFolderId?: string;
   selectedFolderId?: string | null;
-  rootOption?: string;
   isSaving?: boolean;
   onClose: () => void;
   onSelect: (folderId: string | null) => void;
@@ -39,6 +35,8 @@ export function FileFolderPicker({
   const children = folders.filter(
     (folder) => folder.parentId === folderId && folder.id !== excludedFolderId,
   );
+  const isUnavailable = query.isLoading || Boolean(query.error);
+  const isCurrentLocation = folderId === (selectedFolderId ?? null);
 
   return (
     <BottomSheet
@@ -50,40 +48,36 @@ export function FileFolderPicker({
             }
           : undefined
       }
-      closeAction={{ accessibilityLabel: t('common.close') }}
       footer={
-        currentFolder ? (
-          <Button
-            disabled={isCreating}
-            icon={<CheckIcon />}
-            loading={isSaving}
-            onPress={() => onSelect(currentFolder.id)}
-            testID="file-folder-picker-confirm"
-          >
-            {t('library.folders.select')}
-          </Button>
-        ) : undefined
-      }
-      headerAction={
-        <Button
-          accessibilityLabel={t('library.folders.create')}
-          disabled={isSaving || isCreating || query.isLoading || Boolean(query.error)}
-          icon={<PlusIcon />}
-          onPress={requestCreate}
-          size="sm"
-          testID="file-folder-picker-create"
-          variant="ghost"
-        />
+        <View className="flex-row gap-3">
+          <View className="flex-1">
+            <Button
+              disabled={isSaving || isCreating || isUnavailable}
+              onPress={requestCreate}
+              testID="file-folder-picker-create"
+              variant="secondary"
+            >
+              {t('library.folders.create')}
+            </Button>
+          </View>
+          <View className="flex-1">
+            <Button
+              disabled={isCreating || isUnavailable || isCurrentLocation}
+              loading={isSaving}
+              onPress={() => onSelect(folderId)}
+              testID="file-folder-picker-confirm"
+            >
+              {t(isCurrentLocation ? 'library.alreadyHere' : 'library.moveHere')}
+            </Button>
+          </View>
+        </View>
       }
       onClose={onClose}
       open
       size="large"
       testID="file-folder-picker"
-      title={title}
+      title={currentFolder?.name ?? t('library.root')}
     >
-      <View className="px-4 pb-2">
-        <FileFolderBreadcrumbs folderId={folderId} folders={folders} onNavigate={setFolderId} />
-      </View>
       <LegendList
         key={folderId ?? 'root'}
         contentContainerStyle={{ paddingBottom: 24 }}
@@ -105,20 +99,6 @@ export function FileFolderPicker({
             )}
           </View>
         }
-        ListHeaderComponent={
-          folderId === null && rootOption ? (
-            <View className="pb-3">
-              <Section variant="plain">
-                <Section.RadioItem
-                  disabled={isSaving}
-                  label={rootOption}
-                  onPress={() => onSelect(null)}
-                  selected={selectedFolderId === null}
-                />
-              </Section>
-            </View>
-          ) : null
-        }
         recycleItems
         renderItem={({ item }) => (
           <Section.Item
@@ -132,7 +112,9 @@ export function FileFolderPicker({
             testID={`file-folder-picker-${item.id}`}
             trailing={
               selectedFolderId === item.id ? (
-                <CheckIcon className="size-4 text-foreground" />
+                <Text className="text-sm text-muted-foreground" numberOfLines={1}>
+                  {t('library.currentLocation')}
+                </Text>
               ) : undefined
             }
           />
