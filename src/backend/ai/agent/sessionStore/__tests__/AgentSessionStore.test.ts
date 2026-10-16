@@ -428,26 +428,39 @@ describe.each([
     },
   );
 
-  test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
-    const ids = { sessionId: uuidv7(), ...messageIds() };
-    const reserved = await store.reserveInitialSubmission({
-      ...ids,
-      ...RESERVATION_FACTS,
-      agentId,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
-    });
+  test.each([false, true])(
+    'reserveInitialSubmission atomically creates the Session and first message pair (workspace: %s)',
+    async (withWorkspace) => {
+      const folderId = uuidv7();
+      if (withWorkspace) {
+        harness.raw
+          ?.prepare(
+            'INSERT INTO file_folder (id, name, name_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(folderId, 'Workspace', 'workspace', 1, 1);
+      }
+      const ids = { sessionId: uuidv7(), ...messageIds() };
+      const reserved = await store.reserveInitialSubmission({
+        ...ids,
+        ...RESERVATION_FACTS,
+        agentId,
+        ...(withWorkspace ? { workspaceFolderId: folderId } : {}),
+        userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+      });
 
-    expect(reserved.session.id).toBe(ids.sessionId);
-    expect(reserved.userMessage.id).toBe(ids.userMessageId);
-    expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
-    expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
-    expect(await store.listMessages(reserved.session.id)).toEqual([
-      reserved.userMessage,
-      reserved.assistantMessage,
-    ]);
-    expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
-    expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
-  });
+      expect(reserved.session.id).toBe(ids.sessionId);
+      expect(reserved.session.workspaceFolderId ?? null).toBe(withWorkspace ? folderId : null);
+      expect(reserved.userMessage.id).toBe(ids.userMessageId);
+      expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
+      expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
+      expect(await store.listMessages(reserved.session.id)).toEqual([
+        reserved.userMessage,
+        reserved.assistantMessage,
+      ]);
+      expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
+      expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
+    },
+  );
 
   test('conversation activity advances the Session row timestamp', async () => {
     const reservationTime = 2_000_000_001_000;

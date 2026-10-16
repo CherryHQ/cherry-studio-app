@@ -96,6 +96,17 @@ No Session creates or owns a folder automatically. New attachments are imported 
 workspace; choosing an existing outside library version copies it there and preserves the source.
 Without a workspace, outputs and new imports land in the library root.
 
+The conversation header's folder action opens a workspace sheet. Folder names select the workspace;
+separate arrows expand each folder's files. File rows open the shared file viewer without attaching
+files or changing the workspace. The sheet stays mounted while the viewer is open, preserving its
+expansion and scroll state on return. The no-workspace option is a peer row. Association is optional and
+can be changed or removed at any time; it never moves existing files. An unsent draft holds its
+selection in memory under an opaque route token, without creating a Session. Its first submission
+validates and persists that folder with the Session and first message pair in one transaction.
+Each turn captures its workspace before execution, so switching during a running turn affects
+subsequent turns. Association belongs to the conversation, and does not change other conversations
+or the Agent's defaults.
+
 Folder deletion marks its active subtree and all versions of those files with one `trashedWith`
 root. Restore and purge operate on that group. Separately trashed subtrees stay independent; when
 their old parent is unavailable, restoration falls back to the library root and resolves name

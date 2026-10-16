@@ -121,6 +121,8 @@ export type TurnPreparationDependencies = {
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
 export type TurnPlan = {
   agent: AgentDefinition;
+  /** Captured before tools resolve; subsequent Session switches do not alter this turn. */
+  workspaceFolderId?: string;
   documentParserMode: DocumentParserMode;
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
@@ -293,6 +295,7 @@ export async function prepareInitialTurn(
   const session = {
     agentId: parsed.agentId,
     name: '',
+    workspaceFolderId: parsed.workspaceFolderId ?? null,
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
@@ -423,6 +426,7 @@ export async function prepareResolvedTurn(
       fail('CAPABILITY_UNSUPPORTED', 'Skills cannot be used with image generation.');
     return {
       agent,
+      ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
       documentParserMode,
       hasMessages: storedTurnContext.hasMessages,
       history: storedTurnContext.history,
@@ -684,6 +688,7 @@ export async function prepareResolvedTurn(
 
   return {
     agent,
+    ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
     documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,

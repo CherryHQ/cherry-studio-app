@@ -29,6 +29,7 @@ type ImportResult = 'failed' | 'ignored' | 'ready';
 export function useManagedComposerAttachments(
   initialAttachments: readonly ComposerInitialAttachment[] = emptyInitialAttachments,
   workspaceSessionId?: string,
+  workspaceFolderId?: string | null,
 ): ComposerAttachmentStore {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -72,13 +73,18 @@ export function useManagedComposerAttachments(
     ): Promise<ImportResult> => {
       try {
         const resolved =
-          isComposerAttachmentReady(source) && workspaceSessionId
+          isComposerAttachmentReady(source) && (workspaceSessionId || workspaceFolderId)
             ? await file.prepareWorkspaceAttachment({
                 fileEntryId: source.fileEntryId,
-                sessionId: workspaceSessionId,
+                ...(workspaceSessionId
+                  ? { sessionId: workspaceSessionId }
+                  : { folderId: workspaceFolderId! }),
               })
             : await file.createInternalEntry({
                 ...(workspaceSessionId ? { workspaceSessionId } : {}),
+                ...(!workspaceSessionId && workspaceFolderId
+                  ? { folderId: workspaceFolderId }
+                  : {}),
                 mediaType: source.mediaType,
                 name: source.name,
                 uri: source.uri,
@@ -114,7 +120,7 @@ export function useManagedComposerAttachments(
         return 'failed';
       }
     },
-    [commitAttachments, file, workspaceSessionId],
+    [commitAttachments, file, workspaceSessionId, workspaceFolderId],
   );
 
   const importAttachments = useCallback(
@@ -153,19 +159,21 @@ export function useManagedComposerAttachments(
       const sources = accepted.filter(
         (attachment): attachment is ComposerAttachmentSource | ComposerAttachmentReady =>
           attachment.status === undefined ||
-          (Boolean(workspaceSessionId) && isComposerAttachmentReady(attachment)),
+          (Boolean(workspaceSessionId || workspaceFolderId) &&
+            isComposerAttachmentReady(attachment)),
       );
       commitAttachments([
         ...current,
         ...accepted.map((attachment) => {
-          if (isComposerAttachmentReady(attachment) && !workspaceSessionId) return attachment;
+          if (isComposerAttachmentReady(attachment) && !workspaceSessionId && !workspaceFolderId)
+            return attachment;
           const { fileEntryId: _fileEntryId, status: _status, ...source } = attachment;
           return { ...source, status: 'importing' as const };
         }),
       ]);
       if (sources.length > 0) void importAttachments(sources);
     },
-    [commitAttachments, importAttachments, workspaceSessionId],
+    [commitAttachments, importAttachments, workspaceSessionId, workspaceFolderId],
   );
 
   const removeAttachment = useCallback(

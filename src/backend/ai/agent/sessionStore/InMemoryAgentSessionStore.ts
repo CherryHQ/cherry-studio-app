@@ -47,6 +47,7 @@ type StoredMessage = {
 function createSessionView(input: {
   id?: string;
   agentId: string;
+  workspaceFolderId?: string | null;
   forkedFromSessionId?: string;
   name?: string;
   isNameManuallyEdited?: boolean;
@@ -55,6 +56,9 @@ function createSessionView(input: {
   return {
     id: input.id ?? uuidv7(),
     agentId: input.agentId,
+    ...(input.workspaceFolderId !== undefined
+      ? { workspaceFolderId: input.workspaceFolderId }
+      : {}),
     name: input.name ?? '',
     isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
@@ -263,6 +267,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       forkedFromSessionId: source.id,
       name: input.name ?? source.name,
       isNameManuallyEdited: source.isNameManuallyEdited,
+      workspaceFolderId: source.workspaceFolderId,
     });
     const reissuedTurnIds = new Map<string, string>();
     const copied = transcript
@@ -368,6 +373,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const session = createSessionView({
       id: input.sessionId,
       agentId: input.agentId,
+      ...(input.workspaceFolderId ? { workspaceFolderId: input.workspaceFolderId } : {}),
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {

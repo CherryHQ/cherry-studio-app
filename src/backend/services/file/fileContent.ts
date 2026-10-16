@@ -75,14 +75,18 @@ const createTextEntryInputSchema = z.strictObject({
 export const fileContent = {
   subscribeChanges: subscribeFileChanges,
   editImage: editFileImage,
-  async prepareWorkspaceAttachment(input: {
-    fileEntryId: FileEntryId;
-    sessionId: string;
-  }): Promise<ResolvedFile> {
+  async prepareWorkspaceAttachment(
+    input: {
+      fileEntryId: FileEntryId;
+    } & ({ sessionId: string; folderId?: never } | { folderId: string; sessionId?: never }),
+  ): Promise<ResolvedFile> {
     const id = FileEntryIdSchema.parse(input.fileEntryId);
     const source = await resolveFileEntry(fileEntryService, id);
     if (!source) throw new Error('The attached file is unavailable.');
-    const folder = await fileLibraryService.workspace(input.sessionId);
+    const folder =
+      input.sessionId !== undefined
+        ? await fileLibraryService.workspace(input.sessionId)
+        : await fileLibraryService.resolveDirectory(z.uuid().parse(input.folderId), '.');
     if (!folder || (await fileLibraryService.contains(folder.id, id))) return source;
     const logical = await fileLibraryService.fileForEntry(id);
     return fileContent.createInternalEntry({

@@ -7,6 +7,7 @@ import type { ComposerInitialAttachment } from '../utils/composerAttachments';
 
 type ComposerSessionProviderProps = PropsWithChildren<{
   workspaceSessionId?: string;
+  workspaceFolderId?: string | null;
   initialAttachments?: readonly ComposerInitialAttachment[];
   /** Read once when the session mounts; pass a function to defer reading a stored draft. */
   initialDraft?: string | (() => string);
@@ -18,8 +19,13 @@ export function ComposerSessionProvider({
   initialAttachments,
   initialDraft,
   workspaceSessionId,
+  workspaceFolderId,
 }: ComposerSessionProviderProps) {
-  const attachmentStore = useManagedComposerAttachments(initialAttachments, workspaceSessionId);
+  const attachmentStore = useManagedComposerAttachments(
+    initialAttachments,
+    workspaceSessionId,
+    workspaceFolderId,
+  );
   const collapseEditor = useComposerExpansion()?.actions.collapse;
 
   useEffect(() => collapseEditor?.(), [collapseEditor]);

@@ -74,27 +74,34 @@ describe('fileContent attachment boundary', () => {
     jest.restoreAllMocks();
   });
 
-  test('copies an outside attachment into the workspace and reuses existing workspace entries', async () => {
-    const folderId = '00000000-0000-7000-8000-000000000009';
-    jest.spyOn(fileLibraryService, 'workspace').mockResolvedValue({ id: folderId } as never);
-    const contains = jest.spyOn(fileLibraryService, 'contains').mockResolvedValue(false);
-    jest
-      .spyOn(fileLibraryService, 'fileForEntry')
-      .mockResolvedValue({ name: 'Renamed.txt' } as never);
-    jest.mocked(createInternalEntryWithPreview).mockResolvedValue(resolvedFile().entry);
-    await fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, sessionId: 'session' });
-    expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
-      {},
-      expect.objectContaining({ folderId, name: 'Renamed.txt', uri: resolvedFile().uri }),
-    );
-    jest.mocked(createInternalEntryWithPreview).mockClear();
-    contains.mockResolvedValue(true);
-    await expect(
-      fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, sessionId: 'session' }),
-    ).resolves.toEqual(resolvedFile());
-    expect(createInternalEntryWithPreview).not.toHaveBeenCalled();
-    jest.restoreAllMocks();
-  });
+  test.each(['session', 'draft'] as const)(
+    'copies outside attachments and reuses workspace entries for a %s',
+    async (target) => {
+      const folderId = '00000000-0000-7000-8000-000000000009';
+      jest.spyOn(fileLibraryService, 'workspace').mockResolvedValue({ id: folderId } as never);
+      jest
+        .spyOn(fileLibraryService, 'resolveDirectory')
+        .mockResolvedValue({ id: folderId } as never);
+      const address = target === 'session' ? { sessionId: 'session' } : { folderId };
+      const contains = jest.spyOn(fileLibraryService, 'contains').mockResolvedValue(false);
+      jest
+        .spyOn(fileLibraryService, 'fileForEntry')
+        .mockResolvedValue({ name: 'Renamed.txt' } as never);
+      jest.mocked(createInternalEntryWithPreview).mockResolvedValue(resolvedFile().entry);
+      await fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address });
+      expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ folderId, name: 'Renamed.txt', uri: resolvedFile().uri }),
+      );
+      jest.mocked(createInternalEntryWithPreview).mockClear();
+      contains.mockResolvedValue(true);
+      await expect(
+        fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address }),
+      ).resolves.toEqual(resolvedFile());
+      expect(createInternalEntryWithPreview).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    },
+  );
 
   test('stores the normalized image instead of the picked original, then discards it', async () => {
     const normalized = {

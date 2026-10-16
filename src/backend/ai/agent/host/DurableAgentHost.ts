@@ -513,6 +513,7 @@ export class DurableAgentHost implements AgentProtocol {
         : await this.store.reserveInitialSubmission({
             ...reservation,
             agentId: plan.agent.id,
+            ...(plan.workspaceFolderId ? { workspaceFolderId: plan.workspaceFolderId } : {}),
           }));
     const { turnId } = reserved;
     const requestId = turnId;

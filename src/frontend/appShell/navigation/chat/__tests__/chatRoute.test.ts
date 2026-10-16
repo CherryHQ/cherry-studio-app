@@ -46,6 +46,20 @@ describe('shared chat route contract', () => {
     expect(chatReturnToHref({ agentId: 'agent-1', kind: 'draft' })).toBe('/?agentId=agent-1');
   });
 
+  test('carries an unsent workspace selection only with its draft', () => {
+    const workspaceDraftId = '00000000-0000-7000-8000-000000000001';
+    const target = { kind: 'draft' as const, agentId: 'agent-1', workspaceDraftId };
+    expect(parseChatRoute(chatRouteParams(target))).toEqual({ status: 'ready', target });
+    expect(chatRouteParams({ kind: 'draft', agentId: 'agent-1' }).workspaceDraftId).toBeUndefined();
+    expect(
+      chatRouteParams({ kind: 'session', sessionId: 'session-1' }).workspaceDraftId,
+    ).toBeUndefined();
+    expect(parseChatRoute({ sessionId: 'session-1', workspaceDraftId })).toEqual({
+      status: 'ready',
+      target: { kind: 'session', sessionId: 'session-1' },
+    });
+  });
+
   test('preserves a message destination and repeated-navigation identity', () => {
     const target = {
       kind: 'session' as const,
