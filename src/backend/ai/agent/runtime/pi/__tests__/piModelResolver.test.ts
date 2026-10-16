@@ -116,6 +116,7 @@ describe('Pi model resolver', () => {
 
   test('translates with the OpenAI OAuth account and Codex transport when no API key exists', async () => {
     const oauthModel = Object.values(OPENAI_CODEX_MODELS)[0];
+    jest.spyOn(piOAuthModels, 'resolveOAuthPiModel').mockResolvedValueOnce(oauthModel);
     const provider = makeProvider(
       ENDPOINT_TYPE.OPENAI_RESPONSES,
       'https://chatgpt.com/backend-api',

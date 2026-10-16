@@ -1,3 +1,5 @@
+import { zstdDecompressSync } from 'node:zlib';
+
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Api, AssistantMessage, Model } from '@earendil-works/pi-ai';
 import { streamSimple as streamSimpleCodex } from '@earendil-works/pi-ai/api/openai-codex-responses';
@@ -111,7 +113,12 @@ test('sends a text-only translation through the installed Codex adapter with OAu
   const headers = new Headers(init?.headers);
   expect(headers.get('authorization')).toBe(`Bearer ${token}`);
   expect(headers.get('chatgpt-account-id')).toBe('test-account');
-  const sent = JSON.parse(String(init?.body));
+  const sentBody = new Response(init?.body);
+  const sent = JSON.parse(
+    headers.get('content-encoding') === 'zstd'
+      ? zstdDecompressSync(new Uint8Array(await sentBody.arrayBuffer())).toString()
+      : await sentBody.text(),
+  );
   expect(sent).toMatchObject({
     instructions: request.instructions,
     stream: true,
