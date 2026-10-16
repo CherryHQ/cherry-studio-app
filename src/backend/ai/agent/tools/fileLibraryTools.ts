@@ -5,7 +5,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { workspacePathSegments } from '@/shared/data/types/fileLibrary';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeTool } from '../runtime';
+import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { createReadFileTool, readFileInputSchema } from './readFileTool';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -160,7 +160,7 @@ export function createFileLibraryTools(
       description:
         'Create one folder at a relative workspace path. Its parent must exist. The Agent cannot move, delete, restore or purge library items.',
       inputSchema: toRuntimeInputSchema(createFolderSchema),
-      async execute({ input }) {
+      async execute({ input }): Promise<RuntimeToolResult> {
         const parsed = createFolderSchema.parse(input);
         const segments = workspacePathSegments(parsed.path);
         const name = segments.pop();

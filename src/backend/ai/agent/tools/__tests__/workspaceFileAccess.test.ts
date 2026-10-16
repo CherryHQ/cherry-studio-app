@@ -9,9 +9,10 @@ const folderId = id(9);
 const sourceId = id(1);
 const signal = new AbortController().signal;
 function setup(workspace: string | null = folderId) {
+  const fileEntryIds = new Set<string>();
   const resources: TurnToolResources = {
     availableFiles: new Map(),
-    fileEntryIds: new Set(),
+    fileEntryIds,
     draftFileEntryIds: new Set(),
     grantFile: jest.fn(),
   };
@@ -48,17 +49,17 @@ function setup(workspace: string | null = folderId) {
     library as unknown as FileLibraryService,
     content,
   );
-  return { access, resources, library, content };
+  return { access, resources, fileEntryIds, library, content };
 }
 
 describe('turn workspace file access', () => {
   it('permits conversation references and workspace members, but rejects arbitrary ids', async () => {
-    const { access, resources, library } = setup();
+    const { access, fileEntryIds, library } = setup();
     await expect(access.resolveRead({ file_entry_id: sourceId })).rejects.toThrow();
     await expect(access.resolveEdit({ file_entry_id: sourceId })).rejects.toThrow();
-    resources.fileEntryIds.add(sourceId);
+    fileEntryIds.add(sourceId);
     await expect(access.resolveRead({ file_entry_id: sourceId })).resolves.toBe(sourceId);
-    resources.fileEntryIds.clear();
+    fileEntryIds.clear();
     library.contains.mockResolvedValue(true);
     await expect(access.resolveRead({ path: 'Notes.md' })).resolves.toBe(sourceId);
   });

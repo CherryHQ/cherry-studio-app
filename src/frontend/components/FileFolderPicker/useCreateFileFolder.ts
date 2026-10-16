@@ -14,7 +14,12 @@ export function useCreateFileFolder(parentId: string | null) {
     alert.prompt({
       title: t('library.folders.create'),
       confirmLabel: t('common.save'),
-      input: { accessibilityLabel: t('library.folders.name'), maxLength: 255, autoFocus: true },
+      input: {
+        accessibilityLabel: t('library.folders.name'),
+        initialValue: '',
+        maxLength: 255,
+        autoFocus: true,
+      },
       onConfirm: (name) => {
         if (!name.trim()) return;
         void create.trigger({ body: { parentId, name } }).catch((error: unknown) => {

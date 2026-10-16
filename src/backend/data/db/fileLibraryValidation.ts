@@ -54,9 +54,9 @@ export function validateFileLibraryReferences({
   const byFolder = new Map(folders.map((folder) => [folder.id, folder]));
   const byFile = new Map(files.map((file) => [file.id, file]));
   const byVersion = new Map(versions.map((entry) => [entry.id, entry]));
-  const fail = (): never => {
+  function fail(): never {
     throw new BackupError('invalid', 'Invalid file-library references.');
-  };
+  }
   const names = new Set<string>();
   function checkName(
     parentId: string | null,
