@@ -42,7 +42,9 @@ export function assertBackupPath(path: string): void {
     /^skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/[0-9a-f]{64}\/(?:[^/\\\x00-\x1f]+\/)*[^/\\\x00-\x1f]+$/.test(
       path,
     ) ||
-    /^(?:files|avatars\/(?:user|agents|providers))\/[^/\\\x00-\x1f]+$/.test(path);
+    /^(?:files|avatars\/(?:user|agents|providers|resources|characters))\/[^/\\\x00-\x1f]+$/.test(
+      path,
+    );
   if (
     !allowed ||
     path.split('/').some((part) => part === '.') ||

@@ -22,7 +22,7 @@ export const CHERRY_AGENT_AVATAR = '🍒';
 export const AgentIdSchema = z.uuidv4();
 
 export const AgentSchema = z.strictObject({
-  /** Built-in Cherry emoji or a managed avatar file reference; null uses the name fallback. */
+  /** Built-in Cherry emoji, managed image, or dynamic avatar resource reference; null uses the name fallback. */
   avatar: z.string().nullable(),
   /**
    * Read-time projection of `avatar` into a device-local image URI; null when

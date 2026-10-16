@@ -12,6 +12,7 @@ type AvatarImagePickerProps = {
   onBeforeOpen?: () => void;
   onError: (error: unknown) => void;
   onSelect: (sourceUri: string) => Promise<void> | void;
+  onCreate?: () => void;
   /**
    * Pins the trigger to a square of this size, so an avatar that has not
    * loaded yet still presents a full-size tap target. Omit it when the trigger
@@ -33,6 +34,7 @@ export function AvatarImagePicker({
   onBeforeOpen,
   onError,
   onSelect,
+  onCreate,
   size,
 }: AvatarImagePickerProps) {
   const { t } = useTranslation();
@@ -77,6 +79,9 @@ export function AvatarImagePicker({
   );
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
+      ...(onCreate
+        ? [{ id: 'studio', label: t('agent.avatarStudio.create'), onPress: onCreate }]
+        : []),
       {
         id: 'camera',
         label: t('chat.media.camera'),
@@ -88,7 +93,7 @@ export function AvatarImagePicker({
         onPress: () => void selectImage('photos'),
       },
     ],
-    [selectImage, t],
+    [onCreate, selectImage, t],
   );
 
   return (

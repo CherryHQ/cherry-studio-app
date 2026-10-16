@@ -21,6 +21,10 @@ import { Platform } from 'react-native';
 import type { AiUsageAttributionResolver } from '@/backend/ai/AiService';
 import { agentService } from '@/backend/data/services/AgentService';
 import type { ModelService } from '@/backend/data/services/ModelService';
+import { agentAvatarImages } from '@/backend/services/agents/agentAvatarStorage';
+import { createAgentAvatars } from '@/backend/services/agents/createAgentAvatars';
+import { createAvatarCharacters } from '@/backend/services/avatars/avatarCharacters';
+import { createAvatarResources } from '@/backend/services/avatars/avatarResources';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { createJsSandbox, type JsSandbox } from '@/backend/services/jsSandbox';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -47,6 +51,10 @@ import type { RuntimeModel, RuntimeTool } from '../runtime';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
 import { type AskUserQuestion, createAskUserQuestionTool } from './askUserQuestionTool';
 import {
+  type AvatarCharacterToolDependencies,
+  createAvatarCharacterTools,
+} from './avatarCharacterTools';
+import {
   createCalendarTools,
   createHealthTools,
   createLocationTools,
@@ -54,6 +62,7 @@ import {
   type DeviceToolDependencies,
 } from './device';
 import { createEditFileTool } from './editFileTool';
+import { createImageProcessTool } from './imageProcessTool';
 import {
   type ConfiguredPaintingModel,
   createGenerateImageTool,
@@ -105,6 +114,7 @@ export type SystemCapabilitySource = {
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
+    avatars: AvatarCharacterToolDependencies;
     /** Null on clients built without the native sandbox, which omits `run_js`. */
     jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
@@ -253,6 +263,16 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode),
     createWriteFileTool(fileContent),
+    createImageProcessTool(
+      {
+        createInternalEntry: paintingFileStorage.createInternalEntry,
+        readAsBytes: managedFileResolver.readAsBytes,
+        readImage: managedFileResolver.readImage,
+        resolveAvailable: managedFileResolver.resolveAvailable,
+      },
+      resources,
+    ),
+    ...createAvatarCharacterTools(deps.avatars, managedFileResolver, resources, agentId),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),
@@ -372,6 +392,7 @@ function resolveDependencies(
 ): SystemCapabilitySourceDependencies {
   return {
     agents: overrides.agents ?? agentService,
+    avatars: overrides.avatars ?? productionAvatarDependencies(),
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),
@@ -380,6 +401,19 @@ function resolveDependencies(
     supportsToolCalling:
       overrides.supportsToolCalling ?? ((model) => supportsToolCalling(services.model, model)),
     webSearch: overrides.webSearch ?? services.webSearch,
+  };
+}
+
+function productionAvatarDependencies(): AvatarCharacterToolDependencies {
+  const resources = createAvatarResources();
+  return {
+    characters: createAvatarCharacters(),
+    resources,
+    agentAvatars: createAgentAvatars({
+      agents: agentService,
+      images: agentAvatarImages,
+      resources,
+    }),
   };
 }
 

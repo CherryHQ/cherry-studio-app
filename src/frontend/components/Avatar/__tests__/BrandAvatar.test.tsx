@@ -2,13 +2,9 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import {
-  BrandAvatar,
-  BrandAvatarIcon,
-  BrandAvatarPhoto,
-  ModelAvatar,
-  ProviderBrandAvatar,
-} from '..';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '../components/BrandAvatar';
+import { ModelAvatar } from '../components/ModelAvatar';
+import { ProviderBrandAvatar } from '../components/ProviderBrandAvatar';
 
 const mockAvatar = jest.fn(({ children }: { children?: React.ReactNode }) => children);
 const mockAvatarFallback = jest.fn((_props: unknown) => null);

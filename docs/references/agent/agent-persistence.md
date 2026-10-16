@@ -141,6 +141,19 @@ updates reject direct avatar writes, and managed file references always use the 
 The uuid rotates on every replace so the uri, which doubles as the image cache key,
 changes with it.
 
+**Studio avatars keep an editable recipe with their cover.** Mobile saves
+its offline studio resources through the existing `avatar` reference. A dynamic avatar is stored as
+`avatar-resource:<id>`, whose managed resource owns a versioned recipe (a character from the
+on-device library and a circle colour) and a PNG cover. The library keeps
+imported characters as flat files that backups capture with the other avatar directories; an avatar
+whose character is deleted keeps its cover. A recipe the running build cannot read keeps its cover and is copied
+verbatim, so a newer app can still animate it.
+The shared `AvatarEditor` accepts and returns an opaque source; Agent forms and write DTOs do not
+carry artwork parameters. The avatar workflow copies the resource before committing its reference,
+then removes the previous image/resource after success. Read-time `avatarUri` projects the cover.
+The focused conversation resolves the recipe for status-driven playback. Backups require both files.
+No additional Agent column or migration is needed.
+
 Emoji avatars render from `Agent.avatar` and have no image URI. File references project into a
 device-local `Agent.avatarUri`, rebuilt per read because the
 absolute path does not survive container relocation. That projection happens at the Data API

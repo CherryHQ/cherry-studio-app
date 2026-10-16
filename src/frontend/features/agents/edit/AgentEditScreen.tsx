@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
-import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/Avatar';
+import { AgentAvatar, AvatarImagePicker, AvatarEditor } from '@/frontend/components/Avatar';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
@@ -174,6 +174,7 @@ function AgentEditForm({
     shouldStartChat ? '/agents/new?startChat=true' : undefined,
   );
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isAvatarStudioOpen, setIsAvatarStudioOpen] = useState(false);
   const [isModePickerOpen, setIsModePickerOpen] = useState(false);
   const [isToolApprovalModePickerOpen, setIsToolApprovalModePickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('agent.default_model_id');
@@ -245,6 +246,13 @@ function AgentEditForm({
     (sourceUri: string) => updateForm('avatarUri', sourceUri),
     [updateForm],
   );
+  const handleStudioSave = useCallback(
+    (sourceUri: string) => {
+      updateForm('avatarUri', sourceUri);
+      setIsAvatarStudioOpen(false);
+    },
+    [updateForm],
+  );
   const handleToolBindingsChange = useCallback(
     (bindings: WriteAgentToolBinding[]) => {
       setToolBindings(bindings);
@@ -305,8 +313,7 @@ function AgentEditForm({
       return;
     }
 
-    // The avatar is a managed file keyed by agent id, so it can only be written
-    // once the record exists — and only when the draft moved off its seed.
+    // Bind the picked image or dynamic resource only after its Agent exists.
     // A failure here is reported but does not keep the form open: the agent is
     // already saved, and a second Save from a create form would create a second
     // agent.
@@ -419,6 +426,7 @@ function AgentEditForm({
             onBeforeOpen={Keyboard.dismiss}
             onError={reportAvatarPickError}
             onSelect={handleAvatarSelect}
+            onCreate={() => setIsAvatarStudioOpen(true)}
             size={agentFormAvatarSize}
           >
             <View>
@@ -561,6 +569,13 @@ function AgentEditForm({
           </Section>
         ) : null}
       </KeyboardAwareScrollView>
+      {isAvatarStudioOpen ? (
+        <AvatarEditor
+          source={form.avatarUri}
+          onClose={() => setIsAvatarStudioOpen(false)}
+          onSave={handleStudioSave}
+        />
+      ) : null}
       {isModelPickerOpen ? (
         <ModelPickerDrawer
           modelType={form.mode === 'minimal' ? 'text' : 'all'}
