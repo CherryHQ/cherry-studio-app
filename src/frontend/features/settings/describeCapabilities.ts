@@ -13,5 +13,8 @@ export function describeCapabilities(
   t: TFunction,
 ): string {
   if (capabilities.length === 0) return t('settings.deviceConnections.capabilities.none');
-  return capabilities.map((capability) => t(LABEL_KEYS[capability])).join(' · ');
+  return (['configuration', 'agent', 'assistant'] as const)
+    .filter((capability) => capabilities.includes(capability))
+    .map((capability) => t(LABEL_KEYS[capability]))
+    .join(' · ');
 }

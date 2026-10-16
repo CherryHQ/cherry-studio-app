@@ -1,13 +1,5 @@
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
-import {
-  createContext,
-  type PropsWithChildren,
-  use,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-} from 'react';
+import { createContext, type PropsWithChildren, use, useRef, useCallback, useMemo } from 'react';
 import { Keyboard } from 'react-native';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -47,7 +39,6 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   const lastLocal = useRef<ChatTarget | undefined>(undefined);
   const lastRemote = useRef(new Map<string, RemoteChatTarget>());
   const [localViewMode, setLocalViewMode] = usePreference('ui.sidebar.recent_view_mode');
-  const [remoteViewMode, setRemoteViewMode] = useState<'sessions' | 'agents'>('agents');
 
   const openRemote = useCallback(
     (target: RemoteChatTarget) => {
@@ -82,11 +73,7 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       const domain =
         requestedDomain ??
         (connectionId === remoteTarget?.connectionId ? remoteTarget.domain : undefined) ??
-        (connection?.capabilities.includes('agent')
-          ? 'agent'
-          : connection?.capabilities.includes('assistant')
-            ? 'assistant'
-            : 'agent');
+        (connection?.capabilities.includes('assistant') ? 'assistant' : 'agent');
       if (
         source === 'remote' &&
         connectionId === remoteTarget?.connectionId &&
@@ -122,7 +109,6 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
   const setViewMode = useCallback(
     async (mode: 'sessions' | 'agents') => {
       if (source === 'local') await setLocalViewMode(mode);
-      else setRemoteViewMode(mode);
     },
     [source, setLocalViewMode],
   );
@@ -133,19 +119,10 @@ export function ChatSourceProvider({ children }: PropsWithChildren) {
       selectDevice,
       openRemote,
       startRemoteChat,
-      viewMode: source === 'local' ? localViewMode : remoteViewMode,
+      viewMode: source === 'local' ? localViewMode : ('agents' as const),
       setViewMode,
     }),
-    [
-      source,
-      remoteTarget,
-      selectDevice,
-      openRemote,
-      startRemoteChat,
-      localViewMode,
-      remoteViewMode,
-      setViewMode,
-    ],
+    [source, remoteTarget, selectDevice, openRemote, startRemoteChat, localViewMode, setViewMode],
   );
   return <Context value={value}>{children}</Context>;
 }
