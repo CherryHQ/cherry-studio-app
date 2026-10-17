@@ -55,6 +55,7 @@ export const PiToolBlueprintSchema = z.object({
   approval: z.enum(['auto', 'ask', 'deny']),
   failureGroup: z.string().optional(),
   autoApprovalEligible: z.boolean().optional(),
+  deferred: z.boolean().optional(),
 });
 
 const WebToolRouteSchema = z.enum(['client', 'server', 'none']);

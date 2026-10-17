@@ -3,7 +3,7 @@ import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
 import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentMessagePart } from '../../../host/runtimeProjection';
-import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
+import { PiConfigurationSchema, piToolBlueprint, projectPiTurn } from '../piDurableProjection';
 
 const writeFile = {
   ref: { source: 'builtin' as const, capabilityId: 'write_file' },
@@ -98,6 +98,13 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
     usage,
   };
 }
+
+test('stored tool blueprints keep deferred discovery across restarts', () => {
+  expect(piToolBlueprint({ ...writeFile, deferred: true } as never)).toMatchObject({
+    deferred: true,
+  });
+  expect(piToolBlueprint(writeFile as never)).not.toHaveProperty('deferred');
+});
 
 describe('Pi turn projection', () => {
   test('preserves upstream loaded tool names for search presentation', () => {

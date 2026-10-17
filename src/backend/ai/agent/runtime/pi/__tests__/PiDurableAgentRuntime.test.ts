@@ -190,6 +190,7 @@ describe('Persistent Agent facade', () => {
         description: 'Find available skills.',
         inputSchema: { type: 'object', properties: {} },
         approval: 'auto',
+        deferred: true,
         execute: async () => {
           throw new Error('Recovery must not replay tools.');
         },
