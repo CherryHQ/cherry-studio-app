@@ -66,8 +66,8 @@ and a stable WebView source prevent status writes from reloading the page.
   seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
   minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
   durations; service phase promotions retain the service, requiring service and old/new phases.
-  `startupStartedAt` identifies the JS launch by wall time; `jsEntryStartMs` and `elapsedMs` locate
-  each event on the monotonic clock. Available React Native startup/runtime/bundle-entry milestones
+  Every event carries `startupStartedAt`, identifying the JS launch by wall time, and `elapsedMs`
+  since JS entry; the JS entry event alone carries `jsEntryStartMs`, its monotonic clock reading. Available React Native startup/runtime/bundle-entry milestones
   are sampled from `performance.rnStartupTiming`, relative to `performance.timeOrigin`. Missing
   native milestones remain absent; JS events alone do not measure the OS's entire launch interval.
   No preference values, database paths, translated names or route parameters are recorded.
@@ -100,7 +100,8 @@ use the same local retention and submission path; they do not add an external re
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
 Startup events retain separate records without repetition aggregation, preserving retry timings.
 They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
-the buffer limit, or on explicit flush. Warning/error writes first drain preceding startup events
+the buffer limit, or on explicit flush. Database stages run synchronously and would block the
+timer, so each flushes its start before running. Warning/error writes first drain preceding startup events
 in the same append, so fatal exceptions remain synchronous. File inspection and history pruning
 start with the first flush, outside the ordinary startup logging call path.
 The first matching error is written immediately. Within a 30-second window, repeated records with

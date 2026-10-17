@@ -1,7 +1,7 @@
-import { recordStartupEvent } from './src/shared/core/logger/startupDiagnostics';
+import { recordJavaScriptEntry } from './src/shared/core/logger/startupDiagnostics';
 import './src/bootstrap/runtime/diagnosticRecording';
 
-recordStartupEvent('startup.javascript', 'completed');
+recordJavaScriptEntry();
 
 /**
  * Expo entry point.

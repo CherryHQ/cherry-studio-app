@@ -8,7 +8,7 @@ import {
   assertStorageDatabaseExists,
   databaseDirectory,
 } from '@/backend/data/storage/storagePaths';
-import { startStartupStage } from '@/shared/core/logger/startupDiagnostics';
+import { startBlockingStartupStage } from '@/shared/core/logger/startupDiagnostics';
 
 import { backfillSearchableText, customSqlStatements } from './customSql';
 import { migrations } from './migrations';
@@ -53,7 +53,7 @@ export class DbService extends BaseService {
   protected async onInit(): Promise<void> {
     this.assertOpen();
 
-    let finish = startStartupStage('startup.database.open');
+    let finish = startBlockingStartupStage('startup.database.open');
     try {
       assertStorageDatabaseExists();
       const sqlite = SQLite.openDatabaseSync(
@@ -64,16 +64,16 @@ export class DbService extends BaseService {
       this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
       finish();
 
-      finish = startStartupStage('startup.database.configure');
+      finish = startBlockingStartupStage('startup.database.configure');
       await this.configurePragmas();
       finish();
-      finish = startStartupStage('startup.database.migrate');
+      finish = startBlockingStartupStage('startup.database.migrate');
       await migrate(this.db, migrations);
       finish();
-      finish = startStartupStage('startup.database.custom_migrate');
+      finish = startBlockingStartupStage('startup.database.custom_migrate');
       this.runCustomMigrations();
       finish();
-      finish = startStartupStage('startup.database.seed');
+      finish = startBlockingStartupStage('startup.database.seed');
       await seedDatabase(this);
       finish();
     } catch (error) {

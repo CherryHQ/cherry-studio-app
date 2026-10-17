@@ -1,4 +1,4 @@
-import { loggerService } from './LoggerService';
+import { flushLogWriter, loggerService } from './LoggerService';
 
 type StartupOperation =
   | 'startup.javascript'
@@ -29,6 +29,7 @@ type StartupFacts = {
   serviceName?: string;
   phase?: string;
   durationMs?: number;
+  jsEntryStartMs?: number;
   rnStartupStartMs?: number | null;
   rnRuntimeStartMs?: number | null;
   rnBundleEntryStartMs?: number | null;
@@ -49,9 +50,13 @@ export function recordStartupEvent(
     operation,
     outcome,
     startupStartedAt,
-    jsEntryStartMs: clockStartedAt,
     elapsedMs: performance.now() - clockStartedAt,
   });
+}
+
+/** Relates every event's `elapsedMs` to React Native's `performance.timeOrigin` milestones. */
+export function recordJavaScriptEntry() {
+  recordStartupEvent('startup.javascript', 'completed', { jsEntryStartMs: clockStartedAt });
 }
 
 /** Persist the start too, so an interrupted or stuck stage remains visible. */
@@ -68,6 +73,13 @@ export function startStartupStage(operation: StartupOperation, facts: StartupFac
       });
     }
   };
+}
+
+/** A synchronous step blocks the batch timer, so its start is persisted before entering it. */
+export function startBlockingStartupStage(operation: StartupOperation) {
+  const finish = startStartupStage(operation);
+  flushLogWriter();
+  return finish;
 }
 
 export async function measureStartupStage<T>(

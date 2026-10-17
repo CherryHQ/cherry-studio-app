@@ -15,10 +15,10 @@ const mockAppend = jest.fn((file: { name: string }, bytes: Uint8Array) => {
 
 jest.mock('expo-file-system', () => ({
   File: class {
-    constructor(
-      _directory: unknown,
-      readonly name: string,
-    ) {}
+    readonly name: string;
+    constructor(_directory: unknown, fileName: string) {
+      this.name = fileName;
+    }
     get exists() {
       return mockFiles.has(this.name);
     }
