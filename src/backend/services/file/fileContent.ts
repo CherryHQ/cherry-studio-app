@@ -65,6 +65,10 @@ const createTextEntryInputSchema = z.strictObject({
   provenance: FileEntryProvenanceSchema,
 });
 
+const createBytesEntryInputSchema = createTextEntryInputSchema.extend({
+  data: z.instanceof(Uint8Array),
+});
+
 /**
  * Managed-file port over `fileStorage`, validated at the boundary.
  *
@@ -164,6 +168,19 @@ export const fileContent = {
   ) => {
     const validated = createTextEntryInputSchema.parse(input);
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' }, signal);
+  },
+  /** Generated binary artifacts use the same write/commit/rollback boundary as text files. */
+  createBytesEntry: async (
+    input: FilePlacement & {
+      data: Uint8Array;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const validated = createBytesEntryInputSchema.parse(input);
+    return createInternalEntry(fileEntryService, { ...validated, source: 'bytes' }, signal);
   },
   prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
     const signal = input.signal ?? new AbortController().signal;

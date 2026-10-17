@@ -225,6 +225,46 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test('defers Office schemas while keeping the tools discoverable and callable', async () => {
+    const names = [
+      'create_document',
+      'create_workbook',
+      'create_presentation',
+      'inspect_office_file',
+      'read_office_content',
+      'edit_document',
+      'edit_workbook',
+      'edit_presentation',
+    ];
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: names.map((name) =>
+        capability({ ref: { source: 'builtin', capabilityId: name }, providerName: name }),
+      ),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      const agent = await conversation.agent(BACKGROUND_CONTEXT);
+      expect(agent.tools.map((tool) => tool.name)).toEqual(['tool_search']);
+      expect(agent.deferred.map((tool) => tool.name)).toEqual(names);
+      expect(agent.callable.map((tool) => tool.name)).toEqual(names);
+      await harness.waitForTask(
+        await toolTask(conversation, 'tool_search', { query: 'create_workbook', limit: 1 }),
+        BACKGROUND_CONTEXT,
+      );
+      expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
+        content: [expect.objectContaining({ text: expect.stringContaining('create_workbook') })],
+      });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
     let conversation!: Conversation;
     const codes: (string | undefined)[] = [];
@@ -317,99 +357,110 @@ describe('durable capability boundary', () => {
     },
   );
 
-  test('completed child artifacts survive parent cancellation, task cleanup and reopening', async () => {
-    const artifact: RuntimeArtifact = {
-      ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
-      name: 'note.txt',
-      mediaType: 'text/plain',
-      kind: 'created',
-    };
-    const created = jest.fn(async () => ({ value: 'saved', artifacts: [artifact] }));
-    let childFinished!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      childFinished = resolve;
-    });
-    const extension = capabilityExtension({
-      name: 'cherry',
-      tools: [capability({ approval: 'auto', execute: created }), scriptCapability()],
-      approve: async () => true,
-      codemode: defineExtension({
-        name: 'test-codemode',
-        tools: [
-          defineTool({
-            name: 'codemode',
-            parameters: { type: 'object' } as TSchema,
-            description: 'Create a file then wait.',
-            replay: 'safe',
-            async execute(_args, api, context) {
-              await api.executeTool('create_file', { name: 'note.txt' }, context, { key: 'c1' });
-              childFinished();
-              return cancelled(context);
-            },
-          }),
-        ],
-      }),
-    });
-    const storage = new ReopenableMemoryStorage();
-    const harness = await open(storage, extension);
-    const conversation = await harness.createConversation(
-      { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
-      BACKGROUND_CONTEXT,
-    );
-    const id = await toolTask(conversation, 'codemode', {});
-    try {
-      harness.resume();
-      await ready;
-      await harness.abortTask(id, BACKGROUND_CONTEXT);
-      await harness.waitForTask(id, BACKGROUND_CONTEXT);
-      expect(await harness.snapshot(PiCodemodeFiles, id, BACKGROUND_CONTEXT)).toBeUndefined();
-    } finally {
-      await harness.close(BACKGROUND_CONTEXT);
-    }
-    const reopened = await open(storage, extension);
-    try {
-      const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
-      const entries = (
-        await restored.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
-      ).items;
-      expect(entries.filter(PiCodemodeArtifactsEntry.is)).toHaveLength(1);
-      const turn = projectPiTurn({
-        sessionId: 'session',
-        entries,
-        record: {
-          id: 1,
-          type: 'input',
-          status: 'unanswered',
-          entry: 1,
-          reason: 'aborted',
-        } as unknown as SubmissionRecord,
-        metadata: {
-          kind: 'cherry.input',
-          version: 1,
-          requestId: 'request',
-          turnId: 'turn',
-          userMessageId: 'user',
-          assistantMessageId: 'assistant',
-          createdAt: 1,
-          metadata: {},
-          tools: [],
-        },
+  test.each(['create_file', 'create_document', 'edit_workbook'])(
+    'completed %s child artifacts survive parent cancellation, task cleanup and reopening',
+    async (name) => {
+      const artifact: RuntimeArtifact = {
+        ref: { kind: 'managed-file', fileEntryId: '00000000-0000-7000-8000-000000000001' },
+        name: 'note.txt',
+        mediaType: 'text/plain',
+        kind: name.startsWith('edit_') ? 'derived' : 'created',
+      };
+      const created = jest.fn(async () => ({ value: 'saved', artifacts: [artifact] }));
+      let childFinished!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        childFinished = resolve;
       });
-      expect(turn.parts).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'tool',
-            state: 'interrupted',
-            output: expect.objectContaining({ artifacts: [] }),
+      const extension = capabilityExtension({
+        name: 'cherry',
+        tools: [
+          capability({
+            ref: { source: 'builtin', capabilityId: name },
+            providerName: name,
+            approval: 'auto',
+            execute: created,
           }),
-          expect.objectContaining({ type: 'file', ref: artifact.ref, name: artifact.name }),
-        ]),
+          scriptCapability(),
+        ],
+        approve: async () => true,
+        codemode: defineExtension({
+          name: 'test-codemode',
+          tools: [
+            defineTool({
+              name: 'codemode',
+              parameters: { type: 'object' } as TSchema,
+              description: 'Create a file then wait.',
+              replay: 'safe',
+              async execute(_args, api, context) {
+                await api.executeTool(name, { name: 'note.txt' }, context, { key: 'c1' });
+                childFinished();
+                return cancelled(context);
+              },
+            }),
+          ],
+        }),
+      });
+      const storage = new ReopenableMemoryStorage();
+      const harness = await open(storage, extension);
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
       );
-      expect(created).toHaveBeenCalledTimes(1);
-    } finally {
-      await reopened.close(BACKGROUND_CONTEXT);
-    }
-  });
+      const id = await toolTask(conversation, 'codemode', {});
+      try {
+        harness.resume();
+        await ready;
+        await harness.abortTask(id, BACKGROUND_CONTEXT);
+        await harness.waitForTask(id, BACKGROUND_CONTEXT);
+        expect(await harness.snapshot(PiCodemodeFiles, id, BACKGROUND_CONTEXT)).toBeUndefined();
+      } finally {
+        await harness.close(BACKGROUND_CONTEXT);
+      }
+      const reopened = await open(storage, extension);
+      try {
+        const restored = (await reopened.conversation(conversation.id, BACKGROUND_CONTEXT))!;
+        const entries = (
+          await restored.entries({ order: 'ascending' }, 100, undefined, BACKGROUND_CONTEXT)
+        ).items;
+        expect(entries.filter(PiCodemodeArtifactsEntry.is)).toHaveLength(1);
+        const turn = projectPiTurn({
+          sessionId: 'session',
+          entries,
+          record: {
+            id: 1,
+            type: 'input',
+            status: 'unanswered',
+            entry: 1,
+            reason: 'aborted',
+          } as unknown as SubmissionRecord,
+          metadata: {
+            kind: 'cherry.input',
+            version: 1,
+            requestId: 'request',
+            turnId: 'turn',
+            userMessageId: 'user',
+            assistantMessageId: 'assistant',
+            createdAt: 1,
+            metadata: {},
+            tools: [],
+          },
+        });
+        expect(turn.parts).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              type: 'tool',
+              state: 'interrupted',
+              output: expect.objectContaining({ artifacts: [] }),
+            }),
+            expect.objectContaining({ type: 'file', ref: artifact.ref, name: artifact.name }),
+          ]),
+        );
+        expect(created).toHaveBeenCalledTimes(1);
+      } finally {
+        await reopened.close(BACKGROUND_CONTEXT);
+      }
+    },
+  );
 
   test.each([
     ['completed', false, { status: 'ok' }],

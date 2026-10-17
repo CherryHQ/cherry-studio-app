@@ -56,6 +56,7 @@ import {
 } from './device';
 import { createEditFileTool } from './editFileTool';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createOfficeTools } from './officeTools';
 import {
   type ConfiguredPaintingModel,
   createGenerateImageTool,
@@ -109,7 +110,7 @@ export type SystemCapabilitySource = {
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
-    /** Null on clients built without the native sandbox, which omits `run_js`. */
+    /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
     platform: string;
@@ -268,6 +269,18 @@ function createCatalog(
     createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
     createWriteFileTool(fileContent, fileAccess),
     ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
+    ...(deps.jsSandbox
+      ? createOfficeTools(
+          deps.jsSandbox,
+          {
+            createBytesEntry: fileContent.createBytesEntry,
+            readImage: managedFileResolver.readImage,
+            readAsBytes: managedFileResolver.readAsBytes,
+            resolveAvailable: managedFileResolver.resolveAvailable,
+          },
+          fileAccess,
+        )
+      : []),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),

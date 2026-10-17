@@ -2,7 +2,8 @@
 
 The trusted page that renders `@cherrystudio/file-preview` (PDF, DOCX, PPTX and XLSX) inside the
 file viewer's WebView. The package owns rendering and in-document interaction; this page only wires
-it to the app: bytes, PDF resources, theme, locale, diagnostics and the system-open request.
+it to the app: bytes, PDF resources, theme, locale, diagnostics, structural selections and the
+system-open request.
 The app side lives in [`src/frontend/features/files`](../../src/frontend/features/files/README.md).
 
 > Status: uses the published npm package `@cherrystudio/file-preview@0.1.0`.
@@ -49,6 +50,7 @@ message with `PageMessageSchema`.
 
 | Page → app | Meaning |
 | --- | --- |
+| `selection` | Captured `{ sourceId, revision, anchor, excerpt }`, or null; enabled only by host `captureSelection` |
 | `ready` | The page can receive `render` |
 | `open` | `PreviewSource.open()`; each call opens an independent document |
 | `read`, `resource` | Exact byte range of a document, or a bundled PDF resource |
@@ -61,3 +63,15 @@ dark mode, CSS custom properties), `opened` (`size`, `revision`), and `chunk` (b
 1 MiB raw) followed by `done` or `failed` with a `PreviewErrorCode`. The page writes chunks into one
 buffer of the requested length and rejects a short total. Aborted reads reject immediately and send
 `cancel`; reads after `close` reject with `closed` on both sides.
+
+## Office Selection Handoff
+
+The protocol reuses the published package's portable `DocumentAnchorSchema`; no DOM rendering
+module enters the native bundle. `captureSelection` arms structural picking. The app validates
+source identity and revision. The viewer's explicit reference action opens a new standard-Agent
+draft with the original managed attachment, structural anchor and excerpt; it never sends
+automatically. The Agent reads the referenced content and compares it with the excerpt before
+editing, following Desktop's workflow.
+
+Source changes here require regenerating the inline HTML with the existing package build. That
+build and native acceptance have not been run for this change.

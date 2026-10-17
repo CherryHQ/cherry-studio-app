@@ -106,6 +106,26 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
+  test('offers Office generation with the compute sandbox even without a Code Mode bridge', async () => {
+    const office = [
+      'create_document',
+      'create_workbook',
+      'create_presentation',
+      'inspect_office_file',
+      'read_office_content',
+      'edit_document',
+      'edit_workbook',
+      'edit_presentation',
+    ];
+    const absent = capabilityIds(await resolve({}));
+    expect(absent.some((id) => office.includes(id))).toBe(false);
+    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    for (const name of office) {
+      expect(capabilityIds(tools)).toContain(name);
+      expect(approvalOf(tools, name)).toBe('auto');
+    }
+  });
+
   test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([
@@ -470,6 +490,70 @@ describe('createSystemCapabilitySource', () => {
       ref: { kind: 'managed-file', fileEntryId: entry.id },
       kind: 'derived',
     });
+  });
+
+  test('publishes and grants Office output in the conversation workspace', async () => {
+    const folderId = '00000000-0000-7000-8000-000000000009';
+    jest.spyOn(fileLibraryService, 'folder').mockResolvedValue({
+      id: folderId,
+      name: 'Reports',
+      parentId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    });
+    const entry = FileEntrySchema.parse({
+      createdAt: 1,
+      updatedAt: 1,
+      filename: 'report.docx',
+      id: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      provenance: 'generated',
+      size: 4,
+    });
+    const save = jest.spyOn(fileContent, 'createBytesEntry').mockResolvedValueOnce(entry);
+    const grantFile = jest.fn();
+    const source = createSystemCapabilitySource(
+      SERVICES,
+      dependencies({
+        jsSandbox: {
+          run: async ({ onSettled }) => {
+            onSettled?.();
+            return {
+              status: 'ok',
+              result: '"UEsDBA=="',
+              logs: '',
+              logsTruncated: false,
+              durationMs: 1,
+            };
+          },
+        },
+      }),
+    );
+    const tools = await source.getTools({
+      askUser: noAskUser,
+      documentParserMode: 'builtin',
+      disabledCapabilities: [],
+      model: MODEL,
+      resources: { ...TURN_RESOURCES, grantFile },
+      workspaceFolderId: folderId,
+    });
+    const tool = tools.find((tool) => tool.providerName === 'create_document')!;
+    const result = await tool.execute({
+      input: {
+        filename: 'report.docx',
+        spec: { version: 1, blocks: [{ type: 'paragraph', text: 'Report' }] },
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'office-call',
+      turnId: 'turn',
+    });
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId, workspaceFolderId: folderId }),
+      expect.any(AbortSignal),
+    );
+    expect(result.artifacts[0]?.ref.fileEntryId).toBe(entry.id);
+    expect(grantFile).toHaveBeenCalledWith(entry.id);
   });
 
   test('rewrites a draft this turn produced instead of deriving a copy', async () => {
