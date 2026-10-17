@@ -1,6 +1,6 @@
 # File Trash
 
-The trash retains user-deleted library files, versions, and folders for 30 days. The library's More menu opens `/trash`,
+The trash retains user-deleted library files and folders for 30 days. The library's More menu opens `/trash`,
 which presents Recently deleted as compact thumbnail/name/days-left rows beneath one notice with the
 retention period and total trashed file size. Tapping a row opens Restore and Permanently delete;
 the header menu offers Empty trash. Trash image thumbnails resolve only the matching deletion
@@ -12,7 +12,7 @@ deletion remains immediate and does not move attachments to trash.
 There is no duplicate trash table. `file_folder.deletedAt`, `library_file.deletedAt`, and
 `file_entry.deletedAt` own recoverable membership. `trashedWith` groups descendants and versions.
 `TrashService` projects root items into one cursor stream, ordered by deletion time and `kind:id`.
-File thumbnails use the logical file's current version; individual versions use their own entry id.
+File thumbnails use the logical file's current version.
 Folders display a folder icon.
 
 - `TrashRuntime` owns trashing for the library screen (`FileModule.moveToTrash` and folder
@@ -41,8 +41,8 @@ trashed records with their original deletion time. After a backup restore and re
 sweep removes expired items. Cache thumbnails are derived and are regenerated as needed.
 
 Trashing a logical file includes every version. Trashing a folder includes its active subtree and
-those files' versions as one item; separately trashed subtrees stay independent. Users may also
-trash old versions individually. Restore reactivates the group, retaining content revision keys;
+those files' versions as one item; separately trashed subtrees stay independent. Old versions are
+never trashed individually. Restore reactivates the group, retaining content revision keys;
 when the former parent is unavailable, the restored root moves to the library root with a collision
 suffix if needed. Permanent folder deletion clears Session bindings. Deleting a Session leaves its
 workspace folder and files intact.

@@ -150,7 +150,7 @@ export function createFileLibraryManagementTools(
       'library_list_trash',
       'List recently deleted files',
       'auto',
-      'List trashed files, folders and old versions, newest first. Follow nextCursor.',
+      'List trashed files and folders, newest first. Follow nextCursor.',
       trashListSchema,
       async (input, signal) => {
         const result = await trash.entries.list(input, signal);

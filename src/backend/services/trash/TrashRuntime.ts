@@ -57,7 +57,7 @@ export class TrashRuntime extends BaseService {
 
   /** Trash the logical file that owns this version, with all its versions. */
   async trashFile(entryId: FileEntryId, signal?: AbortSignal) {
-    const ids = await this.files.trashFileEntry(entryId, false, signal);
+    const ids = await this.files.trashFileEntry(entryId, signal);
     for (const id of ids) notifyFileChange(id);
     return ids.length > 0;
   }

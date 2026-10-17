@@ -261,12 +261,12 @@ destinations, collision rules, transactions, and cache invalidation. Move result
 collision suffix selected by that service.
 
 `library_trash_item` moves a file with all versions or an active folder subtree into the existing
-30-day trash. `library_list_trash` pages recoverable files, folders, and individually deleted old
-versions; `library_restore_item` restores one group by its exact `kind` and `id`. Both use the
-host-owned `TrashRuntime`, the same owner as the library screen, which notifies file subscribers
-after commit. These tools work without a selected workspace. Mutations recheck turn
-cancellation when their write transaction starts and before it commits; cancellation rolls back the
-whole change. The Agent cannot permanently purge items or empty the trash.
+30-day trash. `library_list_trash` pages recoverable files and folders; `library_restore_item`
+restores one group by its exact `kind` and `id`. Both use the host-owned `TrashRuntime`, the same
+owner as the library screen, which notifies file subscribers after commit. These tools work without
+a selected workspace. Mutations recheck turn cancellation when their write transaction starts and
+before it commits; cancellation rolls back the whole change. The Agent cannot permanently purge
+items or empty the trash.
 
 `generate_image` still scopes input images to conversation references; outputs use the
 workspace, as do direct image generation and managed MCP result files. Code Mode calls these same

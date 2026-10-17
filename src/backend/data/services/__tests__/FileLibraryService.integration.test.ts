@@ -139,29 +139,6 @@ describe('file library folders, versions, and workspaces', () => {
     validate();
   });
 
-  it('keeps deleted history recoverable when a cancelled draft has no active predecessor', async () => {
-    await create(1);
-    await create(2, { baseFileEntryId: id(1) });
-    await library.trashFileEntry(id(1), true);
-    await entries.delete(id(2));
-    expect((await library.list()).items).toEqual([]);
-    validate();
-    await library.restore('file', id(1));
-    expect((await library.list()).items).toMatchObject([{ id: id(1), entry: { id: id(1) } }]);
-    validate();
-  });
-
-  it('restores a separately deleted version without changing the current path', async () => {
-    await create(1);
-    await create(2, { baseFileEntryId: id(1) });
-    await expect(library.trashFileEntry(id(2), true)).rejects.toThrow();
-    await library.trashFileEntry(id(1), true);
-    expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2)]);
-    await library.restore('version', id(1));
-    expect((await library.fileForEntry(id(1)))?.currentEntryId).toBe(id(2));
-    validate();
-  });
-
   it('restores into the root when the original parent is unavailable and disambiguates names', async () => {
     const parent = await library.createFolder(null, 'Parent');
     const child = await library.createFolder(parent.id, 'Reports');

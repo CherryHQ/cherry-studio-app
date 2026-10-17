@@ -12,7 +12,6 @@ import {
   type FileFolderRow,
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { TrashItem, TrashKind } from '@/shared/data/api/schemas/trash';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -294,7 +293,8 @@ export class FileLibraryService {
     return { folderId: folder.id, name, file: file ?? null };
   }
 
-  trashFileEntry(entryId: string, versionOnly = false, signal?: AbortSignal): Promise<string[]> {
+  /** Trash the logical file that owns this version, with all its versions. */
+  trashFileEntry(entryId: string, signal?: AbortSignal): Promise<string[]> {
     return this.mutate(async (tx) => {
       const [entry] = await tx
         .select()
@@ -303,26 +303,14 @@ export class FileLibraryService {
       if (!entry?.libraryFileId) throw DataApiErrorFactory.notFound('FileEntry', entryId);
       const file = await this.requireFile(tx, entry.libraryFileId);
       const deletedAt = Date.now();
-      if (versionOnly && file.currentEntryId === entry.id)
-        throw DataApiErrorFactory.invalidOperation(
-          'trashVersion',
-          'Delete the whole file to remove its current version.',
-        );
-      if (!versionOnly)
-        await tx
-          .update(libraryFileTable)
-          .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
-          .where(eq(libraryFileTable.id, file.id));
+      await tx
+        .update(libraryFileTable)
+        .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
+        .where(eq(libraryFileTable.id, file.id));
       const rows = await tx
         .update(fileEntryTable)
-        .set({
-          deletedAt,
-          trashedWith: versionOnly ? null : file.id,
-          updatedAt: sql`${fileEntryTable.updatedAt}`,
-        })
-        .where(
-          versionOnly ? eq(fileEntryTable.id, entryId) : eq(fileEntryTable.libraryFileId, file.id),
-        )
+        .set({ deletedAt, trashedWith: file.id, updatedAt: sql`${fileEntryTable.updatedAt}` })
+        .where(eq(fileEntryTable.libraryFileId, file.id))
         .returning({ id: fileEntryTable.id });
       return rows.map((row) => row.id);
     }, signal);
@@ -396,7 +384,7 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.trashedWith, id));
-      } else if (kind === 'file') {
+      } else {
         const [file] = await tx.select().from(libraryFileTable).where(eq(libraryFileTable.id, id));
         if (!file || file.deletedAt === null || file.trashedWith !== null)
           throw DataApiErrorFactory.notFound('TrashItem', id);
@@ -416,36 +404,11 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.id, id));
-      } else {
-        const [entry] = await tx.select().from(fileEntryTable).where(eq(fileEntryTable.id, id));
-        if (!entry || entry.deletedAt === null || entry.trashedWith !== null)
-          throw DataApiErrorFactory.notFound('TrashItem', id);
-        const [file] = entry.libraryFileId
-          ? await tx
-              .select()
-              .from(libraryFileTable)
-              .where(eq(libraryFileTable.id, entry.libraryFileId))
-          : [];
-        if (!file || file.deletedAt !== null) {
-          const fileId = createOrderedUuid();
-          const name = await availableLibraryName(tx, null, entry.filename, { suffix: true });
-          await tx.insert(libraryFileTable).values({
-            id: fileId,
-            folderId: null,
-            name,
-            nameKey: fileNameKey(name),
-            currentEntryId: entry.id,
-          });
-          await tx
-            .update(fileEntryTable)
-            .set({ libraryFileId: fileId, updatedAt: sql`${fileEntryTable.updatedAt}` })
-            .where(eq(fileEntryTable.id, id));
-        }
       }
       const entries = await tx
         .update(fileEntryTable)
         .set({ deletedAt: null, trashedWith: null, updatedAt: sql`${fileEntryTable.updatedAt}` })
-        .where(kind === 'version' ? eq(fileEntryTable.id, id) : eq(fileEntryTable.trashedWith, id))
+        .where(eq(fileEntryTable.trashedWith, id))
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
     }, signal);
@@ -455,21 +418,6 @@ export class FileLibraryService {
   purge(item: TrashItem): Promise<FileEntry[] | null> {
     return this.mutate(async (tx) => {
       const entries = new FileEntryService(this.dbService);
-      if (item.kind === 'version') {
-        const [row] = await tx
-          .select()
-          .from(fileEntryTable)
-          .where(
-            and(
-              eq(fileEntryTable.id, item.id),
-              eq(fileEntryTable.deletedAt, item.deletedAt),
-              isNull(fileEntryTable.trashedWith),
-            ),
-          );
-        if (!row) return null;
-        await entries.deleteTx(tx, row.id);
-        return [rowToFileEntry(row)];
-      }
       let fileIds: string[];
       if (item.kind === 'folder') {
         const [folder] = await tx

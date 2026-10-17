@@ -1,6 +1,5 @@
 import * as z from 'zod';
 
-import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import {
   fileLibraryService,
@@ -38,10 +37,6 @@ export function createFileHandlers(
     '/files/history': {
       GET: ({ query }) => library.history(z.uuid().parse(query.id)),
     },
-    '/files/versions/:id': {
-      DELETE: async ({ params }) =>
-        notifyEntries(await library.trashFileEntry(z.uuid().parse(params.id), true)),
-    },
     '/files/folders': {
       GET: () => library.folders(),
       POST: ({ body }) => {
@@ -68,8 +63,4 @@ export function createFileHandlers(
       GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),
     },
   };
-}
-
-function notifyEntries(ids: readonly string[]) {
-  publishDataApiChanges(ids.map((id) => `/files/entries/${id}`));
 }
