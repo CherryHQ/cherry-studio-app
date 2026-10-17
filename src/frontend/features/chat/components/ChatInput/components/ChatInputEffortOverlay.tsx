@@ -12,6 +12,7 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -29,6 +30,7 @@ import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop/ChatInputEffo
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
+const openMountSettleMs = 34;
 const closeDurationMs = duration.base;
 const EFFORT_BACKDROP_FADE_INSET = 96;
 
@@ -64,6 +66,7 @@ export function ChatInputEffortOverlay({
   const progress = useSharedValue(0);
   const rootRef = useRef<View>(null);
   const openingRef = useRef(false);
+  const revealPendingRef = useRef(false);
   const [layout, setLayout] = useState<ActiveEffortLayout | null>(null);
   const portalName = useId();
   const scrimColor = useThemeColor('constant-black');
@@ -91,6 +94,8 @@ export function ChatInputEffortOverlay({
     if (!layout) {
       return;
     }
+
+    revealPendingRef.current = false;
 
     if (reducedMotion) {
       progress.set(0);
@@ -131,6 +136,7 @@ export function ChatInputEffortOverlay({
         }
 
         progress.set(reducedMotion ? 1 : 0);
+        revealPendingRef.current = !reducedMotion;
         setLayout({
           ...nextLayout,
           keyboardHeight: keyboard.height,
@@ -138,11 +144,6 @@ export function ChatInputEffortOverlay({
           viewportHeight,
           viewportWidth,
         });
-        if (!reducedMotion) {
-          requestAnimationFrame(() => {
-            progress.set(withTiming(1, { duration: openDurationMs, easing: easing.settle }));
-          });
-        }
       });
     },
     [
@@ -174,6 +175,23 @@ export function ChatInputEffortOverlay({
 
     return undefined;
   }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
+
+  // Portal content mounts one commit after the overlay, and mounting the iOS blurs stalls a frame.
+  // Layout events precede that native mount, so the morph starts two frames after the portal's
+  // first layout; the stall then lands before anything moves instead of skipping the eased start.
+  const reveal = useCallback(() => {
+    if (!revealPendingRef.current) {
+      return;
+    }
+
+    revealPendingRef.current = false;
+    progress.set(
+      withDelay(
+        openMountSettleMs,
+        withTiming(1, { duration: openDurationMs, easing: easing.settle }),
+      ),
+    );
+  }, [progress]);
 
   const handleChange = useCallback(
     (value: string) => onChange(value as ChatInputReasoningEffort),
@@ -336,6 +354,7 @@ export function ChatInputEffortOverlay({
           <View
             accessibilityViewIsModal
             onAccessibilityEscape={close}
+            onLayout={reveal}
             pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
             style={StyleSheet.absoluteFill}
           >
