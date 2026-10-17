@@ -286,6 +286,26 @@ describe('partitionMessageParts', () => {
     expect(partitioned.body).toEqual([{ index: 0, kind: 'part', part: failure }]);
   });
 
+  test('lifts a running image generation into the body until it settles back into process', () => {
+    const running = { ...tool('generate_image'), state: 'input-available' } as CherryMessagePart;
+    const approved = {
+      ...tool('generate_image'),
+      approval: { approved: true, id: 'approval-1' },
+      state: 'approval-responded',
+    } as CherryMessagePart;
+    for (const part of [running, approved]) {
+      const partition = partitionMessageParts([tool('read'), part]);
+      expect(partition.body.map((item) => item.part)).toEqual([part]);
+      expect(partition.process.map((item) => item.part)).toEqual([tool('read')]);
+    }
+
+    // Awaiting approval, finished, and failed calls stay ordinary process rows.
+    for (const state of ['approval-requested', 'output-available', 'output-error']) {
+      const part = { ...tool('generate_image'), state } as CherryMessagePart;
+      expect(partitionMessageParts([part]).process.map((item) => item.part)).toEqual([part]);
+    }
+  });
+
   test('provider web searches stay invisible and do not create an empty process group', () => {
     const provider = providerWebSearch();
     const grouped = partitionMessageParts([tool('a'), provider, tool('b')]);

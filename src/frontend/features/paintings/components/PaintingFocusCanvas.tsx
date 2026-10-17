@@ -22,10 +22,9 @@ type CanvasSize = { height: number; width: number };
 
 /**
  * The focused image, full-bleed. Each gesture has one owner:
- * tap shows or hides the chrome (or selects a marker), long press drops an
- * annotation at the pressed point (or removes the marker under it), pinch and
- * double tap zoom, and a horizontal swipe at rest moves between the images of
- * one generation. Annotation coordinates are normalized to the image itself,
+ * tap only selects a marker, long press drops an annotation at the pressed
+ * point (or removes the marker under it), pinch and double tap zoom, and a
+ * horizontal swipe at rest moves between the images of one generation. Annotation coordinates are normalized to the image itself,
  * excluding letterboxing, so they survive keyboard and zoom changes.
  */
 export function PaintingFocusCanvas({
@@ -37,7 +36,6 @@ export function PaintingFocusCanvas({
   onRemoveAnnotation,
   onSelectAnnotation,
   onSwipe,
-  onTap,
   selectedAnnotationId,
   uri,
 }: {
@@ -49,7 +47,6 @@ export function PaintingFocusCanvas({
   onRemoveAnnotation: (id: number) => void;
   onSelectAnnotation: (id: number) => void;
   onSwipe: (direction: 1 | -1) => void;
-  onTap: () => void;
   selectedAnnotationId: number | null;
   uri: string;
 }) {
@@ -83,7 +80,6 @@ export function PaintingFocusCanvas({
   function handleTap(x: number, y: number) {
     const marker = markerAt(x, y);
     if (marker) onSelectAnnotation(marker.id);
-    else onTap();
   }
 
   function handleLongPress(x: number, y: number) {

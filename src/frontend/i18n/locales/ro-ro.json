@@ -896,6 +896,7 @@
   "painting.editor.annotationInstruction": "Nota {{number}} ({{x}}% de la stânga, {{y}}% de sus): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Editează nota {{number}}",
   "painting.editor.annotationSummary": "Nota {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Detaliile erorii",
   "painting.errorDetail.unavailable": "Nu sunt disponibile detalii despre eroare pentru această generație.",
   "painting.focus.annotationHint": "Apăsați lung pe imagine pentru a adăuga o notă",
   "painting.focus.delete": "Ștergeți această versiune",

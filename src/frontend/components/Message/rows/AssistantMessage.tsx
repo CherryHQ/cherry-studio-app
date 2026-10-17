@@ -1,14 +1,10 @@
-import { ImageGenerationLoader } from '@cherrystudio/ui/components';
-import { memo, type ReactNode, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, View } from 'react-native';
+import { memo, type ReactNode } from 'react';
+import { View } from 'react-native';
 
-import {
-  imageParamsAspectRatio,
-  imageParamsResolutionLabel,
-} from '@/shared/utils/imageGenerationParams';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import { MessageParts } from '../parts/MessageParts';
+import { PendingImagePart } from '../parts/PendingImagePart';
 import type { MessageListItem } from '../types';
 
 type AssistantMessageProps = {
@@ -34,7 +30,12 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
     !parts.some((part) => part.type !== 'data-compaction-anchor' || part.data.status !== 'skipped');
 
   if (isPendingEmptyMessage && message.imageGeneration) {
-    return <PendingImageMessage settings={message.imageGeneration} />;
+    return (
+      <PendingImagePart
+        aspectRatio={imageParamsAspectRatio(message.imageGeneration.paramValues)}
+        testID="chat-image-generation-loader"
+      />
+    );
   }
 
   return <MessageParts message={message} />;
@@ -51,32 +52,3 @@ export const AssistantMessage = memo(function AssistantMessage({
     </View>
   );
 });
-
-function PendingImageMessage({
-  settings,
-}: {
-  settings: NonNullable<MessageListItem['imageGeneration']>;
-}) {
-  const { t } = useTranslation();
-  const [width, setWidth] = useState(0);
-  const aspectRatio = imageParamsAspectRatio(settings.paramValues);
-  const handleLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
-  return (
-    <View className="w-full" onLayout={handleLayout}>
-      {width > 0 ? (
-        <ImageGenerationLoader
-          active
-          height={width / aspectRatio}
-          label={t('painting.status.generating')}
-          resolution={
-            imageParamsResolutionLabel(settings.paramValues) ?? t('painting.settings.option.auto')
-          }
-          testID="chat-image-generation-loader"
-          width={width}
-        />
-      ) : (
-        <View style={{ aspectRatio }} />
-      )}
-    </View>
-  );
-}

@@ -1,23 +1,20 @@
-import { Canvas, Rect, Shader, Skia, type SkColor } from '@shopify/react-native-skia';
-import { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, type ViewProps, View } from 'react-native';
+import { Canvas, Rect, Shader, Skia } from '@shopify/react-native-skia';
+import { useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, AppState, StyleSheet, type ViewProps, View } from 'react-native';
 import {
   useDerivedValue,
   useFrameCallback,
   useReducedMotion,
   useSharedValue,
 } from 'react-native-reanimated';
-import { useCSSVariable, useResolveClassNames } from 'uniwind';
+import { useCSSVariable } from 'uniwind';
 
 import { cn } from '../../utils/cn';
-import { ShimmerText } from '../shimmer-text';
 import { getImageGenerationLoaderEffect } from './image-generation-loader-effect';
 
 const DEFAULT_SIZE = 208;
-// Wrap after 250 complete glare cycles, while the reflection is off-canvas.
+// 500 complete 2.4-second light cycles.
 const CLOCK_WRAP_SECONDS = 1200;
-
-const FIELD_COLOR_VARIABLES = ['--color-foreground-tertiary', '--color-muted-foreground'];
 
 export type ImageGenerationLoaderProps = Omit<ViewProps, 'children'> &
   Readonly<{
@@ -25,66 +22,68 @@ export type ImageGenerationLoaderProps = Omit<ViewProps, 'children'> &
     active?: boolean;
     /** Preview height in points. Defaults to `size`. */
     height?: number;
-    /** Visible status text. Pass a translated value at product call sites. */
-    label?: string;
-    /** Resolution text; omitted when the requested size is not known. */
-    resolution?: string;
     /** Square fallback used when `width` or `height` is not provided. */
     size?: number;
     /** Preview width in points. Defaults to `size`. */
     width?: number;
   }>;
 
+/**
+ * Active generation shows a holo card: a pearl sheen with a white glare that
+ * crosses it, revealing fine foil lines and sparkles. A UI-thread clock drives
+ * one shader. Inactive/background states pause it; Reduce Motion keeps the
+ * neutral canvas without the light.
+ */
 export function ImageGenerationLoader({
-  accessibilityLabel,
+  accessibilityLabel = 'Generating image',
   active = true,
   className,
   height,
-  label = 'Generating image',
-  resolution,
   size = DEFAULT_SIZE,
   width,
   ...props
 }: ImageGenerationLoaderProps) {
-  const reducedMotion = useReducedMotion();
-  const isAnimating = active && !reducedMotion;
+  const initialReducedMotion = useReducedMotion();
+  const [reducedMotion, setReducedMotion] = useState(initialReducedMotion);
+  const [isForeground, setIsForeground] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const appState = AppState.addEventListener('change', (state) => {
+      setIsForeground(state === 'active');
+    });
+    const reduceMotion = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReducedMotion,
+    );
+    return () => {
+      appState.remove();
+      reduceMotion.remove();
+    };
+  }, []);
+  const isAnimating = active && isForeground && !reducedMotion;
   const previewHeight = height ?? size;
   const previewWidth = width ?? size;
   const time = useLoaderClock(isAnimating);
-  const colorValues = useCSSVariable(FIELD_COLOR_VARIABLES);
-  const baseColorValue = colorValues[0];
-  const glowColorValue = colorValues[1];
-  const glareStyle = useResolveClassNames('bg-constant-white/60 dark:bg-constant-white/10');
-  const glareColorValue =
-    typeof glareStyle.backgroundColor === 'string' ? glareStyle.backgroundColor : undefined;
-  const dotFieldEffect = getImageGenerationLoaderEffect();
-  const [baseColor, glowColor, glareColor] = useMemo(
-    () => [
-      resolveSkiaColor(baseColorValue, '#a1a1a1'),
-      resolveSkiaColor(glowColorValue, '#a1a1a1'),
-      resolveSkiaColor(glareColorValue, 'transparent'),
-    ],
-    [baseColorValue, glowColorValue, glareColorValue],
+  const surfaceColorValue = useCSSVariable('--color-background');
+  const foilEffect = getImageGenerationLoaderEffect();
+  const surfaceColor = useMemo(
+    () => Skia.Color(surfaceColorValue ?? '#f5f5f5'),
+    [surfaceColorValue],
   );
 
   const uniforms = useDerivedValue(
     () => ({
-      uBaseColor: baseColor,
-      uGlowColor: glowColor,
-      uGlareColor: glareColor,
       uResolution: [previewWidth, previewHeight],
       uStatic: isAnimating ? 0 : 1,
+      uSurfaceColor: surfaceColor,
       uTime: time.get(),
     }),
-    [baseColor, glowColor, glareColor, isAnimating, previewHeight, previewWidth, time],
+    [isAnimating, previewHeight, previewWidth, surfaceColor, time],
   );
-
-  const spokenLabel = accessibilityLabel ?? (resolution ? `${label}. ${resolution}` : label);
 
   return (
     <View
       {...props}
-      accessibilityLabel={spokenLabel}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="progressbar"
       accessibilityState={{ busy: active }}
       className={cn('items-center', className)}
@@ -96,21 +95,9 @@ export function ImageGenerationLoader({
       >
         <Canvas style={StyleSheet.absoluteFill}>
           <Rect height={previewHeight} width={previewWidth} x={0} y={0}>
-            <Shader source={dotFieldEffect} uniforms={uniforms} />
+            <Shader source={foilEffect} uniforms={uniforms} />
           </Rect>
         </Canvas>
-        {resolution ? (
-          <View className="absolute right-3 top-3">
-            <Text className="font-mono text-xs text-muted-foreground" numberOfLines={1} selectable>
-              {resolution}
-            </Text>
-          </View>
-        ) : null}
-        <View className="absolute bottom-3 left-3">
-          <ShimmerText active={active} className="font-mono text-xs" numberOfLines={1}>
-            {label}
-          </ShimmerText>
-        </View>
       </View>
     </View>
   );
@@ -132,8 +119,4 @@ function useLoaderClock(active: boolean) {
   }, [active, frame, time]);
 
   return time;
-}
-
-function resolveSkiaColor(value: number | string | undefined, fallback: string): SkColor {
-  return Skia.Color(value ?? fallback);
 }

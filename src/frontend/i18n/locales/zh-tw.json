@@ -874,6 +874,7 @@
   "painting.editor.annotationInstruction": "標註 {{number}}（距左側 {{x}}%、距上方 {{y}}%）：{{instruction}}",
   "painting.editor.annotationPlaceholder": "標註 {{number}} 的修改",
   "painting.editor.annotationSummary": "標註 {{number}}：{{instruction}}",
+  "painting.errorDetail.action": "錯誤詳情",
   "painting.errorDetail.unavailable": "本次生成沒有可用的錯誤詳情。",
   "painting.focus.annotationHint": "長按圖片新增標註",
   "painting.focus.delete": "刪除此版本",

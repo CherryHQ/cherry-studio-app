@@ -885,6 +885,7 @@
   "painting.editor.annotationInstruction": "Not {{number}} (soldan {{x}}%, üstten {{y}}%): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Not {{number}} düzenle",
   "painting.editor.annotationSummary": "Not {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Hata ayrıntıları",
   "painting.errorDetail.unavailable": "Bu üretim için hata ayrıntısı yok.",
   "painting.focus.annotationHint": "Not eklemek için görsele uzun basın",
   "painting.focus.delete": "Bu sürümü sil",

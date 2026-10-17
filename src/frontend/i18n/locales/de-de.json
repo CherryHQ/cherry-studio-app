@@ -885,6 +885,7 @@
   "painting.editor.annotationInstruction": "Notiz {{number}} ({{x}}% vom linken Rand, {{y}}% vom oberen Rand): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Notiz {{number}} bearbeiten",
   "painting.editor.annotationSummary": "Notiz {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Fehlerdetails",
   "painting.errorDetail.unavailable": "Für diese Generation sind keine Fehlerdetails verfügbar.",
   "painting.focus.annotationHint": "Lange auf das Bild drücken, um eine Notiz hinzuzufügen",
   "painting.focus.delete": "Diese Version löschen",

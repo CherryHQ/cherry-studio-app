@@ -162,12 +162,11 @@ describe('usePaintingGalleryEntries', () => {
     await waitForCondition(() => entries?.isLoading === false);
 
     // Nothing has been generated yet, so the request is all the tile has to go
-    // on for both the shape it reserves and the size it names.
+    // on for the shape it reserves.
     expect(entries?.items).toEqual([
       expect.objectContaining({
         aspectRatio: 1664 / 928,
         kind: 'generating',
-        resolution: '1664 × 928',
       }),
     ]);
   });
