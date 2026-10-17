@@ -1,5 +1,3 @@
-import { MULTI_MODEL_TOOL_NAME } from '@/shared/contracts/agent';
-
 export type BuiltInToolIconName =
   | 'calendar'
   | 'code'
@@ -24,7 +22,6 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   library_read_file: { iconName: 'fileText', titleKey: 'library.read' },
   create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
-  [MULTI_MODEL_TOOL_NAME]: { iconName: 'fileText', titleKey: 'chat.multiModel.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },
   install_skill: { iconName: 'fileText', titleKey: 'skills.candidate.install' },
   list_local_skills: { iconName: 'fileText', titleKey: 'skills.activity.list' },

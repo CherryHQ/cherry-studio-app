@@ -24,24 +24,13 @@ import {
   watchEvents,
 } from '@earendil-works/pi-durable';
 
-import { MULTI_MODEL_TOOL_NAME, AgentMultiModelResultSchema } from '@/shared/contracts/agent';
-
 import { RuntimeOptionsSchema } from '../runtimeSchemas';
 import type { RuntimeOptions } from '../types';
-import { MultiModelGroup } from './piMultiModel';
 import { ToolInstructions } from './piToolInstructions';
 
 type PiSessionBinding = {
   conversationId: ConversationId | null;
   revision: number;
-  activePathId?: string;
-  paths?: { [key: string]: ConversationId };
-  pendingPath?: {
-    pathId: string;
-    at: EntryId;
-    edits: JsonObject | null;
-    fileEntryIds: string[];
-  } | null;
 };
 
 /** The binding identifies a disposable copy of a Cherry transcript revision. */
@@ -51,6 +40,18 @@ const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   scope: 'session',
   family: true,
   initial: (revision) => ({ conversationId: null, revision }),
+});
+
+/**
+ * The working copy that executed each Cherry answer, so a later question below
+ * that answer can continue or fork it. Keyed by the Cherry assistant message id.
+ */
+const AnswerLane = defineDocFamily<{ lane: string }, string>({
+  kind: 'cherry.answer-lane',
+  version: 1,
+  scope: 'session',
+  family: true,
+  initial: (lane) => ({ lane }),
 });
 
 /** Display identities and original managed-file references, not an assistant transcript mirror. */
@@ -133,7 +134,6 @@ type SubmissionIndex = {
 type PiConversationSeed = {
   sessionId: string;
   revision: number;
-  pathId?: string;
   agent: AgentChange;
   options?: RuntimeOptions;
   configuration?: JsonObject;
@@ -194,11 +194,47 @@ export class PiDurableRuntime {
       resources.fileEntryIds = [...new Set(seed.resourceFileEntryIds ?? [])];
       for (const entry of seed.entries ?? []) await tx.appendEntry(conversation.id, entry);
       binding.conversationId = conversation.id;
-      binding.activePathId = seed.pathId ?? 'root';
-      binding.paths = { [binding.activePathId]: conversation.id };
       return conversation.id;
     }, context);
     return this.requireConversation(id, context);
+  }
+
+  /**
+   * Atomic native history fork into a new working copy. The fork sees the source's
+   * entries through `at` and starts with its own agent, options and instructions.
+   */
+  async forkConversation(
+    source: string,
+    seed: PiConversationSeed & { at: EntryId },
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<Conversation> {
+    const parent = await this.requireSession(source, context);
+    const id = await this.harness.commit(async (tx) => {
+      const binding = await tx.doc(SessionBinding, seed.sessionId, seed.revision);
+      assertWorkingCopy(binding);
+      if (binding.conversationId !== null) throw new Error('The working copy already exists.');
+      if (seed.configuration) await tx.doc(Configuration, seed.sessionId, seed.configuration);
+      const conversation = await tx.forkConversation(parent.id, seed.at, {
+        ownership: { kind: 'ownerless' },
+      });
+      await configure(tx, conversation.id, seed.agent);
+      const instructions = await tx.doc(ToolInstructions, conversation.id);
+      instructions.sections = [...(seed.initialInstructions ?? [])];
+      const provider = await tx.doc(ProviderDoc, conversation.id);
+      await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? {}));
+      const resources = await tx.doc(ResourceScope, conversation.id);
+      resources.fileEntryIds = [
+        ...new Set([...resources.fileEntryIds, ...(seed.resourceFileEntryIds ?? [])]),
+      ];
+      binding.conversationId = conversation.id;
+      return conversation.id;
+    }, context);
+    return this.requireConversation(id, context);
+  }
+
+  /** The working copy that executed a Cherry answer, if it still exists. */
+  async answerLane(assistantMessageId: string, context: Context = BACKGROUND_CONTEXT) {
+    return (await this.harness.snapshot(AnswerLane, assistantMessageId, context))?.lane;
   }
 
   async conversation(
@@ -209,81 +245,6 @@ export class PiDurableRuntime {
     return binding?.conversationId === undefined || binding.conversationId === null
       ? undefined
       : this.requireConversation(binding.conversationId, context);
-  }
-
-  async activatePath(
-    input: {
-      sessionId: string;
-      pathId: string;
-      revision: number;
-      at?: EntryId;
-      edits?: EntryDraft;
-      defer?: boolean;
-      fileEntryIds?: readonly string[];
-    },
-    context: Context = BACKGROUND_CONTEXT,
-  ): Promise<boolean> {
-    const previous = await this.binding(input.sessionId, context);
-    if (!previous?.conversationId) return false;
-    const paths = { [previous.activePathId ?? 'root']: previous.conversationId, ...previous.paths };
-    if (!paths[input.pathId] && input.at === undefined) return false;
-    const providerId = await this.providerSessionId(input.sessionId, context);
-    const options = await this.requestOptions(providerId, context);
-    await this.harness.commit(async (tx) => {
-      const binding = await tx.doc(SessionBinding, input.sessionId, input.revision);
-      const existing = paths[input.pathId];
-      if (!existing && input.defer) {
-        binding.pendingPath = {
-          pathId: input.pathId,
-          at: input.at!,
-          edits: input.edits ? (JSON.parse(JSON.stringify(input.edits)) as JsonObject) : null,
-          fileEntryIds: [...(input.fileEntryIds ?? [])],
-        };
-        binding.revision = input.revision;
-        return;
-      }
-      binding.pendingPath = null;
-      const conversation = existing
-        ? { id: existing }
-        : await tx.forkConversation(previous.conversationId!, input.at!, {
-            ownership: { kind: 'ownerless' },
-          });
-      if (input.fileEntryIds) {
-        const resources = await tx.doc(ResourceScope, conversation.id);
-        resources.fileEntryIds = [...input.fileEntryIds];
-      }
-      if (!existing) {
-        const provider = await tx.doc(ProviderDoc, conversation.id);
-        await tx.doc(RequestOptions, provider.sessionId, jsonOptions(options));
-      }
-      if (
-        input.edits &&
-        (!existing ||
-          input.pathId === previous.activePathId ||
-          (!previous.activePathId && input.pathId === 'root'))
-      )
-        await tx.appendEntry(conversation.id, input.edits);
-      binding.conversationId = conversation.id;
-      binding.activePathId = input.pathId;
-      binding.paths = { ...paths, [input.pathId]: conversation.id };
-      binding.revision = input.revision;
-    }, context);
-    return true;
-  }
-
-  async materializePendingPath(sessionId: string) {
-    const binding = await this.binding(sessionId);
-    if (binding?.pendingPath)
-      await this.activatePath({
-        sessionId,
-        pathId: binding.pendingPath.pathId,
-        revision: binding.revision,
-        at: binding.pendingPath.at,
-        fileEntryIds: binding.pendingPath.fileEntryIds,
-        ...(binding.pendingPath.edits
-          ? { edits: binding.pendingPath.edits as unknown as EntryDraft }
-          : {}),
-      });
   }
 
   async binding(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
@@ -338,75 +299,12 @@ export class PiDurableRuntime {
     }, BACKGROUND_CONTEXT);
   }
 
-  async cancelCandidate(input: { sessionId: string; toolCallId: string; candidateId: string }) {
-    const conversation = await this.requireSession(input.sessionId, BACKGROUND_CONTEXT);
-    const group = await this.harness.snapshot(
-      MultiModelGroup,
-      `${conversation.id}:${input.toolCallId}`,
-      BACKGROUND_CONTEXT,
-    );
-    const result = AgentMultiModelResultSchema.safeParse(group?.value);
-    const index = result.success
-      ? result.data.candidates.findIndex((candidate) => candidate.id === input.candidateId)
-      : -1;
-    const taskId = index >= 0 ? group?.tasks[index] : undefined;
-    if (taskId === undefined) throw new Error('The candidate execution is unavailable.');
-    await this.harness.abortTask(
-      taskId as import('@earendil-works/pi-durable').TaskId,
-      BACKGROUND_CONTEXT,
-    );
-  }
-
-  async refreshMultiModelEntry(
-    entry: EntryRecord,
-    context: Context = BACKGROUND_CONTEXT,
-  ): Promise<EntryRecord> {
-    const messages = await Promise.all(
-      (entry.model ?? []).map(async (message) => {
-        if (message.role !== 'toolResult' || message.toolName !== MULTI_MODEL_TOOL_NAME)
-          return message;
-        const group = await this.harness.snapshot(
-          MultiModelGroup,
-          `${entry.conversationId}:${message.toolCallId}`,
-          context,
-        );
-        const result = AgentMultiModelResultSchema.safeParse(group?.value);
-        if (!result.success) return message;
-        return {
-          ...message,
-          details: {
-            kind: 'cherry.tool-result',
-            ref: { source: 'builtin', capabilityId: MULTI_MODEL_TOOL_NAME },
-            providerName: MULTI_MODEL_TOOL_NAME,
-            displayName: 'Multi-model reply',
-            output: {
-              value: result.data,
-              modelValue: {
-                kind: result.data.kind,
-                candidates: result.data.candidates.map(({ id, modelId, name, status }) => ({
-                  id,
-                  modelId,
-                  name,
-                  status,
-                })),
-              },
-              artifacts: [],
-            },
-          },
-        };
-      }),
-    );
-    return { ...entry, model: messages };
-  }
-
   async providerSessionId(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
     const conversation = await this.requireSession(sessionId, context);
     return (await this.harness.snapshot(ProviderDoc, conversation.id, context))?.sessionId;
   }
 
   async resourceFileEntryIds(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
-    const binding = await this.binding(sessionId, context);
-    if (binding?.pendingPath) return binding.pendingPath.fileEntryIds;
     const conversation = await this.requireSession(sessionId, context);
     return (
       (await this.harness.snapshot(ResourceScope, conversation.id, context))?.fileEntryIds ?? []
@@ -551,6 +449,8 @@ export class PiDurableRuntime {
           if (alias.requestId !== draft.requestId || alias.role !== role)
             throw new Error('A display message identity cannot belong to two submissions.');
         }
+        const lane = await tx.doc(AnswerLane, displayIds.assistantMessageId, sessionId);
+        lane.lane = sessionId;
       }
     }, context);
     return conversation.submit(draft, context);
@@ -716,14 +616,6 @@ export class PiDurableRuntime {
     await conversation.abort(context, { background: true });
   }
 
-  async stopAllPaths(sessionId: string, context: Context = BACKGROUND_CONTEXT) {
-    const binding = await this.binding(sessionId, context);
-    const ids = new Set(Object.values(binding?.paths ?? {}));
-    if (binding?.conversationId) ids.add(binding.conversationId);
-    for (const id of ids)
-      await (await this.requireConversation(id, context)).abort(context, { background: true });
-  }
-
   inspect(context: Context = BACKGROUND_CONTEXT) {
     return this.harness.inspect(context);
   }
@@ -794,6 +686,7 @@ export class PiDurableRuntime {
     const provider = await this.harness.snapshot(ProviderDoc, conversationId, context);
     const requestIds: string[] = [];
     const messageIds: string[] = [];
+    const answerIds: string[] = [];
     let next: Cursor | undefined;
     do {
       const page = await this.storage.scanSubmissions({ conversationId }, 256, next, context);
@@ -804,13 +697,19 @@ export class PiDurableRuntime {
         for (const field of ['userMessageId', 'assistantMessageId'] as const) {
           const id = value?.[field];
           if (typeof id === 'string') messageIds.push(id);
+          if (field === 'assistantMessageId' && typeof id === 'string') answerIds.push(id);
         }
       }
       next = page.next;
     } while (next);
+    // An answer re-executed by another working copy keeps that copy's claim.
+    const ownedAnswers: string[] = [];
+    for (const answerId of answerIds)
+      if ((await this.answerLane(answerId, context)) === sessionId) ownedAnswers.push(answerId);
     await this.harness.commit(async (tx) => {
       await tx.retireDoc(SessionBinding, sessionId);
       await tx.retireDoc(Configuration, sessionId);
+      for (const answerId of ownedAnswers) await tx.retireDoc(AnswerLane, answerId);
       if (provider) await tx.retireDoc(RequestOptions, provider.sessionId);
       for (const requestId of requestIds)
         await tx.retireDoc(SubmissionMetadata, metadataKey(conversationId, requestId));

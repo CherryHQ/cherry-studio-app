@@ -158,15 +158,28 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
-## Fork, Retry And Delete
+## Branches, Fork, Retry And Delete
 
-Forks copy Cherry message rows with new message/turn identities. Checkpoints are cleared
-because their old turn anchors are not valid in the copy. The new session creates an independent Pi
-conversation on its first submission; it never uses Pi's shared-history fork tree.
+A Cherry Session's message tree runs on several Pi conversations, one per branch that executed.
+Each is a lane keyed by the Session id (the first lane, as before branching) or
+`${sessionId}#${answerId}`. Runtime calls and execution identities carry the lane key; the Host maps
+it back to the Session for Cherry reads, events and usage. A Pi document records which lane executed
+each Cherry answer (`cherry.answer-lane`). A question below answer P continues P's lane when P is
+that lane's newest queued, running or settled answer, natively forks that
+lane at P's answer boundary otherwise (shared history and compaction state, no rebuild), and
+rebuilds a new lane from the Cherry branch when no current lane holds P (restore, revision change,
+or answers from before branching). A multi-model question gives every further answer its own lane,
+runs them in parallel with only automatically approved read tools, and keeps the Session busy until
+all of them settle; meanwhile further input is rejected rather than queued. Rebuilds restore the
+messages and history, not loaded tool instructions or Skill sections.
 
-Regenerating a successful or older answer copies the prefix before its question into a new Cherry
-session and submits the original input. Retrying the latest failed answer retains its message ids,
-issues a new turn id, and rebuilds a fresh copy. A recorded completed-tool prefix is imported as
+"Branch to a new chat" copies the selected branch into a new Cherry Session with new message/turn
+identities. Checkpoints are cleared because their old turn anchors are not valid in the copy. The
+new session creates an independent Pi conversation on its first submission.
+
+Regenerating any settled answer reserves a sibling answer to the same question in the same Session
+and submits the original input on its own lane. Retrying a failed leaf answer retains its message
+ids, issues a new turn id, and rebuilds a fresh copy. A recorded completed-tool prefix is imported as
 history and a continuation input asks for the remaining answer; historical tools are not executed
 by import.
 

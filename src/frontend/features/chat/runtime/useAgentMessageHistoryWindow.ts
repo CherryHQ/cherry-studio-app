@@ -58,25 +58,25 @@ function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMe
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
   navigation: MessageNavigation = {},
-  { pathId, settledOnly = false }: { pathId?: string; settledOnly?: boolean } = {},
+  {
+    settledOnly = false,
+    prepareAround,
+  }: {
+    settledOnly?: boolean;
+    /** Runs before a window around a message is read, such as selecting its branch. */
+    prepareAround?: (messageId: string) => Promise<void>;
+  } = {},
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
   const { messageId, messageRequestId } = navigation;
-  const navigationKey = JSON.stringify([
-    sessionId,
-    messageId,
-    messageRequestId,
-    ...(pathId ? [pathId] : []),
-  ]);
+  const navigationKey = JSON.stringify([sessionId, messageId, messageRequestId]);
   const [latestNavigationKey, setLatestNavigationKey] = useState<string>();
   const isReturningToLatest = latestNavigationKey === navigationKey;
   const aroundMessageId = isReturningToLatest ? undefined : messageId;
   const isAroundMessage = Boolean(aroundMessageId);
   const dataKey = messageId
     ? `${navigationKey}:${isAroundMessage ? 'message' : 'latest'}`
-    : pathId && pathId !== 'root'
-      ? `${sessionId ?? ''}:${pathId}`
-      : (sessionId ?? '');
+    : (sessionId ?? '');
   const initialPageParam: ListAgentSessionMessagesQueryParams = { aroundMessageId };
   const query = useInfiniteQuery({
     enabled: Boolean(sessionId),
@@ -90,15 +90,11 @@ export function useAgentMessageHistoryWindow(
       page.previousCursor ? { cursor: page.previousCursor, direction: 'newer' } : undefined,
     initialPageParam,
     queryFn: async ({ pageParam, signal }) => {
+      if (pageParam.aroundMessageId) await prepareAround?.(pageParam.aroundMessageId);
       const page = await apiClient.get(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
         {
-          query: {
-            ...pageParam,
-            ...(pathId ? { pathId } : {}),
-            limit: messageWindowPolicy.initialFetchCount,
-            settledOnly,
-          },
+          query: { ...pageParam, limit: messageWindowPolicy.initialFetchCount, settledOnly },
           signal,
         },
       );
@@ -109,7 +105,6 @@ export function useAgentMessageHistoryWindow(
       ...queryKeys.agentSessions.messages(sessionId ?? '__missing_session__'),
       {
         aroundMessageId,
-        ...(pathId ? { pathId } : {}),
         ...(aroundMessageId ? { messageRequestId } : {}),
         limit: messageWindowPolicy.initialFetchCount,
         settledOnly,

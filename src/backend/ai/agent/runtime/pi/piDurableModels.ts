@@ -22,7 +22,6 @@ import {
   type PiModelFailureStage,
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
-import { multiModelStream } from './piMultiModel';
 import { providerErrorEvent } from './piStreamEvents';
 import { disablePiToolCalls } from './piToolChoice';
 import { applyPiWebReplay, PiWebResponse } from './PiWebResponse';
@@ -57,10 +56,10 @@ export function createPiDurableModels(
 
   async function registerModel(
     reference: RuntimeModel,
-    kind: 'language' | 'image' | 'multi-model' = 'language',
+    kind: 'language' | 'image' = 'language',
   ): Promise<void> {
     const preflight =
-      kind !== 'language'
+      kind === 'image'
         ? {
             // The local scheduling adapter consumes no provider context and creates no summary requests.
             contextWindow: Number.MAX_SAFE_INTEGER,
@@ -74,12 +73,7 @@ export function createPiDurableModels(
       throw new Error('The selected model has no usable input context.');
     const registered = providers.get(reference.providerId) ?? new Map<string, Model<Api>>();
     registered.set(piDurableModelKey(reference, kind), {
-      api:
-        kind === 'image'
-          ? 'cherry-image'
-          : kind === 'multi-model'
-            ? 'cherry-multi-model'
-            : 'cherry',
+      api: kind === 'image' ? 'cherry-image' : 'cherry',
       provider: reference.providerId,
       id: piDurableModelKey(reference, kind),
       name: reference.modelId,
@@ -89,7 +83,7 @@ export function createPiDurableModels(
       contextWindow,
       maxTokens: preflight.maxOutputTokens,
       input: [...preflight.inputModalities],
-      reasoning: kind === 'language',
+      reasoning: kind !== 'image',
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     });
     providers.set(reference.providerId, registered);
@@ -105,7 +99,7 @@ export function createPiDurableModels(
         let failureStage: PiModelFailureStage = 'configuration';
         try {
           // Include configuration/permission failures before a provider stream exists.
-          if (model.api !== 'cherry-image' && model.api !== 'cherry-multi-model') {
+          if (model.api !== 'cherry-image') {
             trace = await traceRequest?.(options?.sessionId, options?.signal);
             trace?.setAttributes({
               'gen_ai.request.model': model.id,
@@ -114,7 +108,6 @@ export function createPiDurableModels(
           }
           const selected = await configuration(options?.sessionId, options?.signal);
           if (model.api === 'cherry-image') return imageModelStream(model, context);
-          if (model.api === 'cherry-multi-model') return multiModelStream(model, context.messages);
           const reportUsage = await captureUsage?.(options?.sessionId, options?.signal);
           options?.signal?.throwIfAborted();
           failureStage = 'model_resolution';
@@ -257,16 +250,13 @@ export function createPiDurableModels(
   return {
     models,
     registerModel,
-    getModel: (reference: RuntimeModel, kind: 'language' | 'image' | 'multi-model' = 'language') =>
+    getModel: (reference: RuntimeModel, kind: 'language' | 'image' = 'language') =>
       models.getModel(reference.providerId, piDurableModelKey(reference, kind)),
   };
 }
 
-export function piDurableModelKey(
-  reference: RuntimeModel,
-  kind: 'language' | 'image' | 'multi-model',
-) {
-  return kind === 'language' ? reference.modelId : `cherry:${kind}:${reference.modelId}`;
+export function piDurableModelKey(reference: RuntimeModel, kind: 'language' | 'image') {
+  return kind === 'image' ? `cherry:image:${reference.modelId}` : reference.modelId;
 }
 
 async function* webStream(

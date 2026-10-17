@@ -28,7 +28,6 @@ export class PiDurableObserver {
   private stream: AgentEventStream | undefined;
   private readonly inputs = new Map<SubmissionId, InputView>();
   private readonly entries = new Map<number, EntryRecord>();
-  private readonly toolDetails = new Map<string, unknown>();
   private readonly toolStates = new Map<string, 'running' | 'input-available' | 'interrupted'>();
   private readonly nestedTools = new Map<
     string,
@@ -71,7 +70,6 @@ export class PiDurableObserver {
     this.entries.clear();
     this.toolStates.clear();
     this.nestedTools.clear();
-    this.toolDetails.clear();
     this.run = [];
     this.partial = undefined;
     this.retrying = false;
@@ -84,7 +82,6 @@ export class PiDurableObserver {
     this.entries.clear();
     this.toolStates.clear();
     this.nestedTools.clear();
-    this.toolDetails.clear();
     this.run = snapshot.run?.inputs ?? [];
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
@@ -124,12 +121,10 @@ export class PiDurableObserver {
           BACKGROUND_CONTEXT,
           through,
         ))
-          this.entries.set(entry.id, await this.runtime.refreshMultiModelEntry(entry));
+          this.entries.set(entry.id, entry);
     }
-    for (const entry of snapshot.entries)
-      this.entries.set(entry.id, await this.runtime.refreshMultiModelEntry(entry));
+    for (const entry of snapshot.entries) this.entries.set(entry.id, entry);
     for (const tool of snapshot.tools) {
-      if (tool.details !== undefined) this.toolDetails.set(tool.callId, tool.details);
       if (tool.status !== 'done')
         this.toolStates.set(tool.callId, tool.status === 'running' ? 'running' : 'input-available');
       else if (tool.entry === undefined) this.toolStates.set(tool.callId, 'interrupted');
@@ -180,12 +175,9 @@ export class PiDurableObserver {
           this.retrying = false;
           this.toolStates.clear();
           this.nestedTools.clear();
-          this.toolDetails.clear();
           event.inputs.forEach((id) => touched.add(id));
           break;
         case 'run_end':
-          for (const [id, entry] of this.entries)
-            this.entries.set(id, await this.runtime.refreshMultiModelEntry(entry));
           event.inputs.forEach((id) => touched.add(id));
           this.run = [];
           this.partial = undefined;
@@ -207,7 +199,7 @@ export class PiDurableObserver {
           }
           break;
         case 'message_end':
-          this.entries.set(event.entry.id, await this.runtime.refreshMultiModelEntry(event.entry));
+          this.entries.set(event.entry.id, event.entry);
           for (const message of event.entry.model ?? []) {
             if (message.role === 'assistant') {
               this.partial = undefined;
@@ -218,7 +210,7 @@ export class PiDurableObserver {
           }
           break;
         case 'entry_appended':
-          this.entries.set(event.entry.id, await this.runtime.refreshMultiModelEntry(event.entry));
+          this.entries.set(event.entry.id, event.entry);
           if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
           break;
         case 'compaction_start':
@@ -253,9 +245,6 @@ export class PiDurableObserver {
           }
           this.toolStates.set(event.toolCallId, 'running');
           break;
-        case 'tool_execution_update':
-          if (event.details !== undefined) this.toolDetails.set(event.toolCallId, event.details);
-          break;
         case 'tool_execution_end':
           if (event.parentToolCallId) {
             const nested = this.nestedTools.get(event.toolCallId);
@@ -268,11 +257,7 @@ export class PiDurableObserver {
             }
             break;
           }
-          if (event.entry)
-            this.entries.set(
-              event.entry.id,
-              await this.runtime.refreshMultiModelEntry(event.entry),
-            );
+          if (event.entry) this.entries.set(event.entry.id, event.entry);
           else {
             this.toolStates.set(event.toolCallId, 'interrupted');
             logger.warn('Pi durable tool execution interrupted', {
@@ -364,7 +349,6 @@ export class PiDurableObserver {
       active,
       toolStates: this.toolStates,
       nestedTools: this.nestedTools,
-      toolDetails: this.toolDetails,
       ...(active && this.partial
         ? {
             partial: this.partial,

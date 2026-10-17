@@ -10,6 +10,7 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
   FakeRuntime,
+  sessionOfLane,
   type DurableAgentRuntime,
   type RuntimeArtifact,
   type RuntimeConversationEvent,
@@ -95,11 +96,17 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     ensureConversation: async (seed) => {
       copies.set(seed.sessionId, { revision: seed.revision, turns: [] });
     },
+    forkConversation: async (seed) => {
+      copies.set(seed.sessionId, { revision: seed.revision, turns: [] });
+    },
+    answerLane: async (messageId) =>
+      [...copies].find(([, copy]) =>
+        copy.turns.some((turn) => turn.assistantMessageId === messageId),
+      )?.[0],
     submit: jest.fn(async (id, input) => {
-      expect(
-        (await store.listMessages(id)).find((message) => message.id === input.assistantMessageId)
-          ?.status,
-      ).toBe('pending');
+      expect((await store.getMessage(sessionOfLane(id), input.assistantMessageId))?.status).toBe(
+        'pending',
+      );
       const turn: RuntimeDurableTurn = {
         identity: { sessionId: id, turnId: input.turnId, requestId: input.requestId },
         userMessageId: input.userMessageId,
@@ -903,6 +910,124 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ]);
       expect(messages[1]).toMatchObject({ status: 'pending' });
       expect(messages[1].turnId).not.toBe(failed.identity.turnId);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('regenerating a completed answer adds a selected sibling in the same Session', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'success',
+        parts: [],
+        usage: null,
+        error: null,
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      expect(
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        }),
+      ).toBeUndefined();
+      const [question, answer] = await state.store.listMessages(state.sessionId);
+      expect(question?.id).toBe(original.userMessageId);
+      expect(answer).toMatchObject({ parentId: original.userMessageId, status: 'pending' });
+      expect(answer?.id).not.toBe(original.assistantMessageId);
+      expect(
+        await state.store.getMessage(state.sessionId, original.assistantMessageId),
+      ).toMatchObject({ status: 'success' });
+      // The sibling runs on its own working copy; the original lane keeps its history.
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      expect(lane).not.toBe(state.sessionId);
+      expect(state.copies.get(state.sessionId)?.turns).toHaveLength(1);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('parallel answers share one question and each run on its own lane', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    try {
+      const second = createUniqueModelId('provider', 'second-model');
+      const result = await state.host.startSession({
+        sessionId: state.sessionId,
+        agentId: state.agentId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        additionalReplies: [{ modelId: second, assistantMessageId: uuid() }],
+        parts: [{ type: 'text', text: 'Compare' }],
+      });
+      expect(result.activeNodeId).toBeTruthy();
+      const calls = (state.conversations.submit as jest.Mock).mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(new Set(calls.map(([lane]) => lane)).size).toBe(2);
+      expect(calls.map(([, input]) => input.metadata.readOnlyTools)).toEqual([true, true]);
+      expect(new Set(calls.map(([, input]) => input.turnId)).size).toBe(1);
+      const unsettled = await state.store.listUnsettledAssistantMessages();
+      expect(unsettled).toHaveLength(2);
+      const answers = await Promise.all(
+        unsettled.map((row) => state.store.getMessage(state.sessionId, row.assistantMessageId)),
+      );
+      expect(answers.map((answer) => answer?.siblingsGroupId)).toEqual([1, 1]);
+      expect(answers.map((answer) => answer?.modelId)).toEqual([
+        inferenceSnapshot.model.uniqueModelId,
+        second,
+      ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('rejects parallel answers that repeat a model', async () => {
+    const state = fixture();
+    await state.host.initialize();
+    try {
+      await expect(
+        state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          modelId: inferenceSnapshot.model.uniqueModelId,
+          additionalReplies: [
+            { modelId: inferenceSnapshot.model.uniqueModelId, assistantMessageId: uuid() },
+          ],
+          parts: [{ type: 'text', text: 'Compare' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('selecting a message publishes the Session with its new selected leaf', async () => {
+    const state = fixture();
+    const first = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      const session = await state.host.selectMessage({
+        sessionId: state.sessionId,
+        messageId: first.userMessageId,
+      });
+      expect(session.activeNodeId).toBe(first.assistantMessageId);
+      expect(events).toContainEqual({ type: 'session.updated', session });
+      observation.unsubscribe();
+      await expect(
+        state.host.selectMessage({ sessionId: state.sessionId, messageId: uuid() }),
+      ).rejects.toMatchObject({ view: { code: 'MESSAGE_NOT_FOUND' } });
     } finally {
       await state.host.close();
     }

@@ -7,8 +7,6 @@
 
 import {
   AgentMessagePartSchema,
-  AgentProtocolError,
-  multiModelResultFromParts,
   AgentToolResultSchema,
   type AgentInputPart,
   type AgentMessageView,
@@ -109,27 +107,6 @@ export function toRuntimeHistory(
               providerName: part.toolName,
               input: part.input,
             });
-            const group = multiModelResultFromParts([part]);
-            if (group) {
-              const selected = group.candidates.find(
-                (candidate) =>
-                  candidate.id === message.selectedCandidateId && candidate.status === 'completed',
-              );
-              if (!selected)
-                throw new AgentProtocolError({
-                  code: 'ANSWER_SELECTION_REQUIRED',
-                  message: 'Adopt a multi-model reply before continuing.',
-                  retryable: false,
-                });
-              output.data.modelValue = {
-                kind: group.kind,
-                adopted: {
-                  candidateId: selected.id,
-                  modelId: selected.modelId,
-                  text: selected.text,
-                },
-              };
-            }
             parts.push({
               type: 'tool-result',
               toolCallId: part.toolCallId,

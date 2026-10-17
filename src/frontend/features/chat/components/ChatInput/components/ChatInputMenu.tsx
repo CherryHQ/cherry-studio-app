@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import LayersIcon from '@cherrystudio/app-icons/icons/layers';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
@@ -23,6 +24,7 @@ export function ChatInputMenu({
   triggerRef,
 }: {
   media?: 'all' | 'images';
+  /** Chooses several models to answer the next question in parallel. */
   onPickModels?: () => void;
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
@@ -54,6 +56,7 @@ export function ChatInputMenu({
       >
         {onPickModels ? (
           <Composer.Menu.Item
+            icon={<LayersIcon className="size-5 text-foreground" />}
             label={t('chat.multiModel.title')}
             onPress={onPickModels}
             testID="chat-composer-multi-model"

@@ -10,7 +10,6 @@ import {
   type AgentMessagePart,
   type AgentMessageView,
   type AgentSubmitMessageInput,
-  multiModelResultFromParts,
   AgentToolResultSchema,
 } from '@/shared/contracts/agent';
 import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
@@ -319,10 +318,7 @@ function toDisplayParts(
 }
 
 export function resolveMessageModel(message: AgentMessageView): MessageListItem['model'] {
-  if (
-    message.inferenceSnapshot?.status !== 'supported' ||
-    message.inferenceSnapshot.snapshot.multiModelIds
-  ) {
+  if (message.inferenceSnapshot?.status !== 'supported') {
     return undefined;
   }
 
@@ -355,12 +351,7 @@ export function toAgentMessageListItem(
   }
 
   const model = resolveMessageModel(message);
-  const multiModel = multiModelResultFromParts(message.parts);
   const item = {
-    ...(message.pathId ? { pathId: message.pathId } : {}),
-    ...(multiModel
-      ? { multiModel: { result: multiModel, selectedCandidateId: message.selectedCandidateId } }
-      : {}),
     createdAt: message.createdAt,
     data: {
       ...toDisplayParts(
@@ -381,6 +372,18 @@ export function toAgentMessageListItem(
       ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
       : {}),
     ...(model ? { model } : {}),
+    ...(message.siblings
+      ? {
+          branch: {
+            siblings: message.siblings.map((sibling) => ({
+              id: sibling.id,
+              status: toDisplayStatus(sibling.status),
+              modelId: sibling.modelId,
+            })),
+            multiModel: message.siblings.some((sibling) => sibling.siblingsGroupId > 0),
+          },
+        }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),

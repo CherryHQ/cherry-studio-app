@@ -28,6 +28,36 @@ describe('AgentSessionMessageService persistence', () => {
     sqlite.close();
   });
 
+  test('reads only the selected branch and lists the alternatives at each branch point', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'q1', text: 'Q1', role: 'user', turnId: 't1' });
+    insertMessage(sqlite, { createdAt: 110, id: 'a1', text: 'A1', turnId: 't1' });
+    insertMessage(sqlite, { createdAt: 120, id: 'q2', text: 'Q2', role: 'user', turnId: 't2' });
+    insertMessage(sqlite, { createdAt: 130, id: 'a2', text: 'A2', turnId: 't2' });
+    // A second model answered Q1 in parallel; its sibling group is shared with A1.
+    sqlite.exec(`
+      INSERT INTO agent_session_message (
+        id, session_id, parent_id, siblings_group_id, turn_id, role, data, status, created_at, updated_at
+      ) VALUES ('b1', 'session-1', 'q1', 1, 't1', 'assistant', '{"parts":[]}', 'success', 115, 115);
+      UPDATE agent_session_message SET siblings_group_id = 1 WHERE id = 'a1';
+      UPDATE agent_session SET active_node_id = 'a2' WHERE id = 'session-1';
+    `);
+
+    const selected = await agentSessionMessageService.listByCursor('session-1');
+    expect(selected.items.map((message) => message.id)).toEqual(['a2', 'q2', 'a1', 'q1']);
+    expect(selected.items.find((message) => message.id === 'a1')?.siblings).toEqual([
+      { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 1 },
+      { id: 'b1', modelId: null, status: 'success', siblingsGroupId: 1 },
+    ]);
+    expect(selected.items.find((message) => message.id === 'q2')?.siblings).toBeUndefined();
+
+    sqlite.exec(`UPDATE agent_session SET active_node_id = 'b1' WHERE id = 'session-1'`);
+    const other = await agentSessionMessageService.listByCursor('session-1');
+    expect(other.items.map((message) => message.id)).toEqual(['b1', 'q1']);
+    await expect(
+      agentSessionMessageService.listByCursor('session-1', { aroundMessageId: 'a2' }),
+    ).rejects.toThrow();
+  });
+
   test('merges concurrent languages into message data and returns them with history and selection', async () => {
     insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
     const original = sqlite
@@ -589,4 +619,24 @@ function insertMessage(
       values.createdAt,
       values.createdAt,
     );
+  linkLinearTranscript(database);
+}
+
+/** Fixtures describe linear transcripts: chain each row to its predecessor, as 0012 does. */
+function linkLinearTranscript(database: DatabaseSync): void {
+  database.exec(`
+    UPDATE agent_session_message SET parent_id = (
+      SELECT previous.id FROM agent_session_message AS previous
+      WHERE previous.session_id = agent_session_message.session_id
+        AND (previous.created_at < agent_session_message.created_at
+          OR (previous.created_at = agent_session_message.created_at
+            AND previous.id < agent_session_message.id))
+      ORDER BY previous.created_at DESC, previous.id DESC
+      LIMIT 1
+    );
+    UPDATE agent_session SET active_node_id = (
+      SELECT id FROM agent_session_message WHERE session_id = agent_session.id
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    );
+  `);
 }

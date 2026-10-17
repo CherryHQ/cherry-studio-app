@@ -22,7 +22,6 @@ import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
 import { FileAttachmentIssueSchema, FileAttachmentReportSchema } from '../fileAttachment';
-import { AgentConversationStateSchema, AgentMultiModelIdsSchema } from './multiModel';
 
 export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -98,7 +97,6 @@ export const AgentInferenceSnapshotV1Schema = z.strictObject({
     name: z.string(),
   }),
   imageGeneration: AgentImageGenerationSchema.optional(),
-  multiModelIds: AgentMultiModelIdsSchema.optional(),
   reasoningEffort: z.string().min(1).optional(),
   parameters: z.strictObject({
     temperature: z.number().finite().optional(),
@@ -144,7 +142,6 @@ export const AgentSessionViewSchema = z.strictObject({
   agentId: z.string().min(1),
   name: z.string(),
   isNameManuallyEdited: z.boolean(),
-  conversationState: AgentConversationStateSchema.optional(),
   /**
    * Copied-message boundary after which the fork-origin divider is rendered.
    * Null for ordinary or pre-boundary Sessions, and cleared with fork lineage.
@@ -156,6 +153,11 @@ export const AgentSessionViewSchema = z.strictObject({
    * user can no longer open.
    */
   forkedFromSessionId: z.string().min(1).nullable(),
+  /**
+   * Selected leaf of the message tree. The visible transcript and the next
+   * submission's history are its ancestor chain. Null for an empty Session.
+   */
+  activeNodeId: z.string().min(1).nullable().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -177,8 +179,6 @@ export const AgentErrorViewSchema = z
       'MESSAGE_NOT_FOUND',
       'MESSAGE_UNREADABLE',
       'SESSION_BUSY',
-      'ANSWER_SELECTION_REQUIRED',
-      'TURN_HAS_CONTINUATIONS',
       'CAPABILITY_UNSUPPORTED',
       'TOOL_CALLING_UNSUPPORTED',
       'ATTACHMENT_INVALID',
@@ -398,17 +398,33 @@ export const AgentMessagePartSchema = z.union([
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
 
+/** One alternative at a message-tree branch point, in creation order. */
+export const AgentMessageSiblingSchema = z.strictObject({
+  id: z.string().min(1),
+  modelId: UniqueModelIdSchema.nullable(),
+  status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
+  siblingsGroupId: z.number().int().nonnegative(),
+});
+export type AgentMessageSibling = z.infer<typeof AgentMessageSiblingSchema>;
+
 export const AgentMessageViewSchema = z.strictObject({
   id: z.string().min(1),
   sessionId: z.string().min(1),
+  /** Previous message in the tree; absent on live projections that do not carry it. */
+  parentId: z.string().min(1).nullable().optional(),
+  /** 0 for an ordinary branch; >0 for answers of one multi-model question. */
+  siblingsGroupId: z.number().int().nonnegative().optional(),
+  /**
+   * Every child of this message's parent, this one included, when there is more
+   * than one. Transcript reads attach it so the client can offer branch switching.
+   */
+  siblings: z.array(AgentMessageSiblingSchema).min(2).optional(),
   turnId: z.string().min(1).nullable(),
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
   // Local reading aids; execution and replay consume only parts.
   translations: MessageTranslationsSchema.optional(),
-  pathId: z.string().min(1).optional(),
-  selectedCandidateId: z.string().min(1).optional(),
   stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),

@@ -34,6 +34,7 @@ export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
     workspaceFolderId: row.workspaceFolderId,
     forkBoundaryMessageId: row.forkBoundaryMessageId,
     forkedFromSessionId: row.forkedFromSessionId,
+    activeNodeId: row.activeNodeId,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
@@ -54,6 +55,8 @@ export function toAgentSessionEntity(row: AgentSessionRow): AgentSessionEntity {
 export const agentMessageViewColumns = {
   id: agentSessionMessageTable.id,
   sessionId: agentSessionMessageTable.sessionId,
+  parentId: agentSessionMessageTable.parentId,
+  siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
   turnId: agentSessionMessageTable.turnId,
   role: agentSessionMessageTable.role,
   status: agentSessionMessageTable.status,
@@ -78,6 +81,7 @@ type AgentMessageViewSqlRow = Omit<AgentMessageViewRow, 'data' | 'inferenceSnaps
 
 /** {@link agentMessageViewColumns} for raw SQL over `agent_session_message AS message`. */
 export const agentMessageViewSqlColumns = sql`message.id, message.session_id AS "sessionId",
+  message.parent_id AS "parentId", message.siblings_group_id AS "siblingsGroupId",
   message.turn_id AS "turnId", message.role, message.status, message.data,
   message.stats, message.model_id AS "modelId", message.inference_snapshot AS "inferenceSnapshot",
   message.created_at AS "createdAt", message.updated_at AS "updatedAt"`;
@@ -101,6 +105,8 @@ export function toAgentMessageView(row: AgentMessageViewRow): AgentMessageView {
   return AgentMessageViewSchema.parse({
     id: row.id,
     sessionId: row.sessionId,
+    parentId: row.parentId,
+    siblingsGroupId: row.siblingsGroupId,
     turnId: row.turnId,
     role: row.role,
     status: row.status,

@@ -29,16 +29,17 @@ type ModelPickerDrawerProps = {
   open: boolean;
   providerId?: string;
   selectedModelId: string | null;
+  /** Multi-select callers mark every chosen model and confirm in the footer. */
   selectedModelIds?: readonly string[];
-  children?: ReactNode;
+  footer?: ReactNode;
   title?: string;
   variant?: ModelPickerDrawerVariant;
 };
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
 export function ModelPickerDrawer({
-  children,
   emptyText,
+  footer,
   isModelVisible,
   modelType,
   onAddProvider,
@@ -66,6 +67,7 @@ export function ModelPickerDrawer({
 
   return (
     <BottomSheet
+      footer={footer}
       onClose={handleClose}
       open={open}
       size={isSearchExpanded ? 'full' : 'large'}
@@ -92,7 +94,6 @@ export function ModelPickerDrawer({
           variant={variant}
         />
       </ModelRegistryGate>
-      {children}
     </BottomSheet>
   );
 }

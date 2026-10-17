@@ -138,6 +138,9 @@ jest.mock('@/frontend/hooks/file', () => ({
 jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
 
 jest.mock('../components/ChatInput', () => ({
+  ...jest.requireActual<typeof import('../components/ChatInput/ChatReplyTarget')>(
+    '../components/ChatInput/ChatReplyTarget',
+  ),
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;
     return null;
@@ -149,10 +152,6 @@ jest.mock('../components/ChatRouteResolver', () => ({
     mockRouteResolverRendered = true;
     return null;
   },
-}));
-
-jest.mock('../components/MultiModelChat', () => ({
-  MultiModelChatProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 
 jest.mock('../components/ChatWorkspace', () => ({

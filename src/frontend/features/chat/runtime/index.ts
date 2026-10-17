@@ -3,9 +3,9 @@ export {
   ChatProvider,
   type PendingChatSend,
   useAgentChatControls,
-  useAgentChatClient,
   useAgentChatDraftHandoff,
   useAgentChatImageResult,
+  useAgentChatClient,
   useAgentQueuedInputs,
   useAgentSessionState,
 } from './ChatProvider';

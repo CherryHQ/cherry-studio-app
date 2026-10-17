@@ -34,14 +34,16 @@ import type { SkillAction } from '@/shared/data/types/skill';
 import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
-import { useMultiModelChatState, useMultiModelChatActions } from '../MultiModelChat';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
+import { useChatReplyTarget } from './ChatReplyTarget';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenu } from './components/ChatInputMenu';
 import { ChatInputPluginPopover } from './components/ChatInputPluginPopover';
 import { ChatInputPromptPopover } from './components/ChatInputPromptPopover';
 import { ChatInputQueue } from './components/ChatInputQueue';
 import { ChatInputSkillPopover } from './components/ChatInputSkillPopover';
+import { ChatReplyModelSheet } from './components/ChatReplyModelSheet';
+import { ChatReplyTargetNotice } from './components/ChatReplyTargetNotice';
 import { useChatInputAgentModelSelection } from './hooks/useChatInputAgentModelSelection';
 import { useChatInputMcpPrompts } from './hooks/useChatInputMcpPrompts';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
@@ -111,10 +113,14 @@ export function ChatInput({
     persistModel,
     handleModelPersistenceError,
   );
-  const multiModel = useMultiModelChatState();
-  const effectiveModelId = multiModel?.nextModelIds[0] ?? selectedModelId;
+  const replyTarget = useChatReplyTarget();
+  const replyModels = replyTarget?.target.models;
+  // A chosen reply model answers this send only; the Agent default stays unchanged.
+  const effectiveModelId = replyModels?.[0] ?? selectedModelId;
   const selectedModelItem = modelPickerData.getModelItem(effectiveModelId);
-  const reasoningEfforts = useChatInputReasoningEfforts(selectedModelItem?.model);
+  const reasoningEfforts = useChatInputReasoningEfforts(
+    replyModels && replyModels.length > 1 ? undefined : selectedModelItem?.model,
+  );
   const reasoningSelection = useChatInputReasoningEffortSelection(
     selectedModelItem ? reasoningEfforts : undefined,
     agentId,
@@ -144,12 +150,14 @@ export function ChatInput({
     <PaintingInputProvider result={latestImageResult}>
       <View className="gap-2">
         <ChatInputQueue sessionId={sessionId} />
+        <ChatReplyTargetNotice />
         {mode === 'standard' &&
+        !replyModels &&
         selectedModelItem &&
         isImageGenerationModel(selectedModelItem.model) &&
         !skillAction ? (
           <PaintingInput
-            canSend={multiModel?.awaitingAdoption ? false : canSend}
+            canSend={canSend}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
             modelSelection={modelSelection}
             onCancel={cancelGeneration}
@@ -172,6 +180,10 @@ export function ChatInput({
           />
         )}
       </View>
+      <ChatReplyModelSheet
+        defaultModelId={selectedModelId}
+        providerSetupReturnTo={providerSetupReturnTo}
+      />
     </PaintingInputProvider>
   );
 }
@@ -202,13 +214,13 @@ function TextChatInput({
   const { cancel, canSend, isApprovalPending, isBusy, sendMessage } = controls;
   const mcpApps = useMcpAppConversation();
   const openProviderSetup = useOpenProviderSetup(providerSetupReturnTo);
+  const replyTarget = useChatReplyTarget();
+  const replyModels = replyTarget?.target.models;
+  const isParallel = Boolean(replyModels && replyModels.length > 1);
   const selectedModel = selectedModelItem?.model;
-  const multiModel = useMultiModelChatState();
-  const multiModelActions = useMultiModelChatActions();
-  const selectedModelLabel =
-    multiModel && multiModel.nextModelIds.length > 1
-      ? t('chat.multiModel.selectedModels', { count: multiModel.nextModelIds.length })
-      : selectedModel?.name;
+  const selectedModelLabel = isParallel
+    ? t('chat.multiModel.selectedModels', { count: replyModels!.length })
+    : selectedModel?.name;
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } = reasoningSelection;
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSkillPickerOpen, setIsSkillPickerOpen] = useState(false);
@@ -249,7 +261,11 @@ function TextChatInput({
     maxHeight: Math.max(restingInputHeight, (inputTextStyle.fontSize ?? 16) * fontScale * 2),
   };
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
-  const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
+  const openModelPicker = useCallback(() => {
+    // Parallel models are edited in the same sheet that chose them.
+    if (replyTarget && replyModels) replyTarget.actions.chooseModels();
+    else setIsModelPickerOpen(true);
+  }, [replyModels, replyTarget]);
   const handleModelSelect = useCallback(
     (item: ModelPickerModelItem) => {
       setIsModelPickerOpen(false);
@@ -290,14 +306,16 @@ function TextChatInput({
       const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
       for (const context of appContexts)
         parts.push({ type: 'text', text: `[MCP App context: ${context.title}]\n${context.text}` });
+      const target = replyTarget?.target;
       const result = await sendMessage({
         parts,
-        ...(multiModel && multiModel.nextModelIds.length > 1
-          ? { multiModelIds: [...multiModel.nextModelIds] }
-          : {}),
         ...(skillAction ? { skillAction } : {}),
         ...(skills.length ? { skillIds: skills.map((skill) => skill.id) } : {}),
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
+        ...(target?.models && target.models.length > 1
+          ? { additionalModelIds: target.models.slice(1) }
+          : {}),
+        ...(target?.continueFromMessageId ? { parentMessageId: target.continueFromMessageId } : {}),
         ...(reasoningEfforts.length > 0
           ? {
               reasoningEffort: getChatInputReasoningEffortSnapshot(
@@ -309,17 +327,16 @@ function TextChatInput({
           : {}),
       });
       mcpApps?.consumed(appContexts);
-      multiModelActions?.clearModels();
+      replyTarget?.actions.clear();
       return result;
     },
     [
-      multiModel,
-      multiModelActions,
       isReasoningEffortSelected,
       mcpApps,
       mode,
       reasoningEffort,
       reasoningEfforts,
+      replyTarget,
       selectedModelId,
       sendMessage,
     ],
@@ -366,7 +383,6 @@ function TextChatInput({
                 {(effortGauge) => (
                   <ChatInputComposer
                     canSend={
-                      !multiModel?.awaitingAdoption &&
                       selectedModelItem &&
                       (mode === 'standard' || !isImageGenerationModel(selectedModelItem.model))
                         ? canSend
@@ -401,23 +417,12 @@ function TextChatInput({
                       fieldStyle={isPickerVisible ? compactInputStyle : undefined}
                       leadingAction={
                         <ChatInputMenu
-                          onPickModels={
-                            multiModelActions
-                              ? () =>
-                                  multiModelActions.chooseModels(
-                                    multiModel?.nextModelIds.length
-                                      ? multiModel.nextModelIds
-                                      : selectedModelId
-                                        ? [selectedModelId]
-                                        : [],
-                                  )
-                              : undefined
-                          }
                           media={mode === 'minimal' ? 'images' : 'all'}
+                          onPickModels={
+                            replyTarget ? () => replyTarget.actions.chooseModels() : undefined
+                          }
                           onPickSkills={
-                            mode === 'standard' &&
-                            agentId &&
-                            !(multiModel && multiModel.nextModelIds.length > 1)
+                            mode === 'standard' && agentId && !isParallel
                               ? () => {
                                   setIsPluginPickerOpen(false);
                                   setIsPromptPickerOpen(false);
@@ -426,8 +431,7 @@ function TextChatInput({
                               : undefined
                           }
                           onPickPlugins={
-                            mode === 'standard' &&
-                            !(multiModel && multiModel.nextModelIds.length > 1)
+                            mode === 'standard' && !isParallel
                               ? () => {
                                   setIsSkillPickerOpen(false);
                                   setIsPromptPickerOpen(false);
@@ -459,11 +463,7 @@ function TextChatInput({
                             ) : undefined
                           }
                           label={selectedModelLabel}
-                          onPress={
-                            multiModel?.nextModelIds.length && multiModelActions
-                              ? () => multiModelActions.chooseModels(multiModel.nextModelIds)
-                              : openModelPicker
-                          }
+                          onPress={openModelPicker}
                         />
                       }
                       trailingAction={effortGauge}

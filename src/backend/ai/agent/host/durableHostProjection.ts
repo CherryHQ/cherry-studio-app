@@ -11,7 +11,7 @@ import {
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeSpan, MessageRuntimeTiming } from '@/shared/data/types/message';
 
-import type { RuntimeDurableTurn } from '../runtime';
+import { sessionOfLane, type RuntimeDurableTurn } from '../runtime';
 import { toAgentErrorView, toAgentMessagePart } from './runtimeProjection';
 
 /** Display identities accompany execution; terminal content and replay settle into Cherry. */
@@ -21,6 +21,10 @@ export const DurableTurnMetadataSchema = z.object({
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
+  /** One answer of a multi-model question: its tools are limited to automatic reads. */
+  readOnlyTools: z.boolean().optional(),
+  /** The question's parent in the message tree, so live rows can be placed on a branch. */
+  parentMessageId: z.string().nullable().optional(),
 });
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */
@@ -67,8 +71,9 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     turn.error && (turn.status === 'failed' || turn.status === 'interrupted')
       ? toAgentErrorView(turn.error)
       : null;
+  const sessionId = sessionOfLane(turn.identity.sessionId);
   const common = {
-    sessionId: turn.identity.sessionId,
+    sessionId,
     turnId: turn.identity.turnId,
     createdAt: new Date(turn.createdAt).toISOString(),
     updatedAt: new Date(turn.updatedAt).toISOString(),
@@ -78,6 +83,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
   };
   const user = AgentMessageViewSchema.parse({
     ...common,
+    ...(metadata.parentMessageId !== undefined ? { parentId: metadata.parentMessageId } : {}),
     id: turn.userMessageId,
     role: 'user',
     status: 'success',
@@ -95,6 +101,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     ? AgentMessageViewSchema.parse({
         ...common,
         id: turn.assistantMessageId,
+        parentId: turn.userMessageId,
         stats: assistantStats(turn),
         role: 'assistant',
         status:
@@ -112,7 +119,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     : null;
   const view = AgentTurnViewSchema.parse({
     id: turn.identity.turnId,
-    sessionId: turn.identity.sessionId,
+    sessionId,
     status: turn.status === 'queued' ? 'running' : turn.status,
     assistantMessageId: turn.assistantMessageId,
     error,

@@ -1,9 +1,10 @@
-import { and, asc, desc, eq, inArray, notExists, notInArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
+import type { AgentMessageSibling, AgentMessageView } from '@/shared/contracts/agent';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
@@ -22,10 +23,7 @@ import {
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
-import {
-  activeConversationCondition,
-  withConversationSelections,
-} from './utils/agentConversationPaths';
+import { messagePathIdsSql } from './utils/agentMessageTree';
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
@@ -34,7 +32,7 @@ import {
 } from './utils/agentSessionRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
-/** Durable transcript windows within a persisted path, with message-owned reading aids. */
+/** Durable transcript reads and message-owned reading aids. */
 export class AgentSessionMessageService {
   private get db() {
     return application.get('DbService').getDb();
@@ -98,7 +96,7 @@ export class AgentSessionMessageService {
   ): Promise<AgentSessionMessagePage> {
     const query = ListAgentSessionMessagesQuerySchema.parse(params);
     const [session] = await this.db
-      .select({ id: agentSessionTable.id, state: agentSessionTable.conversationState })
+      .select({ id: agentSessionTable.id })
       .from(agentSessionTable)
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
@@ -106,20 +104,6 @@ export class AgentSessionMessageService {
       throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     }
 
-    if (
-      query.pathId &&
-      query.pathId !== 'root' &&
-      !session.state?.paths.some((path) => path.id === query.pathId)
-    )
-      throw DataApiErrorFactory.notFound('ConversationPath', query.pathId);
-    const state =
-      session.state && query.pathId
-        ? { ...session.state, activePathId: query.pathId }
-        : session.state;
-    const condition = and(
-      activeConversationCondition(state),
-      this.settledTurnFilter(query.settledOnly ?? false),
-    );
     if (query.ids) {
       const rows = await this.db
         .select(agentMessageViewColumns)
@@ -128,19 +112,15 @@ export class AgentSessionMessageService {
           and(
             eq(agentSessionMessageTable.sessionId, sessionId),
             inArray(agentSessionMessageTable.id, query.ids),
-            condition,
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
-      return {
-        items: withConversationSelections(toReadableAgentMessageViews(rows), state),
-      };
+      return { items: await this.withSiblings(sessionId, toReadableAgentMessageViews(rows)) };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
     if (query.aroundMessageId) {
-      const page = await this.readAround(sessionId, query.aroundMessageId, limit, condition);
-      return { ...page, items: withConversationSelections(page.items, state) };
+      return this.readAround(sessionId, query.aroundMessageId, limit, query.settledOnly);
     }
 
     const cursor = decodeListCursor(query.cursor, asNumericKey, 'agent-session-messages');
@@ -153,14 +133,14 @@ export class AgentSessionMessageService {
       limit + 1,
       isNewer ? 'asc' : 'desc',
       cursor,
-      condition,
+      query.settledOnly,
     );
     const selectedRows = rows.slice(0, limit);
     const pageRows = isNewer ? selectedRows.toReversed() : selectedRows;
     const head = pageRows[0];
     const tail = pageRows.at(-1);
     return {
-      items: withConversationSelections(toReadableAgentMessageViews(pageRows), state),
+      items: await this.withSiblings(sessionId, toReadableAgentMessageViews(pageRows)),
       ...(tail && (isNewer ? cursor : rows.length > limit)
         ? { nextCursor: encodeCursor(tail.createdAt, tail.id) }
         : {}),
@@ -203,14 +183,16 @@ export class AgentSessionMessageService {
     return {
       assistantName: rows[0].assistantName ?? undefined,
       session: toAgentSessionView(rows[0].session),
-      messages: withConversationSelections(
-        toReadableAgentMessageViews(messages),
-        rows[0].session.conversationState,
-      ),
+      messages: toReadableAgentMessageViews(messages),
     };
   }
 
-  private async readAround(sessionId: string, messageId: string, limit: number, condition?: SQL) {
+  private async readAround(
+    sessionId: string,
+    messageId: string,
+    limit: number,
+    settledOnly = false,
+  ) {
     const [target] = await this.db
       .select(agentMessageViewColumns)
       .from(agentSessionMessageTable)
@@ -218,7 +200,8 @@ export class AgentSessionMessageService {
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
           eq(agentSessionMessageTable.id, messageId),
-          condition,
+          this.onSelectedPath(sessionId),
+          this.settledTurnFilter(settledOnly),
         ),
       )
       .limit(1);
@@ -230,8 +213,8 @@ export class AgentSessionMessageService {
     const olderCount = Math.floor((limit - 1) / 2);
     const newerCount = limit - 1 - olderCount;
     const [older, newer] = await Promise.all([
-      this.readRows(sessionId, olderCount + 1, 'desc', boundary, condition),
-      this.readRows(sessionId, newerCount + 1, 'asc', boundary, condition),
+      this.readRows(sessionId, olderCount + 1, 'desc', boundary, settledOnly),
+      this.readRows(sessionId, newerCount + 1, 'asc', boundary, settledOnly),
     ]);
     const rows = [
       ...newer.slice(0, newerCount).toReversed(),
@@ -241,7 +224,7 @@ export class AgentSessionMessageService {
     const head = rows[0];
     const tail = rows[rows.length - 1];
     return {
-      items: toReadableAgentMessageViews(rows),
+      items: await this.withSiblings(sessionId, toReadableAgentMessageViews(rows)),
       ...(older.length > olderCount ? { nextCursor: encodeCursor(tail.createdAt, tail.id) } : {}),
       ...(newer.length > newerCount
         ? { previousCursor: encodeCursor(head.createdAt, head.id) }
@@ -254,7 +237,7 @@ export class AgentSessionMessageService {
     limit: number,
     direction: 'asc' | 'desc',
     cursor: { key: number; id: string } | null,
-    condition?: SQL,
+    settledOnly = false,
   ): Promise<AgentMessageViewRow[]> {
     const ordering = keysetOrdering(
       agentSessionMessageTable.createdAt,
@@ -267,12 +250,58 @@ export class AgentSessionMessageService {
       .where(
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
+          this.onSelectedPath(sessionId),
           cursor ? ordering.where(cursor) : undefined,
-          condition,
+          this.settledTurnFilter(settledOnly),
         ),
       )
       .orderBy(...ordering.orderBy)
       .limit(limit);
+  }
+
+  /** The transcript is the selected leaf's ancestor chain (docs/references/agent/agent-persistence.md). */
+  private onSelectedPath(sessionId: string) {
+    return sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId)})`;
+  }
+
+  /** Attach every alternative at each branch point the page passes through. */
+  private async withSiblings(
+    sessionId: string,
+    items: AgentMessageView[],
+  ): Promise<AgentMessageView[]> {
+    if (!items.length) return items;
+    const parents = [...new Set(items.flatMap((item) => (item.parentId ? [item.parentId] : [])))];
+    const rows = await this.db
+      .select({
+        id: agentSessionMessageTable.id,
+        parentId: agentSessionMessageTable.parentId,
+        modelId: agentSessionMessageTable.modelId,
+        status: agentSessionMessageTable.status,
+        siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
+      })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          or(
+            parents.length ? inArray(agentSessionMessageTable.parentId, parents) : undefined,
+            items.some((item) => item.parentId === null)
+              ? isNull(agentSessionMessageTable.parentId)
+              : undefined,
+          ),
+        ),
+      )
+      .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id));
+    const children = new Map<string | null, AgentMessageSibling[]>();
+    for (const { parentId, ...sibling } of rows) {
+      const list = children.get(parentId) ?? [];
+      list.push(sibling as AgentMessageSibling);
+      children.set(parentId, list);
+    }
+    return items.map((item) => {
+      const siblings = item.parentId === undefined ? undefined : children.get(item.parentId);
+      return siblings && siblings.length > 1 ? { ...item, siblings } : item;
+    });
   }
 
   private settledTurnFilter(settledOnly: boolean) {

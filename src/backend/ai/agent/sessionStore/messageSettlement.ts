@@ -1,9 +1,4 @@
-import {
-  readMultiModelResult,
-  MULTI_MODEL_TOOL_NAME,
-  type AgentErrorView,
-  type AgentMessagePart,
-} from '@/shared/contracts/agent';
+import type { AgentErrorView, AgentMessagePart } from '@/shared/contracts/agent';
 import type { MessageStats } from '@/shared/data/types/message';
 
 import { createInterruptedToolResult } from '../runtime';
@@ -48,31 +43,6 @@ export function interruptNonTerminalToolParts(
     ) {
       return part;
     }
-    const group =
-      part.toolRef.source === 'builtin' &&
-      part.toolRef.capabilityId === MULTI_MODEL_TOOL_NAME &&
-      part.output &&
-      typeof part.output === 'object' &&
-      'value' in part.output
-        ? readMultiModelResult(part.output.value)
-        : null;
-    if (group)
-      return {
-        ...part,
-        state: 'output-available',
-        output: {
-          value: {
-            ...group,
-            candidates: group.candidates.map((candidate) =>
-              candidate.status === 'queued' || candidate.status === 'running'
-                ? { ...candidate, status: 'interrupted' }
-                : candidate,
-            ),
-          },
-          modelValue: { kind: group.kind },
-          artifacts: [],
-        },
-      };
     const { approvalId: _approvalId, error: _error, output: _output, ...base } = part;
     return {
       ...base,

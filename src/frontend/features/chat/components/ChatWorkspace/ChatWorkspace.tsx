@@ -48,6 +48,8 @@ type ChatWorkspaceProps = {
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
+  /** Local chats prepare a new branch below a chosen answer. */
+  onContinueFrom?: (messageId: string) => void;
   sessionId?: string;
   /** Translation is available only for locally owned Agent messages. */
   isTranslationEnabled?: boolean;
@@ -58,6 +60,7 @@ export function ChatWorkspace({
   snapshot: live,
   messages: mergedMessages,
   onShare,
+  onContinueFrom,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -98,13 +101,6 @@ export function ChatWorkspace({
   const listKey = sessionId ?? pendingSend?.sessionId;
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  // Only the Session's latest answer is replaceable, and an older window does
-  // not hold it (agent-protocol.md "Manual answer retry").
-  const retryableMessageId = useMemo(() => {
-    if (hasNewerMessages) return undefined;
-    const last = mergedMessages.at(-1);
-    return last?.display.role === 'assistant' ? last.key : undefined;
-  }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
@@ -271,8 +267,8 @@ export function ChatWorkspace({
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-          retryableMessageId={retryableMessageId}
           onShare={onShare}
+          onContinueFrom={onContinueFrom}
           snapshot={live}
           messages={mergedMessages}
         >

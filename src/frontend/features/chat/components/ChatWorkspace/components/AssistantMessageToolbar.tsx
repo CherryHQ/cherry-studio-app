@@ -1,3 +1,4 @@
+import AtSignIcon from '@cherrystudio/app-icons/icons/at-sign';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
@@ -11,7 +12,6 @@ import { View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
-import { ReplyContinuationMenu } from '../../MultiModelChat';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -32,9 +32,10 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
     isAssistantToolbarEnabled,
     isDeleteDisabled,
     isRetryDisabled,
-    retryableMessageId,
+    retryableMessageIds,
   } = useAssistantMessageActionsState();
   const {
+    continueFromAnswer,
     copyAssistantMessage,
     deleteMessageTurn,
     forkFromAssistantMessage,
@@ -57,14 +58,17 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
 
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {!message.multiModel && message.status === 'success' ? (
-        <ReplyContinuationMenu
-          messageId={message.id}
-          modelId={message.model?.id}
-          sourcePathId={message.pathId}
+      {continueFromAnswer && message.status === 'success' ? (
+        <Button
+          accessibilityLabel={t('chat.branch.continueFrom')}
+          icon={<AtSignIcon className="text-muted-foreground" size={15} />}
+          onPress={() => continueFromAnswer({ messageId: message.id })}
+          size="xs"
+          testID="assistant-message-continue"
+          variant="ghost"
         />
       ) : null}
-      {retryAssistantMessage && retryableMessageId === message.id ? (
+      {retryAssistantMessage && retryableMessageIds.has(message.id) ? (
         <Button
           accessibilityLabel={t(
             message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',

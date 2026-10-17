@@ -17,7 +17,7 @@ import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './
 
 const DEFAULT_LIMIT = 50;
 
-type SessionListRow = Omit<AgentSessionRow, 'isNameManuallyEdited' | 'conversationState'> & {
+type SessionListRow = Omit<AgentSessionRow, 'isNameManuallyEdited'> & {
   isNameManuallyEdited: number;
 };
 
@@ -77,7 +77,6 @@ export class AgentSessionService {
     const items = pageRows.map((row) =>
       toAgentSessionEntity({
         ...row,
-        conversationState: null,
         isNameManuallyEdited: Boolean(row.isNameManuallyEdited),
       }),
     );

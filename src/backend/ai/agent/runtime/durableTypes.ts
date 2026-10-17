@@ -33,6 +33,25 @@ export interface RuntimeSqlDatabase extends RuntimeSqlExecutor {
   close(): Promise<void>;
 }
 
+/**
+ * A lane is one engine working copy. A Cherry Session owns several when its
+ * message tree branches: the lane key is the Session id for the first copy and
+ * `${sessionId}#${suffix}` for the others. Runtime operations and identities
+ * carry the lane key in their `sessionId` field; {@link sessionOfLane} recovers
+ * the Cherry Session.
+ */
+const LANE_SEPARATOR = '#';
+export function sessionOfLane(lane: string): string {
+  const index = lane.indexOf(LANE_SEPARATOR);
+  return index < 0 ? lane : lane.slice(0, index);
+}
+export function createLaneKey(sessionId: string, suffix: string): string {
+  return `${sessionId}${LANE_SEPARATOR}${suffix}`;
+}
+export function isLaneOf(lane: string, sessionId: string): boolean {
+  return sessionOfLane(lane) === sessionId;
+}
+
 export type RuntimeExecutionIdentity = { sessionId: string; turnId: string; requestId: string };
 export type RuntimeUsageOwner =
   | RuntimeExecutionIdentity
@@ -88,8 +107,7 @@ export type RuntimeExecutionPorts = {
 
 export type RuntimeConversationConfiguration = {
   /** Direct image requests execute as a single unsafe capability, without a language-model request. */
-  kind?: 'language' | 'image' | 'multi-model';
-  multiModelTargets?: readonly { model: RuntimeModel; modelId: string; name: string }[];
+  kind?: 'language' | 'image';
   model: RuntimeModel;
   instructions: string;
   /** Host-owned replaceable system sections, seeded once for this configuration. */
@@ -105,7 +123,6 @@ export type RuntimeConversationSeed = {
   sessionId: string;
   /** Cherry-owned history revision. A different revision must never resume this working copy. */
   revision: number;
-  pathId?: string;
   configuration: RuntimeConversationConfiguration;
   history?: {
     history: RuntimeHistoryTurn[];
@@ -204,20 +221,18 @@ export interface DurableAgentRuntime {
   configuration(sessionId: string): Promise<RuntimeConversationConfiguration>;
   resourceFileEntryIds(sessionId: string): Promise<readonly string[]>;
   ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void>;
-  cancelCandidate?(input: {
-    sessionId: string;
-    toolCallId: string;
-    candidateId: string;
-  }): Promise<void>;
-  activatePath?(input: {
-    sessionId: string;
-    pathId: string;
-    revision: number;
-    fromMessageId?: string;
-    defer?: boolean;
-    fileEntryIds?: readonly string[];
-    selection?: { toolCallId: string; candidateId: string; text: string; modelId: string };
-  }): Promise<boolean>;
+  /**
+   * Natively forks `from.sessionId` at an answer boundary it returned into the new lane
+   * `seed.sessionId`, which then continues from that answer with its own configuration.
+   */
+  forkConversation(
+    seed: Omit<RuntimeConversationSeed, 'history'> & {
+      from: { sessionId: string; boundary: string };
+    },
+    signal?: AbortSignal,
+  ): Promise<void>;
+  /** The lane that executed a Cherry answer, while its working copy is bound. */
+  answerLane(assistantMessageId: string): Promise<string | undefined>;
   configure(sessionId: string, configuration: RuntimeConversationConfiguration): Promise<void>;
   submit(sessionId: string, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
   observe(

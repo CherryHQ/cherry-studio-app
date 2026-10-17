@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import type { ScrollViewProps } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import type { AgentMultiModelResult } from '@/shared/contracts/agent';
 import type { FileAttachmentReport } from '@/shared/contracts/fileAttachment';
 import type { MessageUsageSummary } from '@/shared/contracts/messageUsage';
 import type { CherryMessagePart, MessageStats, MessageStatus } from '@/shared/data/types/message';
@@ -21,12 +20,20 @@ export type MessageListItem = Readonly<{
     translations?: MessageTranslations;
   }>;
   id: string;
-  pathId?: string;
-  multiModel?: { result: AgentMultiModelResult; selectedCandidateId?: string };
   /** Image request settings captured by this message, independent of the current model. */
   imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
+  /**
+   * Alternatives at this message's branch point, oldest first and including this
+   * message, when there is more than one: other answers to the same question, or
+   * other questions continuing the same answer.
+   */
+  branch?: Readonly<{
+    siblings: readonly Readonly<{ id: string; status: MessageStatus; modelId: string | null }>[];
+    /** The alternatives are one question's parallel multi-model answers. */
+    multiModel: boolean;
+  }>;
   role: 'assistant' | 'system' | 'user';
   /** Feature-owned timeline event synthesized beside persisted messages. */
   systemEvent?: Readonly<{

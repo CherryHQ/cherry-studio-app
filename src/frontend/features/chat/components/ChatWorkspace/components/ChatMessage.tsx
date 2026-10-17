@@ -16,6 +16,7 @@ import { useAssistantMessageActions } from '../context/AssistantMessageActionsPr
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
+import { MessageBranchSwitcher } from './MessageBranchSwitcher';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -67,6 +68,8 @@ function renderChatAssistantMessage(
             </View>
           ) : null}
         </View>
+        {/* In the header so parallel answers can be compared while they still stream. */}
+        <MessageBranchSwitcher message={message} />
       </View>
       <AssistantMessage message={message}>
         {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
@@ -119,6 +122,11 @@ export const ChatMessage = memo(function ChatMessage({
       <View className="gap-2">
         <UserMessage attachments={attachments} message={message} />
         {accessories}
+        {message.branch ? (
+          <View className="flex-row justify-end">
+            <MessageBranchSwitcher message={message} />
+          </View>
+        ) : null}
       </View>
     ) : (
       renderChatAssistantMessage(

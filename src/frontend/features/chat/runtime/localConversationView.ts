@@ -69,6 +69,7 @@ export function createLocalConversationProjector(input: {
     | 'retryMessage'
     | 'forkSession'
     | 'deleteTurn'
+    | 'selectMessage'
   >;
   sessionId: string;
   onSessionChanged?: (sessionId: string) => void;
@@ -119,9 +120,25 @@ export function createLocalConversationProjector(input: {
       if (cached && cached.busy === busy) return cached.message;
       const isSettled = message.status !== 'pending' && message.status !== 'streaming';
       const canModify = isSettled && message.role !== 'system';
+      const isParallelAnswer = message.siblings?.some((sibling) => sibling.siblingsGroupId > 0);
       const projected: ConversationMessage = {
         ...projectLocalTranscriptMessage(message, cache),
         actions: {
+          // Switching only changes what is shown, so it never waits for running work.
+          ...(message.siblings
+            ? {
+                select: action<{ messageId: string }, void>(state, false, async ({ messageId }) => {
+                  await client.selectMessage(sessionId, messageId);
+                }),
+              }
+            : {}),
+          ...(!isSettled && message.role === 'assistant' && isParallelAnswer
+            ? {
+                stop: action<void, void>(state, false, () =>
+                  client.cancelTurn(sessionId, message.id),
+                ),
+              }
+            : {}),
           ...(canModify && message.turnId
             ? {
                 remove: action<void, void>(state, true, () =>

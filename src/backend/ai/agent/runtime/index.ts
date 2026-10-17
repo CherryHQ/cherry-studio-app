@@ -60,6 +60,7 @@ export type {
   FakeRuntimeOptions,
   FakeRuntimeProgram,
 } from './FakeRuntime';
+export { createLaneKey, isLaneOf, sessionOfLane } from './durableTypes';
 export { FakeRuntime } from './FakeRuntime';
 export { raceAbort } from './raceAbort';
 export { type MediaCapabilities, unsupportedMediaNote } from './unsupportedMedia';

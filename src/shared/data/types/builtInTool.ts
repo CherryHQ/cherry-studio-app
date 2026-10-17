@@ -77,6 +77,8 @@ export type BuiltInToolDescriptor = {
   requiresPaintingModel: boolean;
   /** Needs a default web search provider configured for this capability. */
   requiresWebSearchCapability?: WebSearchCapability;
+  /** `read` marks a tool that changes nothing outside the conversation; absent is a write. */
+  effect?: 'read';
 };
 
 const DEFAULTS = {
@@ -102,17 +104,19 @@ function describe(
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('agent_create', 'ask', { agentCapability: 'agents' }),
-  describe('agent_get', 'auto', { agentCapability: 'agents' }),
-  describe('agent_list', 'auto', { agentCapability: 'agents' }),
+  describe('agent_get', 'auto', { agentCapability: 'agents', effect: 'read' }),
+  describe('agent_list', 'auto', { agentCapability: 'agents', effect: 'read' }),
   describe('agent_update', 'ask', { agentCapability: 'agents' }),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
+    effect: 'read',
   }),
   describe('calendar_list_events', 'auto', {
     agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
+    effect: 'read',
   }),
   describe('calendar_create_event', 'ask', {
     agentCapability: 'calendar',
@@ -130,11 +134,13 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
+    effect: 'read',
   }),
   describe('reminder_list_items', 'auto', {
     agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
+    effect: 'read',
   }),
   describe('reminder_create_item', 'ask', {
     agentCapability: 'reminders',
@@ -167,14 +173,17 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('location_get_current', 'auto', {
     agentCapability: 'location',
     permissionScopes: ['location.read'],
+    effect: 'read',
   }),
   describe('web_search', 'auto', {
     agentCapability: 'web',
     requiresWebSearchCapability: 'searchKeywords',
+    effect: 'read',
   }),
   describe('web_fetch', 'auto', {
     agentCapability: 'web',
     requiresWebSearchCapability: 'fetchUrls',
+    effect: 'read',
   }),
   describe('generate_image', 'ask', {
     agentCapability: 'image',
@@ -182,18 +191,20 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresPaintingModel: true,
   }),
   describe('edit_file', 'auto'),
-  describe('list_workspace', 'auto'),
-  describe('find_workspace_files', 'auto'),
+  describe('list_workspace', 'auto', { effect: 'read' }),
+  describe('find_workspace_files', 'auto', { effect: 'read' }),
   describe('create_workspace_folder', 'auto'),
   describe('library_search_files', 'ask', {
     agentCapability: 'fileLibrary',
     autoApprovalEligible: false,
+    effect: 'read',
   }),
   describe('library_read_file', 'ask', {
     agentCapability: 'fileLibrary',
     autoApprovalEligible: false,
+    effect: 'read',
   }),
-  describe('read_file', 'auto'),
+  describe('read_file', 'auto', { effect: 'read' }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];
