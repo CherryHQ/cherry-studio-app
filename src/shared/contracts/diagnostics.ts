@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const DIAGNOSTIC_SOURCE_LIMIT_BYTES = 50 * 1024 * 1024;
 export const DIAGNOSTIC_DESCRIPTION_MAX_BYTES = 4096;
+export const DIAGNOSTIC_SCREENSHOT_DIRECTORY = 'FeedbackScreenshots';
+export const DIAGNOSTIC_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 export const DIAGNOSTIC_API_ORIGIN = 'https://api.cherry-ai.com';
 export const DiagnosticReportIdSchema = z
   .string()
@@ -50,6 +52,7 @@ export function diagnosticDescriptionByteLength(value: string): number {
 }
 
 export const DiagnosticReportInputSchema = z.strictObject({
+  screenshotId: z.uuidv4().optional(),
   description: z
     .string()
     .trim()

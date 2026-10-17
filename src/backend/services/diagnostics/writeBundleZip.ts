@@ -7,7 +7,7 @@ import type { StagedSource } from './types';
 export async function writeBundleZip(
   destination: File,
   entries: readonly { name: string; content: string }[],
-  sources: readonly StagedSource[],
+  sources: readonly Pick<StagedSource, 'archiveName' | 'path'>[],
   signal?: AbortSignal,
 ): Promise<void> {
   await writeZipFile(

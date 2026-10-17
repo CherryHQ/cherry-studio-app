@@ -178,6 +178,52 @@ describe.each([
     harness.cleanup();
   });
 
+  test('withdrawing a queued reservation preserves history, checkpoints and the current runtime revision', async () => {
+    const session = await harness.createEmptySession({ agentId });
+    const first = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'first', type: 'text', text: 'First', state: 'done' }],
+    });
+    const checkpoint = {
+      version: 1 as const,
+      anchorTurnId: first.turnId,
+      payload: { summary: 'Earlier context' },
+    };
+    await store.finalizeAssistantMessage({
+      assistantMessageId: first.assistantMessage.id,
+      turnId: first.turnId,
+      status: 'success',
+      parts: [],
+      usage: null,
+      error: null,
+      contextCheckpoint: checkpoint,
+      runtimeStats: { runtimeTiming: terminalTiming() },
+    });
+    const history = await store.listMessages(session.id);
+    const revision = await store.getRuntimeRevision(session.id);
+    const queued = await store.reserveSubmission({
+      ...messageIds(),
+      ...RESERVATION_FACTS,
+      sessionId: session.id,
+      userParts: [{ id: 'queued', type: 'text', text: 'Later', state: 'done' }],
+    });
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [queued.userMessage.id, queued.assistantMessage.id],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
+    expect(await store.getRuntimeRevision(session.id)).toBe(revision);
+    expect((await store.getLatestContextCheckpoint(session.id))?.checkpoint).toEqual(checkpoint);
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: queued.turnId })).toEqual(
+      [],
+    );
+    expect(await store.discardQueuedTurn({ sessionId: session.id, turnId: first.turnId })).toEqual(
+      [],
+    );
+    expect(await store.listMessages(session.id)).toEqual(history);
+  });
+
   test('preserves multiple Desktop compaction anchors and their order through persisted reads', async () => {
     const session = await harness.createEmptySession({ agentId });
     const reserved = await store.reserveSubmission({
@@ -428,26 +474,39 @@ describe.each([
     },
   );
 
-  test('reserveInitialSubmission atomically creates the Session and first message pair', async () => {
-    const ids = { sessionId: uuidv7(), ...messageIds() };
-    const reserved = await store.reserveInitialSubmission({
-      ...ids,
-      ...RESERVATION_FACTS,
-      agentId,
-      userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
-    });
+  test.each([false, true])(
+    'reserveInitialSubmission atomically creates the Session and first message pair (workspace: %s)',
+    async (withWorkspace) => {
+      const folderId = uuidv7();
+      if (withWorkspace) {
+        harness.raw
+          ?.prepare(
+            'INSERT INTO file_folder (id, name, name_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          )
+          .run(folderId, 'Workspace', 'workspace', 1, 1);
+      }
+      const ids = { sessionId: uuidv7(), ...messageIds() };
+      const reserved = await store.reserveInitialSubmission({
+        ...ids,
+        ...RESERVATION_FACTS,
+        agentId,
+        ...(withWorkspace ? { workspaceFolderId: folderId } : {}),
+        userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
+      });
 
-    expect(reserved.session.id).toBe(ids.sessionId);
-    expect(reserved.userMessage.id).toBe(ids.userMessageId);
-    expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
-    expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
-    expect(await store.listMessages(reserved.session.id)).toEqual([
-      reserved.userMessage,
-      reserved.assistantMessage,
-    ]);
-    expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
-    expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
-  });
+      expect(reserved.session.id).toBe(ids.sessionId);
+      expect(reserved.session.workspaceFolderId ?? null).toBe(withWorkspace ? folderId : null);
+      expect(reserved.userMessage.id).toBe(ids.userMessageId);
+      expect(reserved.assistantMessage.id).toBe(ids.assistantMessageId);
+      expect(await store.getSession(reserved.session.id)).toEqual(reserved.session);
+      expect(await store.listMessages(reserved.session.id)).toEqual([
+        reserved.userMessage,
+        reserved.assistantMessage,
+      ]);
+      expect(reserved.userMessage.sessionId).toBe(reserved.session.id);
+      expect(reserved.assistantMessage.sessionId).toBe(reserved.session.id);
+    },
+  );
 
   test('conversation activity advances the Session row timestamp', async () => {
     const reservationTime = 2_000_000_001_000;

@@ -595,6 +595,7 @@ describe('fileStorage', () => {
 
     await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(true);
 
+    expect(entries.findByIdTx).toHaveBeenCalledWith(tx, entry.id, undefined);
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
     expect(testState.files.has(previewUri)).toBe(false);
@@ -619,10 +620,16 @@ describe('fileStorage', () => {
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
     await expect(
-      rewriteInternalTextEntry({ findById: async () => entry } as never, {
-        id: entry.id,
-        data: 'changed',
-      }),
+      rewriteInternalTextEntry(
+        {
+          findByIdTx: async () => entry,
+          withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback({}),
+        } as never,
+        {
+          id: entry.id,
+          data: 'changed',
+        },
+      ),
     ).rejects.toThrow('immutable');
     expect(testState.writes).toEqual([]);
     expect(testState.files.get(uri)).toBe(entry.size);
@@ -634,7 +641,8 @@ describe('fileStorage', () => {
     testState.files.set(uri, entry.size);
     const tx = {};
     const entries = {
-      findById: jest.fn(async () => entry),
+      findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
         ...entry,
         id,
@@ -662,9 +670,10 @@ describe('fileStorage', () => {
   test('refuses to rewrite a draft whose bytes are missing', async () => {
     const entry = { ...internalEntry(), provenance: 'generated' as const };
     const entries = {
-      findById: jest.fn(async () => entry),
+      findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
-      withWriteTx: jest.fn(),
+      withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(
@@ -684,26 +693,27 @@ describe('fileStorage', () => {
       finishLookup = resolve;
     });
     const entries = {
-      findById: jest.fn(() => lookup),
+      findByIdTx: jest.fn(() => lookup),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
-      withWriteTx: jest.fn(),
+      withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
     const controller = new AbortController();
     const cancelled = new Error('cancelled');
     const rewriting = rewriteInternalTextEntry(
-      entries,
+      entries as never,
       { data: 'late edit', id: entry.id },
       controller.signal,
     );
 
-    expect(entries.findById).toHaveBeenCalled();
+    expect(entries.findByIdTx).toHaveBeenCalled();
     controller.abort(cancelled);
     finishLookup(entry);
 
     await expect(rewriting).rejects.toBe(cancelled);
     expect(testState.writes).toEqual([]);
     expect(testState.files.get(uri)).toBe(entry.size);
-    expect(entries.withWriteTx).not.toHaveBeenCalled();
+    expect(entries.updateSizeTx).not.toHaveBeenCalled();
     expect(onFileChange).not.toHaveBeenCalled();
   });
 
@@ -713,16 +723,14 @@ describe('fileStorage', () => {
     testState.files.set(uri, entry.size);
     const controller = new AbortController();
     const entries = {
-      findById: jest.fn(async () => entry),
-      updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => ({
-        ...entry,
-        size,
-      })),
-      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => {
+      findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
+      updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => {
         expect(testState.writes).toHaveLength(1);
         controller.abort();
-        return callback({});
+        return { ...entry, size };
       }),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
     };
 
     await expect(
@@ -843,7 +851,15 @@ function createEntryStore() {
   const stored = new Map<string, FileEntry>();
   const create = jest.fn(
     async (values: Parameters<FileEntryService['create']>[0]): Promise<FileEntry> => {
-      const entry = FileEntrySchema.parse({ ...values, createdAt: 1, updatedAt: 1 });
+      const entry = FileEntrySchema.parse({
+        id: values.id,
+        filename: values.filename,
+        mediaType: values.mediaType,
+        size: values.size,
+        provenance: values.provenance,
+        createdAt: 1,
+        updatedAt: 1,
+      });
       stored.set(entry.id, entry);
       return entry;
     },

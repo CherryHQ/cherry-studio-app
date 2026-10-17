@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type RefObject, useState } from 'react';
 import { Keyboard, type View } from 'react-native';
 
@@ -6,8 +6,13 @@ import {
   ConversationSourceBoundary,
   useConversationAgents,
 } from '@/frontend/appShell/conversation';
-import { chatRouteParams } from '@/frontend/appShell/navigation/chat';
+import {
+  type ChatRouteParamsInput,
+  chatRouteParams,
+  parseChatRoute,
+} from '@/frontend/appShell/navigation/chat';
 
+import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useMainHeaderAgent } from './MainHeaderAgentLabel';
 import { MainHeaderAgentPickerSheet } from './MainHeaderAgentPickerSheet';
 import { MainHeaderView } from './MainHeaderView/MainHeaderView';
@@ -15,9 +20,11 @@ import { MainHeaderView } from './MainHeaderView/MainHeaderView';
 export function MainHeader({
   blurTarget,
   hidden,
+  actions,
 }: {
   blurTarget: RefObject<View | null>;
   hidden?: boolean;
+  actions?: readonly HeaderToolbarAction[];
 }) {
   const { agent, openNewSession } = useMainHeaderAgent();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -27,6 +34,7 @@ export function MainHeader({
         agent={agent}
         blurTarget={blurTarget}
         hidden={hidden}
+        actions={actions}
         onNewChat={openNewSession}
         onAgentPress={() => {
           Keyboard.dismiss();
@@ -55,13 +63,20 @@ function LocalAgentPicker({
 }) {
   const catalog = useConversationAgents();
   const router = useRouter();
+  const route = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
+  const workspaceDraftId =
+    route.status === 'ready' && route.target.kind === 'draft'
+      ? route.target.workspaceDraftId
+      : undefined;
   return (
     <MainHeaderAgentPickerSheet
       currentAgentId={currentAgentId}
       catalog={catalog}
       open={open}
       onClose={onClose}
-      onSelect={(agentId) => router.setParams(chatRouteParams({ agentId, kind: 'draft' }))}
+      onSelect={(agentId) =>
+        router.setParams(chatRouteParams({ agentId, kind: 'draft', workspaceDraftId }))
+      }
       onEdit={(agentId) => router.push({ params: { agentId }, pathname: '/agents/[agentId]/edit' })}
       onCreate={() => router.push({ params: { startChat: 'true' }, pathname: '/agents/new' })}
     />

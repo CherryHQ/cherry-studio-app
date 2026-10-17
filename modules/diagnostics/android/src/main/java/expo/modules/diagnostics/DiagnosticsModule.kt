@@ -1,5 +1,10 @@
 package expo.modules.diagnostics
 
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.net.Uri
 import android.system.Os
 import android.system.OsConstants
@@ -14,9 +19,46 @@ private const val SECRET_SUFFIX = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2
 
 class DiagnosticsModule : Module() {
   @Volatile private var upload: DiagnosticUpload? = null
+  private var observingMotion = false
+  private var sensorManager: SensorManager? = null
+  private val motionListener = object : SensorEventListener {
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    override fun onSensorChanged(event: SensorEvent) {
+      sendEvent("onAcceleration", mapOf(
+        "x" to event.values[0] / SensorManager.GRAVITY_EARTH,
+        "y" to event.values[1] / SensorManager.GRAVITY_EARTH,
+        "z" to event.values[2] / SensorManager.GRAVITY_EARTH,
+        "timestamp" to event.timestamp / 1_000_000.0,
+      ))
+    }
+  }
+
+  private fun startMotion() {
+    if (!observingMotion || sensorManager != null) return
+    val manager = appContext.reactContext?.getSystemService(Context.SENSOR_SERVICE) as? SensorManager ?: return
+    val sensor = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+    if (manager.registerListener(motionListener, sensor, 50_000)) sensorManager = manager
+  }
+
+  private fun stopMotion() {
+    sensorManager?.unregisterListener(motionListener)
+    sensorManager = null
+  }
 
   override fun definition() = ModuleDefinition {
     Name("CherryDiagnostics")
+    Constants("supportsShakeFeedback" to true)
+    Events("onAcceleration")
+    OnStartObserving("onAcceleration") {
+      observingMotion = true
+      startMotion()
+    }
+    OnStopObserving("onAcceleration") {
+      observingMotion = false
+      stopMotion()
+    }
+    OnActivityEntersForeground { startMotion() }
+    OnActivityEntersBackground { stopMotion() }
 
     Function("identifyFile") { uri: String ->
       val stat = Os.stat(Uri.parse(uri).path!!)
@@ -55,6 +97,10 @@ class DiagnosticsModule : Module() {
       hmac.doFinal(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
-    OnDestroy { upload?.cancel() }
+    OnDestroy {
+      observingMotion = false
+      stopMotion()
+      upload?.cancel()
+    }
   }
 }

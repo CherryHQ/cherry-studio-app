@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agent/host/MobileAgentHost';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { LanguageServingSupport } from '@/backend/ai/provider/systemModelSupport';
@@ -40,6 +40,7 @@ import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliv
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -137,7 +138,9 @@ export function createAppBootstrapRuntime(
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
-  const languageServing = host.container.get<LanguageServingSupport & AgentRuntime>('AgentRuntime');
+  const languageServing = host.container.get<
+    LanguageServingSupport & AgentRuntime & RuntimeTextGenerator
+  >('AgentRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const providerRegistryUpdater = host.container.get<ProviderRegistryUpdaterService>(
     'ProviderRegistryUpdaterService',
@@ -176,11 +179,13 @@ export function createAppBootstrapRuntime(
     languageServing,
     providerRegistryUpdater,
   });
+  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   backup.configure(
     () =>
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
-      hasPendingSkillStorageWork(),
+      hasPendingSkillStorageWork() ||
+      trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
     },
@@ -189,6 +194,8 @@ export function createAppBootstrapRuntime(
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      trash: trash.entries,
+      trashMutations: trash,
       agentAvatars: dataApiDependencies.agentAvatars,
       agents: services.agentData,
       agentGlobalSkills: services.agentGlobalSkill,

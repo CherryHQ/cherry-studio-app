@@ -1,12 +1,28 @@
 import CryptoKit
+import CoreMotion
 import ExpoModulesCore
 import Foundation
+import UIKit
 
 private let secretSuffix = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
 public class DiagnosticsModule: Module {
   private let uploadLock = NSLock()
   private var upload: DiagnosticUpload?
+  private let motion = CMMotionManager()
+  private var observingMotion = false
+
+  private func startMotion() {
+    guard observingMotion, motion.isAccelerometerAvailable, !motion.isAccelerometerActive else { return }
+    motion.accelerometerUpdateInterval = 0.05
+    motion.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
+      guard let self, let data, UIApplication.shared.applicationState == .active else { return }
+      self.sendEvent("onAcceleration", [
+        "x": data.acceleration.x, "y": data.acceleration.y, "z": data.acceleration.z,
+        "timestamp": data.timestamp * 1000,
+      ])
+    }
+  }
 
   private func cancelUpload() {
     uploadLock.lock()
@@ -17,6 +33,22 @@ public class DiagnosticsModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("CherryDiagnostics")
+    Constants(["supportsShakeFeedback": true])
+    Events("onAcceleration")
+    OnStartObserving("onAcceleration") {
+      DispatchQueue.main.async {
+        self.observingMotion = true
+        if UIApplication.shared.applicationState == .active { self.startMotion() }
+      }
+    }
+    OnStopObserving("onAcceleration") {
+      DispatchQueue.main.async {
+        self.observingMotion = false
+        self.motion.stopAccelerometerUpdates()
+      }
+    }
+    OnAppBecomesActive { self.startMotion() }
+    OnAppEntersBackground { self.motion.stopAccelerometerUpdates() }
 
     Function("identifyFile") { (uri: URL) -> [String: Any] in
       let attributes = try FileManager.default.attributesOfItem(atPath: uri.path)
@@ -36,7 +68,10 @@ public class DiagnosticsModule: Module {
 
     Function("cancelOperations") { self.cancelUpload() }
 
-    OnDestroy { self.cancelUpload() }
+    OnDestroy {
+      self.cancelUpload()
+      self.motion.stopAccelerometerUpdates()
+    }
 
     Function("isUploadConfigured") {
       let secret = Bundle.main.object(forInfoDictionaryKey: "CherryAIClientSecret") as? String

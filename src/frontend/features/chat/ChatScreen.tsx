@@ -1,13 +1,16 @@
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import FolderCheckIcon from '@cherrystudio/app-icons/icons/folder-check';
 import {
   composerContentGap,
   ContentState,
   getComposerKeyboardStickyOffset,
 } from '@cherrystudio/ui/components';
 import { router, useIsPreview, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
+import { type ComponentProps, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { v7 as uuidv7 } from 'uuid';
 
 import { MainHeader } from '@/frontend/appShell/header';
 import { ChatDockFooter } from '@/frontend/appShell/layout';
@@ -17,6 +20,7 @@ import {
   conversationShareHref,
   parseChatRoute,
   getChatComposerHandoff,
+  chatRouteParams,
 } from '@/frontend/appShell/navigation/chat';
 import {
   ComposerDismissArea,
@@ -27,6 +31,7 @@ import {
 import { McpAppConversationProvider } from '@/frontend/components/McpApp';
 import type { MessageListItem } from '@/frontend/components/Message';
 import { useAgentApiById, useAgentSession } from '@/frontend/hooks/agent';
+import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/file';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
@@ -34,6 +39,7 @@ import { createSkillActionMention } from './components/ChatInput/utils/skillMent
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
+import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
@@ -50,9 +56,63 @@ const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage me
 
 export function ChatScreen() {
   return (
-    <ChatScreenFrame header={MainHeader}>
+    <ChatScreenFrame header={LocalChatHeader}>
       <ChatRouteContent />
     </ChatScreenFrame>
+  );
+}
+
+function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
+  const { t } = useTranslation();
+  const params = useLocalSearchParams<ChatRouteParamsInput>();
+  const route = parseChatRoute(params);
+  const target = route.status === 'ready' ? route.target : undefined;
+  // Shares the content's queries, so the header reflects the binding without another fetch.
+  const workspace = useFileWorkspace({
+    sessionId: target?.kind === 'session' ? target.sessionId : undefined,
+    workspaceDraftId: target?.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
+  const workspaceName = workspace.workspace?.name;
+  const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
+  const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
+  function openWorkspace() {
+    if (!target) return;
+    Keyboard.dismiss();
+    if (target.kind === 'session') {
+      setWorkspaceAddress({ sessionId: target.sessionId });
+    } else {
+      const workspaceDraftId = target.workspaceDraftId ?? uuidv7();
+      if (!target.workspaceDraftId)
+        router.setParams(chatRouteParams({ ...target, workspaceDraftId }));
+      setWorkspaceAddress({ workspaceDraftId });
+    }
+  }
+  return (
+    <>
+      <MainHeader
+        {...props}
+        actions={
+          target
+            ? [
+                {
+                  key: 'file-workspace',
+                  type: 'icon',
+                  // The check marks a linked workspace, matching the selection in its sheet.
+                  icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
+                  accessibilityLabel: workspaceName
+                    ? t('workspace.openCurrent', { name: workspaceName })
+                    : t('workspace.open'),
+                  testID: 'chat-file-workspace',
+                  onPress: () => openWorkspace(),
+                },
+              ]
+            : undefined
+        }
+      />
+      {workspaceAddress ? (
+        <FileWorkspaceSheet address={workspaceAddress} onClose={closeWorkspace} />
+      ) : null}
+    </>
   );
 }
 
@@ -72,6 +132,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const isPreview = useIsPreview();
   const agentId = target.kind === 'draft' ? target.agentId : undefined;
   const sessionId = target.kind === 'session' ? target.sessionId : undefined;
+  const workspace = useFileWorkspace({
+    sessionId,
+    workspaceDraftId: target.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
   const draftHandoff = useAgentChatDraftHandoff(sessionId);
   const composerSession = useChatComposerSession(target, draftHandoff);
   const session = useAgentSession(sessionId);
@@ -80,6 +144,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     agentId: resolvedAgentId,
     sessionId,
     composerKey: composerSession.key,
+    workspaceFolderId: !sessionId ? workspace.folderId : undefined,
   });
   const agent = useAgentApiById(resolvedAgentId);
   const { snapshot, messages, messageWindow } = useLocalConversation({
@@ -113,6 +178,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
     : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;
   const keyboardOffset = hasComposer ? getComposerKeyboardStickyOffset(bottomInset) : 0;
 
@@ -122,6 +188,8 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
 
   return (
     <ComposerSessionProvider
+      workspaceSessionId={sessionId}
+      workspaceFolderId={!sessionId ? workspace.folderId : undefined}
       key={composerSession.key}
       initialAttachments={composerHandoff?.attachments}
       initialDraft={initialDraft}
@@ -156,6 +224,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
               </View>
             ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
               <ChatWorkspace
+                feedbackHintBottomOffset={composerHeight}
                 isTranslationEnabled
                 renderUsage={renderLocalUsage}
                 snapshot={snapshot}
@@ -182,7 +251,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (
-            <ComposerDock layoutMode="expandable">
+            <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
               <View>
                 <ChatInput
                   agentId={resolvedAgentId}

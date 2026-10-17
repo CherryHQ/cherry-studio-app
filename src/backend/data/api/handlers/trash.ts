@@ -1,0 +1,41 @@
+import * as z from 'zod';
+
+import type { TrashService } from '@/backend/data/services/TrashService';
+import {
+  TrashKindSchema,
+  type TrashKind,
+  type TrashSchemas,
+} from '@/shared/data/api/schemas/trash';
+import type { HandlersFor } from '@/shared/data/api/types';
+
+export type TrashMutations = {
+  delete(kind: TrashKind, id: string): Promise<void>;
+  empty(): Promise<void>;
+  restore(kind: TrashKind, id: string): Promise<void>;
+};
+const paramsSchema = z.strictObject({ kind: TrashKindSchema, id: z.uuid() });
+
+export function createTrashHandlers(
+  entries: TrashService,
+  mutations: TrashMutations,
+): HandlersFor<TrashSchemas> {
+  return {
+    '/trash': {
+      GET: ({ query }) => entries.list(query ?? {}),
+      DELETE: () => mutations.empty(),
+    },
+    '/trash/summary': { GET: () => entries.summary() },
+    '/trash/:kind/:id': {
+      DELETE: ({ params }) => {
+        const { kind, id } = paramsSchema.parse(params);
+        return mutations.delete(kind, id);
+      },
+    },
+    '/trash/:kind/:id/restore': {
+      POST: ({ params }) => {
+        const { kind, id } = paramsSchema.parse(params);
+        return mutations.restore(kind, id);
+      },
+    },
+  };
+}

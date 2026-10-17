@@ -1,4 +1,5 @@
 import { getDefaultValue, getPreferenceKeys, isPreferenceKey, ThemeMode } from '..';
+import { DEVICE_LOCAL_PREFERENCE_KEYS } from '../preferenceSchema';
 
 describe('preference schema', () => {
   // The schema used to be generated from desktop's classification.json, which
@@ -30,4 +31,11 @@ describe('preference schema', () => {
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
     expect(getDefaultValue('ui.sidebar.recent_view_mode')).toBe('sessions');
   });
+});
+
+test('shake feedback requires a device-local opt-in', () => {
+  expect(getDefaultValue('app.feedback.shake_enabled')).toBe(false);
+  expect(getDefaultValue('app.feedback.shake_hint_decision')).toBe('unseen');
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
+  expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });

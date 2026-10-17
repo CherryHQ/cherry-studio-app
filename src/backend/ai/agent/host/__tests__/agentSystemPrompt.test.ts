@@ -292,6 +292,25 @@ describe('buildAgentSystemPrompt', () => {
     ).not.toContain('## Create Skills');
   });
 
+  test('states the workspace contract only when the turn has a workspace', () => {
+    const linked = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('list_workspace'), tool('write_file')],
+    });
+    expect(linked).toContain('## Workspace');
+    expect(linked).toContain('`list_workspace` names it');
+    expect(linked).toContain('files you save or generate are stored there');
+    expect(linked).toContain('list or search it first');
+    expect(
+      buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'en-US',
+        tools: [tool('write_file')],
+      }),
+    ).not.toContain('## Workspace');
+  });
+
   test('asks for sandboxed computation only when run_js is in the turn', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '',

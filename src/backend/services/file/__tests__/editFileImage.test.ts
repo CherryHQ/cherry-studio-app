@@ -30,7 +30,7 @@ const replacement = {
   entry: FileEntrySchema.parse({
     ...source.entry,
     id: '00000000-0000-4000-8000-000000000002',
-    filename: 'photo v2.png',
+    filename: 'photo.png',
   }),
   uri: 'file:///managed/photo-v2.png',
 };
@@ -61,7 +61,8 @@ test('stores the rendered derivative while preserving source format, provenance 
     {
       source: 'uri',
       uri: temporary.uri,
-      name: 'photo v2.png',
+      name: 'photo.png',
+      baseFileEntryId: source.entry.id,
       mediaType: 'image/png',
       provenance: 'imported',
     },

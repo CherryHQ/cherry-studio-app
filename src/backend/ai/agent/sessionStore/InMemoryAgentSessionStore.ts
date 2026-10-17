@@ -47,6 +47,7 @@ type StoredMessage = {
 function createSessionView(input: {
   id?: string;
   agentId: string;
+  workspaceFolderId?: string | null;
   forkedFromSessionId?: string;
   name?: string;
   isNameManuallyEdited?: boolean;
@@ -55,6 +56,9 @@ function createSessionView(input: {
   return {
     id: input.id ?? uuidv7(),
     agentId: input.agentId,
+    ...(input.workspaceFolderId !== undefined
+      ? { workspaceFolderId: input.workspaceFolderId }
+      : {}),
     name: input.name ?? '',
     isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
@@ -263,6 +267,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       forkedFromSessionId: source.id,
       name: input.name ?? source.name,
       isNameManuallyEdited: source.isNameManuallyEdited,
+      workspaceFolderId: source.workspaceFolderId,
     });
     const reissuedTurnIds = new Map<string, string>();
     const copied = transcript
@@ -368,6 +373,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const session = createSessionView({
       id: input.sessionId,
       agentId: input.agentId,
+      ...(input.workspaceFolderId ? { workspaceFolderId: input.workspaceFolderId } : {}),
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
@@ -382,6 +388,18 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     this.sessions.set(session.id, activeSession);
     this.messages.set(session.id, transcript);
     return cloneJson({ ...reserved, session: activeSession });
+  }
+
+  async discardQueuedTurn(input: DeleteTurnInput): Promise<string[]> {
+    const rows = this.messages.get(input.sessionId) ?? [];
+    const selected = rows.filter((row) => row.view.turnId === input.turnId);
+    if (!selected.some((row) => row.view.role === 'assistant' && row.view.status === 'pending'))
+      return [];
+    this.messages.set(
+      input.sessionId,
+      rows.filter((row) => row.view.turnId !== input.turnId),
+    );
+    return selected.map((row) => row.view.id);
   }
 
   async reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult> {

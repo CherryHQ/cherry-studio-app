@@ -14,7 +14,7 @@ let items: readonly MenuItem[];
 let renderer: ReactTestRenderer;
 const onSelect = jest.fn();
 
-function Harness({ language }: { language?: AppLanguage }) {
+function Harness({ language }: { language?: AppLanguage | null }) {
   const choices = useTranslationLanguageMenu({ onSelect, selectedLanguage: language });
   useEffect(() => {
     items = choices;
@@ -43,4 +43,14 @@ test('preserves an explicit target independently of the app language and dispatc
   expect(items.find((item) => item.checked)?.label).toBe('Français');
   act(() => items.find((item) => item.id === 'translation-language-ja-JP')!.onPress());
   expect(onSelect).toHaveBeenCalledWith('ja-JP');
+});
+
+test('an explicitly unselected menu waits for a manual language choice', () => {
+  act(() => {
+    renderer = create(<Harness language={null} />);
+  });
+  expect(items.some((item) => item.checked)).toBe(false);
+  expect(onSelect).not.toHaveBeenCalled();
+  act(() => items.find((item) => item.id === 'translation-language-fr-FR')!.onPress());
+  expect(onSelect).toHaveBeenCalledWith('fr-FR');
 });

@@ -13,13 +13,11 @@ jest.mock('../feedbackHistory', () => ({ rememberFeedback: jest.fn() }));
 const uploaded = { status: 'uploaded', reportId: '550e8400-e29b-41d4-a716-446655440000' };
 let workflow: ReturnType<typeof useDiagnosticBundle>;
 let renderer: ReactTestRenderer;
-function Probe({
-  onUpdate,
-}: {
-  onUpdate: (value: ReturnType<typeof useDiagnosticBundle>) => void;
-}) {
-  const value = useDiagnosticBundle();
-  useLayoutEffect(() => onUpdate(value), [onUpdate, value]);
+function Probe({ screenshotId }: { screenshotId?: string }) {
+  const value = useDiagnosticBundle(screenshotId);
+  useLayoutEffect(() => {
+    workflow = value;
+  }, [value]);
   return null;
 }
 
@@ -28,13 +26,7 @@ beforeEach(() => {
   jest.mocked(rememberFeedback).mockReset();
   mockUpload.mockResolvedValue(uploaded);
   act(() => {
-    renderer = create(
-      <Probe
-        onUpdate={(value) => {
-          workflow = value;
-        }}
-      />,
-    );
+    renderer = create(<Probe />);
   });
 });
 afterEach(() => {
@@ -76,4 +68,64 @@ test('an acknowledgement received after unmount still saves its receipt', async 
     await submission;
   });
   expect(rememberFeedback).toHaveBeenCalledWith(uploaded.reportId, 'keep the ID');
+});
+
+test('a preview is omitted until explicitly selected, and selection survives retry', async () => {
+  act(() => renderer.update(<Probe screenshotId="capture-id" />));
+  expect(workflow.isScreenshotIncluded).toBe(false);
+  mockUpload.mockResolvedValue({ status: 'submission_failed', reason: 'service_unavailable' });
+  await act(async () => {
+    await workflow.submit('screen problem');
+  });
+  expect(mockUpload.mock.calls[0][0]).not.toHaveProperty('screenshotId');
+  act(() => {
+    workflow.edit();
+    workflow.setScreenshotIncluded(true);
+  });
+  await act(async () => {
+    await workflow.submit('screen problem');
+  });
+  expect(mockUpload.mock.calls[1][0].screenshotId).toBe('capture-id');
+  act(() => workflow.edit());
+  expect(workflow.isScreenshotIncluded).toBe(true);
+  await act(async () => {
+    await workflow.submit('retry');
+  });
+  expect(mockUpload.mock.calls[2][0].screenshotId).toBe('capture-id');
+});
+
+test('deselection and removal remain effective through retries', async () => {
+  act(() => renderer.update(<Probe screenshotId="capture-id" />));
+  act(() => workflow.setScreenshotIncluded(true));
+  act(() => workflow.setScreenshotIncluded(false));
+  mockUpload.mockResolvedValue({ status: 'submission_failed', reason: 'service_unavailable' });
+  await act(async () => {
+    await workflow.submit('deselected');
+  });
+  act(() => workflow.edit());
+  await act(async () => {
+    await workflow.submit('still deselected');
+  });
+  expect(mockUpload.mock.calls[0][0]).not.toHaveProperty('screenshotId');
+  expect(mockUpload.mock.calls[1][0]).not.toHaveProperty('screenshotId');
+  act(() => workflow.setScreenshotIncluded(true));
+  act(() => renderer.update(<Probe />));
+  await act(async () => {
+    await workflow.submit('removed');
+  });
+  expect(mockUpload.mock.calls[2][0]).not.toHaveProperty('screenshotId');
+});
+
+test('replacement screenshots and new reports require a new selection', () => {
+  act(() => renderer.update(<Probe screenshotId="first" />));
+  act(() => workflow.setScreenshotIncluded(true));
+  expect(workflow.isScreenshotIncluded).toBe(true);
+  act(() => renderer.update(<Probe screenshotId="second" />));
+  expect(workflow.isScreenshotIncluded).toBe(false);
+  act(() => workflow.setScreenshotIncluded(true));
+  act(() => renderer.unmount());
+  act(() => {
+    renderer = create(<Probe screenshotId="second" />);
+  });
+  expect(workflow.isScreenshotIncluded).toBe(false);
 });

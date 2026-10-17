@@ -48,6 +48,7 @@ export type ReserveSubmissionInput = {
 
 export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
   agentId: string;
+  workspaceFolderId?: string;
 };
 
 export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {
@@ -192,6 +193,12 @@ export interface AgentSessionStore {
    * only way to keep deleted content out of the model's context.
    */
   deleteTurn(input: DeleteTurnInput): Promise<DeleteTurnResult>;
+
+  /**
+   * Remove an unexecuted reservation after the Runtime confirms withdrawal. Unlike deleting
+   * history, this cannot invalidate the current context or another input's execution.
+   */
+  discardQueuedTurn(input: DeleteTurnInput): Promise<string[]>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 

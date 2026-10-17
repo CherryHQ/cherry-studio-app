@@ -1,3 +1,4 @@
+import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
@@ -51,9 +52,49 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
+      'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
+  });
+
+  test('requires explicit approval for every file-library call and honors the group deny-list', async () => {
+    const tools = await resolve({});
+    for (const name of ['library_search_files', 'library_read_file']) {
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'ask',
+        autoApprovalEligible: false,
+      });
+    }
+    const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
+    expect(capabilityIds(disabled)).not.toContain('library_search_files');
+    expect(capabilityIds(disabled)).not.toContain('library_read_file');
+    expect(capabilityIds(disabled)).toContain('read_file');
+  });
+
+  test('names the linked folder in the workspace tools only for a workspace conversation', async () => {
+    const folder = jest.spyOn(fileLibraryService, 'folder').mockResolvedValue({
+      id: 'folder-1',
+      parentId: null,
+      name: '项目资料',
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    } as never);
+    const linked = await resolve({ workspaceFolderId: 'folder-1' });
+    expect(folder).toHaveBeenCalledWith('folder-1');
+    expect(capabilityIds(linked)).toEqual(
+      expect.arrayContaining(['list_workspace', 'find_workspace_files', 'create_workspace_folder']),
+    );
+    expect(linked.find((tool) => tool.providerName === 'list_workspace')?.description).toContain(
+      'file-library folder "项目资料"',
+    );
+
+    folder.mockClear();
+    const unlinked = await resolve({});
+    expect(folder).not.toHaveBeenCalled();
+    expect(capabilityIds(unlinked)).not.toContain('list_workspace');
   });
 
   test('offers run_js without approval only when the client has the interactive bridge', async () => {
@@ -96,6 +137,8 @@ describe('createSystemCapabilitySource', () => {
       'calendar_list_collections',
       'calendar_list_events',
       'edit_file',
+      'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
@@ -139,6 +182,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_update',
       'ask_user_question',
       'edit_file',
+      'library_search_files',
+      'library_read_file',
       'read_file',
       'write_file',
     ]);
@@ -387,6 +432,9 @@ describe('createSystemCapabilitySource', () => {
 
   test('grants an edited derivative before returning the built-in tool result', async () => {
     const sourceId = '00000000-0000-7000-8000-000000000001';
+    jest
+      .spyOn(fileLibraryService, 'fileForEntry')
+      .mockResolvedValue({ folderId: null, name: 'notes.txt' } as never);
     const entry = FileEntrySchema.parse({
       createdAt: 2,
       filename: 'notes.txt',
@@ -423,7 +471,7 @@ describe('createSystemCapabilitySource', () => {
       resources: {
         availableFiles: new Map(),
         draftFileEntryIds: new Set(),
-        fileEntryIds: new Set(),
+        fileEntryIds: new Set([sourceId]),
         grantFile,
       },
     });
@@ -446,6 +494,9 @@ describe('createSystemCapabilitySource', () => {
 
   test('rewrites a draft this turn produced instead of deriving a copy', async () => {
     const draftId = '00000000-0000-7000-8000-000000000001';
+    jest
+      .spyOn(fileLibraryService, 'fileForEntry')
+      .mockResolvedValue({ folderId: null, name: 'notes.txt' } as never);
     const entry = FileEntrySchema.parse({
       createdAt: 2,
       filename: 'notes.txt',
@@ -494,7 +545,7 @@ describe('createSystemCapabilitySource', () => {
     });
 
     expect(rewriteTextEntry).toHaveBeenCalledWith(
-      { data: 'new', id: draftId },
+      { data: 'new', id: draftId, baseUpdatedAt: undefined, workspaceFolderId: null },
       expect.any(AbortSignal),
     );
     expect(createTextEntry).not.toHaveBeenCalled();
@@ -553,6 +604,7 @@ type Scenario = {
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
   webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
+  workspaceFolderId?: string;
 };
 
 async function resolve(
@@ -569,6 +621,7 @@ async function resolve(
     disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
     resources: TURN_RESOURCES,
+    workspaceFolderId: scenario.workspaceFolderId,
   });
 }
 

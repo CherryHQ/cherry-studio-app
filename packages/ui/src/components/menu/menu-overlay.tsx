@@ -1,4 +1,12 @@
-import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import {
+  type ComponentType,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { BackHandler, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -6,6 +14,7 @@ import {
 } from 'react-native-gesture-handler';
 import { OverKeyboardView } from 'react-native-keyboard-controller';
 
+import { useNavigationOverlay } from '../portal/overlay-navigation';
 import { focusMenuTarget } from './menu-focus';
 import { MenuInteraction, type MenuInteractionValue } from './menu-interaction';
 
@@ -55,6 +64,8 @@ function MenuOverlayRoot({
   host: ComponentType<MenuOverlayHostProps>;
   shouldUseNativePresses?: boolean;
 }) {
+  const [isPresented, setIsPresented] = useState(isVisible);
+  if (isVisible && !isPresented) setIsPresented(true);
   const items = useRef(new Set<View>());
   const isActive = useRef(isOpen);
   const focusFrame = useRef<number | undefined>(undefined);
@@ -73,6 +84,11 @@ function MenuOverlayRoot({
   const requestClose = useCallback(() => {
     if (isActive.current) onClose();
   }, [onClose]);
+  useNavigationOverlay(isVisible || isPresented, requestClose);
+  const handleDismiss = useCallback(() => {
+    if (!isOpen) setIsPresented(false);
+    onClosed();
+  }, [isOpen, onClosed]);
   const handleShow = useCallback(() => {
     focusFrame.current = requestAnimationFrame(() => {
       if (isActive.current) focusMenuTarget(items.current.values().next().value ?? null);
@@ -97,7 +113,7 @@ function MenuOverlayRoot({
 
   return (
     <Host
-      onDismiss={onClosed}
+      onDismiss={handleDismiss}
       onRequestClose={requestClose}
       onShow={handleShow}
       visible={isVisible}

@@ -1,0 +1,154 @@
+diff --git a/dist/tool-search/tool-search.js b/dist/tool-search/tool-search.js
+--- a/dist/tool-search/tool-search.js
++++ b/dist/tool-search/tool-search.js
+@@ -3,7 +3,7 @@
+  * and the matches are loaded with `control.addTools`, so the next request offers them. Loading writes the
+  * conversation's `modelTools` (its `add`), so loaded tools stay offered on that branch, also after a compaction.
+  */
+-import { Type } from "@earendil-works/pi-ai";
++import { Type } from "typebox";
+ import { defineExtension, defineTool } from "../harness/define.js";
+ import { rankDocuments } from "../search.js";
+ export const TOOL_SEARCH_TOOL_NAME = "tool_search";
+diff --git a/dist/search.js b/dist/search.js
+--- a/dist/search.js
++++ b/dist/search.js
+@@ -41,7 +41,15 @@
+         .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+         .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+         .toLowerCase()
+-        .split(/[^a-z0-9]+/)
++        .split(/[^\p{L}\p{N}]+/u)
++        // Keep Han names and adjacent pairs: 飞书日历 is searchable as 飞书 and 日历.
++        .flatMap((term) => term.match(/\p{Script=Han}+|[^\p{Script=Han}]+/gu) ?? [])
++        .flatMap((term) => {
++            const chars = [...term];
++            return /\p{Script=Han}/u.test(term) && chars.length > 2
++                ? [term, ...chars.slice(1).map((next, index) => chars[index] + next)]
++                : [term];
++        })
+         .filter((term) => term.length > 0 && !STOP_WORDS.has(term))
+         .map(stem);
+ }
+diff --git a/dist/codemode/codemode.js b/dist/codemode/codemode.js
+--- a/dist/codemode/codemode.js
++++ b/dist/codemode/codemode.js
+@@ -35,7 +35,7 @@
+  * call with an error result.
+  */
+ import { copyJson } from "@earendil-works/chord";
+-import { toCodemodeIdentifier, } from "@earendil-works/pi-codemode/portable";
++import { toCodemodeIdentifier, } from "@earendil-works/pi-codemode/declarations";
+ import { CODEMODE_SOURCE_GRAMMAR, parseCodemodeSource } from "@earendil-works/pi-codemode/source";
+ import { Type } from "typebox";
+ import { defineDoc } from "../documents.js";
+@@ -412,6 +412,8 @@
+     }
+     /** Writes the result's files under fixed names into the run's output directory, so a rerun overwrites them. */
+     outputFiles() {
++        if (this.options.writeOutput)
++            return (name, data) => this.options.writeOutput(name, data, this.api, this.context);
+         const env = this.api.env;
+         let directory;
+         return async (name, data) => {
+diff --git a/dist/codemode/codemode.d.ts b/dist/codemode/codemode.d.ts
+--- a/dist/codemode/codemode.d.ts
++++ b/dist/codemode/codemode.d.ts
+@@ -152,6 +152,8 @@
+ }>;
+ export type CodemodeToolInput = Static<typeof codemodeSchema>;
+ export type CodemodeToolOptions = {
++    /** Host-managed output storage, for environments without device filesystem paths. */
++    readonly writeOutput?: (name: string, data: string | Uint8Array, api: ToolExecutionApi, context: Context) => Promise<{ path: string } | { error: string }>;
+     /** Runs the scripts: `CodemodeSandbox` on Node, `RemoteCodemodeSandbox` on Cloudflare. */
+     readonly sandbox: CodemodeSandboxBase;
+     /** Groups of tools by name prefix, such as MCP servers, for the `codemode` section and tool search. */
+diff --git a/dist/harness/generation.js b/dist/harness/generation.js
+--- a/dist/harness/generation.js
++++ b/dist/harness/generation.js
+@@ -246,7 +246,11 @@
+ async function failModelError(runtime, text, context) {
+     await runtime.commit(async (tx) => {
+         const live = await tx.doc(LiveDoc, runtime.conversationId);
++        const boundary = await prepareBoundary(tx, runtime.conversationId, runtime.settings);
+         endRun(tx, live, runtime.taskId, { status: "unanswered", reason: "model_error", detail: text });
++        const { users } = await applyBoundary(tx, boundary, "final", runtime.now());
++        if (users.length > 0)
++            await startRun(tx, runtime.conversationId, live, users);
+         return {
+             status: "terminal",
+             outcome: { status: "failed", error: { message: text, detail: { reason: "model_error" } } },
+@@ -258,7 +262,11 @@
+     const message = ref === undefined ? "No model is configured" : `Model ${ref.provider}/${ref.modelId} is not available`;
+     await runtime.commit(async (tx) => {
+         const live = await tx.doc(LiveDoc, runtime.conversationId);
++        const boundary = await prepareBoundary(tx, runtime.conversationId, runtime.settings);
+         endRun(tx, live, runtime.taskId, { status: "unanswered", reason: "no_model" });
++        const { users } = await applyBoundary(tx, boundary, "final", runtime.now());
++        if (users.length > 0)
++            await startRun(tx, runtime.conversationId, live, users);
+         return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } } };
+     }, context);
+ }
+@@ -391,6 +399,7 @@
+     const until = retry ? runtime.now() + retryDelayMs(policy, attempt) : 0;
+     await runtime.commit(async (tx) => {
+         const live = await tx.doc(LiveDoc, conversationId);
++        const boundary = retry ? undefined : await prepareBoundary(tx, conversationId, settings);
+         await appendAssistant(tx, conversationId, message);
+         if (retry) {
+             live.generation = { attempt, retry: { at: until, error: message.errorMessage ?? "" } };
+@@ -404,6 +413,9 @@
+         }
+         const text = message.errorMessage ?? `Model response ended with stop reason ${message.stopReason}`;
+         endRun(tx, live, runtime.taskId, { status: "unanswered", reason: "model_error", detail: text });
++        const { users } = await applyBoundary(tx, boundary, "final", runtime.now());
++        if (users.length > 0)
++            await startRun(tx, conversationId, live, users);
+         return {
+             status: "terminal",
+             outcome: { status: "failed", error: { message: text, detail: { reason: "model_error" } } },
+diff --git a/dist/harness/harness.js b/dist/harness/harness.js
+--- a/dist/harness/harness.js
++++ b/dist/harness/harness.js
+@@ -5,7 +5,8 @@
+ import { AgentDoc, configure, createAgent, resolveAgent, resolveSettings } from "./agent.js";
+ import { createCompaction } from "./compaction.js";
+ import { readContext } from "./context.js";
+-import { InboxDoc, withdrawQueuedInputs } from "./inbox.js";
++import { InboxDoc, prepareBoundary, applyBoundary, withdrawQueuedInputs } from "./inbox.js";
++import { startRun } from "./generation.js";
+ import { LiveDoc, settleSchedulerOutcome } from "./live.js";
+ import { ProviderDoc } from "./provider.js";
+ import { BUILTIN_TASKS } from "./registry.js";
+@@ -142,8 +143,28 @@
+         return build({ conversationId: id, ...(cwd === undefined ? {} : { cwd }), read: this }, context);
+     }
+     /** Reconcile surviving `running` tasks to `pending`; part of open. */
+-    openTasks(context) {
+-        return this.#tasks.open(context);
++    async openTasks(context) {
++        await this.#tasks.open(context);
++        // Older runs could fail with an inbox but no live run. Recover those inputs once,
++        // on the Session line, before the host enables scheduling and restores capabilities.
++        const queued = await this.readOnLine(() => scanAll((cursor) =>
++            this.storage.scanSubmissions({ status: "queued" }, SCAN_PAGE_SIZE, cursor, context)));
++        const owners = new Set(queued.filter((record) => record.type === "input").map((record) => record.conversationId));
++        for (const conversationId of owners) {
++            await this.commitWith(async (tx) => {
++                const conversation = await tx.conversation(conversationId);
++                // Task-owned sub-conversations follow the scheduler's abort cascade.
++                if (!conversation || conversation.owner !== undefined)
++                    return;
++                const live = await tx.doc(LiveDoc, conversationId);
++                if (live.run !== undefined)
++                    return;
++                const boundary = await prepareBoundary(tx, conversationId, resolveSettings(this.#options.settings));
++                const { users } = await applyBoundary(tx, boundary, "final", this.#host.now());
++                if (users.length > 0)
++                    await startRun(tx, conversationId, live, users);
++            }, context);
++        }
+     }
+     resume() {
+         this.assertUsable();

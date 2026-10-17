@@ -322,8 +322,8 @@ A temporary device starts with empty app data. Reuse it for the rest of the task
 
 ### Development Client
 
-Reuse an installed development client until native inputs change. The native fingerprint decides
-compatibility:
+Reuse an installed development client until native inputs change. Start with the native fingerprint
+to find an exact-match client:
 
 ```bash
 PROFILE=development pnpm exec fingerprint fingerprint:generate --platform ios | jq -r .hash
@@ -331,7 +331,17 @@ PROFILE=development pnpm exec fingerprint fingerprint:generate --platform ios | 
 
 Shared artifacts live in `$CONDUCTOR_ROOT_PATH/.local/dev-clients/` as `ios-<hash>.tar.gz` or
 `android-<hash>.apk`. Install the one matching this workspace's hash; reinstalling keeps app data.
-If none matches, report it, or with build authorization build it straight to that path:
+An exact-hash cache miss alone does not establish that an installed or cached client needs rebuilding.
+Before proposing a build, compare its recorded fingerprint sources or known build revision with the
+current checkout under the same platform and development configuration. Include changes since that
+client was built, not only this branch's diff: native dependencies, modules, plugins, configuration,
+and native patches may have changed on the base branch.
+
+Reuse a different-hash client only when the differences are shown to leave its native runtime
+compatible with the current code. Record the actual artifact identity and compatibility evidence;
+do not relabel it with the current hash. A successful launch alone does not establish compatibility.
+If native inputs are incompatible or the build baseline cannot be established, report that concrete
+gap and, with build authorization, build a matching client straight to the shared path:
 
 ```bash
 pnpm build:local --platform ios --profile development-simulator --output "$CONDUCTOR_ROOT_PATH/.local/dev-clients/ios-<hash>.tar.gz"
@@ -340,6 +350,8 @@ pnpm build:local --platform android --output "$CONDUCTOR_ROOT_PATH/.local/dev-cl
 
 Extract the iOS archive and install its `.app` with `agent-device install`. iOS simulator and
 physical-device builds are not interchangeable.
+This reuse procedure applies to local Metro development only; published updates retain the strict
+runtime matching in [Application Updates](./app-updates.md#startup-and-compatibility).
 
 ## Metro And App Session
 

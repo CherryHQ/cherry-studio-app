@@ -1,5 +1,5 @@
 import { randomUUID } from 'expo-crypto';
-import { Directory, File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 import {
   AppStatePolicy,
@@ -17,6 +17,8 @@ import {
   DiagnosticError,
   DiagnosticReportInputSchema,
   DIAGNOSTIC_SOURCE_LIMIT_BYTES,
+  DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+  DIAGNOSTIC_SCREENSHOT_MAX_BYTES,
   normalizeDiagnosticDescription,
   type DiagnosticsModule,
   type DiagnosticReportInput,
@@ -162,6 +164,20 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     try {
       this.abort.signal.throwIfAborted();
       tempRoot = createDiagnosticTemporaryDirectory(bundleId);
+      // Adopt the selected screenshot before asynchronous collection. Only opaque IDs
+      // from our capture directory are accepted, never arbitrary file paths.
+      let screenshot: File | undefined;
+      if (input.screenshotId) {
+        const source = new File(
+          Paths.cache,
+          DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+          `${input.screenshotId}.png`,
+        );
+        if (!source.exists || source.size <= 0 || source.size > DIAGNOSTIC_SCREENSHOT_MAX_BYTES)
+          throw new Error('Invalid feedback screenshot');
+        screenshot = new File(tempRoot, 'screenshot.png');
+        await source.copy(screenshot);
+      }
       const fileName = `cherry-studio-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}-${bundleId}.zip`;
       const destination = new File(tempRoot, fileName);
       const now = Date.now();
@@ -250,6 +266,9 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
         },
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
         feedback: { file: 'feedback.txt', source: 'user' },
+        ...(screenshot
+          ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
+          : {}),
         system,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
@@ -272,7 +291,10 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           { name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
           { name: 'feedback.txt', content: normalizeDiagnosticDescription(input.description) },
         ],
-        staged,
+        [
+          ...staged,
+          ...(screenshot ? [{ archiveName: 'screenshot.png', path: screenshot.uri }] : []),
+        ],
         this.abort.signal,
       );
       for (const entry of tempRoot.list()) if (entry.uri !== destination.uri) entry.delete();

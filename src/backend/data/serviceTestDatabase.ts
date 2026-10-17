@@ -23,12 +23,12 @@ export function createServiceTestDatabase(): {
         statement.run(...params);
         return { rows: [] };
       }
+      // Positional rows, like the app driver: joined tables share column names.
+      statement.setReturnArrays(true);
       if (method === 'get') {
-        const row = statement.get(...params) as Record<string, unknown> | undefined;
-        return { rows: row ? Object.values(row) : [] };
+        return { rows: (statement.get(...params) as unknown[] | undefined) ?? [] };
       }
-      const rows = statement.all(...params) as Record<string, unknown>[];
-      return { rows: rows.map((row) => Object.values(row)) };
+      return { rows: statement.all(...params) as unknown as unknown[][] };
     },
     undefined as never,
     { casing: 'snake_case', schema },

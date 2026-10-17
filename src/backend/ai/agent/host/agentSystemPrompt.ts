@@ -7,6 +7,7 @@ import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
+import { LIST_WORKSPACE_TOOL_NAME } from '../tools/fileLibraryTools';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, LIST_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
@@ -150,6 +151,16 @@ ${JSON.stringify(toolDiscoveryWarnings.slice(0, 20).map((warning) => warning.sli
 
   if (findBuiltInToolNames(tools, MANAGED_FILE_TOOL_NAMES).length > 0) {
     sections.push(buildManagedFilesSection(tools));
+  }
+  // Only a conversation with a workspace receives the workspace tools.
+  if (
+    tools.some(
+      (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === LIST_WORKSPACE_TOOL_NAME,
+    )
+  ) {
+    sections.push(`## Workspace
+
+The user linked this conversation to a file-library folder; \`${LIST_WORKSPACE_TOOL_NAME}\` names it. Relative paths in file tools resolve inside it, and files you save or generate are stored there. When a request involves the workspace or its files, list or search it first instead of assuming what it contains.`);
   }
   if (
     tools.some(

@@ -4,10 +4,12 @@ import { useCallback, useMemo } from 'react';
 import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { queryKeys, useBackendModule, useInfiniteQuery } from '@/frontend/data';
 import type { FileEntry } from '@/shared/data/types/file';
+import type { LibraryFile } from '@/shared/data/types/fileLibrary';
 
 const FILE_ENTRY_PAGE_SIZE = 30;
 
 export type ResolvedFileEntry = {
+  libraryFile?: LibraryFile;
   entry: FileEntry;
   previewUri: string | undefined;
   uri: string | undefined;
@@ -25,16 +27,34 @@ type FilePreviewResult = {
 };
 
 /** Shared cursor pages and batched previews for the library and attachment picker. */
-export function useFileEntryPages({ enabled }: { enabled: boolean }) {
+export function useFileEntryPages({
+  enabled,
+  folderId,
+}: {
+  enabled: boolean;
+  folderId?: string | null;
+}) {
   const file = useBackendModule('file');
   const queryClient = useQueryClient();
-  const query = useInfiniteQuery('/files/entries', {
+  const query = useInfiniteQuery('/files/library', {
     enabled,
+    query: { folderId },
     limit: FILE_ENTRY_PAGE_SIZE,
   });
+  const pages = useMemo(
+    () => query.pages.map((page) => ({ ...page, items: page.items.map((item) => item.entry) })),
+    [query.pages],
+  );
+  const libraryFiles = useMemo(
+    () =>
+      new Map(
+        query.pages.flatMap((page) => page.items.map((item) => [item.entry.id, item] as const)),
+      ),
+    [query.pages],
+  );
   const uriPageQueries = useMemo(
     () =>
-      query.pages.map((page) =>
+      pages.map((page) =>
         queryOptions({
           enabled,
           // Page membership changes after deletion. Keep surviving files visible
@@ -61,7 +81,7 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
           staleTime: Infinity,
         }),
       ),
-    [enabled, file, query.pages, queryClient],
+    [enabled, file, pages, queryClient],
   );
   const combineUriPages = useCallback((results: readonly FileUriPageResult[]) => {
     return {
@@ -100,7 +120,21 @@ export function useFileEntryPages({ enabled }: { enabled: boolean }) {
       }),
     [uriPages.entries],
   );
-  const entries = useQueries({ combine: combinePreviews, queries: previewQueries });
+  const previews = useQueries({ combine: combinePreviews, queries: previewQueries });
+  const attachLibraryMetadata = useMemo(() => {
+    const cache = new WeakMap<ResolvedFileEntry, ResolvedFileEntry>();
+    return (item: ResolvedFileEntry, libraryFile: LibraryFile | undefined) => {
+      const previous = cache.get(item);
+      if (previous && previous.libraryFile === libraryFile) return previous;
+      const resolved = { ...item, libraryFile };
+      cache.set(item, resolved);
+      return resolved;
+    };
+  }, []);
+  const entries = useMemo(
+    () => previews.map((item) => attachLibraryMetadata(item, libraryFiles.get(item.entry.id))),
+    [previews, libraryFiles, attachLibraryMetadata],
+  );
   const refreshPages = query.refresh;
   const refresh = useCallback(async () => {
     await Promise.all([refreshPages(), ...uriPages.failedPages.map((page) => page.refetch())]);

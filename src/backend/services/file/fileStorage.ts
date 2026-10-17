@@ -1,8 +1,11 @@
 import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -18,6 +21,7 @@ import {
   SafeExtSchema,
   SafeNameSchema,
 } from '@/shared/data/types/file';
+import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { resolveDocumentImportMediaType } from '@/shared/utils/documentFileTypes';
@@ -31,43 +35,58 @@ const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 const fileChanges = new Emitter<FileEntryId>();
 
+export function notifyFileChange(id: FileEntryId): void {
+  fileChanges.fire(id);
+  publishDataApiChanges(['/files/library', '/files/history', '/trash', '/trash/summary']);
+}
+
+export async function trashInternalEntry(
+  library: Pick<FileLibraryService, 'trashFileEntry'>,
+  id: FileEntryId,
+): Promise<boolean> {
+  storageMutationGate.assertWritable();
+  const ids = await library.trashFileEntry(id);
+  for (const entryId of ids) notifyFileChange(entryId);
+  return ids.length > 0;
+}
+
 /** All managed-file writers notify here, after their entry changes commit. */
 export function subscribeFileChanges(listener: (entryId: FileEntryId) => void): () => void {
   const subscription = fileChanges.event(listener);
   return () => subscription.dispose();
 }
 
-export type CreateInternalEntryInput = { provenance: FileEntryProvenance } & (
-  | {
-      /** Authoritative media type from the picker; extension inference is the fallback. */
-      mediaType?: string;
-      name?: string;
-      /** Transient import source; its bytes are copied to Data/Files and the URI is not persisted. */
-      source: 'uri';
-      uri: string;
-    }
-  | {
-      data: string;
-      mediaType: string;
-      name?: string;
-      source: 'base64';
-    }
-  | {
-      /** UTF-8 text written verbatim. */
-      data: string;
-      mediaType: string;
-      /** Display name; the caller owns extension inference, so it is required. */
-      name: string;
-      source: 'text';
-    }
-  | {
-      /** Binary output produced in memory, with an explicit media type and filename. */
-      data: Uint8Array;
-      mediaType: string;
-      name: string;
-      source: 'bytes';
-    }
-);
+export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryProvenance } & (
+    | {
+        /** Authoritative media type from the picker; extension inference is the fallback. */
+        mediaType?: string;
+        name?: string;
+        /** Transient import source; its bytes are copied to Data/Files and the URI is not persisted. */
+        source: 'uri';
+        uri: string;
+      }
+    | {
+        data: string;
+        mediaType: string;
+        name?: string;
+        source: 'base64';
+      }
+    | {
+        /** UTF-8 text written verbatim. */
+        data: string;
+        mediaType: string;
+        /** Display name; the caller owns extension inference, so it is required. */
+        name: string;
+        source: 'text';
+      }
+    | {
+        /** Binary output produced in memory, with an explicit media type and filename. */
+        data: Uint8Array;
+        mediaType: string;
+        name: string;
+        source: 'bytes';
+      }
+  );
 
 type WrittenInternalFile = {
   filename: string;
@@ -202,8 +221,19 @@ export async function createInternalEntry(
   const written = await writeInternalFile(input);
   try {
     signal?.throwIfAborted();
-    const entry = await entries.create(written, signal);
-    fileChanges.fire(entry.id);
+    const entry = await entries.create(
+      {
+        ...written,
+        folderId: input.folderId,
+        baseFileEntryId: input.baseFileEntryId,
+        conflictIfExists: input.conflictIfExists,
+        workspaceFolderId: input.workspaceFolderId,
+        baseUpdatedAt: input.baseUpdatedAt,
+        expectedName: input.expectedName,
+      },
+      signal,
+    );
+    notifyFileChange(entry.id);
     return entry;
   } catch (error) {
     try {
@@ -273,7 +303,7 @@ export async function discardInternalEntries(
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
-    fileChanges.fire(entry.id);
+    notifyFileChange(entry.id);
   }
 }
 
@@ -286,44 +316,59 @@ export async function discardInternalEntries(
  * updated ahead of its bytes would misreport content the blob never held.
  */
 export async function rewriteInternalTextEntry(
-  entries: Pick<FileEntryService, 'findById' | 'updateSizeTx' | 'withWriteTx'>,
-  input: { data: string; id: FileEntryId },
+  entries: Pick<
+    FileEntryService,
+    'findByIdTx' | 'updateSizeTx' | 'withWriteTx' | 'assertCurrentTx'
+  >,
+  input: {
+    data: string;
+    id: FileEntryId;
+    workspaceFolderId?: string | null;
+    baseUpdatedAt?: number;
+  },
   signal?: AbortSignal,
 ): Promise<FileEntry> {
   signal?.throwIfAborted();
-  const entry = await entries.findById(input.id);
-  signal?.throwIfAborted();
-  if (!entry) {
-    throw new Error(`Draft file entry does not exist: ${input.id}`);
-  }
-  if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
-  const file = managedFileForEntry(entry);
-  if (!file.exists) {
-    throw new Error(`Draft file bytes are missing: ${input.id}`);
-  }
-  // Expo writes text synchronously. Once the bytes change, finish recording
-  // their size even if the turn is cancelled while its DB write is queued.
-  file.write(input.data);
-  const size = file.size;
-  if (!Number.isSafeInteger(size) || size < 0) {
-    throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
-  }
-  const updatedEntry = await entries.withWriteTx((tx) => entries.updateSizeTx(tx, entry.id, size));
-  fileChanges.fire(entry.id);
+  const updatedEntry = await entries.withWriteTx(async (tx) => {
+    signal?.throwIfAborted();
+    const entry = await entries.findByIdTx(tx, input.id, null);
+    signal?.throwIfAborted();
+    if (!entry) {
+      throw new Error(`Draft file entry does not exist: ${input.id}`);
+    }
+    if (entry.provenance === 'imported') throw new Error('Imported file originals are immutable');
+    const file = managedFileForEntry(entry);
+    if (!file.exists) {
+      throw new Error(`Draft file bytes are missing: ${input.id}`);
+    }
+    await entries.assertCurrentTx(tx, entry.id, input);
+    signal?.throwIfAborted();
+    // Availability, synchronous bytes and metadata share the deletion write queue.
+    // Once bytes change, complete bookkeeping even if the caller cancels.
+    file.write(input.data);
+    const size = file.size;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`Rewritten internal file has an invalid size: ${file.uri}`);
+    }
+    return entries.updateSizeTx(tx, entry.id, size);
+  });
+  notifyFileChange(updatedEntry.id);
   return updatedEntry;
 }
 
 /**
  * Hard-delete an entry, its bytes and its preview. The row is removed first; the unlink is
  * best-effort (a leftover blob is reclaimable by the future cache-cleanup
- * sweep, while a dangling row would not be).
+ * sweep, while a dangling row would not be). A `deletedAt` limits removal to that trash
+ * incarnation, so a concurrent restore wins over stale cleanup.
  */
 export async function deleteInternalEntry(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   id: FileEntryId,
+  deletedAt?: number,
 ): Promise<boolean> {
   const deletedEntry = await entries.withWriteTx(async (tx) => {
-    const entry = await entries.findByIdTx(tx, id);
+    const entry = await entries.findByIdTx(tx, id, deletedAt);
     if (!entry) {
       return null;
     }
@@ -335,14 +380,19 @@ export async function deleteInternalEntry(
     return false;
   }
 
-  try {
-    deleteInternalFile(deletedEntry);
-    deleteFilePreview(deletedEntry);
-  } catch (error) {
-    logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
-  }
-  fileChanges.fire(id);
+  deleteInternalEntryFiles(deletedEntry);
   return true;
+}
+
+/** Clean up bytes after their metadata removal commits, including grouped trash deletion. */
+export function deleteInternalEntryFiles(entry: FileEntry): void {
+  try {
+    deleteInternalFile(entry);
+    deleteFilePreview(entry);
+  } catch (error) {
+    logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
+  }
+  notifyFileChange(entry.id);
 }
 
 export async function resolveFileEntry(

@@ -4,15 +4,15 @@
 
 How Cherry Mobile stores user- and generation-owned files. This model is mobile-native and
 deliberately diverges from Cherry Desktop's `FileEntry`: desktop's external-path entries, content
-hashing, cleanup policies, and entry-level trash have no mobile consumer, so none of them exist
-here. Terms follow [Domain Language](../domain-language.md).
+hashing, and per-file cleanup policies have no mobile consumer. Mobile uses the
+[file trash](./trash.md) for recoverable user deletion. Terms follow [Domain Language](../domain-language.md).
 
 ## Invariants
 
 1. **Files are first-class.** A file is a peer of the Agent message or painting that uses it, not a
    dependent of it. Every entry belongs in the file library.
 2. **Content is immutable once its turn ends.** An entry produced by an Agent turn is that turn's
-   draft and may be rewritten in place by the same turn's `edit_file`; the moment the turn ends,
+   draft and may be rewritten in place by the same turn's `edit_file` or `write_file`; the moment the turn ends,
    or for any entry the turn did not produce, bytes never change and an "edit" creates a new
    version entry. Nothing else in the app rewrites a managed blob.
 3. **Cherry owns every blob.** Picker, camera, and provider URIs are transient import sources whose
@@ -27,8 +27,9 @@ here. Terms follow [Domain Language](../domain-language.md).
    be re-encoded are stored untouched; send-time attachment limits remain their guard.
 5. **Business-object deletion never deletes files.** Deleting an Agent Session or painting leaves
    every file it pointed at in place.
-6. **Only the user deletes files.** Removing a composer attachment removes its reference, not the
-   library entry. Deletion belongs to the file library; there is no background garbage collection.
+6. **The user decides which files to delete.** Removing a composer attachment removes its reference,
+   not the library entry. Library deletion moves the file to trash for 30 days. The user may
+   permanently delete it sooner; the app removes expired trash on startup and foreground entry.
 7. **Owners hold their own file ids; there is no association table.** A message carries them in its
    part JSON, a painting in its `files` column. Nothing maintains a reverse index; the one reverse
    question asked — which painting produced an image the library opens — is answered by scanning
@@ -46,7 +47,7 @@ here. Terms follow [Domain Language](../domain-language.md).
 ## Schema
 
 `file_entry`: `id`, `filename` (including extension), `mediaType`, `size`, `createdAt`,
-`updatedAt`, `deletedAt`, `provenance`.
+`updatedAt`, `deletedAt`, `provenance`, `libraryFileId`, `trashedWith`.
 
 - `mediaType` is the IANA media type captured at import — picker metadata first, Expo's
   extension-derived `File.type` second, `application/octet-stream` last. Import fills an absent or
@@ -55,8 +56,8 @@ here. Terms follow [Domain Language](../domain-language.md).
   library's category tabs (`image/%`, `application/pdf`, …), which is why extensions are not stored
   separately.
 - `updatedAt` equals `createdAt` on insert. Its one writer today is the draft rewrite
-  (`rewriteInternalTextEntry`), which records the new `size` and bumps it; a future metadata update
-  (library rename) will be the second.
+  (`rewriteInternalTextEntry`), which records the new `size` and advances it monotonically. Logical
+  rename and move update `library_file`, leaving version filenames and blob suffixes untouched.
 - `provenance` is stable source identity: `imported` for a file brought in from a picker, camera,
   paste, or painting input; `generated` for ordinary files written or produced for the user by
   Cherry; `document-export` for new files produced by document export; `unknown` when the origin
@@ -69,9 +70,50 @@ here. Terms follow [Domain Language](../domain-language.md).
   recording them as `imported` would state something the data does not support. The library's
   Sharing tab selects `document-export`; exported images/documents remain in their media-type tabs.
   This value extends the existing text column without a database migration or changes to old rows.
-- `deletedAt` is reserved for the future library trash. It is `NULL` for every production row today;
-  attachment admission and direct preview reads already treat a marked row as unavailable, while
-  cleanup still must not infer ownership from it.
+- `deletedAt` is the time a user moved the file to trash. Library listing, attachment admission,
+  Agent reads/edits, and previews exclude marked rows. Restore clears it. Trash and restore preserve
+  `updatedAt`, which identifies the existing content/preview revision.
+
+## Folders, Stable Paths, And History
+
+`file_folder` stores parent, display name, normalized name key, timestamps, and trash membership.
+`library_file` stores a stable logical file id, folder id, display name, and `currentEntryId`.
+Every `file_entry.libraryFileId` joins one immutable version to that file. The current pointer and
+new version are committed in one serialized write transaction; messages and paintings continue
+referencing exact version ids. The library shows only current versions; older versions are kept
+for those references and are not listed to users. The current version is deleted by trashing the
+whole logical file.
+
+Folders and files share a namespace within each folder, compared after NFC normalization and
+Unicode lowercasing. Rename rejects conflicts; imports, moves, and restoration choose a readable
+` (2)` suffix when needed. Existing root duplicates remain separate logical files. The root cannot
+be selected as a workspace. Migration adds rows and references without moving or renaming blobs.
+
+An Agent Session may bind one folder by `workspaceFolderId`. Renaming or moving that folder keeps
+the binding; multiple Sessions may share it. A trashed folder retains the binding but is unavailable;
+restoring it resumes access. Permanent deletion clears the binding through `ON DELETE SET NULL`.
+No Session creates or owns a folder automatically. New attachments are imported directly into its
+workspace; choosing an existing outside library version copies it there and preserves the source.
+Without a workspace, outputs and new imports land in the library root.
+
+The conversation header's folder action opens a workspace sheet showing the folder tree. Folder names
+select the workspace; separate arrows expand a folder in place to show its subfolders, then its files.
+File rows open the shared file viewer without attaching
+files or changing the workspace. The sheet stays mounted while the viewer is open, preserving its
+expansion and scroll state on return. The no-workspace option is a peer row. Association is optional and
+can be changed or removed at any time; it never moves existing files. An unsent draft holds its
+selection in memory under an opaque route token, without creating a Session. Its first submission
+validates and persists that folder with the Session and first message pair in one transaction.
+Each turn captures its workspace before execution, so switching during a running turn affects
+subsequent turns. Association belongs to the conversation, and does not change other conversations
+or the Agent's defaults.
+
+Folder deletion marks its active subtree and all versions of those files with one `trashedWith`
+root. Restore and purge operate on that group. Separately trashed subtrees stay independent; when
+their old parent is unavailable, restoration falls back to the library root and resolves name
+collisions. Backups include these rows and validate ancestry, cycles, names, current pointers,
+version membership, and trash grouping. Restore clears orphan Session bindings; it rejects corrupt
+folder or version references.
 
 ## Ownership
 
@@ -212,13 +254,14 @@ the new `size`. Bytes first: a crash in between leaves a row whose `size` lags t
 reader tolerates, whereas a row updated ahead of its bytes would describe content the blob never
 held. Only the turn that produced the draft may call it, one edit at a time: `edit_file` serializes
 calls naming the same file so a rewrite is never built on bytes another edit has already replaced.
-Storage checks cancellation after loading the draft entry, before the synchronous native text
-write. Once bytes have changed, the size update finishes even if the turn is cancelled while that
-metadata write is queued.
+Storage queues draft edits with deletion and restoration, checking availability and cancellation
+inside the write transaction before the synchronous file write. Once bytes have changed, the size
+update finishes in the same transaction even if the turn is cancelled.
 
-**Delete** — `deleteInternalEntry` removes the row inside a write transaction, then unlinks the
-bytes best-effort. Row first: a leftover blob is reclaimable, a dangling row is not. Cancelling an
-attachment does not call it; deletion and the future trash belong to the library.
+**Delete** — `deleteInternalEntry` removes the row first, then unlinks bytes and preview
+best-effort; a leftover blob is reclaimable by orphan-blob sweeping, while a dangling row would not
+be. Cancelling an attachment does not call it. User deletion calls `moveToTrash`; permanent trash
+removal and compensating cleanup use the hard-delete path.
 
 **Missing bytes** — a current submission fails before admission; an already-persisted reference
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
@@ -245,36 +288,39 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 **File library.** The library page is a query over `file_entry`; it needs no new table. The Sharing
 tab selects `provenance: 'document-export'` without reclassifying historical rows. See
 [Document Export](../document-export.md).
-General imported/generated provenance filters remain unshipped. Its future trash uses
-the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
-bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
-trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no
-"used by 2 Sessions" warning, because that would need the reverse index this model does without, and
-the user owns the consequences of their own deletion. The same iteration owns a cache-cleanup
-action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
-row).
+General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
+bytes and previews. The [file trash](./trash.md) restores entries, permanently deletes them, and
+clears the whole trash. Files older than 30 days in trash are permanently deleted at app startup
+and foreground entry, without a timer or background task. No reverse-reference warning is needed:
+existing messages and paintings show their unavailable placeholder until a file is restored.
+Backups include trashed rows and bytes with the original deletion time; the next sweep removes
+expired restored trash. Orphan-blob sweeping remains separate from trash retention.
 
-**Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text through the
-`'text'` source of `createInternalEntry`. `edit_file` strictly decodes a bounded UTF-8 source
-selected by active `fileEntryId` and applies exact replacement. If the source is a draft of the
-current turn it rewrites that entry's bytes through `rewriteInternalTextEntry` (bytes first, then
-the row's `size`), so a turn ends with one artifact per file; otherwise it creates a
-same-media-type entry named for its version (`report.html` → `report v2.html`) through the same
-text boundary, and the source is history. New entries persist with `provenance: 'generated'` and return in the Runtime artifact
-envelope; `generate_image` likewise imports generated image bytes with generated provenance.
-`write_file` reads no entry and does not consult the turn resource ledger. Knowledge of a valid id
-is sufficient for `edit_file` even outside that ledger, but it exposes no file listing or search.
-`read_file` returns bounded line windows for UTF-8/built-in/PDF output, or explicit raw JSON
-character windows for AnyDoc, and creates nothing. JSON offsets count Unicode code points;
-concatenating all windows recovers `JSON.stringify(original IR)`, including long strings. Asset
-descriptors contain references and sizes, never pixels. For text output, `sourceTruncated`
-distinguishes an extraction cap from the pageable line window's `truncated` flag. Versions are
-carried in the filename rather than a lineage column; folding a version chain in the library is a
-future library concern and needs no schema change to start.
+**Agent file writes and generated artifacts.** `write_file` stores bounded UTF-8 text and accepts
+relative workspace paths. Existing paths require `base_file_entry_id` and `base_revision` from a
+read; a changed current pointer, draft revision, or destination fails with a conflict. `edit_file`
+uses exact UTF-8 replacement and the same commit checks. Same-turn drafts rewrite in place after
+checking the current pointer and revision inside the write transaction. Later turns create a new
+version under the same logical name. A failed save removes its uncommitted blob.
+
+`read_file` and `edit_file` accept conversation references and workspace files. Outside-library
+search and reads use `library_search_files` and `library_read_file`; every call requires confirmation
+and is ineligible for automatic approval. An approved read permits editing that source during the
+turn, but never grants unrestricted reads. Editing an outside source creates a workspace copy.
+`generate_image`, direct image generation, Code Mode tool calls and saved script outputs, and stored
+MCP results use the captured workspace destination. Tool outputs contain managed ids and revisions,
+never device paths. A workspace turn names its folder in `list_workspace`, and the system prompt
+states that relative paths and saved files belong to it and that the model lists or searches it
+before relying on its contents; the folder's file list is never injected into the prompt.
+
+`read_file` returns bounded line windows for UTF-8/built-in/PDF output, or raw JSON character
+windows for AnyDoc. JSON offsets count Unicode code points; concatenating windows recovers the
+original serialized IR. Asset descriptors contain references and sizes, never pixels. For text,
+`sourceTruncated` distinguishes the extractor cap from a pageable window's `truncated` flag.
 
 **Readable names.** Every file Cherry produces is named for what it is, never for its id: an
 imported file keeps the name it arrived with (a camera photo, which has none, falls back to
-`Image`), a version carries its number, `write_file` uses the name the model chose, and a generated
+`Image`), versions keep the logical name, `write_file` uses the name the model chose, and a generated
 image is named after its prompt through `readableFilename` (`sunset over the bay.png`, with a
 numeric suffix for siblings from one request). The `painting-{id}` fallback in `fileStorage` is a
 last resort for a caller that supplies no name, not a naming scheme.
