@@ -312,7 +312,6 @@
   "chat.errorPart.title": "Hata",
   "chat.errorPart.unreadable.message": "Bu mesaj okunamayan veya desteklenmeyen içerik barındırıyor. Özgün veriler korundu.",
   "chat.errorPart.unreadable.title": "İçeriğin bir kısmı görüntülenemiyor",
-  "chat.filePicker.add": "Ekle",
   "chat.filePicker.addSelected_one": "{{count}} dosya ekle",
   "chat.filePicker.addSelected_other": "{{count}} dosya ekle",
   "chat.filePicker.alreadyAdded": "Zaten eklendi",
