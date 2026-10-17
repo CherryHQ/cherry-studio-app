@@ -15,8 +15,9 @@ There is no duplicate trash table. `file_folder.deletedAt`, `library_file.delete
 File thumbnails use the logical file's current version; individual versions use their own entry id.
 Folders display a folder icon.
 
-- Library deletion uses `FileModule.moveToTrash`. Normal file reads, Agent attachment/edit paths,
-  and previews treat trashed files as unavailable. Restore clears the deletion mark, keeping the
+- `TrashRuntime` owns trashing for the library screen (`FileModule.moveToTrash` and folder
+  `DELETE`) and Agent tools, notifying file subscribers after commit. Normal file reads, Agent
+  attachment/edit paths, and previews treat trashed files as unavailable. Restore clears the deletion mark, keeping the
   entry id and content/preview revision. Historical references work again when their file is restored.
   Draft rewrites check availability and write bytes and metadata within the same serialized database
   transaction as trash mutations, so a queued deletion cannot split those writes.

@@ -10,17 +10,14 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import {
-  deleteInternalEntryFiles,
-  notifyFileChange,
-  trashInternalEntry,
-} from '@/backend/services/file/fileStorage';
+import { deleteInternalEntryFiles, notifyFileChange } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   TRASH_RETENTION_MS,
   type TrashItem,
   type TrashKind,
 } from '@/shared/data/api/schemas/trash';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 const logger = loggerService.withContext('TrashRuntime');
 
@@ -55,16 +52,19 @@ export class TrashRuntime extends BaseService {
     return this.pending > 0;
   }
 
-  /** Trash a logical file with all its versions, or a folder with its active subtree. */
-  trash(kind: 'file' | 'folder', id: string, signal?: AbortSignal) {
-    return this.mutate(async () => {
-      if (kind === 'folder') {
-        for (const entryId of await this.files.trashFolder(id, signal)) notifyFileChange(entryId);
-        return;
-      }
-      const file = await this.files.file(id);
-      await trashInternalEntry(this.files, file.currentEntryId, signal);
-    });
+  // Trashing only marks active rows, so unlike restore it needs no ordering against purges; its
+  // write transaction alone orders it with draft rewrites.
+
+  /** Trash the logical file that owns this version, with all its versions. */
+  async trashFile(entryId: FileEntryId, signal?: AbortSignal) {
+    const ids = await this.files.trashFileEntry(entryId, false, signal);
+    for (const id of ids) notifyFileChange(id);
+    return ids.length > 0;
+  }
+
+  /** Trash a folder with its active subtree. */
+  async trashFolder(id: string, signal?: AbortSignal) {
+    for (const entryId of await this.files.trashFolder(id, signal)) notifyFileChange(entryId);
   }
 
   restore(kind: TrashKind, id: string, signal?: AbortSignal) {

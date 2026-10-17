@@ -1,11 +1,9 @@
 import { Directory, File } from 'expo-file-system';
 
 import { Emitter } from '@/backend/core/lifecycle/event';
-import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -38,17 +36,6 @@ const fileChanges = new Emitter<FileEntryId>();
 export function notifyFileChange(id: FileEntryId): void {
   fileChanges.fire(id);
   publishDataApiChanges(['/files/library', '/files/history', '/trash', '/trash/summary']);
-}
-
-export async function trashInternalEntry(
-  library: Pick<FileLibraryService, 'trashFileEntry'>,
-  id: FileEntryId,
-  signal?: AbortSignal,
-): Promise<boolean> {
-  storageMutationGate.assertWritable();
-  const ids = await library.trashFileEntry(id, false, signal);
-  for (const entryId of ids) notifyFileChange(entryId);
-  return ids.length > 0;
 }
 
 /** All managed-file writers notify here, after their entry changes commit. */

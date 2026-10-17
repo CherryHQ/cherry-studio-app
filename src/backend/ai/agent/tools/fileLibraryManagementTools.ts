@@ -11,7 +11,7 @@ import { fileNameKey } from '@/shared/data/types/fileLibrary';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
-export type FileLibraryTrashAccess = Pick<TrashRuntime, 'trash' | 'restore'> & {
+export type FileLibraryTrashAccess = Pick<TrashRuntime, 'trashFile' | 'trashFolder' | 'restore'> & {
   entries: Pick<TrashService, 'list'>;
 };
 
@@ -141,7 +141,8 @@ export function createFileLibraryManagementTools(
       'Move a file (with its versions) or a folder (with its subtree) to trash for 30 days. Its conversation references stay unavailable until restored.',
       itemSchema,
       async ({ kind, id }, signal) => {
-        await trash.trash(kind, id, signal);
+        if (kind === 'folder') await trash.trashFolder(id, signal);
+        else await trash.trashFile((await library.file(id)).currentEntryId, signal);
         return { status: 'trashed', kind, id };
       },
     ),

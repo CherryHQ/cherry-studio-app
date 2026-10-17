@@ -241,18 +241,15 @@ describe('Agent file-library management', () => {
       ),
     ).rejects.toThrow();
     const duringLookup = new AbortController();
-    // The trash runtime owns its own library service, so intercept every instance.
-    const read = FileLibraryService.prototype.file;
-    jest
-      .spyOn(FileLibraryService.prototype, 'file')
-      .mockImplementation(async function (this: FileLibraryService, fileId) {
-        const file = await read.call(this, fileId);
-        duringLookup.abort();
-        return file;
-      });
+    const read = library.file.bind(library);
+    jest.spyOn(library, 'file').mockImplementation(async (fileId) => {
+      const file = await read(fileId);
+      duringLookup.abort();
+      return file;
+    });
     await expect(
       call('library_trash_item', { kind: 'file', id: id(1) }, duringLookup.signal),
     ).rejects.toThrow();
-    expect(await read.call(library, id(1))).toMatchObject({ name: 'Notes.md', deletedAt: null });
+    expect(await read(id(1))).toMatchObject({ name: 'Notes.md', deletedAt: null });
   });
 });

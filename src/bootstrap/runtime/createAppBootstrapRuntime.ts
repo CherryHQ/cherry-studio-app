@@ -147,6 +147,7 @@ export function createAppBootstrapRuntime(
     'ProviderRegistryUpdaterService',
   );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
+  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const services = createBackendServices({
     agent,
     ai,
@@ -179,8 +180,8 @@ export function createAppBootstrapRuntime(
     diagnostics,
     languageServing,
     providerRegistryUpdater,
+    trash,
   });
-  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   backup.configure(
     () =>
       agent.hasPendingStorageWork() ||
