@@ -1,8 +1,10 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
+import { ProtocolError } from '@modelcontextprotocol/client';
 import { AppState } from 'react-native';
 import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
+import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import {
   AppStatePolicy,
   BaseService,
@@ -146,7 +148,8 @@ type ServerRuntimeState = {
   clientListed: boolean;
   connectionConfig: McpRuntimeConnectionConfig;
   connectionKey?: Promise<string>;
-  connectionPromise?: Promise<McpRuntimeClient>;
+  /** Setup shared by every caller; cancelled only once no caller still waits for it. */
+  connection?: { client: Promise<McpRuntimeClient>; cancel: AbortController; waiters: number };
   discoveryFailure?: { attempts: number; nextAttemptAt: number };
   prompts?: McpPromptEntry[];
   generation: number;
@@ -554,7 +557,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     const progress: McpInvocationProgress = { sent() {}, waiting: bound.setPaused };
     state.calls.add(progress);
     try {
-      const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
+      const client = await this.getClient(server, state, bound.signal);
       let catalog: Promise<ListToolsResult['tools']> | undefined;
       const result = await operation({
         client,
@@ -579,7 +582,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
         throw error;
       const rejection = classifyMcpCallRejection(error);
       if (rejection?.staleCatalog) this.refreshChangedCatalog(state);
-      else if (!signal?.aborted) this.resetConnection(state);
+      // A JSON-RPC error answer proves the shared connection; resetting it would abort Agent calls.
+      else if (!signal?.aborted && !ProtocolError.isInstance(error)) this.resetConnection(state);
       throw rejection?.failure ?? error;
     } finally {
       bound.done();
@@ -950,7 +954,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     server: McpServer,
     state: ServerRuntimeState,
     signal: AbortSignal,
-    didTimeout?: () => boolean,
   ): Promise<McpRuntimeClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
@@ -959,51 +962,66 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (state.client) {
       return state.client;
     }
-    if (state.connectionPromise) {
-      return state.connectionPromise;
+
+    let connection = state.connection;
+    if (!connection) {
+      const generation = state.generation;
+      const cancel = new AbortController();
+      const setupSignal = AbortSignal.any([state.abort.signal, cancel.signal]);
+      const trace = this.traces?.startTrace('mcp.connect', undefined, {
+        'mcp.server.id': state.serverId,
+        'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
+        'mcp.connection.generation': generation,
+      });
+      const pending: Promise<McpRuntimeClient> = createMcpClient(
+        state.connectionConfig,
+        setupSignal,
+        this.pluginAuthorizations,
+        this.foreground,
+        this.oauth,
+        {
+          elicit: (params, requestSignal) =>
+            this.askForServer(server, state, params, requestSignal),
+          onCatalogChanged: () => {
+            if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
+          },
+        },
+      )
+        .then((client) => {
+          if (state.connection?.client !== pending || !this.isCurrentState(state, generation)) {
+            this.closeQuietly(client);
+            throw new McpEvictedError(
+              `MCP server ${server.name} was reconfigured while connecting`,
+            );
+          }
+          state.client = client;
+          client.setForeground?.(this.foreground);
+          trace?.end('ok');
+          return client;
+        })
+        .catch((error: unknown) => {
+          endMcpTrace(trace, error, setupSignal);
+          throw error;
+        })
+        .finally(() => {
+          if (state.connection?.client === pending) {
+            state.connection = undefined;
+          }
+        });
+      connection = { client: pending, cancel, waiters: 0 };
+      state.connection = connection;
     }
 
-    const generation = state.generation;
-    const trace = this.traces?.startTrace('mcp.connect', undefined, {
-      'mcp.server.id': state.serverId,
-      'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
-      'mcp.connection.generation': generation,
-    });
-    const initPromise: Promise<McpRuntimeClient> = createMcpClient(
-      state.connectionConfig,
-      signal,
-      this.pluginAuthorizations,
-      this.foreground,
-      this.oauth,
-      {
-        elicit: (params, requestSignal) => this.askForServer(server, state, params, requestSignal),
-        onCatalogChanged: () => {
-          if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
-        },
-      },
-    )
-      .then((client) => {
-        if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
-          this.closeQuietly(client);
-          throw new McpEvictedError(`MCP server ${server.name} was reconfigured while connecting`);
-        }
-        state.client = client;
-        client.setForeground?.(this.foreground);
-        trace?.end('ok');
-        return client;
-      })
-      .catch((error: unknown) => {
-        endMcpTrace(trace, error, signal, didTimeout?.());
-        throw error;
-      })
-      .finally(() => {
-        if (state.connectionPromise === initPromise) {
-          state.connectionPromise = undefined;
-        }
-      });
-
-    state.connectionPromise = initPromise;
-    return initPromise;
+    connection.waiters += 1;
+    try {
+      return await raceAbort(connection.client, signal);
+    } finally {
+      connection.waiters -= 1;
+      if (connection.waiters === 0 && state.connection === connection) {
+        state.connection = undefined;
+        connection.cancel.abort();
+      }
+    }
   }
 
   private closeQuietly(client: McpRuntimeClient): void {
@@ -1068,7 +1086,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.generation = this.allocateGeneration();
     state.abort.abort();
     state.abort = new AbortController();
-    state.connectionPromise = undefined;
+    state.connection = undefined;
     state.clientListed = false;
     if (state.client) {
       this.closeQuietly(state.client);
@@ -1082,7 +1100,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     state.generation = this.allocateGeneration();
     state.abort.abort();
-    state.connectionPromise = undefined;
+    state.connection = undefined;
     if (state.client) {
       this.closeQuietly(state.client);
       state.client = undefined;
@@ -1293,7 +1311,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       ...(signal ? [signal] : []),
     );
     try {
-      const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
+      const client = await this.getClient(server, state, bound.signal);
       return await this.listAndRecord(server, state, client, bound.signal, bound.didTimeout);
     } catch (error) {
       if (error instanceof McpEvictedError) {

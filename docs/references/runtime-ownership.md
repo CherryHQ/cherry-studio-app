@@ -214,8 +214,10 @@ unsaved configuration uses a bounded temporary client and joins service shutdown
 validate before consent and again afterwards; authorization waiting has no network deadline. Server
 disable/delete/configuration changes retire the generation and close dependent views. Backgrounding
 closes App sessions and updates transport subscription policy; it does not cancel unrelated Agent
-work merely because a view closed. A lost result after transmission is not proof of no side effect.
-Neither caller path automatically replays an uncertain write.
+work merely because a view closed. A server error answer or a local App refusal leaves the shared
+connection in place; only a lost exchange resets it. Connection setup belongs to the connection, so
+it is cancelled only once no caller still waits. A lost result after transmission is not proof of
+no side effect. Neither caller path automatically replays an uncertain write.
 
 ## Async Storage Admission And Teardown
 

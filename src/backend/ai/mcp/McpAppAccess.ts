@@ -55,9 +55,25 @@ function unavailable(): McpRuntimeToolError {
   );
 }
 
+function acceptsArguments(schema: unknown, args: Record<string, unknown>): boolean {
+  try {
+    return z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]).safeParse(args)
+      .success;
+  } catch {
+    return false;
+  }
+}
+
 /** Source identity, per-Agent permission and independent App consent. No connection state. */
 export class McpAppAccess {
   constructor(private readonly ports: AppAccessPorts) {}
+
+  /** A failed lookup, such as a deleted Agent, refuses locally instead of faulting the connection. */
+  private assertBinding(reference: McpAppReference, name: string): Promise<void> {
+    return this.ports.assertBinding(reference, name).catch((error: unknown) => {
+      throw error instanceof McpRuntimeToolError ? error : unavailable();
+    });
+  }
 
   private async withSource<T>(
     reference: McpAppReference,
@@ -66,7 +82,7 @@ export class McpAppAccess {
   ): Promise<T> {
     signal.throwIfAborted();
     if (!this.ports.isForeground()) throw unavailable();
-    await this.ports.assertBinding(reference, reference.toolName);
+    await this.assertBinding(reference, reference.toolName);
     return this.ports.withConnection(reference.serverId, signal, async (connection) => {
       const { server } = connection;
       if ((await createMcpConnectionKey(server)) !== reference.connectionKey) throw unavailable();
@@ -79,7 +95,7 @@ export class McpAppAccess {
       )
         throw unavailable();
       const result = await operation(connection, tools);
-      await this.ports.assertBinding(reference, reference.toolName);
+      await this.assertBinding(reference, reference.toolName);
       if (!this.ports.isForeground()) throw unavailable();
       connection.signal.throwIfAborted();
       return result;
@@ -121,7 +137,7 @@ export class McpAppAccess {
       for (const tool of tools) {
         if (!mcpToolVisible(tool, 'app') || server.disabledTools.includes(tool.name)) continue;
         try {
-          await this.ports.assertBinding(reference, tool.name);
+          await this.assertBinding(reference, tool.name);
           permitted.push(tool as Tool);
         } catch {
           requestSignal.throwIfAborted();
@@ -139,14 +155,11 @@ export class McpAppAccess {
   ): Promise<CallToolResult> {
     if (JSON.stringify(args).length > 64 * 1024) throw unavailable();
     const inspect = async (connection: McpAppConnection, tools: ListToolsResult['tools']) => {
-      await this.ports.assertBinding(reference, name);
+      await this.assertBinding(reference, name);
       const tool = tools.find((item) => item.name === name);
       if (!tool || !mcpToolVisible(tool, 'app') || connection.server.disabledTools.includes(name))
         throw unavailable();
-      const validator = z.fromJSONSchema(
-        tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0],
-      );
-      if (!validator.safeParse(args).success) throw unavailable();
+      if (!acceptsArguments(tool.inputSchema, args)) throw unavailable();
       return tool;
     };
     const server = await this.withSource(reference, signal, async (connection, tools) => {
@@ -174,9 +187,11 @@ export class McpAppAccess {
             waiting: bound.setPaused,
           });
           received = true;
-          if (JSON.stringify(result).length > 4 * 1024 * 1024)
-            throw new Error('Result exceeds App delivery limit');
-          return CallToolResultSchema.parse(result);
+          // Local refusals stay typed so the shared connection survives; a received result is still lost.
+          if (JSON.stringify(result).length > 4 * 1024 * 1024) throw unavailable();
+          const parsed = CallToolResultSchema.safeParse(result);
+          if (!parsed.success) throw unavailable();
+          return parsed.data;
         }),
         bound.signal,
       );

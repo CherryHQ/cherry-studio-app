@@ -274,6 +274,7 @@ describe('getServerInfo', () => {
   it('reuses the server connection for repeated result-resource reads', async () => {
     const server = makeServer();
     const client = makeClient([]);
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
     client.readResource = jest.fn(async () => ({
       contents: [{ uri: 'data://result', mimeType: 'text/plain', text: 'Result' }],
     }));
@@ -1301,9 +1302,72 @@ describe('catalog reuse', () => {
 
     turn.abort();
     await expect(question).resolves.toEqual({ action: 'cancel' });
-    await expect(execution).resolves.toMatchObject({ code: 'mcp_tool_cancelled' });
+    // The call was transmitted, so cancelling locally cannot prove that it did not run.
+    await expect(execution).resolves.toMatchObject({ code: 'mcp_tool_outcome_unknown' });
     expect(service.getElicitations()).toEqual([]);
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Agent calls on the shared connection when the server refuses a resource read', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    client.readResource = jest.fn(async () => {
+      throw new ProtocolError(-32002, 'Resource not found');
+    });
+    const answer = deferred<unknown>();
+    client.callTool.mockImplementation(({ options }: { options: { abortSignal: AbortSignal } }) =>
+      abortable(answer.promise, options.abortSignal, 'Request was aborted'),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const execution = executeFrozenTool(service, descriptor!);
+    await flush();
+
+    await expect(
+      service.readResultResource({
+        source: { serverId: server.id, connectionKey: await createMcpConnectionKey(server) },
+        uri: 'data://missing',
+      }),
+    ).rejects.toBeInstanceOf(ProtocolError);
+    answer.resolve({ content: [] });
+    await expect(execution).resolves.toBeDefined();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+  });
+
+  it('keeps a shared connection setup for an Agent call when another caller stops waiting', async () => {
+    const stale = makeClient(makeRawTools(['search']));
+    stale.callTool.mockRejectedValue(new Error('socket closed'));
+    const fresh = makeClient(makeRawTools(['search']));
+    fresh.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    fresh.readResource = jest.fn(async () => ({ contents: [] }));
+    const connecting = deferred<FakeClient>();
+    mockCreateMCPClient.mockResolvedValueOnce(stale).mockReturnValueOnce(connecting.promise);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toBeDefined();
+
+    const view = new AbortController();
+    const read = service.readResultResource(
+      {
+        source: { serverId: server.id, connectionKey: await createMcpConnectionKey(server) },
+        uri: 'data://result',
+      },
+      view.signal,
+    );
+    await flush();
+    const execution = executeFrozenTool(service, descriptor!);
+    await flush();
+    view.abort();
+    await expect(read).rejects.toBeDefined();
+    connecting.resolve(fresh);
+
+    await expect(execution).resolves.toBeDefined();
+    expect(fresh.callTool).toHaveBeenCalledTimes(1);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 
   it('does not reconnect after a discovery timeout and backs the server off on the send path', async () => {

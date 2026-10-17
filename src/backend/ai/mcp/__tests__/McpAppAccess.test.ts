@@ -49,17 +49,23 @@ function fixture() {
       return { content: [] };
     }),
   };
+  const faults: unknown[] = [];
   const assertBinding = jest.fn(async () => {});
   const requestConsent = jest.fn(async () => ({ action: 'accept' as const }));
   const access = new McpAppAccess({
     isForeground: () => true,
     assertBinding,
     requestConsent,
-    withConnection: async (_serverId, signal, operation) => operation({ ...connection, signal }),
+    // The service resets the shared connection for untyped faults, so record what reaches it.
+    withConnection: async (_serverId, signal, operation) =>
+      operation({ ...connection, signal }).catch((error: unknown) => {
+        faults.push(error);
+        throw error;
+      }),
   });
   const call = () =>
     access.call(reference, 'write', { title: 'Title' }, new AbortController().signal);
-  return { access, reference, connection, assertBinding, requestConsent, call };
+  return { access, reference, connection, tools, faults, assertBinding, requestConsent, call };
 }
 
 describe('MCP App authorization and invocation', () => {
@@ -140,6 +146,25 @@ describe('MCP App authorization and invocation', () => {
     ).rejects.toMatchObject({ code: 'mcp_tool_outcome_unknown', retryable: false });
     expect(state.connection.invoke).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['oversized', 'malformed', 'unreadable schema', 'binding lookup'] as const)(
+    'keeps a local %s refusal typed so the shared connection is not reset',
+    async (failure) => {
+      const state = fixture();
+      if (failure === 'unreadable schema') state.tools[1]!.inputSchema = { type: 'nope' } as never;
+      // The first check runs before connecting; the Agent disappears for the in-connection check.
+      if (failure === 'binding lookup')
+        state.assertBinding.mockResolvedValueOnce(undefined).mockRejectedValue(new Error('Gone'));
+      jest.mocked(state.connection.invoke).mockImplementation(async (_name, _args, progress) => {
+        progress.sent();
+        if (failure === 'malformed') return { content: 'not blocks' };
+        return { content: [{ type: 'text', text: 'x'.repeat(4 * 1024 * 1024) }] };
+      });
+      await expect(state.call()).rejects.toBeInstanceOf(McpRuntimeToolError);
+      expect(state.faults.length).toBeGreaterThan(0);
+      for (const fault of state.faults) expect(fault).toBeInstanceOf(McpRuntimeToolError);
+    },
+  );
 
   it('rejects invalid arguments before requesting consent or sending a call', async () => {
     const state = fixture();
