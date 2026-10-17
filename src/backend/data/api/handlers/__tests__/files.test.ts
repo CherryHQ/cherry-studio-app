@@ -6,7 +6,7 @@ describe('file Data API handlers', () => {
   it('passes the list query through untouched, including an absent one', async () => {
     const page = { items: [] };
     const entries = { listByCursor: jest.fn(async () => page) };
-    const handlers = createFileHandlers(entries as never);
+    const handlers = createFileHandlers(entries as never, {} as never);
 
     await expect(handlers['/files/entries'].GET({ query: { limit: 5 } })).resolves.toBe(page);
     expect(entries.listByCursor).toHaveBeenCalledWith({ limit: 5 });
@@ -18,7 +18,7 @@ describe('file Data API handlers', () => {
 
   it('validates the id before delegating the entry lookup', async () => {
     const entries = { getById: jest.fn(async () => ({ id: entryId })) };
-    const handlers = createFileHandlers(entries as never);
+    const handlers = createFileHandlers(entries as never, {} as never);
 
     await expect(handlers['/files/entries/:id'].GET({ params: { id: entryId } })).resolves.toEqual({
       id: entryId,

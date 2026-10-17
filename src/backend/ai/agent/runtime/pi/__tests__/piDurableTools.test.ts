@@ -173,6 +173,9 @@ describe('durable capability boundary', () => {
         capability({
           ref: { source: 'builtin', capabilityId: name },
           providerName: name,
+          ...(['find_skills', 'install_skill', 'adapt_skill'].includes(name)
+            ? { deferred: true }
+            : {}),
           execute,
         }),
       ),

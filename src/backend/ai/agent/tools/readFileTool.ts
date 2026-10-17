@@ -3,7 +3,7 @@
  * reference to.
  *
  * Reads allow conversation references and the selected workspace. Outside
- * library access requires the separately approved library_read_file tool.
+ * library access goes through the library_read_file tool.
  * Output is a bounded line or code-point window so a large file is
  * paged rather than dumped into the context.
  */

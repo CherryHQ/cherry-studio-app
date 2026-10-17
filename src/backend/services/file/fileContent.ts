@@ -39,7 +39,6 @@ import {
   resolveFileEntry,
   rewriteInternalTextEntry,
   subscribeFileChanges,
-  trashInternalEntry,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
@@ -230,8 +229,6 @@ export const fileContent = {
     if (!snapshot) throw new Error('Upload snapshot is unavailable');
     return snapshot;
   },
-  moveToTrash: (id: FileEntryId) =>
-    trashInternalEntry(fileLibraryService, FileEntryIdSchema.parse(id)),
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   /**
    * Replace a draft text entry's bytes in place. Only a turn's own artifact is

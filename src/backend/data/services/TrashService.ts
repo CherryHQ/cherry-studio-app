@@ -21,12 +21,9 @@ const trashRows = sql`(
   SELECT id, 'folder' AS kind, name AS title, deleted_at,
     (SELECT coalesce(sum(size), 0) FROM file_entry WHERE trashed_with = file_folder.id) AS size, NULL AS thumbnail_entry_id
     FROM file_folder WHERE deleted_at IS NOT NULL AND trashed_with IS NULL
-  UNION ALL
-  SELECT id, 'version' AS kind, filename AS title, deleted_at, size, id AS thumbnail_entry_id FROM file_entry
-    WHERE deleted_at IS NOT NULL AND trashed_with IS NULL
 ) AS trashed`;
 
-/** Projects recoverable files, folders, and individual versions into one cursor stream. */
+/** Projects recoverable files and folders into one cursor stream. */
 export class TrashService {
   constructor(private readonly dbService: DbService) {}
 
@@ -89,7 +86,7 @@ export class TrashService {
     );
   }
 
-  restore(kind: TrashKind, id: string) {
-    return new FileLibraryService(this.dbService).restore(kind, id);
+  restore(kind: TrashKind, id: string, signal?: AbortSignal) {
+    return new FileLibraryService(this.dbService).restore(kind, id, signal);
   }
 }
