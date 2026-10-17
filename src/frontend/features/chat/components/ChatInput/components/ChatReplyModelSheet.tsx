@@ -4,12 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
+import { MAX_PARALLEL_ANSWERS } from '@/shared/contracts/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { useChatReplyTarget } from '../ChatReplyTarget';
-
-/** Parallel answers are limited by the Host; more would crowd one question on a phone. */
-const MAX_REPLY_MODELS = 8;
 
 /**
  * Chooses the models for the next question, in pick order. One model answers
@@ -52,7 +50,7 @@ function ChatReplyModelSheetContent({
     setSelected((current) =>
       current.includes(item.modelId)
         ? current.filter((modelId) => modelId !== item.modelId)
-        : current.length < MAX_REPLY_MODELS
+        : current.length < MAX_PARALLEL_ANSWERS
           ? [...current, item.modelId]
           : current,
     );

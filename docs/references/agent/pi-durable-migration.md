@@ -160,25 +160,31 @@ transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependenc
 
 ## Branches, Fork, Retry And Delete
 
-A Cherry Session's message tree runs on several Pi conversations, one per branch that executed.
-Each is a lane keyed by the Session id (the first lane, as before branching) or
-`${sessionId}#${answerId}`. Runtime calls and execution identities carry the lane key; the Host maps
-it back to the Session for Cherry reads, events and usage. A Pi document records which lane executed
-each Cherry answer (`cherry.answer-lane`). A question below answer P continues P's lane when P is
-that lane's newest queued, running or settled answer, natively forks that
-lane at P's answer boundary otherwise (shared history and compaction state, no rebuild), and
-rebuilds a new lane from the Cherry branch when no current lane holds P (restore, revision change,
-or answers from before branching). A multi-model question gives every further answer its own lane,
-runs them in parallel with only automatically approved read tools, and keeps the Session busy until
-all of them settle; meanwhile further input is rejected rather than queued. Rebuilds restore the
-messages and history, not loaded tool instructions or Skill sections.
+A Cherry Session's message tree runs on up to eight Pi conversations (working copies), one per
+fixed slot. Slot 0 keeps the bare Session id as its Pi key, so every pre-branching Session is
+unchanged; slot n uses `${sessionId}#${n}`. The key is private to the Pi adapter: runtime calls take
+a typed `RuntimeLane` (`{ sessionId, slot }`), and execution identities always carry the Cherry
+Session id plus the slot, so a working copy cannot be mistaken for a Session. Finding a Session's
+copies probes its eight slot bindings; no Session operation scans every copy in the engine.
+
+A question below answer P continues the copy whose newest queued, running or settled answer is P,
+natively forks the copy that executed P at P's answer boundary otherwise (shared history and
+compaction state, no rebuild), and rebuilds from the Cherry branch when no current copy holds P.
+A new copy takes a free slot, or replaces the least recently used idle copy. Copies are disposable:
+Pi stores no Cherry identity mapping, and an empty or deleted Pi database only means every branch is
+rebuilt from Cherry messages on its next use. A multi-model question gives every further answer its
+own copy, runs them in parallel with only automatically approved read tools, and keeps the Session
+busy until all of them settle; meanwhile further input is rejected rather than queued (Pi queues
+input but not per-input configuration, and Cherry keeps no queue of its own; see
+[Agent Protocol](./agent-protocol.md)). Rebuilds
+restore the messages and history, not loaded tool instructions or Skill sections.
 
 "Branch to a new chat" copies the selected branch into a new Cherry Session with new message/turn
 identities. Checkpoints are cleared because their old turn anchors are not valid in the copy. The
 new session creates an independent Pi conversation on its first submission.
 
 Regenerating any settled answer reserves a sibling answer to the same question in the same Session
-and submits the original input on its own lane. Retrying a failed leaf answer retains its message
+and submits the original input on its own working copy. Retrying a failed leaf answer retains its message
 ids, issues a new turn id, and rebuilds a fresh copy. A recorded completed-tool prefix is imported as
 history and a continuation input asks for the remaining answer; historical tools are not executed
 by import.

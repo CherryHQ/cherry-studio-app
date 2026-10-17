@@ -13,7 +13,7 @@ import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
 import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 import { createTextPreview } from '@/shared/utils/textPreview';
 
-import type { RuntimeDurableSubmission, RuntimeDurableTurn } from '../durableTypes';
+import type { RuntimeDurableSubmission, RuntimeDurableTurn, RuntimeLane } from '../durableTypes';
 import { RuntimeJsonValueSchema, RuntimeOptionsSchema } from '../runtimeSchemas';
 import {
   createDeniedToolResult,
@@ -255,7 +255,7 @@ function toolInputPreview(
 }
 
 export function projectPiTurn(options: {
-  sessionId: string;
+  lane: RuntimeLane;
   record: SubmissionRecord;
   metadata: JsonObject | undefined;
   entries: readonly EntryRecord[];
@@ -598,7 +598,7 @@ export function projectPiTurn(options: {
       }
     }
   return {
-    identity: { sessionId: options.sessionId, turnId: stored.turnId, requestId: stored.requestId },
+    identity: { ...options.lane, turnId: stored.turnId, requestId: stored.requestId },
     userMessageId: stored.userMessageId,
     assistantMessageId: stored.assistantMessageId,
     inputBoundary: record.entry !== undefined ? `pi:${record.entry}` : null,

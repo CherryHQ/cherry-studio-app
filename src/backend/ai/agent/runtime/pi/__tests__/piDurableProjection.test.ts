@@ -75,7 +75,7 @@ function call(content: string, timestamp: number, durationMs?: number): Assistan
 describe('Pi turn projection', () => {
   test('preserves upstream loaded tool names for search presentation', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata,
       record: { id: 1, type: 'input', status: 'placed', entry: 1 } as unknown as SubmissionRecord,
       active: true,
@@ -134,7 +134,7 @@ describe('Pi turn projection', () => {
 
   function projectMessage(message: AssistantMessage, streaming: boolean) {
     return projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       record: placed,
       metadata,
       active: true,
@@ -243,7 +243,7 @@ describe('Pi turn projection', () => {
 
   test('keeps an empty streaming reasoning phase after a completed tool result', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       record: placed,
       metadata,
       active: true,
@@ -292,7 +292,7 @@ describe('Pi turn projection', () => {
         ],
       };
       const turn = projectPiTurn({
-        sessionId: 'session',
+        lane: { sessionId: 'session', slot: 0 },
         record: placed,
         metadata,
         active: true,
@@ -337,7 +337,7 @@ describe('Pi turn projection', () => {
 
   test('recovered terminal inputs settle tool calls that have no result entry', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata,
       record: {
         id: 1,
@@ -379,7 +379,7 @@ describe('Pi turn projection', () => {
   test('a failed script keeps the JavaScript capability and reports the error its output ends with', () => {
     const scriptText = `Script failed\nOutput:\n${'line\n'.repeat(100)}Script error:\nSyntaxError: unexpected token`;
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata: {
         ...metadata,
         tools: [
@@ -462,7 +462,7 @@ describe('Pi turn projection', () => {
 
   test('live child status is progress, never a final tool output', () => {
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       metadata: {
         ...metadata,
         tools: [
@@ -505,7 +505,7 @@ describe('Pi turn projection', () => {
       entry: 1,
     } as unknown as SubmissionRecord;
     const turn = projectPiTurn({
-      sessionId: 'session',
+      lane: { sessionId: 'session', slot: 0 },
       record,
       metadata,
       entries: [],
@@ -563,7 +563,12 @@ describe('Pi turn projection', () => {
         ],
       },
     ] as unknown as EntryRecord[];
-    const turn = projectPiTurn({ sessionId: 'session', record, metadata, entries });
+    const turn = projectPiTurn({
+      lane: { sessionId: 'session', slot: 0 },
+      record,
+      metadata,
+      entries,
+    });
     expect(turn.status).toBe('completed');
     expect(turn.parts[0]).toEqual(
       expect.objectContaining({

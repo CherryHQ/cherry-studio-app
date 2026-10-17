@@ -44,6 +44,7 @@ export {
   AgentSelectMessageInputSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
+  MAX_PARALLEL_ANSWERS,
   type AgentAdditionalReply,
   type AgentDeleteTurnInput,
   type AgentForkSessionInput,

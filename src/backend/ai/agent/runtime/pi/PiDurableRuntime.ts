@@ -42,18 +42,6 @@ const SessionBinding = defineDocFamily<PiSessionBinding, number>({
   initial: (revision) => ({ conversationId: null, revision }),
 });
 
-/**
- * The working copy that executed each Cherry answer, so a later question below
- * that answer can continue or fork it. Keyed by the Cherry assistant message id.
- */
-const AnswerLane = defineDocFamily<{ lane: string }, string>({
-  kind: 'cherry.answer-lane',
-  version: 1,
-  scope: 'session',
-  family: true,
-  initial: (lane) => ({ lane }),
-});
-
 /** Display identities and original managed-file references, not an assistant transcript mirror. */
 const SubmissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
   kind: 'cherry.submission',
@@ -230,11 +218,6 @@ export class PiDurableRuntime {
       return conversation.id;
     }, context);
     return this.requireConversation(id, context);
-  }
-
-  /** The working copy that executed a Cherry answer, if it still exists. */
-  async answerLane(assistantMessageId: string, context: Context = BACKGROUND_CONTEXT) {
-    return (await this.harness.snapshot(AnswerLane, assistantMessageId, context))?.lane;
   }
 
   async conversation(
@@ -449,8 +432,6 @@ export class PiDurableRuntime {
           if (alias.requestId !== draft.requestId || alias.role !== role)
             throw new Error('A display message identity cannot belong to two submissions.');
         }
-        const lane = await tx.doc(AnswerLane, displayIds.assistantMessageId, sessionId);
-        lane.lane = sessionId;
       }
     }, context);
     return conversation.submit(draft, context);
@@ -686,7 +667,6 @@ export class PiDurableRuntime {
     const provider = await this.harness.snapshot(ProviderDoc, conversationId, context);
     const requestIds: string[] = [];
     const messageIds: string[] = [];
-    const answerIds: string[] = [];
     let next: Cursor | undefined;
     do {
       const page = await this.storage.scanSubmissions({ conversationId }, 256, next, context);
@@ -697,19 +677,13 @@ export class PiDurableRuntime {
         for (const field of ['userMessageId', 'assistantMessageId'] as const) {
           const id = value?.[field];
           if (typeof id === 'string') messageIds.push(id);
-          if (field === 'assistantMessageId' && typeof id === 'string') answerIds.push(id);
         }
       }
       next = page.next;
     } while (next);
-    // An answer re-executed by another working copy keeps that copy's claim.
-    const ownedAnswers: string[] = [];
-    for (const answerId of answerIds)
-      if ((await this.answerLane(answerId, context)) === sessionId) ownedAnswers.push(answerId);
     await this.harness.commit(async (tx) => {
       await tx.retireDoc(SessionBinding, sessionId);
       await tx.retireDoc(Configuration, sessionId);
-      for (const answerId of ownedAnswers) await tx.retireDoc(AnswerLane, answerId);
       if (provider) await tx.retireDoc(RequestOptions, provider.sessionId);
       for (const requestId of requestIds)
         await tx.retireDoc(SubmissionMetadata, metadataKey(conversationId, requestId));

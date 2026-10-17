@@ -30,7 +30,7 @@ export type AgentMessageData = {
 
 /**
  * Agent Session Message table - one row per message-tree node
- * (docs/references/agent/agent-persistence.md, docs/references/chat/message-tree.md).
+ * (docs/references/agent/agent-persistence.md).
  *
  * Messages form an adjacency-list tree aligned with Desktop's `message` table:
  * `parentId` points at the previous message, and the Session's `activeNodeId`

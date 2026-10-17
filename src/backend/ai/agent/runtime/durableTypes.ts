@@ -1,3 +1,5 @@
+import { MAX_PARALLEL_ANSWERS } from '@/shared/contracts/agent/inputs';
+
 import type { TraceSpan } from '../../observability';
 import type {
   RuntimeApproval,
@@ -34,28 +36,41 @@ export interface RuntimeSqlDatabase extends RuntimeSqlExecutor {
 }
 
 /**
- * A lane is one engine working copy. A Cherry Session owns several when its
- * message tree branches: the lane key is the Session id for the first copy and
- * `${sessionId}#${suffix}` for the others. Runtime operations and identities
- * carry the lane key in their `sessionId` field; {@link sessionOfLane} recovers
- * the Cherry Session.
+ * One engine working copy of a Cherry Session. A Session whose message tree
+ * branches keeps up to {@link LANES_PER_SESSION} copies in fixed slots; slot 0
+ * is the copy every Session had before branching. Copies are disposable: the
+ * Host rebuilds a missing one from Cherry history.
+ *
+ * A lane is an object, not a string, so it can never be passed where a Cherry
+ * Session id is expected.
  */
-const LANE_SEPARATOR = '#';
-export function sessionOfLane(lane: string): string {
-  const index = lane.indexOf(LANE_SEPARATOR);
-  return index < 0 ? lane : lane.slice(0, index);
+export type RuntimeLane = Readonly<{ sessionId: string; slot: number }>;
+/** One slot per parallel answer of a question. */
+export const LANES_PER_SESSION = MAX_PARALLEL_ANSWERS;
+export function runtimeLane(sessionId: string, slot = 0): RuntimeLane {
+  if (!Number.isSafeInteger(slot) || slot < 0 || slot >= LANES_PER_SESSION)
+    throw new Error(`Invalid working copy slot: ${slot}`);
+  return { sessionId, slot };
 }
-export function createLaneKey(sessionId: string, suffix: string): string {
-  return `${sessionId}${LANE_SEPARATOR}${suffix}`;
+export function sameLane(a: RuntimeLane, b: RuntimeLane) {
+  return a.sessionId === b.sessionId && a.slot === b.slot;
 }
-export function isLaneOf(lane: string, sessionId: string): boolean {
-  return sessionOfLane(lane) === sessionId;
+/** Stable string key for maps and engine storage. Slot 0 keeps the bare Session id. */
+export function laneKey({ sessionId, slot }: RuntimeLane): string {
+  return slot === 0 ? sessionId : `${sessionId}#${slot}`;
+}
+export function parseLaneKey(key: string): RuntimeLane {
+  const index = key.lastIndexOf('#');
+  return index < 0
+    ? runtimeLane(key)
+    : runtimeLane(key.slice(0, index), Number(key.slice(index + 1)));
 }
 
-export type RuntimeExecutionIdentity = { sessionId: string; turnId: string; requestId: string };
+/** `sessionId` is always the Cherry Session; `slot` names the working copy that runs the input. */
+export type RuntimeExecutionIdentity = RuntimeLane & { turnId: string; requestId: string };
 export type RuntimeUsageOwner =
   | RuntimeExecutionIdentity
-  | { sessionId: string; turnId: null; requestId: null };
+  | (RuntimeLane & { turnId: null; requestId: null });
 
 /** Isolated script transport supplied by the Host; no platform or engine imports cross this port. */
 export type RuntimeScriptSandbox = {
@@ -120,7 +135,7 @@ export type RuntimeConversationConfiguration = {
 };
 
 export type RuntimeConversationSeed = {
-  sessionId: string;
+  lane: RuntimeLane;
   /** Cherry-owned history revision. A different revision must never resume this working copy. */
   revision: number;
   configuration: RuntimeConversationConfiguration;
@@ -214,55 +229,56 @@ export interface DurableAgentRuntime {
     unsubscribe(): Promise<void>;
   }>;
   close(): Promise<void>;
-  sessions(): Promise<readonly { sessionId: string; revision: number }[]>;
-  hasConversation(sessionId: string): Promise<boolean>;
-  revision(sessionId: string): Promise<number | undefined>;
-  unfinishedSessions(): Promise<readonly string[]>;
-  configuration(sessionId: string): Promise<RuntimeConversationConfiguration>;
-  resourceFileEntryIds(sessionId: string): Promise<readonly string[]>;
+  /** Every bound working copy; a full scan for recovery and maintenance only. */
+  sessions(): Promise<readonly { lane: RuntimeLane; revision: number }[]>;
+  /** The bound working copies of one Session, by slot. */
+  lanes(sessionId: string): Promise<readonly { lane: RuntimeLane; revision: number }[]>;
+  hasConversation(lane: RuntimeLane): Promise<boolean>;
+  revision(lane: RuntimeLane): Promise<number | undefined>;
+  unfinishedLanes(): Promise<readonly RuntimeLane[]>;
+  configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration>;
+  resourceFileEntryIds(lane: RuntimeLane): Promise<readonly string[]>;
   ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void>;
   /**
-   * Natively forks `from.sessionId` at an answer boundary it returned into the new lane
-   * `seed.sessionId`, which then continues from that answer with its own configuration.
+   * Natively forks `from.lane` at an answer boundary it returned into the new
+   * lane `seed.lane`, which then continues from that answer with its own configuration.
    */
   forkConversation(
     seed: Omit<RuntimeConversationSeed, 'history'> & {
-      from: { sessionId: string; boundary: string };
+      from: { lane: RuntimeLane; boundary: string };
     },
     signal?: AbortSignal,
   ): Promise<void>;
-  /** The lane that executed a Cherry answer, while its working copy is bound. */
-  answerLane(assistantMessageId: string): Promise<string | undefined>;
-  configure(sessionId: string, configuration: RuntimeConversationConfiguration): Promise<void>;
-  submit(sessionId: string, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
+  configure(lane: RuntimeLane, configuration: RuntimeConversationConfiguration): Promise<void>;
+  submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn>;
   observe(
-    sessionId: string,
+    lane: RuntimeLane,
     listener: (event: RuntimeConversationEvent) => void,
   ): Promise<{
     snapshot: RuntimeConversationSnapshot;
     unsubscribe(): Promise<void>;
   }>;
   history(
-    sessionId: string,
+    lane: RuntimeLane,
     query: { limit: number; cursor?: string; requestIds?: readonly string[] },
   ): Promise<{
     turns: readonly RuntimeDurableTurn[];
     nextCursor?: string;
   }>;
   message(
-    sessionId: string,
+    lane: RuntimeLane,
     messageId: string,
   ): Promise<{ turn: RuntimeDurableTurn; role: 'user' | 'assistant' } | undefined>;
   exportTurn(
-    sessionId: string,
+    lane: RuntimeLane,
     requestId: string,
     options?: { currentContext?: boolean },
   ): Promise<{ contextCheckpoint: RuntimeContextCheckpoint | null }>;
-  abort(sessionId: string): Promise<void>;
+  abort(lane: RuntimeLane): Promise<void>;
   /** Abort and retire the application binding through public APIs. File reclamation is separate. */
-  discardConversation(sessionId: string): Promise<void>;
+  discardConversation(lane: RuntimeLane): Promise<void>;
   withdraw(
-    sessionId: string,
+    lane: RuntimeLane,
     requestId: string,
   ): Promise<'aborted' | 'already-placed' | 'settled' | 'not-found'>;
   hasUnfinishedWork(): Promise<boolean>;

@@ -11,7 +11,7 @@ import {
 } from '@/shared/contracts/agent';
 import type { MessageRuntimeSpan, MessageRuntimeTiming } from '@/shared/data/types/message';
 
-import { sessionOfLane, type RuntimeDurableTurn } from '../runtime';
+import type { RuntimeDurableTurn } from '../runtime';
 import { toAgentErrorView, toAgentMessagePart } from './runtimeProjection';
 
 /** Display identities accompany execution; terminal content and replay settle into Cherry. */
@@ -71,9 +71,8 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     turn.error && (turn.status === 'failed' || turn.status === 'interrupted')
       ? toAgentErrorView(turn.error)
       : null;
-  const sessionId = sessionOfLane(turn.identity.sessionId);
   const common = {
-    sessionId,
+    sessionId: turn.identity.sessionId,
     turnId: turn.identity.turnId,
     createdAt: new Date(turn.createdAt).toISOString(),
     updatedAt: new Date(turn.updatedAt).toISOString(),
@@ -119,7 +118,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     : null;
   const view = AgentTurnViewSchema.parse({
     id: turn.identity.turnId,
-    sessionId,
+    sessionId: turn.identity.sessionId,
     status: turn.status === 'queued' ? 'running' : turn.status,
     assistantMessageId: turn.assistantMessageId,
     error,

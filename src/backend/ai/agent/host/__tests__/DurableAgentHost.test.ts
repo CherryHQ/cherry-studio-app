@@ -10,7 +10,10 @@ import { createUniqueModelId } from '@/shared/data/types/model';
 import { createTraceRecorder } from '../../../observability/__tests__/_traceRecorder';
 import {
   FakeRuntime,
-  sessionOfLane,
+  LANES_PER_SESSION,
+  laneKey,
+  parseLaneKey,
+  runtimeLane,
   type DurableAgentRuntime,
   type RuntimeArtifact,
   type RuntimeConversationEvent,
@@ -52,12 +55,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
   const listeners = new Map<string, (event: RuntimeConversationEvent) => void>();
   let execution: RuntimeExecutionPorts | undefined;
   const emit = (turn: RuntimeDurableTurn) => {
-    const copy = copies.get(turn.identity.sessionId)!;
+    const copy = copies.get(laneKey(turn.identity))!;
     copy.turns = [
       ...copy.turns.filter((item) => item.identity.requestId !== turn.identity.requestId),
       turn,
     ];
-    listeners.get(turn.identity.sessionId)?.({ type: 'turn.updated', turn });
+    listeners.get(laneKey(turn.identity))?.({ type: 'turn.updated', turn });
   };
   const conversations: DurableAgentRuntime = {
     descriptor: new FakeRuntime().descriptor,
@@ -79,36 +82,39 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       steps.push('close');
     }),
     sessions: async () =>
-      [...copies].map(([sessionId, copy]) => ({ sessionId, revision: copy.revision })),
-    revision: async (id) => copies.get(id)?.revision,
-    hasConversation: async (id) => copies.has(id),
-    unfinishedSessions: async () =>
+      [...copies].map(([key, copy]) => ({ lane: parseLaneKey(key), revision: copy.revision })),
+    lanes: async (id) =>
+      Array.from({ length: LANES_PER_SESSION }, (_, slot) => runtimeLane(id, slot)).flatMap(
+        (lane) => {
+          const copy = copies.get(laneKey(lane));
+          return copy ? [{ lane, revision: copy.revision }] : [];
+        },
+      ),
+    revision: async (lane) => copies.get(laneKey(lane))?.revision,
+    hasConversation: async (lane) => copies.has(laneKey(lane)),
+    unfinishedLanes: async () =>
       [...copies]
         .filter(([, copy]) =>
           copy.turns.some((turn) => ['running', 'queued'].includes(turn.status)),
         )
-        .map(([id]) => id),
-    hasUnfinishedWork: async () => (await conversations.unfinishedSessions()).length > 0,
+        .map(([key]) => parseLaneKey(key)),
+    hasUnfinishedWork: async () => (await conversations.unfinishedLanes()).length > 0,
     watchWork: async () => ({ active: false, unsubscribe: async () => {} }),
     configuration: async () => configuration,
     configure: async () => {},
     resourceFileEntryIds: async () => [],
     ensureConversation: async (seed) => {
-      copies.set(seed.sessionId, { revision: seed.revision, turns: [] });
+      copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
     },
     forkConversation: async (seed) => {
-      copies.set(seed.sessionId, { revision: seed.revision, turns: [] });
+      copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
     },
-    answerLane: async (messageId) =>
-      [...copies].find(([, copy]) =>
-        copy.turns.some((turn) => turn.assistantMessageId === messageId),
-      )?.[0],
-    submit: jest.fn(async (id, input) => {
-      expect((await store.getMessage(sessionOfLane(id), input.assistantMessageId))?.status).toBe(
+    submit: jest.fn(async (lane, input) => {
+      expect((await store.getMessage(lane.sessionId, input.assistantMessageId))?.status).toBe(
         'pending',
       );
       const turn: RuntimeDurableTurn = {
-        identity: { sessionId: id, turnId: input.turnId, requestId: input.requestId },
+        identity: { ...lane, turnId: input.turnId, requestId: input.requestId },
         userMessageId: input.userMessageId,
         assistantMessageId: input.assistantMessageId,
         inputBoundary: 'pi:1',
@@ -125,28 +131,28 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       emit(turn);
       return turn;
     }),
-    observe: async (id, listener) => {
-      listeners.set(id, listener);
-      const turns = copies.get(id)?.turns ?? [];
+    observe: async (lane, listener) => {
+      listeners.set(laneKey(lane), listener);
+      const turns = copies.get(laneKey(lane))?.turns ?? [];
       return {
         snapshot: {
           activeTurn: turns.find((turn) => turn.status === 'running') ?? null,
           queue: turns.filter((turn) => turn.status === 'queued'),
         },
         unsubscribe: async () => {
-          listeners.delete(id);
+          listeners.delete(laneKey(lane));
         },
       };
     },
-    history: async (id, query) => ({
-      turns: (copies.get(id)?.turns ?? [])
+    history: async (lane, query) => ({
+      turns: (copies.get(laneKey(lane))?.turns ?? [])
         .toReversed()
         .filter((turn) => !query.requestIds || query.requestIds.includes(turn.identity.requestId))
         .slice(0, query.limit),
     }),
-    message: async (id, messageId) => {
+    message: async (lane, messageId) => {
       const turn = copies
-        .get(id)
+        .get(laneKey(lane))
         ?.turns.find(
           (turn) => turn.assistantMessageId === messageId || turn.userMessageId === messageId,
         );
@@ -158,12 +164,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     drainUsage: async () => {
       steps.push('usage');
     },
-    abort: jest.fn(async (id) => {
-      for (const turn of copies.get(id)?.turns ?? [])
+    abort: jest.fn(async (lane) => {
+      for (const turn of copies.get(laneKey(lane))?.turns ?? [])
         if (['queued', 'running'].includes(turn.status)) emit({ ...turn, status: 'cancelled' });
     }),
-    discardConversation: jest.fn(async (id) => {
-      copies.delete(id);
+    discardConversation: jest.fn(async (lane) => {
+      copies.delete(laneKey(lane));
       steps.push('discard');
     }),
     withdraw: async () => 'aborted',
@@ -247,7 +253,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
       inferenceSnapshot,
     });
     const turn: RuntimeDurableTurn = {
-      identity: { sessionId, turnId: reserved.turnId, requestId: reserved.turnId },
+      identity: { sessionId, slot: 0, turnId: reserved.turnId, requestId: reserved.turnId },
       userMessageId: reserved.userMessage.id,
       assistantMessageId: reserved.assistantMessage.id,
       inputBoundary: 'pi:1',
@@ -807,6 +813,7 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         ...first,
         identity: {
           sessionId: state.sessionId,
+          slot: 0,
           turnId: reserved.turnId,
           requestId: reserved.turnId,
         },
@@ -835,7 +842,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(terminal).toEqual([
         expect.objectContaining({
           status: outcome,
-          context: { ...first.identity, messageId: first.assistantMessageId },
+          context: {
+            sessionId: first.identity.sessionId,
+            turnId: first.identity.turnId,
+            requestId: first.identity.requestId,
+            messageId: first.assistantMessageId,
+          },
           attributes: expect.objectContaining({
             'agent.turn.status': status,
             ...(status === 'failed'
@@ -942,9 +954,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(
         await state.store.getMessage(state.sessionId, original.assistantMessageId),
       ).toMatchObject({ status: 'success' });
-      // The sibling runs on its own working copy; the original lane keeps its history.
+      // The sibling runs on its own working copy; the original copy keeps its history.
       const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
-      expect(lane).not.toBe(state.sessionId);
+      expect(lane).toEqual(runtimeLane(state.sessionId, 1));
       expect(state.copies.get(state.sessionId)?.turns).toHaveLength(1);
     } finally {
       await state.host.close();
@@ -981,6 +993,96 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         inferenceSnapshot.model.uniqueModelId,
         second,
       ]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('branches reuse a bounded set of working copies, replacing the least recently used', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      for (let index = 0; index < LANES_PER_SESSION + 1; index++) {
+        await state.host.retryMessage({
+          sessionId: state.sessionId,
+          messageId: original.assistantMessageId,
+        });
+        const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+        const turn = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+        state.emit({
+          ...turn,
+          status: 'completed',
+          answerBoundary: 'pi:2',
+          updatedAt: 100 + index,
+        });
+        await state.host.quiesce();
+      }
+      expect(state.copies.size).toBe(LANES_PER_SESSION);
+      // Every slot was taken, so the next copies replaced the oldest idle ones in order.
+      expect(
+        (state.conversations.discardConversation as jest.Mock).mock.calls.map(([lane]) => lane),
+      ).toEqual([runtimeLane(state.sessionId, 0), runtimeLane(state.sessionId, 1)]);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('sending and stopping read only the Session own working copies', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const sessions = jest.spyOn(state.conversations, 'sessions');
+      const unfinished = jest.spyOn(state.conversations, 'unfinishedLanes');
+      const observation = await state.host.observeSession(state.sessionId, () => {});
+      const submitted = await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      await state.host.cancelTurn({ sessionId: state.sessionId, turnId: submitted.turnId });
+      observation.unsubscribe();
+      expect(sessions).not.toHaveBeenCalled();
+      expect(unfinished).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('rebuilds the selected branch from Cherry history once the engine copies are gone', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      const sibling = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+      state.emit({
+        ...sibling,
+        status: 'completed',
+        answerBoundary: 'pi:2',
+        parts: [{ id: 'sibling', type: 'text', text: 'Sibling', state: 'done' }],
+      });
+      await state.host.quiesce();
+      // The engine database is disposable: Cherry history is the only source left.
+      state.copies.clear();
+      const ensure = jest.spyOn(state.conversations, 'ensureConversation');
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      const [seed] = ensure.mock.calls.at(-1)!;
+      expect(seed.lane).toEqual(runtimeLane(state.sessionId));
+      const history = JSON.stringify(seed.history?.history);
+      expect(history).toContain('Sibling');
+      expect(history).not.toContain('"Answer"');
     } finally {
       await state.host.close();
     }
@@ -1153,7 +1255,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ).toEqual([
         expect.objectContaining({
           status: 'ok',
-          context: { ...turn.identity, messageId: turn.assistantMessageId },
+          context: {
+            sessionId: turn.identity.sessionId,
+            turnId: turn.identity.turnId,
+            requestId: turn.identity.requestId,
+            messageId: turn.assistantMessageId,
+          },
           attributes: { 'agent.turn.status': 'completed' },
         }),
       ]);
@@ -1166,13 +1273,15 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     const state = fixture();
     const running = await state.reserve('running');
     state.copies.set('deleted-owner', { revision: 0, turns: [] });
-    jest.spyOn(state.conversations, 'discardConversation').mockImplementation(async (id) => {
-      state.copies.delete(id);
+    jest.spyOn(state.conversations, 'discardConversation').mockImplementation(async (lane) => {
+      state.copies.delete(laneKey(lane));
       state.emit({ ...running, status: 'completed' });
     });
     await state.host.initialize();
     try {
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith('deleted-owner');
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane('deleted-owner'),
+      );
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('success');
       const submitted = await state.host.submitMessage({
         sessionId: state.sessionId,
@@ -1208,7 +1317,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     try {
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
       expect(await state.store.getSession('deleted-owner')).toBeNull();
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith('deleted-owner');
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane('deleted-owner'),
+      );
     } finally {
       await state.host.close();
     }
@@ -1268,7 +1379,12 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     );
     expect(writes.map((record) => record.status)).toEqual(['error', 'ok']);
     expect(writes[0]).toMatchObject({
-      context: { ...running.identity, messageId: running.assistantMessageId },
+      context: {
+        sessionId: running.identity.sessionId,
+        turnId: running.identity.turnId,
+        requestId: running.identity.requestId,
+        messageId: running.assistantMessageId,
+      },
       attributes: { 'error.code': 'SQLITE_FULL' },
     });
     expect(JSON.stringify(writes)).not.toContain('disk full');
@@ -1316,7 +1432,9 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     await state.store.deleteTurn({ sessionId: state.sessionId, turnId: turn.identity.turnId });
     await state.host.initialize();
     try {
-      expect(state.conversations.discardConversation).toHaveBeenCalledWith(state.sessionId);
+      expect(state.conversations.discardConversation).toHaveBeenCalledWith(
+        runtimeLane(state.sessionId),
+      );
       expect(await state.store.listMessages(state.sessionId)).toEqual([]);
     } finally {
       await state.host.close();

@@ -26,7 +26,12 @@ export const AgentAdditionalReplySchema = z.strictObject({
   modelId: UniqueModelIdSchema,
   assistantMessageId: z.string().min(1),
 });
-export const AgentAdditionalRepliesSchema = z.array(AgentAdditionalReplySchema).min(1).max(7);
+/** Models answering one question in parallel, the composer's own model included. */
+export const MAX_PARALLEL_ANSWERS = 8;
+export const AgentAdditionalRepliesSchema = z
+  .array(AgentAdditionalReplySchema)
+  .min(1)
+  .max(MAX_PARALLEL_ANSWERS - 1);
 export type AgentAdditionalReply = z.infer<typeof AgentAdditionalReplySchema>;
 
 export const AgentSubmitMessageInputSchema = z.strictObject({

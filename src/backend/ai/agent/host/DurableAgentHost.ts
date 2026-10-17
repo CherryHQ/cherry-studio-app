@@ -46,12 +46,14 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
 
 import {
-  createLaneKey,
-  isLaneOf,
+  LANES_PER_SESSION,
+  laneKey,
   raceAbort,
-  sessionOfLane,
+  runtimeLane,
+  sameLane,
   type AgentRuntime,
   type DurableAgentRuntime,
+  type RuntimeLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
   type RuntimeDurableTurn,
@@ -80,6 +82,7 @@ import {
   prepareInitialTurn,
   prepareTurn,
   type TurnPlan,
+  type TurnScope,
   type TurnPreparationDependencies,
 } from './turnPreparation';
 import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
@@ -87,7 +90,9 @@ import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('DurableAgentHost');
 type Admission = { controller: AbortController; promise: Promise<unknown> };
+/** Presentation state of one observed working copy. */
 type LiveSession = {
+  lane: RuntimeLane;
   waiters: Set<{ requestId: string; resolve: () => void }>;
   users: Set<string>;
   assistant: AgentMessageView | null;
@@ -111,12 +116,14 @@ type PreparedInput = { turnId: string; plan: TurnPlan };
  * rebuild a new lane from the Cherry history.
  */
 type LaneChoice =
-  | { lane: string; mode: 'native' | 'rebuild' }
+  | { lane: RuntimeLane; mode: 'native' | 'rebuild' }
   | {
-      lane: string;
+      lane: RuntimeLane;
       mode: 'fork';
-      from: { sessionId: string; boundary: string };
+      from: { lane: RuntimeLane; boundary: string };
     };
+/** The newest answer submitted to a copy, and when the copy was last used. */
+type LaneTail = { answerId: string | undefined; usedAt: number };
 type ReplyTarget = LaneChoice & {
   plan: TurnPlan;
   input: Pick<AgentSubmitMessageInput, 'assistantMessageId'>;
@@ -132,6 +139,7 @@ function submittedEffort(value: string | undefined) {
 
 /** Business operations and disposable presentation over the persistent engine; no model loop. */
 export class DurableAgentHost implements AgentProtocol {
+  /** Keyed by {@link laneKey}. */
   private readonly live = new Map<string, LiveSession>();
   private readonly attachments = new Map<string, Promise<LiveSession>>();
   private readonly admissions = new Map<string, Admission>();
@@ -191,7 +199,7 @@ export class DurableAgentHost implements AgentProtocol {
     await this.naming.drain();
   }
   pendingTurns(sessionId: string) {
-    return this.live.get(sessionId)?.queue ?? [];
+    return this.liveStates(sessionId).flatMap((state) => state.queue);
   }
 
   constructor(
@@ -227,16 +235,15 @@ export class DurableAgentHost implements AgentProtocol {
         );
       },
       traceModel: async (identity) => {
-        const sessionId = sessionOfLane(identity.sessionId);
-        const session = await this.store.getSession(sessionId);
+        const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
-          ? this.prepared.get(executionKey(identity.sessionId, identity.requestId))
+          ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
         return this.ports.traces?.startTrace(
           'pi.generate_content',
           {
             agentId: prepared?.plan.agent.id ?? session?.agentId,
-            sessionId,
+            sessionId: identity.sessionId,
             ...(identity.turnId ? { turnId: identity.turnId } : {}),
             ...(identity.requestId ? { requestId: identity.requestId } : {}),
           },
@@ -246,18 +253,18 @@ export class DurableAgentHost implements AgentProtocol {
       assertExecutionAllowed: async (identity, signal) => {
         signal.throwIfAborted();
         storageMutationGate.assertWritable();
-        if (this.deleting.has(sessionOfLane(identity.sessionId)))
+        if (this.deleting.has(identity.sessionId))
           fail('SESSION_NOT_FOUND', 'This session is being deleted.');
-        const session = await this.store.getSession(sessionOfLane(identity.sessionId));
-        if (!session || !(await this.isCurrentConversation(identity.sessionId)))
+        const session = await this.store.getSession(identity.sessionId);
+        if (!session || !(await this.isCurrentConversation(identity)))
           fail('SESSION_NOT_FOUND', 'The execution no longer has a current Cherry owner.');
         if (session && !(await this.ports.agents.getAgent(session.agentId)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
         if (identity.requestId) {
-          await this.waitForOwner(identity.sessionId, identity.requestId, signal);
-          const prepared = this.prepared.get(executionKey(identity.sessionId, identity.requestId));
+          await this.waitForOwner(identity, identity.requestId, signal);
+          const prepared = this.prepared.get(executionKey(identity, identity.requestId));
           if (prepared)
-            for (const id of await this.conversations.resourceFileEntryIds(identity.sessionId))
+            for (const id of await this.conversations.resourceFileEntryIds(identity))
               prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
         }
         signal.throwIfAborted();
@@ -278,22 +285,21 @@ export class DurableAgentHost implements AgentProtocol {
       },
       recordUsage: async (identity, report) => {
         const prepared = identity.requestId
-          ? this.prepared.get(executionKey(identity.sessionId, identity.requestId))
+          ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
-        const sessionId = sessionOfLane(identity.sessionId);
-        const session = await this.store.getSession(sessionId);
+        const session = await this.store.getSession(identity.sessionId);
         const agentId = prepared?.plan.agent.id ?? session?.agentId;
         // Deleted owners are never reconstructed from the disposable execution log.
         if (!agentId) return;
         const selected = identity.requestId
           ? (
-              await this.conversations.history(identity.sessionId, {
+              await this.conversations.history(identity, {
                 limit: 1,
                 requestIds: [identity.requestId],
               })
             ).turns[0]
           : undefined;
-        await this.ports.recordDurableUsage!({ ...identity, sessionId }, report, {
+        await this.ports.recordDurableUsage!(identity, report, {
           agentId,
           agentName: prepared?.plan.agent.name ?? null,
           assistantMessageId: selected?.assistantMessageId ?? null,
@@ -306,16 +312,17 @@ export class DurableAgentHost implements AgentProtocol {
       await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
       const copies = await this.conversations.sessions();
       // Upstream abort enables scheduling too. Attach current owners before retiring stale copies.
-      const unfinished = await this.conversations.unfinishedSessions();
+      // Every unfinished copy is observed from here on, so later reads need no engine-wide scan.
+      const unfinished = await this.conversations.unfinishedLanes();
       recovery?.setAttributes({
         'agent.recovery.session_count': copies.length,
         'agent.recovery.unfinished_count': unfinished.length,
       });
-      for (const sessionId of unfinished)
-        if (await this.isCurrentConversation(sessionId)) await this.attach(sessionId);
-      for (const { sessionId } of copies)
-        if (!(await this.isCurrentConversation(sessionId)))
-          await this.conversations.discardConversation(sessionId);
+      for (const lane of unfinished)
+        if (await this.isCurrentConversation(lane)) await this.attach(lane);
+      for (const { lane } of copies)
+        if (!(await this.isCurrentConversation(lane)))
+          await this.conversations.discardConversation(lane);
       // Working copies outlive the process: continuing a conversation reuses its native context.
       await this.reconcileUnsettled();
       await this.conversations.drainUsage();
@@ -447,11 +454,7 @@ export class DurableAgentHost implements AgentProtocol {
       for (const [index, answer] of answers.entries()) {
         const input = { ...parsed, ...answer };
         targets.push({
-          // The first answer keeps the Session-keyed lane, as every pre-branching Session does.
-          lane:
-            index === 0
-              ? parsed.sessionId
-              : createLaneKey(parsed.sessionId, answer.assistantMessageId),
+          lane: runtimeLane(parsed.sessionId, index),
           mode: 'rebuild',
           plan: await prepareInitialTurn(this.preparation, input, signal, {
             readOnlyTools: answers.length > 1,
@@ -474,7 +477,7 @@ export class DurableAgentHost implements AgentProtocol {
   private submitNative(parsed: AgentSubmitMessageInput) {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
-      await this.syncSession(parsed.sessionId);
+      const current = await this.syncSession(parsed.sessionId);
       const parent = parsed.parentMessageId ?? session.activeNodeId ?? null;
       if (parent && !(await this.store.getMessage(parsed.sessionId, parent)))
         fail('MESSAGE_NOT_FOUND', 'The message to continue from no longer exists.');
@@ -482,95 +485,127 @@ export class DurableAgentHost implements AgentProtocol {
       const busy = this.busyLanes(parsed.sessionId);
       if (busy.length && answers.length > 1)
         fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
+      const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
+      // Only a follow-up to the busy lane's newest answer can wait in its queue.
+      const [first] = choices;
+      if (
+        busy.length &&
+        (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
+      )
+        fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
+      const scope = { through: parent, readOnlyTools: answers.length > 1 };
       const targets: ReplyTarget[] = [];
       for (const [index, answer] of answers.entries()) {
-        const choice = await this.resolveLane(parsed.sessionId, parent, index === 0, answer);
-        // Only a follow-up to the busy lane's newest answer can wait in its queue.
-        if (busy.length && (choice.mode !== 'native' || busy.length > 1 || busy[0] !== choice.lane))
-          fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
         const input = { ...parsed, ...answer };
-        const scope = { through: parent, readOnlyTools: answers.length > 1 };
-        const plan =
-          choice.mode === 'rebuild'
-            ? await prepareTurn(this.preparation, input, signal, undefined, scope)
-            : await prepareDurableTurn(
-                this.preparation,
-                input,
-                await this.conversations.resourceFileEntryIds(
-                  choice.mode === 'fork' ? choice.from.sessionId : choice.lane,
-                ),
-                signal,
-                scope,
-              );
-        targets.push({ ...choice, plan, input });
+        const choice = choices[index]!;
+        targets.push({
+          ...choice,
+          plan: await this.planAnswer(choice, input, signal, scope),
+          input,
+        });
       }
       return this.submitTargets(parsed, parent, targets, signal);
     });
   }
 
+  /** Rebuilt copies read their history from Cherry; native and forked ones keep the engine's. */
+  private async planAnswer(
+    choice: LaneChoice,
+    input: AgentSubmitMessageInput,
+    signal: AbortSignal,
+    scope: TurnScope,
+  ) {
+    return choice.mode === 'rebuild'
+      ? prepareTurn(this.preparation, input, signal, undefined, scope)
+      : prepareDurableTurn(
+          this.preparation,
+          input,
+          await this.conversations.resourceFileEntryIds(
+            choice.mode === 'fork' ? choice.from.lane : choice.lane,
+          ),
+          signal,
+          scope,
+        );
+  }
+
   /**
-   * Picks the working copy for one answer below `parent`. Only the first answer
-   * of a question may continue an existing lane; further answers always get
-   * their own copy.
+   * Picks a working copy for each of `count` answers below `parent`. The first
+   * answer continues the copy whose newest answer is `parent`; the others
+   * natively fork the copy that executed `parent`, or rebuild from Cherry
+   * history when no current copy holds it. New copies take a free slot, else
+   * replace the least recently used idle copy: every copy is rebuildable.
    */
-  private async resolveLane(
+  private async chooseLanes(
     sessionId: string,
     parent: string | null,
-    allowReuse: boolean,
-    answer: { assistantMessageId: string },
-  ): Promise<LaneChoice> {
-    const fresh = createLaneKey(sessionId, answer.assistantMessageId);
-    if (!parent)
-      return {
-        lane:
-          allowReuse && !(await this.conversations.hasConversation(sessionId)) ? sessionId : fresh,
-        mode: 'rebuild',
-      };
-    // Answers from before branching have no lane record; they ran on the Session-keyed lane.
+    count: number,
+    current: readonly RuntimeLane[],
+  ): Promise<LaneChoice[]> {
+    const tails = new Map<string, LaneTail>();
+    for (const lane of current) tails.set(laneKey(lane), await this.laneTail(lane));
+    const choices: LaneChoice[] = [];
+    const native = parent
+      ? current.find((lane) => tails.get(laneKey(lane))?.answerId === parent)
+      : undefined;
+    if (native) choices.push({ lane: native, mode: 'native' });
     const source =
-      (await this.conversations.answerLane(parent)) ??
-      ((await this.conversations.hasConversation(sessionId)) ? sessionId : undefined);
-    if (source && isLaneOf(source, sessionId) && (await this.isCurrentConversation(source))) {
-      if (allowReuse && (await this.laneTail(source)) === parent)
-        return { lane: source, mode: 'native' };
-      const turn = (await this.conversations.message(source, parent))?.turn;
-      if (turn?.assistantMessageId === parent && turn.answerBoundary)
-        return {
-          lane: fresh,
-          mode: 'fork',
-          from: { sessionId: source, boundary: turn.answerBoundary },
-        };
+      parent && choices.length < count ? await this.answerBoundary(current, parent) : undefined;
+    // Free slots first, then idle copies from the least recently used; the copy continued or
+    // forked from stays.
+    const bound = new Set(current.map(laneKey));
+    const free = Array.from({ length: LANES_PER_SESSION }, (_, slot) =>
+      runtimeLane(sessionId, slot),
+    ).filter((lane) => !bound.has(laneKey(lane)));
+    const reusable = current
+      .filter((lane) => lane !== native && lane !== source?.lane && !this.isBusy(lane))
+      .sort((a, b) => tails.get(laneKey(a))!.usedAt - tails.get(laneKey(b))!.usedAt);
+    for (const lane of [...free, ...reusable].slice(0, count - choices.length))
+      choices.push(source ? { lane, mode: 'fork', from: source } : { lane, mode: 'rebuild' });
+    if (choices.length < count) fail('SESSION_BUSY', 'Every working copy of this session is busy.');
+    return choices;
+  }
+
+  /** The current copy that executed a settled answer, and that answer's history boundary. */
+  private async answerBoundary(current: readonly RuntimeLane[], answerId: string) {
+    for (const lane of current) {
+      const turn = (await this.conversations.message(lane, answerId))?.turn;
+      if (turn?.assistantMessageId === answerId && turn.answerBoundary)
+        return { lane, boundary: turn.answerBoundary };
     }
-    return { lane: fresh, mode: 'rebuild' };
+    return undefined;
   }
 
-  /** The newest answer submitted to a lane: queued, running, or else its latest settled turn. */
-  private async laneTail(lane: string) {
-    const state = this.live.get(lane);
-    return (
-      state?.queue.at(-1)?.assistantMessageId ??
-      state?.active?.assistantMessageId ??
-      (await this.conversations.history(lane, { limit: 1 })).turns[0]?.assistantMessageId
-    );
+  private async laneTail(lane: RuntimeLane): Promise<LaneTail> {
+    const state = this.live.get(laneKey(lane));
+    const pending = state?.queue.at(-1) ?? state?.active;
+    if (pending) return { answerId: pending.assistantMessageId, usedAt: Date.now() };
+    const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
+    return { answerId: latest?.assistantMessageId, usedAt: latest?.updatedAt ?? 0 };
   }
 
-  /** Lanes of a Session with an active or queued input. */
+  private isBusy(lane: RuntimeLane) {
+    const state = this.live.get(laneKey(lane));
+    return Boolean(state?.active || state?.queue.length);
+  }
+
+  private liveStates(sessionId: string) {
+    return [...this.live.values()].filter((state) => state.lane.sessionId === sessionId);
+  }
+
+  /** Copies of a Session with an active or queued input. */
   private busyLanes(sessionId: string) {
-    return [...this.live]
-      .filter(([lane, state]) => isLaneOf(lane, sessionId) && (state.active || state.queue.length))
-      .map(([lane]) => lane);
+    return this.liveStates(sessionId)
+      .filter((state) => state.active || state.queue.length)
+      .map((state) => state.lane);
   }
 
-  /** Every bound or observed lane of a Session. */
+  /** Every bound or observed copy of a Session. */
   private async sessionLanes(sessionId: string) {
-    return [
-      ...new Set([
-        ...(await this.conversations.sessions())
-          .map((copy) => copy.sessionId)
-          .filter((lane) => isLaneOf(lane, sessionId)),
-        ...[...this.live.keys()].filter((lane) => isLaneOf(lane, sessionId)),
-      ]),
+    const lanes = [
+      ...(await this.conversations.lanes(sessionId)).map(({ lane }) => lane),
+      ...this.liveStates(sessionId).map((state) => state.lane),
     ];
+    return [...new Map(lanes.map((lane) => [laneKey(lane), lane])).values()];
   }
 
   /**
@@ -713,11 +748,13 @@ export class DurableAgentHost implements AgentProtocol {
     const { plan } = target;
     const configuration = this.configuration(plan);
     const revision = (await this.store.getRuntimeRevision(sessionId)) ?? 0;
+    // A new copy may take over the slot of a least recently used one.
+    if (target.mode !== 'native' && (await this.conversations.hasConversation(target.lane)))
+      await this.detachLane(target.lane);
     if (target.mode === 'rebuild') {
-      if (await this.conversations.hasConversation(target.lane)) await this.detachLane(target.lane);
       await this.conversations.ensureConversation(
         {
-          sessionId: target.lane,
+          lane: target.lane,
           revision,
           configuration,
           ...(plan.history.length > 0 || plan.runtimeContextCheckpoint
@@ -738,12 +775,11 @@ export class DurableAgentHost implements AgentProtocol {
       );
     } else if (target.mode === 'fork') {
       await this.conversations.forkConversation(
-        { sessionId: target.lane, revision, configuration, from: target.from },
+        { lane: target.lane, revision, configuration, from: target.from },
         signal,
       );
     } else {
-      const state = this.live.get(target.lane);
-      if (state?.active || state?.queue.length) {
+      if (this.isBusy(target.lane)) {
         const current = await this.conversations.configuration(target.lane);
         if (configurationKey(current) !== configurationKey(configuration))
           fail('SESSION_BUSY', 'Wait for the current turn before changing its configuration.');
@@ -800,7 +836,7 @@ export class DurableAgentHost implements AgentProtocol {
     const parsed = AgentRetryMessageInputSchema.parse(input);
     this.assertIdle(parsed.sessionId);
     return this.admit(parsed.sessionId, async (signal) => {
-      await this.syncSession(parsed.sessionId, true);
+      const current = await this.syncSession(parsed.sessionId, true);
       const source = await this.requireSession(parsed.sessionId);
       const assistant = await this.store.getMessage(source.id, parsed.messageId);
       const user = assistant?.parentId
@@ -839,20 +875,8 @@ export class DurableAgentHost implements AgentProtocol {
           userMessageId: user.id,
           ...answer,
         };
-        const choice = await this.resolveLane(source.id, parent, true, answer);
-        const scope = { through: parent };
-        const plan =
-          choice.mode === 'rebuild'
-            ? await prepareTurn(this.preparation, regenerate, signal, undefined, scope)
-            : await prepareDurableTurn(
-                this.preparation,
-                regenerate,
-                await this.conversations.resourceFileEntryIds(
-                  choice.mode === 'fork' ? choice.from.sessionId : choice.lane,
-                ),
-                signal,
-                scope,
-              );
+        const [choice] = await this.chooseLanes(source.id, parent, 1, current);
+        const plan = await this.planAnswer(choice, regenerate, signal, { through: parent });
         await this.submitTargets(
           regenerate,
           parent,
@@ -913,7 +937,7 @@ export class DurableAgentHost implements AgentProtocol {
         await this.submitTargets(
           retry,
           parent,
-          [{ lane: source.id, mode: 'rebuild', plan, input: retry }],
+          [{ lane: runtimeLane(source.id), mode: 'rebuild', plan, input: retry }],
           signal,
           undefined,
           async () => reserved,
@@ -989,7 +1013,7 @@ export class DurableAgentHost implements AgentProtocol {
       const lanes = await this.sessionLanes(sessionId);
       for (const lane of lanes)
         if (await this.conversations.hasConversation(lane)) await this.conversations.abort(lane);
-      for (const lane of lanes) await this.live.get(lane)?.unsubscribe();
+      for (const lane of lanes) await this.live.get(laneKey(lane))?.unsubscribe();
       await this.settlements.get(sessionId);
       await this.conversations.drainUsage();
       if (!(await this.store.deleteSession(sessionId)))
@@ -1012,41 +1036,43 @@ export class DurableAgentHost implements AgentProtocol {
     for (const lane of await this.sessionLanes(sessionId)) await this.detachLane(lane);
   }
 
-  private async detachLane(lane: string) {
-    const state = this.live.get(lane);
+  private async detachLane(lane: RuntimeLane) {
+    const state = this.live.get(laneKey(lane));
     await state?.unsubscribe();
     state?.background?.retire();
-    this.live.delete(lane);
+    this.live.delete(laneKey(lane));
     if (await this.conversations.hasConversation(lane))
       await this.conversations.discardConversation(lane);
   }
 
-  /** Current lanes of a Session that are observed or still have native work. */
+  /**
+   * Observed copies of a Session. Every copy with native work is observed: recovery attaches
+   * unfinished copies and admission attaches each copy it submits to. The first copy is also
+   * observed while current, as before branching.
+   */
   private async attachedLanes(sessionId: string) {
-    const unfinished = new Set(await this.conversations.unfinishedSessions());
-    const states: [string, LiveSession][] = [];
-    for (const lane of await this.sessionLanes(sessionId))
-      if ((this.live.has(lane) || unfinished.has(lane)) && (await this.isCurrentConversation(lane)))
-        states.push([lane, await this.attach(lane)]);
-    return states;
+    const first = runtimeLane(sessionId);
+    if (!this.live.has(laneKey(first)) && (await this.isCurrentConversation(first)))
+      await this.attach(first);
+    return this.liveStates(sessionId);
   }
 
   async cancelTurn(input: Parameters<AgentProtocol['cancelTurn']>[0]) {
     const parsed = AgentCancelTurnInputSchema.parse(input);
-    for (const [lane, state] of await this.attachedLanes(parsed.sessionId)) {
+    for (const state of await this.attachedLanes(parsed.sessionId)) {
       if (state.active?.identity.turnId !== parsed.turnId) {
         if (parsed.messageId) continue;
         const queued = state.queue.find((turn) => turn.identity.turnId === parsed.turnId);
-        if (queued) await this.conversations.withdraw(lane, queued.identity.requestId);
+        if (queued) await this.conversations.withdraw(state.lane, queued.identity.requestId);
         continue;
       }
       // A multi-model answer can be stopped alone; without a message the whole question stops.
       if (parsed.messageId && state.active.assistantMessageId !== parsed.messageId) continue;
-      this.publish(lane, {
+      this.publish(parsed.sessionId, {
         type: 'turn.updated',
         turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
       });
-      await this.conversations.abort(lane);
+      await this.conversations.abort(state.lane);
     }
   }
 
@@ -1055,17 +1081,16 @@ export class DurableAgentHost implements AgentProtocol {
   ): ReturnType<AgentProtocol['cancelQueuedInput']> {
     const { sessionId, turnId } = AgentCancelTurnInputSchema.parse(input);
     storageMutationGate.assertWritable();
-    const lanes = await this.attachedLanes(sessionId);
-    const owner = lanes.find(([, state]) =>
+    const states = await this.attachedLanes(sessionId);
+    const owner = states.find((state) =>
       state.queue.some((turn) => turn.identity.turnId === turnId),
     );
     if (!owner)
-      return lanes.some(([, state]) => state.active?.identity.turnId === turnId)
+      return states.some((state) => state.active?.identity.turnId === turnId)
         ? 'already-started'
         : 'not-found';
-    const [lane, state] = owner;
-    const queued = state.queue.find((turn) => turn.identity.turnId === turnId)!;
-    const result = await this.conversations.withdraw(lane, queued.identity.requestId);
+    const queued = owner.queue.find((turn) => turn.identity.turnId === turnId)!;
+    const result = await this.conversations.withdraw(owner.lane, queued.identity.requestId);
     // The Runtime checks placement and withdrawal in one transaction. Never turn a lost race
     // into abort(sessionId), which would stop the active input and every remaining follow-up.
     if (result === 'already-placed') return 'already-started';
@@ -1109,10 +1134,6 @@ export class DurableAgentHost implements AgentProtocol {
     state.questions.respond(parsed.toolCallId, parsed.answer);
   }
 
-  private liveStates(sessionId: string) {
-    return [...this.live].filter(([lane]) => isLaneOf(lane, sessionId)).map(([, state]) => state);
-  }
-
   async observeSession(
     sessionId: string,
     listener: (event: AgentEvent) => void,
@@ -1121,9 +1142,7 @@ export class DurableAgentHost implements AgentProtocol {
     const session = await this.requireSession(sessionId);
     const agent = await this.ports.agents.getAgent(session.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
-    const states = this.accepting
-      ? (await this.attachedLanes(sessionId)).map(([, state]) => state)
-      : [];
+    const states = this.accepting ? await this.attachedLanes(sessionId) : [];
     await this.requireSession(sessionId);
     // Several lanes run when one question has several answers; the first active one leads.
     const running = states.filter((state) => state.active);
@@ -1184,7 +1203,7 @@ export class DurableAgentHost implements AgentProtocol {
     identity: RuntimeExecutionIdentity,
     signal: AbortSignal,
   ): Promise<PreparedInput> {
-    const key = executionKey(identity.sessionId, identity.requestId);
+    const key = executionKey(identity, identity.requestId);
     const cached = this.prepared.get(key);
     if (cached) return cached;
     const existing = this.preparing.get(key);
@@ -1193,12 +1212,12 @@ export class DurableAgentHost implements AgentProtocol {
       'ai.prepare',
       identity,
       async () => {
-        const state = await this.attach(identity.sessionId);
+        const state = await this.attach(identity);
         const turn =
           state.active?.identity.requestId === identity.requestId
             ? state.active
             : (
-                await this.conversations.history(identity.sessionId, {
+                await this.conversations.history(identity, {
                   limit: 1,
                   requestIds: [identity.requestId],
                 })
@@ -1206,8 +1225,8 @@ export class DurableAgentHost implements AgentProtocol {
         if (!turn || turn.identity.turnId !== identity.turnId)
           throw new Error('The durable tool has no current owning input.');
         const facts = DurableTurnMetadataSchema.parse(turn.metadata);
-        const configuration = await this.conversations.configuration(identity.sessionId);
-        const sessionId = sessionOfLane(identity.sessionId);
+        const configuration = await this.conversations.configuration(identity);
+        const { sessionId } = identity;
         const question = await this.store.getMessage(sessionId, turn.userMessageId);
         const plan = await prepareDurableTurn(
           this.preparation,
@@ -1223,7 +1242,7 @@ export class DurableAgentHost implements AgentProtocol {
               ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
               : {}),
           },
-          await this.conversations.resourceFileEntryIds(identity.sessionId),
+          await this.conversations.resourceFileEntryIds(identity),
           signal,
           { through: question?.parentId ?? null, readOnlyTools: facts.readOnlyTools === true },
         );
@@ -1307,7 +1326,7 @@ export class DurableAgentHost implements AgentProtocol {
     approval: Parameters<RuntimeExecutionPorts['requestApproval']>[1],
     signal: AbortSignal,
   ) {
-    const state = await this.attach(identity.sessionId);
+    const state = await this.attach(identity);
     signal.throwIfAborted();
     if (state.active?.identity.turnId !== identity.turnId)
       throw new Error('The approval has no active owning input.');
@@ -1317,11 +1336,11 @@ export class DurableAgentHost implements AgentProtocol {
       resolve = accept;
       reject = refuse;
     });
-    const view = toAgentApprovalView(approval, sessionOfLane(identity.sessionId));
+    const view = toAgentApprovalView(approval, identity.sessionId);
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
-    const key = executionKey(identity.sessionId, identity.requestId);
+    const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
       toolCallId: approval.toolCallId,
@@ -1351,12 +1370,11 @@ export class DurableAgentHost implements AgentProtocol {
     question: Parameters<TurnPreparationDependencies['askUser']>[0],
     call: RuntimeToolCall,
   ) {
-    const entry = [...this.live.entries()].find(
-      ([, state]) => state.active?.identity.turnId === call.turnId,
+    const state = [...this.live.values()].find(
+      (candidate) => candidate.active?.identity.turnId === call.turnId,
     );
-    if (!entry) throw new Error('The question has no active owning input.');
-    const [lane, state] = entry;
-    const sessionId = sessionOfLane(lane);
+    if (!state) throw new Error('The question has no active owning input.');
+    const { sessionId } = state.lane;
     const response = state.questions.ask(question, call);
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
     this.publish(sessionId, { type: 'question.updated', question: state.question });
@@ -1374,20 +1392,20 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
-  /** A lane is current while its revision matches its Cherry Session's history revision. */
-  private async isCurrentConversation(lane: string) {
-    const revision = await this.store.getRuntimeRevision(sessionOfLane(lane));
+  /** A copy is current while its revision matches its Cherry Session's history revision. */
+  private async isCurrentConversation(lane: RuntimeLane) {
+    const revision = await this.store.getRuntimeRevision(lane.sessionId);
     return revision !== null && revision === (await this.conversations.revision(lane));
   }
 
+  /** Retires obsolete copies and settles reservations; returns the Session's current copies. */
   private async syncSession(sessionId: string, requireIdle = false) {
     await this.settlements.get(sessionId);
-    for (const lane of await this.sessionLanes(sessionId))
-      if (
-        (await this.conversations.hasConversation(lane)) &&
-        !(await this.isCurrentConversation(lane))
-      )
-        await this.detachLane(lane);
+    const revision = await this.store.getRuntimeRevision(sessionId);
+    const current: RuntimeLane[] = [];
+    for (const copy of await this.conversations.lanes(sessionId))
+      if (copy.revision === revision) current.push(copy.lane);
+      else await this.detachLane(copy.lane);
     await this.reconcileUnsettled(sessionId);
     // Observation may lag native admission. Durable reservations also guard history mutations.
     if (
@@ -1395,24 +1413,32 @@ export class DurableAgentHost implements AgentProtocol {
       (await this.store.listUnsettledAssistantMessages()).some((row) => row.sessionId === sessionId)
     )
       fail('SESSION_BUSY', 'The session has unfinished work.');
+    return current;
   }
 
   /** Each unsettled Cherry row is a durable receipt awaiting its full Pi result, with no cursor gaps. */
   private async reconcileUnsettled(onlySessionId?: string) {
     const rows = await this.store.listUnsettledAssistantMessages();
+    const sessionCopies = new Map<string, RuntimeLane[]>();
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
-      // Answers reserved before branching ran on the Session-keyed lane.
-      const lane = (await this.conversations.answerLane(row.assistantMessageId)) ?? row.sessionId;
-      const selected =
-        isLaneOf(lane, row.sessionId) && (await this.isCurrentConversation(lane))
-          ? await this.conversations.message(lane, row.assistantMessageId)
-          : undefined;
+      let copies = sessionCopies.get(row.sessionId);
+      if (!copies) {
+        const revision = await this.store.getRuntimeRevision(row.sessionId);
+        copies = (await this.conversations.lanes(row.sessionId))
+          .filter((copy) => copy.revision === revision)
+          .map((copy) => copy.lane);
+        sessionCopies.set(row.sessionId, copies);
+      }
+      // The answer ran on whichever current copy still holds it.
+      let selected: Awaited<ReturnType<DurableAgentRuntime['message']>>;
+      for (const lane of copies)
+        if ((selected = await this.conversations.message(lane, row.assistantMessageId))) break;
       if (selected?.turn.identity.turnId === row.turnId) {
         if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
           const turn = this.timed(selected.turn);
           await this.persistTurn(turn);
-          if (this.live.has(lane)) this.presentSettled(turn);
+          if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
         }
         continue;
       }
@@ -1454,13 +1480,13 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** Called with admission blocked and no native work, including background compaction. */
   private async captureCheckpoints() {
-    for (const { sessionId } of await this.conversations.sessions()) {
-      if (!(await this.isCurrentConversation(sessionId))) continue;
-      const latest = (await this.conversations.history(sessionId, { limit: 1 })).turns[0];
+    for (const { lane } of await this.conversations.sessions()) {
+      if (!(await this.isCurrentConversation(lane))) continue;
+      const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
       await this.traceOperation('ai.checkpoint', latest.identity, async () => {
         const { contextCheckpoint } = await this.conversations.exportTurn(
-          sessionId,
+          lane,
           latest.identity.requestId,
           { currentContext: true },
         );
@@ -1478,7 +1504,7 @@ export class DurableAgentHost implements AgentProtocol {
     if (turn.status === 'cancelled' && turn.inputBoundary === null) {
       // A withdrawn inbox item never entered model context. Remove its reservation without
       // invalidating the working copy; reconciliation retries this after a process interruption.
-      const sessionId = sessionOfLane(turn.identity.sessionId);
+      const { sessionId } = turn.identity;
       const messageIds = await this.store.discardQueuedTurn({
         sessionId,
         turnId: turn.identity.turnId,
@@ -1489,7 +1515,7 @@ export class DurableAgentHost implements AgentProtocol {
         const session = await this.store.getSession(sessionId);
         if (session) this.publish(sessionId, { type: 'session.updated', session });
       }
-      this.prepared.delete(executionKey(turn.identity.sessionId, turn.identity.requestId));
+      this.prepared.delete(executionKey(turn.identity, turn.identity.requestId));
       return;
     }
     const { assistant, turn: view } = projectDurableHostTurn(turn);
@@ -1500,7 +1526,7 @@ export class DurableAgentHost implements AgentProtocol {
       { ...turn.identity, messageId: assistant.id },
       async () => {
         const artifacts = await this.conversations.exportTurn(
-          turn.identity.sessionId,
+          turn.identity,
           turn.identity.requestId,
         );
         const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
@@ -1520,24 +1546,16 @@ export class DurableAgentHost implements AgentProtocol {
             },
           },
         });
-        this.ports.durableStorage?.notifyTranscript(sessionOfLane(turn.identity.sessionId));
+        this.ports.durableStorage?.notifyTranscript(turn.identity.sessionId);
       },
     );
     // Settlement can outlive the current UI turn, including recovery without an observer.
-    this.recordTurnState(
-      {
-        ...turn.identity,
-        sessionId: sessionOfLane(turn.identity.sessionId),
-        messageId: assistant.id,
-      },
-      view.status,
-      view.error,
-    );
+    this.recordTurnState({ ...turn.identity, messageId: assistant.id }, view.status, view.error);
   }
 
   private settle(turn: RuntimeDurableTurn) {
-    // Settlement is serialized per Cherry Session across all of its lanes.
-    const sessionId = sessionOfLane(turn.identity.sessionId);
+    // Settlement is serialized per Cherry Session across all of its copies.
+    const { sessionId } = turn.identity;
     const operation = (this.settlements.get(sessionId) ?? Promise.resolve())
       .then(async () => {
         await this.persistTurn(turn);
@@ -1562,13 +1580,16 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
-  private async attach(sessionId: string): Promise<LiveSession> {
-    const existing = this.live.get(sessionId);
+  private async attach(copy: RuntimeLane): Promise<LiveSession> {
+    const lane = runtimeLane(copy.sessionId, copy.slot);
+    const key = laneKey(lane);
+    const existing = this.live.get(key);
     if (existing) return existing;
-    const pending = this.attachments.get(sessionId);
+    const pending = this.attachments.get(key);
     if (pending) return pending;
-    const operation = this.traceOperation('ai.observe', { sessionId }, async () => {
+    const operation = this.traceOperation('ai.observe', { sessionId: lane.sessionId }, async () => {
       const state: LiveSession = {
+        lane,
         waiters: new Set(),
         users: new Set(),
         assistant: null,
@@ -1585,32 +1606,33 @@ export class DurableAgentHost implements AgentProtocol {
       // The engine's exact watch is acquired before scheduling. App route listeners are independent.
       let installed = false;
       const pending: RuntimeConversationEvent[] = [];
-      const observed = await this.conversations.observe(sessionId, (event) => {
-        if (installed) this.consume(sessionId, state, event);
+      const observed = await this.conversations.observe(lane, (event) => {
+        if (installed) this.consume(state, event);
         else pending.push(event);
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
       state.contextStatus = observed.snapshot.contextStatus ?? null;
       state.unsubscribe = observed.unsubscribe;
-      this.live.set(sessionId, state);
-      this.updateQueue(sessionId, state, observed.snapshot.queue);
+      this.live.set(key, state);
+      this.updateQueue(state, observed.snapshot.queue);
       if (state.active) this.present(state.active);
       installed = true;
-      for (const event of pending) this.consume(sessionId, state, event);
+      for (const event of pending) this.consume(state, event);
       return state;
     });
-    this.attachments.set(sessionId, operation);
+    this.attachments.set(key, operation);
     try {
       return await operation;
     } finally {
-      this.attachments.delete(sessionId);
+      this.attachments.delete(key);
     }
   }
 
-  private consume(sessionId: string, state: LiveSession, event: RuntimeConversationEvent) {
+  private consume(state: LiveSession, event: RuntimeConversationEvent) {
+    const { sessionId } = state.lane;
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
-      this.updateQueue(sessionId, state, event.snapshot.queue);
+      this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
       if (state.active) this.present(state.active);
@@ -1618,7 +1640,7 @@ export class DurableAgentHost implements AgentProtocol {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
     } else if (event.type === 'queue.updated') {
-      this.updateQueue(sessionId, state, event.queue);
+      this.updateQueue(state, event.queue);
     } else {
       const turn = this.timed(event.turn);
       if (
@@ -1626,7 +1648,6 @@ export class DurableAgentHost implements AgentProtocol {
         state.queue.some((item) => item.identity.turnId === turn.identity.turnId)
       )
         this.updateQueue(
-          sessionId,
           state,
           state.queue.filter((item) => item.identity.turnId !== turn.identity.turnId),
         );
@@ -1644,9 +1665,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private timed(turn: RuntimeDurableTurn): RuntimeDurableTurn {
-    const approvals = this.approvalWaits.get(
-      executionKey(turn.identity.sessionId, turn.identity.requestId),
-    );
+    const approvals = this.approvalWaits.get(executionKey(turn.identity, turn.identity.requestId));
     if (!approvals?.length || !turn.timing) return turn;
     return {
       ...turn,
@@ -1665,9 +1684,9 @@ export class DurableAgentHost implements AgentProtocol {
   private presentSettled(turn: RuntimeDurableTurn) {
     if (turn.status === 'queued' || (turn.status === 'cancelled' && turn.inputBoundary === null))
       return;
-    const lane = turn.identity.sessionId;
-    const sessionId = sessionOfLane(lane);
-    const state = this.live.get(lane);
+    const lane = turn.identity;
+    const { sessionId } = lane;
+    const state = this.live.get(laneKey(lane));
     this.publishRows(turn);
     const view = projectDurableHostTurn(turn);
     const projected = state ? this.turnStatus(view.turn, state) : view.turn;
@@ -1741,7 +1760,7 @@ export class DurableAgentHost implements AgentProtocol {
       // Only the first question's leading answer names the Session.
       if (
         turn.status === 'completed' &&
-        lane === sessionId &&
+        lane.slot === 0 &&
         prepared &&
         !prepared.plan.hasMessages &&
         view.assistant
@@ -1759,8 +1778,8 @@ export class DurableAgentHost implements AgentProtocol {
 
   private publishRows(turn: RuntimeDurableTurn) {
     const { user, assistant } = projectDurableHostTurn(turn);
-    const sessionId = turn.identity.sessionId;
-    const state = this.live.get(sessionId);
+    const { sessionId } = turn.identity;
+    const state = this.live.get(laneKey(turn.identity));
     if (!state?.users.has(user.id)) {
       state?.users.add(user.id);
       this.publish(sessionId, { type: 'message.created', message: user });
@@ -1830,8 +1849,8 @@ export class DurableAgentHost implements AgentProtocol {
     this.setStatus(sessionId, { turnId: turn.id, status: turn.status });
   }
 
-  private async waitForOwner(sessionId: string, requestId: string, signal: AbortSignal) {
-    const state = await this.attach(sessionId);
+  private async waitForOwner(lane: RuntimeLane, requestId: string, signal: AbortSignal) {
+    const state = await this.attach(lane);
     signal.throwIfAborted();
     if (state.active?.identity.requestId === requestId) return;
     let resolve!: () => void;
@@ -1846,9 +1865,7 @@ export class DurableAgentHost implements AgentProtocol {
       state.waiters.delete(waiter);
     }
   }
-  /** Observers subscribe to Cherry Sessions; a lane publishes to its Session. */
-  private publish(target: string, event: AgentEvent) {
-    const sessionId = sessionOfLane(target);
+  private publish(sessionId: string, event: AgentEvent) {
     const value = AgentEventSchema.parse(JSON.parse(JSON.stringify(event)));
     for (const listener of this.listeners.get(sessionId) ?? [])
       try {
@@ -1860,8 +1877,7 @@ export class DurableAgentHost implements AgentProtocol {
         });
       }
   }
-  private setStatus(target: string, status: AgentSessionStatus | null) {
-    const sessionId = sessionOfLane(target);
+  private setStatus(sessionId: string, status: AgentSessionStatus | null) {
     const previous = this.statuses.get(sessionId);
     if (previous?.turnId === status?.turnId && previous?.status === status?.status) return;
     // Terminal outcomes are recorded by persistence, independently of the current UI status.
@@ -2004,7 +2020,7 @@ export class DurableAgentHost implements AgentProtocol {
     }));
   }
 
-  private updateQueue(lane: string, state: LiveSession, queue: readonly RuntimeDurableTurn[]) {
+  private updateQueue(state: LiveSession, queue: readonly RuntimeDurableTurn[]) {
     if (
       state.queue.length === queue.length &&
       state.queue.every(
@@ -2012,7 +2028,7 @@ export class DurableAgentHost implements AgentProtocol {
       )
     )
       return;
-    const sessionId = sessionOfLane(lane);
+    const { sessionId } = state.lane;
     this.recordQueue(sessionId, queue, state.queue);
     state.queue = queue;
     this.publish(sessionId, {
@@ -2062,9 +2078,9 @@ function fail(
     retryable: code === 'SESSION_BUSY' || code === 'EXECUTION_UNAVAILABLE',
   });
 }
-/** Keyed by lane: answers of one question share a turn but never a lane and request. */
-function executionKey(lane: string, requestId: string) {
-  return `${lane}:${requestId}`;
+/** Keyed by copy: answers of one question share a turn but never a copy and request. */
+function executionKey(lane: RuntimeLane, requestId: string) {
+  return `${laneKey(lane)}:${requestId}`;
 }
 
 /** The question's answers in requested order; the first uses the composer's model. */

@@ -79,7 +79,7 @@ test.each([
     const dispose = installLogWriter((record) => {
       records.push(record);
     });
-    const observer = new PiDurableObserver(runtime, 'session', () => {});
+    const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, () => {});
     try {
       const observed = await observer.start();
       expect(observed.activeTurn?.identity.requestId).toBe('request-current');
@@ -140,7 +140,9 @@ test('restores compaction failure, shows progress, and clears failure only after
     submissions: async () => [],
   } as unknown as PiDurableRuntime;
   const events: RuntimeConversationEvent[] = [];
-  const observer = new PiDurableObserver(runtime, 'session', (event) => events.push(event));
+  const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
+    events.push(event),
+  );
   expect((await observer.start()).contextStatus).toBe('compaction-failed');
   await advance([{ type: 'compaction_start', taskId, reason: 'threshold', blocking: true }]);
   expect(events.at(-1)).toEqual({ type: 'context.updated', status: 'compacting' });
@@ -201,7 +203,9 @@ function attach(snapshot: Omit<SnapshotEvent, 'type' | 'agent' | 'usage'>, runni
     turnEntries: async () => [],
   } as unknown as PiDurableRuntime;
   const events: RuntimeConversationEvent[] = [];
-  const observer = new PiDurableObserver(runtime, 'session', (event) => events.push(event));
+  const observer = new PiDurableObserver(runtime, { sessionId: 'session', slot: 0 }, (event) =>
+    events.push(event),
+  );
   return { observer, events, advance: (batch: readonly AgentEvent[]) => advance(batch) };
 }
 

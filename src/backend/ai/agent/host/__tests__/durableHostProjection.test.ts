@@ -3,7 +3,7 @@ import { projectDurableHostTurn } from '../durableHostProjection';
 
 function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
   return {
-    identity: { sessionId: 'session', turnId: 'turn', requestId: 'turn' },
+    identity: { sessionId: 'session', slot: 0, turnId: 'turn', requestId: 'turn' },
     userMessageId: 'user',
     assistantMessageId: 'assistant',
     inputBoundary: 'pi:1',
