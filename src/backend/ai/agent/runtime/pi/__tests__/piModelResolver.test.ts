@@ -503,7 +503,7 @@ describe('Pi model resolver', () => {
     expect(mockListApiKeys).toHaveBeenCalledWith(provider.id, { enabled: true });
   });
 
-  test('bounds all credential attempts to two minutes before output', async () => {
+  test('bounds all credential attempts to thirty minutes before output', async () => {
     jest.useFakeTimers();
     try {
       const testCase = CASES[0];
@@ -550,11 +550,11 @@ describe('Pi model resolver', () => {
         resolution.model,
         normalizeContext({ messages: [] }),
       );
-      await jest.advanceTimersByTimeAsync(120_000);
+      await jest.advanceTimersByTimeAsync(30 * 60_000);
 
       expect(await stream.result()).toMatchObject({
         stopReason: 'error',
-        errorMessage: 'The model response timed out after 120 seconds without data.',
+        errorMessage: 'The model response timed out after 1800 seconds without data.',
       });
       expect(usedKeys).toEqual([keys[0].key, keys[1].key]);
       expect(signal?.aborted).toBe(true);
