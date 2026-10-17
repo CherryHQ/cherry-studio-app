@@ -11,6 +11,7 @@ import { createTraceRecorder } from '../../../observability/__tests__/_traceReco
 import {
   FakeRuntime,
   type DurableAgentRuntime,
+  type RuntimeArtifact,
   type RuntimeConversationEvent,
   type RuntimeDurableTurn,
   type RuntimeExecutionPorts,
@@ -225,10 +226,12 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     userParts: AgentMessagePart[] = [
       { id: 'question', type: 'text', text: 'Question', state: 'done' },
     ],
+    workspaceFolderId?: string,
   ) => {
     const reserved = await store.reserveInitialSubmission({
       sessionId,
       agentId,
+      ...(workspaceFolderId ? { workspaceFolderId } : {}),
 
       userMessageId: uuid(),
       assistantMessageId: uuid(),
@@ -453,6 +456,35 @@ describe('durable tool diagnostics', () => {
       } finally {
         await f.host.close();
       }
+    }
+  });
+
+  test('stores Code Mode outputs in the workspace the turn captured', async () => {
+    const workspaceFolderId = uuid();
+    const writeToolOutput = jest.fn(
+      async (): Promise<RuntimeArtifact> => ({
+        ref: { kind: 'managed-file', fileEntryId: uuid() },
+        name: 'result.csv',
+        mediaType: 'text/plain',
+        kind: 'created',
+      }),
+    );
+    const state = fixture({ writeToolOutput });
+    const turn = await state.reserve('running', undefined, workspaceFolderId);
+    await state.host.initialize();
+    try {
+      const signal = new AbortController().signal;
+      await state.execution()!.writeToolOutput!(
+        turn.identity,
+        { name: 'result.csv', data: 'a,b' },
+        signal,
+      );
+      expect(writeToolOutput).toHaveBeenCalledWith(
+        { name: 'result.csv', data: 'a,b', folderId: workspaceFolderId },
+        signal,
+      );
+    } finally {
+      await state.host.close();
     }
   });
 
