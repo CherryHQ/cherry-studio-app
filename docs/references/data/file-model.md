@@ -84,10 +84,6 @@ referencing exact version ids. The library shows only current versions; older ve
 for those references and are not listed to users. The current version is deleted by trashing the
 whole logical file.
 
-`GET /files/library` includes the logical file's `updatedAt`, which also orders its cursor pages.
-Folder/file pickers use that timestamp when interleaving files with `file_folder.updatedAt`;
-`entry.updatedAt` still identifies the content revision and its preview cache.
-
 Folders and files share a namespace within each folder, compared after NFC normalization and
 Unicode lowercasing. Rename rejects conflicts; imports, moves, and restoration choose a readable
 ` (2)` suffix when needed. Existing root duplicates remain separate logical files. The root cannot

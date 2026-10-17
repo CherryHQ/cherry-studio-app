@@ -111,7 +111,6 @@ export class FileLibraryService {
         folderId: file.folderId,
         name: file.name,
         entry: rowToFileEntry(entry),
-        updatedAt: file.updatedAt,
         versionCount,
       })),
       ...(rows.length > limit && tail ? { nextCursor: encodeCursor(tail.updatedAt, tail.id) } : {}),

@@ -15,13 +15,6 @@ import { type ResolvedFileEntry, useFileEntryPages } from '@/frontend/hooks/file
 import type { FileEntryId } from '@/shared/data/types/file';
 import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
-import {
-  type FilePickerDirectoryItem,
-  filePickerDirectoryItems,
-  filePickerItemKey,
-  filePickerModifiedAt,
-} from '../utils/filePickerDirectoryItems';
-
 // Matches the library rows so both lists share one name column.
 const PREVIEW_SIZE = 40;
 // Folder status lines start where a child row's name would.
@@ -29,6 +22,10 @@ const NAME_INSET = PREVIEW_SIZE + 16;
 const LEVEL_INDENT = 24;
 // Preserve room for filenames and selection controls in deeply nested folders.
 const MAX_VISUAL_DEPTH = 3;
+
+type FilePickerDirectoryItem =
+  | { kind: 'folder'; folder: FileFolder }
+  | { kind: 'file'; file: ResolvedFileEntry };
 
 type FilePickerSelection = {
   attachedIds: ReadonlySet<FileEntryId>;
@@ -50,7 +47,7 @@ export function FilePickerList(selection: FilePickerSelection) {
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(() => new Set());
   const directory = useFilePickerDirectory(null, folders.data ?? []);
   const error = folders.error ?? directory.error;
-  const isLoading = folders.isLoading || directory.isLoading || directory.isResolving;
+  const isLoading = folders.isLoading || directory.isLoading;
   const dateFormatter = new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, {
     day: 'numeric',
     month: 'short',
@@ -125,20 +122,20 @@ export function FilePickerList(selection: FilePickerSelection) {
   );
 }
 
+/** Like the library, a level lists its folders first, then its files newest first. */
 function useFilePickerDirectory(folderId: string | null, folders: readonly FileFolder[]) {
   const query = useFileEntryPages({ enabled: true, folderId });
-  const items = filePickerDirectoryItems({
-    entries: query.entries,
-    folders,
-    folderId,
-    isComplete:
-      !query.hasNext &&
-      !query.isLoading &&
-      !query.isLoadingMore &&
-      !query.isResolving &&
-      !query.error,
-  });
+  const items: FilePickerDirectoryItem[] = [
+    ...folders
+      .filter((folder) => folder.parentId === folderId)
+      .map((folder) => ({ kind: 'folder' as const, folder })),
+    ...query.entries.map((file) => ({ kind: 'file' as const, file })),
+  ];
   return { ...query, items };
+}
+
+function filePickerItemKey(item: FilePickerDirectoryItem) {
+  return item.kind === 'folder' ? `folder:${item.folder.id}` : `file:${item.file.entry.id}`;
 }
 
 function filePickerItemType(item: FilePickerDirectoryItem) {
@@ -170,7 +167,7 @@ function FilePickerItem({
           isAttached={data.attachedIds.has(item.file.entry.id)}
           isSelected={data.selectedIds.has(item.file.entry.id)}
           item={item.file}
-          modifiedDate={data.dateFormatter.format(filePickerModifiedAt(item.file))}
+          modifiedDate={data.dateFormatter.format(item.file.entry.updatedAt)}
           onToggle={data.onToggle}
         />
       </View>
@@ -248,7 +245,7 @@ function FilePickerFolderContents({
       <View style={{ paddingLeft: Math.min(depth, MAX_VISUAL_DEPTH) * LEVEL_INDENT + NAME_INSET }}>
         {directory.error ? (
           <FilePickerError onRetry={directory.refresh} />
-        ) : directory.isLoading || directory.isLoadingMore || directory.isResolving ? (
+        ) : directory.isLoading || directory.isLoadingMore ? (
           <View className="py-2">
             <ContentState.Loading layout="row" title={t('chat.filePicker.loading')} />
           </View>
