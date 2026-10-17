@@ -1,6 +1,7 @@
 import type { AssistantMessage } from '@earendil-works/pi-ai';
 import type { EntryRecord, SubmissionRecord } from '@earendil-works/pi-durable';
 
+import { buildAgentSystemPrompt } from '../../../host/agentSystemPrompt';
 import { toAgentMessagePart } from '../../../host/runtimeProjection';
 import { PiConfigurationSchema, projectPiTurn } from '../piDurableProjection';
 
@@ -31,6 +32,32 @@ test('older configurations remain readable and current replaceable instructions 
     PiConfigurationSchema.parse(JSON.parse(JSON.stringify(current))).initialInstructions,
   ).toEqual(current.initialInstructions);
 });
+
+test.each(['standard', 'minimal'] as const)(
+  'migrates only the automatic date in released %s prompts and preserves user instructions',
+  (mode) => {
+    const date = '\n\n## Current Date\n\nThe current local date is `2026-12-31`.';
+    const language = '\n\n## Response Language\n';
+    const instructions = buildAgentSystemPrompt({
+      mode,
+      agentInstructions: `Keep this quoted example:${date}${language}Example language.`,
+      appLanguage: 'en-US',
+      tools: [],
+    });
+    const old = {
+      version: 1,
+      model: { providerId: 'p', modelId: 'm' },
+      instructions: instructions.replace(language, `${date}${language}`),
+      options: {},
+      tools: [],
+    };
+    const migrated = PiConfigurationSchema.parse(old);
+    expect(migrated).toMatchObject({ version: 2, instructions });
+    expect(PiConfigurationSchema.parse(JSON.parse(JSON.stringify(migrated)))).toEqual(migrated);
+    expect(PiConfigurationSchema.parse({ ...old, version: 2 }).instructions).toBe(old.instructions);
+  },
+);
+
 const metadata = {
   kind: 'cherry.input',
   version: 1,

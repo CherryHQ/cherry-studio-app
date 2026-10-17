@@ -26,7 +26,6 @@ describe('buildAgentSystemPrompt', () => {
       mode: 'minimal',
       agentInstructions: 'Explain simply.',
       appLanguage: 'zh-CN',
-      currentDate: '2026-10-10',
       tools: [
         tool('web_search'),
         tool('read_file'),
@@ -46,7 +45,7 @@ describe('buildAgentSystemPrompt', () => {
       "model provider's native web search and page reading may be available",
     );
     expect(prompt).toContain('Application tools, Skills and plugins are unavailable');
-    expect(prompt).toContain('`2026-10-10`');
+    expect(prompt).not.toContain('The current local date');
     expect(prompt).toContain('`zh-CN`');
     expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
     for (const heading of [
@@ -124,7 +123,6 @@ describe('buildAgentSystemPrompt', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '   ',
       appLanguage: 'zh-CN',
-      currentDate: '2026-09-03',
       tools: [],
     });
 
@@ -133,7 +131,7 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('persistent memory, or background execution');
     expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
-    expect(prompt).toContain('The current local date is `2026-09-03`.');
+    expect(prompt).not.toContain('The current local date');
     expect(prompt).toContain('You must write every response in this language');
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## Web Citations');

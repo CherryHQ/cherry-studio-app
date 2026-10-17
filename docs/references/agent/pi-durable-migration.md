@@ -135,6 +135,25 @@ execution. Existing live runs and task-owned conversations retain their normal r
 
 ## Rebuilding Model Context
 
+The fixed application prompt is the leading `cherry-runtime` system section. The local calendar
+date is a separate `current-date` section, rendered when Pi prepares a model request rather than
+frozen at input admission. Pi records a system update only when the date changes. Official DeepSeek
+Responses and Chat Completions endpoints retain these updates in place, preserving the earlier
+request prefix across midnight, queued inputs and process restarts. Other providers retain their
+existing compatibility settings, which may fold updates back into the leading system message.
+Compaction and history import restore the current date through Pi's normal system baseline;
+no separate date state is stored.
+
+Recovery resends an already prepared request with its persisted context cutoff, including the
+date at preparation. It does not rebuild that in-flight request across midnight or an upgrade;
+the next preparation refreshes the date. Queued inputs have not reached preparation yet and use
+the date when their request is prepared.
+
+Configuration v2 removes the automatic date block from released v1 prompts. Before resuming an
+unfinished v1 conversation, recovery saves the migrated configuration and clears Pi's former
+`instructions` field in one commit, preserving loaded tools and retained Skill/plugin instructions.
+The next prompt preparation replaces the old section through Pi's normal system update mechanism.
+
 A working copy is rebuilt only when none exists: the first continuation of a pre-Pi session, after
 a fork, retry or turn deletion, and after the Pi file itself has been removed. The rebuild imports
 the latest usable Cherry checkpoint and the following transcript tail, normalizing stored parts into
