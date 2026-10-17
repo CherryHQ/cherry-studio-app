@@ -896,6 +896,7 @@
   "painting.editor.annotationInstruction": "Nota {{number}} ({{x}}% a partir da esquerda, {{y}}% a partir do topo): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Editar a nota {{number}}",
   "painting.editor.annotationSummary": "Nota {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Detalhes do erro",
   "painting.errorDetail.unavailable": "Não estão disponíveis detalhes de erro para esta geração.",
   "painting.focus.annotationHint": "Mantenha premida a imagem para adicionar uma nota",
   "painting.focus.delete": "Eliminar esta versão",

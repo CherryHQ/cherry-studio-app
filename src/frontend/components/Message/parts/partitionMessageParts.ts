@@ -2,6 +2,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
   isAgentMutationToolPart,
+  isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isToolMessagePart,
   isUserQuestionToolPart,
@@ -129,10 +130,12 @@ export function partitionMessageParts(
       return;
     }
 
-    // A question and a saved Agent are outcomes the reader acts on, not process.
+    // A question, a saved Agent, and an image being drawn are outcomes the
+    // reader acts on or waits for, not process.
     if (
       isToolMessagePart(part) &&
       (isUserQuestionToolPart(part) ||
+        isGeneratingImageToolPart(part) ||
         ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
           part.state === 'output-available'))
     ) {

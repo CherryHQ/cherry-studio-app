@@ -26,10 +26,7 @@ import type { PaintingsModule } from '@/shared/contracts';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntryId } from '@/shared/data/types/file';
 import type { Painting } from '@/shared/data/types/painting';
-import {
-  imageParamsAspectRatio,
-  imageParamsResolutionLabel,
-} from '@/shared/utils/imageGenerationParams';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import {
   type PaintingJobInterruptionReason,
@@ -62,8 +59,6 @@ type PaintingPendingGalleryItemBase = {
   aspectRatio: number;
   key: string;
   painting: Painting;
-  /** Requested size, when the params that asked for it name one. */
-  resolution?: string;
 };
 
 export type PaintingPendingGalleryItem = PaintingPendingGalleryItemBase &
@@ -351,7 +346,6 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
           // land and the real count is known.
           key: `${painting.id}:pending`,
           painting,
-          resolution: imageParamsResolutionLabel(paramValues),
           ...(activeJob
             ? { kind: 'generating' as const }
             : {

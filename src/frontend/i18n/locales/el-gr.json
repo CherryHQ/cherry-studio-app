@@ -885,6 +885,7 @@
   "painting.editor.annotationInstruction": "Σημείωση {{number}} ({{x}}% από αριστερά, {{y}}% από πάνω): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Επεξεργασία σημείωσης {{number}}",
   "painting.editor.annotationSummary": "Σημείωση {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Λεπτομέρειες σφάλματος",
   "painting.errorDetail.unavailable": "Δεν υπάρχουν διαθέσιμες λεπτομέρειες σφάλματος για αυτήν τη γενιά.",
   "painting.focus.annotationHint": "Πατήστε παρατεταμένα την εικόνα για να προσθέσετε σημείωση",
   "painting.focus.delete": "Διαγραφή αυτής της έκδοσης",

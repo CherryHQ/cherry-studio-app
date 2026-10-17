@@ -907,6 +907,7 @@
   "painting.editor.annotationInstruction": "Пометка {{number}} ({{x}}% от левого края, {{y}}% от верхнего края): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Изменить пометку {{number}}",
   "painting.editor.annotationSummary": "Пометка {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Детали ошибки",
   "painting.errorDetail.unavailable": "Подробности об ошибках для этого поколения отсутствуют.",
   "painting.focus.annotationHint": "Нажмите и удерживайте изображение, чтобы добавить пометку",
   "painting.focus.delete": "Удалить эту версию",

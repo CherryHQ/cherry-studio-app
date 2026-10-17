@@ -874,6 +874,7 @@
   "painting.editor.annotationInstruction": "注釈 {{number}}（左端から {{x}}%、上端から {{y}}%）：{{instruction}}",
   "painting.editor.annotationPlaceholder": "注釈 {{number}} の変更",
   "painting.editor.annotationSummary": "注釈 {{number}}：{{instruction}}",
+  "painting.errorDetail.action": "エラーの詳細",
   "painting.errorDetail.unavailable": "この世代ではエラーの詳細は利用できません。",
   "painting.focus.annotationHint": "画像を長押しして注釈を追加",
   "painting.focus.delete": "このバージョンを削除",

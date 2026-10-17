@@ -874,6 +874,7 @@
   "painting.editor.annotationInstruction": "Ghi chú {{number}} ({{x}}% từ cạnh trái, {{y}}% từ cạnh trên): {{instruction}}",
   "painting.editor.annotationPlaceholder": "Sửa ghi chú {{number}}",
   "painting.editor.annotationSummary": "Ghi chú {{number}}: {{instruction}}",
+  "painting.errorDetail.action": "Chi tiết lỗi",
   "painting.errorDetail.unavailable": "Không có chi tiết lỗi nào cho thế hệ này.",
   "painting.focus.annotationHint": "Nhấn giữ hình ảnh để thêm ghi chú",
   "painting.focus.delete": "Xóa phiên bản này",
