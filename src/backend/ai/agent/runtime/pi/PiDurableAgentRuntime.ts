@@ -6,6 +6,7 @@ import {
   createRegistry,
   GenerationTask,
   hook,
+  section,
   type AgentChange,
   type Cursor,
   type EntryId,
@@ -76,6 +77,15 @@ const DESCRIPTOR: RuntimeDescriptor = {
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: true },
 };
 const logger = loggerService.withContext('PiDurableAgentRuntime');
+
+// Pi persists only changed sections, keeping earlier request prefixes intact across local midnight.
+const CURRENT_DATE_SECTION = section('current-date', () => {
+  const date = new Date(Date.now());
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `The current local date is \`${year}-${month}-${day}\`.`;
+});
 
 /** Persistent, runtime-neutral facade. Pi owns execution, its working context, queue and recovery. */
 export class PiDurableAgentRuntime implements DurableAgentRuntime {
@@ -178,10 +188,11 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
       for (const sessionId of await this.unfinishedSessions()) {
-        const configuration = PiConfigurationSchema.parse(
-          await this.runtime.configuration(sessionId),
-        );
-        await this.installConfiguration(sessionId, configuration, true);
+        const stored = await this.runtime.configuration(sessionId);
+        const configuration = PiConfigurationSchema.parse(stored);
+        const agent = await this.installConfiguration(sessionId, configuration, true);
+        if (stored?.version === 1)
+          await this.runtime.restoreConfiguration(sessionId, detachedJson(configuration), agent);
         await this.bindProvider(sessionId);
       }
     } catch (error) {
@@ -705,6 +716,15 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     });
     this.registry.install({
       ...extension,
+      sections: [
+        section(
+          'cherry-runtime',
+          () => `${configuration.instructions}${webInstructions(configuration.webTools, routes)}`,
+          { tag: false },
+        ),
+        ...(extension.sections ?? []),
+        CURRENT_DATE_SECTION,
+      ],
       hooks: [
         ...(extension.hooks ?? []),
         hook(GenerationTask, {
@@ -778,7 +798,8 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         provider: configuration.model.providerId,
         modelId: piDurableModelKey(configuration.model, configuration.kind),
       },
-      instructions: `${configuration.instructions}${webInstructions(configuration.webTools, routes)}`,
+      // The reserved instructions section renders last; the extension keeps fixed rules first.
+      instructions: null,
       extensions: [extension],
     };
   }
@@ -793,7 +814,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         : undefined;
     return PiConfigurationSchema.parse({
       ...input,
-      version: 1,
+      version: 2,
       tools: input.tools.map(piToolBlueprint),
       ...(input.webTools
         ? { webRoutes: resolvePiWebToolRoutes(input.webTools, native, input.tools) }

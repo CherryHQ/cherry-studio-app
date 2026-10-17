@@ -59,27 +59,41 @@ export const PiToolBlueprintSchema = z.object({
 
 const WebToolRouteSchema = z.enum(['client', 'server', 'none']);
 
-export const PiConfigurationSchema = z.object({
-  version: z.literal(1),
-  kind: z.enum(['language', 'image']).default('language'),
-  model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
-  instructions: z.string(),
-  initialInstructions: z
-    .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
-    .max(64)
-    .default([]),
-  options: RuntimeOptionsSchema,
-  tools: z.array(PiToolBlueprintSchema),
-  webTools: z
-    .object({
-      modelToolsPreferred: z.boolean(),
-      clientSearchAvailable: z.boolean(),
-      clientFetchAvailable: z.boolean(),
-    })
-    .optional(),
-  /** Selected with the configuration, so queued, retried and recovered requests share one route. */
-  webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
-});
+export const PiConfigurationSchema = z
+  .object({
+    version: z.union([z.literal(1), z.literal(2)]),
+    kind: z.enum(['language', 'image']).default('language'),
+    model: z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }),
+    instructions: z.string(),
+    initialInstructions: z
+      .array(z.object({ key: z.string().min(1).max(256), text: z.string().min(1).max(128_000) }))
+      .max(64)
+      .default([]),
+    options: RuntimeOptionsSchema,
+    tools: z.array(PiToolBlueprintSchema),
+    webTools: z
+      .object({
+        modelToolsPreferred: z.boolean(),
+        clientSearchAvailable: z.boolean(),
+        clientFetchAvailable: z.boolean(),
+      })
+      .optional(),
+    /** Selected with the configuration, so queued, retried and recovered requests share one route. */
+    webRoutes: z.object({ search: WebToolRouteSchema, fetch: WebToolRouteSchema }).optional(),
+  })
+  .transform(({ version, ...configuration }) => ({
+    ...configuration,
+    version: 2 as const,
+    // Released v1 configurations included this Host-owned block before the language rules.
+    // Replace only its first occurrence; an Agent's own instructions may quote the same text.
+    instructions:
+      version === 1 && configuration.instructions.startsWith('# Cherry Studio Mobile Runtime\n\n')
+        ? configuration.instructions.replace(
+            /\n\n## Current Date\n\nThe current local date is `\d{4}-\d{2}-\d{2}`\.(?=\n\n## Response Language\n)/,
+            '',
+          )
+        : configuration.instructions,
+  }));
 
 const PiSubmissionSchema = z.object({
   kind: z.literal('cherry.input'),

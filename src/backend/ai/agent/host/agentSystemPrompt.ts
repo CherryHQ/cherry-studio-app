@@ -46,7 +46,6 @@ export type BuildAgentSystemPromptInput = {
   agentInstructions: string;
   mode?: AgentMode;
   appLanguage: LanguageVarious;
-  currentDate?: string;
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
   skills?: TurnSkillPlan;
@@ -64,7 +63,6 @@ export function buildAgentSystemPrompt({
   agentInstructions,
   mode = DEFAULT_AGENT_MODE,
   appLanguage,
-  currentDate = formatLocalDate(new Date()),
   tools,
   pluginGuides = [],
   skills,
@@ -73,7 +71,6 @@ export function buildAgentSystemPrompt({
 }: BuildAgentSystemPromptInput): string {
   const sections = [
     mode === 'minimal' ? MINIMAL_CHAT_RULES : MOBILE_RUNTIME_RULES,
-    `## Current Date\n\nThe current local date is \`${currentDate}\`.`,
     buildResponseLanguageSection(appLanguage),
   ];
   if (mode === 'standard') {
@@ -298,13 +295,6 @@ export function buildInitialSkillInstructions(skills: TurnSkillPlan) {
   return [...skills.selected, ...(skills.active?.values() ?? [])].map(({ entry, instructions }) =>
     skillInstructionSection(entry, instructions),
   );
-}
-
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 function buildResponseLanguageSection(appLanguage: LanguageVarious): string {

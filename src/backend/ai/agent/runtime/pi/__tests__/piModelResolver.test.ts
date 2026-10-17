@@ -822,6 +822,22 @@ describe('Pi model resolver', () => {
     },
   );
 
+  test.each([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS])(
+    'keeps system updates inline only for official DeepSeek %s endpoints',
+    async (endpoint) => {
+      mockGetModelById.mockResolvedValue(makeModel(endpoint, { name: 'DeepSeek Flash' }));
+      for (const baseUrl of ['https://api.deepseek.com/v1', 'https://relay.example.test/v1']) {
+        mockGetProviderById.mockResolvedValue(makeProvider(endpoint, baseUrl, 'openai-compatible'));
+        const resolution = await resolve(resolver, {});
+        if (baseUrl === 'https://api.deepseek.com/v1') {
+          expect(resolution.model.compat).toMatchObject({ supportsMidConvoSystemMessages: true });
+        } else {
+          expect(resolution.model.compat).not.toHaveProperty('supportsMidConvoSystemMessages');
+        }
+      }
+    },
+  );
+
   test.each(CASES)(
     'normalizes DeepSeek responses on the configured $api route',
     async (testCase) => {

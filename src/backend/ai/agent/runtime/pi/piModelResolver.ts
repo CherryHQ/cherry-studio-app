@@ -132,7 +132,7 @@ export function createPiModelResolver(accounts?: {
       const isOpenRouter =
         provider.id === 'openrouter' ||
         provider.presetProviderId === 'openrouter' ||
-        isOpenRouterUrl(connection.baseUrl);
+        isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
       if (oauth) {
         for (const name of Object.keys(headers)) {
@@ -176,6 +176,9 @@ export function createPiModelResolver(accounts?: {
           ? {
               compat: {
                 supportsDeveloperRole: false,
+                ...(isProviderHost(connection.baseUrl, 'api.deepseek.com')
+                  ? { supportsMidConvoSystemMessages: true }
+                  : {}),
                 ...(adapter.api === 'openai-completions'
                   ? {
                       ...(isOpenRouter
@@ -503,9 +506,9 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
   ];
 }
 
-function isOpenRouterUrl(baseUrl: string): boolean {
+function isProviderHost(baseUrl: string, hostname: string): boolean {
   try {
-    return new URL(baseUrl).hostname === 'openrouter.ai';
+    return new URL(baseUrl).hostname === hostname;
   } catch {
     return false;
   }
