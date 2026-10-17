@@ -354,7 +354,6 @@ export function createBackend(
         getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
-        subscribeChanges: services.fileContent.subscribeChanges,
       },
       mcp: services.mcpRuntime,
       models,

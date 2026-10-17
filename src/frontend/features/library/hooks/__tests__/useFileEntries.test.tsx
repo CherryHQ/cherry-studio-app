@@ -445,7 +445,7 @@ describe('useFileEntries', () => {
 
         dataApi.get.mockResolvedValueOnce({ items: [].map(libraryFile) });
         await act(async () => notifyFileChange(entry.id));
-        await flushQueryNotifications();
+        await flushFileChange();
         await act(async () => {
           for (const complete of pendingUriPages) await complete();
         });
@@ -503,7 +503,7 @@ describe('useFileEntries', () => {
     content = 'rewritten content';
     currentEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024 });
     await act(async () => notifyFileChange(generatedEntry.id));
-    await flushQueryNotifications();
+    await flushFileChange();
 
     expect(displayedText).toBe('rewritten content');
     expect(readText).toHaveBeenCalledTimes(2);
@@ -576,6 +576,12 @@ describe('useFileEntries', () => {
 function notifyFileChange(entryId: FileEntryId) {
   for (const listener of fileChangeListeners)
     listener(['/files/library', '/files/entries', `/files/entries/${entryId}`]);
+}
+
+/** One window lets DataApiProvider coalesce the change; the next lets the refetch it starts land. */
+async function flushFileChange() {
+  await flushQueryNotifications();
+  await flushQueryNotifications();
 }
 
 async function flushQueryNotifications() {
