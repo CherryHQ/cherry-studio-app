@@ -322,6 +322,8 @@ export async function prepareDurableTurn(
   parsed: AgentSubmitMessageInput,
   referencedFileEntryIds: readonly string[],
   signal: AbortSignal,
+  /** Recovery supplies the admitted identity; null must not inherit the current binding. */
+  workspaceFolderId?: string | null,
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
   if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
@@ -330,7 +332,7 @@ export async function prepareDurableTurn(
   return prepareResolvedTurn(
     dependencies,
     parsed,
-    session,
+    workspaceFolderId === undefined ? session : { ...session, workspaceFolderId },
     agent,
     {
       anchorFound: true,

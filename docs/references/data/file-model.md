@@ -267,13 +267,14 @@ removal and compensating cleanup use the hard-delete path.
 survives, the UI renders the "unavailable" placeholder, and later model history omits its content
 without failing the turn. Nothing silently removes a historical reference.
 
-**File-list updates** — all managed-file writes go through `fileStorage`. Its create, rewrite,
-delete, and compensating-discard operations announce changes after entry persistence commits;
-failed writes do not announce a successful change. `FileModule.subscribeChanges` exposes this
-notification to the app-wide frontend `FileQueryBridge`, which invalidates every shared file-list
-page size. This also covers background painting and Agent writes while the library and composer
-are unmounted. Business callers do not refresh queries; URI and preview caches remain reusable
-under their existing file/version keys.
+**File-list updates** — `fileStorage` and `FileLibraryService` publish committed resource paths and
+changed entry IDs through the existing Data API change bus. Trash/restore/purge publishes one batch
+per transaction, including every affected version. `DataApiProvider` merges bursts for 300 ms and
+invalidates resource queries, matching URI/preview keys and `meta.fileEntryIds` projections in one
+cache pass. There is no separate file workflow event stream. Ordinary metadata changes do not
+invalidate Session queries; rebinding a workspace or purging a bound folder does. Background Agent
+and painting writes still refresh cached lists without a mounted library/composer. Content revision
+keys remain intact; notification supplies freshness without discarding unrelated caches.
 
 ## Out of scope, deliberately
 
@@ -285,8 +286,10 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 
 ## Extension points
 
-**File library.** The library page is a query over `file_entry`; it needs no new table. The Sharing
-tab selects `provenance: 'document-export'` without reclassifying historical rows. See
+**File library.** `library_file` owns the logical name, folder placement and current-version pointer;
+`file_folder` owns the hierarchy, and `file_entry` owns each content version. The library query joins
+the logical file to its active current version; history reads the versions of that logical file.
+The Sharing tab selects `provenance: 'document-export'` without reclassifying historical rows. See
 [Document Export](../document-export.md).
 General imported/generated provenance filters remain unshipped. Deletion sets `deletedAt` and keeps
 bytes and previews. The [file trash](./trash.md) restores entries, permanently deletes them, and

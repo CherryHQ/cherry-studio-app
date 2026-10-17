@@ -10,7 +10,7 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import { deleteInternalEntryFiles, notifyFileChange } from '@/backend/services/file/fileStorage';
+import { deleteInternalEntryFiles } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   TRASH_RETENTION_MS,
@@ -53,8 +53,7 @@ export class TrashRuntime extends BaseService {
 
   restore(kind: TrashKind, id: string) {
     return this.mutate(async () => {
-      const restored = await this.entries.restore(kind, id);
-      for (const entryId of restored) notifyFileChange(entryId);
+      await this.entries.restore(kind, id);
     });
   }
 

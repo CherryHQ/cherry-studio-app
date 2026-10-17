@@ -49,8 +49,9 @@ Native and ownership assessments.
 ### `@cherrystudio/ai-core`
 
 Mobile imports the published `ai-core` package through the private implementation behind
-`AiService`. Production consumers use provider construction, non-conversation text generation,
-model probes, and image generation. `packages/ai-runtime` owns Mobile's provider configuration
+`AiService`. Production consumers use provider construction, SDK-specific text/model probes,
+model discovery and image generation. Translation and session naming instead use the bound Pi
+`RuntimeTextGenerator`, as described in [Provider Integration](./provider-integration.md). `packages/ai-runtime` owns Mobile's provider configuration
 types that the published package does not expose.
 
 The published package also contains Desktop context and Agent helpers. They have no Mobile

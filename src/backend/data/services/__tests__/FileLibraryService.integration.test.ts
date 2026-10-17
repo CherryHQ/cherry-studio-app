@@ -1,3 +1,4 @@
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import { validateFileLibraryReferences } from '@/backend/data/db/fileLibraryValidation';
 import { createServiceTestDatabase } from '@/backend/data/serviceTestDatabase';
 
@@ -35,6 +36,33 @@ describe('file library folders, versions, and workspaces', () => {
     });
     expect(database.sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   }
+
+  it.each([1, 50])('publishes one committed batch for %i versions in a folder', async (count) => {
+    const folder = await library.createFolder(null, 'Folder');
+    for (let index = 1; index <= count; index += 1)
+      await create(index, { folderId: folder.id, filename: `File-${index}.txt` });
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      await library.trashFolder(folder.id);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(
+        changed.mock.calls[0]![0].filter((path: string) => path.startsWith('/files/entries/')),
+      ).toHaveLength(count);
+      expect(changed.mock.calls[0]![0]).not.toContain('/agent-sessions');
+      changed.mockClear();
+      await library.restore('folder', folder.id);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(
+        changed.mock.calls[0]![0].filter((path: string) => path.startsWith('/files/entries/')),
+      ).toHaveLength(count);
+      changed.mockClear();
+      await library.updateFile(id(1), { name: 'Renamed.txt' });
+      expect(changed).toHaveBeenCalledWith(['/files/library']);
+    } finally {
+      unsubscribe();
+    }
+  });
 
   it('keeps duplicate root files and resolves normalized collisions when moving into folders', async () => {
     const folder = await library.createFolder(null, 'Research');

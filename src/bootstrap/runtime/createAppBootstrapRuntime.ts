@@ -160,9 +160,11 @@ export function createAppBootstrapRuntime(
     backend,
     dataApiDependencies,
     disposeSystemEntry,
+    disposeSkills,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
       replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
@@ -186,6 +188,7 @@ export function createAppBootstrapRuntime(
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
@@ -236,7 +239,7 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await disposeSystemEntry();
+        await Promise.all([disposeSystemEntry(), disposeSkills()]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;

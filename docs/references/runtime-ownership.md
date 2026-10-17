@@ -4,8 +4,7 @@ The active experimental Agent lifetime is specified in
 [Pi Durable Migration](./agent/pi-durable-migration.md). One app generation owns the native Harness
 and Pi connection. Native task demand, including compaction, holds the existing execution lease.
 Ordinary disposal or OS expiry preserves work; foreground reopening reconstructs current capabilities
-before resuming. User stop alone aborts. Historical per-turn descriptions below do not override this.
-Its target owner is one application-scoped Harness; route disposal only releases observation.
+before resuming. User stop aborts the selected Session. Route disposal only releases observation.
 
 This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
 cleanup.
@@ -102,8 +101,9 @@ for workflows that are not ordinary resource queries or mutations.
 
 The service registry creates one `MobileAgentHost` per `ApplicationHost` generation and composition
 exposes its `AgentProtocol` interface through `Backend.agent`. The Host is app-owned, not
-route-owned. It owns active turns, Runtime sessions, normalized Agent events, approvals, terminal
-persistence, and process-start reconciliation of unfinished turns.
+route-owned. It owns admission, per-input execution capabilities, normalized Agent events, approvals, terminal
+projection into Cherry history, and process-start reconciliation. Pi owns the durable model/tool loop
+and queued submissions; the Host reconstructs capabilities before scheduling resumes.
 
 The app-shell `ConversationProvider` owns the local conversation source and its
 `AgentSessionChatClient`. The feature `ChatProvider` consumes that client for existing local
@@ -118,11 +118,13 @@ through `/agent-sessions/:sessionId/messages` and projects protocol snapshots/ev
 consumption contract. `ConversationPresenter` reconciles history and live rows by stable message id.
 Backend code never imports Expo Router or TanStack Query.
 
-User cancellation affects only the selected Session. One Session allows at most one active turn,
-while different Sessions may run concurrently. App disposal closes Runtime sessions and waits for
-tracked turns before lower-level infrastructure closes. OS suspension or termination still does not
-guarantee continued execution or resumable streaming; the next process start marks unfinished local
-turns interrupted.
+User cancellation affects only the selected Session. Pi executes one input at a time within that
+Session and retains admitted follow-ups in its inbox; different Sessions may run concurrently.
+Ordinary disposal and OS execution expiry suspend the Harness without a user-abort mark. The next
+Host reopens committed tasks and reconstructs current capabilities. An unsafe tool interrupted after
+execution intent is not blindly replayed. Missing or obsolete execution copies reconcile through
+Cherry reservations, as specified in [Pi Durable Migration](./agent/pi-durable-migration.md).
+None of this guarantees continuous execution or a preserved network stream after process death.
 
 ## Remote Conversation Ownership
 
@@ -165,6 +167,82 @@ The app-owned `JobRuntime` owns painting execution, cancellation, and terminal p
 route changes. Frontend hooks own only observation and UI synchronization. See
 [Job Runtime](./job-runtime.md#production-handler-paintinggenerate) for the durable workflow and
 resource-deletion contract.
+
+## Admission Identity And Live Resources
+
+Durable metadata identifies the work that was accepted; it is not a permanent permission grant.
+The resource contract spans admission, use, deletion and recovery:
+
+| Resource or effect | Fixed at admission | Checked at use or commit | Owner and regression source |
+| --- | --- | --- | --- |
+| Agent workspace | `workspaceFolderId`, including explicit `null`, in each input's durable metadata | Folder availability, path membership, source version and revision, current tool/approval policy | `DurableAgentHost` / `WorkspaceFileAccess`; [Host regression](../../src/backend/ai/agent/host/__tests__/DurableAgentHost.test.ts), [workspace access](../../src/backend/ai/agent/tools/__tests__/workspaceFileAccess.test.ts); [#1337](https://github.com/CherryHQ/cherry-studio-app/issues/1337) |
+| Painting inputs | Managed `fileEntryId` for each selected version, never a durable physical URI | Resolve active entry and local bytes immediately before the provider read; unavailable input stops dispatch | `paintingGenerateJobHandler` / `paintingFileStorage`; [queue regression](../../src/backend/services/paintings/tasks/__tests__/paintingGenerateJobHandler.test.ts); [#1338](https://github.com/CherryHQ/cherry-studio-app/issues/1338) |
+| Painting and board | `paintingId` and `boardId` in the job input | Admission and execution register both scopes; execution also checks the receipt still belongs to that board | `PaintingsModule`, `JobRuntime`, `ResourceScopeCoordinator`; [admission regression](../../src/backend/services/paintings/__tests__/createPaintingsModule.test.ts), [deletion regression](../../src/backend/data/api/handlers/__tests__/deletionScopes.test.ts); [#1339](https://github.com/CherryHQ/cherry-studio-app/issues/1339) |
+| MCP side effects | Server/configuration identity and selected tool; App calls additionally retain their source reference | Current enablement/binding, input schema, consent and connection generation; transmission determines whether a lost result is uncertain | `McpRuntimeService`, `McpAppAccess`, `mcpRuntimeAdapter`; [App policy regression](../../src/backend/ai/mcp/__tests__/McpAppAccess.test.ts); [#1340](https://github.com/CherryHQ/cherry-studio-app/issues/1340) |
+
+Changing a Session's workspace affects subsequent admissions only. A suspended or queued input
+continues against its admitted identity. If that folder is trashed or purged, access fails; recovery
+must never switch to another folder or to the root as a fallback. Released pre-workspace metadata
+without this field means unbound (`null`). Current accounts and availability are still resolved live.
+
+A logical file and one of its content versions are different identities. A task that chose a version
+does not silently use the logical file's later current version. Trash retains bytes for recovery but
+revokes ordinary reads immediately. The execution owner resolves availability; the storage adapter
+owns byte access. Data already transmitted cannot be recalled by later deletion.
+
+Board deletion fences the parent before draining, so a newly admitted child cannot escape a stale
+child enumeration. Admission holds its scope through transaction commit/rollback; execution holds
+both scopes through actual settlement. A process-local fence is not crash recovery: painting jobs
+use `abandon`, and receipt existence is checked before external I/O. See
+[Resource Scope Lifecycle](./lifecycle/resource-scope.md). Current painting-board/workspace task
+shapes were introduced after v0.2.1; future changes to shipped inputs need an explicit compatibility
+policy rather than guessed IDs or reconstructed paths.
+
+## MCP Ownership
+
+| Owner | State and responsibility |
+| --- | --- |
+| `McpRuntimeService` | One pooled client per server configuration, transport and catalog generations, cached catalogs, invalidation, temporary inspection, tracked OAuth completion and service teardown |
+| `McpAppAccess` | Stateless App source/configuration binding, per-Agent permission, visibility/schema checks and independent consent; each validation round shares one catalog |
+| `McpAppRuntime` | Live view sessions, initialization, bounded bridge messages, duplicate request rejection, view cancellation and redacted errors |
+| `McpOAuthRuntime` | Authorization attempts, token refresh, revocation and serialized SecureStore writes; its stop cancels network work and settles token storage |
+| `McpElicitationBroker` | User questions and responses; pooled in-flight requests pause their network budgets while a server question waits |
+| `mcpRuntimeAdapter` | Shared transmission/effect outcome classification and Agent result projection; App callers use the same classification without Agent presentation |
+
+App content and tool operations acquire the service's shared connection. Settings inspection of an
+unsaved configuration uses a bounded temporary client and joins service shutdown. App tool calls
+validate before consent and again afterwards; authorization waiting has no network deadline. Server
+disable/delete/configuration changes retire the generation and close dependent views. Backgrounding
+closes App sessions and updates transport subscription policy; it does not cancel unrelated Agent
+work merely because a view closed. A lost result after transmission is not proof of no side effect.
+Neither caller path automatically replays an uncertain write.
+
+## Async Storage Admission And Teardown
+
+Backup uses `StorageMutationGate`, with the explicit owner list composed in
+`createAppBootstrapRuntime`. It rejects busy capture/restore instead of waiting for arbitrary
+network work. Once frozen, new persistent work is rejected; Agent quiescence drains projections,
+usage and checkpoints before the snapshot. This is application admission control, not a database
+mutex or a distributed transaction.
+
+| Operation | Initiation / cancellation | Settlement and final write guard | Backup and teardown |
+| --- | --- | --- | --- |
+| Agent admission, tools and transcript projection | Host admission and per-execution signals; ordinary shutdown suspends; user stop aborts | Host tracks admissions, pending writes and settlements; workspace/file commits retain live guards | Busy during admitted work; `quiesce()` reconciles reservations, drains usage/naming and captures context; dependencies remain alive during close |
+| Painting admission and job execution | Module transaction then `JobRuntime`; user/scope/OS interruption aborts the execution | Admission scope covers commit/rollback; job actual-settlement promise covers terminal persistence; output writes never recreate a deleted receipt | Pending transaction verification, pump and actual executions count as busy; shutdown drains within its existing ceiling, then ledger recovery handles unfinished rows |
+| Skill installation/update publication | Caller may cancel download/staging; composition owns persistent publication admission | Publication and the row write are inside the counted write transaction; staging is disposable cache data | Busy during admitted publication; `disposeSkills()` rejects later writes and joins accepted transactions before host uninstall; later network completions fail admission and discard staging |
+| Trash restore/purge/sweep | `TrashRuntime` serializes user work and foreground sweeps; stopping blocks new work | `pending` and `tail` cover metadata commit plus best-effort byte cleanup; purge rechecks deletion timestamp | Busy while pending; sweeps skip a freeze; stop drains the tail before SQLite closes |
+| MCP OAuth completion | Service deduplicates by attempt ID; service lifetime and OAuth attempt signals cancel network work | Completion stays tracked through inspection, connection transaction and grant cleanup; lifetime checks run inside the connection transaction | Reject start while frozen; tracked completions count as busy; stop aborts OAuth/inspection, then joins completion and cleanup before persistence teardown |
+| MCP temporary inspection | Caller starts a bounded unsaved-server probe; service lifetime aborts it | No application row write; temporary-operation promise includes closing the client | May run during backup; stop cancels and joins it. A probe used by OAuth remains inside that completion's busy interval |
+
+The OAuth source audit found that token storage already serialized writes and obeyed OAuth lifetime,
+but the outer post-token inspection/connection save lacked a service-level join and backup admission.
+The service now owns that interval. Skill publication was already included in backup admission; its
+composition owner now also joins accepted writes during bootstrap disposal. No shared registration
+framework is needed for these bounded owners. See [#1344](https://github.com/CherryHQ/cherry-studio-app/issues/1344).
+
+These are source contracts and regression sources, not a claim of executed acceptance. The related
+OAuth, queued-transaction and bootstrap-order regressions remain subject to the repository's
+user-owned verification policy.
 
 ## Other Long-Lived Resources
 

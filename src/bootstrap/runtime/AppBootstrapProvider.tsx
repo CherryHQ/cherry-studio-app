@@ -8,7 +8,6 @@ import {
 import { recordSentryBreadcrumb } from '@/frontend/appShell/observability';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
 import { SkillQueryBridge } from '@/frontend/data/SkillQueryBridge';
@@ -78,7 +77,6 @@ export function AppBootstrapProvider({ children, createRuntime }: AppBootstrapPr
   return (
     <BackendProvider backend={runtime.backend}>
       <DataApiProvider dataApi={runtime.dataApi}>
-        <FileQueryBridge />
         <SkillQueryBridge />
         <ProviderRegistryQueryBridge />
         <PreferenceProvider preference={runtime.preference}>

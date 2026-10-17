@@ -1,3 +1,4 @@
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -16,7 +17,6 @@ import {
   readFileUriBytes,
   resolveFileEntry,
   rewriteInternalTextEntry,
-  subscribeFileChanges,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -145,7 +145,7 @@ describe('fileStorage', () => {
 
   beforeEach(() => {
     onFileChange = jest.fn();
-    unsubscribe = subscribeFileChanges(onFileChange);
+    unsubscribe = subscribeDataApiChanges(onFileChange);
     testState.copies.length = 0;
     testState.directories.clear();
     testState.failures.clear();
@@ -636,7 +636,9 @@ describe('fileStorage', () => {
     expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
     expect(rewritten.size).toBe(14);
     expect(onFileChange).toHaveBeenCalledTimes(1);
-    expect(onFileChange).toHaveBeenCalledWith(entry.id);
+    expect(onFileChange).toHaveBeenCalledWith(
+      expect.arrayContaining([`/files/entries/${entry.id}`]),
+    );
   });
 
   test('refuses to rewrite a draft whose bytes are missing', async () => {
@@ -713,7 +715,9 @@ describe('fileStorage', () => {
       ),
     ).resolves.toMatchObject({ size: 14 });
     expect(testState.files.get(uri)).toBe(14);
-    expect(onFileChange).toHaveBeenCalledWith(entry.id);
+    expect(onFileChange).toHaveBeenCalledWith(
+      expect.arrayContaining([`/files/entries/${entry.id}`]),
+    );
   });
 
   test('reports a missing entry row without deleting anything', async () => {

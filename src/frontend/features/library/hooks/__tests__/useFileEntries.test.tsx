@@ -4,7 +4,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { queryKeys } from '@/frontend/data/queryKeys';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
@@ -57,6 +56,10 @@ const dataApi = {
   patch: jest.fn(),
   post: jest.fn(),
   put: jest.fn(),
+  subscribeChanges: (listener: (paths: readonly string[]) => void) => {
+    fileChangeListeners.add(listener);
+    return () => fileChangeListeners.delete(listener);
+  },
 } as unknown as jest.Mocked<ApiClient>;
 const resolveUris = jest.fn(async (entries: readonly (typeof entry)[]) =>
   entries.map((item) => {
@@ -71,15 +74,11 @@ const generatePreviewUri = jest.fn(
       completePreview = resolve;
     }),
 );
-const fileChangeListeners = new Set<(entryId: FileEntryId) => void>();
+const fileChangeListeners = new Set<(paths: readonly string[]) => void>();
 const backend = {
   file: {
     generatePreviewUri,
     resolveUris,
-    subscribeChanges: (listener: (entryId: FileEntryId) => void) => {
-      fileChangeListeners.add(listener);
-      return () => fileChangeListeners.delete(listener);
-    },
   },
 } as unknown as Backend;
 
@@ -92,10 +91,7 @@ function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <BackendProvider backend={backend}>
-        <DataApiProvider dataApi={dataApi}>
-          <FileQueryBridge />
-          {children}
-        </DataApiProvider>
+        <DataApiProvider dataApi={dataApi}>{children}</DataApiProvider>
       </BackendProvider>
     </QueryClientProvider>
   );
@@ -114,6 +110,7 @@ function Probe({ enabled, filter = 'all' }: { enabled: boolean; filter?: FileLib
 
 describe('useFileEntries', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     completePreview = undefined;
     latestResult = undefined;
@@ -127,6 +124,7 @@ describe('useFileEntries', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
     queryClient.clear();
+    jest.useRealTimers();
   });
 
   test('sharing partitions the same loaded pages by source while keeping exported images in the image tab', async () => {
@@ -576,11 +574,12 @@ describe('useFileEntries', () => {
 });
 
 function notifyFileChange(entryId: FileEntryId) {
-  for (const listener of fileChangeListeners) listener(entryId);
+  for (const listener of fileChangeListeners)
+    listener(['/files/library', '/files/entries', `/files/entries/${entryId}`]);
 }
 
 async function flushQueryNotifications() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await jest.advanceTimersByTimeAsync(300);
   });
 }

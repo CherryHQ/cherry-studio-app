@@ -129,7 +129,7 @@ walk to verify it.
   deletes the library file; an in-flight import may finish after its tile is
   removed, but cannot restore that stale tile. Only explicit library deletion
   removes the file. Managed-file storage announces committed writes and the
-  app-wide `FileQueryBridge` refreshes shared file lists after unmount too.
+  app-wide `DataApiProvider` refreshes shared file lists after unmount too.
 - `context/ComposerProvider.tsx`: the session's private draft, attachments, and
   field-ref contexts, plus the input-presentation transition. Its contexts are
   split so dispatch-only components and the dock skip keystroke re-renders.

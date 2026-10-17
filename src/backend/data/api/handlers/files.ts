@@ -1,6 +1,5 @@
 import * as z from 'zod';
 
-import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import {
   fileLibraryService,
@@ -37,7 +36,7 @@ export function createFileHandlers(
     },
     '/files/versions/:id': {
       DELETE: async ({ params }) =>
-        notifyEntries(await library.trashFileEntry(z.uuid().parse(params.id), true)),
+        void (await library.trashFileEntry(z.uuid().parse(params.id), true)),
     },
     '/files/folders': {
       GET: () => library.folders(),
@@ -49,8 +48,7 @@ export function createFileHandlers(
     '/files/folders/:id': {
       PATCH: ({ params, body }) =>
         library.updateFolder(z.uuid().parse(params.id), UpdateFileFolderSchema.parse(body)),
-      DELETE: async ({ params }) =>
-        notifyEntries(await library.trashFolder(z.uuid().parse(params.id))),
+      DELETE: async ({ params }) => void (await library.trashFolder(z.uuid().parse(params.id))),
     },
     '/files/workspace': {
       GET: ({ query }) => library.workspaceBinding(z.string().min(1).parse(query.sessionId)),
@@ -66,8 +64,4 @@ export function createFileHandlers(
       GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),
     },
   };
-}
-
-function notifyEntries(ids: readonly string[]) {
-  publishDataApiChanges(ids.map((id) => `/files/entries/${id}`));
 }

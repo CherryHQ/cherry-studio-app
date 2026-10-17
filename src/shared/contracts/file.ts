@@ -42,8 +42,6 @@ export type PreparedFile = ResolvedFile & {
 };
 
 export interface FileModule {
-  /** Subscribe to committed managed-file creates, rewrites, deletions, and discards. */
-  subscribeChanges(listener: (entryId: FileEntryId) => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
   /** Reuse a workspace file or copy an explicitly attached outside version into it. */

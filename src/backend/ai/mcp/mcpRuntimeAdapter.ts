@@ -493,7 +493,7 @@ function timeoutError(): McpRuntimeToolError {
  * reading the body, or this boundary may time out before invoke() settles; neither proves
  * the service did nothing.
  */
-function incompleteCallError(call: {
+export function incompleteCallError(call: {
   cancelled: boolean;
   effect: McpExecutableToolDescriptor['effect'];
   sent: boolean;
@@ -505,8 +505,7 @@ function incompleteCallError(call: {
     return new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
   }
   if (call.effect === 'write') return unknownWriteError();
-  // The user stopped a call whose effect the server never declared; the stop is what happened.
-  if (call.cancelled && !call.timedOut) return cancelledError();
+  // Cancellation stops local waiting; an undeclared remote effect may already have happened.
   return new McpRuntimeToolError(
     'mcp_tool_outcome_unknown',
     'The MCP tool call did not complete, so its outcome is unknown. Retry only if repeating it is harmless; otherwise check the service first.',

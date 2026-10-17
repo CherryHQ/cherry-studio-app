@@ -556,6 +556,7 @@ export class DurableAgentHost implements AgentProtocol {
           // Schema-validated parts are plain JSON; their interface types lack index signatures.
           userParts: plan.userParts as unknown as RuntimeJsonValue[],
           inferenceSnapshot: plan.inferenceSnapshot,
+          workspaceFolderId: plan.workspaceFolderId ?? null,
           referencedFileEntryIds: [...plan.resources.inputFiles.keys()],
           hasHistoryBeforeActiveTurn: plan.hasMessages,
         },
@@ -964,6 +965,7 @@ export class DurableAgentHost implements AgentProtocol {
           },
           await this.conversations.resourceFileEntryIds(identity.sessionId),
           signal,
+          facts.workspaceFolderId,
         );
         plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
         for (const part of turn.parts)
