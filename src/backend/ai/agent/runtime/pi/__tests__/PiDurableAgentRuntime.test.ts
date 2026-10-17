@@ -6,7 +6,7 @@ import { streamSimple as streamCompletions } from '@earendil-works/pi-ai/api/ope
 import { streamSimple as streamResponses } from '@earendil-works/pi-ai/api/openai-responses';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
-import { getCurrentSystemPrompt } from '@earendil-works/pi-ai/utils/transcript';
+import { getCurrentSystemPrompt, getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
 import {
   AgentDoc,
   createRegistry,
@@ -35,7 +35,7 @@ import type {
 import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
-import { piSubmissionMetadata } from '../piDurableProjection';
+import { piSubmissionMetadata, piToolBlueprint } from '../piDurableProjection';
 import { PiDurableRuntime } from '../PiDurableRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
@@ -182,10 +182,23 @@ describe('Persistent Agent facade', () => {
   test('migrates an unfinished v1 conversation across midnight without resetting loaded instructions', async () => {
     const state = fixture();
     const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+    const tools: RuntimeTool[] = [
+      {
+        ref: { source: 'builtin', capabilityId: 'find_skills' },
+        providerName: 'find_skills',
+        displayName: 'Find skills',
+        description: 'Find available skills.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'auto',
+        execute: async () => {
+          throw new Error('Recovery must not replay tools.');
+        },
+      },
+    ];
     const instructions = buildAgentSystemPrompt({
       agentInstructions: 'Help.',
       appLanguage: 'en-US',
-      tools: [],
+      tools,
     });
     const legacyInstructions = instructions.replace(
       '\n\n## Response Language\n',
@@ -214,12 +227,13 @@ describe('Persistent Agent facade', () => {
           version: 1,
           instructions: legacyInstructions,
           initialInstructions: [initial],
+          tools: tools.map(piToolBlueprint),
         },
         initialInstructions: [initial],
       });
       // Seed a persisted run without scheduling it, as if the previous process closed before prepare.
       const submission = input('unfinished');
-      const metadata = piSubmissionMetadata(submission, []);
+      const metadata = piSubmissionMetadata(submission, tools);
       const submissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
         kind: 'cherry.submission',
         version: 1,
@@ -311,6 +325,9 @@ describe('Persistent Agent facade', () => {
         expect(prompt).not.toContain('2026-12-31');
         expect(prompt).toContain(initial.text);
         expect(prompt).toContain(loaded.text);
+        expect(getCurrentTools(state.requests[0]!.messages).map((tool) => tool.name)).toContain(
+          'find_skills',
+        );
       } finally {
         await observation.unsubscribe();
       }
