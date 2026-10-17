@@ -62,6 +62,15 @@ and a stable WebView source prevent status writes from reloading the page.
 
 - Warning/error summaries: timestamp, module, fixed message templates and allowlisted error facts.
   Arbitrary messages, stacks, causes and nested payloads are excluded before writing to disk.
+- Startup metadata: JS entry, bootstrap, host/service phases, database open/configuration/migrations/
+  seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
+  minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
+  durations; service phase promotions retain the service, requiring service and old/new phases.
+  `startupStartedAt` identifies the JS launch by wall time; `jsEntryStartMs` and `elapsedMs` locate
+  each event on the monotonic clock. Available React Native startup/runtime/bundle-entry milestones
+  are sampled from `performance.rnStartupTiming`, relative to `performance.timeOrigin`. Missing
+  native milestones remain absent; JS events alone do not measure the OS's entire launch interval.
+  No preference values, database paths, translated names or route parameters are recorded.
 - Model and MCP request metadata from the existing `TraceStorageService`: correlation identifiers,
   operation, timing, outcome, status/error codes and plugin authorization steps. Capture runs
   during ordinary use; there is no developer-mode setting or separate Agent event recorder.
@@ -85,8 +94,15 @@ existing [Sentry integration](../../../frontend/appShell/observability/README.md
 ## Storage and collection
 
 The process-owned logger and JS exception/rejection observer are installed before router imports.
-They preserve React Native's existing handlers and persist only projected warning/error metadata.
+They preserve React Native's existing handlers and persist projected warning/error metadata plus
+the fixed `Startup` / `Startup stage` info event. Other info logs remain excluded. Startup events
+use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
+Startup events retain separate records without repetition aggregation, preserving retry timings.
+They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
+the buffer limit, or on explicit flush. Warning/error writes first drain preceding startup events
+in the same append, so fatal exceptions remain synchronous. File inspection and history pruning
+start with the first flush, outside the ordinary startup logging call path.
 The first matching error is written immediately. Within a 30-second window, repeated records with
 matching level/module/template and stable error/context facts are summarized. Request/turn/message
 ids, elapsed time, token totals and cumulative storage counters do not split a group; summaries omit
@@ -94,8 +110,9 @@ those per-occurrence values. `repetition.count` counts **additional** occurrence
 and last timestamps; add the separately written first record when counting the complete burst.
 At most 64 groups are retained in memory, and pending counts are written before a group is evicted.
 Fatal exceptions bypass aggregation. Summaries flush on a timer, backgrounding, writer replacement,
-and submission. An abrupt process exit can lose pending repeat counts, but not the already
-written first occurrence. Collection limits are upper bounds, not a guarantee of seven days of history.
+and submission; these flushes also drain pending startup events. An abrupt process exit can lose
+pending startup events and repeat counts, but not the already written first error occurrence.
+Collection limits are upper bounds, not a guarantee of seven days of history.
 
 Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Flushes append to
 the current file, rotating at 1 MiB or a UTC day boundary instead of creating a file per request

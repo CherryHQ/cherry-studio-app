@@ -55,6 +55,7 @@ import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import { BackupError } from '@/shared/contracts/backup';
+import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -267,9 +268,9 @@ export function createAppBootstrapRuntime(
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }
-        await application.install(host);
+        await measureStartupStage('startup.host', () => application.install(host));
         await initializeAppRuntime(services);
-        await initializeSkills();
+        await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();
         try {
           cleanupStorageAfterBoot();
