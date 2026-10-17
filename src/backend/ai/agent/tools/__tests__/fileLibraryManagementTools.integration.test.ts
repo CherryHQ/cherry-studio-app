@@ -1,10 +1,10 @@
 import type { SQLInputValue } from 'node:sqlite';
 
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { createServiceTestDatabase } from '@/backend/data/serviceTestDatabase';
-import { subscribeFileChanges } from '@/backend/services/file/fileStorage';
 import { TrashRuntime } from '@/backend/services/trash';
 
 import type { RuntimeTool, RuntimeToolCall } from '../../runtime';
@@ -180,7 +180,7 @@ describe('Agent file-library management', () => {
       code: 'NOT_FOUND',
     });
     const changed = jest.fn();
-    const unsubscribe = subscribeFileChanges(changed);
+    const unsubscribe = subscribeDataApiChanges(changed);
     try {
       const trashed = await call('library_trash_item', { kind: 'file', id: id(1) });
       expect(trashed).toEqual({
@@ -188,7 +188,17 @@ describe('Agent file-library management', () => {
         artifacts: [],
       });
       expect(await entries.findAvailableByIds([id(1), id(2)])).toEqual([]);
-      expect(changed.mock.calls.flat()).toEqual(expect.arrayContaining([id(1), id(2)]));
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(changed).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `/files/entries/${id(1)}`,
+          `/files/entries/${id(2)}`,
+          '/files/library',
+          '/files/history',
+          '/trash',
+          '/trash/summary',
+        ]),
+      );
       const trash = await call('library_list_trash', {});
       expect(trash.value).toMatchObject({
         items: [{ kind: 'file', id: id(1), name: 'Notes.md' }],
@@ -197,7 +207,17 @@ describe('Agent file-library management', () => {
       changed.mockClear();
       await call('library_restore_item', { kind: 'file', id: id(1) });
       expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2), id(1)]);
-      expect(changed.mock.calls.flat()).toEqual(expect.arrayContaining([id(1), id(2)]));
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(changed).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `/files/entries/${id(1)}`,
+          `/files/entries/${id(2)}`,
+          '/files/library',
+          '/files/history',
+          '/trash',
+          '/trash/summary',
+        ]),
+      );
       expect((await call('library_list_trash', {})).value).toEqual({ items: [], nextCursor: null });
     } finally {
       unsubscribe();

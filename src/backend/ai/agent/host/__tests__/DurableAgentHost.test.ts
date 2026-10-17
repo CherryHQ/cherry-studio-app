@@ -260,6 +260,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
         referencedFileEntryIds: [],
         hasHistoryBeforeActiveTurn: false,
         inferenceSnapshot,
+        workspaceFolderId: workspaceFolderId ?? null,
       },
     };
     copies.set(sessionId, { revision: 0, turns: [turn] });
@@ -487,6 +488,86 @@ describe('durable tool diagnostics', () => {
       await state.host.close();
     }
   });
+
+  test.each(['bound', 'unbound'] as const)(
+    'preserves an admitted %s workspace through rebinding and host suspension',
+    async (binding) => {
+      const originalFolderId = binding === 'bound' ? uuid() : null;
+      const nextFolderId = uuid();
+      let interrupt!: (reason: Error) => void | Promise<void>;
+      const getTools = jest.fn(async () => []);
+      const resolveTools = jest.fn(async () => ({ tools: [], pluginGuides: [] }));
+      const writeToolOutput = jest.fn(
+        async (): Promise<RuntimeArtifact> => ({
+          ref: { kind: 'managed-file', fileEntryId: uuid() },
+          name: 'result.csv',
+          mediaType: 'text/plain',
+          kind: 'created',
+        }),
+      );
+      const state = fixture({
+        executionLease: (onInterrupt) => {
+          interrupt = onInterrupt;
+          return { release() {} };
+        },
+        tools: { getTools },
+        runtimeTools: { resolve: resolveTools },
+        writeToolOutput,
+      });
+      state.conversations.watchWork = async () => ({ active: true, unsubscribe: async () => {} });
+      await state.host.initialize();
+      try {
+        await state.host.startSession({
+          sessionId: state.sessionId,
+          agentId: state.agentId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Write a CSV' }],
+          ...(originalFolderId ? { workspaceFolderId: originalFolderId } : {}),
+        });
+        const turn = state.copies.get(state.sessionId)!.turns[0]!;
+        expect(turn.metadata.workspaceFolderId).toBe(originalFolderId);
+        const getSession = state.store.getSession.bind(state.store);
+        jest.spyOn(state.store, 'getSession').mockImplementation(async (id) => {
+          const session = await getSession(id);
+          return session ? { ...session, workspaceFolderId: nextFolderId } : null;
+        });
+        await interrupt(new Error('Background window expired'));
+        await state.host.resumeSuspended();
+        const signal = new AbortController().signal;
+        await state.execution()!.writeToolOutput!(
+          turn.identity,
+          { name: 'result.csv', data: 'a,b' },
+          signal,
+        );
+        expect(writeToolOutput).toHaveBeenLastCalledWith(
+          { name: 'result.csv', data: 'a,b', folderId: originalFolderId },
+          signal,
+        );
+        expect(getTools).toHaveBeenLastCalledWith(
+          expect.objectContaining({ workspaceFolderId: originalFolderId }),
+        );
+        expect(resolveTools).toHaveBeenLastCalledWith(
+          state.agentId,
+          expect.any(Function),
+          signal,
+          originalFolderId,
+        );
+        state.emit({ ...turn, status: 'completed' });
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Write in the new workspace' }],
+        });
+        expect(state.copies.get(state.sessionId)!.turns.at(-1)!.metadata.workspaceFolderId).toBe(
+          nextFolderId,
+        );
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
 
   test('records returned installation errors without changing execution failure policy', async () => {
     const { traces, records } = createTraceRecorder();

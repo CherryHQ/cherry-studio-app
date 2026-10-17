@@ -34,6 +34,16 @@ clean install.
 - Repeated declarations in a patched file under `node_modules` mean a patch was applied twice.
   Delete that package's directory under `node_modules/.pnpm` and run `pnpm install --force`.
 
+### Pi Dependency Upgrades
+
+The pinned Pi family includes scheduler/recovery behavior patches as well as mobile compatibility
+adaptations. Before upgrading or retiring a hunk, use the
+[maintained patch inventory](../references/agent/pi-durable-migration.md#maintained-patch-contracts).
+Record the upstream replacement, compare persisted-input and recovery semantics, and retain
+behavioral regressions alongside patch/hash guards. A patch that applies cleanly is not proof of
+compatibility. Follow [Testing And CI](./testing-and-ci.md) and the active task's authorization for
+checks and device acceptance; do not clear runtime storage to make an upgrade pass.
+
 ## Run
 
 Build and install the development client for your target platform. Choose one:

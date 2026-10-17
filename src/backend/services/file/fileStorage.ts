@@ -1,8 +1,7 @@
 import { Directory, File } from 'expo-file-system';
 
-import { Emitter } from '@/backend/core/lifecycle/event';
-import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
@@ -31,18 +30,6 @@ import { deleteFilePreview } from './filePreviewCache';
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
-const fileChanges = new Emitter<FileEntryId>();
-
-export function notifyFileChange(id: FileEntryId): void {
-  fileChanges.fire(id);
-  publishDataApiChanges(['/files/library', '/files/history', '/trash', '/trash/summary']);
-}
-
-/** All managed-file writers notify here, after their entry changes commit. */
-export function subscribeFileChanges(listener: (entryId: FileEntryId) => void): () => void {
-  const subscription = fileChanges.event(listener);
-  return () => subscription.dispose();
-}
 
 export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryProvenance } & (
     | {
@@ -214,7 +201,7 @@ export async function createInternalEntry(
       },
       signal,
     );
-    notifyFileChange(entry.id);
+    publishFileEntryChanges([entry.id]);
     return entry;
   } catch (error) {
     try {
@@ -284,7 +271,7 @@ export async function discardInternalEntries(
     } catch (error) {
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
-    notifyFileChange(entry.id);
+    publishFileEntryChanges([entry.id]);
   }
 }
 
@@ -333,7 +320,7 @@ export async function rewriteInternalTextEntry(
     }
     return entries.updateSizeTx(tx, entry.id, size);
   });
-  notifyFileChange(updatedEntry.id);
+  publishFileEntryChanges([updatedEntry.id]);
   return updatedEntry;
 }
 
@@ -362,6 +349,7 @@ export async function deleteInternalEntry(
   }
 
   deleteInternalEntryFiles(deletedEntry);
+  publishFileEntryChanges([deletedEntry.id]);
   return true;
 }
 
@@ -373,7 +361,6 @@ export function deleteInternalEntryFiles(entry: FileEntry): void {
   } catch (error) {
     logger.warn('Failed to unlink a deleted internal file', error as Error, { id: entry.id });
   }
-  notifyFileChange(entry.id);
 }
 
 export async function resolveFileEntry(

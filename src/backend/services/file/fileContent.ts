@@ -38,7 +38,6 @@ import {
   readFileUriBytes,
   resolveFileEntry,
   rewriteInternalTextEntry,
-  subscribeFileChanges,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
@@ -72,7 +71,6 @@ const createTextEntryInputSchema = z.strictObject({
  * factory to inject.
  */
 export const fileContent = {
-  subscribeChanges: subscribeFileChanges,
   editImage: editFileImage,
   async prepareWorkspaceAttachment(
     input: {

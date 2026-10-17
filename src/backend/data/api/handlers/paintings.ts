@@ -26,14 +26,13 @@ export function createPaintingHandlers(service: PaintingService): HandlersFor<Pa
       GET: ({ params }) => service.findByOutputFile(params.fileEntryId),
     },
     '/painting-boards/:id': {
-      // The board's paintings go with it, so their generations are drained first.
-      DELETE: async ({ params }) => {
-        const paintings = await service.listByBoard(params.id);
-        await application.get('ResourceScopeCoordinator').delete(
-          paintings.map(({ id }) => ({ id, kind: 'painting' })),
-          () => service.deleteBoard(params.id),
-        );
-      },
+      // Fence the parent before waiting; new children cannot escape a stale snapshot.
+      DELETE: ({ params }) =>
+        application
+          .get('ResourceScopeCoordinator')
+          .delete([{ id: params.id, kind: 'painting-board' }], () =>
+            service.deleteBoard(params.id),
+          ),
       GET: ({ params }) => service.getBoard(params.id),
       PATCH: ({ body, params }) => service.updateBoard(params.id, body),
     },

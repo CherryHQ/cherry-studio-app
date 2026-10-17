@@ -194,11 +194,41 @@ test('backup freeze prevents trash mutations and cleanup', async () => {
     expect(() => runtime.empty()).toThrow();
     expect(() => runtime.sweep()).toThrow();
     expect(() => runtime.restore('file', fileId)).toThrow();
+    expect(() => runtime.trashFile(fileId)).toThrow();
+    expect(() => runtime.trashFolder('folder')).toThrow();
     expect(mockFiles.has(bytes)).toBe(true);
   } finally {
     release();
   }
 });
+
+test.each(['file', 'folder'] as const)(
+  '%s deletion remains pending through commit and drains before shutdown',
+  async (kind) => {
+    const folder = await library.createFolder(null, 'Workspace');
+    await library.updateFile(fileId, { folderId: folder.id });
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocking = db.dbService.withWriteTx(async () => barrier);
+    const deleting = kind === 'file' ? runtime.trashFile(fileId) : runtime.trashFolder(folder.id);
+    expect(runtime.hasPendingStorageWork()).toBe(true);
+    const stopping = runtime._doStop();
+    try {
+      await Promise.resolve();
+      expect(runtime.isStopped).toBe(false);
+      await expect(runtime.trashFile(fileId)).rejects.toThrow('Trash runtime has stopped');
+      await expect(runtime.trashFolder(folder.id)).rejects.toThrow('Trash runtime has stopped');
+    } finally {
+      release();
+      await Promise.all([blocking, deleting, stopping]);
+    }
+    expect(runtime.isStopped).toBe(true);
+    expect(runtime.hasPendingStorageWork()).toBe(false);
+    expect(await files.findById(fileId)).toBeNull();
+  },
+);
 
 test('a queued deletion prevents a later draft edit from changing the recoverable bytes', async () => {
   sqlite.prepare("UPDATE file_entry SET provenance = 'generated' WHERE id = ?").run(fileId);

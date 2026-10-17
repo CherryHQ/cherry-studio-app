@@ -10,7 +10,7 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import { deleteInternalEntryFiles, notifyFileChange } from '@/backend/services/file/fileStorage';
+import { deleteInternalEntryFiles } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   TRASH_RETENTION_MS,
@@ -31,6 +31,7 @@ export class TrashRuntime extends BaseService {
   private pending = 0;
   private stopped = false;
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly trashWrites = new Set<Promise<unknown>>();
 
   constructor(dbService: DbService) {
     super();
@@ -49,28 +50,27 @@ export class TrashRuntime extends BaseService {
   }
 
   hasPendingStorageWork() {
-    return this.pending > 0;
+    return this.pending > 0 || this.trashWrites.size > 0;
   }
 
-  // Trashing only marks active rows, so unlike restore it needs no ordering against purges; its
-  // write transaction alone orders it with draft rewrites.
-
-  /** Trash the logical file that owns this version, with all its versions. */
-  async trashFile(entryId: FileEntryId, signal?: AbortSignal) {
-    const ids = await this.files.trashFileEntry(entryId, signal);
-    for (const id of ids) notifyFileChange(id);
-    return ids.length > 0;
+  /** Trash the logical file and retain ownership until its transaction settles. */
+  trashFile(entryId: FileEntryId, signal?: AbortSignal) {
+    return this.trackTrashWrite(async () => {
+      const ids = await this.files.trashFileEntry(entryId, signal);
+      return ids.length > 0;
+    });
   }
 
   /** Trash a folder with its active subtree. */
-  async trashFolder(id: string, signal?: AbortSignal) {
-    for (const entryId of await this.files.trashFolder(id, signal)) notifyFileChange(entryId);
+  trashFolder(id: string, signal?: AbortSignal) {
+    return this.trackTrashWrite(async () => {
+      await this.files.trashFolder(id, signal);
+    });
   }
 
   restore(kind: TrashKind, id: string, signal?: AbortSignal) {
     return this.mutate(async () => {
-      const restored = await this.entries.restore(kind, id, signal);
-      for (const entryId of restored) notifyFileChange(entryId);
+      await this.entries.restore(kind, id, signal);
     });
   }
 
@@ -109,7 +109,7 @@ export class TrashRuntime extends BaseService {
   }
 
   private requestSweep() {
-    if (this.stopped || storageMutationGate.isFrozen || this.pending) return;
+    if (this.stopped || storageMutationGate.isFrozen || this.hasPendingStorageWork()) return;
     void this.sweep().catch((error: unknown) =>
       logger.warn('Trash sweep deferred', error as Error),
     );
@@ -119,6 +119,16 @@ export class TrashRuntime extends BaseService {
     storageMutationGate.assertWritable();
     const entries = await this.files.purge(item);
     for (const entry of entries ?? []) deleteInternalEntryFiles(entry);
+  }
+
+  private trackTrashWrite<T>(operation: () => Promise<T>): Promise<T> {
+    storageMutationGate.assertWritable();
+    if (this.stopped) return Promise.reject(new Error('Trash runtime has stopped'));
+    // Admit the metadata transaction immediately so a later draft edit cannot
+    // overtake deletion. Byte cleanup still uses the serialized mutation tail.
+    const result = operation();
+    this.trashWrites.add(result);
+    return result.finally(() => this.trashWrites.delete(result));
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
@@ -139,6 +149,6 @@ export class TrashRuntime extends BaseService {
 
   protected override async onStop() {
     this.stopped = true;
-    await this.tail;
+    await Promise.allSettled([this.tail, ...this.trashWrites]);
   }
 }

@@ -9,8 +9,9 @@ boundaries around it.
 
 ## Backend Ownership
 
-- `AiService.ts` owns non-conversation generation, model listing, SDK-only probes, and image generation.
-  Text generation can report cumulative streamed text without creating a conversation turn.
+- `AiService.ts` owns model listing, SDK-only text/protocol probes and image generation.
+  Its explicit-model text API remains an AI SDK boundary; translation, session naming and chat
+  connection checks use the bound Runtime text generator instead.
   Callers supply an explicit `uniqueModelId`; it does not resolve Agent state or stream chat turns.
 - `generation/` is the private implementation of `AiService`: AI SDK request assembly, provider
   configuration, model listing, Vertex authentication, execution, and mobile usage capture. Nothing
@@ -41,8 +42,10 @@ boundaries around it.
   declares the system model support factory whose language answer comes from the bound Runtime.
   Anything used by only one execution path belongs to that path — AI SDK provider configuration
   lives in `generation/`, and the Pi language compatibility decision lives in `agent/runtime/pi/`.
-- `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
-  discovery used by MCP settings.
+- `mcp/` owns the mobile Streamable HTTP transport and pooled connection/catalog lifecycle.
+  `McpAppAccess` owns App source/permission/consent policy and `McpAppRuntime` owns live views.
+  Agent and App calls share the invocation path and uncertain-outcome classification. See
+  [MCP Ownership](../../../docs/references/runtime-ownership.md#mcp-ownership).
 - `observability/` owns local diagnostic traces: explicit span handles, bounded metadata capture,
   retained JSONL files, and stable snapshots for future diagnostic packages. `TraceStorageService`
   is lifecycle-owned and flushes on backgrounding and stop; the public instrumentation surface is
