@@ -614,6 +614,7 @@ describe('fileStorage', () => {
     const tx = {};
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
         ...entry,
         id,
@@ -642,6 +643,7 @@ describe('fileStorage', () => {
     const entry = { ...internalEntry(), provenance: 'generated' as const };
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
       withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
@@ -664,6 +666,7 @@ describe('fileStorage', () => {
     });
     const entries = {
       findByIdTx: jest.fn(() => lookup),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
       withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
@@ -693,6 +696,7 @@ describe('fileStorage', () => {
     const controller = new AbortController();
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => {
         expect(testState.writes).toHaveLength(1);
         controller.abort();
@@ -819,7 +823,15 @@ function createEntryStore() {
   const stored = new Map<string, FileEntry>();
   const create = jest.fn(
     async (values: Parameters<FileEntryService['create']>[0]): Promise<FileEntry> => {
-      const entry = FileEntrySchema.parse({ ...values, createdAt: 1, updatedAt: 1 });
+      const entry = FileEntrySchema.parse({
+        id: values.id,
+        filename: values.filename,
+        mediaType: values.mediaType,
+        size: values.size,
+        provenance: values.provenance,
+        createdAt: 1,
+        updatedAt: 1,
+      });
       stored.set(entry.id, entry);
       return entry;
     },

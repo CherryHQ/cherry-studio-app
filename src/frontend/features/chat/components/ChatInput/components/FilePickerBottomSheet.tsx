@@ -209,7 +209,7 @@ function FilePickerRow({
 
   return (
     <Pressable
-      accessibilityLabel={`${item.entry.filename}, ${description}`}
+      accessibilityLabel={`${item.libraryFile?.name ?? item.entry.filename}, ${description}`}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isAttached || isSelected, disabled: isDisabled }}
       className="min-h-18 flex-row items-center gap-4 py-3 active:opacity-60"
@@ -238,7 +238,7 @@ function FilePickerRow({
       </View>
       <View className="min-w-0 flex-1 gap-1">
         <Text className="text-base text-foreground" numberOfLines={2}>
-          {item.entry.filename}
+          {item.libraryFile?.name ?? item.entry.filename}
         </Text>
         <Text className="text-sm text-muted-foreground">{description}</Text>
       </View>

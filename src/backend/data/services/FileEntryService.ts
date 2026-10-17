@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import * as z from 'zod';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database, DbService } from '@/backend/data/db/DbService';
-import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
+import { type FileEntryRow, fileEntryTable, libraryFileTable } from '@/backend/data/db/schemas';
+import { monotonicUpdateTimestamp } from '@/backend/data/db/schemas/_columnHelpers';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { FileEntryListQuery } from '@/shared/data/api/schemas/files';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -16,6 +17,7 @@ import {
   SafeNameSchema,
 } from '@/shared/data/types/file';
 
+import { placeLibraryVersion, requireWorkspaceDestination } from './utils/fileLibraryRows';
 import { asNumericKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 
 const CreateFileEntrySchema = z.strictObject({
@@ -26,6 +28,12 @@ const CreateFileEntrySchema = z.strictObject({
   // transfer, a future import path) cannot silently inherit a wrong answer.
   provenance: FileEntryProvenanceSchema,
   size: z.int().nonnegative(),
+  folderId: z.uuid().nullable().optional(),
+  baseFileEntryId: z.uuid().optional(),
+  conflictIfExists: z.boolean().optional(),
+  workspaceFolderId: z.uuid().nullable().optional(),
+  baseUpdatedAt: z.int().nonnegative().optional(),
+  expectedName: SafeNameSchema.optional(),
 });
 
 export type CreateFileEntry = z.input<typeof CreateFileEntrySchema>;
@@ -69,7 +77,13 @@ export class FileEntryService {
     const rows = await this.db
       .select()
       .from(fileEntryTable)
-      .where(and(isNull(fileEntryTable.deletedAt), cursor ? keyset.where(cursor) : undefined))
+      .where(
+        and(
+          isNull(fileEntryTable.deletedAt),
+          sql`EXISTS (SELECT 1 FROM library_file WHERE current_entry_id = ${fileEntryTable.id} AND deleted_at IS NULL)`,
+          cursor ? keyset.where(cursor) : undefined,
+        ),
+      )
       .orderBy(...keyset.orderBy)
       .limit(limit + 1);
 
@@ -152,8 +166,27 @@ export class FileEntryService {
   }
 
   async createTx(tx: Database, values: CreateFileEntry): Promise<FileEntry> {
-    const parsed = CreateFileEntrySchema.parse(values);
-    const [row] = await tx.insert(fileEntryTable).values(parsed).returning();
+    const {
+      folderId,
+      baseFileEntryId,
+      conflictIfExists,
+      workspaceFolderId,
+      baseUpdatedAt,
+      expectedName,
+      ...parsed
+    } = CreateFileEntrySchema.parse(values);
+    const libraryFileId = await placeLibraryVersion(tx, parsed, {
+      folderId,
+      baseFileEntryId,
+      conflictIfExists,
+      workspaceFolderId,
+      baseUpdatedAt,
+      expectedName,
+    });
+    const [row] = await tx
+      .insert(fileEntryTable)
+      .values({ ...parsed, libraryFileId })
+      .returning();
     if (!row) throw new Error('Insert did not return a FileEntry');
     return rowToFileEntry(row);
   }
@@ -166,11 +199,40 @@ export class FileEntryService {
   async updateSizeTx(tx: Database, id: FileEntryId, size: number): Promise<FileEntry> {
     const [row] = await tx
       .update(fileEntryTable)
-      .set({ size: z.int().nonnegative().parse(size) })
+      .set({
+        size: z.int().nonnegative().parse(size),
+        updatedAt: monotonicUpdateTimestamp(fileEntryTable.updatedAt),
+      })
       .where(and(eq(fileEntryTable.id, id), isNull(fileEntryTable.deletedAt)))
       .returning();
     if (!row) throw DataApiErrorFactory.notFound('FileEntry', id);
     return rowToFileEntry(row);
+  }
+
+  async assertCurrentTx(
+    tx: Database,
+    id: FileEntryId,
+    placement: { workspaceFolderId?: string | null; baseUpdatedAt?: number } = {},
+  ): Promise<void> {
+    const [row] = await tx
+      .select({ file: libraryFileTable, entry: fileEntryTable })
+      .from(fileEntryTable)
+      .innerJoin(libraryFileTable, eq(fileEntryTable.libraryFileId, libraryFileTable.id))
+      .where(
+        and(
+          eq(fileEntryTable.id, id),
+          isNull(fileEntryTable.deletedAt),
+          isNull(libraryFileTable.deletedAt),
+        ),
+      );
+    if (!row) throw DataApiErrorFactory.notFound('FileEntry', id);
+    if (row.file.currentEntryId !== id)
+      throw DataApiErrorFactory.conflict(
+        'The file has a newer version. Read it again before editing.',
+      );
+    if (placement.baseUpdatedAt !== undefined && row.entry.updatedAt !== placement.baseUpdatedAt)
+      throw DataApiErrorFactory.conflict('The draft changed. Read it again before editing.');
+    await requireWorkspaceDestination(tx, row.file.folderId, placement.workspaceFolderId);
   }
 
   async delete(id: FileEntryId): Promise<void> {
@@ -178,12 +240,48 @@ export class FileEntryService {
   }
 
   async deleteTx(tx: Database, id: FileEntryId): Promise<void> {
-    await tx.delete(fileEntryTable).where(eq(fileEntryTable.id, id));
+    const [removed] = await tx.delete(fileEntryTable).where(eq(fileEntryTable.id, id)).returning();
+    if (!removed?.libraryFileId) return;
+    const [latest] = await tx
+      .select()
+      .from(fileEntryTable)
+      .where(eq(fileEntryTable.libraryFileId, removed.libraryFileId))
+      .orderBy(
+        sql`${fileEntryTable.deletedAt} IS NOT NULL`,
+        desc(fileEntryTable.createdAt),
+        desc(fileEntryTable.id),
+      )
+      .limit(1);
+    if (!latest)
+      await tx.delete(libraryFileTable).where(eq(libraryFileTable.id, removed.libraryFileId));
+    else {
+      const [file] = await tx
+        .select()
+        .from(libraryFileTable)
+        .where(eq(libraryFileTable.id, removed.libraryFileId));
+      if (file.currentEntryId !== id) return;
+      const deletedAt = file.deletedAt ?? latest.deletedAt;
+      await tx
+        .update(libraryFileTable)
+        .set({ currentEntryId: latest.id, deletedAt })
+        .where(eq(libraryFileTable.id, file.id));
+      // Cancellation can discard the current draft after the user trashed all older versions.
+      // Keep that remaining history recoverable without resurrecting deleted content.
+      if (deletedAt !== null)
+        await tx
+          .update(fileEntryTable)
+          .set({
+            deletedAt,
+            trashedWith: file.trashedWith ?? file.id,
+            updatedAt: sql`${fileEntryTable.updatedAt}`,
+          })
+          .where(eq(fileEntryTable.libraryFileId, file.id));
+    }
   }
 }
 
 // Active file DTOs omit deletion state; the trash exposes its own metadata projection.
-function rowToFileEntry(row: FileEntryRow): FileEntry {
+export function rowToFileEntry(row: FileEntryRow): FileEntry {
   return FileEntrySchema.parse({
     createdAt: row.createdAt,
     filename: row.filename,

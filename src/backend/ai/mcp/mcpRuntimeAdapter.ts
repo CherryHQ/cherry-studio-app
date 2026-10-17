@@ -57,6 +57,7 @@ export type McpExecutableToolDescriptor = {
 };
 
 export type McpRuntimeToolSelection = {
+  workspaceFolderId?: string | null;
   descriptor: McpExecutableToolDescriptor;
   approval: 'ask' | 'deny';
 };
@@ -77,6 +78,7 @@ export type McpToolInvocationCapability = {
   storeResult?(
     result: unknown,
     signal: AbortSignal,
+    workspaceFolderId?: string | null,
   ): Promise<{
     value: unknown;
     artifacts: import('../agent/runtime/types').RuntimeArtifact[];
@@ -178,7 +180,7 @@ export function createMcpRuntimeTools(
   const providerNames = new Set<string>();
   const invoke = capability.invoke.bind(capability);
 
-  return selections.map(({ approval, descriptor }) => {
+  return selections.map(({ approval, descriptor, workspaceFolderId }) => {
     if (
       !descriptor.serverId ||
       !descriptor.rawToolName ||
@@ -229,6 +231,7 @@ export function createMcpRuntimeTools(
       execute: (call) =>
         executeMcpRuntimeTool({
           call,
+          workspaceFolderId,
           app: descriptor.app,
           connectionKey: descriptor.connectionKey,
           pluginId: descriptor.pluginId,
@@ -249,6 +252,7 @@ export function createMcpRuntimeTools(
 }
 
 async function executeMcpRuntimeTool(input: {
+  workspaceFolderId?: string | null;
   connectionKey?: string;
   call: RuntimeToolCall;
   app?: McpExecutableToolDescriptor['app'];
@@ -305,7 +309,7 @@ async function executeMcpRuntimeTool(input: {
       artifacts: RuntimeToolResult['artifacts'];
       images?: McpRetainedImage[];
       fullTextFileEntryId?: string;
-    } = (await input.storeResult?.(remoteResult, call.signal)) ?? {
+    } = (await input.storeResult?.(remoteResult, call.signal, input.workspaceFolderId)) ?? {
       value: remoteResult,
       artifacts: [],
     };

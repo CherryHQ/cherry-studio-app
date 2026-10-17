@@ -15,6 +15,11 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  list_workspace: { iconName: 'fileText', titleKey: 'workspace.list' },
+  find_workspace_files: { iconName: 'fileText', titleKey: 'workspace.find' },
+  create_workspace_folder: { iconName: 'fileEdit', titleKey: 'library.folders.create' },
+  library_search_files: { iconName: 'fileText', titleKey: 'library.search' },
+  library_read_file: { iconName: 'fileText', titleKey: 'library.read' },
   create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },

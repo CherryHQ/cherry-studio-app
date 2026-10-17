@@ -451,6 +451,7 @@ describe('turn preparation', () => {
     const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
 
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      workspaceFolderId: null,
       agentId: AGENT.id,
       askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
@@ -486,6 +487,7 @@ describe('turn preparation', () => {
       AGENT_ID,
       expect.any(Function),
       expect.any(AbortSignal),
+      null,
     );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);

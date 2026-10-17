@@ -6,7 +6,6 @@ import {
   fileEntryUrl,
   filenameExtension,
   MediaTypeSchema,
-  nextVersionFilename,
   readableFilename,
 } from '../file';
 
@@ -51,30 +50,6 @@ describe('File contract', () => {
     const id = FileEntryIdSchema.parse(entryId);
 
     expect(fileEntryUrl(id)).toBe(`${FILE_ENTRY_URL_PREFIX}${entryId}`);
-  });
-});
-
-describe('nextVersionFilename', () => {
-  it.each([
-    ['report.html', 'report v2.html'],
-    ['report v2.html', 'report v3.html'],
-    ['report v9.html', 'report v10.html'],
-    ['notes', 'notes v2'],
-    ['archive.tar.gz', 'archive.tar v2.gz'],
-    ['plan v1.5.md', 'plan v1.5 v2.md'],
-  ])('versions %s as %s', (source, expected) => {
-    expect(nextVersionFilename(source)).toBe(expected);
-  });
-
-  it('skips names already in use', () => {
-    const taken = new Set(['report v2.html', 'report v3.html']);
-    expect(nextVersionFilename('report.html', taken)).toBe('report v4.html');
-  });
-
-  it('keeps the result within the filename limit', () => {
-    const name = nextVersionFilename(`${'a'.repeat(252)}.md`);
-    expect(name).toHaveLength(255);
-    expect(name.endsWith(' v2.md')).toBe(true);
   });
 });
 

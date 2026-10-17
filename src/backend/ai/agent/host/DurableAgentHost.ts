@@ -191,8 +191,11 @@ export class DurableAgentHost implements AgentProtocol {
       scriptSandbox: this.ports.scriptSandbox?.(),
       writeToolOutput: this.ports.writeToolOutput
         ? async (identity, output, signal) => {
-            await this.prepareExecution(identity, signal);
-            return this.ports.writeToolOutput!(output, signal);
+            const { plan } = await this.prepareExecution(identity, signal);
+            return this.ports.writeToolOutput!(
+              { ...output, folderId: plan.workspaceFolderId ?? null },
+              signal,
+            );
           }
         : undefined,
       onFailure: (error) => {
@@ -514,6 +517,7 @@ export class DurableAgentHost implements AgentProtocol {
         : await this.store.reserveInitialSubmission({
             ...reservation,
             agentId: plan.agent.id,
+            ...(plan.workspaceFolderId ? { workspaceFolderId: plan.workspaceFolderId } : {}),
           }));
     const { turnId } = reserved;
     const requestId = turnId;

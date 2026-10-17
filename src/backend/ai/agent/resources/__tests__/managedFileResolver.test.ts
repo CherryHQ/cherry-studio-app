@@ -32,6 +32,7 @@ describe('managedFileResolver', () => {
           AVAILABLE_ID,
           {
             fileEntryId: AVAILABLE_ID,
+            revision: 1,
             mediaType: 'image/png',
             name: 'available.png',
             size: 128,

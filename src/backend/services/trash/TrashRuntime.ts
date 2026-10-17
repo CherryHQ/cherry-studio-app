@@ -8,11 +8,15 @@ import {
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
-import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import { deleteInternalEntry, notifyFileChange } from '@/backend/services/file/fileStorage';
+import { deleteInternalEntryFiles, notifyFileChange } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { TRASH_RETENTION_MS, type TrashItem } from '@/shared/data/api/schemas/trash';
+import {
+  TRASH_RETENTION_MS,
+  type TrashItem,
+  type TrashKind,
+} from '@/shared/data/api/schemas/trash';
 
 const logger = loggerService.withContext('TrashRuntime');
 
@@ -22,7 +26,7 @@ const logger = loggerService.withContext('TrashRuntime');
 @AppStatePolicy('foreground-refresh')
 export class TrashRuntime extends BaseService {
   readonly entries: TrashService;
-  private readonly files: FileEntryService;
+  private readonly files: FileLibraryService;
   private pending = 0;
   private stopped = false;
   private tail: Promise<unknown> = Promise.resolve();
@@ -30,7 +34,7 @@ export class TrashRuntime extends BaseService {
   constructor(dbService: DbService) {
     super();
     this.entries = new TrashService(dbService);
-    this.files = new FileEntryService(dbService);
+    this.files = new FileLibraryService(dbService);
   }
 
   protected override onInit() {
@@ -47,16 +51,16 @@ export class TrashRuntime extends BaseService {
     return this.pending > 0;
   }
 
-  restore(id: string) {
+  restore(kind: TrashKind, id: string) {
     return this.mutate(async () => {
-      await this.entries.restore(id);
-      notifyFileChange(id);
+      const restored = await this.entries.restore(kind, id);
+      for (const entryId of restored) notifyFileChange(entryId);
     });
   }
 
-  delete(id: string) {
+  delete(kind: TrashKind, id: string) {
     return this.mutate(async () => {
-      await this.purge(await this.entries.get(id));
+      await this.purge(await this.entries.get(kind, id));
     });
   }
 
@@ -97,7 +101,8 @@ export class TrashRuntime extends BaseService {
 
   private async purge(item: TrashItem) {
     storageMutationGate.assertWritable();
-    await deleteInternalEntry(this.files, item.id, item.deletedAt);
+    const entries = await this.files.purge(item);
+    for (const entry of entries ?? []) deleteInternalEntryFiles(entry);
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {

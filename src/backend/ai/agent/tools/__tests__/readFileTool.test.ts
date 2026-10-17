@@ -421,7 +421,6 @@ describe('readFileTool', () => {
         start_line: expect.objectContaining({ type: 'integer' }),
         limit: expect.objectContaining({ type: 'integer' }),
       },
-      required: ['file_entry_id'],
       additionalProperties: false,
     });
     expect(schema).not.toMatchObject({

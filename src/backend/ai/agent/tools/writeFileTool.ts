@@ -2,7 +2,7 @@
  * `write_file`: the model saves text as a managed file.
  *
  * Bounded on purpose (docs/references/agent/agent-tools-and-resources.md): UTF-8
- * text only, one new entry per call, no path and no overwrite. The model names
+ * text only, workspace-relative paths, and checked version replacement. The model names
  * the file; where the bytes live is Cherry's business, so the result carries an
  * entry id rather than a URI.
  */
@@ -18,6 +18,7 @@ import {
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
+import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 export const WRITE_FILE_TOOL_NAME = 'write_file';
 
@@ -52,9 +53,22 @@ export const writeFileInputSchema = z.strictObject({
     .string()
     .trim()
     .min(1)
-    .max(255)
+    .max(4096)
     .describe(
-      'Display name including its extension, e.g. `report.md`. Not a path: it must not contain `/` or `\\`.',
+      'Filename, or relative path within the selected workspace, including its extension, e.g. Reports/report.md.',
+    ),
+  base_file_entry_id: z
+    .string()
+    .optional()
+    .describe(
+      'For an existing workspace path, the version id returned by the last read. Omit only when creating a new path.',
+    ),
+  base_revision: z
+    .int()
+    .nonnegative()
+    .optional()
+    .describe(
+      'For an existing path, the revision returned by read_file. This also detects changes to a draft within a turn.',
     ),
 });
 
@@ -71,12 +85,16 @@ export type WriteFileFiles = {
   ): Promise<FileEntry>;
 };
 
-export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
+export function createWriteFileTool(
+  files: WriteFileFiles,
+  access?: WorkspaceFileAccess,
+): RuntimeTool {
   return {
     ref: { source: 'builtin', capabilityId: WRITE_FILE_TOOL_NAME },
     providerName: WRITE_FILE_TOOL_NAME,
     displayName: 'Write file',
-    description: "Save UTF-8 text as a new file in the user's Cherry file library.",
+    description:
+      'Save UTF-8 text at a relative workspace path, or at the library root without a workspace. For an existing path supply base_file_entry_id and base_revision from the last read. A same-turn draft is rewritten; otherwise the path advances to a new version. Re-read after a conflict.',
     inputSchema: toRuntimeInputSchema(writeFileInputSchema),
     inputPreview: { textField: 'content', nameField: 'filename' },
     // The catalog overrides this from the resolved binding policy; the value
@@ -88,7 +106,10 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
         return invalid(`Invalid input: ${z.prettifyError(parsed.error)}`);
       }
 
-      const filename = normalizeFilename(parsed.data.filename);
+      const rawName = access?.folderId
+        ? parsed.data.filename.split('/').at(-1)!
+        : parsed.data.filename;
+      const filename = normalizeFilename(rawName);
       if (!filename) {
         return invalid(
           'Invalid filename: give a plain name with an extension, such as `report.md`, without path separators.',
@@ -111,31 +132,48 @@ export function createWriteFileTool(files: WriteFileFiles): RuntimeTool {
 
       // Storage checks again after async work and before committing the entry.
       signal.throwIfAborted();
-      const entry = await files.createTextEntry(
-        {
-          data: parsed.data.content,
-          mediaType: mediaTypeForFilename(filename),
-          name: filename,
-          provenance: 'generated',
-        },
-        signal,
-      );
+      const path =
+        parsed.data.filename.slice(0, parsed.data.filename.length - rawName.length) + filename;
+      const entry = access
+        ? await access.write(
+            {
+              data: parsed.data.content,
+              mediaType: mediaTypeForFilename(filename),
+              name: filename,
+              path,
+              baseFileEntryId: parsed.data.base_file_entry_id,
+              baseUpdatedAt: parsed.data.base_revision,
+            },
+            signal,
+          )
+        : await files.createTextEntry(
+            {
+              data: parsed.data.content,
+              mediaType: mediaTypeForFilename(filename),
+              name: filename,
+              provenance: 'generated',
+            },
+            signal,
+          );
 
       return {
         value: {
           status: 'created',
           fileEntryId: entry.id,
+          revision: entry.updatedAt,
           filename: entry.filename,
           size: entry.size,
         },
-        artifacts: [
-          {
-            ref: { kind: 'managed-file', fileEntryId: entry.id },
-            mediaType: entry.mediaType,
-            name: entry.filename,
-            kind: 'created',
-          },
-        ],
+        artifacts: access?.isDraft(entry.id)
+          ? []
+          : [
+              {
+                ref: { kind: 'managed-file', fileEntryId: entry.id },
+                mediaType: entry.mediaType,
+                name: entry.filename,
+                kind: 'created',
+              },
+            ],
       };
     },
   };
