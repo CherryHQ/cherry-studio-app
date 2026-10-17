@@ -58,7 +58,14 @@ function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMe
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
   navigation: MessageNavigation = {},
-  { settledOnly = false }: { settledOnly?: boolean } = {},
+  {
+    settledOnly = false,
+    prepareAround,
+  }: {
+    settledOnly?: boolean;
+    /** Runs before a window around a message is read, such as selecting its branch. */
+    prepareAround?: (messageId: string) => Promise<void>;
+  } = {},
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
   const { messageId, messageRequestId } = navigation;
@@ -83,6 +90,7 @@ export function useAgentMessageHistoryWindow(
       page.previousCursor ? { cursor: page.previousCursor, direction: 'newer' } : undefined,
     initialPageParam,
     queryFn: async ({ pageParam, signal }) => {
+      if (pageParam.aroundMessageId) await prepareAround?.(pageParam.aroundMessageId);
       const page = await apiClient.get(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
         {

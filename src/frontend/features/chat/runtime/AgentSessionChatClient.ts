@@ -304,6 +304,14 @@ export class AgentSessionChatClient {
     return session;
   }
 
+  /** Shows the branch containing `messageId`; work on other branches keeps running. */
+  async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView> {
+    const session = await this.protocol.selectMessage({ sessionId, messageId });
+    this.options.onSessionChanged?.(sessionId);
+    this.options.onTranscriptChanged?.(sessionId);
+    return session;
+  }
+
   /**
    * The removal reaches live state through the Session's own `turn.deleted`
    * event, so a caller that is already observing needs no separate reconcile.
@@ -426,13 +434,19 @@ export class AgentSessionChatClient {
     }
   }
 
-  async cancelTurn(sessionId: string): Promise<void> {
+  /** Stops the active turn, or only one of its parallel answers when `messageId` names it. */
+  async cancelTurn(sessionId: string, messageId?: string): Promise<void> {
     const entry = this.getEntry(sessionId);
     const turn = entry.state.activeTurn;
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
-      await this.protocol.cancelTurn({ sessionId, turnId: turn.id });
+      await this.protocol.cancelTurn({
+        sessionId,
+        turnId: turn.id,
+        ...(messageId ? { messageId } : {}),
+      });
       return;
     }
+    if (messageId) return;
     // Stop before the Host reserves the turn: the pending call rejects with
     // CANCELLED, whether it is still observing here or preparing in the Host.
     if (entry.submission && !entry.submission.isCancelled) {
@@ -521,9 +535,12 @@ export class AgentSessionChatClient {
     if (snapshot.activeUserMessage) {
       entry.liveMessages.set(snapshot.activeUserMessage.id, snapshot.activeUserMessage);
     }
-    if (snapshot.streamingMessage) {
-      entry.liveMessages.set(snapshot.streamingMessage.id, snapshot.streamingMessage);
-      this.installToolInputPreviews(snapshot.streamingMessage);
+    for (const message of [
+      ...(snapshot.streamingMessage ? [snapshot.streamingMessage] : []),
+      ...(snapshot.additionalStreamingMessages ?? []),
+    ]) {
+      entry.liveMessages.set(message.id, message);
+      this.installToolInputPreviews(message);
     }
     this.updateState(entry, {
       isSubmitting: entry.state.isSubmitting,
@@ -660,7 +677,9 @@ export class AgentSessionChatClient {
         return;
       }
       case 'message.finalized':
-        entry.pendingTextDeltas.clear();
+        // Parallel answers keep streaming: drop only this message's unflushed text.
+        for (const [key, pending] of entry.pendingTextDeltas)
+          if (pending.messageId === event.message.id) entry.pendingTextDeltas.delete(key);
         entry.liveMessages.set(event.message.id, event.message);
         this.toolInputPreviews.clearMessage(event.message.id);
         this.commitLiveMessages(entry);

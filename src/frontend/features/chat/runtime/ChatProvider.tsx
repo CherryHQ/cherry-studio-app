@@ -23,6 +23,7 @@ import {
   type AgentQueuedInput,
   type AgentSubmitMessageInput,
 } from '@/shared/contracts/agent';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import {
   type AgentChatDraftHandoff,
@@ -274,15 +275,30 @@ export function useAgentChatControls(input: {
     return cancellationSessionId ? client.cancelTurn(cancellationSessionId) : Promise.resolve();
   }, [client, cancellationSessionId]);
   const send = useCallback(
-    async (
-      message: Omit<AgentSubmitMessageInput, 'sessionId' | 'userMessageId' | 'assistantMessageId'>,
-    ) => {
+    async ({
+      additionalModelIds,
+      ...message
+    }: Omit<
+      AgentSubmitMessageInput,
+      'sessionId' | 'userMessageId' | 'assistantMessageId' | 'additionalReplies'
+    > & {
+      /** Further models answering the same question in parallel. */
+      additionalModelIds?: readonly UniqueModelId[];
+    }) => {
       const isCurrent = () => mountedComposerKeyRef.current === composerKey;
       const request = {
         ...message,
         sessionId: sessionId ?? uuidv7(),
         userMessageId: uuidv7(),
         assistantMessageId: uuidv7(),
+        ...(additionalModelIds?.length
+          ? {
+              additionalReplies: additionalModelIds.map((modelId) => ({
+                modelId,
+                assistantMessageId: uuidv7(),
+              })),
+            }
+          : {}),
       };
       const pending: PendingChatSend = {
         sessionId: request.sessionId,

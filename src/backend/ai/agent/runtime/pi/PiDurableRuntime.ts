@@ -187,6 +187,39 @@ export class PiDurableRuntime {
     return this.requireConversation(id, context);
   }
 
+  /**
+   * Atomic native history fork into a new working copy. The fork sees the source's
+   * entries through `at` and starts with its own agent, options and instructions.
+   */
+  async forkConversation(
+    source: string,
+    seed: PiConversationSeed & { at: EntryId },
+    context: Context = BACKGROUND_CONTEXT,
+  ): Promise<Conversation> {
+    const parent = await this.requireSession(source, context);
+    const id = await this.harness.commit(async (tx) => {
+      const binding = await tx.doc(SessionBinding, seed.sessionId, seed.revision);
+      assertWorkingCopy(binding);
+      if (binding.conversationId !== null) throw new Error('The working copy already exists.');
+      if (seed.configuration) await tx.doc(Configuration, seed.sessionId, seed.configuration);
+      const conversation = await tx.forkConversation(parent.id, seed.at, {
+        ownership: { kind: 'ownerless' },
+      });
+      await configure(tx, conversation.id, seed.agent);
+      const instructions = await tx.doc(ToolInstructions, conversation.id);
+      instructions.sections = [...(seed.initialInstructions ?? [])];
+      const provider = await tx.doc(ProviderDoc, conversation.id);
+      await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? {}));
+      const resources = await tx.doc(ResourceScope, conversation.id);
+      resources.fileEntryIds = [
+        ...new Set([...resources.fileEntryIds, ...(seed.resourceFileEntryIds ?? [])]),
+      ];
+      binding.conversationId = conversation.id;
+      return conversation.id;
+    }, context);
+    return this.requireConversation(id, context);
+  }
+
   async conversation(
     sessionId: string,
     context: Context = BACKGROUND_CONTEXT,

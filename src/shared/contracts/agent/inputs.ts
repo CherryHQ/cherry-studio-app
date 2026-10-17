@@ -18,14 +18,36 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+/**
+ * Further models answering the same question in parallel. Each answer is an
+ * ordinary assistant message in the same multi-model sibling group.
+ */
+export const AgentAdditionalReplySchema = z.strictObject({
+  modelId: UniqueModelIdSchema,
+  assistantMessageId: z.string().min(1),
+});
+/** Models answering one question in parallel, the composer's own model included. */
+export const MAX_PARALLEL_ANSWERS = 8;
+export const AgentAdditionalRepliesSchema = z
+  .array(AgentAdditionalReplySchema)
+  .min(1)
+  .max(MAX_PARALLEL_ANSWERS - 1);
+export type AgentAdditionalReply = z.infer<typeof AgentAdditionalReplySchema>;
+
 export const AgentSubmitMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   /** Allocated once by the send action and reused for display and persistence. */
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
+  /**
+   * Answer the new question continues from. Defaults to the Session's selected
+   * leaf; naming an earlier answer opens a new branch below it.
+   */
+  parentMessageId: z.string().min(1).optional(),
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
@@ -49,6 +71,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
@@ -84,6 +107,12 @@ export const AgentDeleteTurnInputSchema = z.strictObject({
   turnId: z.string().min(1),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
+/** Moves the Session's selected leaf into the branch that contains `messageId`. */
+export const AgentSelectMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+export type AgentSelectMessageInput = z.infer<typeof AgentSelectMessageInputSchema>;
 export const AgentRetryMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
@@ -92,6 +121,8 @@ export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** Stops one answer of a multi-model question; omitted, every answer of the turn stops. */
+  messageId: z.string().min(1).optional(),
 });
 export const AgentCancelSubmissionInputSchema = z.strictObject({
   sessionId: z.string().min(1),

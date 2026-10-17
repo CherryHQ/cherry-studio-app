@@ -170,7 +170,14 @@ export function createSystemCapabilitySource(
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
-        return policy && tool ? [bindTurnResources({ ...tool, ...policy }, resources)] : [];
+        return policy && tool
+          ? [
+              bindTurnResources(
+                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                resources,
+              ),
+            ]
+          : [];
       });
     },
   };

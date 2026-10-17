@@ -132,6 +132,7 @@ function protocolWithObservation(
     deleteTurn: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
+    selectMessage: jest.fn(),
     getSessionStatus: jest.fn<
       ReturnType<AgentProtocol['getSessionStatus']>,
       Parameters<AgentProtocol['getSessionStatus']>

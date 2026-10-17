@@ -83,8 +83,8 @@ describe('AssistantMessageToolbar', () => {
     expect(mockRetryMessage).not.toHaveBeenCalled();
   });
 
-  test('offers no retry on an answer that is not the latest, leaving branching as the way back', () => {
-    renderToolbar(createMessage('success', 'Older answer'), 'assistant-2');
+  test('offers no retry on an answer whose source cannot regenerate it', () => {
+    renderToolbar(createMessage('success', 'Older answer'), false);
 
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-retry' })).toHaveLength(0);
     expect(
@@ -216,12 +216,11 @@ describe('AssistantMessageToolbar', () => {
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-delete' })).toHaveLength(0);
   });
 
-  function renderToolbar(message: MessageListItem, retryableMessageId = 'assistant-1') {
+  function renderToolbar(message: MessageListItem, retryable = true) {
     act(() => {
       renderer = create(
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
-          retryableMessageId={retryableMessageId}
           onShare={jest.fn()}
           snapshot={{
             title: 'Arithmetic drills',
@@ -237,13 +236,17 @@ describe('AssistantMessageToolbar', () => {
               completeness: 'complete',
               display: message,
               actions: {
-                retry: {
-                  availability: { state: 'enabled' },
-                  execute: async () => {
-                    await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
-                    return { state: 'applied', value: undefined };
-                  },
-                },
+                ...(retryable
+                  ? {
+                      retry: {
+                        availability: { state: 'enabled' as const },
+                        execute: async () => {
+                          await mockRetryMessage({ sessionId: 'session-1', messageId: message.id });
+                          return { state: 'applied' as const, value: undefined };
+                        },
+                      },
+                    }
+                  : {}),
                 fork: {
                   availability: { state: 'enabled' },
                   execute: async ({ title }) => {

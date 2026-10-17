@@ -62,6 +62,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     retryMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
+    selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
   };
   const sessionChanged = jest.fn();
   const projector = createLocalConversationProjector({

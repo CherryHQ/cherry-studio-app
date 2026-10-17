@@ -93,7 +93,6 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
-      retryableMessageId="assistant-1"
       onShare={mockShare}
       snapshot={{
         title: mockSourceTitle ?? '',

@@ -85,6 +85,13 @@
       "when": 1792074154479,
       "tag": "0011_file_library",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792209852632,
+      "tag": "0012_message_tree",
+      "breakpoints": true
     }
   ]
 }

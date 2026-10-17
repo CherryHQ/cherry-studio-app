@@ -9,6 +9,7 @@ import type {
 import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
 import { createLocalConversationProjector } from './localConversationView';
+import { messagesThrough, selectedLiveMessages, withLiveSiblings } from './messageTreeView';
 import {
   type MessageNavigation,
   useAgentMessageHistoryWindow,
@@ -23,15 +24,25 @@ export function useLocalConversation(input: {
   sessionId?: string;
   title?: string;
   navigation?: MessageNavigation;
+  /** Shows the history only through this message, while a continuation from it is prepared. */
+  throughMessageId?: string;
 }): {
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
   messageWindow: ConversationHistoryView;
 } {
-  const { sessionId, title, navigation } = input;
+  const { sessionId, title, navigation, throughMessageId } = input;
   const { client, onSessionChanged } = useAgentChatClient();
   const state = useAgentSessionState(sessionId);
-  const window = useAgentMessageHistoryWindow(sessionId, navigation, { settledOnly: true });
+  const window = useAgentMessageHistoryWindow(sessionId, navigation, {
+    settledOnly: true,
+    // A search result may sit on another branch; show that branch before reading around it.
+    prepareAround: sessionId
+      ? async (messageId) => {
+          await client.selectMessage(sessionId, messageId);
+        }
+      : undefined,
+  });
   const [owned, setOwned] = useState(() => ({
     sessionId,
     client,
@@ -69,13 +80,19 @@ export function useLocalConversation(input: {
     () => (projector ? projector.history(history, state) : []),
     [projector, history, state],
   );
+  const activeNodeId = state.snapshot?.session.activeNodeId;
+  const branchMessages = useMemo(() => {
+    const live = selectedLiveMessages(state.liveMessages, history, activeNodeId);
+    return messagesThrough(
+      withLiveSiblings(mergeAgentMessageViews(history, live), state.liveMessages),
+      throughMessageId,
+    );
+  }, [activeNodeId, history, state.liveMessages, throughMessageId]);
   const messages = useMemo(() => {
     if (!projector) return [];
     if (window.hasNewerMessages) return historyMessages;
-    return mergeAgentMessageViews(history, state.liveMessages).map((message) =>
-      projector.message(message, state),
-    );
-  }, [projector, history, historyMessages, state, window.hasNewerMessages]);
+    return branchMessages.map((message) => projector.message(message, state));
+  }, [projector, branchMessages, historyMessages, state, window.hasNewerMessages]);
   const messageWindow = useMemo<ConversationHistoryView>(
     () => ({ ...window, messages: historyMessages }),
     [window, historyMessages],

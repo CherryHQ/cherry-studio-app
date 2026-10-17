@@ -648,7 +648,7 @@ describe('turn preparation', () => {
     expect(plan.workflowInstructions).toEqual([
       { key: 'workflow:plugin:feishu-1', text: expect.stringContaining('Read before edits.') },
     ]);
-    expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID);
+    expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
   });
 
   test('freezes the web policy only for an Agent that may use the web', async () => {
@@ -734,7 +734,11 @@ describe('turn preparation', () => {
 
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
 
-    expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(SESSION_ID, 'turn-anchor');
+    expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(
+      SESSION_ID,
+      'turn-anchor',
+      undefined,
+    );
     expect(plan.runtimeContextCheckpoint).toBeNull();
     expect(plan.history).toEqual(history);
     expect(plan.hasMessages).toBe(true);

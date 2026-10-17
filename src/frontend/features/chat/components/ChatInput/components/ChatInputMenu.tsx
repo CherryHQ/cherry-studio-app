@@ -1,4 +1,5 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import LayersIcon from '@cherrystudio/app-icons/icons/layers';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
@@ -16,12 +17,15 @@ const logger = loggerService.withContext('ChatInputMenu');
 /** Chat owns the library destination; the shared menu still owns media handoffs. */
 export function ChatInputMenu({
   media = 'all',
+  onPickModels,
   onPickPlugins,
   onPickPrompts,
   onPickSkills,
   triggerRef,
 }: {
   media?: 'all' | 'images';
+  /** Chooses several models to answer the next question in parallel. */
+  onPickModels?: () => void;
   onPickPlugins?: () => void;
   onPickPrompts?: () => void;
   onPickSkills?: () => void;
@@ -50,6 +54,14 @@ export function ChatInputMenu({
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}
       >
+        {onPickModels ? (
+          <Composer.Menu.Item
+            icon={<LayersIcon className="size-5 text-foreground" />}
+            label={t('chat.multiModel.title')}
+            onPress={onPickModels}
+            testID="chat-composer-multi-model"
+          />
+        ) : null}
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}

@@ -374,7 +374,7 @@ describe('durable capability boundary', () => {
       ).items;
       expect(entries.filter(PiCodemodeArtifactsEntry.is)).toHaveLength(1);
       const turn = projectPiTurn({
-        sessionId: 'session',
+        lane: { sessionId: 'session', slot: 0 },
         entries,
         record: {
           id: 1,
@@ -673,7 +673,7 @@ describe('durable capability boundary', () => {
         expect(content).not.toContain('UI_ONLY');
         expect(content).not.toContain('mcpApp');
         const turn = projectPiTurn({
-          sessionId: 'session',
+          lane: { sessionId: 'session', slot: 0 },
           entries: JSON.parse(JSON.stringify(entries)),
           record: {
             id: 1,

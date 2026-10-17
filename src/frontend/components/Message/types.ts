@@ -24,6 +24,16 @@ export type MessageListItem = Readonly<{
   imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
+  /**
+   * Alternatives at this message's branch point, oldest first and including this
+   * message, when there is more than one: other answers to the same question, or
+   * other questions continuing the same answer.
+   */
+  branch?: Readonly<{
+    siblings: readonly Readonly<{ id: string; status: MessageStatus; modelId: string | null }>[];
+    /** The alternatives are one question's parallel multi-model answers. */
+    multiModel: boolean;
+  }>;
   role: 'assistant' | 'system' | 'user';
   /** Feature-owned timeline event synthesized beside persisted messages. */
   systemEvent?: Readonly<{

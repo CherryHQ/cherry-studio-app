@@ -37,11 +37,13 @@ type ModelPickerListProps = {
   loadingText?: string;
   onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
+  selectedModelIds?: readonly string[];
   showBadges?: boolean;
 };
 
 type ModelPickerListExtraData = {
   selectedModelId: string | null;
+  selectedModelIds?: readonly string[];
 };
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
@@ -54,6 +56,7 @@ export function ModelPickerList({
   loadingText,
   onSelect,
   selectedModelId,
+  selectedModelIds,
   showBadges = false,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
@@ -114,8 +117,8 @@ export function ModelPickerList({
     [],
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
-    () => ({ selectedModelId }),
-    [selectedModelId],
+    () => ({ selectedModelId, selectedModelIds }),
+    [selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -125,7 +128,11 @@ export function ModelPickerList({
 
       return (
         <ModelPickerRow
-          isSelected={item.item.modelId === extraData.selectedModelId}
+          isSelected={
+            extraData.selectedModelIds
+              ? extraData.selectedModelIds.includes(item.item.modelId)
+              : item.item.modelId === extraData.selectedModelId
+          }
           item={item.item}
           onSelect={onSelect}
           showBadges={showBadges}
