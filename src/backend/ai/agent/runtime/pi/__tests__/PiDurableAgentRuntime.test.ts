@@ -208,7 +208,6 @@ describe('Persistent Agent facade', () => {
           model: { provider: reference.providerId, modelId: reference.modelId },
           extensions: [{ name: 'cherry.capabilities:session' }],
           instructions: legacyInstructions,
-          modelTools: { add: ['find_skills'] },
         },
         configuration: {
           ...seed.configuration,
@@ -229,6 +228,8 @@ describe('Persistent Agent facade', () => {
         initial: (value) => ({ value }),
       });
       await conversation.commit(async (tx) => {
+        const agent = await tx.doc(AgentDoc, conversation.id);
+        agent.modelTools = { add: ['find_skills'] };
         const live = await tx.doc(LiveDoc, conversation.id);
         const retained = await tx.doc(ToolInstructions, conversation.id);
         retained.sections.push(loaded);
