@@ -16,7 +16,7 @@ export const officeText = (max: number) =>
 
 const imageSchema = z.strictObject({
   file_entry_id: FileEntryIdSchema.describe(
-    'An image already available to this turn. PNG or JPEG only.',
+    'A managed image from the conversation or selected workspace. PNG or JPEG only.',
   ),
   width_px: z.number().int().min(1).max(1600),
   height_px: z.number().int().min(1).max(1600),

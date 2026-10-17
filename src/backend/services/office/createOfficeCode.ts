@@ -1,4 +1,8 @@
-import { officeZipLibraryCode, officeXmlLibraryCode } from './officePackageCode';
+import {
+  officeTextEncoderCode,
+  officeZipLibraryCode,
+  officeXmlLibraryCode,
+} from './officePackageCode';
 import type { OfficeImage, OfficeRequest } from './officeSpec';
 import docx from './vendor/docx.json';
 import pptxgenjs from './vendor/pptxgenjs.json';
@@ -22,13 +26,6 @@ globalThis.setTimeout = (callback, delay = 0, ...args) => {
   return setImmediate(callback, ...args);
 };
 globalThis.clearTimeout = clearImmediate;
-// docx pre-encodes XML to keep JSZip from splitting UTF-16 surrogate pairs between chunks.
-globalThis.TextEncoder = class {
-  encode(value = '') {
-    const utf8 = unescape(encodeURIComponent(String(value).replace(/[\ud800-\udfff]/gu, '\ufffd')));
-    return Uint8Array.from(utf8, character => character.charCodeAt(0));
-  }
-};
 `;
 
 const documentRenderer = String.raw`
@@ -131,8 +128,8 @@ export function createOfficeCode(
     library = `(() => {\n${xlsx.code}\nreturn XLSX; })()`;
     renderer = `${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${workbookRenderer}`;
   } else {
-    library = `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn pptxgen; })()`;
+    library = `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn PptxGenJS; })()`;
     renderer = presentationRenderer;
   }
-  return `${scheduler}\nconst library = ${library};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderer}`;
+  return `${officeTextEncoderCode}\n${scheduler}\nconst library = ${library};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderer}`;
 }

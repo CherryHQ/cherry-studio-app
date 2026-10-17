@@ -5,7 +5,11 @@ import type { JsSandbox } from '@/backend/services/jsSandbox';
 
 import { OfficeGenerationError, OFFICE_MAX_OUTPUT_BYTES } from './generateOfficeFile';
 import type { OfficeTransformRequest } from './officeEditSpec';
-import { officeZipLibraryCode, officeXmlLibraryCode } from './officePackageCode';
+import {
+  officeTextEncoderCode,
+  officeZipLibraryCode,
+  officeXmlLibraryCode,
+} from './officePackageCode';
 import { officeTransformCode } from './officeTransformCode';
 
 export function createOfficeTransformCode(
@@ -13,6 +17,7 @@ export function createOfficeTransformCode(
   request: OfficeTransformRequest,
 ): string {
   return `
+${officeTextEncoderCode}
 ${officeZipLibraryCode}
 ${officeXmlLibraryCode}
 const request = ${JSON.stringify(request)};

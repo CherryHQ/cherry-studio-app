@@ -1,7 +1,7 @@
 # Office Files
 
 This module generates, inspects, reads and patches Office files in the native QuickJS compute pool.
-The Agent adapters in `ai/agent/tools/officeTools.ts` and `officeEditTools.ts` own turn authorization,
+The Agent adapters in `ai/agent/tools/officeTools.ts` and `officeEditTools.ts` own file authorization,
 source hashes, image resolution and managed-file publication. Computations receive validated data
 and bytes; they have no file or network port. The existing preview WebView supplies selections.
 There is no new native module, remote service, job queue or model-written renderer.
@@ -60,6 +60,10 @@ this implementation neither retries that unsafe write automatically nor claims e
 Storage uses `createBytesEntry` with generated provenance, returning only managed metadata and
 artifacts. Cancellation before publication produces no successful artifact; storage owns rollback
 if its write or entry transaction fails. Successful outputs receive the catalog's usual turn grant.
+Source and image reads use `WorkspaceFileAccess.resolveRead`: conversation grants or live membership
+in the selected workspace are required on every call. Outputs are separate logical files in the
+selected workspace, or at the library root when no workspace is selected. Storage receives the
+workspace placement for validation at commit; edits do not advance the source file's version.
 
 ## Desktop Reference And Patch Contract
 
@@ -126,7 +130,9 @@ rechecked during this change. No install scripts or Node module resolution are u
 | @xmldom/xmldom | 0.9.12 | Published `lib/*.js`, loaded by a closed app-owned module map |
 
 The private job supplies zero-delay scheduling through QuickJS microtasks for JSZip and a UTF-8
-encoder for docx. It does not add globals or capabilities to the model's VM. Generation layout is
+encoder for generation and package patching. The encoder preserves supplementary Unicode characters
+when the pinned libraries run without native `TextEncoder`. It does not add globals or capabilities
+to the model's VM. Generation layout is
 app-owned, but ZIP timestamps and library-generated identifiers are not byte-deterministic.
 
 ## Remaining Acceptance
@@ -134,11 +140,11 @@ app-owned, but ZIP timestamps and library-generated identifiers are not byte-det
 This is a bounded mobile implementation, not feature parity with unrestricted Desktop Python
 scripting or a full Office editor.
 
-The implementation includes tests for serialized inputs, generated package content, scalar types,
-image embedding, cancellation, storage rollback, discovery and child-artifact retention. These
-tests have not been run for this implementation. The JavaScript adapter fixture uses a minimal
+Focused tests pass for serialized inputs, generated package content, scalar types, Unicode,
+image embedding, workspace authorization and placement, cancellation, storage rollback, discovery,
+selection references and child-artifact retention. The JavaScript adapter fixture uses a minimal
 Node VM; it is not evidence of QuickJS compatibility, native budgets, Office visual fidelity, or
-device behavior. Before release, run the focused suites and both-platform native acceptance, open
+device behavior. Before release, complete both-platform native acceptance, open
 the files in Office without a repair prompt, and check preview, text wrapping and editability.
 
 Template filling, arbitrary layouts, formula authoring/evaluation, chart authoring, editing Word

@@ -15,7 +15,7 @@ belong to every turn on a client that can execute them, and `ask_user_question` 
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
 Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
-Tests and native/Office acceptance remain pending; see [Office Tools Design](./office-tools-design.md)
+Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
 and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
 tool still diverges from carry an **As-built** note.
 
@@ -517,6 +517,9 @@ receipt rules. Generation uses the separate compute pool, not the waiting Code M
 The [Office service](../../../src/backend/services/office/README.md) defines the supported elements,
 libraries and limits. Inputs contain only structured data and authorized managed image references.
 Results contain managed file metadata and a created artifact, never package bytes or device paths.
+Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
+membership in the selected workspace. Outputs are separate logical files in that workspace, or at
+the library root when none is selected; storage validates workspace placement at commit.
 `inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
 returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
 source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
@@ -532,7 +535,8 @@ Desktop's workflow. Selection references do not widen file grants.
 
 Template filling, formula authoring/evaluation, arbitrary layouts, image changes in existing files
 and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
-pending; no runtime compatibility or preservation claims have been established by executed tests.
+pending. Executed tests cover package contents and supported patch preservation in a Node VM;
+they do not establish native QuickJS compatibility or Office visual fidelity.
 
 ### Managed File Write And Edit
 

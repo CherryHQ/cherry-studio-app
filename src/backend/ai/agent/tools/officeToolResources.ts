@@ -1,5 +1,6 @@
 import { createConcurrencySlots } from '@/backend/utils/concurrencySlots';
 import type { FileEntry, FileEntryProvenance } from '@/shared/data/types/file';
+import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
 import type { ManagedFileResolver } from '../resources/managedFileResolver';
 
@@ -8,7 +9,12 @@ export type OfficeFiles = Pick<
   'readImage' | 'readAsBytes' | 'resolveAvailable'
 > & {
   createBytesEntry(
-    input: { data: Uint8Array; mediaType: string; name: string; provenance: FileEntryProvenance },
+    input: FilePlacement & {
+      data: Uint8Array;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
     signal: AbortSignal,
   ): Promise<FileEntry>;
 };

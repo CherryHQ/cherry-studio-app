@@ -113,7 +113,7 @@ describe('Office generation contracts', () => {
                 cell: 'C4',
                 width_px: 100,
                 height_px: 60,
-                alt: '中文 & photo',
+                alt: '中文 😀 & photo',
               },
             ],
           },
@@ -128,7 +128,7 @@ describe('Office generation contracts', () => {
     const drawing = strFromU8(files['xl/drawings/drawing1.xml']);
     expect(drawing).toContain('<xdr:col>2</xdr:col>');
     expect(drawing).toContain('<xdr:row>3</xdr:row>');
-    expect(drawing).toContain('中文 &amp; photo');
+    expect(drawing).toContain('中文 😀 &amp; photo');
     expect(files['xl/media/image1.png']).toEqual(new Uint8Array(Buffer.from(IMAGE.data, 'base64')));
     expect(strFromU8(files['[Content_Types].xml'])).toContain('image/png');
   });

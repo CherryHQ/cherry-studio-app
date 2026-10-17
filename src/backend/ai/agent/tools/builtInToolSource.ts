@@ -278,7 +278,7 @@ function createCatalog(
             readAsBytes: managedFileResolver.readAsBytes,
             resolveAvailable: managedFileResolver.resolveAvailable,
           },
-          resources,
+          fileAccess,
         )
       : []),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.

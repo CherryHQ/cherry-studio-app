@@ -12,13 +12,13 @@ import {
   type OfficeFormat,
   type OfficeTransformRequest,
 } from '@/backend/services/office';
-import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 import { sha256Hex } from '@/shared/utils/sha256';
 
-import type { TurnFileScope } from '../resources/managedFileResolver';
 import type { RuntimeTool } from '../runtime';
 import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
+import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const definitions = [
   {
@@ -50,14 +50,14 @@ const definitions = [
 export function createOfficeEditTools(
   sandbox: JsSandbox,
   files: OfficeFiles,
-  scope: TurnFileScope,
+  access: Pick<WorkspaceFileAccess, 'resolveRead' | 'folderId'>,
 ): RuntimeTool[] {
   return definitions.map(
     (definition): RuntimeTool => ({
       ref: { source: 'builtin', capabilityId: definition.name },
       providerName: definition.name,
       displayName: definition.title,
-      description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids available to this turn; no paths or URLs.`,
+      description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace.`,
       inputSchema: toRuntimeInputSchema(definition.schema),
       approval: 'auto',
       async execute({ input, signal }) {
@@ -70,14 +70,12 @@ export function createOfficeEditTools(
           return invalid('Office input exceeds 128 KiB.');
         const parsed = definition.schema.safeParse(input);
         if (!parsed.success) return invalid(z.prettifyError(parsed.error));
-        const sourceId = parsed.data.file_entry_id;
-        if (!scope.fileEntryIds.has(sourceId))
-          return invalid('This file is not available to this turn. Attach it first.');
+        const sourceId = await access.resolveRead(parsed.data);
         const release = await officeOperationSlots.acquire(signal);
         let settled = true,
           finished = false;
         try {
-          const facts = await files.resolveAvailable([FileEntryIdSchema.parse(sourceId)]);
+          const facts = await files.resolveAvailable([sourceId]);
           signal.throwIfAborted();
           const fact = facts.get(sourceId);
           if (
@@ -144,6 +142,8 @@ export function createOfficeEditTools(
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
+              folderId: access.folderId,
+              workspaceFolderId: access.folderId,
             },
             signal,
           );

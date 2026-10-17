@@ -1,6 +1,16 @@
 import fflate from './vendor/fflate.json';
 import xmldom from './vendor/xmldom.json';
 
+export const officeTextEncoderCode = String.raw`
+// QuickJS has no TextEncoder; use one UTF-8 encoder for generation and package patching.
+globalThis.TextEncoder = class {
+  encode(value = '') {
+    const utf8 = unescape(encodeURIComponent(String(value).replace(/[\ud800-\udfff]/gu, '\ufffd')));
+    return Uint8Array.from(utf8, character => character.charCodeAt(0));
+  }
+};
+`;
+
 /** Only these pinned, app-owned modules can resolve inside a compute job. */
 export const officeZipLibraryCode = `
 const zip = (() => { const module = { exports: {} }; const exports = module.exports;

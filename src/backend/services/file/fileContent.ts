@@ -171,7 +171,12 @@ export const fileContent = {
   },
   /** Generated binary artifacts use the same write/commit/rollback boundary as text files. */
   createBytesEntry: async (
-    input: { data: Uint8Array; mediaType: string; name: string; provenance: FileEntryProvenance },
+    input: FilePlacement & {
+      data: Uint8Array;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
     signal?: AbortSignal,
   ) => {
     const validated = createBytesEntryInputSchema.parse(input);

@@ -15,11 +15,11 @@ import {
 } from '@/backend/services/office';
 import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
-import type { TurnFileScope } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
 import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
+import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const formats: readonly {
   format: OfficeFormat;
@@ -53,14 +53,14 @@ const formats: readonly {
 export function createOfficeTools(
   sandbox: JsSandbox,
   files: OfficeFiles,
-  scope: TurnFileScope,
+  access: Pick<WorkspaceFileAccess, 'resolveRead' | 'folderId'>,
 ): RuntimeTool[] {
   const generators = formats.map(
     ({ format, name, displayName, description }): RuntimeTool => ({
       ref: { source: 'builtin', capabilityId: name },
       providerName: name,
       displayName,
-      description: `${description} Saves a new managed file and returns its attachment; never overwrites or edits a source. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension.`,
+      description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments or the selected workspace. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension.`,
       inputSchema: toRuntimeInputSchema(officeInputSchemas[format]),
       approval: 'auto',
       async execute({ input, signal }) {
@@ -80,11 +80,11 @@ export function createOfficeTools(
         // The schema and format are selected together from officeInputSchemas above.
         const request = { ...parsed.data, filename, format } as OfficeRequest;
         const ids = officeImageIds(request);
-        if (ids.some((id) => !scope.fileEntryIds.has(id)))
-          return invalid(
-            'An image is not available to this turn. Use a file_entry_id from an attachment or tool result.',
-          );
         if (ids.length > 8) return invalid('Use at most 8 distinct images per file.');
+        for (const id of ids) {
+          signal.throwIfAborted();
+          await access.resolveRead({ file_entry_id: id });
+        }
 
         const release = await officeOperationSlots.acquire(signal);
         let nativeSettled = true;
@@ -109,6 +109,8 @@ export function createOfficeTools(
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
+              folderId: access.folderId,
+              workspaceFolderId: access.folderId,
             },
             signal,
           );
@@ -140,7 +142,7 @@ export function createOfficeTools(
       },
     }),
   );
-  return [...generators, ...createOfficeEditTools(sandbox, files, scope)];
+  return [...generators, ...createOfficeEditTools(sandbox, files, access)];
 }
 
 async function readImages(

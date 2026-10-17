@@ -1,7 +1,7 @@
 # Office Tools Design
 
 > Status: bounded generation, inspection, reading, editing and preview-selection handoff are
-> implemented in source; tests and native/Office acceptance remain pending. All eight tools require
+> implemented in source; focused tests pass and native/Office acceptance remains pending. All eight tools require
 > native QuickJS. Template filling and advanced content remain design. The exact implemented
 > contract is in the [Office service](../../../src/backend/services/office/README.md) and
 > [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
@@ -148,7 +148,7 @@ rendering belongs inside a bounded tool operation, with its own cancellation and
 
 ## Pi Durable Integration
 
-Use the existing Pi Durable 1.2 integration and its public extension/task APIs. The
+Use the existing Pi Durable 1.3 integration and its public extension/task APIs. The
 [migration reference](./pi-durable-migration.md) owns persistence and recovery behavior; Office does
 not introduce another harness, conversation engine, tool dispatcher, or long-term document store.
 
@@ -219,7 +219,8 @@ silently starts the Office writes again.
 
 ## Inspection And Safe Editing
 
-1. Resolve an active source through the current turn's controlled file scope. Detect its actual
+1. Resolve an active source through a conversation file grant or live membership in the selected
+   workspace, using `WorkspaceFileAccess.resolveRead`. Detect its actual
    format and reject unsupported packages before building an editable representation.
 2. Inspect bounded structure and return compatibility findings with format-specific selectors.
    A selector identifies a paragraph, cell/range, or slide shape in that exact source revision;
@@ -260,14 +261,17 @@ requests filling remain a later contract decision; no executable template langua
   Start reads and local copy-producing writes with `auto`, matching text-file creation; this grants
   neither external publishing nor provider quota. Any later cloud processing or export tool needs
   its own policy.
-- All Office source, template, and asset reads require a turn file grant. Do not inherit
-  `edit_file`'s separate policy that knowing an active file id permits editing outside that scope.
-  Recheck availability and authorization at execution, not just during inspection.
+- All Office source and asset reads use the same `WorkspaceFileAccess.resolveRead` boundary as
+  `read_file`: a conversation grant or live membership in the selected workspace is required.
+  An id or selection reference alone never grants access. Recheck availability and authorization
+  at execution, not just during inspection.
 - Generation returns `created`; edits and template filling return `derived`. Import validated bytes
   through the existing managed-file boundary with generated provenance. The tool result carries
   the file id, readable name, format, size, bounded warnings, and a source id where applicable.
   The Host admits artifacts and persists their transcript references through its existing path.
-- Retain originals and use the existing readable version-name convention for derived entries.
+- Retain originals and publish separate logical files in the selected workspace, or at the library
+  root without a workspace. Pass workspace placement through the storage commit boundary. The
+  library resolves filename collisions; Office copies do not advance the original's version.
   Export and sharing remain explicit user actions through the existing file surface.
 - Bound compressed input, actual expanded ZIP bytes, individual XML parts, entry count, nesting,
   operation count, content windows, images, output size, and execution time. Existing extraction
@@ -345,4 +349,6 @@ Device and desktop Office acceptance should cover both mobile platforms, the exi
 opening output without a repair prompt, editable text/cells/shapes, and formulas recalculated by the
 target application where required. Follow [Testing And CI](../../guides/testing-and-ci.md) and
 [Parallel Device Testing](../../guides/parallel-device-testing.md).
-Generation tests are written but have not been run. No builds or device/Office acceptance are claimed.
+Focused generation, editing, workspace/file-publication, selection and Pi adapter tests pass.
+Their Node VM fixtures do not establish native QuickJS compatibility or Office visual fidelity.
+No builds or device/Office acceptance are claimed.

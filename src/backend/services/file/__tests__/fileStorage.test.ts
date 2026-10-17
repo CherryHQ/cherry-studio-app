@@ -420,13 +420,21 @@ describe('fileStorage', () => {
 
   test('stores binary output verbatim with the declared Office type and generated provenance', async () => {
     const data = new Uint8Array([80, 75, 3, 4, 0, 255]);
-    const entry = await createInternalEntry(createEntryStore(), {
+    const entries = createEntryStore();
+    const folderId = '00000000-0000-7000-8000-000000000009';
+    const entry = await createInternalEntry(entries, {
       source: 'bytes',
       data,
       name: 'report.docx',
       provenance: 'generated',
       mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      folderId,
+      workspaceFolderId: folderId,
     });
+    expect(entries.create).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId, workspaceFolderId: folderId }),
+      undefined,
+    );
     expect(entry).toMatchObject({
       filename: 'report.docx',
       size: data.length,

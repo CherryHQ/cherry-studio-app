@@ -327,7 +327,10 @@ last resort for a caller that supplies no name, not a naming scheme.
 
 Office generation and editing tools publish bytes through `fileContent.createBytesEntry` and the
 `'bytes'` source of `createInternalEntry`, with generated provenance and the usual artifact envelope.
-They read managed sources and images only after checking turn file grants.
+They read managed sources and images through `WorkspaceFileAccess.resolveRead`, requiring a
+conversation grant or live membership in the selected workspace. Outputs are separate logical files
+in that workspace, or at the library root without a workspace. Storage validates the workspace
+placement at commit; Office edits do not advance the source logical file's version.
 [Office inspection and editing tools](../agent/office-tools-design.md) bind edits to a source SHA-256,
 preserve imported sources and publish new derived entries. Preview selections carry structural
 anchors and excerpts for the Agent; references alone never grant access. The file library is also the
