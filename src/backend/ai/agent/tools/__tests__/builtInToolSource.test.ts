@@ -54,6 +54,12 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
@@ -61,15 +67,24 @@ describe('createSystemCapabilitySource', () => {
 
   test('requires explicit approval for every file-library call and honors the group deny-list', async () => {
     const tools = await resolve({});
-    for (const name of ['library_search_files', 'library_read_file']) {
+    const names = [
+      'library_search_files',
+      'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
+    ];
+    for (const name of names) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
         approval: 'ask',
         autoApprovalEligible: false,
       });
     }
     const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
-    expect(capabilityIds(disabled)).not.toContain('library_search_files');
-    expect(capabilityIds(disabled)).not.toContain('library_read_file');
+    for (const name of names) expect(capabilityIds(disabled)).not.toContain(name);
     expect(capabilityIds(disabled)).toContain('read_file');
   });
 
@@ -119,6 +134,12 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
@@ -164,6 +185,12 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
@@ -612,6 +639,7 @@ const SERVICES: SystemCapabilityServices = {
   model: { getById: jest.fn() },
   preference: { get: jest.fn() },
   webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
+  trash: { entries: { list: jest.fn() }, restore: jest.fn() },
 } as unknown as SystemCapabilityServices;
 
 function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDependencies> {

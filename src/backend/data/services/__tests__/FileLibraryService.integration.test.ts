@@ -176,4 +176,22 @@ describe('file library folders, versions, and workspaces', () => {
     });
     validate();
   });
+
+  it('rolls back a cancelled folder deletion before committing any of its subtree', async () => {
+    const folder = await library.createFolder(null, 'Reports');
+    await create(1, { folderId: folder.id });
+    await create(2, { baseFileEntryId: id(1) });
+    const controller = new AbortController();
+    database.sqlite.function('cancel_tool', () => {
+      controller.abort();
+      return null;
+    });
+    database.sqlite.exec(`CREATE TRIGGER cancel_folder_mutation BEFORE UPDATE ON file_folder
+      BEGIN SELECT cancel_tool(); END;`);
+
+    await expect(library.trashFolder(folder.id, controller.signal)).rejects.toThrow();
+    expect(await library.folder(folder.id)).toMatchObject({ deletedAt: null });
+    expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2), id(1)]);
+    validate();
+  });
 });

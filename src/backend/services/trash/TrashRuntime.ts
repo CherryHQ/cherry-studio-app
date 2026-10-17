@@ -51,9 +51,9 @@ export class TrashRuntime extends BaseService {
     return this.pending > 0;
   }
 
-  restore(kind: TrashKind, id: string) {
+  restore(kind: TrashKind, id: string, signal?: AbortSignal) {
     return this.mutate(async () => {
-      const restored = await this.entries.restore(kind, id);
+      const restored = await this.entries.restore(kind, id, signal);
       for (const entryId of restored) notifyFileChange(entryId);
     });
   }

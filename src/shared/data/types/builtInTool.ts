@@ -35,6 +35,12 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'create_workspace_folder',
   'library_search_files',
   'library_read_file',
+  'library_list_folders',
+  'library_move_item',
+  'library_rename_item',
+  'library_trash_item',
+  'library_list_trash',
+  'library_restore_item',
   'generate_image',
   'health_get_summary',
   'health_list_workouts',
@@ -190,6 +196,30 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     autoApprovalEligible: false,
   }),
   describe('library_read_file', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_list_folders', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_move_item', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_rename_item', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_trash_item', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_list_trash', 'ask', {
+    agentCapability: 'fileLibrary',
+    autoApprovalEligible: false,
+  }),
+  describe('library_restore_item', 'ask', {
     agentCapability: 'fileLibrary',
     autoApprovalEligible: false,
   }),

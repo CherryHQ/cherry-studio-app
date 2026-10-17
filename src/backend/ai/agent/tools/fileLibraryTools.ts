@@ -49,6 +49,7 @@ export function createFileLibraryTools(
           value: {
             files: result.items.map((file) => ({
               fileId: file.id,
+              folderId: file.folderId,
               fileEntryId: file.entry.id,
               revision: file.entry.updatedAt,
               name: file.name,
@@ -165,7 +166,7 @@ export function createFileLibraryTools(
       displayName: 'Create workspace folder',
       approval: 'auto',
       description:
-        'Create one folder at a relative workspace path. Its parent must exist. The Agent cannot move, delete, restore or purge library items.',
+        'Create one folder at a relative workspace path. Its parent must exist. For library-wide moves, renames, trashing and restoration, use the separately approved library tools.',
       inputSchema: toRuntimeInputSchema(createFolderSchema),
       async execute({ input }): Promise<RuntimeToolResult> {
         const parsed = createFolderSchema.parse(input);

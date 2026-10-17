@@ -132,6 +132,11 @@ export class FileLibraryService {
     return row?.file ?? null;
   }
 
+  /** Look up the stable logical identity, independently of its current version. */
+  file(id: string): Promise<LibraryFileRow> {
+    return this.requireFile(this.db, id);
+  }
+
   async history(id: string): Promise<FileEntry[]> {
     const file = await this.requireFile(this.db, id);
     await requireActiveFolder(this.db, file.folderId);
@@ -165,7 +170,11 @@ export class FileLibraryService {
     });
   }
 
-  updateFolder(id: string, changes: { name?: string; parentId?: string | null }): Promise<void> {
+  updateFolder(
+    id: string,
+    changes: { name?: string; parentId?: string | null },
+    signal?: AbortSignal,
+  ): Promise<void> {
     return this.mutate(async (tx) => {
       const [folder] = await tx
         .select()
@@ -184,10 +193,14 @@ export class FileLibraryService {
         .update(fileFolderTable)
         .set({ parentId, name, nameKey: fileNameKey(name) })
         .where(eq(fileFolderTable.id, id));
-    });
+    }, signal);
   }
 
-  updateFile(id: string, changes: { name?: string; folderId?: string | null }): Promise<void> {
+  updateFile(
+    id: string,
+    changes: { name?: string; folderId?: string | null },
+    signal?: AbortSignal,
+  ): Promise<void> {
     return this.mutate(async (tx) => {
       const file = await this.requireFile(tx, id);
       const folderId = changes.folderId === undefined ? file.folderId : changes.folderId;
@@ -200,7 +213,7 @@ export class FileLibraryService {
         .update(libraryFileTable)
         .set({ folderId, name, nameKey: fileNameKey(name) })
         .where(eq(libraryFileTable.id, id));
-    });
+    }, signal);
   }
 
   async workspace(sessionId: string): Promise<FileFolder | null> {
@@ -281,7 +294,7 @@ export class FileLibraryService {
     return { folderId: folder.id, name, file: file ?? null };
   }
 
-  trashFileEntry(entryId: string, versionOnly = false): Promise<string[]> {
+  trashFileEntry(entryId: string, versionOnly = false, signal?: AbortSignal): Promise<string[]> {
     return this.mutate(async (tx) => {
       const [entry] = await tx
         .select()
@@ -312,10 +325,10 @@ export class FileLibraryService {
         )
         .returning({ id: fileEntryTable.id });
       return rows.map((row) => row.id);
-    });
+    }, signal);
   }
 
-  trashFolder(id: string): Promise<string[]> {
+  trashFolder(id: string, signal?: AbortSignal): Promise<string[]> {
     return this.mutate(async (tx) => {
       await requireActiveFolder(tx, id);
       const ids = await this.descendants(tx, id, true);
@@ -346,10 +359,10 @@ export class FileLibraryService {
         )
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
   }
 
-  restore(kind: TrashKind, id: string): Promise<string[]> {
+  restore(kind: TrashKind, id: string, signal?: AbortSignal): Promise<string[]> {
     return this.mutate(async (tx) => {
       if (kind === 'folder') {
         const [folder] = await tx.select().from(fileFolderTable).where(eq(fileFolderTable.id, id));
@@ -435,7 +448,7 @@ export class FileLibraryService {
         .where(kind === 'version' ? eq(fileEntryTable.id, id) : eq(fileEntryTable.trashedWith, id))
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
   }
 
   /** Remove group ownership atomically, then return its blobs for best-effort cleanup. */
@@ -541,11 +554,19 @@ export class FileLibraryService {
     return [...ids];
   }
 
-  private async mutate<T>(operation: (tx: Database) => Promise<T>): Promise<T> {
+  private async mutate<T>(
+    operation: (tx: Database) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    signal?.throwIfAborted();
     storageMutationGate.assertWritable();
     const result = await this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
       storageMutationGate.assertWritable();
-      return operation(tx);
+      const value = await operation(tx);
+      // Abort before commit so a queued or in-flight tool mutation rolls back as one unit.
+      signal?.throwIfAborted();
+      return value;
     });
     publishDataApiChanges([
       '/files/library',

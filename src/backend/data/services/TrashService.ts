@@ -89,7 +89,7 @@ export class TrashService {
     );
   }
 
-  restore(kind: TrashKind, id: string) {
-    return new FileLibraryService(this.dbService).restore(kind, id);
+  restore(kind: TrashKind, id: string, signal?: AbortSignal) {
+    return new FileLibraryService(this.dbService).restore(kind, id, signal);
   }
 }

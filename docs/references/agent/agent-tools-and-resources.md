@@ -242,12 +242,31 @@ name search, and subfolder creation use `list_workspace`, `find_workspace_files`
 `create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
 live destination ancestry. Without a workspace, new outputs use the library root.
 
-The `fileLibrary` capability adds `library_search_files` and `library_read_file`, enabled by default
+The `fileLibrary` capability adds library search/read and management tools, enabled by default
 through the Agent's deny-list model. Every call, including pagination, uses `ask` with
 `autoApprovalEligible: false`; automatic approval cannot bypass consent. An approved read permits
 editing that source into a workspace copy during this turn and leaves the source unchanged. It does
-not grant `read_file` future outside-library access. The Agent has no delete, move, restore, or purge
-tool. `generate_image` still scopes input images to conversation references; outputs use the
+not grant `read_file` future outside-library access.
+
+`library_list_folders` searches active folder names or lists direct children, returning stable ids
+and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
+and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
+rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
+changes only its display name. The existing library service owns cycle prevention, active
+destinations, collision rules, transactions, and cache invalidation. Move results report any
+collision suffix selected by that service.
+
+`library_trash_item` moves a file with all versions or an active folder subtree into the existing
+30-day trash. `library_list_trash` pages recoverable files, folders, and individually deleted old
+versions; `library_restore_item` restores one group by its exact `kind` and `id`, through the
+host-owned `TrashRuntime`. Trashing and restoration notify file subscribers after commit. These
+tools work without a selected workspace and retain explicit approval even in automatic mode.
+Mutations recheck turn cancellation when their write transaction starts and before it commits;
+cancellation rolls back the whole change.
+The Agent cannot permanently purge items or empty the trash.
+
+`generate_image` still scopes input images to conversation references; outputs use the
 workspace, as do direct image generation and managed MCP result files. Code Mode calls these same
 authorized tools and has no filesystem of its own.
 
