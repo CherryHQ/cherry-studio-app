@@ -165,19 +165,30 @@ function FileLibraryScreenBody() {
               horizontal
               showsHorizontalScrollIndicator={false}
             >
-              <View className="flex-row items-center gap-2">
-                {filterOrder.map((value) => (
-                  <Chip.Selectable
-                    accessibilityRole="radio"
-                    hitSlop={6}
-                    key={value}
-                    onSelectedChange={() => setFilter(value)}
-                    selected={filter === value}
-                    testID={`file-library-filter-${value}`}
-                  >
-                    {t(filterLabelKeys[value])}
-                  </Chip.Selectable>
-                ))}
+              {/* A quiet single-choice filter under the browse tabs: only the selection gets a fill. */}
+              <View className="flex-row items-center gap-1">
+                {filterOrder.map((value) => {
+                  const selected = filter === value;
+                  return (
+                    <Chip.Selectable
+                      accessibilityRole="radio"
+                      className={
+                        selected ? 'border-transparent' : 'border-transparent bg-transparent'
+                      }
+                      hitSlop={6}
+                      key={value}
+                      onSelectedChange={() => setFilter(value)}
+                      selected={selected}
+                      testID={`file-library-filter-${value}`}
+                    >
+                      <Chip.Label
+                        className={selected ? 'text-foreground' : 'text-muted-foreground'}
+                      >
+                        {t(filterLabelKeys[value])}
+                      </Chip.Label>
+                    </Chip.Selectable>
+                  );
+                })}
               </View>
             </ScrollView>
             {isBrowsingFolders && folderId ? (
