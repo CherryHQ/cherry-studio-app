@@ -80,8 +80,8 @@ describe('DependencyResolver.hoistGateDependencies', () => {
     expect(adjustments).toEqual([
       {
         from: Phase.PostReady,
-        reason: expect.stringContaining('Gate'),
         serviceName: 'Late',
+        requiredBy: 'Gate',
         to: Phase.Gate,
       },
     ]);

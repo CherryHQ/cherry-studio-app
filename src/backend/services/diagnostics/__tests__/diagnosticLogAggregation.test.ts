@@ -98,3 +98,24 @@ test('writes every fatal exception immediately', () => {
   expect(write).toHaveBeenCalledTimes(2);
   expect(jest.getTimerCount()).toBe(0);
 });
+
+test('keeps every startup attempt and duration instead of collapsing repeated stages', () => {
+  const write = jest.fn();
+  const record = createDiagnosticLogAggregator(write);
+  for (const durationMs of [10, 20]) {
+    record(
+      projectDiagnosticLog({
+        capture: 'metadata',
+        timestamp: new Date(1000 + durationMs).toISOString(),
+        level: 'info',
+        module: 'Startup',
+        message: 'Startup stage',
+        facts: { operation: 'startup.host', outcome: 'completed', durationMs },
+      })!,
+    );
+  }
+  record.flush();
+  expect(write.mock.calls.map(([entry]) => entry.facts.durationMs)).toEqual([10, 20]);
+  expect(write.mock.calls.every(([entry]) => entry.repetition === undefined)).toBe(true);
+  expect(jest.getTimerCount()).toBe(0);
+});
