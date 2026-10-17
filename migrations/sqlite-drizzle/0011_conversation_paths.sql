@@ -1,1 +1,0 @@
-ALTER TABLE `agent_session` ADD `conversation_state` text;

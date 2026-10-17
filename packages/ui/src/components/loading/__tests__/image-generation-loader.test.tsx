@@ -1,26 +1,14 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ShimmerText } from '../../shimmer-text';
 import { ImageGenerationLoader } from '../image-generation-loader';
 
 let mockReducedMotion = false;
 const mockSetFrameActive = jest.fn();
 
 jest.mock('uniwind', () => ({
-  useCSSVariable: () => ['#777777', '#111111'],
-  useResolveClassNames: () => ({ color: '#777777' }),
+  useCSSVariable: () => '#f5f5f5',
 }));
-
-jest.mock('@react-native-masked-view/masked-view', () => {
-  const { View: NativeView } = jest.requireActual('react-native');
-  return { __esModule: true, default: NativeView };
-});
-
-jest.mock('expo-linear-gradient', () => {
-  const { View: NativeView } = jest.requireActual('react-native');
-  return { LinearGradient: NativeView };
-});
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -77,11 +65,13 @@ describe('ImageGenerationLoader', () => {
   beforeEach(() => {
     mockReducedMotion = false;
     mockSetFrameActive.mockClear();
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('renders the default image generation state', () => {
@@ -90,12 +80,12 @@ describe('ImageGenerationLoader', () => {
     });
 
     const root = findHostRoot(renderer!);
-    const text = collectText(renderer!);
 
     expect(root.props.accessibilityRole).toBe('progressbar');
     expect(root.props.accessibilityState).toEqual({ busy: true });
     expect(root.props.accessibilityLabel).toBe('Generating image');
-    expect(text).toContain('Generating image');
+    // The card is purely visual; status lives in the accessibility label.
+    expect(renderer!.root.findAllByType(Text)).toHaveLength(0);
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(true);
   });
 
@@ -105,8 +95,6 @@ describe('ImageGenerationLoader', () => {
         <ImageGenerationLoader
           accessibilityLabel="Rendering cover image"
           active={false}
-          label="Rendering"
-          resolution={'1536 \u00d7 1024'}
           size={160}
           testID="loader"
         />,
@@ -114,16 +102,13 @@ describe('ImageGenerationLoader', () => {
     });
 
     const root = findHostRoot(renderer!);
-    const preview = renderer!.root
-      .findAllByType(View)
-      .find((node) => node.props.pointerEvents === 'none');
 
     expect(root.props.accessibilityLabel).toBe('Rendering cover image');
     expect(root.props.accessibilityState).toEqual({ busy: false });
-    expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 160, width: 160 });
-    expect(collectText(renderer!)).toEqual(
-      expect.arrayContaining(['Rendering', '1536 \u00d7 1024']),
-    );
+    expect(StyleSheet.flatten(findPreview(renderer!)?.props.style)).toMatchObject({
+      height: 160,
+      width: 160,
+    });
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(false);
   });
 
@@ -138,26 +123,6 @@ describe('ImageGenerationLoader', () => {
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(false);
   });
 
-  it('omits resolution text when the request never named a size', () => {
-    act(() => {
-      renderer = create(<ImageGenerationLoader label="Rendering" size={96} testID="loader" />);
-    });
-
-    const root = findHostRoot(renderer!);
-    const preview = renderer!.root
-      .findAllByType(View)
-      .find((node) => node.props.pointerEvents === 'none');
-    const resolutionLabel = renderer!.root
-      .findAllByType(View)
-      .find((node) => node.props.className === 'absolute right-3 top-3');
-
-    expect(resolutionLabel).toBeUndefined();
-    expect(root.props.accessibilityLabel).toBe('Rendering');
-    expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 96, width: 96 });
-    // The status text still speaks for the loader on its own.
-    expect(collectText(renderer!)).toContain('Rendering');
-  });
-
   it('leaves the host to own the accessibility target when asked', () => {
     act(() => {
       renderer = create(<ImageGenerationLoader accessible={false} testID="loader" />);
@@ -166,51 +131,15 @@ describe('ImageGenerationLoader', () => {
     expect(findHostRoot(renderer!).props.accessible).toBe(false);
   });
 
-  it('renders the message shimmer at the canvas bottom-left', () => {
-    act(() => {
-      renderer = create(
-        <ImageGenerationLoader label="Rendering" resolution={'1536 \u00d7 1024'} testID="loader" />,
-      );
-    });
-
-    expect(findHostRoot(renderer!).props.accessibilityLabel).toBe('Rendering. 1536 \u00d7 1024');
-    expect(collectText(renderer!)).toEqual(
-      expect.arrayContaining(['Rendering', '1536 \u00d7 1024']),
-    );
-    const shimmer = renderer!.root.findByType(ShimmerText);
-    expect(shimmer.props).toMatchObject({
-      active: true,
-      children: 'Rendering',
-      className: 'font-mono text-xs',
-      numberOfLines: 1,
-    });
-    const label = renderer!.root
-      .findAllByType(Text)
-      .find((node) => flattenText(node.props.children) === 'Rendering');
-    expect(label?.props.className).toBe('font-mono text-xs text-foreground');
-    expect(
-      renderer!.root
-        .findAllByType(View)
-        .find((node) => node.props.className === 'absolute bottom-3 left-3'),
-    ).toBeDefined();
-    expect(
-      renderer!.root.findAll((node) => {
-        const style = StyleSheet.flatten(node.props.style);
-        return style?.width === 208 && style.height === undefined;
-      }),
-    ).toHaveLength(0);
-  });
-
-  it('renders the dot field at a requested non-square image size', () => {
+  it('renders the foil surface at a requested non-square image size', () => {
     act(() => {
       renderer = create(<ImageGenerationLoader height={224} testID="loader" width={128} />);
     });
 
-    const preview = renderer!.root
-      .findAllByType(View)
-      .find((node) => node.props.pointerEvents === 'none');
-
-    expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 224, width: 128 });
+    expect(StyleSheet.flatten(findPreview(renderer!)?.props.style)).toMatchObject({
+      height: 224,
+      width: 128,
+    });
   });
 });
 
@@ -219,12 +148,6 @@ function findHostRoot(tree: ReactTestRenderer) {
   return matches[matches.length - 1]!;
 }
 
-function collectText(tree: ReactTestRenderer): string[] {
-  return tree.root.findAllByType(Text).map((node) => flattenText(node.props.children));
-}
-
-function flattenText(value: unknown): string {
-  if (Array.isArray(value)) return value.map(flattenText).join('');
-  if (typeof value === 'number' || typeof value === 'string') return String(value);
-  return '';
+function findPreview(tree: ReactTestRenderer) {
+  return tree.root.findAllByType(View).find((node) => node.props.pointerEvents === 'none');
 }

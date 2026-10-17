@@ -24,6 +24,7 @@ import {
   toAgentMessageView,
   toAgentSessionView,
 } from '@/backend/data/services/utils/agentSessionRows';
+import { requireActiveFolder } from '@/backend/data/services/utils/fileLibraryRows';
 import { toSearchableText } from '@/backend/data/services/utils/searchSnippet';
 import {
   createConversationState,
@@ -229,11 +230,13 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     input: ReserveInitialSubmissionInput,
   ): Promise<ReserveInitialSubmissionResult> {
     return this.dbService.withWriteTx(async (tx) => {
+      if (input.workspaceFolderId) await requireActiveFolder(tx, input.workspaceFolderId);
       const [sessionRow] = await tx
         .insert(agentSessionTable)
         .values({
           id: input.sessionId,
           agentId: input.agentId,
+          workspaceFolderId: input.workspaceFolderId,
         })
         .returning();
       const { reservedAt, ...reserved } = await insertSubmission(tx, {
@@ -323,6 +326,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .insert(agentSessionTable)
         .values({
           agentId: source.agentId,
+          workspaceFolderId: source.workspaceFolderId,
           forkedFromSessionId: source.id,
           // A fork copies history but creates no conversation activity of its
           // own. Keep the last included message's original activity time.

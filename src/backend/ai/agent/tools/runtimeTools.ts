@@ -31,6 +31,7 @@ export type AgentRuntimeToolResolver = {
     agentId: string,
     onUnavailable?: (warning: string) => void,
     signal?: AbortSignal,
+    workspaceFolderId?: string | null,
   ): Promise<{
     tools: RuntimeTool[];
     pluginGuides: readonly PluginGuideSnapshot[];
@@ -48,7 +49,7 @@ export function createAgentRuntimeToolResolver(input: {
   getMcpRuntime(): McpRuntimeToolCapability;
 }): AgentRuntimeToolResolver {
   return {
-    async resolve(agentId, onUnavailable, signal) {
+    async resolve(agentId, onUnavailable, signal, workspaceFolderId) {
       const [{ items }, { items: connectedServers }] = await Promise.all([
         input.bindings.list(agentId),
         input.servers.list(),
@@ -131,6 +132,7 @@ export function createAgentRuntimeToolResolver(input: {
         tools: mcpRuntime.createRuntimeTools(
           selections.map((selection) => ({
             ...selection,
+            workspaceFolderId,
             descriptor: {
               ...selection.descriptor,
               ...(selection.descriptor.app

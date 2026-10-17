@@ -49,6 +49,7 @@ export type ReserveSubmissionInput = {
 
 export type ReserveInitialSubmissionInput = ReserveSubmissionInput & {
   agentId: string;
+  workspaceFolderId?: string;
 };
 
 export type ReserveInitialSubmissionResult = ReserveSubmissionResult & {

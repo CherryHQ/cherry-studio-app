@@ -139,6 +139,7 @@ export function readAgentInferenceSnapshot(value: unknown): AgentInferenceSnapsh
 }
 
 export const AgentSessionViewSchema = z.strictObject({
+  workspaceFolderId: z.string().min(1).nullable().optional(),
   id: z.string().min(1),
   agentId: z.string().min(1),
   name: z.string(),

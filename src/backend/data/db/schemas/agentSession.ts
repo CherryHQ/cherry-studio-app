@@ -4,12 +4,13 @@ import type { AgentConversationState } from '@/shared/contracts/agent';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { agentTable } from './agent';
+import { fileFolderTable } from './fileLibrary';
 
 /**
  * Agent Session table - one product conversation with app-owned continuation paths
  * (docs/references/agent/agent-persistence.md).
  *
- * No workspace reference: mobile has no working directory or shell
+ * An optional folder binding provides a shared file workspace without a shell
  * environment. The Host owns the local Runtime binding. Sessions hard-delete and
  * cascade their messages; list ordering is recency (`lastActivityAt`), so
  * there is no order key.
@@ -23,6 +24,7 @@ export const agentSessionTable = sqliteTable(
       .notNull()
       .references(() => agentTable.id, { onDelete: 'restrict' }),
     name: text().notNull().default(''),
+    workspaceFolderId: text().references(() => fileFolderTable.id, { onDelete: 'set null' }),
     // Whether the name was manually edited by user
     isNameManuallyEdited: integer({ mode: 'boolean' }).notNull().default(false),
     /** Invalidates disposable execution history in the same transaction as transcript edits. */

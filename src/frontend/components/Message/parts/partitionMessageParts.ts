@@ -1,9 +1,8 @@
-import { MULTI_MODEL_TOOL_NAME } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
-  getToolName,
   isAgentMutationToolPart,
+  isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isToolMessagePart,
   isUserQuestionToolPart,
@@ -131,11 +130,12 @@ export function partitionMessageParts(
       return;
     }
 
-    // A question and a saved Agent are outcomes the reader acts on, not process.
+    // A question, a saved Agent, and an image being drawn are outcomes the
+    // reader acts on or waits for, not process.
     if (
       isToolMessagePart(part) &&
-      (getToolName(part) === MULTI_MODEL_TOOL_NAME ||
-        isUserQuestionToolPart(part) ||
+      (isUserQuestionToolPart(part) ||
+        isGeneratingImageToolPart(part) ||
         ((isAgentMutationToolPart(part) || isSkillAdaptationToolPart(part)) &&
           part.state === 'output-available'))
     ) {

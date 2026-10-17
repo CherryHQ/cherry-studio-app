@@ -19,15 +19,18 @@ created by its first generation, titled from the request, and renamable from the
 
 ## One Page, Two Layers
 
-- **Focus** fills the screen with the focused image. Tap shows or hides the chrome, long press drops
-  a positional note (or removes the one under the finger), pinch and double tap zoom, and a
-  horizontal swipe moves between the images of one generation. The header carries back (to wherever
-  the board was opened from), the board pill (to the overview), save, and a menu with share,
-  generation info, and delete-this-version. Below the image, the lineage strip shows sources,
+- **Focus** fills the screen with the focused image. A plain tap leaves the page unchanged; tapping
+  a note selects it. Long press drops a positional note (or removes the one under the finger),
+  pinch and double tap zoom, and a horizontal swipe moves between the images of one generation.
+  The header carries back (to wherever
+  the board was opened from), the board pill (to the overview), and one ungrouped menu with save,
+  share, generation info, and delete-this-version. Below the image, the lineage strip shows sources,
   the current image, and what was made from it; tapping a cell walks the edge and holding one
   previews it in place for comparison.
 - **Overview** draws every node and edge; drag to pan, pinch to zoom, double tap to reset, tap a
-  node to focus it. Its composer starts a new root that references nothing.
+  thumbnail to focus it. Tap its caption to read the complete prompt in an anchored information
+  popover; long prompts scroll inside it without changing the board's layout or viewport. Its
+  composer starts a new root that references nothing.
 
 The composer stays mounted across both layers so a draft survives moving around the board. The
 focused image is attached as the next generation's reference (`usePaintingFocusReference`); removing
@@ -47,8 +50,13 @@ Choosing one saves any selected note and prepares a whole-image request; user-au
 intact, while untouched shortcut text follows subsequent ratio choices.
 
 Sending moves the focus to the new receipt, which shows the loader until its job finishes; the
-generation runs as a durable job, so the user can keep browsing the board. A stopped generation
-shows its failure in place with retry. Stopping a running generation discards its receipt. If it
+generation runs as a durable job, so the user can keep browsing the board. Generating and stopped
+receipts keep the requested image proportions. The shared loader is a text-free holo card with a
+light sweeping across it; it stops when the screen is inactive, the app is backgrounded, or Reduce
+Motion is enabled. A stopped generation shows an empty image frame, its saved brief, retry, and an explicit
+error-details action instead of a conversation error bubble. Diagnostic messages stay in the shared
+detail sheet. The receipt content scrolls above the composer when space or text size requires it.
+Stopping a running generation discards its receipt. If it
 was the board's last generation, the next send creates a fresh board on the same page. Removing a
 version refreshes the board and moves its focus and route to a surviving generation.
 

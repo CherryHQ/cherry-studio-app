@@ -1,7 +1,10 @@
+import type { ParamValues } from '@cherrystudio/provider-registry';
 import { View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
+import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
+import { PendingImagePart } from '../PendingImagePart';
 import { AgentManagementToolPart } from './AgentManagementToolPart';
 import { EditFileToolPart, isEditFileToolPart } from './EditFileToolPart';
 import { FileToolContent } from './FileToolContent';
@@ -14,8 +17,10 @@ import { SkillToolPart } from './SkillToolPart';
 import {
   getToolName,
   isAgentMutationToolPart,
+  isGeneratingImageToolPart,
   isProviderWebSearchToolPart,
   isUserQuestionToolPart,
+  isRecord,
   isWebSearchToolPart,
   type ToolMessagePart,
 } from './toolPartState';
@@ -79,6 +84,17 @@ export function ToolPartRenderer({ messageId, messageParts, part }: ToolPartRend
 
   if (isRunJsToolPart(part)) {
     return <RunJsToolPart part={part} />;
+  }
+
+  if (isGeneratingImageToolPart(part)) {
+    // Tool input carries the canonical painting params, so it names the shape.
+    const params = isRecord(part.input) ? (part.input as ParamValues) : undefined;
+    return (
+      <PendingImagePart
+        aspectRatio={imageParamsAspectRatio(params)}
+        testID="chat-image-tool-loader"
+      />
+    );
   }
 
   if (isUserQuestionToolPart(part)) {

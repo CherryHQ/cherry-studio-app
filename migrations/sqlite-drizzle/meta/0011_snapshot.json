@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fe8b2cb5-396a-491b-98ad-64294197d7b3",
+  "id": "4b33882b-5cbd-4648-b89f-c90f60f03d66",
   "prevId": "0e847715-9709-4076-80db-a80b2481ac4c",
   "tables": {
     "app_state": {
@@ -57,6 +57,20 @@
           "type": "text",
           "primaryKey": true,
           "notNull": true,
+          "autoincrement": false
+        },
+        "library_file_id": {
+          "name": "library_file_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "trashed_with": {
+          "name": "trashed_with",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         },
         "filename": {
@@ -120,9 +134,24 @@
           "name": "fe_deleted_at_idx",
           "columns": ["deleted_at"],
           "isUnique": false
+        },
+        "fe_library_file_idx": {
+          "name": "fe_library_file_idx",
+          "columns": ["library_file_id"],
+          "isUnique": false
         }
       },
-      "foreignKeys": {},
+      "foreignKeys": {
+        "file_entry_library_file_id_library_file_id_fk": {
+          "name": "file_entry_library_file_id_library_file_id_fk",
+          "tableFrom": "file_entry",
+          "tableTo": "library_file",
+          "columnsFrom": ["library_file_id"],
+          "columnsTo": ["id"],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -668,6 +697,13 @@
           "autoincrement": false,
           "default": "''"
         },
+        "workspace_folder_id": {
+          "name": "workspace_folder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "is_name_manually_edited": {
           "name": "is_name_manually_edited",
           "type": "integer",
@@ -683,13 +719,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 0
-        },
-        "conversation_state": {
-          "name": "conversation_state",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "last_activity_at": {
           "name": "last_activity_at",
@@ -747,6 +776,15 @@
           "columnsFrom": ["agent_id"],
           "columnsTo": ["id"],
           "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "agent_session_workspace_folder_id_file_folder_id_fk": {
+          "name": "agent_session_workspace_folder_id_file_folder_id_fk",
+          "tableFrom": "agent_session",
+          "tableTo": "file_folder",
+          "columnsFrom": ["workspace_folder_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "agent_session_forked_from_session_id_agent_session_id_fk": {
@@ -2288,6 +2326,187 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "file_folder": {
+      "name": "file_folder",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "parent_id": {
+          "name": "parent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "trashed_with": {
+          "name": "trashed_with",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "file_folder_parent_idx": {
+          "name": "file_folder_parent_idx",
+          "columns": ["parent_id"],
+          "isUnique": false
+        },
+        "file_folder_trash_idx": {
+          "name": "file_folder_trash_idx",
+          "columns": ["trashed_with"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "file_folder_parent_id_file_folder_id_fk": {
+          "name": "file_folder_parent_id_file_folder_id_fk",
+          "tableFrom": "file_folder",
+          "tableTo": "file_folder",
+          "columnsFrom": ["parent_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "library_file": {
+      "name": "library_file",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "folder_id": {
+          "name": "folder_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "current_entry_id": {
+          "name": "current_entry_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "trashed_with": {
+          "name": "trashed_with",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "library_file_folder_idx": {
+          "name": "library_file_folder_idx",
+          "columns": ["folder_id"],
+          "isUnique": false
+        },
+        "library_file_trash_idx": {
+          "name": "library_file_trash_idx",
+          "columns": ["trashed_with"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "library_file_folder_id_file_folder_id_fk": {
+          "name": "library_file_folder_id_file_folder_id_fk",
+          "tableFrom": "library_file",
+          "tableTo": "file_folder",
+          "columnsFrom": ["folder_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

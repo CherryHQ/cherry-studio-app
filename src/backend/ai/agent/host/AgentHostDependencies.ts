@@ -82,7 +82,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       : undefined;
   }
   readonly writeToolOutput: NonNullable<MobileAgentHostPorts['writeToolOutput']> = async (
-    { name, data },
+    { name, data, folderId },
     signal,
   ) => {
     const entry = await createInternalEntry(
@@ -96,6 +96,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
             ? 'text/plain'
             : imageMediaTypeFromExtension(name.split('.').at(-1)),
         provenance: 'generated',
+        folderId,
       },
       signal,
     );

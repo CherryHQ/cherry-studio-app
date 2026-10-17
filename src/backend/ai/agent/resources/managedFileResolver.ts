@@ -102,6 +102,7 @@ export function createManagedFileResolver(
         }
         facts.set(entry.id, {
           fileEntryId: entry.id,
+          revision: entry.updatedAt,
           mediaType: entry.mediaType,
           name: entry.filename,
           size: entry.size,

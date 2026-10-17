@@ -4,22 +4,26 @@ import { fileEntryPreviewKind } from '@/frontend/components/FileEntryPreview';
 import { type ResolvedFileEntry, useFileEntryPages } from '@/frontend/hooks/file';
 import type { FileEntry } from '@/shared/data/types/file';
 
-import { fileLibraryMinVisibleTiles } from '../utils/constants';
+import { fileLibraryMinVisibleRows } from '../utils/constants';
 
 export type FileLibraryFilter = 'all' | 'document' | 'image' | 'sharing';
 export type FileLibraryEntry = ResolvedFileEntry;
 
 /**
  * One cursor walk over every file, filtered by kind or provenance client-side.
+ * An omitted folder spans the library; null selects only root-level files.
  *
  * The tabs are a filter over what is already on screen, not separate
- * lists: switching them must not re-query, must not blank the grid, and must
+ * lists: switching them must not re-query, must not blank the results, and must
  * carry the pages the previous tab already paged in. That rules out putting the
  * filter in the DataApi query — it would key independent page stacks that
  * cannot share a thing.
  */
-export function useFileEntries(filter: FileLibraryFilter, { enabled }: { enabled: boolean }) {
-  const query = useFileEntryPages({ enabled });
+export function useFileEntries(
+  filter: FileLibraryFilter,
+  { enabled, folderId }: { enabled: boolean; folderId?: string | null },
+) {
+  const query = useFileEntryPages({ enabled, folderId });
   const loadNext = query.loadNext;
   const entries = useMemo(
     () =>
@@ -63,7 +67,7 @@ function entryKind(entry: FileEntry): FileLibraryFilter {
 
 /**
  * A sparse kind — three documents among a thousand images — would otherwise
- * show a near-empty tab that only fills as the user scrolls a list with nothing
+ * show a near-empty filter that only fills as the user scrolls a list with nothing
  * in it to scroll. Pages are pulled one at a time until the tab has enough to
  * cover a screen or the stream runs out, and each page reaching the filter is
  * what re-arms this.
@@ -82,7 +86,7 @@ function useFillViewport({
   visibleCount: number;
 }) {
   useEffect(() => {
-    if (enabled && visibleCount < fileLibraryMinVisibleTiles && hasNext && !isLoadingMore) {
+    if (enabled && visibleCount < fileLibraryMinVisibleRows && hasNext && !isLoadingMore) {
       loadNext();
     }
   }, [enabled, hasNext, isLoadingMore, loadNext, visibleCount]);

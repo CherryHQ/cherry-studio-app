@@ -17,25 +17,26 @@ Platform selection stays inside CherryUI; local and remote screens use the same 
 ## ImageGenerationLoader
 
 `ImageGenerationLoader` is the pending state for generated images, in one treatment at every size:
-a dot field with a soft diagonal glare, plain resolution text, and shimmering status copy inside
-the canvas. The short edge spans 19 cells, preserving dot spacing on rectangular previews. Callers
-can provide `active`, `height`, `label`, `resolution`, `size`, `width`, and standard `View` props.
-`resolution` is optional — the label is dropped when the request never named a size — and hosts that
-already speak for the loader (a gallery tile, say) pass `accessible={false}`.
+a holo card whose light sweeps across it. The card carries no text — the moving light already says
+the image is on its way. Callers can provide `active`, `height`, `size`, `width`, and standard `View`
+props. Product call sites pass a translated `accessibilityLabel`; hosts that already speak for the
+loader (a gallery tile, say) pass `accessible={false}`.
 
-- One Skia runtime shader draws the dot field and reflection in a single GPU pass, with no
-  per-dot React Native views or extra blur layer.
-- The glare indicates ongoing generation, not completion percentage. Each 4.8-second cycle sweeps
-  diagonally across the surface for 3.84 seconds, then rests off-canvas for 0.96 seconds. Point-based
-  projection keeps the reflection's angle consistent across preview aspect ratios.
-- Reanimated drives the shader clock and shared `ShimmerText` sweep on the UI thread.
-- Deactivation stops and resets the clock immediately. Inactive and Reduce Motion states show
-  static dots without glare; the existing image handoff owns the final result transition.
-- Colors come from Cherry's semantic Uniwind tokens, so scoped and app-selected themes both work.
-- A neutral secondary surface and subtle border frame the field. Highlighted dots and resolution
-  text use secondary ink; the resolution has no separate capsule, fill, or border. The reflection
-  uses the constant-white token at 60% in light themes and 10% in dark themes to limit its contrast.
-- Product call sites should pass translated `label` and `accessibilityLabel` values.
+- One Skia runtime shader draws three layers in a single GPU pass: a faint pastel pearl sheen over
+  the whole card, fine spectral foil lines that only the passing light reveals, and a white glare
+  with sparkles. The look follows the shine/glare layering of
+  [Pokémon Cards CSS](https://github.com/zhangjiadi225/pokemon-cards-css); the canvas stays still.
+- The light indicates ongoing generation, not completion percentage. Every 2.4 seconds it crosses
+  diagonally from one off-card corner to the other and fades at both ends of the cycle, so the
+  restart never jumps and the card is never blank. Point-based projection keeps the angle consistent
+  across preview aspect ratios.
+- The spectrum is procedural; it is not a brand or status color. The shader reads the
+  `--color-background` token's luminance to dim the pearl and deepen the foil on dark themes, so
+  scoped and app-selected themes both work.
+- Reanimated drives the shader clock on the UI thread.
+- Deactivation, backgrounding, and Reduce Motion stop the clock and show the neutral canvas without
+  light; the existing image handoff owns the final result transition.
+- A neutral secondary surface and subtle border frame the card.
 
 ## Dot matrix foundation
 

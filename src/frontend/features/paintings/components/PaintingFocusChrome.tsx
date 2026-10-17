@@ -1,4 +1,3 @@
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
 import type { MenuItem } from '@cherrystudio/ui/components';
@@ -19,8 +18,8 @@ import type { PaintingBoardImage } from '../hooks/usePaintingBoard';
 
 /**
  * Focus chrome: back returns to wherever the board was opened from, the board
- * pill opens the overview, and the focused image's actions sit on the right —
- * save directly, everything else in one menu.
+ * pill opens the overview, and the focused image's actions share one menu
+ * on the right.
  */
 export function PaintingFocusChrome({
   boardTitle,
@@ -50,8 +49,12 @@ export function PaintingFocusChrome({
     const items: MenuItem[] = [];
     if (image) {
       items.push({
+        id: 'save',
+        label: t('painting.focus.save'),
+        onPress: () => void save(),
+      });
+      items.push({
         disabled: !file.data || isSharing,
-        group: 'share',
         id: 'share',
         label: t('painting.focus.share'),
         onPress: () => void share(),
@@ -59,7 +62,6 @@ export function PaintingFocusChrome({
     }
     if (onShowInfo) {
       items.push({
-        group: 'info',
         id: 'info',
         label: t('painting.focus.info.title'),
         onPress: onShowInfo,
@@ -68,26 +70,16 @@ export function PaintingFocusChrome({
     if (onDelete) {
       items.push({
         destructive: true,
-        group: 'delete',
         id: 'delete',
         label: t('painting.focus.delete'),
         onPress: onDelete,
       });
     }
     return items;
-  }, [file.data, image, isSharing, onDelete, onShowInfo, share, t]);
+  }, [file.data, image, isSharing, onDelete, onShowInfo, save, share, t]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
     const actions: HeaderToolbarAction[] = [];
-    if (image) {
-      actions.push({
-        accessibilityLabel: t('painting.focus.save'),
-        icon: DownloadIcon,
-        key: 'save',
-        onPress: () => void save(),
-        type: 'icon',
-      });
-    }
     if (menuItems.length > 0) {
       actions.push({
         accessibilityLabel: t('painting.focus.more'),
@@ -98,7 +90,7 @@ export function PaintingFocusChrome({
       });
     }
     return actions;
-  }, [image, menuItems, save, t]);
+  }, [menuItems, t]);
   const leftActions = useMemo(() => [leadingAction], [leadingAction]);
 
   return (

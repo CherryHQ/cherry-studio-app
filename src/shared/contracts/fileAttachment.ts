@@ -101,6 +101,7 @@ export type FileAttachmentContent =
     };
 
 export type FileAttachmentFact = {
+  revision?: number;
   fileEntryId: z.infer<typeof FileEntryIdSchema>;
   mediaType: string;
   name: string;

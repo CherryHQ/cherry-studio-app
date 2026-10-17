@@ -20,10 +20,11 @@ export function MainHeaderView({
   onNewChat,
   blurTarget,
   hidden,
+  actions,
 }: MainHeaderViewProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
-  const { leadingAction, rightActions } = useMainHeaderActions(onNewChat);
+  const { leadingAction, rightActions } = useMainHeaderActions(onNewChat, actions);
   const horizontalInset = HEADER_HORIZONTAL_INSET + Math.max(insets.left, insets.right);
 
   if (hidden) return <Stack.Screen options={{ headerShown: false }} />;

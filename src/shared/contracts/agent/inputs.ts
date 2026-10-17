@@ -43,6 +43,8 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
   agentId: z.string().min(1),
+  /** Optional workspace chosen before sending the first message. */
+  workspaceFolderId: z.uuid().optional(),
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),

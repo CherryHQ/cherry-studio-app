@@ -170,6 +170,9 @@ walk to verify it.
   removal, and tools remain available. The send boundary rechecks readiness and
   exposes only managed `fileEntryId` attachments to callers. Import timing logs
   contain only kind, size, result, and duration.
+- Chat passes `workspaceSessionId`, or the selected `workspaceFolderId` before its first send.
+  New imports and newly selected library references use that destination. Switching workspaces
+  preserves already prepared attachment references and their files.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.

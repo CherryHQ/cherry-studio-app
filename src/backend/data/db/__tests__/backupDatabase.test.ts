@@ -35,11 +35,34 @@ function database() {
   const adapter = {
     execAsync: async (sql: string) => raw.exec(sql),
     runAsync: async (sql: string, ...params: SQLInputValue[]) => raw.prepare(sql).run(...params),
+    getFirstAsync: async (sql: string, ...params: (SQLInputValue | SQLInputValue[])[]) =>
+      raw.prepare(sql).get(...params.flat()) ?? null,
     getAllAsync: async (sql: string, ...params: (SQLInputValue | SQLInputValue[])[]) =>
       raw.prepare(sql).all(...params.flat()),
   } as unknown as SQLiteDatabase;
   return { raw, adapter };
 }
+
+test('restore clears orphan workspace bindings while preserving existing trashed folders', async () => {
+  const { raw, adapter } = database();
+  try {
+    // A restored backup can carry a dangling binding; node:sqlite enforces keys by default.
+    raw.exec("PRAGMA foreign_keys = OFF; UPDATE agent_session SET workspace_folder_id = 'missing'");
+    await restoreDeviceState(adapter, []);
+    expect(raw.prepare('SELECT workspace_folder_id FROM agent_session').get()).toEqual({
+      workspace_folder_id: null,
+    });
+    raw.exec(
+      "INSERT INTO file_folder (id, name, name_key, created_at, updated_at, deleted_at) VALUES ('folder', 'Reports', 'reports', 1, 1, 2); UPDATE agent_session SET workspace_folder_id = 'folder'",
+    );
+    await restoreDeviceState(adapter, []);
+    expect(raw.prepare('SELECT workspace_folder_id FROM agent_session').get()).toEqual({
+      workspace_folder_id: 'folder',
+    });
+  } finally {
+    raw.close();
+  }
+});
 
 test('restore preserves message-owned translations together with the original parts', async () => {
   const { raw, adapter } = database();

@@ -328,6 +328,7 @@ export function createBackend(
       documentExport: infrastructure.documentExport,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
+        prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
         moveToTrash: services.fileContent.moveToTrash,

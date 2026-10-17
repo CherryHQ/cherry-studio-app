@@ -5,6 +5,7 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 const ChatRouteParamsSchema = z.strictObject({
   agentId: z.string().trim().min(1).optional(),
   composerHandoff: z.string().trim().min(1).optional(),
+  workspaceDraftId: z.uuid().optional(),
   sessionId: z.string().trim().min(1).optional(),
   messageId: z.string().trim().min(1).optional(),
   messageRequestId: z.string().trim().min(1).optional(),
@@ -17,6 +18,8 @@ export type ChatTarget =
       kind: 'draft';
       /** Seeds the composer from a handoff, such as an incoming system share. */
       composerHandoff?: string;
+      /** Identifies the unsent conversation's optional workspace selection. */
+      workspaceDraftId?: string;
     }
   | {
       kind: 'session';
@@ -29,6 +32,7 @@ export type ChatTarget =
 export type ChatRouteParamsInput = {
   agentId?: string | string[];
   composerHandoff?: string | string[];
+  workspaceDraftId?: string | string[];
   sessionId?: string | string[];
   messageId?: string | string[];
   messageRequestId?: string | string[];
@@ -44,6 +48,7 @@ export function chatRouteParams(target: ChatTarget) {
     ? {
         agentId: undefined,
         composerHandoff: undefined,
+        workspaceDraftId: undefined,
         sessionId: target.sessionId,
         messageId: target.messageId,
         messageRequestId: target.messageRequestId,
@@ -51,6 +56,7 @@ export function chatRouteParams(target: ChatTarget) {
     : {
         agentId: target.agentId,
         composerHandoff: target.composerHandoff,
+        workspaceDraftId: target.workspaceDraftId,
         sessionId: undefined,
         messageId: undefined,
         messageRequestId: undefined,
@@ -75,6 +81,7 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
   const result = ChatRouteParamsSchema.safeParse({
     agentId: getSingleRouteParam(input.agentId),
     composerHandoff: getSingleRouteParam(input.composerHandoff),
+    workspaceDraftId: getSingleRouteParam(input.workspaceDraftId),
     sessionId: getSingleRouteParam(input.sessionId),
     messageId: getSingleRouteParam(input.messageId),
     messageRequestId: getSingleRouteParam(input.messageRequestId),
@@ -84,7 +91,8 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
     return { status: 'invalid' };
   }
 
-  const { agentId, composerHandoff, sessionId, messageId, messageRequestId } = result.data;
+  const { agentId, composerHandoff, workspaceDraftId, sessionId, messageId, messageRequestId } =
+    result.data;
   if (sessionId) {
     return {
       status: 'ready',
@@ -98,7 +106,12 @@ export function parseChatRoute(input: ChatRouteParamsInput): ParsedChatRoute {
   if (agentId) {
     return {
       status: 'ready',
-      target: { agentId, kind: 'draft', ...(composerHandoff ? { composerHandoff } : {}) },
+      target: {
+        agentId,
+        kind: 'draft',
+        ...(composerHandoff ? { composerHandoff } : {}),
+        ...(workspaceDraftId ? { workspaceDraftId } : {}),
+      },
     };
   }
 

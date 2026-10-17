@@ -43,6 +43,7 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | Need | Owner |
 | --- | --- |
 | Product UI components | CherryUI in `packages/ui`; see [UI Components](./ui-components.md) |
+| Anchored informational text | `InfoPopover` from `@cherrystudio/ui/components` |
 | Backend module access | `useBackendModule` in `src/frontend/data/BackendProvider.tsx` |
 | Preferences | `usePreference` in `src/frontend/data/hooks/usePreference.ts` |
 | Persistent UI cache | `cacheService` in `src/frontend/data/CacheService.ts`, keys in `src/shared/data/cache/cacheSchemas.ts` |
@@ -50,6 +51,9 @@ Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScri
 | List selection state and controls | `src/frontend/components/Selection`, with `SelectionIndicator` from CherryUI and `common.selection.*` copy |
 | Opening external links | `openExternalUrl` in `src/frontend/utils/openExternalUrl.ts` |
 | Compact counts | `formatCompactNumber` in `src/frontend/utils/compactNumber.ts` |
+| Library folder browsing, creation, and selection for moves and Session workspaces | `FileFolderPicker` and `useCreateFileFolder` in `src/frontend/components/FileFolderPicker`; `FileFolderBreadcrumbs` owns the shared path navigation |
+| Optional conversation workspace association, including unsent drafts | `useFileWorkspace` in `src/frontend/hooks/file`; chat owns `FileWorkspaceSheet`, reusing the shared file pages and `FileEntryPreview` viewer |
+| Logical folder, file lineage, and workspace metadata | `FileLibraryService` and `fileLibraryRows` in `src/backend/data/services` |
 | Composer attachment drafts from managed files | `createReadyAttachmentDraft` in `src/frontend/components/Composer/utils/composerAttachments.ts` |
 | Adding resolved MCP text and binary content to a draft | `addMcpContentToDraft` in `src/frontend/components/McpContent` |
 | Theme-aware MCP brand icon | `useMcpIcon` in `src/frontend/hooks/mcp/useMcpIcon.ts` |

@@ -39,6 +39,7 @@ import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
+  workspaceFolderId?: string;
   isNewSession: boolean;
   isCurrent: () => boolean;
 };
@@ -241,11 +242,12 @@ export function useAgentChatDraftHandoff(
 
 export function useAgentChatControls(input: {
   agentId?: string;
+  workspaceFolderId?: string | null;
   sessionId?: string;
   composerKey: number;
 }) {
   const { client, sendMessage } = useAgentChatContext();
-  const { agentId, composerKey, sessionId } = input;
+  const { agentId, composerKey, sessionId, workspaceFolderId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
@@ -290,7 +292,13 @@ export function useAgentChatControls(input: {
       };
       setSubmission({ composerKey, userMessageId: request.userMessageId, send: pending });
       try {
-        await sendMessage({ ...request, agentId, isCurrent, isNewSession: pending.isNewSession });
+        await sendMessage({
+          ...request,
+          agentId,
+          isCurrent,
+          isNewSession: pending.isNewSession,
+          ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
+        });
         if (isCurrent()) {
           setSubmission((current) =>
             current?.send === pending
@@ -312,7 +320,7 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, composerKey, sendMessage, sessionId],
+    [agentId, composerKey, sendMessage, sessionId, workspaceFolderId],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {

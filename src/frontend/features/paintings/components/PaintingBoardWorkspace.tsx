@@ -7,10 +7,10 @@ import {
   useToast,
 } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
+import { Stack, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +20,6 @@ import {
   ComposerSessionProvider,
   useComposerActions,
   useComposerPresentationActions,
-  useComposerPresentationState,
   useComposerSendError,
 } from '@/frontend/components/Composer';
 import { useModelPickerData } from '@/frontend/components/ModelPicker';
@@ -35,11 +34,7 @@ import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
 import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import { isUniqueModelId } from '@/shared/data/types/model';
-import {
-  type ImageParamDraft,
-  imageParamsAspectRatio,
-  imageParamsResolutionLabel,
-} from '@/shared/utils/imageGenerationParams';
+import { type ImageParamDraft, imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import { usePaintingAnnotationDraft } from '../hooks/usePaintingAnnotationDraft';
 import {
@@ -55,9 +50,9 @@ import {
   paintingNodeParents,
 } from '../utils/paintingBoardGraph';
 import { PaintingBoardOverview } from './PaintingBoardOverview';
-import { PaintingErrorMessage } from './PaintingErrorMessage';
 import { PaintingFocusCanvas } from './PaintingFocusCanvas';
 import { PaintingFocusChrome } from './PaintingFocusChrome';
+import { PaintingGenerationFailure } from './PaintingGenerationFailure';
 import { PaintingGenerationInfoSheet } from './PaintingGenerationInfoSheet';
 import { PaintingLineageStrip } from './PaintingLineageStrip';
 import { PaintingOverviewChrome } from './PaintingOverviewChrome';
@@ -118,6 +113,7 @@ function PaintingBoardContent({
   onReceipt: (paintingId: string | undefined) => void;
 }) {
   const { t } = useTranslation();
+  const isScreenFocused = useIsFocused();
   const { alert } = useAlert();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -130,13 +126,11 @@ function PaintingBoardContent({
   const reportError = useComposerSendError({ sendFailedLabel: t('painting.input.generateFailed') });
   const { setDraft } = useComposerActions();
   const { dismissInput } = useComposerPresentationActions();
-  const { isEditing } = useComposerPresentationState();
   const isEditorPresented = useComposerExpansion()?.state.isPresented ?? false;
   const models = useModelPickerData({ modelType: 'image' });
   const [mode, setMode] = useState<'focus' | 'overview'>('focus');
   const [focus, setFocus] = useState<Focus | null>(null);
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
-  const [isChromeHidden, setIsChromeHidden] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [pending, setPending] = useState<{
     paintingId: string;
@@ -164,8 +158,7 @@ function PaintingBoardContent({
   const annotationKey = referenceImage?.fileEntryId ?? null;
   const annotation = usePaintingAnnotationDraft(annotationKey);
   const hasAnnotations = annotation.annotations.length > 0;
-  const showChrome = !isChromeHidden || isEditing || isGenerating || mode === 'overview';
-  const showBoardChrome = showChrome && !isEditorPresented;
+  const showBoardChrome = !isEditorPresented;
 
   // Remember where the user was, so reopening the board lands there.
   const { trigger: updateBoard } = useMutation('PATCH', '/painting-boards/:id', {
@@ -314,9 +307,9 @@ function PaintingBoardContent({
     [annotation, setDraft, t],
   );
 
-  const retryFocused = useCallback(() => {
+  const retryFocused = useCallback(async () => {
     if (!focusedPainting || focusedNode?.status.kind !== 'stopped') return;
-    void generation.retry(focusedPainting, focusedNode.status.job).catch(reportError);
+    await generation.retry(focusedPainting, focusedNode.status.job).catch(reportError);
   }, [focusedNode, focusedPainting, generation, reportError]);
 
   const parents = activeFocus
@@ -345,15 +338,22 @@ function PaintingBoardContent({
   const overlayStyle = useAnimatedStyle(() => ({
     bottom: dockHeight.get() + 10 + lift(),
   }));
+  const generationStateStyle = useAnimatedStyle(() => ({
+    paddingBottom: dockHeight.get() + 24 + lift(),
+    paddingTop: insets.top + 64,
+  }));
 
   const boardTitle = board.board?.title ?? t('painting.board.newBoard');
   const modelName = focusedModel?.name ?? focusedPainting?.modelId?.split('::').at(-1) ?? undefined;
-  const generatingParams =
-    (focusedNode?.status.kind === 'generating'
+  const generationParams =
+    (focusedNode?.status.kind === 'generating' || focusedNode?.status.kind === 'stopped'
       ? paintingJobParamValues(focusedNode.status.job)
       : undefined) ?? (isAwaitingNode ? pending?.paramValues : undefined);
-  const loaderRatio = imageParamsAspectRatio(generatingParams);
-  const loaderWidth = Math.min(windowWidth - 32, windowHeight * 0.55 * loaderRatio);
+  const loaderRatio = imageParamsAspectRatio(generationParams);
+  const loaderWidth = Math.min(
+    windowWidth - insets.left - insets.right - 48,
+    windowHeight * 0.36 * loaderRatio,
+  );
 
   let canvas;
   if (mode === 'overview' && boardId) {
@@ -386,7 +386,6 @@ function PaintingBoardContent({
               nodeId: activeFocus.nodeId,
             });
           }}
-          onTap={() => (isEditing ? dismissInput() : setIsChromeHidden((hidden) => !hidden))}
           selectedAnnotationId={annotation.selectedId}
           uri={shownImage.uri}
         />
@@ -394,27 +393,42 @@ function PaintingBoardContent({
     );
   } else if (isGenerating) {
     canvas = (
-      <Pressable className="flex-1 items-center justify-center" onPress={dismissInput}>
-        <ImageGenerationLoader
-          height={loaderWidth / loaderRatio}
-          label={t('painting.status.generating')}
-          resolution={imageParamsResolutionLabel(generatingParams)}
-          width={loaderWidth}
-        />
-      </Pressable>
+      <Animated.View className="flex-1" style={generationStateStyle}>
+        <ScrollView
+          contentContainerClassName="grow items-center justify-center px-6 py-4"
+          keyboardShouldPersistTaps="handled"
+        >
+          <Pressable className="items-center" onPress={dismissInput}>
+            <ImageGenerationLoader
+              accessibilityLabel={t('painting.status.generating')}
+              active={isScreenFocused && !isEditorPresented}
+              height={loaderWidth / loaderRatio}
+              width={loaderWidth}
+            />
+          </Pressable>
+        </ScrollView>
+      </Animated.View>
     );
   } else if (focusedNode?.status.kind === 'stopped') {
     const canRetry = retryableJobInput(focusedNode.status.job) !== undefined;
     canvas = (
-      <View className="flex-1 justify-center px-6">
-        <View className="rounded-3xl bg-card p-4">
-          <PaintingErrorMessage
+      <Animated.View className="flex-1" style={generationStateStyle}>
+        <ScrollView
+          contentContainerClassName="grow items-center justify-center px-6 py-4"
+          keyboardShouldPersistTaps="handled"
+        >
+          <PaintingGenerationFailure
             failure={stoppedFailure(focusedNode)}
+            height={loaderWidth / loaderRatio}
+            key={focusedNode.id}
             message={focusedNode.status.job?.error?.message}
             onRetry={canRetry ? retryFocused : undefined}
+            prompt={focusedPainting?.brief ?? focusedPainting?.prompt}
+            status={focusedNode.status.reason}
+            width={loaderWidth}
           />
-        </View>
-      </View>
+        </ScrollView>
+      </Animated.View>
     );
   } else if (focusedNode) {
     canvas = (
@@ -511,32 +525,30 @@ function PaintingBoardContent({
           )}
         </Animated.View>
       ) : null}
-      {showChrome ? (
-        <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
-          <PaintingWorkspaceInput
-            initialParamValues={initialParamValues}
-            onCancel={handleCancel}
-            onGenerate={handleGenerate}
-            onRatioChange={prepareRatioChange}
-            painting={focusedPainting}
-            placeholder={
-              mode === 'overview'
-                ? t('painting.board.newRootPlaceholder')
-                : annotation.selectedId !== null
-                  ? t('painting.editor.annotationPlaceholder', { number: annotation.selectedId })
-                  : referenceImage
-                    ? t('painting.focus.editPlaceholder')
-                    : undefined
-            }
-            preparePrompt={(text, images) =>
-              annotationKey && images.some((image) => image.fileEntryId === annotationKey)
-                ? annotation.preparePrompt(text)
-                : text
-            }
-            status={mode === 'focus' && isGenerating && !isAwaitingNode ? 'generating' : 'idle'}
-          />
-        </ComposerDock>
-      ) : null}
+      <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
+        <PaintingWorkspaceInput
+          initialParamValues={initialParamValues}
+          onCancel={handleCancel}
+          onGenerate={handleGenerate}
+          onRatioChange={prepareRatioChange}
+          painting={focusedPainting}
+          placeholder={
+            mode === 'overview'
+              ? t('painting.board.newRootPlaceholder')
+              : annotation.selectedId !== null
+                ? t('painting.editor.annotationPlaceholder', { number: annotation.selectedId })
+                : referenceImage
+                  ? t('painting.focus.editPlaceholder')
+                  : undefined
+          }
+          preparePrompt={(text, images) =>
+            annotationKey && images.some((image) => image.fileEntryId === annotationKey)
+              ? annotation.preparePrompt(text)
+              : text
+          }
+          status={mode === 'focus' && isGenerating && !isAwaitingNode ? 'generating' : 'idle'}
+        />
+      </ComposerDock>
       {isInfoOpen && focusedPainting ? (
         <PaintingGenerationInfoSheet
           modelName={modelName}

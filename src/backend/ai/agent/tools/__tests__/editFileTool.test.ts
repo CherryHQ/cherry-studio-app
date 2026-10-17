@@ -12,9 +12,14 @@ import {
 
 const SOURCE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const EDITED_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
-const NO_DRAFTS: TurnEditScope = { availableFiles: new Map(), draftFileEntryIds: new Set() };
+const NO_DRAFTS: TurnEditScope = {
+  availableFiles: new Map(),
+  fileEntryIds: new Set([SOURCE_ID, EDITED_ID]),
+  draftFileEntryIds: new Set(),
+};
 const SOURCE_IS_DRAFT: TurnEditScope = {
   availableFiles: new Map(),
+  fileEntryIds: new Set([SOURCE_ID, EDITED_ID]),
   draftFileEntryIds: new Set([SOURCE_ID]),
 };
 
@@ -35,7 +40,9 @@ describe('editFileTool', () => {
       {
         data: 'Hello Cherry\n',
         mediaType: 'text/markdown',
-        name: 'notes v2.md',
+        name: 'notes.md',
+        baseFileEntryId: SOURCE_ID,
+        baseUpdatedAt: undefined,
         provenance: 'generated',
       },
       expect.any(AbortSignal),
@@ -46,7 +53,8 @@ describe('editFileTool', () => {
         status: 'edited',
         sourceFileEntryId: SOURCE_ID,
         fileEntryId: EDITED_ID,
-        filename: 'notes v2.md',
+        revision: 2,
+        filename: 'notes.md',
         size: 13,
         replacements: 1,
         snippet: 'Hello Cherry\n',
@@ -56,7 +64,7 @@ describe('editFileTool', () => {
         {
           ref: { kind: 'managed-file', fileEntryId: EDITED_ID },
           mediaType: 'text/markdown',
-          name: 'notes v2.md',
+          name: 'notes.md',
           kind: 'derived',
         },
       ],
@@ -81,6 +89,7 @@ describe('editFileTool', () => {
         status: 'edited',
         sourceFileEntryId: SOURCE_ID,
         fileEntryId: SOURCE_ID,
+        revision: 3,
         filename: 'notes.md',
         size: 13,
         replacements: 1,
@@ -157,6 +166,7 @@ describe('editFileTool', () => {
     const drafts = new Set<string>();
     const tool = createEditFileTool(files, {
       availableFiles: new Map(),
+      fileEntryIds: new Set([SOURCE_ID, EDITED_ID]),
       draftFileEntryIds: drafts,
     });
     await execute(tool, { file_entry_id: SOURCE_ID, old_string: 'alpha', new_string: 'ALPHA' });
@@ -201,18 +211,19 @@ describe('editFileTool', () => {
     );
     expect(first.artifacts).toHaveLength(1);
     expect(second.artifacts).toHaveLength(0);
-    expect(second.value).toMatchObject({ fileEntryId: EDITED_ID, filename: 'notes v2.md' });
+    expect(second.value).toMatchObject({ fileEntryId: EDITED_ID, filename: 'notes.md' });
   });
 
-  test('skips a version number already used in the Session', async () => {
+  test('preserves the source name even when another session file shares it', async () => {
     const files = createFiles('Hello world\n');
     const scope: TurnEditScope = {
       availableFiles: new Map([
         [
           EDITED_ID,
-          { fileEntryId: EDITED_ID, mediaType: 'text/markdown', name: 'notes v2.md', size: 1 },
+          { fileEntryId: EDITED_ID, mediaType: 'text/markdown', name: 'notes.md', size: 1 },
         ],
       ]),
+      fileEntryIds: new Set([SOURCE_ID, EDITED_ID]),
       draftFileEntryIds: new Set(),
     };
     await execute(createEditFileTool(files, scope), {
@@ -222,7 +233,7 @@ describe('editFileTool', () => {
     });
 
     expect(files.createTextEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'notes v3.md' }),
+      expect.objectContaining({ name: 'notes.md' }),
       expect.any(AbortSignal),
     );
   });
@@ -491,8 +502,11 @@ describe('editFileTool', () => {
         old_string: expect.objectContaining({ type: 'string' }),
         new_string: expect.objectContaining({ type: 'string' }),
         replace_all: expect.objectContaining({ type: 'boolean' }),
+        path: expect.objectContaining({ type: 'string' }),
+        base_file_entry_id: expect.objectContaining({ type: 'string' }),
+        base_revision: expect.objectContaining({ type: 'integer' }),
       },
-      required: ['file_entry_id', 'old_string', 'new_string'],
+      required: ['old_string', 'new_string'],
       additionalProperties: false,
     });
     expect(schema).not.toMatchObject({

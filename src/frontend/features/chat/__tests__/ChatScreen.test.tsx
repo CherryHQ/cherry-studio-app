@@ -131,6 +131,10 @@ jest.mock('../runtime', () => ({
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileWorkspace: () => ({ folderId: null }),
+}));
+
 jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
 
 jest.mock('../components/ChatInput', () => ({

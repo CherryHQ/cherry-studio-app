@@ -4,10 +4,12 @@ import { useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { Backend, ResolvedFile } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import type { Painting } from '@/shared/data/types/painting';
 
 import { BackendProvider } from '../BackendProvider';
+import { DataApiProvider } from '../DataApiProvider';
 import { FileQueryBridge } from '../FileQueryBridge';
 import {
   resolvedPaintingFilesQueryOptions,
@@ -46,6 +48,13 @@ const unrelatedPainting: Painting = {
   files: { input: [], output: ['output-2'] },
 };
 const paintings = [painting, unrelatedPainting];
+const dataApi = {
+  delete: jest.fn(),
+  get: jest.fn(),
+  patch: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+} satisfies ApiClient;
 
 it.each([false, true])(
   'refreshes trash and restore projections with an active board query: %s',
@@ -92,8 +101,10 @@ it.each([false, true])(
         renderer = create(
           <QueryClientProvider client={client}>
             <BackendProvider backend={backend}>
-              <FileQueryBridge />
-              <Probe />
+              <DataApiProvider dataApi={dataApi}>
+                <FileQueryBridge />
+                <Probe />
+              </DataApiProvider>
             </BackendProvider>
           </QueryClientProvider>,
         );
