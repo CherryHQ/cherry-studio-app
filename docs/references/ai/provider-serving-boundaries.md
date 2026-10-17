@@ -103,7 +103,7 @@ and invocation usage remain part of the text-generation contract.
 
 Pi selects the first API key through `ProviderService`'s per-provider round-robin cursor. When a
 request fails before substantive content or a tool-call event is emitted, Pi tries every other
-enabled key at most once within the request's shared 120-second waiting budget, in cyclic order
+enabled key at most once within the request's shared 30-minute waiting budget, in cyclic order
 starting after the key that failed, and reports the last failure if none succeeds. Network failures,
 provider timeouts, streams that end without a terminal event, and every HTTP or provider error switch
 keys, including errors reported inside an HTTP 200 stream and failures to resolve a key's
@@ -122,8 +122,8 @@ This policy belongs to Pi; non-conversation AI SDK and image calls retain their 
 The idle timer wraps the complete key-failover sequence and is the only request bound; the
 provider SDK's own connection timeout is not configured. Credential switching, stream-start events,
 and empty text/thinking events do not reset it, so the budget is identical for single-key and
-multi-key providers: a request that keeps failing or produces no content ends after 120 seconds
-total, rather than waiting 120 seconds per key. Once content events reach the caller, each event
+multi-key providers: a request that keeps failing or produces no content ends after 30 minutes
+total, rather than waiting 30 minutes per key. Once content events reach the caller, each event
 resets the idle timer so ongoing generation can continue. Expiry ends the request and aborts the
 active transport without trying another key. Cancellation, source creation/iteration failures, and
 streams closed without a terminal event all settle the final result, including when source creation
