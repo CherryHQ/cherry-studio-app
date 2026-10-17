@@ -307,9 +307,9 @@ checking the current pointer and revision inside the write transaction. Later tu
 version under the same logical name. A failed save removes its uncommitted blob.
 
 `read_file` and `edit_file` accept conversation references and workspace files. Outside-library
-search and reads use `library_search_files` and `library_read_file`; every call requires confirmation
-and is ineligible for automatic approval. An approved read permits editing that source during the
-turn, but never grants unrestricted reads. Editing an outside source creates a workspace copy.
+search and reads use `library_search_files` and `library_read_file`, which are `auto` like other
+reads. A successful read permits editing that source during the turn, but never grants unrestricted
+reads. Editing an outside source creates a workspace copy.
 `generate_image`, direct image generation, Code Mode tool calls and saved script outputs, and stored
 MCP results use the captured workspace destination. Tool outputs contain managed ids and revisions,
 never device paths. A workspace turn names its folder in `list_workspace`, and the system prompt

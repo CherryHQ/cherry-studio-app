@@ -3,7 +3,7 @@ import * as z from 'zod';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 export const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
-export const TrashKindSchema = z.enum(['file', 'folder', 'version']);
+export const TrashKindSchema = z.enum(['file', 'folder']);
 export type TrashKind = z.infer<typeof TrashKindSchema>;
 export const TrashQuerySchema = z.strictObject({
   cursor: z.string().optional(),

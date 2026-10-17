@@ -185,8 +185,8 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and low-frequency Skill installation/adaptation tools register as upstream `deferred`
-tools. Upstream `tool_search` ranks names,
+MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation and library
+management) register as upstream `deferred` tools. Upstream `tool_search` ranks names,
 descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
@@ -242,12 +242,33 @@ name search, and subfolder creation use `list_workspace`, `find_workspace_files`
 `create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
 live destination ancestry. Without a workspace, new outputs use the library root.
 
-The `fileLibrary` capability adds `library_search_files` and `library_read_file`, enabled by default
-through the Agent's deny-list model. Every call, including pagination, uses `ask` with
-`autoApprovalEligible: false`; automatic approval cannot bypass consent. An approved read permits
-editing that source into a workspace copy during this turn and leaves the source unchanged. It does
-not grant `read_file` future outside-library access. The Agent has no delete, move, restore, or purge
-tool. `generate_image` still scopes input images to conversation references; outputs use the
+The `fileLibrary` capability adds library search/read and management tools, enabled by default
+through the Agent's deny-list model. They follow the shared approval rule: reads
+(`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
+`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+Agent's approval mode decides whether a mutation waits for the user. A successful library read
+permits editing that source into a workspace copy during this turn and leaves the source unchanged.
+It does not grant `read_file` future outside-library access.
+
+The six management tools are deferred; `library_search_files` names them for `tool_search`.
+`library_list_folders` searches active folder names or lists direct children, returning stable ids
+and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
+and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
+rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
+changes only its display name. The existing library service owns cycle prevention, active
+destinations, collision rules, transactions, and cache invalidation. Move results report any
+collision suffix selected by that service.
+
+`library_trash_item` moves a file with all versions or an active folder subtree into the existing
+30-day trash. `library_list_trash` pages recoverable files and folders; `library_restore_item`
+restores one group by its exact `kind` and `id`. Both use the host-owned `TrashRuntime`, the same
+owner as the library screen, which notifies file subscribers after commit. These tools work without
+a selected workspace. Mutations recheck turn cancellation when their write transaction starts and
+before it commits; cancellation rolls back the whole change. The Agent cannot permanently purge
+items or empty the trash.
+
+`generate_image` still scopes input images to conversation references; outputs use the
 workspace, as do direct image generation and managed MCP result files. Code Mode calls these same
 authorized tools and has no filesystem of its own.
 

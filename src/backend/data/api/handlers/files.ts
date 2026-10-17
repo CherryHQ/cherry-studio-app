@@ -19,8 +19,11 @@ import {
 import type { HandlersFor } from '@/shared/data/api/types';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
+import type { TrashMutations } from './trash';
+
 export function createFileHandlers(
   entries: FileEntryService,
+  trash: Pick<TrashMutations, 'trashFolder'>,
   library: FileLibraryService = fileLibraryService,
 ): HandlersFor<FileSchemas> {
   return {
@@ -34,10 +37,6 @@ export function createFileHandlers(
     '/files/history': {
       GET: ({ query }) => library.history(z.uuid().parse(query.id)),
     },
-    '/files/versions/:id': {
-      DELETE: async ({ params }) =>
-        void (await library.trashFileEntry(z.uuid().parse(params.id), true)),
-    },
     '/files/folders': {
       GET: () => library.folders(),
       POST: ({ body }) => {
@@ -48,7 +47,7 @@ export function createFileHandlers(
     '/files/folders/:id': {
       PATCH: ({ params, body }) =>
         library.updateFolder(z.uuid().parse(params.id), UpdateFileFolderSchema.parse(body)),
-      DELETE: async ({ params }) => void (await library.trashFolder(z.uuid().parse(params.id))),
+      DELETE: ({ params }) => trash.trashFolder(z.uuid().parse(params.id)),
     },
     '/files/workspace': {
       GET: ({ query }) => library.workspaceBinding(z.string().min(1).parse(query.sessionId)),

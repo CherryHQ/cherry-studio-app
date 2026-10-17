@@ -300,6 +300,8 @@ export type RuntimeTool = {
   autoApprovalEligible?: boolean;
   /** Refuse before approval until a trusted instruction section with this key is in context. */
   requiredInstructions?: { key: string; refusal: string };
+  /** Low-frequency tools are found through tool_search instead of sent with every request. */
+  deferred?: boolean;
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>;
 };
 

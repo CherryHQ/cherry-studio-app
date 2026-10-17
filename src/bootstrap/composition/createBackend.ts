@@ -74,11 +74,13 @@ import {
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
@@ -113,6 +115,7 @@ export function createBackend(
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    trash: Pick<TrashRuntime, 'trashFile'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -345,7 +348,7 @@ export function createBackend(
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
-        moveToTrash: services.fileContent.moveToTrash,
+        moveToTrash: (id) => infrastructure.trash.trashFile(FileEntryIdSchema.parse(id)),
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
         getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,

@@ -1784,6 +1784,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       approval: tool.approval,
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
+      deferred: tool.deferred,
     })),
     webTools: configuration.webTools,
   };

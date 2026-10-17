@@ -1,10 +1,8 @@
 import { Directory, File } from 'expo-file-system';
 
-import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { storageDirectory } from '@/backend/data/storage/storagePaths';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -32,14 +30,6 @@ import { deleteFilePreview } from './filePreviewCache';
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
-export async function trashInternalEntry(
-  library: Pick<FileLibraryService, 'trashFileEntry'>,
-  id: FileEntryId,
-): Promise<boolean> {
-  storageMutationGate.assertWritable();
-  const ids = await library.trashFileEntry(id);
-  return ids.length > 0;
-}
 
 export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryProvenance } & (
     | {

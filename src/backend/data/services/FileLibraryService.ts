@@ -12,7 +12,6 @@ import {
   type FileFolderRow,
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { TrashItem, TrashKind } from '@/shared/data/api/schemas/trash';
@@ -133,6 +132,11 @@ export class FileLibraryService {
     return row?.file ?? null;
   }
 
+  /** Look up the stable logical identity, independently of its current version. */
+  file(id: string): Promise<LibraryFileRow> {
+    return this.requireFile(this.db, id);
+  }
+
   async history(id: string): Promise<FileEntry[]> {
     const file = await this.requireFile(this.db, id);
     await requireActiveFolder(this.db, file.folderId);
@@ -171,6 +175,7 @@ export class FileLibraryService {
   async updateFolder(
     id: string,
     changes: { name?: string; parentId?: string | null },
+    signal?: AbortSignal,
   ): Promise<void> {
     await this.mutate(async (tx) => {
       const [folder] = await tx
@@ -190,13 +195,14 @@ export class FileLibraryService {
         .update(fileFolderTable)
         .set({ parentId, name, nameKey: fileNameKey(name) })
         .where(eq(fileFolderTable.id, id));
-    });
+    }, signal);
     publishDataApiChanges(['/files/folders', '/files/workspace', '/files/library']);
   }
 
   async updateFile(
     id: string,
     changes: { name?: string; folderId?: string | null },
+    signal?: AbortSignal,
   ): Promise<void> {
     await this.mutate(async (tx) => {
       const file = await this.requireFile(tx, id);
@@ -210,7 +216,7 @@ export class FileLibraryService {
         .update(libraryFileTable)
         .set({ folderId, name, nameKey: fileNameKey(name) })
         .where(eq(libraryFileTable.id, id));
-    });
+    }, signal);
     publishDataApiChanges(['/files/library']);
   }
 
@@ -292,7 +298,8 @@ export class FileLibraryService {
     return { folderId: folder.id, name, file: file ?? null };
   }
 
-  async trashFileEntry(entryId: string, versionOnly = false): Promise<string[]> {
+  /** Trash the logical file that owns this version, with all its versions. */
+  async trashFileEntry(entryId: string, signal?: AbortSignal): Promise<string[]> {
     const ids = await this.mutate(async (tx) => {
       const [entry] = await tx
         .select()
@@ -301,34 +308,22 @@ export class FileLibraryService {
       if (!entry?.libraryFileId) throw DataApiErrorFactory.notFound('FileEntry', entryId);
       const file = await this.requireFile(tx, entry.libraryFileId);
       const deletedAt = Date.now();
-      if (versionOnly && file.currentEntryId === entry.id)
-        throw DataApiErrorFactory.invalidOperation(
-          'trashVersion',
-          'Delete the whole file to remove its current version.',
-        );
-      if (!versionOnly)
-        await tx
-          .update(libraryFileTable)
-          .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
-          .where(eq(libraryFileTable.id, file.id));
+      await tx
+        .update(libraryFileTable)
+        .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
+        .where(eq(libraryFileTable.id, file.id));
       const rows = await tx
         .update(fileEntryTable)
-        .set({
-          deletedAt,
-          trashedWith: versionOnly ? null : file.id,
-          updatedAt: sql`${fileEntryTable.updatedAt}`,
-        })
-        .where(
-          versionOnly ? eq(fileEntryTable.id, entryId) : eq(fileEntryTable.libraryFileId, file.id),
-        )
+        .set({ deletedAt, trashedWith: file.id, updatedAt: sql`${fileEntryTable.updatedAt}` })
+        .where(eq(fileEntryTable.libraryFileId, file.id))
         .returning({ id: fileEntryTable.id });
       return rows.map((row) => row.id);
-    });
+    }, signal);
     publishFileEntryChanges(ids);
     return ids;
   }
 
-  async trashFolder(id: string): Promise<string[]> {
+  async trashFolder(id: string, signal?: AbortSignal): Promise<string[]> {
     const entryIds = await this.mutate(async (tx) => {
       await requireActiveFolder(tx, id);
       const ids = await this.descendants(tx, id, true);
@@ -359,12 +354,12 @@ export class FileLibraryService {
         )
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
     publishFileEntryChanges(entryIds, ['/files/folders', '/files/workspace']);
     return entryIds;
   }
 
-  async restore(kind: TrashKind, id: string): Promise<string[]> {
+  async restore(kind: TrashKind, id: string, signal?: AbortSignal): Promise<string[]> {
     const entryIds = await this.mutate(async (tx) => {
       if (kind === 'folder') {
         const [folder] = await tx.select().from(fileFolderTable).where(eq(fileFolderTable.id, id));
@@ -402,7 +397,7 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.trashedWith, id));
-      } else if (kind === 'file') {
+      } else {
         const [file] = await tx.select().from(libraryFileTable).where(eq(libraryFileTable.id, id));
         if (!file || file.deletedAt === null || file.trashedWith !== null)
           throw DataApiErrorFactory.notFound('TrashItem', id);
@@ -422,39 +417,14 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.id, id));
-      } else {
-        const [entry] = await tx.select().from(fileEntryTable).where(eq(fileEntryTable.id, id));
-        if (!entry || entry.deletedAt === null || entry.trashedWith !== null)
-          throw DataApiErrorFactory.notFound('TrashItem', id);
-        const [file] = entry.libraryFileId
-          ? await tx
-              .select()
-              .from(libraryFileTable)
-              .where(eq(libraryFileTable.id, entry.libraryFileId))
-          : [];
-        if (!file || file.deletedAt !== null) {
-          const fileId = createOrderedUuid();
-          const name = await availableLibraryName(tx, null, entry.filename, { suffix: true });
-          await tx.insert(libraryFileTable).values({
-            id: fileId,
-            folderId: null,
-            name,
-            nameKey: fileNameKey(name),
-            currentEntryId: entry.id,
-          });
-          await tx
-            .update(fileEntryTable)
-            .set({ libraryFileId: fileId, updatedAt: sql`${fileEntryTable.updatedAt}` })
-            .where(eq(fileEntryTable.id, id));
-        }
       }
       const entries = await tx
         .update(fileEntryTable)
         .set({ deletedAt: null, trashedWith: null, updatedAt: sql`${fileEntryTable.updatedAt}` })
-        .where(kind === 'version' ? eq(fileEntryTable.id, id) : eq(fileEntryTable.trashedWith, id))
+        .where(eq(fileEntryTable.trashedWith, id))
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
     publishFileEntryChanges(
       entryIds,
       kind === 'folder' ? ['/files/folders', '/files/workspace'] : [],
@@ -467,21 +437,6 @@ export class FileLibraryService {
     const paths: string[] = item.kind === 'folder' ? ['/files/folders', '/files/workspace'] : [];
     const removedEntries = await this.mutate(async (tx) => {
       const entries = new FileEntryService(this.dbService);
-      if (item.kind === 'version') {
-        const [row] = await tx
-          .select()
-          .from(fileEntryTable)
-          .where(
-            and(
-              eq(fileEntryTable.id, item.id),
-              eq(fileEntryTable.deletedAt, item.deletedAt),
-              isNull(fileEntryTable.trashedWith),
-            ),
-          );
-        if (!row) return null;
-        await entries.deleteTx(tx, row.id);
-        return [rowToFileEntry(row)];
-      }
       let fileIds: string[];
       if (item.kind === 'folder') {
         const [folder] = await tx
@@ -591,11 +546,19 @@ export class FileLibraryService {
     return [...ids];
   }
 
-  private mutate<T>(operation: (tx: Database) => Promise<T>): Promise<T> {
+  private async mutate<T>(
+    operation: (tx: Database) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    signal?.throwIfAborted();
     storageMutationGate.assertWritable();
     return this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
       storageMutationGate.assertWritable();
-      return operation(tx);
+      const value = await operation(tx);
+      // Abort before commit so a queued or in-flight tool mutation rolls back as one unit.
+      signal?.throwIfAborted();
+      return value;
     });
   }
 }

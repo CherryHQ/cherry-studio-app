@@ -7,11 +7,7 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import { createTestDb } from '@/backend/data/services/__tests__/_testDb';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
-import {
-  resolveFileEntry,
-  rewriteInternalTextEntry,
-  trashInternalEntry,
-} from '@/backend/services/file/fileStorage';
+import { resolveFileEntry, rewriteInternalTextEntry } from '@/backend/services/file/fileStorage';
 import { TrashRuntime } from '@/backend/services/trash';
 import { TRASH_RETENTION_MS } from '@/shared/data/api/schemas/trash';
 
@@ -96,7 +92,7 @@ afterEach(async () => {
 });
 
 test('file trash preserves bytes and previews, hides ordinary reads, and restores the same identity', async () => {
-  await expect(trashInternalEntry(library, fileId)).resolves.toBe(true);
+  await expect(runtime.trashFile(fileId)).resolves.toBe(true);
   expect(mockFiles.has(bytes)).toBe(true);
   expect(mockFiles.has(preview)).toBe(true);
   expect((await files.listByCursor()).items).toEqual([]);
@@ -142,8 +138,8 @@ test('pagination includes each file when deletion timestamps match', async () =>
     INSERT INTO file_entry (id, library_file_id, filename, media_type, size, created_at, updated_at)
     VALUES ('${sourceId}', '${sourceId}', 'other.txt', 'text/plain', 5, 1, 1);
   `);
-  await trashInternalEntry(library, fileId);
-  await trashInternalEntry(library, sourceId);
+  await runtime.trashFile(fileId);
+  await runtime.trashFile(sourceId);
   const first = await runtime.entries.list({ limit: 1 });
   const second = await runtime.entries.list({ limit: 1, cursor: first.nextCursor });
   expect([first.items[0].id, second.items[0].id].sort()).toEqual([fileId, sourceId].sort());
@@ -153,7 +149,7 @@ test('pagination includes each file when deletion timestamps match', async () =>
 
 test('automatic removal uses a strict 30-day boundary and deletes file bytes and previews', async () => {
   const cutoff = now - TRASH_RETENTION_MS;
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   sqlite.prepare('UPDATE file_entry SET deleted_at = ? WHERE id = ?').run(cutoff, fileId);
   sqlite.prepare('UPDATE library_file SET deleted_at = ? WHERE id = ?').run(cutoff, fileId);
   await runtime.sweep();
@@ -170,7 +166,7 @@ test('automatic removal uses a strict 30-day boundary and deletes file bytes and
 });
 
 test('stale deletion snapshots cannot remove restored records', async () => {
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   const candidates = await runtime.entries.candidates();
   await runtime.restore('file', fileId);
   for (const item of candidates) {
@@ -180,7 +176,7 @@ test('stale deletion snapshots cannot remove restored records', async () => {
 });
 
 test('a failed restore leaves membership intact and emptying trash leaves sessions intact', async () => {
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   db.failNextWriteTx(new Error('disk full'));
   await expect(runtime.restore('file', fileId)).rejects.toThrow('disk full');
   expect(await files.findById(fileId)).toBeNull();
@@ -192,17 +188,47 @@ test('a failed restore leaves membership intact and emptying trash leaves sessio
 });
 
 test('backup freeze prevents trash mutations and cleanup', async () => {
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   const release = storageMutationGate.freeze();
   try {
     expect(() => runtime.empty()).toThrow();
     expect(() => runtime.sweep()).toThrow();
     expect(() => runtime.restore('file', fileId)).toThrow();
+    expect(() => runtime.trashFile(fileId)).toThrow();
+    expect(() => runtime.trashFolder('folder')).toThrow();
     expect(mockFiles.has(bytes)).toBe(true);
   } finally {
     release();
   }
 });
+
+test.each(['file', 'folder'] as const)(
+  '%s deletion remains pending through commit and drains before shutdown',
+  async (kind) => {
+    const folder = await library.createFolder(null, 'Workspace');
+    await library.updateFile(fileId, { folderId: folder.id });
+    let release!: () => void;
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const blocking = db.dbService.withWriteTx(async () => barrier);
+    const deleting = kind === 'file' ? runtime.trashFile(fileId) : runtime.trashFolder(folder.id);
+    expect(runtime.hasPendingStorageWork()).toBe(true);
+    const stopping = runtime._doStop();
+    try {
+      await Promise.resolve();
+      expect(runtime.isStopped).toBe(false);
+      await expect(runtime.trashFile(fileId)).rejects.toThrow('Trash runtime has stopped');
+      await expect(runtime.trashFolder(folder.id)).rejects.toThrow('Trash runtime has stopped');
+    } finally {
+      release();
+      await Promise.all([blocking, deleting, stopping]);
+    }
+    expect(runtime.isStopped).toBe(true);
+    expect(runtime.hasPendingStorageWork()).toBe(false);
+    expect(await files.findById(fileId)).toBeNull();
+  },
+);
 
 test('a queued deletion prevents a later draft edit from changing the recoverable bytes', async () => {
   sqlite.prepare("UPDATE file_entry SET provenance = 'generated' WHERE id = ?").run(fileId);
@@ -211,7 +237,7 @@ test('a queued deletion prevents a later draft edit from changing the recoverabl
     release = resolve;
   });
   const blocking = db.dbService.withWriteTx(async () => barrier);
-  const deleting = trashInternalEntry(library, fileId);
+  const deleting = runtime.trashFile(fileId);
   const editing = expect(
     rewriteInternalTextEntry(files, { id: fileId, data: 'changed' }),
   ).rejects.toThrow('Draft file entry does not exist');
@@ -225,7 +251,7 @@ test('a queued deletion prevents a later draft edit from changing the recoverabl
 test('an admitted draft edit commits matching metadata before the queued deletion', async () => {
   sqlite.prepare("UPDATE file_entry SET provenance = 'generated' WHERE id = ?").run(fileId);
   const editing = rewriteInternalTextEntry(files, { id: fileId, data: 'changed' });
-  const deleting = trashInternalEntry(library, fileId);
+  const deleting = runtime.trashFile(fileId);
   await Promise.all([editing, deleting]);
   await runtime.restore('file', fileId);
   expect(mockContents.get(bytes)).toBe('changed');
@@ -233,7 +259,7 @@ test('an admitted draft edit commits matching metadata before the queued deletio
 });
 
 test('a failed unlink still removes the entry permanently', async () => {
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   mockUnlinkFailures.add(bytes);
   await runtime.delete('file', fileId);
   expect((await runtime.entries.list()).items).toEqual([]);
@@ -242,7 +268,7 @@ test('a failed unlink still removes the entry permanently', async () => {
 });
 
 test('a failed deletion commit preserves the recoverable entry and its bytes', async () => {
-  await trashInternalEntry(library, fileId);
+  await runtime.trashFile(fileId);
   db.failWriteTxCommit(new Error('commit failed'));
   await expect(runtime.delete('file', fileId)).rejects.toThrow('commit failed');
   expect(await runtime.entries.get('file', fileId)).toMatchObject({ id: fileId });

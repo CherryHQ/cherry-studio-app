@@ -72,6 +72,8 @@ it.each([1, 500])(
       },
     };
     client.setQueryData(['/files/library'], []);
+    client.setQueryData(['/files/library', { folderId: 'folder' }], []);
+    client.setQueryData(['/files/folders', { parentId: 'folder' }], []);
     client.setQueryData(['/files/history', { id: 'lineage' }], []);
     client.setQueryData(['/agent-sessions'], []);
     client.setQueryData(['/agent-sessions/session'], {});
@@ -91,12 +93,23 @@ it.each([1, 500])(
         );
       });
       for (let index = 0; index < count; index += 1)
-        changed(['/files/library', '/files/history', `/files/entries/file-${index}`]);
+        changed([
+          '/files/library',
+          '/files/folders',
+          '/files/history',
+          `/files/entries/file-${index}`,
+        ]);
       await act(async () => {
         await jest.advanceTimersByTimeAsync(300);
       });
       expect(invalidate).toHaveBeenCalledTimes(1);
       expect(client.getQueryState(['/files/library'])?.isInvalidated).toBe(true);
+      expect(client.getQueryState(['/files/library', { folderId: 'folder' }])?.isInvalidated).toBe(
+        true,
+      );
+      expect(client.getQueryState(['/files/folders', { parentId: 'folder' }])?.isInvalidated).toBe(
+        true,
+      );
       expect(client.getQueryState(['/files/history', { id: 'lineage' }])?.isInvalidated).toBe(true);
       expect(client.getQueryState(['files', 'file-0', 123])?.isInvalidated).toBe(true);
       expect(
