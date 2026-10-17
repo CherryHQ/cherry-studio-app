@@ -312,7 +312,6 @@
   "chat.errorPart.title": "Error",
   "chat.errorPart.unreadable.message": "This message contains unreadable or unsupported content. The original data has been kept.",
   "chat.errorPart.unreadable.title": "Some content cannot be displayed",
-  "chat.filePicker.add": "Add",
   "chat.filePicker.addSelected_one": "Add {{count}} file",
   "chat.filePicker.addSelected_other": "Add {{count}} files",
   "chat.filePicker.alreadyAdded": "Already added",

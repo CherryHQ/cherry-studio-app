@@ -146,6 +146,7 @@ export function useFileEntryPages({
     hasNext: query.hasNext,
     isLoading: entries.length === 0 && (!enabled || query.isLoading || uriPages.isPending),
     isLoadingMore: query.isLoadingMore,
+    isResolving: uriPages.isPending,
     loadNext: query.loadNext,
     refresh,
   };

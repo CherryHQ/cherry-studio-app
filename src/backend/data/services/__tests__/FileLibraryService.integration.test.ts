@@ -1,5 +1,6 @@
 import { validateFileLibraryReferences } from '@/backend/data/db/fileLibraryValidation';
 import { createServiceTestDatabase } from '@/backend/data/serviceTestDatabase';
+import { LibraryFileSchema } from '@/shared/data/types/fileLibrary';
 
 import { FileEntryService } from '../FileEntryService';
 import { FileLibraryService } from '../FileLibraryService';
@@ -35,6 +36,30 @@ describe('file library folders, versions, and workspaces', () => {
     });
     expect(database.sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   }
+
+  it('returns the logical modification time used by cursor ordering, independently of the content revision', async () => {
+    const original = await create(1);
+    await create(2);
+    database.sqlite.prepare('UPDATE library_file SET updated_at = ? WHERE id = ?').run(300, id(1));
+    database.sqlite.prepare('UPDATE library_file SET updated_at = ? WHERE id = ?').run(200, id(2));
+
+    const firstPage = await library.list({ folderId: null, limit: 1 });
+    expect(LibraryFileSchema.parse(firstPage.items[0])).toMatchObject({
+      id: id(1),
+      updatedAt: 300,
+      entry: { updatedAt: original.updatedAt },
+    });
+    const secondPage = await library.list({
+      folderId: null,
+      limit: 1,
+      cursor: firstPage.nextCursor,
+    });
+    expect(LibraryFileSchema.parse(secondPage.items[0])).toMatchObject({
+      id: id(2),
+      updatedAt: 200,
+    });
+    expect(secondPage.nextCursor).toBeUndefined();
+  });
 
   it('keeps duplicate root files and resolves normalized collisions when moving into folders', async () => {
     const folder = await library.createFolder(null, 'Research');

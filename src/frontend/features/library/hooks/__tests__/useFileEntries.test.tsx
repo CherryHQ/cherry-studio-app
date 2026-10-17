@@ -49,6 +49,7 @@ const libraryFile = (entry: FileEntry) => ({
   name: entry.filename,
   folderId: null,
   entry,
+  updatedAt: entry.updatedAt,
   versionCount: 1,
 });
 const dataApi = {

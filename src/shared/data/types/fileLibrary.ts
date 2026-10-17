@@ -19,6 +19,8 @@ export const LibraryFileSchema = z.strictObject({
   folderId: z.uuid().nullable(),
   name: SafeNameSchema,
   entry: FileEntrySchema,
+  /** Logical file changes, including rename/move; also owns the library cursor order. */
+  updatedAt: TimestampSchema,
   versionCount: z.int().positive(),
 });
 export type LibraryFile = z.infer<typeof LibraryFileSchema>;
