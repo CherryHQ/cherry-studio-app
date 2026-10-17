@@ -56,7 +56,9 @@ export function DeviceConnectionScannerScreen({
     (qr: DesktopPairingQr) => {
       setInput({
         ...qr,
-        capabilities: ['configuration', 'agent'],
+        capabilities: qr.protocolVersions.includes(2)
+          ? ['configuration', 'agent', 'assistant']
+          : ['configuration', 'agent'],
         ...(connectionId ? { connectionId } : {}),
       });
       router.replace(

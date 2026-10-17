@@ -40,6 +40,7 @@ import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliv
 import type { ProviderAccountRuntime } from '@/backend/services/providers/account';
 import type { ProviderRegistryUpdaterService } from '@/backend/services/providers/ProviderRegistryUpdaterService';
 import type { RemoteAgentRuntime } from '@/backend/services/remoteAgent';
+import type { RemoteAssistantRuntime } from '@/backend/services/remoteAssistant';
 import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
@@ -134,6 +135,7 @@ export function createAppBootstrapRuntime(
   const desktopConnectionManager = host.container.get<DesktopConnectionManager>(
     'DesktopConnectionManager',
   );
+  const remoteAssistant = host.container.get<RemoteAssistantRuntime>('RemoteAssistantRuntime');
   const remoteAgent = host.container.get<RemoteAgentRuntime>('RemoteAgentRuntime');
   const diagnostics = host.container.get<DiagnosticBundleService>('DiagnosticBundleService');
   const documentExport = host.container.get<DocumentExportRuntime>('DocumentExportRuntime');
@@ -175,6 +177,7 @@ export function createAppBootstrapRuntime(
     desktopConnections,
     desktopConnectionManager,
     remoteAgent,
+    remoteAssistant,
     diagnostics,
     languageServing,
     providerRegistryUpdater,

@@ -36,7 +36,7 @@ export function ConversationQuestionSheet({ snapshot }: { snapshot: Conversation
   const { t } = useTranslation();
   const retired = snapshot.freshness.state === 'retired';
   const pending = snapshot.interactions.find(
-    (item) => item.state === 'pending' && item.kind === 'question',
+    (item) => item.state === 'pending' && item.kind === 'question' && !item.desktopRequired,
   );
   const interaction = retired ? undefined : pending;
   const input = useConversationResourceValue(interaction?.input, retired);

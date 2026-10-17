@@ -97,14 +97,36 @@ export function DeviceConnectionDetailScreen() {
         <Section>
           {connection.capabilities.includes('agent') ? (
             <Section.Item
-              label={t('settings.deviceConnections.openHome')}
+              accessibilityLabel={t('settings.deviceConnections.openHome')}
+              label={
+                <Text className="text-base text-foreground" numberOfLines={1}>
+                  {t('settings.deviceConnections.openHome')}
+                </Text>
+              }
               onPress={() => router.replace(remoteChatHref({ connectionId: connection.id }))}
+            />
+          ) : null}
+          {connection.capabilities.includes('assistant') ? (
+            <Section.Item
+              accessibilityLabel={t('remoteAssistant.open')}
+              label={
+                <Text className="text-base text-foreground" numberOfLines={1}>
+                  {t('remoteAssistant.open')}
+                </Text>
+              }
+              onPress={() =>
+                router.replace(remoteChatHref({ connectionId: connection.id, domain: 'assistant' }))
+              }
             />
           ) : null}
           {connection.capabilities.includes('configuration') ? (
             <Section.Item
-              description={t('settings.deviceConnections.syncGuide.entryDescription')}
-              label={t('settings.deviceConnections.syncGuide.entry')}
+              accessibilityLabel={t('settings.deviceConnections.syncGuide.entry')}
+              label={
+                <Text className="text-base text-foreground" numberOfLines={1}>
+                  {t('settings.deviceConnections.syncGuide.entry')}
+                </Text>
+              }
               onPress={() =>
                 router.replace({
                   params: { connectionId: connection.id },

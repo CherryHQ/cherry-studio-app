@@ -8,12 +8,12 @@ import {
 } from '@/backend/core/lifecycle';
 import type { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
 import type { DesktopConnections } from '@/backend/services/desktopConnections';
+import type { RemoteUploadFiles } from '@/backend/services/remoteConversation';
 import type { RemoteAgentModule, RemoteAgentSource } from '@/shared/contracts/remoteAgent';
 
 import { RemoteAgentError } from './RemoteAgentError';
 import { RemoteAgentScope, type RemoteBackgroundExecution } from './RemoteAgentScope';
 import { RemoteSessionReadCache } from './RemoteSessionReadCache';
-import type { RemoteUploadFiles } from './remoteUploads';
 
 type Entry = { scope: RemoteAgentScope; users: number; unwatch: () => void };
 type Opening = { promise: Promise<Entry>; waiters: number };

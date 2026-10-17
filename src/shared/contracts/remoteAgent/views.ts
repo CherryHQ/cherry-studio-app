@@ -8,6 +8,7 @@ export type RemoteWorkspaceSelection = { kind: 'registered'; id: string } | { ki
 export type RemoteAttachment = { fileEntryId: FileEntryId; name: string; mediaType: string };
 export type RemoteAttachmentDraftTarget =
   | { sessionId: string }
+  | { assistantId: string }
   | { agentId: string; workspace: RemoteWorkspaceSelection };
 export type RemoteAttachmentDraftView = {
   key: string;
@@ -30,6 +31,7 @@ export type RemoteStartInput = {
 } & (
   | { workspace: RemoteWorkspaceSelection; workspaceId?: never }
   | { workspaceId: string; workspace?: never }
+  | { workspace?: never; workspaceId?: never }
 );
 /** Pending work is recovered by the journal; the other states are final desktop outcomes. */
 export type RemoteOperationStatus = 'pending' | 'applied' | 'rejected' | 'interrupted';
@@ -71,12 +73,13 @@ export type RemoteSourceState = Readonly<{
 }>;
 export type RemoteSessionView = {
   id: string;
-  agentId: string;
-  workspaceId: string;
+  agentId?: string;
+  workspaceId?: string;
   workspaceKind?: 'registered' | 'system';
   title: string;
   updatedAt: string;
   historyVersion: string;
+  historyRevision?: string;
 };
 export type RemoteResource = string;
 export type RemoteMessagePart =
@@ -151,6 +154,7 @@ export type RemoteSessionSnapshot = {
     state: 'pending' | 'approved' | 'denied' | 'expired';
     input: RemoteResource;
     respondTarget?: string;
+    desktopRequired?: boolean;
   }[];
 };
 export type RemoteResourceValue =

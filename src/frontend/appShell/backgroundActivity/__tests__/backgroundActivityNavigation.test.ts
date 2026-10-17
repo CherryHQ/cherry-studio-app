@@ -18,5 +18,11 @@ test('maps current and legacy task links to their owning routes', () => {
   expect(backgroundActivityHref(`${scheme}://remote?connectionId=pc&sessionId=s`, scheme)).toEqual(
     remoteChatHref({ connectionId: 'pc', sessionId: 's' }),
   );
+  expect(
+    backgroundActivityHref(
+      `${scheme}://remote?connectionId=pc&sessionId=s&domain=assistant`,
+      scheme,
+    ),
+  ).toEqual(remoteChatHref({ connectionId: 'pc', sessionId: 's', domain: 'assistant' }));
   expect(backgroundActivityHref(`${scheme}://settings`, scheme)).toBeUndefined();
 });

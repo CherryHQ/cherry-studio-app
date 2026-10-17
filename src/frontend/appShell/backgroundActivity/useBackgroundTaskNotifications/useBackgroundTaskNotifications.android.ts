@@ -29,6 +29,7 @@ export function useBackgroundTaskNotifications(
   const taskKind = task?.kind;
   const taskId = task?.kind === 'painting' ? task.paintingId : task?.sessionId;
   const connectionId = task?.kind === 'remote-chat' ? task.connectionId : undefined;
+  const domain = task?.kind === 'remote-chat' ? task.domain : undefined;
 
   useVisibleBackgroundTask(task, enabled);
 
@@ -37,7 +38,7 @@ export function useBackgroundTaskNotifications(
       if (!enabled || !taskKind || !taskId) return;
       const target: BackgroundTaskLink =
         taskKind === 'remote-chat'
-          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId }
+          ? { kind: taskKind, connectionId: connectionId!, sessionId: taskId, domain }
           : taskKind === 'chat'
             ? { kind: taskKind, sessionId: taskId }
             : { kind: taskKind, paintingId: taskId };
@@ -76,6 +77,6 @@ export function useBackgroundTaskNotifications(
         appState.remove();
         presented.remove();
       };
-    }, [connectionId, enabled, scheme, taskId, taskKind]),
+    }, [connectionId, domain, enabled, scheme, taskId, taskKind]),
   );
 }

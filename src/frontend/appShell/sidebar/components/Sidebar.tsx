@@ -94,7 +94,9 @@ export function Sidebar({ navigation }: SidebarProps) {
 
   return (
     <SidebarActionsContext value={actions}>
-      <SidebarSelectionProvider scope={`${source}:${remoteTarget.connectionId ?? ''}:${viewMode}`}>
+      <SidebarSelectionProvider
+        scope={`${source}:${remoteTarget?.domain ?? ''}:${remoteTarget?.connectionId ?? ''}:${viewMode}`}
+      >
         <View className="flex-1" testID="sidebar">
           <SidebarBody />
           <SidebarHeader />

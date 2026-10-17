@@ -41,6 +41,7 @@ export type BackgroundReplyTurn = {
 
 export type BackgroundReplyTurnInput = {
   connectionId?: string;
+  domain?: 'agent' | 'assistant';
   agentId: string;
   agentName: string;
   sessionId: string;

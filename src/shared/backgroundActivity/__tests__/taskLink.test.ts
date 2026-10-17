@@ -68,3 +68,22 @@ test('notification identity includes the task kind and compares decoded ids', ()
   expect(isSameBackgroundTask(remote, { ...remote, connectionId: 'other-pc' })).toBe(false);
   expect(isSameBackgroundTask(chat, remote)).toBe(false);
 });
+
+it('keeps Assistant notification destinations separate from legacy Agent session ids', () => {
+  const assistant = {
+    kind: 'remote-chat',
+    domain: 'assistant',
+    connectionId: 'pc',
+    sessionId: 'same',
+  } as const;
+  const agent = { kind: 'remote-chat', connectionId: 'pc', sessionId: 'same' } as const;
+  const url = createBackgroundTaskUrl('cherry', assistant);
+  expect(parseBackgroundTaskUrl(url, 'cherry')).toEqual(assistant);
+  expect(isSameBackgroundTask(assistant, agent)).toBe(false);
+  expect(
+    parseBackgroundTaskUrl(
+      'cherry://remote?connectionId=pc&sessionId=same&domain=unknown',
+      'cherry',
+    ),
+  ).toBeUndefined();
+});

@@ -7,7 +7,7 @@ import type { RemoteConversationSession } from '../remoteContracts';
 import { useConversation } from '../useConversation';
 const mockSources = { open: jest.fn() };
 jest.mock('../../ConversationProvider', () => ({ useConversationSources: () => mockSources }));
-const desktop = { kind: 'desktop', connectionId: 'pc' } as const;
+const desktop = { kind: 'desktop', domain: 'agent', connectionId: 'pc' } as const;
 const ref: ConversationRef = { source: desktop, sessionId: 's' };
 let result: ReturnType<typeof useConversation>;
 function Harness() {

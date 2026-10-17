@@ -1,5 +1,6 @@
 import type { AgentProtocol } from '@/shared/contracts/agent';
 import type { RemoteAgentModule } from '@/shared/contracts/remoteAgent';
+import type { RemoteAssistantModule } from '@/shared/contracts/remoteAssistant';
 import type { ApiClient } from '@/shared/data/api/types';
 
 import type { ConversationSource, ConversationSourceRef } from './contracts';
@@ -12,6 +13,7 @@ import { createRemoteConversationSource } from './remote/createRemoteConversatio
 export function createConversationSources(input: {
   agent: AgentProtocol;
   remoteAgent: RemoteAgentModule;
+  remoteAssistant: RemoteAssistantModule;
   api: ApiClient;
   readMarks?: ConversationReadMarks;
   onSessionChanged(sessionId: string): void;
@@ -25,7 +27,8 @@ export function createConversationSources(input: {
       if (lifetime.signal.aborted)
         throw new ConversationReadError({ code: 'retired', retry: 'none' });
       if (ref.kind === 'local') return { source: local, release() {} };
-      const remote = await input.remoteAgent.open(
+      const module = ref.domain === 'assistant' ? input.remoteAssistant : input.remoteAgent;
+      const remote = await module.open(
         ref.connectionId,
         AbortSignal.any([signal, lifetime.signal]),
       );
@@ -33,11 +36,15 @@ export function createConversationSources(input: {
         remote.dispose();
         throw new ConversationReadError({ code: 'cancelled', retry: 'none' });
       }
-      let entry = remoteSources.get(remote.scope);
+      const key = JSON.stringify([ref.connectionId, ref.domain, remote.scope]);
+      let entry = remoteSources.get(key);
       if (entry) remote.dispose();
       else {
-        entry = { source: createRemoteConversationSource(ref.connectionId, remote), users: 0 };
-        remoteSources.set(remote.scope, entry);
+        entry = {
+          source: createRemoteConversationSource(ref.connectionId, remote, ref.domain),
+          users: 0,
+        };
+        remoteSources.set(key, entry);
       }
       const retained = entry;
       retained.users++;
@@ -48,7 +55,7 @@ export function createConversationSources(input: {
           if (released) return;
           released = true;
           if (--retained.users === 0) {
-            remoteSources.delete(remote.scope);
+            remoteSources.delete(key);
             retained.source.dispose();
           }
         },

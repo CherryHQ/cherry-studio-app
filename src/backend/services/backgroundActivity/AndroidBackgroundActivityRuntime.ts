@@ -320,7 +320,12 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         if (this.unprotected) return;
         // Android 12+: start only from a visible Activity, never from a background retry.
         if (AppState.currentState !== 'active' || this.backgroundLimitReached) {
-          this.continueUnprotected(new Error('Background execution was requested while hidden.'));
+          this.unprotected = true;
+          this.publishStatus();
+          logger.warn('Background execution is waiting for foreground admission', {
+            appState: AppState.currentState,
+            backgroundLimitReached: this.backgroundLimitReached,
+          });
           return;
         }
         try {

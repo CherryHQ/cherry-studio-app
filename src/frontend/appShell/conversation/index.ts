@@ -20,6 +20,7 @@ export type {
   ConversationSource,
   ConversationSourceRef,
   ConversationSummary,
+  DesktopConversationDomain,
   OperationOutcome,
   QueryScope,
   Readable,

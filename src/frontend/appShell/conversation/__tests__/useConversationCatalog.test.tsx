@@ -49,7 +49,7 @@ describe('catalog consumer ownership', () => {
     });
     mockSource = {
       scope: 'scope',
-      ref: { kind: 'desktop', connectionId: 'pc' },
+      ref: { kind: 'desktop', domain: 'agent', connectionId: 'pc' },
       state,
       catalog: {
         cacheScope: 'binding',
@@ -222,7 +222,7 @@ describe('catalog consumer ownership', () => {
     await act(async () => tree.unmount());
     mockSource = {
       ...mockSource,
-      ref: { kind: 'desktop', connectionId: 'other' },
+      ref: { kind: 'desktop', domain: 'agent', connectionId: 'other' },
       catalog: { ...mockSource.catalog, cacheScope: 'binding' as ConversationSource['scope'] },
     };
     await act(async () => {

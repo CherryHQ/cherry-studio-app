@@ -89,7 +89,7 @@ function SidebarDeviceTitle() {
   const disabled = useSidebarSelectionSnapshot((state) => state.isSelecting || state.isDeleting);
   const current =
     source === 'remote'
-      ? connections.find((connection) => connection.id === remoteTarget.connectionId)
+      ? connections.find((connection) => connection.id === remoteTarget?.connectionId)
       : undefined;
   const name = current?.name ?? brand;
   const [width, setWidth] = useState(0);
@@ -110,13 +110,28 @@ function SidebarDeviceTitle() {
       label: brand,
       onPress: () => selectDevice(),
     },
-    ...connections.map((connection) => ({
-      group: 'devices',
-      id: `device-${connection.id}`,
-      checked: source === 'remote' && connection.id === remoteTarget.connectionId,
-      label: connection.name,
-      onPress: () => selectDevice(connection.id),
-    })),
+    ...connections.map(
+      (connection): MenuItem => ({
+        group: 'devices',
+        id: `device-${connection.id}`,
+        checked: source === 'remote' && connection.id === remoteTarget?.connectionId,
+        label: connection.name,
+        onPress: () => {
+          if (
+            connection.capabilities.includes('agent') ||
+            connection.capabilities.includes('assistant')
+          ) {
+            selectDevice(connection.id);
+            return;
+          }
+          closeDrawer();
+          router.push({
+            pathname: '/settings/device-connections/[connectionId]',
+            params: { connectionId: connection.id },
+          });
+        },
+      }),
+    ),
     {
       group: 'manage',
       id: 'manage-devices',

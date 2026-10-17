@@ -413,6 +413,26 @@ test('expected native interruption does not enter error reporting', async () => 
   }
 });
 
+test('restoring work while hidden waits for foreground protection without reporting a failure', async () => {
+  const reporter = jest.fn();
+  const removeReporter = loggerService.setErrorReporter(reporter);
+  try {
+    setAppState('background');
+    runtime.acquire('restored-chat');
+    await flush();
+
+    expect(runtime.getStatus()).toBe('limited');
+    expect(native.start).not.toHaveBeenCalled();
+    expect(reporter).not.toHaveBeenCalled();
+
+    setAppState('active');
+    await flush();
+    expect(runtime.getStatus()).toBe('active');
+  } finally {
+    removeReporter();
+  }
+});
+
 test('a new foreground task survives cancellation draining after native service loss', async () => {
   let finishCancellation!: () => void;
   const cancellation = new Promise<void>((resolve) => {

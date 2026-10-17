@@ -34,6 +34,7 @@ it already exists.
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |
 | Logging | `loggerService` in `src/shared/core/logger` |
+| Desktop attachment drafts and resumable uploads | `RemoteAttachmentDrafts` and `uploadAttachments` in `src/backend/services/remoteConversation`; Agent and Assistant scopes supply their own authorized operations |
 
 Installed libraries cover these primitives: `@noble/hashes` (hashing in JavaScript), `expo-crypto`
 (random bytes and native digests), `fflate` (ZIP and deflate), and `yaml`.

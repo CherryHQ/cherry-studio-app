@@ -19,6 +19,7 @@ import {
 } from '@/frontend/appShell/conversation';
 import {
   useConversationDraft,
+  useRemoteConversationSource,
   type DraftId,
   type RemoteConversationSession,
   type RemoteConversationSnapshot,
@@ -58,6 +59,8 @@ export function RemoteComposer({
   const { t } = useTranslation();
   const { toast } = useToast();
   const existing = draftId === undefined;
+  const source = useRemoteConversationSource();
+  const hasWorkspaces = Boolean(source.catalog.listWorkspaces);
   const { draft: text, attachments } = useComposerState();
   const files = useBackendModule('file');
   const { setDraft, addAttachments, setAttachments, subscribeAttachmentChanges } =
@@ -277,27 +280,29 @@ export function RemoteComposer({
           streaming={canStop}
           leadingAction={supportsAttachments ? <ComposerMenu /> : undefined}
           secondaryAction={
-            <Composer.Pill
-              accessibilityLabel={t('remoteAgent.workspace')}
-              disabled={existing || starting || attachments.length > 0}
-              onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
-              icon={<FolderIcon className="size-5 text-foreground" />}
-              testID="composer-workspace-button"
-            >
-              <Text
-                className="min-w-0 shrink font-semibold text-sm text-foreground"
-                numberOfLines={1}
+            hasWorkspaces ? (
+              <Composer.Pill
+                accessibilityLabel={t('remoteAgent.workspace')}
+                disabled={existing || starting || attachments.length > 0}
+                onPress={() => void runInputReplacement(() => setChoosingWorkspace(true))}
+                icon={<FolderIcon className="size-5 text-foreground" />}
+                testID="composer-workspace-button"
               >
-                {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
-                  ? t('remoteAgent.systemWorkspace')
-                  : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
-              </Text>
-            </Composer.Pill>
+                <Text
+                  className="min-w-0 shrink font-semibold text-sm text-foreground"
+                  numberOfLines={1}
+                >
+                  {snapshot.workspaceKind === 'system' || selectedWorkspace?.kind === 'system'
+                    ? t('remoteAgent.systemWorkspace')
+                    : (selectedWorkspace?.name ?? t('remoteAgent.workspace'))}
+                </Text>
+              </Composer.Pill>
+            ) : undefined
           }
         />
       </ComposerSurface>
       {draft.error ? <ContentState.Error title={t('remoteAgent.loadFailed')} /> : null}
-      {choosingWorkspace && !existing ? (
+      {hasWorkspaces && choosingWorkspace && !existing ? (
         <BottomSheet
           open
           onClose={() => setChoosingWorkspace(false)}

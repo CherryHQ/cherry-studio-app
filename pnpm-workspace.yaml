@@ -17,6 +17,7 @@ trustPolicyExclude:
   - ua-parser-js@0.7.41||1.0.41
 
 overrides:
+  '@cherrystudio/remote-protocol': file:.context/local-packages/835952f124/cherrystudio-remote-protocol-0.5.0.tgz
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
   '@storybook/react-native-ui': 10.5.1

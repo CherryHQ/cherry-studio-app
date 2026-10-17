@@ -7,6 +7,7 @@ import { Pressable } from 'react-native-gesture-handler';
 
 import { ConversationSourceBoundary } from '@/frontend/appShell/conversation';
 import { useChatSource } from '@/frontend/appShell/navigation/chat';
+import { useDesktopConnections } from '@/frontend/hooks/useDesktopConnections';
 
 import { useSidebarSelection, useSidebarSelectionSnapshot } from '../SidebarSelectionProvider';
 import { SidebarConversationList } from './SidebarConversationList';
@@ -18,11 +19,19 @@ type SidebarRecentsProps = {
 
 export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProps) {
   const { t } = useTranslation();
-  const { source, remoteTarget, viewMode: mode, setViewMode: setMode } = useChatSource();
+  const {
+    source,
+    remoteTarget,
+    selectDevice,
+    viewMode: mode,
+    setViewMode: setMode,
+  } = useChatSource();
+  const { connections } = useDesktopConnections();
+  const connection = connections.find((item) => item.id === remoteTarget?.connectionId);
   const { toast } = useToast();
   const isSelecting = useSidebarSelectionSnapshot((state) => state.isSelecting);
   const isDeleting = useSidebarSelectionSnapshot((state) => state.isDeleting);
-  const loadingKey = `${source}:${remoteTarget.connectionId ?? ''}:${mode}`;
+  const loadingKey = `${source}:${remoteTarget?.domain ?? ''}:${remoteTarget?.connectionId ?? ''}:${mode}`;
   const [loadingFeedback, setLoadingFeedback] = useState<string>();
   useEffect(() => {
     const timer = setTimeout(() => setLoadingFeedback(loadingKey), 200);
@@ -30,7 +39,15 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
   }, [loadingKey]);
   const showLoading = source === 'local' || loadingFeedback === loadingKey;
   const isSessionMode = mode === 'sessions';
-  const modeLabel = t(isSessionMode ? 'navigation.sessions' : 'navigation.agents');
+  const assistant = source === 'remote' && remoteTarget?.domain === 'assistant';
+  const sessionsLabel = t('navigation.sessions');
+  const agentsLabel = t('navigation.agents');
+  const modeLabel =
+    source === 'remote'
+      ? t(assistant ? 'remoteAssistant.title' : 'navigation.agents')
+      : isSessionMode
+        ? sessionsLabel
+        : agentsLabel;
   const handleModeChange = useCallback(
     (nextMode: 'sessions' | 'agents') => {
       void setMode(nextMode).catch(() => {
@@ -40,23 +57,44 @@ export function SidebarRecents({ registerEndReachedHandler }: SidebarRecentsProp
     [setMode, t, toast],
   );
   const menuItems = useMemo<readonly MenuItem[]>(
-    () => [
-      {
-        checked: isSessionMode,
-        group: 'view',
-        id: 'show-sessions',
-        label: t('navigation.sessions'),
-        onPress: () => handleModeChange('sessions'),
-      },
-      {
-        checked: !isSessionMode,
-        group: 'view',
-        id: 'show-agents',
-        label: t('navigation.agents'),
-        onPress: () => handleModeChange('agents'),
-      },
+    () =>
+      source === 'remote'
+        ? (['assistant', 'agent'] as const)
+            .filter((domain) => !connection || connection.capabilities.includes(domain))
+            .map((domain) => ({
+              checked: remoteTarget?.domain === domain,
+              group: 'view',
+              id: `show-${domain}`,
+              label: t(domain === 'assistant' ? 'remoteAssistant.title' : 'navigation.agents'),
+              onPress: () => selectDevice(remoteTarget?.connectionId, domain),
+            }))
+        : [
+            {
+              checked: isSessionMode,
+              group: 'view',
+              id: 'show-sessions',
+              label: sessionsLabel,
+              onPress: () => handleModeChange('sessions'),
+            },
+            {
+              checked: !isSessionMode,
+              group: 'view',
+              id: 'show-agents',
+              label: agentsLabel,
+              onPress: () => handleModeChange('agents'),
+            },
+          ],
+    [
+      source,
+      connection,
+      remoteTarget,
+      selectDevice,
+      t,
+      handleModeChange,
+      isSessionMode,
+      sessionsLabel,
+      agentsLabel,
     ],
-    [handleModeChange, isSessionMode, t],
   );
 
   const modeTrigger = (

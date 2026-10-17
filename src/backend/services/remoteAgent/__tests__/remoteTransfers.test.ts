@@ -5,13 +5,43 @@ import path from 'node:path';
 import { type AgentUploadState } from '@cherrystudio/remote-protocol/agent';
 
 import { RemoteAgentCommandJournal } from '@/backend/data/services/RemoteAgentCommandJournal';
+import {
+  RemoteAttachmentDrafts,
+  type RemoteAttachmentDraftOperations,
+} from '@/backend/services/remoteConversation/RemoteAttachmentDrafts';
+import {
+  uploadAttachments,
+  type SavedUpload,
+  type RemoteUploadFiles,
+  type RemoteUploadRequests,
+} from '@/backend/services/remoteConversation/remoteUploads';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { RemoteAgentError } from '../RemoteAgentError';
-import { RemoteAttachmentDrafts } from '../RemoteAttachmentDrafts';
 import { integrity, type AgentRequest } from '../remoteContent';
 import { createAttachmentDownloader, downloadAttachment } from '../remoteDownloads';
-import { uploadAttachments, type SavedUpload, type RemoteUploadFiles } from '../remoteUploads';
+
+function uploadRequests(request: AgentRequest): RemoteUploadRequests {
+  return {
+    get: (params, signal) => request('agent.uploads.get', params, signal),
+    prepare: (params, signal) => request('agent.uploads.prepare', params, signal),
+    resume: (params, signal) => request('agent.uploads.resume', params, signal),
+    complete: (params, signal) => request('agent.uploads.complete', params, signal),
+    cancel: (params, signal) => request('agent.uploads.cancel', params, signal),
+  };
+}
+function draftOperations(request: AgentRequest): RemoteAttachmentDraftOperations {
+  return {
+    uploads: uploadRequests(request),
+    create: async (target, commandId, signal) => {
+      if (!('agentId' in target)) throw new Error('Expected an Agent target');
+      const receipt = await request('agent.sessions.create', { commandId, ...target }, signal);
+      if (!receipt.sessionId) throw new Error('Missing session');
+      return receipt.sessionId;
+    },
+    present: (params, signal) => request('agent.attachments.present', params, signal),
+  };
+}
 
 const mockNativeReads: number[] = [];
 
@@ -306,7 +336,7 @@ it.each([
       'phone:grant:attachments',
       journal,
       files,
-      request,
+      draftOperations(request),
       new AbortController().signal,
       () => {},
       transport,
@@ -322,7 +352,7 @@ it.each([
       'phone:grant:attachments',
       journal,
       files,
-      request,
+      draftOperations(request),
       new AbortController().signal,
       () => {},
       transport,
@@ -338,7 +368,7 @@ it.each([
       'phone:grant:attachments',
       journal,
       files,
-      request,
+      draftOperations(request),
       new AbortController().signal,
       () => {},
       transport,
@@ -357,9 +387,9 @@ it.each([
       'phone:grant:attachments',
       journal,
       files,
-      (async () => {
+      draftOperations((async () => {
         throw new Error('Admitted drafts must recover through the command journal');
-      }) as AgentRequest,
+      }) as AgentRequest),
       new AbortController().signal,
       () => {},
       transport,
@@ -444,7 +474,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
     'removal',
     journal,
     files,
-    request,
+    draftOperations(request),
     new AbortController().signal,
     () => {},
     transport,
@@ -459,7 +489,7 @@ it('persists removal before abort and cannot revive the attachment from a late w
     'removal',
     journal,
     files,
-    request,
+    draftOperations(request),
     new AbortController().signal,
     () => {},
     transport,
@@ -525,7 +555,7 @@ it.each([undefined, 'sha256'] as const)(
       uploadAttachments(
         [attachment],
         files,
-        request,
+        uploadRequests(request),
         new AbortController().signal,
         () => {},
         saved,
@@ -615,7 +645,7 @@ function verifiedUpload() {
     uploadAttachments(
       [attachment],
       files,
-      request as AgentRequest,
+      uploadRequests(request as AgentRequest),
       signal,
       progress,
       saved,
@@ -707,7 +737,7 @@ it('rejects an unsupported desktop before retaining, hashing or transmitting sou
     uploadAttachments(
       [attachment],
       task.files,
-      task.request as AgentRequest,
+      uploadRequests(task.request as AgentRequest),
       new AbortController().signal,
       task.progress,
       [],

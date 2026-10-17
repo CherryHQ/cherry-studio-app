@@ -718,6 +718,34 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('keeps Agent and Assistant background turns independent on the same desktop and id', async () => {
+    const runtime = await createRuntime();
+    const input = {
+      connectionId: 'pc',
+      agentId: 'a',
+      agentName: 'Assistant',
+      sessionId: 'same',
+      sessionTitle: 'Topic',
+    };
+    const agent = runtime.startTurn(input);
+    const assistant = runtime.startTurn({ ...input, domain: 'assistant' });
+    expect(mockSessions).toHaveLength(2);
+    expect(mockSessions[0]!.input.deepLinkUrl).toBe(
+      'cherrystudio://remote?connectionId=pc&sessionId=same',
+    );
+    expect(mockSessions[1]!.input.deepLinkUrl).toBe(
+      'cherrystudio://remote?connectionId=pc&sessionId=same&domain=assistant',
+    );
+    assistant.retire();
+    expect(mockSessions[1]!.cancel).toHaveBeenCalledTimes(1);
+    expect(mockSessions[0]!.cancel).not.toHaveBeenCalled();
+    agent.finish('completed');
+    await flushOperations();
+    expect(mockSessions[0]!.finish).toHaveBeenCalledTimes(1);
+    expect(mockSessions[1]!.finish).not.toHaveBeenCalled();
+    await runtime._doStop();
+  });
+
   test('stopped runtimes cannot admit new turns', async () => {
     const runtime = await createRuntime();
     await runtime._doStop();

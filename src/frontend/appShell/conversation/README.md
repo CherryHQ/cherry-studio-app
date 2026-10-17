@@ -36,6 +36,20 @@ outcomes, revisioned history windows or deferred content from this source.
 
 ## Remote
 
+Desktop addresses include a `domain` (`agent` or `assistant`) as well as the connection and
+conversation ID. Navigation, catalog keys, sidebar selection and sharing preserve that domain;
+legacy links without one resolve to `agent`. Agent sources reject Assistant addresses before
+reading history or acquiring an Agent connection. Existing Agent draft storage remains unchanged.
+
+Assistant addresses acquire `Backend.remoteAssistant`, whose separate grant owns assistant
+catalogs and topics. The common remote adapter exposes those topics through the existing chat,
+sidebar, history and sharing contracts. Assistant drafts do not expose workspace selection;
+first send creates a topic and uses the desktop assistant's configured default model. Ordinary
+tool decisions use the shared approval UI; desktop-only interactions remain explicit notices.
+Uploads, assistant configuration and model switching remain desktop-owned. See
+[Desktop Assistant access](../../../../docs/references/remote-access/assistant.md) for the local
+protocol package, ownership and acceptance scope.
+
 `remote/` is the desktop-owned contract and its consumers. `remoteContracts.ts` adds what the
 authoritative-elsewhere case requires: `RemoteConversationSource` with `openSession`, drafts with
 idempotent starts and the operation journal; `RemoteConversationSession` with observation

@@ -53,3 +53,12 @@ yarn-error.*
 
 # Conductor and local build artifacts
 .context/
+
+# Required while the Assistant protocol override points to this local package.
+!.context
+.context/*
+!.context/local-packages
+.context/local-packages/*
+!.context/local-packages/835952f124
+.context/local-packages/835952f124/*
+!.context/local-packages/835952f124/cherrystudio-remote-protocol-0.5.0.tgz

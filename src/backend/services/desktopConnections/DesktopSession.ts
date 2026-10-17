@@ -6,11 +6,13 @@ import {
   remoteLimits,
   uploadTransferLimits,
   uploadAckSchema,
+  uploadMethods,
   type UploadChunk,
   type UploadAck,
   type RemoteAuthorization,
 } from '@cherrystudio/remote-protocol';
 import { agentMethods } from '@cherrystudio/remote-protocol/agent';
+import { assistantMethods } from '@cherrystudio/remote-protocol/assistant';
 import { configurationMethods } from '@cherrystudio/remote-protocol/configuration';
 import type { SecureChannel } from '@cherrystudio/remote-transport';
 import type { MessageStream } from '@libp2p/interface';
@@ -23,7 +25,7 @@ import { transportLogger } from './transportLogger';
 
 export { DesktopUnreachableError, RemoteFailureError, RemoteTransportError } from './remoteErrors';
 
-const PROTOCOL_VERSIONS = [1];
+const PROTOCOL_VERSIONS = [2, 1];
 const REFRESH_MARGIN_MS = 60_000;
 // json-rpc-2.0 reports its own timeouts, send failures and rejectAllPendingRequests() as error
 // responses with this code and no `data`; a desktop verdict always carries protocol `data`.
@@ -42,6 +44,8 @@ export const desktopMethods = {
   ...pairingMethods(remoteAuthorizationSchema),
   ...configurationMethods,
   ...agentMethods,
+  ...assistantMethods,
+  ...uploadMethods,
 };
 export type DesktopMethod = keyof typeof desktopMethods;
 export type DesktopParams<M extends DesktopMethod> = z.input<(typeof desktopMethods)[M]['params']>;
@@ -79,6 +83,8 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
+  assistantVersion?: number;
+  uploadsVersion?: number;
   agentFailureVersion?: number;
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
@@ -103,6 +109,8 @@ export class DesktopSession {
         { protocolVersions: PROTOCOL_VERSIONS },
         options.signal,
       );
+      session.assistantVersion = hello.assistantVersion;
+      session.uploadsVersion = hello.uploadsVersion;
       session.agentFailureVersion = hello.agentFailureVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
@@ -127,7 +135,7 @@ export class DesktopSession {
   ): Promise<Extract<UploadAck, { ok: true }>> {
     signal.throwIfAborted();
     if (this.closed) throw new DesktopUnreachableError(['connection closed']);
-    if (this.agentUploadsVersion !== 1)
+    if (input.domain ? this.uploadsVersion !== 1 : this.agentUploadsVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Binary upload is unavailable',
@@ -223,10 +231,28 @@ export class DesktopSession {
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop does not support attachments',
       });
+    if (
+      (method.startsWith('uploads.') ||
+        method === 'assistant.attachments.present' ||
+        (method === 'assistant.messages.send' && 'attachments' in params)) &&
+      this.uploadsVersion !== 1
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop does not support shared uploads',
+      });
     if (method === 'connection.endpoints' && this.connectionEndpointsVersion !== 1)
       throw new RemoteFailureError({
         reason: 'UPGRADE_REQUIRED',
         message: 'Desktop connection settings are not supported',
+      });
+    if (
+      method.startsWith('assistant.') &&
+      (this.channel.protocolVersion !== 2 || this.assistantVersion !== 1)
+    )
+      throw new RemoteFailureError({
+        reason: 'UPGRADE_REQUIRED',
+        message: 'Desktop Assistant contract is not supported',
       });
     if (method.startsWith('agent.') && this.agentFailureVersion !== 1)
       throw new RemoteFailureError({
@@ -338,7 +364,10 @@ export class DesktopSession {
     try {
       while (!this.closed) {
         const message = await this.channel.read();
-        if (isNotification(message) && message.method === 'agent.uploads.ack') {
+        if (
+          isNotification(message) &&
+          (message.method === 'agent.uploads.ack' || message.method === 'uploads.ack')
+        ) {
           const ack = uploadAckSchema.parse(message).params;
           this.uploads.get(ack.requestId)?.resolve(ack);
         } else if (isNotification(message)) {

@@ -16,7 +16,8 @@ export function ConversationApprovals({ snapshot }: { snapshot: ConversationSnap
   const { t } = useTranslation();
   const { toast } = useToast();
   const pending = snapshot.interactions.find((item) => item.state === 'pending');
-  const interaction = pending?.kind === 'question' ? undefined : pending;
+  const interaction =
+    pending?.kind === 'question' || pending?.desktopRequired ? undefined : pending;
   const healthDataSharing = interaction?.healthDataSharing;
   const recipient = useQuery('/providers/:id', {
     enabled: Boolean(healthDataSharing?.providerId),

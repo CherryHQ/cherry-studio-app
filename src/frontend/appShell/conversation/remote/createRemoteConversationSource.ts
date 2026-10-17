@@ -1,5 +1,5 @@
 import type {
-  RemoteAgentSource,
+  RemoteConversationSource as RemoteSource,
   RemoteStartOperation,
   RemoteWorkspaceSelection,
 } from '@/shared/contracts/remoteAgent';
@@ -41,12 +41,13 @@ const isUndelivered = (start: RemoteStartOperation) =>
 
 export function createRemoteConversationSource(
   connectionId: string,
-  remote: RemoteAgentSource,
+  remote: RemoteSource,
+  domain: 'agent' | 'assistant' = 'agent',
 ): RemoteConversationSource {
-  const ref = { kind: 'desktop' as const, connectionId };
+  const ref = { kind: 'desktop' as const, connectionId, domain };
   const scope = remote.scope as QueryScope;
   const refs = createConversationReferences(scope);
-  const cacheScope = JSON.stringify([connectionId, remote.draftScope]) as QueryScope;
+  const cacheScope = JSON.stringify([connectionId, ref.domain, remote.draftScope]) as QueryScope;
   const catalogRefs = createConversationReferences(cacheScope);
   let disposed = false;
   const systemWorkspaces = new Map<string, WorkspaceRef>();
@@ -121,7 +122,11 @@ export function createRemoteConversationSource(
       },
       readSession: (address, signal) =>
         read(signal, async () => {
-          if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+          if (
+            address.source.kind !== 'desktop' ||
+            address.source.connectionId !== connectionId ||
+            address.source.domain !== ref.domain
+          )
             throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
           const session = await remote.readSession(address.sessionId, signal);
           return {
@@ -154,34 +159,36 @@ export function createRemoteConversationSource(
             ...(page.next ? { next: catalogRefs.issue<CatalogCursor>('agents', page.next) } : {}),
           };
         }),
-      listWorkspaces: (agent, cursor, signal) =>
-        read(signal, async () => {
-          const id = catalogRefs.resolve(agent, 'agent').id;
-          const kind = `workspaces:${id}`;
-          const page = await remote.listWorkspaces(
-            id,
-            cursor ? refs.resolve(cursor, kind).id : undefined,
-            signal,
-          );
-          assertSource();
-          signal.throwIfAborted();
-          const systemRef = refs.issue<WorkspaceRef>(`workspace:${id}`, '', 'system');
-          if (page.systemWorkspace) systemWorkspaces.set(id, systemRef);
-          else systemWorkspaces.delete(id);
-          return {
-            items: [
-              ...(!cursor && page.systemWorkspace
-                ? [{ ref: systemRef, kind: 'system' as const }]
-                : []),
-              ...page.items.map((workspace) => ({
-                id: workspace.id,
-                ref: refs.issue<WorkspaceRef>(`workspace:${id}`, workspace.id),
-                name: workspace.name,
-              })),
-            ],
-            ...(page.next ? { next: refs.issue<CatalogCursor>(kind, page.next) } : {}),
-          };
-        }),
+      listWorkspaces: !remote.listWorkspaces
+        ? undefined
+        : (agent, cursor, signal) =>
+            read(signal, async () => {
+              const id = catalogRefs.resolve(agent, 'agent').id;
+              const kind = `workspaces:${id}`;
+              const page = await remote.listWorkspaces!(
+                id,
+                cursor ? refs.resolve(cursor, kind).id : undefined,
+                signal,
+              );
+              assertSource();
+              signal.throwIfAborted();
+              const systemRef = refs.issue<WorkspaceRef>(`workspace:${id}`, '', 'system');
+              if (page.systemWorkspace) systemWorkspaces.set(id, systemRef);
+              else systemWorkspaces.delete(id);
+              return {
+                items: [
+                  ...(!cursor && page.systemWorkspace
+                    ? [{ ref: systemRef, kind: 'system' as const }]
+                    : []),
+                  ...page.items.map((workspace) => ({
+                    id: workspace.id,
+                    ref: refs.issue<WorkspaceRef>(`workspace:${id}`, workspace.id),
+                    name: workspace.name,
+                  })),
+                ],
+                ...(page.next ? { next: refs.issue<CatalogCursor>(kind, page.next) } : {}),
+              };
+            }),
       listSessions: ({ agent }, cursor, signal) =>
         read(signal, async () => {
           const id = agent ? catalogRefs.resolve(agent, 'agent').id : undefined;
@@ -224,18 +231,22 @@ export function createRemoteConversationSource(
           try {
             assertSource();
             if (retired) throw new ConversationReadError({ code: 'retired', retry: 'none' });
-            if (!target.workspace)
+            if (domain === 'agent' && !target.workspace)
               throw new ConversationReadError({ code: 'invalid-input', retry: 'revise-input' });
             const preparedInput = remoteInput(value);
             pending = true;
             state.set(snapshot());
             return outcome(
-              await remote.start({
-                draftId: input.draftId,
-                agentId: target.agentId,
-                workspace: target.workspace,
-                ...preparedInput,
-              }),
+              await remote.start(
+                target.workspace
+                  ? {
+                      draftId: input.draftId,
+                      agentId: target.agentId,
+                      workspace: target.workspace,
+                      ...preparedInput,
+                    }
+                  : { draftId: input.draftId, agentId: target.agentId, ...preparedInput },
+              ),
             );
           } catch (error) {
             return {
@@ -262,7 +273,7 @@ export function createRemoteConversationSource(
                 : availability;
           const start: ConversationAction<ConversationInput, Submission> = {
             availability:
-              ready.state === 'enabled' && !workspace
+              ready.state === 'enabled' && domain === 'agent' && !workspace
                 ? { state: 'disabled', reason: 'workspace-required' }
                 : ready,
             execute: (value) => submit({ agentId, workspace }, value),
@@ -295,10 +306,11 @@ export function createRemoteConversationSource(
                   const result = await submit(
                     {
                       agentId: failed.agentId,
-                      workspace: failed.workspace ?? {
-                        kind: 'registered',
-                        id: failed.workspaceId!,
-                      },
+                      workspace:
+                        failed.workspace ??
+                        (failed.workspaceId
+                          ? { kind: 'registered', id: failed.workspaceId }
+                          : undefined),
                     },
                     value,
                   );
@@ -322,7 +334,9 @@ export function createRemoteConversationSource(
               attachments: remote.getState().attachments === true,
             },
             attachmentPreparation:
-              workspace && remote.getState().preupload && remote.stageAttachments
+              (domain === 'assistant' || workspace) &&
+              remote.getState().preupload &&
+              remote.stageAttachments
                 ? {
                     draft: remote
                       .getState()
@@ -330,7 +344,9 @@ export function createRemoteConversationSource(
                     stage: (files) =>
                       remote.stageAttachments!(
                         `draft:${input.draftId}`,
-                        { agentId, workspace },
+                        domain === 'assistant'
+                          ? { assistantId: agentId }
+                          : { agentId, workspace: workspace! },
                         files,
                       ),
                   }
@@ -380,7 +396,11 @@ export function createRemoteConversationSource(
     },
     openSession: (address, signal) =>
       read(signal, async () => {
-        if (address.source.kind !== 'desktop' || address.source.connectionId !== connectionId)
+        if (
+          address.source.kind !== 'desktop' ||
+          address.source.connectionId !== connectionId ||
+          address.source.domain !== ref.domain
+        )
           throw new ConversationReadError({ code: 'invalid-input', retry: 'none' });
         const cached = remote.peekSession(address.sessionId);
         const initial = cached?.session ?? (await remote.readSession(address.sessionId, signal));

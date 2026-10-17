@@ -22,6 +22,7 @@ const mockFailStorageBoot = jest.fn();
 const mockRejectStorageCandidate = jest.fn();
 const mockValidateRestoringStorage = jest.fn(async () => {});
 const mockDocumentExport = { kind: 'document-export' };
+const mockRemoteAssistant = { kind: 'remote-assistant' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockDiagnostics = { kind: 'diagnostics' };
@@ -136,6 +137,7 @@ const createRuntime = () =>
     DesktopConnectionRuntime: mockDesktopConnections,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
+    RemoteAssistantRuntime: mockRemoteAssistant,
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
     JobRuntime: mockJobRuntime,
@@ -251,6 +253,7 @@ describe('createAppBootstrapRuntime', () => {
       dbService: mockDb,
       desktopConnections: mockDesktopConnections,
       remoteAgent: mockRemoteAgent,
+      remoteAssistant: mockRemoteAssistant,
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,

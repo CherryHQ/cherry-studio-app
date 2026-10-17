@@ -34,7 +34,7 @@ function ConnectedContent() {
 function Harness({ connectionId }: { connectionId: string }) {
   return (
     <ConversationSourceBoundary
-      source={{ kind: 'desktop', connectionId }}
+      source={{ kind: 'desktop', domain: 'agent', connectionId }}
       fallback={() => <Frame />}
     >
       <Frame>
@@ -47,7 +47,7 @@ function Harness({ connectionId }: { connectionId: string }) {
 function lease(connectionId = 'pc-1') {
   return {
     source: {
-      ref: { kind: 'desktop', connectionId },
+      ref: { kind: 'desktop', domain: 'agent', connectionId },
       state: {
         getSnapshot: () => ({ availability: { state: 'enabled' } }),
         subscribe: () => () => {},

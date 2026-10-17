@@ -29,7 +29,7 @@ function Probe({ target }: { target: RemoteChatTarget }) {
 }
 const draft = { connectionId: 'desktop', agentId: 'a', draftId: 'draft' };
 const created = {
-  source: { kind: 'desktop', connectionId: 'desktop' },
+  source: { kind: 'desktop', domain: 'agent', connectionId: 'desktop' },
   sessionId: 'created',
 } as const;
 async function render(target: RemoteChatTarget) {
@@ -105,6 +105,17 @@ it('new chat invalidates a pending handoff synchronously', async () => {
   await act(async () => navigation.startNewChat('a'));
   expect(result(created)).toBe(false);
   expect(mockOpen.mock.lastCall![0].draftId).not.toBe('draft');
+});
+
+it('does not hand off a recovered topic from a different remote domain', async () => {
+  await render(draft);
+  expect(
+    navigation.onSessionCreated({
+      ...created,
+      source: { ...created.source, domain: 'assistant' },
+    }),
+  ).toBe(false);
+  expect(mockSetParams).not.toHaveBeenCalled();
 });
 
 it('accepts recovered creation from a child effect after mount, and ignores it while blurred', async () => {

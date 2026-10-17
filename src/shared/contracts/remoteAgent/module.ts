@@ -17,7 +17,7 @@ import type {
 } from './views';
 
 /** One retained credential-free scope. Disposing observations never cancels desktop execution. */
-export interface RemoteAgentSource {
+export interface RemoteConversationSource {
   readonly scope: string;
   readonly draftScope: string;
   getState(): RemoteSourceState;
@@ -28,7 +28,7 @@ export interface RemoteAgentSource {
   ): Promise<
     RemotePage<{ id: string; name: string; emoji?: string; model?: RemoteModelSummary | null }>
   >;
-  listWorkspaces(
+  listWorkspaces?(
     agentId: string,
     cursor: string | undefined,
     signal: AbortSignal,
@@ -42,6 +42,7 @@ export interface RemoteAgentSource {
   subscribeReads(sessionId: string, listener: () => void): () => void;
   readSession(sessionId: string, signal: AbortSignal): Promise<RemoteSessionView>;
   observe(sessionId: string, listener: (value: RemoteSessionSnapshot) => void): () => void;
+  /** Pages begin at the latest messages; items within each page are newest first. */
   history(
     sessionId: string,
     version: string,
@@ -67,6 +68,9 @@ export interface RemoteAgentSource {
   /** Hands a start's Session to its route: the start is forgotten, an undelivered first send stays. */
   release(startId: string): void;
   dispose(): void;
+}
+export interface RemoteAgentSource extends RemoteConversationSource {
+  listWorkspaces: NonNullable<RemoteConversationSource['listWorkspaces']>;
 }
 export interface RemoteAgentModule {
   open(connectionId: string, signal: AbortSignal): Promise<RemoteAgentSource>;

@@ -13,7 +13,11 @@ import {
 export function conversationHref(ref: ConversationRef) {
   return ref.source.kind === 'local'
     ? chatHref({ kind: 'session', sessionId: ref.sessionId })
-    : remoteChatHref({ connectionId: ref.source.connectionId, sessionId: ref.sessionId });
+    : remoteChatHref({
+        connectionId: ref.source.connectionId,
+        domain: ref.source.domain,
+        sessionId: ref.sessionId,
+      });
 }
 export function conversationShareHref(
   ref: ConversationRef,
@@ -28,7 +32,9 @@ export function conversationShareHref(
       messageId,
       scope,
       ...(translationHandoff ? { translationHandoff } : {}),
-      ...(ref.source.kind === 'desktop' ? { connectionId: ref.source.connectionId } : {}),
+      ...(ref.source.kind === 'desktop'
+        ? { connectionId: ref.source.connectionId, domain: ref.source.domain }
+        : {}),
     },
   };
 }
@@ -36,9 +42,14 @@ export function conversationShareHref(
 export function conversationRefFromRoute(
   sessionId: string,
   connectionId?: string,
-): ConversationRef {
+  domain?: string,
+): ConversationRef | undefined {
+  const target = parseRemoteChatRoute({ connectionId, domain });
+  if (!target || (domain && !connectionId)) return undefined;
   return {
-    source: connectionId ? { kind: 'desktop', connectionId } : { kind: 'local' },
+    source: connectionId
+      ? { kind: 'desktop', connectionId, domain: target.domain ?? 'agent' }
+      : { kind: 'local' },
     sessionId,
   };
 }
@@ -54,7 +65,9 @@ export function useConversationTarget(source: ConversationSourceRef) {
       ? pathname === '/' && local.status === 'ready'
         ? local.target
         : undefined
-      : pathname === '/remote' && remote.connectionId === source.connectionId
+      : pathname === '/remote' &&
+          remote?.connectionId === source.connectionId &&
+          remote.domain === source.domain
         ? remote
         : undefined;
   return {

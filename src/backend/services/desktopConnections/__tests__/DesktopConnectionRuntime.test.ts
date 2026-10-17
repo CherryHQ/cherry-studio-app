@@ -632,7 +632,9 @@ describe('DesktopConnectionRuntime', () => {
     connect.mockResolvedValueOnce(session as never);
     const events: string[] = [];
     await expect(
-      runtime.pair(pairing, signal(), (event) => events.push(event.stage)),
+      runtime.pair({ ...pairing, capabilities: ['configuration'] }, signal(), (event) =>
+        events.push(event.stage),
+      ),
     ).resolves.toEqual(connection);
     expect(events).toEqual(['connecting', 'saving', 'syncing']);
     expect(session.calls.map((call) => call.method)).toEqual(['connection.endpoints']);
@@ -640,6 +642,42 @@ describe('DesktopConnectionRuntime', () => {
     expect((await store.getRow()).deviceId).toBe(row.deviceId);
     expect(store.savePair).not.toHaveBeenCalled();
     expect(session.isOpen).toBe(false);
+  });
+
+  it('requests explicit approval when an existing pairing is missing Assistant access', async () => {
+    const approved = [...grants, { domain: 'assistant' as const, grantId: 'assistant-grant' }];
+    const authenticated = createSession({
+      'connection.authenticate': () => ({ authorization: { grants } }),
+    });
+    const session = createSession({
+      'pairing.claim': () => ({
+        claimId: 'claim',
+        verificationCode: '123456',
+        expiresAt: '2099-01-01T00:00:00Z',
+      }),
+      'pairing.get': () => ({
+        status: 'approved',
+        deviceId: row.deviceId,
+        authorization: { grants: approved },
+      }),
+    });
+    connect.mockResolvedValueOnce(authenticated as never).mockResolvedValueOnce(session as never);
+    await runtime.pair({ ...pairing, capabilities: ['configuration', 'assistant'] }, signal());
+    expect(authenticated.close).toHaveBeenCalled();
+    expect(session.calls.find((call) => call.method === 'pairing.claim')?.params).toMatchObject({
+      capabilities: ['configuration', 'assistant'],
+    });
+    expect(store.savePair).toHaveBeenCalledWith(
+      expect.objectContaining({ id, grants: approved }),
+      true,
+      expect.any(AbortSignal),
+    );
+    expect(store.updateStatus).not.toHaveBeenCalledWith(
+      id,
+      { status: 'needs-repair' },
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it.each([

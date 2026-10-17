@@ -98,6 +98,8 @@ must also be considered when reviewing shutdown safety.
 | `RemoteSessionReadCache` | Runtime-owned bounded protocol values, latest history membership, verified bodies | Survives route disposal without retaining network demand. Binding invalidation clears idle data too; current Scope reissues resource references. See [read cache](./session-read-cache.md). |
 | `SessionSync` | One observed desktop session's checkpoint and in-memory projection/cursor | Installs a fresh desktop checkpoint on every subscription and applies events in memory before ACK. Background/disconnect stops observation; reconnect never resumes a stored cursor. It never cancels desktop execution. |
 | `RemoteAgentActions` | Exact command parameters, fixed IDs, create/send workflow and receipt interpretation | Journal before send. A lost response queries the receipt and may retry identical IDs; interrupted outcomes do not become blind retries. |
+| `RemoteAssistantRuntime` / `RemoteAssistantScope` | Independent Assistant lease, catalogs/topics, branch-pinned history, content and command demand | Retains admitted work after route disposal, drains on shutdown and retires only its domain on revocation. PC remains the execution owner. See [Assistant access](./assistant.md). |
+| `TopicSync` / `RemoteAssistantActions` | Assistant checkpoint/events and separate durable command journal | Fresh checkpoints on reconnect; exact command receipt recovery, independent create/send IDs and retained first input. No workspace or Agent grant is substituted. |
 | `DesktopConnectionRuntime` | Pair/remove and configuration export/preview/import tasks | Uses temporary pairing channels or configuration leases; aborts and drains workflow tasks at stop. Provider import is this workflow's responsibility. |
 | `DesktopConnectionManager` | Physical connection pool, identity/grant bindings, temporary channels and pending dials | Demand-driven; last lease has a short grace period. Owns physical AppState, reconnect and domain retirement. Background closes transport, not PC execution. |
 | `DesktopSession` | One Noise channel, typed JSON-RPC requests/notifications, heartbeat and auth refresh | Channel lifetime only; no reconnect, provider import, Agent execution or UI policy. |
@@ -108,7 +110,8 @@ must also be considered when reviewing shutdown safety.
 The main declared lifecycle edges are:
 
 ```text
-RemoteAgentRuntime       → DesktopConnectionManager
+RemoteAgentRuntime       → DesktopConnectionManager + BackgroundReplyRuntime
+RemoteAssistantRuntime   → DesktopConnectionManager + BackgroundReplyRuntime
 DesktopConnectionRuntime → DesktopConnectionManager + DbService
 DesktopConnectionManager → DbService
 DocumentExportRuntime    → DbService

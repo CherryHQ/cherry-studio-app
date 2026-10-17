@@ -3,6 +3,7 @@ import type {
   RemoteSessionSnapshot,
   RemoteSourceState,
 } from '@/shared/contracts/remoteAgent';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 import { createRemoteConversationSource } from '../createRemoteConversationSource';
 import type { DraftId } from '../remoteContracts';
@@ -121,7 +122,44 @@ function fixture(scope = 'scope', binding = 'binding') {
     },
   };
 }
-const address = { source: { kind: 'desktop' as const, connectionId: 'pc' }, sessionId: 's' };
+const address = {
+  source: { kind: 'desktop' as const, domain: 'agent' as const, connectionId: 'pc' },
+  sessionId: 's',
+};
+
+it.each(['agent', 'assistant'] as const)(
+  'materializes %s approval arguments as structured input and rejects malformed input',
+  async (domain) => {
+    const test = fixture();
+    const source = createRemoteConversationSource('pc', test.remote, domain);
+    const session = await source.openSession({ ...address, source: source.ref }, signal());
+    session.activate();
+    test.publish({
+      ...test.snapshot,
+      interactions: [
+        {
+          id: 'approval',
+          title: 'Echo',
+          state: 'pending',
+          input: 'approval-input',
+          respondTarget: 'approve-1',
+        },
+      ],
+    });
+    const input = session.state.getSnapshot().interactions[0].input!;
+    expect(input.kind).toBe('deferred');
+    if (input.kind !== 'deferred') throw new Error('Expected deferred approval input');
+    await expect(input.read(signal())).resolves.toEqual({
+      kind: 'json',
+      value: { input: true },
+      complete: true,
+    });
+    jest.mocked(test.remote.readResource).mockResolvedValue({ kind: 'text', text: '{' });
+    await expect(input.read(signal())).rejects.toThrow();
+    source.dispose();
+    test.source.dispose();
+  },
+);
 
 it('opens without observing, disables send until synchronized, and releases observation without cancelling execution', async () => {
   const test = fixture();
@@ -278,6 +316,76 @@ it('binds workspaces to the selected Agent and never invents a default workspace
   test.source.dispose();
 });
 
+it('starts an Assistant topic without a workspace and preserves its domain in the created route', async () => {
+  const test = fixture();
+  const source = createRemoteConversationSource(
+    'pc',
+    { ...test.remote, listWorkspaces: undefined },
+    'assistant',
+  );
+  const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
+  expect(source.catalog.listWorkspaces).toBeUndefined();
+  const draft = await source.catalog.prepareDraft(
+    { agent, draftId: 'assistant-draft' as DraftId },
+    signal(),
+  );
+  expect(draft.state.getSnapshot().start.availability.state).toBe('enabled');
+  await draft.state.getSnapshot().start.execute({ parts: [{ type: 'text', text: 'Hello' }] });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    draftId: 'assistant-draft',
+    agentId: 'a',
+    text: 'Hello',
+  });
+  expect(source.ref).toEqual({ kind: 'desktop', domain: 'assistant', connectionId: 'pc' });
+  draft.dispose();
+  source.dispose();
+  test.source.dispose();
+});
+
+it('prepares an Assistant file-only first message without requiring an Agent workspace', async () => {
+  const test = fixture();
+  const file = {
+    fileEntryId: FileEntryIdSchema.parse('12345678-1234-4234-8234-123456789abc'),
+    name: 'report.pdf',
+    mediaType: 'application/pdf',
+  };
+  test.setState({ status: 'ready', attachments: true, preupload: true });
+  const stageAttachments = jest.fn();
+  const source = createRemoteConversationSource(
+    'pc',
+    { ...test.remote, listWorkspaces: undefined, stageAttachments },
+    'assistant',
+  );
+  const agent = (await source.catalog.listAgents(undefined, signal())).items[0].ref;
+  const draft = await source.catalog.prepareDraft({ agent, draftId: 'files' as DraftId }, signal());
+  const state = draft.state.getSnapshot();
+  expect(state.inputPolicy.attachments).toBe(true);
+  expect(state.attachmentPreparation).toBeDefined();
+  state.attachmentPreparation!.stage([file]);
+  expect(stageAttachments).toHaveBeenCalledWith('draft:files', { assistantId: 'a' }, [file]);
+  await expect(
+    state.start.execute({
+      parts: [
+        {
+          type: 'file',
+          fileEntryId: file.fileEntryId,
+          filename: file.name,
+          mediaType: file.mediaType,
+        },
+      ],
+    }),
+  ).resolves.toMatchObject({ state: 'pending' });
+  expect(test.remote.start).toHaveBeenCalledWith({
+    draftId: 'files',
+    agentId: 'a',
+    text: '',
+    attachments: [file],
+  });
+  draft.dispose();
+  source.dispose();
+  test.source.dispose();
+});
+
 it('keeps a submitted draft busy and hands a created Session to its route', async () => {
   const test = fixture();
   const agent = (await test.source.catalog.listAgents(undefined, signal())).items[0].ref;
@@ -421,10 +529,24 @@ test('selected catalog metadata does not observe history or expose unsupported r
   expect(source.catalog.previewSession?.(ref)).toBeUndefined();
   await expect(
     source.catalog.readSession!(
-      { source: { kind: 'desktop', connectionId: 'other' }, sessionId: 's' },
+      { source: { kind: 'desktop', domain: 'agent', connectionId: 'other' }, sessionId: 's' },
       signal(),
     ),
   ).rejects.toMatchObject({ failure: { code: 'invalid-input' } });
+  source.dispose();
+});
+
+test('Agent catalogs and sessions reject an Assistant topic with the same desktop and id', async () => {
+  const { source, remote } = fixture();
+  const topic = { ...address, source: { ...address.source, domain: 'assistant' as const } };
+  await expect(source.catalog.readSession!(topic, signal())).rejects.toMatchObject({
+    failure: { code: 'invalid-input' },
+  });
+  await expect(source.openSession(topic, signal())).rejects.toMatchObject({
+    failure: { code: 'invalid-input' },
+  });
+  expect(remote.readSession).not.toHaveBeenCalled();
+  expect(remote.peekSession).not.toHaveBeenCalled();
   source.dispose();
 });
 
@@ -591,7 +713,7 @@ it('opens a cached session before any RPC and keeps cached history separate from
   jest.mocked(test.remote.peekSession).mockReturnValue(preview);
   jest.mocked(test.remote.readSession).mockImplementation(() => new Promise(() => {}));
   const handle = await test.source.openSession(
-    { source: { kind: 'desktop', connectionId: 'pc' }, sessionId: 's' },
+    { source: { kind: 'desktop', domain: 'agent', connectionId: 'pc' }, sessionId: 's' },
     signal(),
   );
   expect(test.remote.readSession).not.toHaveBeenCalled();

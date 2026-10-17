@@ -1,6 +1,6 @@
 import type {
   RemoteAttachment,
-  RemoteAgentSource,
+  RemoteConversationSource,
   RemoteCommand,
   RemoteMessageView,
   RemoteSessionSnapshot,
@@ -86,7 +86,7 @@ function commandOutcome<T>(command: RemoteCommand, id: OperationId, value: T): O
   return { state: 'pending', operationId: id };
 }
 export function createRemoteConversationSession(
-  source: RemoteAgentSource,
+  source: RemoteConversationSource,
   ref: ConversationRef,
   initial: RemoteSessionView,
   assertSource: () => void,
@@ -128,13 +128,17 @@ export function createRemoteConversationSession(
         : new ConversationReadError(remoteConversationFailure(error));
     }
   };
-  const resource = (value: string): ResourceRead => ({
+  const resource = (value: string, format?: 'json'): ResourceRead => ({
     kind: 'deferred',
     key: refs.issue('resource', value),
-    read: async (signal) => {
-      const result = await read(signal, (signal) => source.readResource(value, signal));
-      return result.kind === 'text' ? { ...result, complete: true } : result;
-    },
+    read: (signal) =>
+      read(signal, async (signal) => {
+        const result = await source.readResource(value, signal);
+        if (result.kind !== 'text') return result;
+        return format === 'json'
+          ? { kind: 'json', value: JSON.parse(result.text), complete: true }
+          : { ...result, complete: true };
+      }),
   });
   // Unchanged messages keep their rows so the list re-renders only what moved. Live views keep
   // their identity until an event changes them; a history message is immutable per revision.
@@ -282,7 +286,8 @@ export function createRemoteConversationSession(
                   durable: execution.durable === true,
                   historyReady:
                     !!execution.history &&
-                    BigInt(session.historyVersion) >= BigInt(execution.history.historyRevision),
+                    BigInt(session.historyRevision ?? session.historyVersion) >=
+                      BigInt(execution.history.historyRevision),
                 },
               }
             : {}),
@@ -304,8 +309,9 @@ export function createRemoteConversationSession(
           kind: interaction.kind ?? 'decision',
           title: interaction.title,
           state: interaction.state,
-          input: resource(interaction.input),
-          ...(interaction.state === 'pending'
+          desktopRequired: interaction.desktopRequired,
+          input: resource(interaction.input, 'json'),
+          ...(interaction.state === 'pending' && !interaction.desktopRequired
             ? {
                 respond: action<ConversationInteractionResponse, void>(
                   `respond:${interaction.id}`,

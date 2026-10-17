@@ -1,5 +1,12 @@
 # Send mobile files to desktop
 
+Assistant uploads share Mobile's `remoteConversation/RemoteAttachmentDrafts` and `uploadAttachments`
+with Agent uploads. Each scope supplies its own create/present/control operations. Assistants use
+the generic `uploads.*` contract and binary frames with `domain: 'assistant'`, gated by
+`connection.hello.uploadsVersion === 1`. Their first selection prepares an Assistant topic without
+a workspace. Both domains support file-only messages and retain local file references after a
+rejected send. See [Desktop Assistant Access](./assistant.md) for dependency and acceptance status.
+
 [Managed Attachments](./managed-attachments-design.md) defines the integrated simplification:
 mobile-owned drafts, desktop checkpoint ownership, direct-reference sends and disposable pending
 presentation. Desktop intake/draft tables are removed; reducing mobile source copies remains pending.

@@ -51,9 +51,9 @@ export type DesktopPairingQr = z.infer<typeof DesktopPairingQrSchema>;
 /** Mirrors `remoteCapabilitiesSchema`; the protocol package stays off the app's startup path. */
 export const PairDesktopConnectionSchema = DesktopPairingQrSchema.extend({
   capabilities: z
-    .array(z.enum(['configuration', 'agent']))
+    .array(z.enum(['configuration', 'agent', 'assistant']))
     .min(1)
-    .max(2)
+    .max(3)
     .refine((values) => new Set(values).size === values.length, 'Capabilities must be unique'),
   connectionId: z.string().uuid().optional(),
 });
