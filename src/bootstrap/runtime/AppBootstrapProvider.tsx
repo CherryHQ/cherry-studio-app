@@ -13,6 +13,7 @@ import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import { ProviderRegistryQueryBridge } from '@/frontend/data/ProviderRegistryQueryBridge';
 import { SkillQueryBridge } from '@/frontend/data/SkillQueryBridge';
 import i18n, { initI18n } from '@/frontend/i18n';
+import { startStartupStage } from '@/shared/core/logger/startupDiagnostics';
 
 type AppBootstrapProviderProps = PropsWithChildren<{
   /** Test seam. Production owns one in-process backend runtime. */
@@ -100,9 +101,11 @@ async function initializeApp({
   runtime: AppBootstrapRuntime;
   setState: (state: AppBootstrapState) => void;
 }) {
+  const finish = startStartupStage('startup.bootstrap');
   try {
     recordSentryBreadcrumb('startup.bootstrap');
     await runtime.initialize();
+    finish(isDisposed() ? 'cancelled' : 'completed');
 
     if (!isDisposed()) {
       recordSentryBreadcrumb('startup.ready');
@@ -111,6 +114,7 @@ async function initializeApp({
       void runtime.runPostReadyTasks();
     }
   } catch (error) {
+    finish('failed');
     if (!isDisposed()) {
       recordSentryBreadcrumb('startup.failed');
       logger.error('Application initialization failed', toError(error), {

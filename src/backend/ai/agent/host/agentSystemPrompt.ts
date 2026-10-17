@@ -300,7 +300,12 @@ export function buildInitialSkillInstructions(skills: TurnSkillPlan) {
 function buildResponseLanguageSection(appLanguage: LanguageVarious): string {
   return `## Response Language
 
-The current Cherry Studio App language is \`${appLanguage}\`. You must write every response in this language unless the user explicitly requests another language. This rule takes precedence over the Agent Instructions.`;
+The current Cherry Studio App language is \`${appLanguage}\`. Choose the response language in this order:
+1. Follow the user's explicit request for an output language.
+2. Otherwise, follow any response-language preference in the Agent Instructions.
+3. Otherwise, match the language of the user's own message, using conversation context when it is ambiguous.
+
+Use the app language only as a fallback when these do not establish a language. Replies are not limited to the app's supported interface languages.`;
 }
 
 function findBuiltInToolNames(
