@@ -2242,6 +2242,7 @@
   "workspace.loadMore": "Show more files",
   "workspace.none": "No workspace",
   "workspace.open": "Open file workspace",
+  "workspace.openCurrent": "File workspace: {{name}}",
   "workspace.preview": "Preview {{name}}",
   "workspace.runningHint": "The current task keeps the workspace it started with. Switching applies to subsequent tasks.",
   "workspace.title": "File workspace",

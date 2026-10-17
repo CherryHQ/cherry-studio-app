@@ -2225,6 +2225,7 @@
   "workspace.loadMore": "さらにファイルを表示",
   "workspace.none": "ワークスペースを使用しない",
   "workspace.open": "ファイルワークスペースを開く",
+  "workspace.openCurrent": "ファイルワークスペース：{{name}}",
   "workspace.preview": "{{name}}をプレビュー",
   "workspace.runningHint": "実行中のタスクは開始時のワークスペースを使い続けます。切り替えは以降のタスクに適用されます。",
   "workspace.title": "ファイルワークスペース",

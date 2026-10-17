@@ -2242,6 +2242,7 @@
   "workspace.loadMore": "Weitere Dateien anzeigen",
   "workspace.none": "Kein Arbeitsbereich",
   "workspace.open": "Datei-Arbeitsbereich öffnen",
+  "workspace.openCurrent": "Datei-Arbeitsbereich: {{name}}",
   "workspace.preview": "Vorschau von {{name}}",
   "workspace.runningHint": "Die aktuelle Aufgabe behält ihren ursprünglichen Arbeitsbereich. Der Wechsel gilt für nachfolgende Aufgaben.",
   "workspace.title": "Datei-Arbeitsbereich",

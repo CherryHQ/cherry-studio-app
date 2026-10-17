@@ -1,4 +1,5 @@
 import FolderIcon from '@cherrystudio/app-icons/icons/folder';
+import FolderCheckIcon from '@cherrystudio/app-icons/icons/folder-check';
 import {
   composerContentGap,
   ContentState,
@@ -66,6 +67,12 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
   const params = useLocalSearchParams<ChatRouteParamsInput>();
   const route = parseChatRoute(params);
   const target = route.status === 'ready' ? route.target : undefined;
+  // Shares the content's queries, so the header reflects the binding without another fetch.
+  const workspace = useFileWorkspace({
+    sessionId: target?.kind === 'session' ? target.sessionId : undefined,
+    workspaceDraftId: target?.kind === 'draft' ? target.workspaceDraftId : undefined,
+  });
+  const workspaceName = workspace.workspace?.name;
   const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
   const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
   function openWorkspace() {
@@ -90,8 +97,11 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
                 {
                   key: 'file-workspace',
                   type: 'icon',
-                  icon: FolderIcon,
-                  accessibilityLabel: t('workspace.open'),
+                  // The check marks a linked workspace, matching the selection in its sheet.
+                  icon: workspace.folderId ? FolderCheckIcon : FolderIcon,
+                  accessibilityLabel: workspaceName
+                    ? t('workspace.openCurrent', { name: workspaceName })
+                    : t('workspace.open'),
                   testID: 'chat-file-workspace',
                   onPress: () => openWorkspace(),
                 },

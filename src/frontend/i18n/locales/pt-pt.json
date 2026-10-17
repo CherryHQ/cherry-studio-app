@@ -2259,6 +2259,7 @@
   "workspace.loadMore": "Mostrar mais ficheiros",
   "workspace.none": "Sem espaço de trabalho",
   "workspace.open": "Abrir espaço de trabalho de ficheiros",
+  "workspace.openCurrent": "Espaço de arquivos: {{name}}",
   "workspace.preview": "Pré-visualizar {{name}}",
   "workspace.runningHint": "A tarefa atual mantém o espaço de trabalho inicial. A mudança se aplica às próximas tarefas.",
   "workspace.title": "Espaço de arquivos",

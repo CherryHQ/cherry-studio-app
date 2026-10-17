@@ -2259,6 +2259,7 @@
   "workspace.loadMore": "Afișează mai multe fișiere",
   "workspace.none": "Fără spațiu de lucru",
   "workspace.open": "Deschide spațiul de lucru pentru fișiere",
+  "workspace.openCurrent": "Spațiu de fișiere: {{name}}",
   "workspace.preview": "Previzualizează {{name}}",
   "workspace.runningHint": "Sarcina curentă păstrează spațiul de lucru inițial. Schimbarea se aplică sarcinilor următoare.",
   "workspace.title": "Spațiu de fișiere",

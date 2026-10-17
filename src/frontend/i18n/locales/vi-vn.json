@@ -2225,6 +2225,7 @@
   "workspace.loadMore": "Hiện thêm tệp",
   "workspace.none": "Không dùng không gian làm việc",
   "workspace.open": "Mở không gian làm việc tệp",
+  "workspace.openCurrent": "Không gian tệp: {{name}}",
   "workspace.preview": "Xem trước {{name}}",
   "workspace.runningHint": "Tác vụ hiện tại tiếp tục dùng không gian làm việc ban đầu. Thay đổi áp dụng cho các tác vụ tiếp theo.",
   "workspace.title": "Không gian tệp",

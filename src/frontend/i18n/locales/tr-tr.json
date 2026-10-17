@@ -2242,6 +2242,7 @@
   "workspace.loadMore": "Daha fazla dosya göster",
   "workspace.none": "Çalışma alanı kullanma",
   "workspace.open": "Dosya çalışma alanını aç",
+  "workspace.openCurrent": "Dosya çalışma alanı: {{name}}",
   "workspace.preview": "{{name}} dosyasını önizle",
   "workspace.runningHint": "Geçerli görev başladığı çalışma alanını kullanmaya devam eder. Değişiklik sonraki görevlere uygulanır.",
   "workspace.title": "Dosya çalışma alanı",

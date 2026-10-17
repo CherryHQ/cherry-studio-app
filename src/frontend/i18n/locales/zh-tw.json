@@ -2225,6 +2225,7 @@
   "workspace.loadMore": "顯示更多檔案",
   "workspace.none": "不使用工作區",
   "workspace.open": "開啟檔案工作區",
+  "workspace.openCurrent": "檔案工作區：{{name}}",
   "workspace.preview": "預覽 {{name}}",
   "workspace.runningHint": "目前任務繼續使用開始時的工作區，切換對後續任務生效。",
   "workspace.title": "檔案工作區",
