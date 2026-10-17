@@ -2,7 +2,6 @@ import * as z from 'zod';
 
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import type { TrashService } from '@/backend/data/services/TrashService';
-import { notifyFileChange } from '@/backend/services/file/fileStorage';
 import type { TrashRuntime } from '@/backend/services/trash';
 import { TrashKindSchema } from '@/shared/data/api/schemas/trash';
 import type { BuiltInToolCapabilityId } from '@/shared/data/types/builtInTool';
@@ -12,9 +11,8 @@ import { fileNameKey } from '@/shared/data/types/fileLibrary';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 
-export type FileLibraryTrashAccess = {
+export type FileLibraryTrashAccess = Pick<TrashRuntime, 'trash' | 'restore'> & {
   entries: Pick<TrashService, 'list'>;
-  restore: TrashRuntime['restore'];
 };
 
 const itemSchema = z.strictObject({
@@ -22,7 +20,7 @@ const itemSchema = z.strictObject({
   id: z
     .uuid()
     .describe(
-      'Exact fileId or folder id returned by library search/list tools. Never a fileEntryId or path.',
+      'fileId or folder id from library_search_files/library_list_folders; not a fileEntryId.',
     ),
 });
 const foldersSchema = z.strictObject({
@@ -31,29 +29,21 @@ const foldersSchema = z.strictObject({
     .uuid()
     .nullable()
     .optional()
-    .describe(
-      'Omit to search all folders; null lists root folders; an id lists its direct children.',
-    ),
+    .describe('Omit to search all folders; null lists root folders.'),
   page: z.number().int().positive().default(1),
   limit: z.number().int().min(1).max(100).default(50),
 });
 const moveSchema = itemSchema.extend({
-  destination_folder_id: z
-    .uuid()
-    .nullable()
-    .describe('Destination folder id from library_list_folders, or null for the library root.'),
+  destination_folder_id: z.uuid().nullable().describe('Folder id, or null for the library root.'),
 });
 const renameSchema = itemSchema.extend({ name: SafeNameSchema });
 const trashListSchema = z.strictObject({
   cursor: z.string().optional(),
   limit: z.number().int().min(1).max(100).default(30),
 });
-const restoreSchema = z.strictObject({
-  kind: TrashKindSchema,
-  id: z.uuid().describe('Copy kind and id together from library_list_trash or library_trash_item.'),
-});
+const restoreSchema = z.strictObject({ kind: TrashKindSchema, id: z.uuid() });
 
-/** Library-wide operations use explicit approval, independent of the conversation workspace. */
+/** Library-wide operations, independent of the conversation workspace and found through tool_search. */
 export function createFileLibraryManagementTools(
   library: FileLibraryService,
   trash: FileLibraryTrashAccess,
@@ -61,6 +51,7 @@ export function createFileLibraryManagementTools(
   function tool<T>(
     name: BuiltInToolCapabilityId,
     displayName: string,
+    approval: 'auto' | 'ask',
     description: string,
     schema: z.ZodType<T>,
     execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult['value']>,
@@ -71,8 +62,8 @@ export function createFileLibraryManagementTools(
       displayName,
       description,
       inputSchema: toRuntimeInputSchema(schema),
-      approval: 'ask',
-      autoApprovalEligible: false,
+      approval,
+      deferred: true,
       async execute({ input, signal }) {
         const parsed = schema.parse(input);
         signal.throwIfAborted();
@@ -99,7 +90,8 @@ export function createFileLibraryManagementTools(
     tool(
       'library_list_folders',
       'Find library folders',
-      'Find active folders throughout the file library by name, or browse children by parent_id. Returns stable ids and parent ids for moving or renaming. Follow nextPage with the same filters. Resolve ambiguous names before changing anything. Every call requires user confirmation.',
+      'auto',
+      'Find library folders by name, or list the children of parent_id. Returns ids for moving or renaming; follow nextPage with the same filters.',
       foldersSchema,
       async ({ query, parent_id, page, limit }) => {
         const nameQuery = fileNameKey(query);
@@ -120,7 +112,8 @@ export function createFileLibraryManagementTools(
     tool(
       'library_move_item',
       'Move library item',
-      'Move one file (all its versions) or folder (its whole subtree) to another library folder or the root. Use exact ids from library_search_files/library_list_folders. Name collisions receive a suffix; the result reports the saved name. Moving a folder into itself or a descendant is rejected. Requires user confirmation.',
+      'ask',
+      'Move a file (with its versions) or a folder (with its subtree) into another folder. A name collision adds a suffix; the result reports the saved name.',
       moveSchema,
       async ({ kind, id, destination_folder_id }, signal) => {
         if (kind === 'folder')
@@ -132,7 +125,8 @@ export function createFileLibraryManagementTools(
     tool(
       'library_rename_item',
       'Rename library item',
-      'Rename one library file or folder without changing its location or contents. Use exact ids from library_search_files/library_list_folders, and a single name, not a path. Conflicting names are rejected. Requires user confirmation.',
+      'ask',
+      'Rename a file or folder in place. name is a single name, not a path; a conflicting name is rejected.',
       renameSchema,
       async ({ kind, id, name }, signal) => {
         if (kind === 'folder') await library.updateFolder(id, { name }, signal);
@@ -143,24 +137,19 @@ export function createFileLibraryManagementTools(
     tool(
       'library_trash_item',
       'Move library item to trash',
-      'Delete one library file or folder by moving it to trash for 30 days. A file includes all versions; a folder includes its active subtree and file versions. Conversation references become unavailable until restored. Use exact ids from library_search_files/library_list_folders. Requires user confirmation. Returns kind and id for library_restore_item; this never permanently deletes bytes.',
+      'ask',
+      'Move a file (with its versions) or a folder (with its subtree) to trash for 30 days. Its conversation references stay unavailable until restored.',
       itemSchema,
       async ({ kind, id }, signal) => {
-        let entryIds: string[];
-        if (kind === 'folder') entryIds = await library.trashFolder(id, signal);
-        else {
-          const file = await library.file(id);
-          signal.throwIfAborted();
-          entryIds = await library.trashFileEntry(file.currentEntryId, false, signal);
-        }
-        for (const entryId of entryIds) notifyFileChange(entryId);
-        return { status: 'trashed', kind, id, affectedVersions: entryIds.length };
+        await trash.trash(kind, id, signal);
+        return { status: 'trashed', kind, id };
       },
     ),
     tool(
       'library_list_trash',
       'List recently deleted files',
-      'List recoverable library files, folders, and old versions, newest deletion first. Copy kind and id together to library_restore_item. Follow nextCursor. Items are retained for 30 days. Every call requires user confirmation.',
+      'auto',
+      'List trashed files, folders and old versions, newest first. Follow nextCursor.',
       trashListSchema,
       async (input, signal) => {
         const result = await trash.entries.list(input, signal);
@@ -179,7 +168,8 @@ export function createFileLibraryManagementTools(
     tool(
       'library_restore_item',
       'Restore library item',
-      'Restore a trashed file, folder subtree, or old version using kind and id from library_list_trash/library_trash_item. Restores the original location when available, otherwise the library root; name collisions receive a suffix. Requires user confirmation. Search/list again to find its current location and name.',
+      'ask',
+      'Restore a trashed item by kind and id from library_list_trash or library_trash_item, to its original folder or else the root. A name collision adds a suffix.',
       restoreSchema,
       async ({ kind, id }, signal) => {
         await trash.restore(kind, id, signal);

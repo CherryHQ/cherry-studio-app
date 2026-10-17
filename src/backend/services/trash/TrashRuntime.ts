@@ -10,7 +10,11 @@ import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate'
 import type { DbService } from '@/backend/data/db/DbService';
 import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import { deleteInternalEntryFiles, notifyFileChange } from '@/backend/services/file/fileStorage';
+import {
+  deleteInternalEntryFiles,
+  notifyFileChange,
+  trashInternalEntry,
+} from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   TRASH_RETENTION_MS,
@@ -49,6 +53,18 @@ export class TrashRuntime extends BaseService {
 
   hasPendingStorageWork() {
     return this.pending > 0;
+  }
+
+  /** Trash a logical file with all its versions, or a folder with its active subtree. */
+  trash(kind: 'file' | 'folder', id: string, signal?: AbortSignal) {
+    return this.mutate(async () => {
+      if (kind === 'folder') {
+        for (const entryId of await this.files.trashFolder(id, signal)) notifyFileChange(entryId);
+        return;
+      }
+      const file = await this.files.file(id);
+      await trashInternalEntry(this.files, file.currentEntryId, signal);
+    });
   }
 
   restore(kind: TrashKind, id: string, signal?: AbortSignal) {

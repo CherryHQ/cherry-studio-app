@@ -37,10 +37,9 @@ export function createFileLibraryTools(
       ref: { source: 'builtin', capabilityId: 'library_search_files' },
       providerName: 'library_search_files',
       displayName: 'Search file library',
-      approval: 'ask',
-      autoApprovalEligible: false,
+      approval: 'auto',
       description:
-        'Search active file names across the file library. Every call, including pagination, requires user confirmation. An empty query lists files. Use library_read_file for approved reads outside the workspace.',
+        'Search active file names across the file library. An empty query lists files. Use library_read_file to read files outside the workspace. To organize the library, find library_list_folders, library_move_item, library_rename_item, library_trash_item, library_list_trash and library_restore_item through tool_search.',
       inputSchema: toRuntimeInputSchema(searchSchema),
       async execute({ input }) {
         const parsed = searchSchema.parse(input);
@@ -66,10 +65,9 @@ export function createFileLibraryTools(
       ref: { source: 'builtin', capabilityId: 'library_read_file' },
       providerName: 'library_read_file',
       displayName: 'Read library file',
-      approval: 'ask',
-      autoApprovalEligible: false,
+      approval: 'auto',
       description:
-        'Read a file outside the workspace, with explicit user confirmation for every call. Uses the same paging and image rules as read_file. Approval permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access.',
+        'Read a file outside the workspace, with the same paging and image rules as read_file. A successful read permits editing this source into a new workspace file during this turn; it never gives read_file unrestricted library access.',
       inputSchema: toRuntimeInputSchema(libraryReadSchema),
       async execute(call) {
         const parsed = libraryReadSchema.parse(call.input);
@@ -131,7 +129,7 @@ export function createFileLibraryTools(
       displayName: 'Find workspace files',
       approval: 'auto',
       description:
-        'Find file names within the workspace and its descendants. Results identify current versions. Outside files require library_search_files and user approval.',
+        'Find file names within the workspace and its descendants. Results identify current versions. Use library_search_files for files outside the workspace.',
       inputSchema: toRuntimeInputSchema(searchSchema),
       async execute({ input }) {
         const parsed = searchSchema.parse(input);
@@ -165,8 +163,7 @@ export function createFileLibraryTools(
       providerName: 'create_workspace_folder',
       displayName: 'Create workspace folder',
       approval: 'auto',
-      description:
-        'Create one folder at a relative workspace path. Its parent must exist. For library-wide moves, renames, trashing and restoration, use the separately approved library tools.',
+      description: 'Create one folder at a relative workspace path. Its parent must exist.',
       inputSchema: toRuntimeInputSchema(createFolderSchema),
       async execute({ input }): Promise<RuntimeToolResult> {
         const parsed = createFolderSchema.parse(input);

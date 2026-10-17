@@ -184,7 +184,7 @@ describe('Agent file-library management', () => {
     try {
       const trashed = await call('library_trash_item', { kind: 'file', id: id(1) });
       expect(trashed).toEqual({
-        value: { status: 'trashed', kind: 'file', id: id(1), affectedVersions: 2 },
+        value: { status: 'trashed', kind: 'file', id: id(1) },
         artifacts: [],
       });
       expect(await entries.findAvailableByIds([id(1), id(2)])).toEqual([]);
@@ -241,15 +241,18 @@ describe('Agent file-library management', () => {
       ),
     ).rejects.toThrow();
     const duringLookup = new AbortController();
-    const read = library.file.bind(library);
-    jest.spyOn(library, 'file').mockImplementation(async (fileId) => {
-      const file = await read(fileId);
-      duringLookup.abort();
-      return file;
-    });
+    // The trash runtime owns its own library service, so intercept every instance.
+    const read = FileLibraryService.prototype.file;
+    jest
+      .spyOn(FileLibraryService.prototype, 'file')
+      .mockImplementation(async function (this: FileLibraryService, fileId) {
+        const file = await read.call(this, fileId);
+        duringLookup.abort();
+        return file;
+      });
     await expect(
       call('library_trash_item', { kind: 'file', id: id(1) }, duringLookup.signal),
     ).rejects.toThrow();
-    expect(await read(id(1))).toMatchObject({ name: 'Notes.md', deletedAt: null });
+    expect(await read.call(library, id(1))).toMatchObject({ name: 'Notes.md', deletedAt: null });
   });
 });

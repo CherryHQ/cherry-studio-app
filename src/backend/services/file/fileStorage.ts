@@ -43,9 +43,10 @@ export function notifyFileChange(id: FileEntryId): void {
 export async function trashInternalEntry(
   library: Pick<FileLibraryService, 'trashFileEntry'>,
   id: FileEntryId,
+  signal?: AbortSignal,
 ): Promise<boolean> {
   storageMutationGate.assertWritable();
-  const ids = await library.trashFileEntry(id);
+  const ids = await library.trashFileEntry(id, false, signal);
   for (const entryId of ids) notifyFileChange(entryId);
   return ids.length > 0;
 }

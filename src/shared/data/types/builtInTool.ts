@@ -191,38 +191,14 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('list_workspace', 'auto'),
   describe('find_workspace_files', 'auto'),
   describe('create_workspace_folder', 'auto'),
-  describe('library_search_files', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_read_file', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_list_folders', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_move_item', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_rename_item', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_trash_item', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_list_trash', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
-  describe('library_restore_item', 'ask', {
-    agentCapability: 'fileLibrary',
-    autoApprovalEligible: false,
-  }),
+  describe('library_search_files', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_read_file', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_list_folders', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_move_item', 'ask', { agentCapability: 'fileLibrary' }),
+  describe('library_rename_item', 'ask', { agentCapability: 'fileLibrary' }),
+  describe('library_trash_item', 'ask', { agentCapability: 'fileLibrary' }),
+  describe('library_list_trash', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_restore_item', 'ask', { agentCapability: 'fileLibrary' }),
   describe('read_file', 'auto'),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),

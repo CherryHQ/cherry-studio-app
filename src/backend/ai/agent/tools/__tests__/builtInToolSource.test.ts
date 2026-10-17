@@ -65,22 +65,28 @@ describe('createSystemCapabilitySource', () => {
     ]);
   });
 
-  test('requires explicit approval for every file-library call and honors the group deny-list', async () => {
+  test('applies the shared read/mutation approval to file-library tools, defers management, and honors the group deny-list', async () => {
     const tools = await resolve({});
-    const names = [
-      'library_search_files',
-      'library_read_file',
-      'library_list_folders',
-      'library_move_item',
-      'library_rename_item',
-      'library_trash_item',
-      'library_list_trash',
-      'library_restore_item',
-    ];
-    for (const name of names) {
+    const reads = ['library_search_files', 'library_read_file'];
+    const management = {
+      library_list_folders: 'auto',
+      library_move_item: 'ask',
+      library_rename_item: 'ask',
+      library_trash_item: 'ask',
+      library_list_trash: 'auto',
+      library_restore_item: 'ask',
+    };
+    const names = [...reads, ...Object.keys(management)];
+    for (const name of reads) {
+      const tool = tools.find((item) => item.providerName === name);
+      expect(tool).toMatchObject({ approval: 'auto', autoApprovalEligible: true });
+      expect(tool?.deferred).toBeUndefined();
+    }
+    for (const [name, approval] of Object.entries(management)) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
-        approval: 'ask',
-        autoApprovalEligible: false,
+        approval,
+        autoApprovalEligible: true,
+        deferred: true,
       });
     }
     const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
