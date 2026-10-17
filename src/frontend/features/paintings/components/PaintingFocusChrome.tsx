@@ -97,8 +97,9 @@ export function PaintingFocusChrome({
     <HeaderChrome
       leftActions={leftActions}
       rightActions={rightActions}
+      titleAlign="left"
       titleElement={
-        <View className="max-w-full items-center">
+        <View className="max-w-56 items-start">
           <Pressable
             accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
             accessibilityRole="button"
