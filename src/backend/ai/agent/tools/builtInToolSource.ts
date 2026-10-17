@@ -153,6 +153,9 @@ export function createSystemCapabilitySource(
 
       const scope = await resolveScope(deps, new Set(disabledCapabilities));
       const fileAccess = new WorkspaceFileAccess(workspaceFolderId ?? null, resources);
+      const workspaceName = workspaceFolderId
+        ? (await fileAccess.library.folder(workspaceFolderId))?.name
+        : undefined;
       const catalog = createCatalog(
         deps,
         scope,
@@ -162,6 +165,7 @@ export function createSystemCapabilitySource(
         agentId,
         askUser,
         fileAccess,
+        workspaceName,
       );
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
@@ -245,6 +249,7 @@ function createCatalog(
   agentId: string | undefined,
   askUser: AskUserQuestion,
   fileAccess: WorkspaceFileAccess,
+  workspaceName: string | undefined,
 ): ReadonlyMap<string, RuntimeTool> {
   const deviceDeps: DeviceToolDependencies = { devicePermissions: deps.devicePermissions };
   const tools = [
@@ -262,7 +267,7 @@ function createCatalog(
     ),
     createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
     createWriteFileTool(fileContent, fileAccess),
-    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode),
+    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),

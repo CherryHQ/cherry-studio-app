@@ -73,6 +73,30 @@ describe('createSystemCapabilitySource', () => {
     expect(capabilityIds(disabled)).toContain('read_file');
   });
 
+  test('names the linked folder in the workspace tools only for a workspace conversation', async () => {
+    const folder = jest.spyOn(fileLibraryService, 'folder').mockResolvedValue({
+      id: 'folder-1',
+      parentId: null,
+      name: '项目资料',
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    } as never);
+    const linked = await resolve({ workspaceFolderId: 'folder-1' });
+    expect(folder).toHaveBeenCalledWith('folder-1');
+    expect(capabilityIds(linked)).toEqual(
+      expect.arrayContaining(['list_workspace', 'find_workspace_files', 'create_workspace_folder']),
+    );
+    expect(linked.find((tool) => tool.providerName === 'list_workspace')?.description).toContain(
+      'file-library folder "项目资料"',
+    );
+
+    folder.mockClear();
+    const unlinked = await resolve({});
+    expect(folder).not.toHaveBeenCalled();
+    expect(capabilityIds(unlinked)).not.toContain('list_workspace');
+  });
+
   test('offers run_js without approval only when the client has the interactive bridge', async () => {
     expect(capabilityIds(await resolve({}))).not.toContain('run_js');
     expect(capabilityIds(await resolve({ jsSandbox: { run: jest.fn() } }))).not.toContain('run_js');
@@ -560,6 +584,7 @@ type Scenario = {
   paintingModel?: ConfiguredPaintingModel | null;
   supportsToolCalling?: boolean;
   webSearchProviders?: { fetchUrls?: boolean; searchKeywords?: boolean };
+  workspaceFolderId?: string;
 };
 
 async function resolve(
@@ -576,6 +601,7 @@ async function resolve(
     disabledCapabilities: scenario.disabledCapabilities ?? [],
     model: MODEL,
     resources: TURN_RESOURCES,
+    workspaceFolderId: scenario.workspaceFolderId,
   });
 }
 

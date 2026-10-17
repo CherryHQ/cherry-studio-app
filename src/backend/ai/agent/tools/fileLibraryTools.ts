@@ -20,10 +20,14 @@ const directorySchema = z.strictObject({
 });
 const createFolderSchema = z.strictObject({ path: z.string().min(1).max(4096) });
 
+export const LIST_WORKSPACE_TOOL_NAME = 'list_workspace';
+
 export function createFileLibraryTools(
   access: WorkspaceFileAccess,
   files: ManagedFileResolver,
   parser: DocumentParserMode,
+  /** The folder's display name, so the model knows which library folder is its workspace. */
+  workspaceName?: string,
 ): RuntimeTool[] {
   const libraryReadSchema = readFileInputSchema
     .omit({ path: true })
@@ -86,12 +90,15 @@ export function createFileLibraryTools(
   if (!workspaceId) return tools;
   tools.push(
     {
-      ref: { source: 'builtin', capabilityId: 'list_workspace' },
-      providerName: 'list_workspace',
+      ref: { source: 'builtin', capabilityId: LIST_WORKSPACE_TOOL_NAME },
+      providerName: LIST_WORKSPACE_TOOL_NAME,
       displayName: 'List workspace',
       approval: 'auto',
-      description:
-        'List a relative workspace directory. Files include their current fileEntryId; use it as base_file_entry_id when changing an existing path. No device paths are exposed.',
+      description: `${
+        workspaceName
+          ? `This conversation's workspace is the file-library folder ${JSON.stringify(workspaceName)}. `
+          : ''
+      }List a relative workspace directory; "." is the workspace itself. Files include their current fileEntryId; use it as base_file_entry_id when changing an existing path. No device paths are exposed.`,
       inputSchema: toRuntimeInputSchema(directorySchema),
       async execute({ input }) {
         const parsed = directorySchema.parse(input);
