@@ -16,7 +16,8 @@ export function DataScreen() {
   const { t } = useTranslation();
   const report = useBackupErrorReporter();
   const { backup, state } = useBackupState();
-  const busy = state.phase !== 'idle';
+  const [clearing, setClearing] = useState(false);
+  const busy = state.phase !== 'idle' || clearing;
   const available = backup.isAvailable();
 
   const create = () => {
@@ -69,19 +70,24 @@ export function DataScreen() {
           disabled={!available || busy}
         />
       </Section>
-      <StorageSection disabled={busy} />
+      <StorageSection disabled={busy} onClearingChange={setClearing} />
     </SettingsScrollPage>
   );
 }
 
-function StorageSection({ disabled }: { disabled: boolean }) {
+function StorageSection({
+  disabled,
+  onClearingChange,
+}: {
+  disabled: boolean;
+  onClearingChange: (clearing: boolean) => void;
+}) {
   const { t, i18n } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
   const report = useBackupErrorReporter();
   const agent = useBackendModule('agent');
   const [size, setSize] = useState<number>();
-  const [clearing, setClearing] = useState(false);
 
   const refresh = useCallback(() => agent.getWorkingStorageSize().then(setSize), [agent]);
   useEffect(() => {
@@ -89,7 +95,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
   }, [refresh]);
 
   const clear = async () => {
-    setClearing(true);
+    onClearingChange(true);
     try {
       const before = await agent.getWorkingStorageSize();
       await agent.clearWorkingStorage();
@@ -105,7 +111,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
       report(error);
       void refresh().catch(() => undefined);
     } finally {
-      setClearing(false);
+      onClearingChange(false);
     }
   };
   const confirm = () =>
@@ -123,7 +129,7 @@ function StorageSection({ disabled }: { disabled: boolean }) {
         label={t('settings.data.runtimeCache.clear')}
         onPress={confirm}
         showChevron={false}
-        disabled={disabled || clearing}
+        disabled={disabled}
         testID="settings-data-clear-runtime-cache"
         trailing={
           size === undefined ? undefined : (
