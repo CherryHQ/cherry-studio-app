@@ -345,7 +345,16 @@ function read() {
 if (request.operation === 'inspect') return inspect();
 if (request.operation === 'read') return read();
 if (Object.keys(parts).some(path => path.startsWith('_xmlsignatures/'))) fail('Signed Office documents cannot be edited without invalidating their signatures.');
-if (Object.keys(parts).some(path => /(?:^|\/)vbaProject\.bin$/i.test(path)) || parts['[Content_Types].xml'] && /macroEnabled|vbaProject/i.test(decode(parts['[Content_Types].xml']))) fail('Macro-enabled Office documents are not supported for editing.');
+const paths = Object.keys(parts);
+let hasMacros = paths.some(path => /(?:^|\/)vbaProject\.bin$/i.test(path));
+if (parts['[Content_Types].xml']) {
+  const types = checkRoot('[Content_Types].xml', CT, 'Types');
+  const overrides = new Map(children(types, CT, 'Override').map(node => [node.getAttribute('PartName').replace(/^\//, ''), node.getAttribute('ContentType')]));
+  const defaults = new Map(children(types, CT, 'Default').map(node => [node.getAttribute('Extension').toLowerCase(), node.getAttribute('ContentType')]));
+  // Generators may declare macro defaults that no package part actually uses.
+  hasMacros ||= paths.some(path => /macroEnabled|vbaProject/i.test(overrides.get(path) ?? defaults.get(path.split('.').pop().toLowerCase()) ?? ''));
+}
+if (hasMacros) fail('Macro-enabled Office documents are not supported for editing.');
 if (request.format === 'docx' && parts['word/settings.xml'] && all(document('word/settings.xml'), W, 'documentProtection').some(node => ['true', '1', 'on'].includes(node.getAttributeNS(W, 'enforcement')))) fail('Protected Word documents cannot be edited.');
 if (request.format === 'xlsx') editSheet();
 else for (const edit of request.edits) replaceParagraph(request.format === 'docx' ? wordParagraph(edit.anchor) : slideParagraph(edit.anchor), edit);

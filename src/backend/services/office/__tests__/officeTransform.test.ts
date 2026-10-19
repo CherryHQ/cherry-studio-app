@@ -3,6 +3,7 @@ import { runInNewContext } from 'node:vm';
 
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
+import { createOfficeCode } from '../createOfficeCode';
 import {
   officeEditSchemas,
   officeInspectSchema,
@@ -142,6 +143,47 @@ const workbookEdit = (address = 'A1'): OfficeTransformRequest => ({
   sheet: 'Data',
   cells: [{ address, value: '=literal' }],
 });
+
+test('edits generated XLSX files with an unused macro content-type default', async () => {
+  const generated: string = await runInNewContext(
+    `(async () => { ${createOfficeCode(
+      {
+        format: 'xlsx',
+        filename: 'generated.xlsx',
+        spec: { version: 1, sheets: [{ name: 'Data', rows: [['Keep 🍒', 3, true]] }] },
+      },
+      {},
+    )} })()`,
+    { queueMicrotask, atob, btoa },
+    { timeout: 5000 },
+  );
+  const source = unzipSync(new Uint8Array(Buffer.from(generated, 'base64')));
+  expect(strFromU8(source['[Content_Types].xml'])).toContain('macroEnabled');
+  expect(Object.keys(source).some((path) => path.endsWith('.bin'))).toBe(false);
+  const output = editedParts(operate(source, workbookEdit('B1')));
+  const sheet = strFromU8(output['xl/worksheets/sheet1.xml']);
+  expect(sheet).toContain('=literal');
+  expect(sheet).toContain('Keep 🍒');
+  expect(output['[Content_Types].xml']).toEqual(source['[Content_Types].xml']);
+});
+
+test.each(['vba-part', 'macro-override', 'used-macro-default'])(
+  'still rejects an XLSX edit with %s',
+  (kind) => {
+    const source: Record<string, string | Uint8Array> = workbook('<sheetData/>');
+    if (kind === 'vba-part') source['xl/vbaProject.bin'] = new Uint8Array([1]);
+    if (kind === 'macro-override') {
+      source['[Content_Types].xml'] =
+        `<Types xmlns="${CT}"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.ms-excel.sheet.macroEnabled.main+xml"/></Types>`;
+    }
+    if (kind === 'used-macro-default') {
+      source['xl/macro.bin'] = new Uint8Array([1]);
+      source['[Content_Types].xml'] =
+        `<Types xmlns="${CT}"><Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/></Types>`;
+    }
+    expect(operate(source, workbookEdit()).error).toMatch(/Macro-enabled/);
+  },
+);
 
 test('patches XLSX cells, retains drawing bytes and removes invalidated calculation bookkeeping', () => {
   const source = workbook(
