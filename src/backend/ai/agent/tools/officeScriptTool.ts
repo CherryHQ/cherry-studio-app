@@ -22,7 +22,7 @@ export const RUN_OFFICE_SCRIPT_TOOL_NAME = 'run_office_script';
 
 const schema = z.strictObject({
   filename: SafeNameSchema.describe(
-    'Plain output filename ending in .docx, .xlsx or .pptx; the extension selects the library.',
+    'Plain filename ending in .docx, .xlsx or .pptx; the extension selects the library and names any output.',
   ),
   code: z
     .string()
@@ -49,10 +49,10 @@ export function createOfficeScriptTool(
     providerName: RUN_OFFICE_SCRIPT_TOOL_NAME,
     displayName: 'Run Office script',
     description: `Write JavaScript against pinned Office libraries to produce a NEW .docx, .xlsx or .pptx file, for layouts and operations the create_* and edit_* tools cannot express. Prefer those tools when they suffice.
-Globals by output extension: docx = the docx 9.11 module (Document, Paragraph, TextRun, Table, ImageRun, Packer, patchDocument, ...); PptxGenJS = pptxgenjs 4.0 constructor; XLSX = SheetJS CE 0.20.3 mini (cell objects take f for formulas; nothing is calculated). Always: zip = fflate 0.8 (unzipSync, zipSync, strFromU8, strToU8), xml = @xmldom/xmldom 0.9 (DOMParser, XMLSerializer), atob, btoa, and inputs[id] = { name, mediaType, base64, bytes } for each id listed in inputs. There is no DOM, Node API, network, timer, fetch or file path.
-Return the file as a base64 string, Uint8Array or ArrayBuffer: return docx.Packer.toBase64String(doc); return pres.write({ outputType: 'base64' }); return XLSX.write(book, { bookType: 'xlsx', type: 'base64' }); return zip.zipSync(parts). Images: new docx.ImageRun({ type: 'png', data: inputs[id].bytes, transformation: { width, height } }); slide.addImage({ data: 'data:image/png;base64,' + inputs[id].base64, x, y, w, h }).
+Globals by output extension: docx = the docx 9.11 module (Document, Paragraph, TextRun, Table, ImageRun, Packer, patchDocument, ...); PptxGenJS = pptxgenjs 4.0 constructor; XLSX = SheetJS CE 0.20.3 mini (cell objects take f for formulas). Nothing calculates formulas, so also store each computed result: v beside f in SheetJS, or <v> after <f> in sheet XML; otherwise previews show blank cells. Always: zip = fflate 0.8 (unzipSync, zipSync, strFromU8, strToU8), xml = @xmldom/xmldom 0.9 (DOMParser, XMLSerializer), atob, btoa, and inputs[id] = { name, mediaType, base64, bytes } for each id listed in inputs. There is no DOM, Node API, network, timer, fetch or file path.
+Return the file as a base64 string, Uint8Array or ArrayBuffer, or return nothing to only inspect inputs (console.log output comes back as logs and no file is saved): return docx.Packer.toBase64String(doc); return pres.write({ outputType: 'base64' }); return XLSX.write(book, { bookType: 'xlsx', type: 'base64' }); return zip.zipSync(parts). Images: new docx.ImageRun({ type: 'png', data: inputs[id].bytes, transformation: { width, height } }); slide.addImage({ data: 'data:image/png;base64,' + inputs[id].base64, x, y, w, h }).
 To change an existing file without losing untouched parts, unzip inputs[id].bytes, edit its XML parts and zip it again, or use docx.patchDocument({ outputType: 'base64', data: inputs[id].bytes, patches }) for {{key}} placeholders. SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files.
-Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 64 MiB. Saves in the selected workspace, or at the library root without a workspace, and never overwrites a source. Success is status "created" with fileEntryId and any console.log output as logs; status "error" carries the script error to fix before retrying.`,
+Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 64 MiB. Saves in the selected workspace, or at the library root without a workspace, and never overwrites a source. Success is status "created" with fileEntryId and any console.log output (16 KiB) as logs, or status "read" with logs when nothing was returned; status "error" carries the script error to fix before retrying.`,
     inputSchema: toRuntimeInputSchema(schema),
     outputSchema: officeToolOutputSchemas[RUN_OFFICE_SCRIPT_TOOL_NAME],
     approval: 'auto',
@@ -109,6 +109,7 @@ Inputs together must fit 6 MiB and the output 4 MiB; a run gets 30 seconds and 6
           },
         });
         signal.throwIfAborted();
+        if (!data) return { value: { status: 'read', logs }, artifacts: [] };
         const entry = await files.createBytesEntry(
           {
             data,

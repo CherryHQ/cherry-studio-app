@@ -128,7 +128,11 @@ const content = z.union([
 const creationSchema = z.toJSONSchema(z.union([created, error])) as RuntimeJsonValue;
 const editSchema = z.toJSONSchema(z.union([edited, error])) as RuntimeJsonValue;
 const scriptSchema = z.toJSONSchema(
-  z.union([created.extend({ logs: z.string().optional() }), error]),
+  z.union([
+    created.extend({ logs: z.string().optional() }),
+    z.strictObject({ status: z.literal('read'), logs: z.string() }),
+    error,
+  ]),
 ) as RuntimeJsonValue;
 export const officeToolOutputSchemas = {
   create_document: creationSchema,

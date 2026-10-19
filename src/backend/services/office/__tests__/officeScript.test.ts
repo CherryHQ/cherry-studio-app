@@ -120,11 +120,31 @@ describe('Office scripts', () => {
     expect(Object.keys(edited).some((path) => path.startsWith('word/media/'))).toBe(true);
   });
 
+  test('returns null without packaging when the script only inspects inputs', async () => {
+    const result: unknown = await runInNewContext(
+      `(async () => { ${createOfficeScriptCode('docx', `console.log(inputs['${IMAGE_ID}'].bytes.length);`, { [IMAGE_ID]: IMAGE })} })()`,
+      { queueMicrotask, atob, btoa, console: { log: () => {} } },
+    );
+    expect(result).toBeNull();
+  });
+
   test.each([
     ['return 42;', 'Return the DOCX file as a base64 string'],
     ['return zip.zipSync({ a: zip.strToU8("x") });', 'word/document.xml is missing'],
     ['return new Uint8Array([1, 2, 3]);', 'not a ZIP package'],
+    [
+      `const parts = zip.unzipSync(inputs['${SOURCE_ID}'].bytes);
+      parts['word/document.xml'] = zip.strToU8('<?xml version="1.0"?><w:document><w:body></w:document>');
+      return zip.zipSync(parts);`,
+      'Invalid XML in word/document.xml',
+    ],
+    ['return inputs["missing"].bytes;', 'inputs["missing"] is unavailable'],
   ])('refuses an invalid result from %s', async (script, message) => {
-    await expect(run('docx', script)).rejects.toThrow(message);
+    const template = await run(
+      'docx',
+      'return docx.Packer.toBase64String(new docx.Document({ sections: [{ children: [] }] }));',
+    );
+    const source = { name: 'a.docx', mediaType: 'application/octet-stream', data: template };
+    await expect(run('docx', script, { [SOURCE_ID]: source })).rejects.toThrow(message);
   });
 });

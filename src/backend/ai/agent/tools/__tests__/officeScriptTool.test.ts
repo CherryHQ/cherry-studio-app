@@ -109,6 +109,21 @@ describe('run_office_script', () => {
     expect(sandbox.run).not.toHaveBeenCalled();
   });
 
+  test('reports logs without publishing when the script returns nothing', async () => {
+    const { files, execute } = setup({
+      status: 'ok',
+      result: 'null',
+      logs: 'sheets: 明细',
+      logsTruncated: false,
+      durationMs: 1,
+    });
+    expect((await execute({ filename: 'probe.xlsx', code: 'console.log("x");' })).value).toEqual({
+      status: 'read',
+      logs: 'sheets: 明细',
+    });
+    expect(files.createBytesEntry).not.toHaveBeenCalled();
+  });
+
   test('returns the script error and console output for the model to fix', async () => {
     const { files, execute } = setup({
       status: 'error',

@@ -657,7 +657,9 @@ Desktop's workflow. Selection references do not widen file grants.
 compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact. It covers what the
 spec tools cannot express, including template filling, formulas, free layouts and package-level edits
 of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
-job has no app, file or network port. Script errors and console output return as
+job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
+and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
+not parse are refused before publication. Script errors and console output return as
 `{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
 pending. Executed tests cover package contents and supported patch preservation in a Node VM;
 they do not establish native QuickJS compatibility or Office visual fidelity.

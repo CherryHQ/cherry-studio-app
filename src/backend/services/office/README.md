@@ -73,10 +73,15 @@ workspace placement for validation at commit; edits do not advance the source fi
 specs. The output extension selects one generator library (`docx`, `PptxGenJS` or `XLSX`); `zip`
 (fflate), `xml` (xmldom), `atob`/`btoa` and `inputs[id]` (`name`, `mediaType`, `base64`, `bytes`)
 are always present. The script is the body of an async function and returns the file as base64,
-`Uint8Array` or `ArrayBuffer`. The job rejects a result that is not a ZIP package containing the
-format's main part, then the adapter publishes it like generation. Inputs are any authorized managed
-files, 6 MiB together; output, time and memory limits match generation. Script and console errors
-return as `status: "error"` so the model can correct and retry.
+`Uint8Array` or `ArrayBuffer`. A script that returns nothing only inspects its inputs: it reports
+`status: "read"` with its console output (16 KiB) and saves no file.
+
+The job rejects a result that is not a ZIP package containing the format's main part, or whose XML
+parts (each up to 1 MiB) do not parse, so hand-edited package XML cannot publish a corrupt file.
+The adapter then publishes the result like generation. Inputs are any authorized managed files,
+6 MiB together; output, time and memory limits match generation. Script and console errors return
+as `status: "error"` so the model can correct and retry. Formula cells must carry their computed
+value because nothing in the app calculates them.
 
 The QuickJS job has no app, file or network port, so model code can only compute bytes. Changing an
 existing file without losing untouched parts goes through its package XML or `docx.patchDocument`;
