@@ -69,7 +69,7 @@ describe('MessageAnswerTabs', () => {
 
     expect(tabs.props.value).toBe('a1');
     expect(tabs.props.items.map((item: { label: string }) => item.label)).toEqual([
-      'chat.branch.repeatedModel:{"model":"Claude","index":1}',
+      'chat.branch.answerStatus:{"model":"chat.branch.repeatedModel:{\\"model\\":\\"Claude\\",\\"index\\":1}","status":"chat.branch.answering"}',
       'chat.branch.answerStatus:{"model":"GPT","status":"chat.branch.answering"}',
       'chat.branch.answerStatus:{"model":"chat.branch.repeatedModel:{\\"model\\":\\"Claude\\",\\"index\\":2}","status":"chat.branch.failed"}',
       'chat.branch.answerStatus:{"model":"chat.branch.unknownModel","status":"chat.message.stopped"}',
@@ -100,10 +100,13 @@ describe('MessageAnswerTabs', () => {
     act(() => renderer!.root.findByProps({ testID: 'message-answer-stop' }).props.onPress());
     expect(mockStopAnswer).toHaveBeenCalledWith({ messageId: 'a1' });
 
+    const alone = running.branch!.siblings.map((sibling) =>
+      sibling.id === 'a2' ? { ...sibling, status: 'success' as const } : sibling,
+    );
     act(() =>
       renderer!.update(
         <MessageAnswerStop
-          message={{ ...running, branch: { ...running.branch!, multiModel: false } }}
+          message={{ ...running, branch: { ...running.branch!, siblings: alone } }}
         />,
       ),
     );
@@ -114,9 +117,9 @@ describe('MessageAnswerTabs', () => {
 function answer(): MessageListItem {
   return {
     branch: {
-      multiModel: true,
+      key: 'answers:question',
       siblings: [
-        { id: 'a1', modelId: 'anthropic::claude', status: 'success' },
+        { id: 'a1', modelId: 'anthropic::claude', status: 'pending' },
         { id: 'a2', modelId: 'openai::gpt', status: 'pending' },
         { id: 'a3', modelId: 'anthropic::claude', status: 'error' },
         { id: 'a4', modelId: 'removed::model', status: 'paused' },

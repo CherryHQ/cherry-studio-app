@@ -140,7 +140,9 @@ export const MessageAnswerStop = memo(function MessageAnswerStop({
 }) {
   const { t } = useTranslation();
   const { stopAnswer } = useAssistantMessageActions();
-  if (!stopAnswer || !message.branch?.multiModel || message.status !== 'pending') return null;
+  // A single running answer stops with the composer; only parallel ones stop apart.
+  const running = message.branch?.siblings.filter((sibling) => sibling.status === 'pending');
+  if (!stopAnswer || message.status !== 'pending' || (running?.length ?? 0) < 2) return null;
   return (
     <BackgroundPressExclusion>
       <View className="flex-row">

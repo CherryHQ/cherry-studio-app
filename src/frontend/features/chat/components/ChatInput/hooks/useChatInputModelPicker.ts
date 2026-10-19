@@ -12,8 +12,9 @@ const MIN_PARALLEL_MODELS = 2;
 
 /**
  * The composer's model sheet. Choosing one model makes it the Agent's model.
- * The multi-select mode chooses several models for the next send only and
- * applies each change at once; leaving the mode returns to the Agent's model.
+ * The multi-select mode chooses several models that answer each send
+ * without changing the Agent, and applies each change at once; leaving the mode returns to the
+ * Agent's model.
  */
 export function useChatInputModelPicker({
   agentId,

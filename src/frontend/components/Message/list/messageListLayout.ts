@@ -48,7 +48,7 @@ export const MAINTAIN_VISIBLE_CONTENT_POSITION = {
 };
 
 export function messageKeyExtractor(item: MessageListItem) {
-  return item.id;
+  return item.branch?.key ?? item.id;
 }
 
 // LegendList 按角色维护真实尺寸均值；空助手行单独分类，避免用长回复均值估算 loading 行。

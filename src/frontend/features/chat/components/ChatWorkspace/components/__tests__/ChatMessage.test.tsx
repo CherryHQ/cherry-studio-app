@@ -270,7 +270,7 @@ describe('ChatMessage', () => {
       ...createMessage('success'),
       model,
       branch: {
-        multiModel: true,
+        key: 'answers:user-1',
         siblings: [
           { id: 'assistant-1', modelId: model.id, status: 'success' },
           { id: 'assistant-2', modelId: 'openai::gpt-5', status: 'pending' },

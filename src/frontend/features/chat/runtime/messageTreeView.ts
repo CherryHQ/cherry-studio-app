@@ -27,14 +27,28 @@ export function selectedLiveMessages(
   return live.filter((message) => persistedIds.has(message.id) || visible.has(message.id));
 }
 
+/** Each question's answers as last read, carried over from the previous reading. */
+export function readQuestionAnswers(
+  history: readonly AgentMessageView[],
+  previous: ReadonlyMap<string, readonly AgentMessageSibling[]> = new Map(),
+): ReadonlyMap<string, readonly AgentMessageSibling[]> {
+  const byQuestion = new Map(previous);
+  for (const message of history)
+    if (message.role === 'assistant' && message.parentId && message.siblings)
+      byQuestion.set(message.parentId, message.siblings);
+  return byQuestion;
+}
+
 /**
- * Parallel answers stream before their persisted rows carry `siblings`: derive
- * them from the live answers that share a question. Returns the same objects
+ * Answers stream before their persisted rows carry `siblings`, and settled history omits a
+ * question's whole turn while one of its answers runs. A running answer's alternatives are the
+ * answers last read for its question plus the live answers sharing it. Returns the same objects
  * when nothing changes, so row projections stay cached.
  */
 export function withLiveSiblings(
   messages: readonly AgentMessageView[],
   live: readonly AgentMessageView[],
+  readAnswers: ReadonlyMap<string, readonly AgentMessageSibling[]>,
 ): readonly AgentMessageView[] {
   const answers = new Map<string, AgentMessageView[]>();
   for (const message of live)
@@ -43,20 +57,28 @@ export function withLiveSiblings(
       list.push(message);
       answers.set(message.parentId, list);
     }
-  if (![...answers.values()].some((list) => list.length > 1)) return messages;
-  return messages.map((message) => {
+  if (answers.size === 0) return messages;
+  let changed = false;
+  const next = messages.map((message) => {
     const group = message.parentId ? answers.get(message.parentId) : undefined;
-    if (!group || group.length < 2 || !group.some((answer) => answer.id === message.id))
-      return message;
-    const known = new Map((message.siblings ?? []).map((sibling) => [sibling.id, sibling]));
+    if (!group?.some((answer) => answer.id === message.id)) return message;
+    const siblings = new Map(
+      (message.siblings ?? readAnswers.get(message.parentId!) ?? []).map((sibling) => [
+        sibling.id,
+        sibling,
+      ]),
+    );
     for (const answer of group)
-      known.set(answer.id, {
+      siblings.set(answer.id, {
         id: answer.id,
         modelId: answer.modelId,
         status: answer.status,
         // Live answers sharing a question were reserved as one multi-model group.
-        siblingsGroupId: known.get(answer.id)?.siblingsGroupId ?? 1,
+        siblingsGroupId: siblings.get(answer.id)?.siblingsGroupId ?? (group.length > 1 ? 1 : 0),
       } satisfies AgentMessageSibling);
-    return { ...message, siblings: [...known.values()] };
+    if (siblings.size < 2) return message;
+    changed = true;
+    return { ...message, siblings: [...siblings.values()] };
   });
+  return changed ? next : messages;
 }

@@ -29,9 +29,9 @@ export type MessageListItem = Readonly<{
    * answer, when there is more than one.
    */
   branch?: Readonly<{
+    /** Shared by the answers to one question, so switching updates their row in place. */
+    key: string;
     siblings: readonly Readonly<{ id: string; status: MessageStatus; modelId: string | null }>[];
-    /** Some of the answers are one question's parallel multi-model answers. */
-    multiModel: boolean;
   }>;
   role: 'assistant' | 'system' | 'user';
   /** Feature-owned timeline event synthesized beside persisted messages. */

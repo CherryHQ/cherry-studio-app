@@ -110,8 +110,9 @@ export function ChatInput({
     persistModel,
     handleModelPersistenceError,
   );
-  // Several models answer the next send only; the Agent default stays unchanged. The composer
-  // session remounts this input, so another conversation starts without them.
+  // Several models keep answering until the user returns to the Agent's model, which stays
+  // unchanged. The composer session remounts this input, so another conversation starts without
+  // them.
   const [replyModels, setReplyModels] = useState<readonly UniqueModelId[] | null>(null);
   const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
   // Effort levels differ per model, so several models answer at their own defaults.
@@ -310,7 +311,6 @@ function TextChatInput({
           : {}),
       });
       mcpApps?.consumed(appContexts);
-      setReplyModels(null);
       return result;
     },
     [
@@ -322,7 +322,6 @@ function TextChatInput({
       replyModels,
       selectedModelId,
       sendMessage,
-      setReplyModels,
     ],
   );
   const getSendErrorLabel = useCallback(

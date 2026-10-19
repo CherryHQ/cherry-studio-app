@@ -376,12 +376,12 @@ export function toAgentMessageListItem(
     ...(message.siblings && message.role === 'assistant'
       ? {
           branch: {
+            key: `answers:${message.parentId}`,
             siblings: message.siblings.map((sibling) => ({
               id: sibling.id,
               status: toDisplayStatus(sibling.status),
               modelId: sibling.modelId,
             })),
-            multiModel: message.siblings.some((sibling) => sibling.siblingsGroupId > 0),
           },
         }
       : {}),
