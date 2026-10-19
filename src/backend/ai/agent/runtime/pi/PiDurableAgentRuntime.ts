@@ -23,17 +23,23 @@ import { SqliteStorage } from '@earendil-works/pi-durable/storage/sqlite';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type {
-  DurableAgentRuntime,
-  RuntimeConversationConfiguration,
-  RuntimeConversationEvent,
-  RuntimeConversationSeed,
-  RuntimeDurableSubmission,
-  RuntimeDurableTurn,
-  RuntimeExecutionIdentity,
-  RuntimeExecutionPorts,
-  RuntimeSqlDatabase,
-  RuntimeUsageOwner,
+import {
+  LANES_PER_SESSION,
+  laneKey,
+  parseLaneKey,
+  runtimeLane,
+  sameLane,
+  type DurableAgentRuntime,
+  type RuntimeConversationConfiguration,
+  type RuntimeConversationEvent,
+  type RuntimeConversationSeed,
+  type RuntimeDurableSubmission,
+  type RuntimeDurableTurn,
+  type RuntimeExecutionIdentity,
+  type RuntimeExecutionPorts,
+  type RuntimeLane,
+  type RuntimeSqlDatabase,
+  type RuntimeUsageOwner,
 } from '../durableTypes';
 import type { RuntimeDescriptor, RuntimeTool, RuntimeUsageReport } from '../types';
 import { toPiConversation } from './modelMessages';
@@ -97,8 +103,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   private runtime: PiDurableRuntime | undefined;
   private ports: RuntimeExecutionPorts | undefined;
   private readonly registry: Registry = createRegistry();
+  /** Keyed by {@link laneKey}, the engine's session key. */
   private readonly configurations = new Map<string, PiStoredConfiguration>();
-  private readonly providerOwners = new Map<string, string>();
+  private readonly providerOwners = new Map<string, RuntimeLane>();
+  /**
+   * Bound slots by Cherry Session. Pi reads every unbound slot from storage, so they are
+   * probed once; this facade is the only writer of slot bindings, and each write drops the entry.
+   */
+  private readonly slots = new Map<
+    string,
+    Promise<readonly { lane: RuntimeLane; revision: number }[]>
+  >();
   private readonly requestOwners = new WeakMap<AbortSignal, RuntimeExecutionIdentity>();
   /** Requests after an exhausted tool budget, which must not select tools. */
   private readonly toolFreeRequests = new WeakSet<AbortSignal>();
@@ -122,12 +137,9 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         const owner = this.executionOwner(providerId, signal);
         await this.requirePorts().assertExecutionAllowed(owner, signal);
         if (owner.requestId) {
-          const selected = await this.requireRuntime().inputRecord(
-            owner.sessionId,
-            owner.requestId,
-          );
+          const selected = await this.requireRuntime().inputRecord(laneKey(owner), owner.requestId);
           if (!selected) throw new Error('The model request has no durable input.');
-          await this.grantInputFiles(owner.sessionId);
+          await this.grantInputFiles(owner);
         }
         signal.throwIfAborted();
         return this.requireRuntime().requestOptions(providerId);
@@ -187,13 +199,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         })
         .catch((error) => logger.warn('Could not report runtime closure', { error }));
       // Stored history needs no registry code. Rebuild only unfinished owners before any resume.
-      for (const sessionId of await this.unfinishedSessions()) {
-        const stored = await this.runtime.configuration(sessionId);
+      for (const lane of await this.unfinishedLanes()) {
+        const stored = await this.runtime.configuration(laneKey(lane));
         const configuration = PiConfigurationSchema.parse(stored);
-        const agent = await this.installConfiguration(sessionId, configuration, true);
+        const agent = await this.installConfiguration(lane, configuration, true);
         if (stored?.version === 1)
-          await this.runtime.restoreConfiguration(sessionId, detachedJson(configuration), agent);
-        await this.bindProvider(sessionId);
+          await this.runtime.restoreConfiguration(
+            laneKey(lane),
+            detachedJson(configuration),
+            agent,
+          );
+        await this.bindProvider(lane);
       }
     } catch (error) {
       try {
@@ -214,6 +230,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         this.ports = undefined;
         this.configurations.clear();
         this.providerOwners.clear();
+        this.slots.clear();
       }
       throw error;
     }
@@ -259,6 +276,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       this.ports = undefined;
       this.configurations.clear();
       this.providerOwners.clear();
+      this.slots.clear();
       this.observers.clear();
       for (const extension of this.registry.snapshot().installed())
         this.registry.uninstall(extension);
@@ -267,20 +285,57 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
 
   async sessions() {
     return (await this.requireRuntime().sessions()).map(({ sessionId, binding }) => ({
-      sessionId,
+      lane: parseLaneKey(sessionId),
       revision: binding.revision,
     }));
   }
 
-  async hasConversation(sessionId: string) {
-    return (await this.requireRuntime().conversation(sessionId)) !== undefined;
+  /** Probes the Session's fixed slots instead of scanning every working copy. */
+  async lanes(sessionId: string) {
+    const runtime = this.requireRuntime();
+    const cached = this.slots.get(sessionId);
+    if (cached) return cached;
+    const probe = (async () => {
+      const lanes: { lane: RuntimeLane; revision: number }[] = [];
+      for (let slot = 0; slot < LANES_PER_SESSION; slot++) {
+        const lane = runtimeLane(sessionId, slot);
+        const binding = await runtime.binding(laneKey(lane));
+        if (binding?.conversationId !== undefined && binding.conversationId !== null)
+          lanes.push({ lane, revision: binding.revision });
+      }
+      return lanes;
+    })();
+    this.slots.set(sessionId, probe);
+    probe.catch(() => {
+      if (this.slots.get(sessionId) === probe) this.slots.delete(sessionId);
+    });
+    return probe;
   }
 
-  async revision(sessionId: string) {
-    return (await this.requireRuntime().binding(sessionId))?.revision;
+  /** Drops the Session's bound slots once a binding write settles; a probe begun meanwhile is stale. */
+  private async rebinding<Value>(lane: RuntimeLane, write: () => Promise<Value>) {
+    try {
+      return await write();
+    } finally {
+      this.slots.delete(lane.sessionId);
+    }
   }
 
-  async unfinishedSessions() {
+  /** The newest entry of a copy: a boundary that other lanes can fork from. */
+  private async newestBoundary(key: string) {
+    const [newest] = (await this.requireRuntime().history(key, 1)).entries;
+    return newest ? `pi:${newest.id}` : undefined;
+  }
+
+  async hasConversation(lane: RuntimeLane) {
+    return (await this.requireRuntime().conversation(laneKey(lane))) !== undefined;
+  }
+
+  async revision(lane: RuntimeLane) {
+    return (await this.requireRuntime().binding(laneKey(lane)))?.revision;
+  }
+
+  async unfinishedLanes() {
     const runtime = this.requireRuntime();
     const inspection = await runtime.inspect();
     for (const task of inspection.tasks) {
@@ -302,13 +357,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         ({ binding }) =>
           binding.conversationId !== null && conversations.has(binding.conversationId),
       )
-      .map(({ sessionId }) => sessionId);
+      .map(({ sessionId }) => parseLaneKey(sessionId));
   }
 
-  async configuration(sessionId: string): Promise<RuntimeConversationConfiguration> {
+  async configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration> {
+    const key = laneKey(lane);
     const stored =
-      this.configurations.get(sessionId) ??
-      PiConfigurationSchema.parse(await this.requireRuntime().configuration(sessionId));
+      this.configurations.get(key) ??
+      PiConfigurationSchema.parse(await this.requireRuntime().configuration(key));
     return {
       kind: stored.kind,
       model: { ...stored.model },
@@ -320,25 +376,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     };
   }
 
-  resourceFileEntryIds(sessionId: string) {
-    return this.requireRuntime().resourceFileEntryIds(sessionId);
+  resourceFileEntryIds(lane: RuntimeLane) {
+    return this.requireRuntime().resourceFileEntryIds(laneKey(lane));
   }
 
-  async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void> {
+  async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal) {
     const runtime = this.requireRuntime();
-    if (await runtime.conversation(seed.sessionId)) {
-      if ((await runtime.binding(seed.sessionId))?.revision !== seed.revision)
+    const key = laneKey(seed.lane);
+    if (await runtime.conversation(key)) {
+      if ((await runtime.binding(key))?.revision !== seed.revision)
         throw new Error('The working copy is obsolete.');
-      return;
+      return this.newestBoundary(key);
     }
     const configuration = await this.configurationBlueprint(seed.configuration);
-    const agent = await this.installConfiguration(seed.sessionId, configuration);
+    const agent = await this.installConfiguration(seed.lane, configuration);
     const model = this.requireModel(configuration);
     const originalEntries = seed.history
       ? createWorkingPiEntries(
           {
             turnId: 'history-import',
-            sessionId: seed.sessionId,
+            sessionId: seed.lane.sessionId,
             instructions: configuration.instructions,
             model: configuration.model,
             options: configuration.options,
@@ -351,48 +408,77 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         )
       : undefined;
     signal?.throwIfAborted();
-    await runtime.ensureConversation({
-      sessionId: seed.sessionId,
-      revision: seed.revision,
-      agent,
-      options: configuration.options,
-      configuration: detachedJson(configuration),
-      initialInstructions: configuration.initialInstructions,
-      resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
-      entries: originalEntries,
-    });
-    await this.bindProvider(seed.sessionId);
+    await this.rebinding(seed.lane, () =>
+      runtime.ensureConversation({
+        sessionId: key,
+        revision: seed.revision,
+        agent,
+        options: configuration.options,
+        configuration: detachedJson(configuration),
+        initialInstructions: configuration.initialInstructions,
+        resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
+        entries: originalEntries,
+      }),
+    );
+    await this.bindProvider(seed.lane);
+    return this.newestBoundary(key);
   }
 
-  async configure(sessionId: string, input: RuntimeConversationConfiguration): Promise<void> {
-    const previous = this.configurations.get(sessionId);
+  async forkConversation(
+    seed: Parameters<DurableAgentRuntime['forkConversation']>[0],
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const runtime = this.requireRuntime();
+    if (await runtime.conversation(laneKey(seed.lane)))
+      throw new Error('The working copy already exists.');
+    const configuration = await this.configurationBlueprint(seed.configuration);
+    const agent = await this.installConfiguration(seed.lane, configuration);
+    signal?.throwIfAborted();
+    await this.rebinding(seed.lane, () =>
+      runtime.forkConversation(laneKey(seed.from.lane), {
+        sessionId: laneKey(seed.lane),
+        revision: seed.revision,
+        agent,
+        options: configuration.options,
+        configuration: detachedJson(configuration),
+        initialInstructions: configuration.initialInstructions,
+        at: parseBoundary(seed.from.boundary),
+        resourceFileEntryIds: seed.referencedFileEntryIds,
+      }),
+    );
+    await this.bindProvider(seed.lane);
+  }
+
+  async configure(lane: RuntimeLane, input: RuntimeConversationConfiguration): Promise<void> {
+    const previous = this.configurations.get(laneKey(lane));
     const configuration = await this.configurationBlueprint(input);
-    const agent = await this.installConfiguration(sessionId, configuration);
+    const agent = await this.installConfiguration(lane, configuration);
     try {
       await this.requireRuntime().configure(
-        sessionId,
+        laneKey(lane),
         agent,
         configuration.options,
         BACKGROUND_CONTEXT,
         detachedJson(configuration),
         configuration.initialInstructions,
       );
-      await this.bindProvider(sessionId);
+      await this.bindProvider(lane);
     } catch (error) {
-      if (previous) await this.installConfiguration(sessionId, previous);
+      if (previous) await this.installConfiguration(lane, previous);
       throw error;
     }
   }
 
-  async submit(sessionId: string, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn> {
+  async submit(lane: RuntimeLane, input: RuntimeDurableSubmission): Promise<RuntimeDurableTurn> {
     const runtime = this.requireRuntime();
-    const configuration = this.requireConfiguration(sessionId);
+    const key = laneKey(lane);
+    const configuration = this.requireConfiguration(key);
     const model = this.requireModel(configuration);
     const tools = configuration.tools.map((blueprint) => this.toolTemplate(blueprint));
     const assembled = toPiConversation(
       {
         turnId: input.turnId,
-        sessionId,
+        sessionId: lane.sessionId,
         instructions: '',
         model: configuration.model,
         options: configuration.options,
@@ -412,18 +498,18 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         }
       : assembled.prompt;
     const submission = await runtime.submit(
-      sessionId,
+      key,
       { type: 'input', requestId: input.requestId, content: prompt.content, whenBusy: 'followUp' },
       piSubmissionMetadata(input, tools),
       { userMessageId: input.userMessageId, assistantMessageId: input.assistantMessageId },
     );
     const record = await submission.status(BACKGROUND_CONTEXT);
-    return this.project(sessionId, record, await runtime.submissionMetadata(record));
+    return this.project(lane, record, await runtime.submissionMetadata(record));
   }
 
-  async observe(sessionId: string, listener: (event: RuntimeConversationEvent) => void) {
+  async observe(lane: RuntimeLane, listener: (event: RuntimeConversationEvent) => void) {
     const runtime = this.requireRuntime();
-    const observer = new PiDurableObserver(runtime, sessionId, listener);
+    const observer = new PiDurableObserver(runtime, lane, listener);
     const snapshot = await observer.start();
     this.observers.add(observer);
     return {
@@ -436,7 +522,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   async history(
-    sessionId: string,
+    lane: RuntimeLane,
     query: { limit: number; cursor?: string; requestIds?: readonly string[] },
   ) {
     if (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 128)
@@ -448,7 +534,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     let cursor: Cursor | undefined;
     do {
       const page = await runtime.history(
-        sessionId,
+        laneKey(lane),
         256,
         cursor,
         BACKGROUND_CONTEXT,
@@ -462,7 +548,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           continue;
         if (query.requestIds && (!record.requestId || !query.requestIds.includes(record.requestId)))
           continue;
-        turns.push(await this.project(sessionId, record, metadata));
+        turns.push(await this.project(lane, record, metadata));
         if (turns.length === query.limit) {
           maxEntryId = (Number(record.entry) - 1) as EntryId;
           nextCursor = `pi:${maxEntryId}`;
@@ -475,26 +561,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return { turns, ...(nextCursor ? { nextCursor } : {}) };
   }
 
-  async message(sessionId: string, messageId: string) {
+  async message(lane: RuntimeLane, messageId: string) {
     const runtime = this.requireRuntime();
-    const selected = await runtime.submissionForMessage(sessionId, messageId);
+    const selected = await runtime.submissionForMessage(laneKey(lane), messageId);
     if (!selected) return undefined;
-    const turn = await this.project(sessionId, selected.record, selected.metadata);
+    const turn = await this.project(lane, selected.record, selected.metadata);
     if (selected.role === 'assistant' && !turn.hasAssistant) return undefined;
     return { turn, role: selected.role };
   }
 
   async exportTurn(
-    sessionId: string,
+    lane: RuntimeLane,
     requestId: string,
     options: { currentContext?: boolean } = {},
   ) {
     const runtime = this.requireRuntime();
-    const record = await runtime.inputRecord(sessionId, requestId);
+    const record = await runtime.inputRecord(laneKey(lane), requestId);
     if (!record || record.type !== 'input' || record.status !== 'done')
       return { contextCheckpoint: null };
     const stored = readPiSubmission(await runtime.submissionMetadata(record));
-    const conversation = await runtime.conversation(sessionId);
+    const conversation = await runtime.conversation(laneKey(lane));
     if (!conversation) throw new Error('The working copy is missing.');
     const view = await conversation.context(
       BACKGROUND_CONTEXT,
@@ -507,25 +593,26 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return { contextCheckpoint };
   }
 
-  async abort(sessionId: string) {
-    await this.requireRuntime().stop(sessionId);
+  async abort(lane: RuntimeLane) {
+    await this.requireRuntime().stop(laneKey(lane));
   }
 
-  async discardConversation(sessionId: string) {
+  async discardConversation(lane: RuntimeLane) {
     const runtime = this.requireRuntime();
-    if (!(await runtime.conversation(sessionId))) return;
-    await runtime.stop(sessionId);
+    const key = laneKey(lane);
+    if (!(await runtime.conversation(key))) return;
+    await runtime.stop(key);
     await this.drainUsage();
-    await runtime.retireSession(sessionId);
-    this.configurations.delete(sessionId);
+    await this.rebinding(lane, () => runtime.retireSession(key));
+    this.configurations.delete(key);
     for (const [providerId, owner] of this.providerOwners)
-      if (owner === sessionId) this.providerOwners.delete(providerId);
-    const name = `cherry.capabilities:${sessionId}`;
+      if (sameLane(owner, lane)) this.providerOwners.delete(providerId);
+    const name = `cherry.capabilities:${key}`;
     for (const extension of this.registry.snapshot().installed())
       if (extension.name === name) this.registry.uninstall(extension);
   }
-  async withdraw(sessionId: string, requestId: string) {
-    const result = await this.requireRuntime().withdrawInput(sessionId, requestId);
+  async withdraw(lane: RuntimeLane, requestId: string) {
+    const result = await this.requireRuntime().withdrawInput(laneKey(lane), requestId);
     return result === 'already_placed'
       ? ('already-placed' as const)
       : result === 'not_found'
@@ -538,29 +625,30 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   private async project(
-    sessionId: string,
+    lane: RuntimeLane,
     record: SubmissionRecord,
     metadata: JsonObject | undefined,
   ) {
     const runtime = this.requireRuntime();
-    const conversation = await runtime.conversation(sessionId);
+    const conversation = await runtime.conversation(laneKey(lane));
     if (!conversation) throw new Error('The Pi conversation is missing.');
     const active = record.conversationId === conversation.id && record.status === 'placed';
     return projectPiTurn({
-      sessionId,
+      lane,
       record,
       metadata,
-      entries: await runtime.turnEntries(sessionId, record),
+      entries: await runtime.turnEntries(laneKey(lane), record),
       active,
       inherited: record.conversationId !== conversation.id,
     });
   }
 
   private async installConfiguration(
-    sessionId: string,
+    lane: RuntimeLane,
     configuration: PiStoredConfiguration,
     rehydrating = false,
   ): Promise<AgentChange> {
+    const key = laneKey(lane);
     try {
       const existing = rehydrating
         ? this.models.getModel(configuration.model, configuration.kind)
@@ -574,7 +662,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const routes = configuration.webRoutes ?? { search: 'client', fetch: 'client' };
     const nativeWeb = routes.search === 'server' || routes.fetch === 'server';
     const extension = createPiDurableToolExtension({
-      name: `cherry.capabilities:${sessionId}`,
+      name: `cherry.capabilities:${key}`,
       acceptsImages:
         this.models.getModel(configuration.model, configuration.kind)?.input.includes('image') ??
         false,
@@ -594,7 +682,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                 const writer = this.requirePorts().writeToolOutput;
                 if (!writer) return { error: 'Managed output storage is unavailable.' };
                 const signal = requireSignal(context);
-                const identity = await this.taskIdentity(sessionId, api, context);
+                const identity = await this.taskIdentity(lane, api, context);
                 await this.requirePorts().assertExecutionAllowed(identity, signal);
                 try {
                   const previous = await api.snapshot(PiCodemodeFiles, api.taskId, context);
@@ -606,11 +694,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
                   }, context);
                   // Replay retries authorization even when the file receipt already exists.
                   await this.requirePorts().admitArtifacts(identity, [artifact], signal);
-                  await this.requireRuntime().grantFiles(
-                    sessionId,
-                    [artifact.ref.fileEntryId],
-                    context,
-                  );
+                  await this.requireRuntime().grantFiles(key, [artifact.ref.fileEntryId], context);
                   await retainPiCodemodeArtifacts(api, api.taskId, api.callId, [artifact], context);
                   return { path: `managed-file:${artifact.ref.fileEntryId}` };
                 } catch {
@@ -633,7 +717,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           ? [
               ...(budget?.inputId === inputs[0].record.id ? budget.failedGroups : []),
               ...failedPiToolGroups(
-                await this.requireRuntime().turnEntries(sessionId, inputs[0].record, context),
+                await this.requireRuntime().turnEntries(key, inputs[0].record, context),
               ),
             ]
           : [];
@@ -641,12 +725,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       admitCall: async (call, api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
         if (inputs.length !== 1) return false;
-        const conversation = await this.requireRuntime().conversation(sessionId, context);
+        const conversation = await this.requireRuntime().conversation(key, context);
         if (!conversation || conversation.id !== api.conversationId) return false;
         // A script runs inside a tool round, so its calls meet no model call not yet admitted.
         const modelCalls = call.parent
           ? []
-          : (await this.requireRuntime().turnEntries(sessionId, inputs[0]!.record, context))
+          : (await this.requireRuntime().turnEntries(key, inputs[0]!.record, context))
               .flatMap((entry) => entry.model ?? [])
               .flatMap((message) =>
                 message.role === 'assistant'
@@ -661,12 +745,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         return nativeWeb &&
           configuration.tools.find((tool) => tool.providerName === call.name)?.failureGroup ===
             PI_WEB_FAILURE_GROUP &&
-          (await this.webLookupFailed(sessionId, api, context))
+          (await this.webLookupFailed(key, api, context))
           ? 'This tool group stopped after an earlier failure.'
           : undefined;
       },
       resolve: async (template, api, context) => {
-        const identity = await this.taskIdentity(sessionId, api, context);
+        const identity = await this.taskIdentity(lane, api, context);
         const signal = requireSignal(context);
         await this.requirePorts().assertExecutionAllowed(identity, signal);
         return {
@@ -675,7 +759,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         };
       },
       approve: async (tool, input, call, api, context) => {
-        const identity = await this.taskIdentity(sessionId, api, context);
+        const identity = await this.taskIdentity(lane, api, context);
         return (
           (await this.requirePorts().requestApproval(
             identity,
@@ -701,14 +785,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           }, context);
         }
         if (!result.artifacts.length) return;
-        const identity = await this.taskIdentity(sessionId, api, context);
+        const identity = await this.taskIdentity(lane, api, context);
         await this.requirePorts().admitArtifacts(
           identity,
           result.artifacts,
           requireSignal(context),
         );
         await this.requireRuntime().grantFiles(
-          sessionId,
+          key,
           result.artifacts.map((artifact) => artifact.ref.fileEntryId),
           context,
         );
@@ -731,7 +815,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
           beforeRequest: async (request, api, context) => {
             // The harness derives this context from the same invocation signal it forwards to Models.
             const signal = requireSignal(context);
-            this.requestOwners.set(signal, await this.taskIdentity(sessionId, api, context));
+            this.requestOwners.set(signal, await this.taskIdentity(lane, api, context));
             const inputs = await this.requireRuntime().inputsForTask(api, context);
             const admitted = await api.snapshot(PiToolBudget, api.conversationId, context);
             const current = admitted?.inputId === inputs[0]?.record.id ? admitted : undefined;
@@ -769,12 +853,12 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
             this.webRequests.delete(signal);
             if (budget === 'available') {
               this.toolFreeRequests.delete(signal);
-              if (nativeWeb && !(await this.webLookupFailed(sessionId, api, context)))
+              if (nativeWeb && !(await this.webLookupFailed(key, api, context)))
                 this.webRequests.set(signal, routes);
               return undefined;
             }
             this.toolFreeRequests.add(signal);
-            const conversation = await this.requireRuntime().conversation(sessionId, context);
+            const conversation = await this.requireRuntime().conversation(key, context);
             if (!conversation || conversation.id !== api.conversationId)
               throw new Error('The Pi conversation changed before budget settlement.');
             await conversation.commit(async (tx) => {
@@ -792,7 +876,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         }),
       ],
     });
-    this.configurations.set(sessionId, configuration);
+    this.configurations.set(key, configuration);
     return {
       model: {
         provider: configuration.model.providerId,
@@ -822,10 +906,10 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     });
   }
 
-  private async webLookupFailed(sessionId: string, api: HookApi, context: Context) {
+  private async webLookupFailed(key: string, api: HookApi, context: Context) {
     const inputs = await this.requireRuntime().inputsForTask(api, context);
     return failedPiToolGroups(
-      await this.requireRuntime().turnEntries(sessionId, inputs[0]!.record, context),
+      await this.requireRuntime().turnEntries(key, inputs[0]!.record, context),
     ).includes(PI_WEB_FAILURE_GROUP);
   }
 
@@ -841,7 +925,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   }
 
   private async taskIdentity(
-    sessionId: string,
+    lane: RuntimeLane,
     api: HookApi,
     context: Context,
   ): Promise<RuntimeExecutionIdentity> {
@@ -849,54 +933,59 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (inputs.length !== 1)
       throw new Error('Cherry capabilities require one owning input per Pi run.');
     const stored = readPiSubmission(inputs[0]!.metadata);
-    return { sessionId, turnId: stored.turnId, requestId: stored.requestId };
+    return { ...lane, turnId: stored.turnId, requestId: stored.requestId };
   }
 
-  private async bindProvider(sessionId: string) {
-    const providerId = await this.requireRuntime().providerSessionId(sessionId);
+  private async bindProvider(lane: RuntimeLane) {
+    const providerId = await this.requireRuntime().providerSessionId(laneKey(lane));
     if (!providerId) throw new Error('A Pi conversation has no provider affinity.');
-    this.providerOwners.set(providerId, sessionId);
+    this.providerOwners.set(providerId, lane);
   }
 
   private executionOwner(
     providerId: string | undefined,
     signal: AbortSignal | undefined,
   ): RuntimeUsageOwner {
-    const sessionId = providerId ? this.providerOwners.get(providerId) : undefined;
-    if (!sessionId) throw new Error('A provider request has no business conversation owner.');
+    const lane = providerId ? this.providerOwners.get(providerId) : undefined;
+    if (!lane) throw new Error('A provider request has no business conversation owner.');
     const owner = signal ? this.requestOwners.get(signal) : undefined;
-    if (owner && owner.sessionId !== sessionId)
+    if (owner && !sameLane(owner, lane))
       throw new Error('The model invocation belongs to a different conversation.');
     // Compaction (including a recovered summarize phase) is session work, never a future input.
-    return owner ?? { sessionId, turnId: null, requestId: null };
+    return owner ?? { ...lane, turnId: null, requestId: null };
   }
 
-  private async grantInputFiles(sessionId: string) {
+  private async grantInputFiles(lane: RuntimeLane) {
     const runtime = this.requireRuntime();
+    const key = laneKey(lane);
     const ids: string[] = [];
-    for (const input of await runtime.liveInputs(sessionId)) {
+    for (const input of await runtime.liveInputs(key)) {
       const files = readPiSubmission(input.metadata).metadata.referencedFileEntryIds;
       if (Array.isArray(files)) for (const id of files) if (typeof id === 'string') ids.push(id);
     }
-    await runtime.grantFiles(sessionId, ids);
+    await runtime.grantFiles(key, ids);
   }
 
   private async deliverUsage() {
     for (const delivery of await this.requireRuntime().pendingUsage()) {
       // This private document contains only values produced by our model bridge.
+      // Receipts written before working-copy slots name no slot: they ran on the first copy.
       const value = delivery.value as unknown as {
-        owner: RuntimeUsageOwner;
+        owner: Omit<RuntimeUsageOwner, 'slot'> & { slot?: number };
         report: RuntimeUsageReport;
       };
       if (!value.owner?.sessionId || value.report?.requestId !== delivery.id)
         throw new Error('The durable usage receipt has an invalid identity.');
-      await this.requirePorts().recordUsage(value.owner, value.report);
+      await this.requirePorts().recordUsage(
+        { ...value.owner, slot: value.owner.slot ?? 0 } as RuntimeUsageOwner,
+        value.report,
+      );
       await this.requireRuntime().acknowledgeUsage(delivery.id);
     }
   }
 
-  private requireConfiguration(sessionId: string) {
-    const value = this.configurations.get(sessionId);
+  private requireConfiguration(key: string) {
+    const value = this.configurations.get(key);
     if (!value)
       throw new Error('The durable conversation configuration has not been reconstructed.');
     return value;

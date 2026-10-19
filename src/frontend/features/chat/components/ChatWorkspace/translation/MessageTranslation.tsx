@@ -22,53 +22,6 @@ import type { AppLanguage } from '@/shared/utils/languages';
 
 import { useMessageTranslation } from './MessageTranslationProvider';
 
-export function MessageTranslationAction({ message }: { message: MessageListItem }) {
-  const translation = useMessageTranslation(message);
-  const { t } = useTranslation();
-  const store = translation?.store;
-  const source = translation?.source;
-  const onSelect = useCallback(
-    (language: AppLanguage) => {
-      if (store && source) void store.start(source, language);
-    },
-    [source, store],
-  );
-  const items = useTranslationLanguageMenu({
-    onSelect,
-    selectedLanguage: translation?.state.language,
-  });
-  if (!translation) return null;
-  const { state } = translation;
-  const hasTranslation = state.status !== 'idle';
-  const button = (
-    <Button
-      accessibilityLabel={t(
-        hasTranslation
-          ? state.visible
-            ? 'chat.translation.hide'
-            : 'chat.translation.show'
-          : 'chat.translation.translate',
-      )}
-      accessibilityState={{
-        busy: state.status === 'running',
-        expanded: hasTranslation ? state.visible : undefined,
-        selected: state.visible,
-      }}
-      icon={
-        <LanguagesIcon
-          className={state.visible ? 'text-primary' : 'text-muted-foreground'}
-          size={15}
-        />
-      }
-      onPress={hasTranslation ? () => translation.store.toggle(translation.source) : undefined}
-      size="xs"
-      testID="assistant-message-translate"
-      variant="ghost"
-    />
-  );
-  return hasTranslation ? button : <ActionMenu items={items}>{button}</ActionMenu>;
-}
-
 export function MessageTranslationContent({ message }: { message: MessageListItem }) {
   const translation = useMessageTranslation(message);
   const { t } = useTranslation();

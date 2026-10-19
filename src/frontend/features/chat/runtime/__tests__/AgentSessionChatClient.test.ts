@@ -133,6 +133,7 @@ function protocolWithObservation(
     deleteTurn: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
+    selectMessage: jest.fn(),
     getWorkingStorageSize: jest.fn(),
     getSessionStatus: jest.fn<
       ReturnType<AgentProtocol['getSessionStatus']>,
@@ -230,6 +231,39 @@ describe('AgentSessionChatClient', () => {
     expect(protocol.submitMessage).toHaveBeenCalledTimes(1);
     unsubscribe();
     client.dispose();
+  });
+
+  test('reobserving restores a completed selected answer beside its running sibling', async () => {
+    const first = { ...assistantMessage(), parentId: userMessage().id };
+    const second = { ...first, id: 'assistant-2' };
+    let current: AgentSessionSnapshot = {
+      ...snapshot(),
+      session: { ...snapshot().session, activeNodeId: first.id },
+      activeUserMessage: userMessage(),
+      streamingMessage: first,
+      additionalMessages: [second],
+    };
+    const client = new AgentSessionChatClient(
+      protocolWithObservation(async () => ({ snapshot: current, unsubscribe() {} })),
+    );
+    const release = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      client.pauseObservedSessions();
+      const completed: AgentMessageView = {
+        ...first,
+        status: 'success',
+        parts: [{ id: 'text-1', type: 'text', text: 'Completed answer', state: 'done' }],
+      };
+      current = { ...current, streamingMessage: second, additionalMessages: [completed] };
+      await client.resumeObservedSessions();
+      expect(client.getState('session-1').snapshot?.session.activeNodeId).toBe(first.id);
+      expect(client.getState('session-1').liveMessages).toEqual([userMessage(), completed, second]);
+      expect(isAgentSessionBusy(client.getState('session-1'))).toBe(true);
+    } finally {
+      release();
+      client.dispose();
+    }
   });
 
   test('pauses live observation in background and restores missed text from the next snapshot', async () => {
@@ -577,9 +611,37 @@ describe('AgentSessionChatClient', () => {
     ]);
     expect(onTranscriptChanged).not.toHaveBeenCalled();
 
-    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), status: 'success' },
+    });
     expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
     expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('refreshes the transcript once the last parallel answer settles', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    await client.observe('session-1');
+    onTranscriptChanged.mockClear();
+    const second = { ...assistantMessage(), id: 'assistant-2' };
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+    listener?.({ type: 'message.created', message: second });
+
+    // Settled history omits the turn until every answer settles, so reading it now shows nothing.
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), status: 'success' },
+    });
+    expect(onTranscriptChanged).not.toHaveBeenCalled();
+    listener?.({ type: 'message.finalized', message: { ...second, status: 'success' } });
+    expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
   });
 
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
@@ -641,6 +703,40 @@ describe('AgentSessionChatClient', () => {
       turnId: 'turn-1',
     });
   });
+
+  test.each(['streaming', 'success'] as const)(
+    'cancels a selected %s answer by its own turn without stopping another active turn',
+    async (status) => {
+      const selected = { ...assistantMessage(), status };
+      const activeTurn: AgentTurnView = {
+        id: 'background-turn',
+        sessionId: 'session-1',
+        assistantMessageId: 'background-answer',
+        status: 'running',
+        startedAt: selected.createdAt,
+        endedAt: null,
+        error: null,
+      };
+      const protocol = protocolWithObservation(async () => ({
+        snapshot: { ...snapshot(), activeTurn, streamingMessage: selected },
+        unsubscribe: jest.fn(),
+      }));
+      const client = new AgentSessionChatClient(protocol);
+      try {
+        await client.observe('session-1');
+        await client.cancelTurn('session-1', selected.id);
+        if (status === 'streaming')
+          expect(protocol.cancelTurn).toHaveBeenCalledWith({
+            sessionId: 'session-1',
+            turnId: selected.turnId,
+            messageId: selected.id,
+          });
+        else expect(protocol.cancelTurn).not.toHaveBeenCalled();
+      } finally {
+        client.dispose();
+      }
+    },
+  );
 
   test('stops a submission the Host is still admitting and releases the composer', async () => {
     const protocol = protocolWithObservation(async () => ({
@@ -1105,6 +1201,33 @@ describe('AgentSessionChatClient', () => {
     expect(client.getState('session-1').liveMessages).toEqual([live]);
 
     client.reconcilePersistedMessages('session-1', [persisted]);
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    client.dispose();
+  });
+
+  test('keeps a regenerated question live while its new answer runs', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_sessionId, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const question = userMessage();
+    const answer = { ...assistantMessage(), id: 'assistant-2', parentId: question.id };
+    publish({ type: 'message.created', message: question });
+    publish({ type: 'message.created', message: answer });
+
+    // A page read before the regeneration still holds the question with its earlier answer.
+    client.reconcilePersistedMessages('session-1', [question]);
+    expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
+      question.id,
+      answer.id,
+    ]);
+
+    const settled = { ...answer, status: 'success' as const };
+    publish({ type: 'message.finalized', message: settled });
+    client.reconcilePersistedMessages('session-1', [question, settled]);
     expect(client.getState('session-1').liveMessages).toEqual([]);
     client.dispose();
   });

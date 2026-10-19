@@ -29,8 +29,23 @@ type ModelPickerDrawerProps = {
   open: boolean;
   providerId?: string;
   selectedModelId: string | null;
+  /**
+   * Offers a multi-select mode behind a header button. While enabled, a row tap
+   * toggles the model through `onSelect`; the choice applies as it changes, so the sheet
+   * needs no confirm step.
+   */
+  multiSelect?: ModelPickerMultiSelect;
   title?: string;
   variant?: ModelPickerDrawerVariant;
+};
+
+export type ModelPickerMultiSelect = {
+  enabled: boolean;
+  /** Leaving the mode returns to the caller's default choice. */
+  onEnabledChange: (enabled: boolean) => void;
+  /** In pick order. */
+  selectedModelIds: readonly string[];
+  maxCount: number;
 };
 
 /** The complete model-picking interaction; callers only supply business state and actions. */
@@ -44,6 +59,7 @@ export function ModelPickerDrawer({
   open,
   providerId,
   selectedModelId,
+  multiSelect,
   title,
   variant = 'default',
 }: ModelPickerDrawerProps) {
@@ -62,11 +78,30 @@ export function ModelPickerDrawer({
 
   return (
     <BottomSheet
+      headerAction={
+        // A mode entered and left like selecting photos, not a setting the sheet keeps.
+        multiSelect ? (
+          <Button
+            onPress={() => multiSelect.onEnabledChange(!multiSelect.enabled)}
+            size="sm"
+            testID="model-picker-multi-select"
+            variant="ghost"
+          >
+            <Button.Label>
+              {t(multiSelect.enabled ? 'common.cancel' : 'modelPicker.multiSelect.label')}
+            </Button.Label>
+          </Button>
+        ) : undefined
+      }
       onClose={handleClose}
       open={open}
       size={isSearchExpanded ? 'full' : 'large'}
       testID="model-picker"
-      title={title ?? t('modelPicker.title')}
+      title={
+        multiSelect?.enabled
+          ? t('modelPicker.multiSelect.title', { selected: multiSelect.selectedModelIds.length })
+          : (title ?? t('modelPicker.title'))
+      }
     >
       <ModelRegistryGate>
         <ModelPickerDrawerContent
@@ -81,6 +116,7 @@ export function ModelPickerDrawer({
           open={open}
           providerId={providerId}
           searchText={searchText}
+          multiSelect={multiSelect?.enabled ? multiSelect : undefined}
           selectedModelId={selectedModelId}
           selectedBadge={selectedBadge}
           setSelectedBadge={setSelectedBadge}
@@ -104,6 +140,7 @@ function ModelPickerDrawerContent({
   providerId,
   searchText,
   selectedModelId,
+  multiSelect,
   selectedBadge,
   setSelectedBadge,
   variant,
@@ -117,6 +154,7 @@ function ModelPickerDrawerContent({
   | 'open'
   | 'providerId'
   | 'selectedModelId'
+  | 'multiSelect'
   | 'variant'
 > & {
   deferredSearchText: string;
@@ -218,6 +256,8 @@ function ModelPickerDrawerContent({
           listItems={listItems}
           loadingText={t('settings.provider.models.loading')}
           onSelect={onSelect}
+          maxSelectedCount={multiSelect?.maxCount}
+          selectedModelIds={multiSelect?.selectedModelIds}
           selectedModelId={selectedModelId}
           showBadges={variant === 'chat'}
         />

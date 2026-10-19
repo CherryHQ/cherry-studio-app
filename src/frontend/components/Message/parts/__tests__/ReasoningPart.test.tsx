@@ -10,11 +10,11 @@ jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   return {
     MessagePart: {
-      Reasoning: function MockReasoning({ children }: { children: ReactNode }) {
+      Reasoning: function MockReasoning({ children, ...props }: { children: ReactNode }) {
         const [isOpen, setIsOpen] = React.useState(false);
         return React.createElement(
           'Reasoning',
-          { onPress: () => setIsOpen((open: boolean) => !open) },
+          { ...props, onPress: () => setIsOpen((open: boolean) => !open) },
           isOpen ? children : null,
         );
       },
@@ -57,6 +57,18 @@ describe('ReasoningPart', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  test('ends thinking feedback when the reply stops before its part state is finalized', () => {
+    const part: ReasoningMessagePart = { type: 'reasoning', state: 'streaming', text: 'Thinking' };
+    act(() => {
+      renderer = create(<ReasoningPart isStreaming part={part} />);
+    });
+    expect(renderer!.root.findByType('Reasoning' as never).props.state).toBe('running');
+    act(() => {
+      renderer!.update(<ReasoningPart isStreaming={false} part={part} />);
+    });
+    expect(renderer!.root.findByType('Reasoning' as never).props.state).toBe('complete');
   });
 
   test('keeps the complete Markdown document as reasoning grows beyond the former page limit', () => {

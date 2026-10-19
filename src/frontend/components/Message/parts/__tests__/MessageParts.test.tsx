@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageStatus } from '@/shared/data/types/message';
@@ -10,6 +11,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
   MessagePart: {
     Pending: (props: object) => jest.requireActual('react').createElement('Pending', props),
+    Status: (props: object) => jest.requireActual('react').createElement('Status', props),
   },
 }));
 
@@ -77,7 +79,73 @@ describe('MessageParts', () => {
     );
   });
 
-  test('keeps feedback below an answered question until the answer starts streaming', () => {
+  test.each([
+    { name: 'no parts', parts: [] },
+    {
+      name: 'only reasoning and empty text',
+      parts: [
+        { type: 'reasoning', state: 'done', text: 'Thinking about the answer.' },
+        { type: 'text', state: 'done', text: '   ' },
+      ],
+    },
+  ] satisfies { name: string; parts: NonNullable<MessageListItem['data']['parts']> }[])(
+    'shows a stopped outcome with $name and returns to waiting on retry',
+    ({ parts }) => {
+      const pending = { ...makeMessage('pending'), data: { parts: [] } };
+      const renderer = render(<MessageParts message={pending} />);
+
+      act(() =>
+        renderer.update(
+          <MessageParts message={{ ...pending, status: 'paused', data: { parts } }} />,
+        ),
+      );
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).toContain(
+        'chat.message.stopped',
+      );
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+
+      act(() => renderer.update(<MessageParts message={pending} />));
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).not.toContain(
+        'chat.message.stopped',
+      );
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+    },
+  );
+
+  test.each([
+    { name: 'partial answer', parts: [{ type: 'text', state: 'done', text: 'Partial answer' }] },
+    { name: 'image', parts: [makeFilePart('image', 'result.png', 'image/png')] },
+    { name: 'downloadable file', parts: [makeFilePart('file', 'report.md')] },
+    {
+      name: 'interruption error',
+      parts: [
+        {
+          type: 'data-error',
+          data: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+        },
+      ],
+    },
+  ] satisfies { name: string; parts: NonNullable<MessageListItem['data']['parts']> }[])(
+    'keeps the $name without an empty-answer stopped notice',
+    ({ parts }) => {
+      const renderer = render(
+        <MessageParts message={{ ...makeMessage('paused'), data: { parts } }} />,
+      );
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).not.toContain(
+        'chat.message.stopped',
+      );
+      expect(
+        renderer.root.findAll(
+          (node) => node.type === 'MessagePartRenderer' || node.type === 'GeneratedFileStrip',
+        ),
+      ).toHaveLength(1);
+    },
+  );
+
+  test('does not restore connection feedback between visible question, reasoning and tool steps', () => {
     const question = {
       type: 'dynamic-tool' as const,
       toolName: 'ask_user_question',
@@ -117,20 +185,20 @@ describe('MessageParts', () => {
     expect(feedbackOrder()).toEqual(['MessagePartRenderer']);
 
     update([answeredQuestion]);
-    expect(feedbackOrder()).toEqual(['MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['MessagePartRenderer']);
 
     update([answeredQuestion, reasoning]);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     update([answeredQuestion, { ...reasoning, state: 'done' }, tool]);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     const completed = [
       answeredQuestion,
       { ...tool, state: 'output-available', output: {} },
     ] as const;
     update(completed);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     update([...completed, { type: 'text', state: 'streaming', text: 'Done.' }]);
     expect(feedbackOrder()).toEqual([
@@ -146,7 +214,7 @@ describe('MessageParts', () => {
   test.each(['success', 'error', 'paused'] as const)(
     'removes waiting when a silent reply becomes %s',
     (status) => {
-      const message = { ...makeMessage('pending'), data: { parts: [answeredQuestion] } };
+      const message = { ...makeMessage('pending'), data: { parts: [] } };
       const renderer = render(<MessageParts message={message} />);
       expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
 
@@ -162,7 +230,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
   });
 
-  test('keeps waiting when streaming text contains only a removed generated-image reference', () => {
+  test('ends connection feedback when an image appears before its explanatory text', () => {
     const id = '01a0c213-4cfb-741d-807e-624fedfa1ab8';
     const image = makeFilePart(id, 'result.png', 'image/png');
     const text = {
@@ -175,7 +243,7 @@ describe('MessageParts', () => {
     );
 
     expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
-    expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
 
     act(() => {
       renderer.update(
@@ -199,7 +267,7 @@ describe('MessageParts', () => {
     {
       name: 'completed text',
       parts: [{ type: 'text', state: 'done', text: 'Working on it.' }],
-      waiting: true,
+      waiting: false,
     },
     {
       name: 'empty streaming text',
@@ -251,7 +319,7 @@ describe('MessageParts', () => {
           output: {},
         },
       ],
-      waiting: true,
+      waiting: false,
     },
   ] satisfies {
     name: string;

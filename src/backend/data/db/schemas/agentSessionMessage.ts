@@ -1,5 +1,13 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  type AnySQLiteColumn,
+  check,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 import type {
   AgentErrorView,
@@ -21,12 +29,15 @@ export type AgentMessageData = {
 };
 
 /**
- * Agent Session Message table - one row per linear transcript entry
+ * Agent Session Message table - one row per message-tree node
  * (docs/references/agent/agent-persistence.md).
  *
- * There is no message tree and no turn table: `turnId` is the correlation id
- * shared by a submission's user/assistant pair, and the Host projects
- * `AgentTurnView` from the assistant row plus its live in-memory state.
+ * Messages form an adjacency-list tree aligned with Desktop's `message` table:
+ * `parentId` points at the previous message, and the Session's `activeNodeId`
+ * selects the leaf whose ancestor chain is the visible and model-facing
+ * history. There is no turn table: `turnId` correlates one question with all of
+ * its answers, and the Host projects `AgentTurnView` from an assistant row plus
+ * its live in-memory state.
  * searchableText is the visible plain text the store writes for FTS5
  * indexing; see AGENT_SESSION_MESSAGE_FTS_STATEMENTS below.
  */
@@ -38,9 +49,16 @@ export const agentSessionMessageTable = sqliteTable(
     sessionId: text()
       .notNull()
       .references(() => agentSessionTable.id, { onDelete: 'cascade' }),
-    // Correlation id for one submission; nullable per protocol (system rows)
+    // Previous message in the tree; NULL only for a Session's first question.
+    // CASCADE matches Desktop: turn deletion reparents surviving children first.
+    parentId: text().references((): AnySQLiteColumn => agentSessionMessageTable.id, {
+      onDelete: 'cascade',
+    }),
+    // 0 = ordinary branch; >0 = answers of one multi-model question under the same parent.
+    siblingsGroupId: integer().notNull().default(0),
+    // Correlation id for one question and its answers; nullable per protocol (system rows)
     turnId: text(),
-    // Message role: user, assistant, system — no 'root', the transcript is linear
+    // Message role: user, assistant, system — no virtual root row
     role: text().notNull(),
     // Main content - protocol parts (inline JSON)
     data: text({ mode: 'json' }).$type<AgentMessageData>().notNull(),
@@ -72,6 +90,9 @@ export const agentSessionMessageTable = sqliteTable(
     // Mobile short-word search scans bounded global history windows between input events.
     index('agent_session_message_created_id_idx').on(t.createdAt, t.id),
     index('agent_session_message_turn_id_idx').on(t.turnId),
+    // Children lookups for branch switchers and the FK cascade; the Session column finds a
+    // Session's first questions, whose parent is NULL.
+    index('agent_session_message_parent_id_idx').on(t.parentId, t.sessionId),
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.
     index('agent_session_message_status_idx').on(t.status),

@@ -38,6 +38,10 @@ Fork provenance stays on the Session, not in persisted Messages. When the copied
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
+Answer tabs switch the displayed branch. The selected answer uses the composer for its running
+state and stop action; the transcript has no separate stop button or selected-tab spinner.
+Other running answers retain their tab indicators so background work remains discoverable.
+
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions
 CherryUI's menu at the long-press pointer, adjusted to stay inside the screen's safe area.

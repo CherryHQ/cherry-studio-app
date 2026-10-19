@@ -1,9 +1,22 @@
-import { and, asc, desc, eq, inArray, notExists, notInArray } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
 import { agentSessionMessageTable, agentSessionTable, agentTable } from '@/backend/data/db/schemas';
+import type { AgentMessageSibling, AgentMessageView } from '@/shared/contracts/agent';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   AGENT_SESSION_MESSAGES_DEFAULT_LIMIT,
@@ -22,6 +35,7 @@ import {
 import { messageTranslationText } from '@/shared/utils/messageTranslation';
 import { sha256HexOfText } from '@/shared/utils/sha256';
 
+import { messagePathIdsSql } from './utils/agentMessageTree';
 import {
   agentMessageViewColumns,
   type AgentMessageViewRow,
@@ -113,7 +127,7 @@ export class AgentSessionMessageService {
           ),
         )
         .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id));
-      return { items: toReadableAgentMessageViews(rows) };
+      return { items: await this.withSiblings(sessionId, toReadableAgentMessageViews(rows)) };
     }
 
     const limit = query.limit ?? AGENT_SESSION_MESSAGES_DEFAULT_LIMIT;
@@ -138,7 +152,7 @@ export class AgentSessionMessageService {
     const head = pageRows[0];
     const tail = pageRows.at(-1);
     return {
-      items: toReadableAgentMessageViews(pageRows),
+      items: await this.withSiblings(sessionId, toReadableAgentMessageViews(pageRows)),
       ...(tail && (isNewer ? cursor : rows.length > limit)
         ? { nextCursor: encodeCursor(tail.createdAt, tail.id) }
         : {}),
@@ -191,17 +205,27 @@ export class AgentSessionMessageService {
     limit: number,
     settledOnly = false,
   ) {
-    const [target] = await this.db
-      .select(agentMessageViewColumns)
-      .from(agentSessionMessageTable)
-      .where(
-        and(
-          eq(agentSessionMessageTable.sessionId, sessionId),
-          eq(agentSessionMessageTable.id, messageId),
-          this.settledTurnFilter(settledOnly),
-        ),
-      )
-      .limit(1);
+    const readTarget = (candidates: SQL) =>
+      this.db
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            candidates,
+            this.onSelectedPath(sessionId),
+            this.settledTurnFilter(settledOnly),
+          ),
+        )
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(1);
+    let [target] = await readTarget(eq(agentSessionMessageTable.id, messageId));
+    // Selecting another answer above it takes the message out of the transcript; read around its
+    // nearest ancestor still shown, where the branches part.
+    if (!target && !(await this.isOnSelectedPath(sessionId, messageId)))
+      [target] = await readTarget(
+        sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId, messageId)})`,
+      );
     if (!target) {
       throw DataApiErrorFactory.notFound('AgentSessionMessage', messageId);
     }
@@ -221,7 +245,7 @@ export class AgentSessionMessageService {
     const head = rows[0];
     const tail = rows[rows.length - 1];
     return {
-      items: toReadableAgentMessageViews(rows),
+      items: await this.withSiblings(sessionId, toReadableAgentMessageViews(rows)),
       ...(older.length > olderCount ? { nextCursor: encodeCursor(tail.createdAt, tail.id) } : {}),
       ...(newer.length > newerCount
         ? { previousCursor: encodeCursor(head.createdAt, head.id) }
@@ -247,12 +271,75 @@ export class AgentSessionMessageService {
       .where(
         and(
           eq(agentSessionMessageTable.sessionId, sessionId),
+          this.onSelectedPath(sessionId),
           cursor ? ordering.where(cursor) : undefined,
           this.settledTurnFilter(settledOnly),
         ),
       )
       .orderBy(...ordering.orderBy)
       .limit(limit);
+  }
+
+  private async isOnSelectedPath(sessionId: string, messageId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: agentSessionMessageTable.id })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.id, messageId),
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          this.onSelectedPath(sessionId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
+
+  /** The transcript is the selected leaf's ancestor chain (docs/references/agent/agent-persistence.md). */
+  private onSelectedPath(sessionId: string) {
+    return sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId)})`;
+  }
+
+  /** Attach every alternative at each branch point the page passes through. */
+  private async withSiblings(
+    sessionId: string,
+    items: AgentMessageView[],
+  ): Promise<AgentMessageView[]> {
+    if (!items.length) return items;
+    const parents = [...new Set(items.flatMap((item) => (item.parentId ? [item.parentId] : [])))];
+    const rows = await this.db
+      .select({
+        id: agentSessionMessageTable.id,
+        parentId: agentSessionMessageTable.parentId,
+        modelId: agentSessionMessageTable.modelId,
+        status: agentSessionMessageTable.status,
+        siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
+      })
+      .from(agentSessionMessageTable)
+      // Parent ids already belong to this Session; a Session filter beside them lets SQLite pick
+      // the Session index and scan the whole transcript instead of the parent index.
+      .where(
+        or(
+          parents.length ? inArray(agentSessionMessageTable.parentId, parents) : undefined,
+          items.some((item) => item.parentId === null)
+            ? and(
+                isNull(agentSessionMessageTable.parentId),
+                eq(agentSessionMessageTable.sessionId, sessionId),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id));
+    const children = new Map<string | null, AgentMessageSibling[]>();
+    for (const { parentId, ...sibling } of rows) {
+      const list = children.get(parentId) ?? [];
+      list.push(sibling as AgentMessageSibling);
+      children.set(parentId, list);
+    }
+    return items.map((item) => {
+      const siblings = item.parentId === undefined ? undefined : children.get(item.parentId);
+      return siblings && siblings.length > 1 ? { ...item, siblings } : item;
+    });
   }
 
   private settledTurnFilter(settledOnly: boolean) {

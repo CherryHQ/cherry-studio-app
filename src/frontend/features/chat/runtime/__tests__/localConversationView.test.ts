@@ -1,4 +1,5 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import { createLocalConversationProjector } from '../localConversationView';
@@ -62,6 +63,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     retryMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
+    selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
   };
   const sessionChanged = jest.fn();
   const projector = createLocalConversationProjector({
@@ -241,18 +243,31 @@ test('message actions follow the busy state and reuse projections while it is un
   });
   expect(f.client.forkSession).toHaveBeenCalledWith('session', 'answer', 'Copy');
   expect(f.sessionChanged).toHaveBeenCalledWith('fork');
+  const modelId = createUniqueModelId('provider', 'other');
+  expect(await idle.actions.answerWith!.execute({ modelId })).toEqual({
+    state: 'applied',
+    value: undefined,
+  });
+  expect(f.client.retryMessage).toHaveBeenCalledWith({
+    sessionId: 'session',
+    messageId: 'answer',
+    modelId,
+  });
+  f.client.retryMessage.mockClear();
   f.set({
     activeTurn: { id: 'turn', status: 'running' } as AgentSessionChatState['activeTurn'],
   });
   const busy = f.projector.message(answer, f.state);
   expect(busy).not.toBe(idle);
   expect(busy.actions.retry?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(busy.actions.answerWith?.availability).toEqual({ state: 'disabled', reason: 'busy' });
   expect(await idle.actions.retry!.execute()).toMatchObject({
     state: 'rejected',
     failure: { code: 'conflict' },
   });
   expect(f.client.retryMessage).not.toHaveBeenCalled();
   expect(f.projector.message(message('user', 'user'), f.state).actions.retry).toBeUndefined();
+  expect(f.projector.message(message('user', 'user'), f.state).actions.answerWith).toBeUndefined();
   expect(f.projector.message(message('system', 'system'), f.state).actions).toEqual({});
 });
 

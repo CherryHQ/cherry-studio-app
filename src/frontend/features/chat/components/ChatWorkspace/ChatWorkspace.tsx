@@ -98,13 +98,6 @@ export function ChatWorkspace({
   const listKey = sessionId ?? pendingSend?.sessionId;
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
-  // Only the Session's latest answer is replaceable, and an older window does
-  // not hold it (agent-protocol.md "Manual answer retry").
-  const retryableMessageId = useMemo(() => {
-    if (hasNewerMessages) return undefined;
-    const last = mergedMessages.at(-1);
-    return last?.display.role === 'assistant' ? last.key : undefined;
-  }, [hasNewerMessages, mergedMessages]);
   useEffect(() => {
     if (
       pendingSend &&
@@ -271,7 +264,6 @@ export function ChatWorkspace({
         <AssistantMessageActionsProvider
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-          retryableMessageId={retryableMessageId}
           onShare={onShare}
           snapshot={live}
           messages={mergedMessages}

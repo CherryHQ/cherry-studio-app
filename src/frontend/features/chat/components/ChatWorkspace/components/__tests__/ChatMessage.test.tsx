@@ -57,6 +57,13 @@ jest.mock('../AssistantMessageToolbar', () => ({
   AssistantMessageToolbar: () => null,
 }));
 
+jest.mock('../MessageAnswerTabs', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    MessageAnswerTabs: (props: object) => createElement('MessageAnswerTabs', props),
+  };
+});
+
 jest.mock('../AssistantMessageUsage', () => ({
   AssistantMessageUsage: () => mockLocalUsage(),
 }));
@@ -244,6 +251,37 @@ describe('ChatMessage', () => {
       name: 'Qwen3.8 Max Preview',
       providerId: 'qwen',
     });
+  });
+
+  test('names the models of several answers in the answer tabs instead of the header', () => {
+    const model = {
+      id: 'qwen::qwen3-max' as const,
+      modelId: 'qwen3-max',
+      name: 'Qwen3 Max',
+      providerId: 'qwen',
+    };
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), model }));
+    });
+    expect(renderer?.root.findAllByType('MessageAnswerTabs' as never)).toHaveLength(0);
+
+    const branched: MessageListItem = {
+      ...createMessage('success'),
+      model,
+      branch: {
+        key: 'answers:user-1',
+        siblings: [
+          { id: 'assistant-1', modelId: model.id, status: 'success' },
+          { id: 'assistant-2', modelId: 'openai::gpt-5', status: 'pending' },
+        ],
+      },
+    };
+    act(() => renderer?.update(renderMessage(branched)));
+
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-model-avatar' }),
+    ).toHaveLength(0);
+    expect(renderer?.root.findByType('MessageAnswerTabs' as never).props.message).toBe(branched);
   });
 });
 

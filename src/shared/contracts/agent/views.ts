@@ -153,6 +153,11 @@ export const AgentSessionViewSchema = z.strictObject({
    * user can no longer open.
    */
   forkedFromSessionId: z.string().min(1).nullable(),
+  /**
+   * Selected leaf of the message tree. The visible transcript and the next
+   * submission's history are its ancestor chain. Null for an empty Session.
+   */
+  activeNodeId: z.string().min(1).nullable().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -393,9 +398,27 @@ export const AgentMessagePartSchema = z.union([
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
 
+/** One alternative at a message-tree branch point, in creation order. */
+export const AgentMessageSiblingSchema = z.strictObject({
+  id: z.string().min(1),
+  modelId: UniqueModelIdSchema.nullable(),
+  status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
+  siblingsGroupId: z.number().int().nonnegative(),
+});
+export type AgentMessageSibling = z.infer<typeof AgentMessageSiblingSchema>;
+
 export const AgentMessageViewSchema = z.strictObject({
   id: z.string().min(1),
   sessionId: z.string().min(1),
+  /** Previous message in the tree; absent on live projections that do not carry it. */
+  parentId: z.string().min(1).nullable().optional(),
+  /** 0 for an ordinary branch; >0 for answers of one multi-model question. */
+  siblingsGroupId: z.number().int().nonnegative().optional(),
+  /**
+   * Every child of this message's parent, this one included, when there is more
+   * than one. Transcript reads attach it so the client can offer branch switching.
+   */
+  siblings: z.array(AgentMessageSiblingSchema).min(2).optional(),
   turnId: z.string().min(1).nullable(),
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),

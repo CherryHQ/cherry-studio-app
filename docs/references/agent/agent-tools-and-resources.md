@@ -284,6 +284,10 @@ For Version 1, the Host derives the initial ledger grants from:
   revalidates that the entry remains available); and
 - files created by earlier tools in the same active turn.
 
+History grants follow the selected branch. A native history fork replaces the source copy's
+resource grants with the selected prefix and current input's grants, just as a rebuild from Cherry
+does. Files introduced after the fork point do not carry over; workspace access remains independent.
+
 The Host creates a `TurnResourceLedger` containing explicit readable and derivable `fileEntryId`
 sets. Its initial grants are frozen from input and transcript facts. During the turn it may grow only
 when an application capability successfully imports a new file and the Host-owned wrapper validates

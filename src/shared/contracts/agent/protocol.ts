@@ -8,6 +8,7 @@ import type {
   AgentDeleteTurnInput,
   AgentForkSessionInput,
   AgentRetryMessageInput,
+  AgentSelectMessageInput,
   AgentStartSessionInput,
   AgentSubmitMessageInput,
 } from './inputs';
@@ -60,14 +61,25 @@ export interface AgentProtocol {
    */
   deleteTurn(input: AgentDeleteTurnInput): Promise<void>;
 
-  /** Local persistent regeneration opens a new branch and preserves the original answer. */
+  /**
+   * Regenerating a settled answer adds a sibling answer to the same question and
+   * selects it; a failed latest answer is retried in place. The original answer
+   * stays in the tree.
+   */
   retryMessage(input: AgentRetryMessageInput): Promise<AgentSessionView | void>;
+
+  /**
+   * Selects the branch containing `messageId`. Unless it is already on the
+   * selected branch, the Session's selected leaf moves to the newest leaf below
+   * it. Switching never calls a model or stops work running on another branch.
+   */
+  selectMessage(input: AgentSelectMessageInput): Promise<AgentSessionView>;
 
   submitMessage(
     input: AgentSubmitMessageInput,
   ): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
 
-  cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
+  cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>;
 
   /** Withdraw only waiting input; never abort a run that won the admission race. */
   cancelQueuedInput(input: {

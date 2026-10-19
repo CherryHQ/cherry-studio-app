@@ -236,6 +236,8 @@ test('restores a backup from before the Agent field alignment and upgrades its h
     const message = toAgentMessageView({
       id: row.id as string,
       sessionId: row.session_id as string,
+      parentId: row.parent_id as string | null,
+      siblingsGroupId: row.siblings_group_id as number,
       turnId: row.turn_id as string | null,
       role: row.role as string,
       status: row.status as string,

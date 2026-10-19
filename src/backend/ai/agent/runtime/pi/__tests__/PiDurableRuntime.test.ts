@@ -40,6 +40,41 @@ const seed = {
 };
 
 describe('PiDurableRuntime identity and handoff', () => {
+  test('forks replace current source grants with the supplied history prefix grants', async () => {
+    const runtime = await PiDurableRuntime.open(new MemoryStorage(), options());
+    try {
+      const source = await runtime.ensureConversation({
+        ...seed,
+        resourceFileEntryIds: ['earlier-file'],
+      });
+      const at = await source.commit(
+        async (tx) => (await tx.appendEntry(source.id, seed.entries[0]!)).id,
+        BACKGROUND_CONTEXT,
+      );
+      await runtime.grantFiles(seed.sessionId, ['later-file']);
+      await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'fork',
+        at,
+        resourceFileEntryIds: ['earlier-file'],
+      });
+      expect(await runtime.resourceFileEntryIds('fork')).toEqual(['earlier-file']);
+      expect(await runtime.resourceFileEntryIds(seed.sessionId)).toEqual([
+        'earlier-file',
+        'later-file',
+      ]);
+      await runtime.forkConversation(seed.sessionId, {
+        ...seed,
+        sessionId: 'empty-grants',
+        at,
+        resourceFileEntryIds: [],
+      });
+      expect(await runtime.resourceFileEntryIds('empty-grants')).toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   test('reopening leaves an existing run and its waiting input in place', async () => {
     class ReopenableStorage extends MemoryStorage {
       override async close() {}
