@@ -9,6 +9,7 @@ const mockToast = jest.fn();
 const mockHandoff = jest.fn((_value: unknown) => 'handoff');
 let mockRoute: unknown = { status: 'ready', target: { kind: 'draft', agentId: 'current' } };
 let mockCurrentAgent: { id: string; mode: string } | undefined;
+let mockSessionAgentId: string | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useToast: () => ({ toast: { show: mockToast } }),
@@ -25,7 +26,9 @@ jest.mock('@/frontend/hooks/agent', () => ({
     agent: id && mockCurrentAgent?.id === id ? mockCurrentAgent : undefined,
   }),
   useAgentsApi: () => ({ refetch: mockRefetch, agents: [] }),
-  useAgentSession: () => ({}),
+  useAgentSession: (sessionId: string | undefined) => ({
+    data: sessionId && mockSessionAgentId ? { agentId: mockSessionAgentId } : undefined,
+  }),
 }));
 jest.mock('@/frontend/appShell/navigation/chat', () => ({
   parseChatRoute: () => mockRoute,
@@ -49,9 +52,48 @@ describe('Skill installation chat', () => {
     jest.clearAllMocks();
     mockRoute = { status: 'ready', target: { kind: 'draft', agentId: 'current' } };
     mockCurrentAgent = { id: 'current', mode: 'standard' };
+    mockSessionAgentId = undefined;
   });
   afterEach(() => {
     act(() => renderer.unmount());
+  });
+
+  test('keeps the existing conversation Agent instead of the first available Agent', async () => {
+    mockRoute = { status: 'ready', target: { kind: 'session', sessionId: 'session-1' } };
+    mockSessionAgentId = 'current';
+    mockRefetch.mockResolvedValue({
+      data: {
+        items: [
+          { id: 'default', mode: 'standard' },
+          { id: 'current', mode: 'standard' },
+        ],
+      },
+    });
+    render();
+
+    await act(async () => {
+      await skillChat.open();
+    });
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      kind: 'draft',
+      agentId: 'current',
+      composerHandoff: 'handoff',
+    });
+  });
+
+  test('does not fall back to another Agent while the source conversation is loading', async () => {
+    mockRoute = { status: 'ready', target: { kind: 'session', sessionId: 'session-1' } };
+    render();
+
+    expect(skillChat.isAvailable).toBe(false);
+    await act(async () => {
+      await skillChat.open();
+    });
+
+    expect(mockRefetch).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockHandoff).not.toHaveBeenCalled();
   });
 
   test('keeps the current standard Agent when opening the installation draft', async () => {
