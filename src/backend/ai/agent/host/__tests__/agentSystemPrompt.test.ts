@@ -230,6 +230,13 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('discover `create_document` with `tool_search`');
     expect(prompt).not.toContain('`create_workbook`');
     expect(prompt).not.toContain('Editing requires');
+    expect(prompt).not.toContain('run_office_script');
+    const scripted = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('create_workbook'), tool('run_office_script')],
+    });
+    expect(scripted).toContain('instead of reading cells in batches');
     const editing = buildAgentSystemPrompt({
       agentInstructions: '',
       appLanguage: 'en-US',
