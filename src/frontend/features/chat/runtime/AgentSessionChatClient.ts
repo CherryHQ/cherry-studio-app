@@ -408,11 +408,21 @@ export class AgentSessionChatClient {
     }
 
     const persistedById = new Map(persistedMessages.map((message) => [message.id, message]));
+    // Observation supplies a question while an answer to it runs: settled history omits it then,
+    // even when a page read just before a regeneration still holds it.
+    const answeredLive = new Set(
+      [...entry.liveMessages.values()].flatMap((message) =>
+        message.role === 'assistant' && message.parentId && !isTerminalMessage(message)
+          ? [message.parentId]
+          : [],
+      ),
+    );
     let changed = false;
     for (const [messageId, liveMessage] of entry.liveMessages) {
       const persistedMessage = persistedById.get(messageId);
       if (
         persistedMessage &&
+        !answeredLive.has(messageId) &&
         persistedMessage.role === liveMessage.role &&
         isTerminalMessage(liveMessage) &&
         isTerminalMessage(persistedMessage) &&

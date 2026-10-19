@@ -1110,6 +1110,33 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
+  test('keeps a regenerated question live while its new answer runs', async () => {
+    let publish!: (event: AgentEvent) => void;
+    const protocol = protocolWithObservation(async (_sessionId, listener) => {
+      publish = listener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const client = new AgentSessionChatClient(protocol);
+    await client.observe('session-1');
+    const question = userMessage();
+    const answer = { ...assistantMessage(), id: 'assistant-2', parentId: question.id };
+    publish({ type: 'message.created', message: question });
+    publish({ type: 'message.created', message: answer });
+
+    // A page read before the regeneration still holds the question with its earlier answer.
+    client.reconcilePersistedMessages('session-1', [question]);
+    expect(client.getState('session-1').liveMessages.map(({ id }) => id)).toEqual([
+      question.id,
+      answer.id,
+    ]);
+
+    const settled = { ...answer, status: 'success' as const };
+    publish({ type: 'message.finalized', message: settled });
+    client.reconcilePersistedMessages('session-1', [question, settled]);
+    expect(client.getState('session-1').liveMessages).toEqual([]);
+    client.dispose();
+  });
+
   test.each([
     {
       liveStatus: 'cancelled',
