@@ -16,7 +16,7 @@ import { useAssistantMessageActions } from '../context/AssistantMessageActionsPr
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageBranchSwitcher } from './MessageBranchSwitcher';
+import { MessageAnswerStop, MessageAnswerTabs } from './MessageAnswerTabs';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -59,7 +59,8 @@ function renderChatAssistantMessage(
           <Text className="shrink font-semibold text-foreground text-sm" numberOfLines={1}>
             {presentation.name}
           </Text>
-          {message.model ? (
+          {/* Several answers name their models in the tabs below instead. */}
+          {message.model && !message.branch ? (
             <View className="min-w-0 shrink flex-row items-center gap-1">
               <ModelAvatar model={message.model} size={16} />
               <Text className="min-w-0 shrink text-foreground-tertiary text-sm" numberOfLines={1}>
@@ -68,12 +69,13 @@ function renderChatAssistantMessage(
             </View>
           ) : null}
         </View>
-        {/* In the header so parallel answers can be compared while they still stream. */}
-        <MessageBranchSwitcher message={message} />
       </View>
+      {/* Above the answer so parallel answers can be compared while they still stream. */}
+      {message.branch ? <MessageAnswerTabs message={message} /> : null}
       <AssistantMessage message={message}>
         {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
         {accessories}
+        <MessageAnswerStop message={message} />
         {message.status !== 'pending' ? (
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
@@ -122,11 +124,6 @@ export const ChatMessage = memo(function ChatMessage({
       <View className="gap-2">
         <UserMessage attachments={attachments} message={message} />
         {accessories}
-        {message.branch ? (
-          <View className="flex-row justify-end">
-            <MessageBranchSwitcher message={message} />
-          </View>
-        ) : null}
       </View>
     ) : (
       renderChatAssistantMessage(

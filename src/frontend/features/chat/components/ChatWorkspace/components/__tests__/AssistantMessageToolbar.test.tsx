@@ -7,11 +7,14 @@ import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 jest.mock('../../translation/MessageTranslationProvider', () => ({
+  useMessageTranslation: () => undefined,
   useMessageTranslationStore: () => null,
 }));
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockRetryMessage = jest.fn(async (_input: unknown): Promise<void> => undefined);
+const mockShare = jest.fn();
+const mockAnswerWith = jest.fn();
 let mockIsSessionBusy = false;
 const mockForkSession = jest.fn(async (_input: unknown) => undefined);
 const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefined);
@@ -37,6 +40,8 @@ jest.mock('@cherrystudio/app-icons/icons/trash-2', () => () => null);
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
+    ActionMenu: ({ children, items }: { children: unknown; items: unknown }) =>
+      createElement('ActionMenu', { items }, children),
     Button: (props: object) => createElement('Button', props),
     useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
     useToast: () => ({ toast: { show: jest.fn() } }),
@@ -53,9 +58,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
-jest.mock('../../translation/MessageTranslation', () => ({
-  MessageTranslationAction: () => null,
-}));
+jest.mock('@/frontend/components/ModelPicker', () => {
+  const { createElement } = jest.requireActual('react');
+  return { ModelPickerDrawer: (props: object) => createElement('ModelPickerDrawer', props) };
+});
 
 jest.mock('../../utils/copyAssistantMessageText', () => {
   const actual = jest.requireActual('../../utils/copyAssistantMessageText');
@@ -183,15 +189,14 @@ describe('AssistantMessageToolbar', () => {
   test("deletes the pressed answer's whole turn after a destructive confirmation", async () => {
     renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
 
-    const deleteButton = renderer!.root.findByProps({ testID: 'assistant-message-delete' });
-    expect(deleteButton.props).toMatchObject({
-      accessibilityLabel: 'chat.messageActions.delete',
+    const deleteItem = menuItem('delete');
+    expect(deleteItem).toMatchObject({
+      destructive: true,
       disabled: false,
-      size: 'xs',
-      variant: 'ghost',
+      label: 'common.delete',
     });
 
-    act(() => deleteButton.props.onPress());
+    act(() => deleteItem?.onPress());
     expect(mockDeleteTurn).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -205,23 +210,73 @@ describe('AssistantMessageToolbar', () => {
     mockIsSessionBusy = true;
     renderToolbar({ ...createMessage('success', 'Answer'), turnId: 'turn-1' });
 
-    expect(renderer!.root.findByProps({ testID: 'assistant-message-delete' }).props.disabled).toBe(
-      true,
-    );
+    expect(menuItem('delete')?.disabled).toBe(true);
   });
 
   test('offers no delete on a row that carries no turn', () => {
     renderToolbar(createMessage('success', 'Answer'));
 
-    expect(renderer?.root.findAllByProps({ testID: 'assistant-message-delete' })).toHaveLength(0);
+    expect(menuItem('delete')).toBeUndefined();
   });
+
+  test('keeps sharing in the more menu', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    expect(menuItem('translate')).toBeUndefined();
+    act(() => menuItem('share')?.onPress());
+    expect(mockShare).toHaveBeenCalledWith('assistant-1', undefined);
+  });
+
+  test('adds an answer from the model chosen with @', async () => {
+    renderToolbar(createMessage('error', 'Answer'));
+    expect(renderer?.root.findAllByType('ModelPickerDrawer' as never)).toHaveLength(0);
+
+    act(() =>
+      renderer!.root.findByProps({ testID: 'assistant-message-answer-with' }).props.onPress(),
+    );
+    const picker = renderer!.root.findByType('ModelPickerDrawer' as never);
+    expect(picker.props).toMatchObject({
+      modelType: 'text',
+      selectedModelId: 'qwen::qwen3-max',
+      title: 'chat.messageActions.answerWith',
+    });
+    await act(async () => {
+      picker.props.onSelect({ modelId: 'openai::gpt-5' });
+    });
+
+    expect(mockAnswerWith).toHaveBeenCalledWith({ modelId: 'openai::gpt-5' });
+    expect(mockRetryMessage).not.toHaveBeenCalled();
+    expect(renderer?.root.findAllByType('ModelPickerDrawer' as never)).toHaveLength(0);
+  });
+
+  test('disables @ while the session is busy', () => {
+    mockIsSessionBusy = true;
+    renderToolbar(createMessage('success', 'Answer'));
+
+    const answerWith = renderer!.root.findByProps({ testID: 'assistant-message-answer-with' });
+    expect(answerWith.props.disabled).toBe(true);
+    act(() => answerWith.props.onPress());
+    expect(renderer?.root.findAllByType('ModelPickerDrawer' as never)).toHaveLength(0);
+  });
+
+  function menuItem(id: string) {
+    return (
+      renderer!.root.findByType('ActionMenu' as never).props.items as {
+        destructive?: boolean;
+        disabled?: boolean;
+        id: string;
+        label: string;
+        onPress: () => void;
+      }[]
+    ).find((item) => item.id === id);
+  }
 
   function renderToolbar(message: MessageListItem, retryable = true) {
     act(() => {
       renderer = create(
         <AssistantMessageActionsProvider
           isAssistantToolbarEnabled
-          onShare={jest.fn()}
+          onShare={mockShare}
           snapshot={{
             title: 'Arithmetic drills',
             freshness: { state: 'current' },
@@ -238,6 +293,13 @@ describe('AssistantMessageToolbar', () => {
               actions: {
                 ...(retryable
                   ? {
+                      answerWith: {
+                        availability: { state: 'enabled' as const },
+                        execute: async (input: { modelId: string }) => {
+                          mockAnswerWith(input);
+                          return { state: 'applied' as const, value: undefined };
+                        },
+                      },
                       retry: {
                         availability: { state: 'enabled' as const },
                         execute: async () => {
@@ -283,6 +345,7 @@ function createMessage(status: MessageListItem['status'], text: string): Message
   return {
     data: { parts: [{ text, type: 'text' }] },
     id: 'assistant-1',
+    model: { id: 'qwen::qwen3-max', modelId: 'qwen3-max', name: 'Qwen3 Max', providerId: 'qwen' },
     role: 'assistant',
     status,
   };

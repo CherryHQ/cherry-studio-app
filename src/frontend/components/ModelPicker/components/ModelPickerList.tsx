@@ -1,5 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { Button } from '@cherrystudio/ui/components';
+import { Button, SelectionIndicator } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   LegendList,
@@ -37,13 +37,17 @@ type ModelPickerListProps = {
   loadingText?: string;
   onSelect: (item: ModelPickerModelItem) => void;
   selectedModelId: string | null;
+  /** Present in multi-select mode: every chosen model shows a selection mark. */
   selectedModelIds?: readonly string[];
+  /** Unchosen rows are disabled once this many models are chosen. */
+  maxSelectedCount?: number;
   showBadges?: boolean;
 };
 
 type ModelPickerListExtraData = {
   selectedModelId: string | null;
   selectedModelIds?: readonly string[];
+  isFull: boolean;
 };
 
 /** Every selectable model on the device, grouped by provider in the shared picker sheet. */
@@ -57,6 +61,7 @@ export function ModelPickerList({
   onSelect,
   selectedModelId,
   selectedModelIds,
+  maxSelectedCount = Infinity,
   showBadges = false,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
@@ -117,8 +122,12 @@ export function ModelPickerList({
     [],
   );
   const listExtraData = useMemo<ModelPickerListExtraData>(
-    () => ({ selectedModelId, selectedModelIds }),
-    [selectedModelId, selectedModelIds],
+    () => ({
+      selectedModelId,
+      selectedModelIds,
+      isFull: (selectedModelIds?.length ?? 0) >= maxSelectedCount,
+    }),
+    [maxSelectedCount, selectedModelId, selectedModelIds],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
@@ -126,14 +135,15 @@ export function ModelPickerList({
         return <ModelPickerGroupHeader isFirstGroup={item.isFirstGroup} title={item.title} />;
       }
 
+      const isSelected = extraData.selectedModelIds
+        ? extraData.selectedModelIds.includes(item.item.modelId)
+        : item.item.modelId === extraData.selectedModelId;
       return (
         <ModelPickerRow
-          isSelected={
-            extraData.selectedModelIds
-              ? extraData.selectedModelIds.includes(item.item.modelId)
-              : item.item.modelId === extraData.selectedModelId
-          }
+          isDisabled={Boolean(extraData.selectedModelIds) && extraData.isFull && !isSelected}
+          isSelected={isSelected}
           item={item.item}
+          multiple={Boolean(extraData.selectedModelIds)}
           onSelect={onSelect}
           showBadges={showBadges}
         />
@@ -244,13 +254,17 @@ function ModelPickerGroupHeader({ isFirstGroup, title }: { isFirstGroup: boolean
 }
 
 const ModelPickerRow = memo(function ModelPickerRow({
+  isDisabled,
   isSelected,
   item,
+  multiple,
   onSelect,
   showBadges,
 }: {
+  isDisabled: boolean;
   isSelected: boolean;
   item: ModelPickerModelItem;
+  multiple: boolean;
   onSelect: (item: ModelPickerModelItem) => void;
   showBadges: boolean;
 }) {
@@ -266,9 +280,15 @@ const ModelPickerRow = memo(function ModelPickerRow({
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      className="min-h-12 flex-row items-center gap-3 px-6 active:opacity-60"
+      accessibilityRole={multiple ? 'checkbox' : 'button'}
+      accessibilityState={
+        multiple ? { checked: isSelected, disabled: isDisabled } : { selected: isSelected }
+      }
+      className={cn(
+        'min-h-12 flex-row items-center gap-3 px-6 active:opacity-60',
+        isDisabled && 'opacity-40',
+      )}
+      disabled={isDisabled}
       onPress={handleSelect}
     >
       <ModelAvatar model={item.model} provider={item.provider} size={32} />
@@ -284,7 +304,11 @@ const ModelPickerRow = memo(function ModelPickerRow({
           ))}
         </View>
       ) : null}
-      {isSelected ? <CheckIcon className="size-5 shrink-0 text-foreground" /> : null}
+      {multiple ? (
+        <SelectionIndicator selected={isSelected} />
+      ) : isSelected ? (
+        <CheckIcon className="size-5 shrink-0 text-foreground" />
+      ) : null}
     </Pressable>
   );
 });

@@ -1,6 +1,6 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
-import { messagesThrough, selectedLiveMessages, withLiveSiblings } from '../messageTreeView';
+import { selectedLiveMessages, withLiveSiblings } from '../messageTreeView';
 
 function message(
   id: string,
@@ -52,11 +52,5 @@ describe('message tree view', () => {
     const [, , , answer] = withLiveSiblings(shown, [question, first, second]);
     expect(answer?.siblings?.map((sibling) => sibling.id)).toEqual(['a2', 'b2']);
     expect(withLiveSiblings(persisted, [question, first])).toBe(persisted);
-  });
-
-  test('previews the history a continuation will use', () => {
-    const later = [...persisted, message('q2', 'a1', 'user'), message('a2', 'q2')];
-    expect(messagesThrough(later, 'a1').map(({ id }) => id)).toEqual(['q1', 'a1']);
-    expect(messagesThrough(later, undefined)).toBe(later);
   });
 });

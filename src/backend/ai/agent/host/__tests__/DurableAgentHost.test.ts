@@ -1101,6 +1101,43 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
     }
   });
 
+  test('answering with another model adds a sibling even below a failed answer', async () => {
+    const state = fixture();
+    const original = await state.reserve('failed');
+    await state.host.initialize();
+    try {
+      await state.store.finalizeAssistantMessage({
+        assistantMessageId: original.assistantMessageId,
+        status: 'error',
+        parts: [],
+        usage: null,
+        error: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+        contextCheckpoint: null,
+        runtimeStats: { runtimeTiming: { startedAt: 1, completedAt: 2, spans: [] } },
+      });
+      const second = createUniqueModelId('provider', 'second-model');
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+        modelId: second,
+      });
+
+      // The failed answer is kept rather than repaired in place.
+      expect(
+        await state.store.getMessage(state.sessionId, original.assistantMessageId),
+      ).toMatchObject({ status: 'error' });
+      const [answer] = await state.store.listUnsettledAssistantMessages();
+      expect(
+        await state.store.getMessage(state.sessionId, answer!.assistantMessageId),
+      ).toMatchObject({ modelId: second, parentId: original.userMessageId, siblingsGroupId: 0 });
+      expect((await state.store.getSession(state.sessionId))?.activeNodeId).toBe(
+        answer!.assistantMessageId,
+      );
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('parallel answers share one question and each run on its own lane', async () => {
     const state = fixture();
     await state.host.initialize();

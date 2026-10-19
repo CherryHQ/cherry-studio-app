@@ -48,8 +48,6 @@ type ChatWorkspaceProps = {
   messages: readonly ConversationMessage[];
   snapshot: ConversationSnapshot;
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
-  /** Local chats prepare a new branch below a chosen answer. */
-  onContinueFrom?: (messageId: string) => void;
   sessionId?: string;
   /** Translation is available only for locally owned Agent messages. */
   isTranslationEnabled?: boolean;
@@ -60,7 +58,6 @@ export function ChatWorkspace({
   snapshot: live,
   messages: mergedMessages,
   onShare,
-  onContinueFrom,
   enteringUserMessageId,
   pendingSend,
   onPendingSendDisplayed,
@@ -268,7 +265,6 @@ export function ChatWorkspace({
           key={`assistant-actions-${listKey}`}
           isAssistantToolbarEnabled={isAssistantToolbarEnabled}
           onShare={onShare}
-          onContinueFrom={onContinueFrom}
           snapshot={live}
           messages={mergedMessages}
         >

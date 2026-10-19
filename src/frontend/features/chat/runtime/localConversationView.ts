@@ -11,6 +11,7 @@ import {
 } from '@/frontend/appShell/conversation';
 import type { AgentMessageView } from '@/shared/contracts/agent';
 import { BUILT_IN_TOOL_DESCRIPTORS } from '@/shared/data/types/builtInTool';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import {
   type AgentMessageListProjectionCache,
@@ -124,8 +125,8 @@ export function createLocalConversationProjector(input: {
       const projected: ConversationMessage = {
         ...projectLocalTranscriptMessage(message, cache),
         actions: {
-          // Switching only changes what is shown, so it never waits for running work.
-          ...(message.siblings
+          // Answers switch in place; switching only changes what is shown, so it never waits.
+          ...(message.siblings && message.role === 'assistant'
             ? {
                 select: action<{ messageId: string }, void>(state, false, async ({ messageId }) => {
                   await client.selectMessage(sessionId, messageId);
@@ -155,6 +156,13 @@ export function createLocalConversationProjector(input: {
                     return { source: LOCAL_CONVERSATION_SOURCE, sessionId: next.id };
                   }
                 }),
+                answerWith: action<{ modelId: UniqueModelId }, void>(
+                  state,
+                  true,
+                  async ({ modelId }) => {
+                    await client.retryMessage({ sessionId, messageId: message.id, modelId });
+                  },
+                ),
                 fork: action<{ title?: string }, ConversationRef>(
                   state,
                   true,

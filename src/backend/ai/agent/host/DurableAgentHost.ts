@@ -498,9 +498,7 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       const session = await this.requireSession(parsed.sessionId);
       const current = await this.syncSession(parsed.sessionId);
-      const parent = parsed.parentMessageId ?? session.activeNodeId ?? null;
-      if (parent && !(await this.store.getMessage(parsed.sessionId, parent)))
-        fail('MESSAGE_NOT_FOUND', 'The message to continue from no longer exists.');
+      const parent = session.activeNodeId ?? null;
       const answers = replyTargets(parsed);
       const busy = this.busyLanes(parsed.sessionId);
       if (busy.length && answers.length > 1)
@@ -876,16 +874,23 @@ export class DurableAgentHost implements AgentProtocol {
         assistant.inferenceSnapshot?.status === 'supported'
           ? assistant.inferenceSnapshot.snapshot
           : undefined;
+      // Another model keeps only the question: effort and image settings belong to the original.
+      const switched = parsed.modelId !== undefined && parsed.modelId !== assistant.modelId;
+      const modelId = parsed.modelId ?? assistant.modelId;
       const choices = {
         parts: userInput(user.parts),
         ...submittedSkills(user.parts),
-        ...(assistant.modelId ? { modelId: assistant.modelId } : {}),
-        ...submittedEffort(snapshot?.reasoningEffort),
-        ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
+        ...(modelId ? { modelId } : {}),
+        ...(switched ? {} : submittedEffort(snapshot?.reasoningEffort)),
+        ...(!switched && snapshot?.imageGeneration
+          ? { imageGeneration: snapshot.imageGeneration }
+          : {}),
       };
       const parent = user.parentId ?? null;
-      // A successful or continued answer stays: regeneration adds a sibling answer and selects it.
+      // A successful or continued answer stays, and answering with a chosen model always adds
+      // one: these add a sibling answer and select it.
       if (
+        parsed.modelId !== undefined ||
         assistant.status === 'success' ||
         (await this.store.hasChildren(source.id, assistant.id))
       ) {

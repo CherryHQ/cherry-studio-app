@@ -345,9 +345,9 @@ projection:
   native admission is interrupted with its saved parts retained.
 - History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
   history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
-  Reservation places the question below its parent (the selected leaf unless a continuation names
-  another answer) and selects its first answer; a multi-model question reserves every answer in one
-  new sibling group. Regeneration reserves a sibling answer to the same question. Selecting a message
+  Reservation places the question below the selected leaf and selects its first answer; a
+  multi-model question reserves every answer in one new sibling group. Regeneration, including
+  answering with another model, reserves a sibling answer to the same question. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
   wherever the branch passes a parent with several children.

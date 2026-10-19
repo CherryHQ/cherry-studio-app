@@ -48,6 +48,13 @@ jest.mock('../translation/MessageTranslationProvider', () => ({
 
 jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => null }));
 
+jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+
+jest.mock('../components/MessageAnswerTabs', () => ({
+  MessageAnswerStop: () => null,
+  MessageAnswerTabs: () => null,
+}));
+
 jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
   useIsScreenReaderEnabled: () => false,
 }));

@@ -39,11 +39,6 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   /** Allocated once by the send action and reused for display and persistence. */
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
-  /**
-   * Answer the new question continues from. Defaults to the Session's selected
-   * leaf; naming an earlier answer opens a new branch below it.
-   */
-  parentMessageId: z.string().min(1).optional(),
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
@@ -116,6 +111,8 @@ export type AgentSelectMessageInput = z.infer<typeof AgentSelectMessageInputSche
 export const AgentRetryMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
+  /** Answers with this model instead of the original one, always as a sibling answer. */
+  modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({

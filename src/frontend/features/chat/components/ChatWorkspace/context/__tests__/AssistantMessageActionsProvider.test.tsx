@@ -54,6 +54,8 @@ const mockAlert = {
   alert: { confirm: (input: { onConfirm: () => void }) => mockAlertConfirm(input) },
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
+jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
   useToast: () => mockToast,

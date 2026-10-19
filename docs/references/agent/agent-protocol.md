@@ -442,14 +442,13 @@ interface AgentProtocol {
     sessionId: string
     userMessageId: string
     assistantMessageId: string
-    parentMessageId?: string
     parts: AgentInputPart[]
     modelId?: UniqueModelId
     additionalReplies?: { modelId: UniqueModelId; assistantMessageId: string }[]
     reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
-  retryMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView | void>
+  retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
   selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
   cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
@@ -761,12 +760,15 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 
 ## Manual answer retry
 
-`retryMessage({ sessionId, messageId })` answers a settled question again.
+`retryMessage({ sessionId, messageId, modelId? })` answers a settled question again.
 
 **A successful answer, or one that later questions continue, is regenerated as a sibling.** The
 Host reserves a new answer below the same question, selects it, and submits the original input with
 the original model; the earlier answer and its continuations stay in the tree (see
-[Branching](#branching)). **A failed, interrupted or cancelled leaf answer is retried in place**: no
+[Branching](#branching)). **Naming a `modelId` answers with that model and always adds a sibling**,
+even below a failed answer: the user asked for another answer, not a repair. It submits the original
+question without the original reasoning effort or image settings, which belong to the original
+model. **A failed, interrupted or cancelled leaf answer is retried in place**: no
 later message responds to it, so replacing it rewrites nothing. The store checks the leaf inside the
 reservation transaction. The Host holds the Session's admission guard throughout preparation and
 reservation; running, awaiting-approval, cancelling, and admitting Sessions reject retry with
@@ -830,10 +832,11 @@ question has, and the questions an answer has, are alternatives the client can s
 - **Switching.** `selectMessage` selects the branch containing a message. Switching never calls a
   model and never stops work on another branch; it restores the newest continuation below the chosen
   alternative.
-- **Continuing an earlier answer.** A submission's `parentMessageId` places the new question below
-  that answer; its existing continuations stay in the tree.
+- **Continuing.** A submission always continues the selected leaf: the answer the client shows is
+  the one the next question follows. To continue an earlier answer, the client selects it first.
 - **Regeneration.** Regenerating a settled answer reserves a sibling answer to the same question and
-  selects it.
+  selects it. Answering with another model (`retryMessage` with `modelId`) does the same with the
+  chosen model, adding one more answer to the question.
 - **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
   selected branch up to the fork point, without its sibling alternatives, inside one transaction.
   Turns and approvals are not copied; the new Session starts idle.

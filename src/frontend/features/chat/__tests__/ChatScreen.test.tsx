@@ -138,9 +138,6 @@ jest.mock('@/frontend/hooks/file', () => ({
 jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
 
 jest.mock('../components/ChatInput', () => ({
-  ...jest.requireActual<typeof import('../components/ChatInput/ChatReplyTarget')>(
-    '../components/ChatInput/ChatReplyTarget',
-  ),
   ChatInput: (props: Record<string, unknown>) => {
     chatInputProps = props;
     return null;

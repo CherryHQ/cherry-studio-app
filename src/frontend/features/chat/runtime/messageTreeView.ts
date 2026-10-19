@@ -60,13 +60,3 @@ export function withLiveSiblings(
     return { ...message, siblings: [...known.values()] };
   });
 }
-
-/** Cuts the transcript after `messageId`, so a continuation previews the history it will use. */
-export function messagesThrough(
-  messages: readonly AgentMessageView[],
-  messageId: string | undefined,
-): readonly AgentMessageView[] {
-  if (!messageId) return messages;
-  const index = messages.findIndex((message) => message.id === messageId);
-  return index < 0 ? messages : messages.slice(0, index + 1);
-}

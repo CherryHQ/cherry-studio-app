@@ -21,6 +21,7 @@ import type {
   ConversationAction,
 } from '@/frontend/appShell/conversation';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
+import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
@@ -39,7 +40,7 @@ type AssistantMessageActionsState = {
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
   isDeleteDisabled: boolean;
   isRetryDisabled: boolean;
-  /** Answers that can be regenerated or retried. */
+  /** Answers that can be regenerated, retried, or answered again with another model. */
   retryableMessageIds: ReadonlySet<string>;
 };
 
@@ -54,8 +55,8 @@ type AssistantMessageActions = {
   selectBranch?: (input: { messageId: string; targetId: string }) => void;
   /** Stops one parallel answer while the others continue. */
   stopAnswer?: (input: { messageId: string }) => void;
-  /** Prepares the composer to continue from this answer with chosen models. */
-  continueFromAnswer?: (input: { messageId: string }) => void;
+  /** Chooses a model that adds one more answer to this answer's question. */
+  answerWithModel?: (input: { messageId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -67,8 +68,6 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   /** Opens the source-owned share selector; absent while no Session exists. */
   onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
-  /** Local chats continue from a chosen answer; absent where branching is unsupported. */
-  onContinueFrom?: (messageId: string) => void;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -77,7 +76,6 @@ export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
   onShare,
-  onContinueFrom,
   snapshot,
   messages,
 }: AssistantMessageActionsProviderProps) {
@@ -88,6 +86,8 @@ export function AssistantMessageActionsProvider({
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
   const sharing = useRef(false);
+  // The answer whose question the model picker adds an answer to.
+  const [answeringMessageId, setAnsweringMessageId] = useState<string>();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -121,14 +121,13 @@ export function AssistantMessageActionsProvider({
     alert,
     isBusy,
     messages,
-    onContinueFrom,
     onShare,
     snapshot,
     t,
     toast,
   });
   useLayoutEffect(() => {
-    latest.current = { alert, isBusy, messages, onContinueFrom, onShare, snapshot, t, toast };
+    latest.current = { alert, isBusy, messages, onShare, snapshot, t, toast };
   });
 
   const run = useCallback(
@@ -247,9 +246,25 @@ export function AssistantMessageActionsProvider({
     },
     [run],
   );
-  const continueFromAnswer = useCallback(({ messageId }: { messageId: string }) => {
-    latest.current.onContinueFrom?.(messageId);
+  const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
+    if (!latest.current.isBusy) setAnsweringMessageId(messageId);
   }, []);
+  const closeAnswerModelPicker = useCallback(() => setAnsweringMessageId(undefined), []);
+  const answerWith = useCallback(
+    (item: ModelPickerModelItem) => {
+      const messageId = answeringMessageId;
+      setAnsweringMessageId(undefined);
+      const current = latest.current;
+      if (!messageId || current.isBusy) return;
+      const action = current.messages.find((message) => message.key === messageId)?.actions
+        .answerWith;
+      void run(`answer:${messageId}`, action, { modelId: item.modelId }, 'retryFailed');
+    },
+    [answeringMessageId, run],
+  );
+  const answeringMessage = answeringMessageId
+    ? messages.find((message) => message.key === answeringMessageId)
+    : undefined;
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
@@ -259,12 +274,25 @@ export function AssistantMessageActionsProvider({
       onRetry={retryableMessageIds.size ? retry : undefined}
       onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
       onStopAnswer={messages.some((message) => message.actions.stop) ? stopAnswer : undefined}
-      onContinueFrom={onContinueFrom ? continueFromAnswer : undefined}
+      onAnswerWithModel={
+        messages.some((message) => message.actions.answerWith) ? answerWithModel : undefined
+      }
       isDeleteDisabled={isBusy}
       isRetryDisabled={isBusy}
       retryableMessageIds={retryableMessageIds}
     >
       {children}
+      {answeringMessage ? (
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={closeAnswerModelPicker}
+          onSelect={answerWith}
+          open
+          selectedModelId={answeringMessage.display.model?.id ?? null}
+          title={t('chat.messageActions.answerWith')}
+          variant="chat"
+        />
+      ) : null}
     </ChatMessageActionsProvider>
   );
 }
@@ -279,7 +307,7 @@ export function ChatMessageActionsProvider({
   onRetry: retryAssistantMessage,
   onSelectBranch: selectBranch,
   onStopAnswer: stopAnswer,
-  onContinueFrom: continueFromAnswer,
+  onAnswerWithModel: answerWithModel,
   isDeleteDisabled = true,
   isRetryDisabled = true,
   retryableMessageIds = EMPTY_MESSAGE_IDS,
@@ -291,7 +319,7 @@ export function ChatMessageActionsProvider({
   onRetry?: AssistantMessageActions['retryAssistantMessage'];
   onSelectBranch?: AssistantMessageActions['selectBranch'];
   onStopAnswer?: AssistantMessageActions['stopAnswer'];
-  onContinueFrom?: AssistantMessageActions['continueFromAnswer'];
+  onAnswerWithModel?: AssistantMessageActions['answerWithModel'];
   isDeleteDisabled?: boolean;
   isRetryDisabled?: boolean;
   retryableMessageIds?: ReadonlySet<string>;
@@ -357,7 +385,7 @@ export function ChatMessageActionsProvider({
   );
   const actionsValue = useMemo(
     () => ({
-      continueFromAnswer,
+      answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,
       forkFromAssistantMessage,
@@ -367,7 +395,7 @@ export function ChatMessageActionsProvider({
       stopAnswer,
     }),
     [
-      continueFromAnswer,
+      answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,
       forkFromAssistantMessage,
