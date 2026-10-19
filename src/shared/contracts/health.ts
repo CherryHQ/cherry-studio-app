@@ -1157,8 +1157,18 @@ export type HealthDataType = keyof typeof HEALTH_TYPE_CATALOG;
 export type HealthTypeKind = (typeof HEALTH_TYPE_CATALOG)[HealthDataType]['kind'];
 export const HEALTH_DATA_TYPES = Object.keys(HEALTH_TYPE_CATALOG) as HealthDataType[];
 
-/** Blood-pressure and food correlations inherit the grants of their contained quantities. */
+/** The object type whose selection controls access to these records. */
+export function healthRecordSelectionType(type: HealthDataType): HealthDataType | undefined {
+  if (type === 'visionPrescription') return type;
+  if (type === 'userAnnotatedMedication' || type === 'medicationDoseEvent')
+    return 'userAnnotatedMedication';
+  return undefined;
+}
+
+/** Resolve the types that own read authorization, including correlations and medication doses. */
 export function healthAuthorizationTypes(type: HealthDataType): HealthDataType[] {
+  const selectionType = healthRecordSelectionType(type);
+  if (selectionType) return [selectionType];
   if (type === 'audioExposureEvent') return ['environmentalAudioExposureEvent'];
   if (type === 'bloodPressure') return ['bloodPressureSystolic', 'bloodPressureDiastolic'];
   if (type === 'food') return HEALTH_DATA_TYPES.filter((name) => name.startsWith('dietary'));

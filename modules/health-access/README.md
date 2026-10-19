@@ -23,9 +23,13 @@ public types and the deprecated audio-exposure alias:
 Availability is checked before constructing a type; newer types do not make older systems fail.
 Clinical records additionally require Health Records support, the `health-records` entitlement
 and `NSHealthClinicalHealthRecordsShareUsageDescription` configured in `app.json`. A signing
-profile must include that capability. Vision prescriptions use per-object authorization. CDA
-content queries can open Apple's document-selection sheet. The app records only that selection
-was requested, never that reading was granted. Reselection uses the application permission queue.
+profile must include that capability. Vision prescriptions and medications use per-object
+authorization; medication doses inherit the selected medications' access. `reselectRecords` can
+reopen either selection, including when querying medication doses. The app records only that
+selection was requested, never that reading was granted. Reselection, CDA content queries and
+verifiable-record queries share the application permission queue with ordinary system requests.
+Cancelled queued reads do not open a sheet; an open native selection holds the queue until it
+settles, using its native timeout.
 
 The workout overview uses a bounded, newest-first sample query and preserves absent distance
 and energy as null. It uses this module directly and adds no third-party dependency patch.

@@ -16,6 +16,7 @@ import {
   type PermissionStatuses,
   type PermissionsModule,
 } from '@/shared/contracts';
+import { healthRecordSelectionType } from '@/shared/contracts/health';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
@@ -28,6 +29,9 @@ const unsupported: DevicePermissionStatus = {
   reason: 'unsupported',
 };
 const failed: DevicePermissionStatus = { state: 'error', canAskAgain: false };
+const HEALTH_RECORD_SELECTION_SCOPES = new Set<DevicePermissionScope>(
+  HEALTH_DATA_TYPES.filter(healthRecordSelectionType).map(healthPermissionScope),
+);
 
 type ExpoPermission = {
   granted: boolean;
@@ -69,20 +73,12 @@ export class DevicePermissions implements PermissionsModule {
     signal?: AbortSignal,
     options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses> {
-    // Only one system authorization sheet at a time, including requests from an Agent.
-    // Keep the queue locked until an already-open native sheet settles, even after cancellation.
     const unique = [...new Set(scopes)];
-    const result = this.requestQueue.then(() => this.requestPermissions(unique, signal, options));
-    this.requestQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    return this.runWithSystemPrompt(() => this.requestPermissions(unique, signal, options), signal);
   }
 
   requestLocalNetworkAccess(signal?: AbortSignal): Promise<void> {
-    const result = this.requestQueue.then(async () => {
-      signal?.throwIfAborted();
+    return this.runWithSystemPrompt(async () => {
       // The app targets Android SDK 36, where INTERNET already grants local access.
       if (Platform.OS !== 'ios') return;
       try {
@@ -91,9 +87,21 @@ export class DevicePermissions implements PermissionsModule {
         // Preparation is best-effort; the actual pairing request owns connectivity errors.
         logger.warn('Local network prompt preparation failed', { error });
       }
+    }, signal);
+  }
+
+  /** Backend-only: serialize native operations that may present a system authorization sheet. */
+  runWithSystemPrompt<TResult>(
+    operation: () => Promise<TResult>,
+    signal?: AbortSignal,
+  ): Promise<TResult> {
+    const result = this.requestQueue.then(async () => {
       signal?.throwIfAborted();
+      // Await native settlement even after cancellation; an open sheet still owns the queue.
+      const value = await operation();
+      signal?.throwIfAborted();
+      return value;
     });
-    // Allow the network sheet to finish before requesting camera/Agent permissions.
     this.requestQueue = result.then(
       () => undefined,
       () => undefined,
@@ -170,7 +178,7 @@ export class DevicePermissions implements PermissionsModule {
       (scope) =>
         canRequestDevicePermission(before[scope]) ||
         (options?.reselectHealthRecords === true &&
-          scope === 'health.visionPrescription.read' &&
+          HEALTH_RECORD_SELECTION_SCOPES.has(scope) &&
           canUseDevicePermission(scope, before[scope])),
     );
     const healthTypes = healthTypesForScopes(requestable);

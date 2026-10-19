@@ -8,7 +8,11 @@ import {
   shareVerifiableHealthRecords,
   type HealthDataReaderLoader,
 } from '@/backend/services/device';
-import { healthAuthorizationTypes, HEALTH_TYPE_CATALOG } from '@/shared/contracts/health';
+import {
+  healthAuthorizationTypes,
+  healthRecordSelectionType,
+  HEALTH_TYPE_CATALOG,
+} from '@/shared/contracts/health';
 import { healthPermissionScope } from '@/shared/contracts/permissions';
 
 import { createDeviceRuntimeTool, type DeviceToolDependencies } from './deviceRuntimeTool';
@@ -86,7 +90,7 @@ const querySchema = z
     reselectRecords: z
       .boolean()
       .describe(
-        'Usually false. True opens Apple’s record selection again for vision prescriptions, only when the user asks to select more records.',
+        'Usually false. True reopens Apple’s selection for visionPrescription, userAnnotatedMedication or medicationDoseEvent, only when the user asks to change the shared records or medications.',
       ),
   })
   .strict();
@@ -169,13 +173,14 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
       ],
       run: async (input, signal) => {
         if (input.reselectRecords) {
-          if (input.type !== 'visionPrescription')
-            throw new Error('Only vision prescriptions support record reselection.');
-          await deps.devicePermissions.request(
-            [healthPermissionScope('visionPrescription')],
-            signal,
-            { reselectHealthRecords: true },
-          );
+          const selectionType = healthRecordSelectionType(resolveHealthDataType(input.type));
+          if (!selectionType)
+            throw new Error(
+              'Only vision prescriptions and medications support record reselection.',
+            );
+          await deps.devicePermissions.request([healthPermissionScope(selectionType)], signal, {
+            reselectHealthRecords: true,
+          });
           signal.throwIfAborted();
         }
         return queryHealthData(
@@ -198,7 +203,8 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
       inputSchema: recordSchema,
       permissionScopes: (input) =>
         healthAuthorizationTypes(resolveHealthDataType(input.type)).map(healthPermissionScope),
-      run: (input) => getHealthRecord({ ...input, limit: input.limit || 1000 }, load),
+      run: (input, signal) =>
+        getHealthRecord({ ...input, limit: input.limit || 1000 }, load, signal),
     }),
     createDeviceRuntimeTool({
       capabilityId: 'health_share_verifiable_records',
@@ -209,7 +215,7 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
       inputSchema: verifiableSchema,
       // This query presents its own consent sheet; there is no persistent type-level read grant.
       permissionScopes: [],
-      run: (input) =>
+      run: (input, signal) =>
         shareVerifiableHealthRecords(
           {
             ...input,
@@ -217,6 +223,7 @@ export function createHealthDataTools(deps: DeviceToolDependencies, load?: Healt
             dataLimit: input.dataLimit || 1000,
           },
           load,
+          signal,
         ),
     }),
   ];

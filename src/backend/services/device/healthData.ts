@@ -1,6 +1,8 @@
+import { devicePermissions } from '@/backend/services/permissions';
 import {
   HEALTH_DATA_TYPES,
   HEALTH_TYPE_CATALOG,
+  healthRecordSelectionType,
   type HealthDataType,
 } from '@/shared/contracts/health';
 import { HEALTH_ENUM_VALUES } from '@/shared/contracts/healthValues';
@@ -86,9 +88,9 @@ export async function queryHealthData(
     throw new Error('Statistics do not use a cursor.');
   if (input.workoutId && ['characteristic', 'activitySummary', 'medication'].includes(spec.kind))
     throw new Error('Workout filtering only applies to sample types.');
-  if (input.reselectRecords && spec.kind !== 'vision')
+  if (input.reselectRecords && !healthRecordSelectionType(type))
     throw new Error(
-      'reselectRecords applies only to vision prescriptions. CDA documents request selection when their details are read.',
+      'reselectRecords applies only to vision prescriptions and medications. CDA documents request selection when their details are read.',
     );
   const range = normalizeOptionalDateRange(input.startDate, input.endDate);
   const reader = await load();
@@ -120,25 +122,26 @@ export async function queryHealthData(
 export async function getHealthRecord(
   input: HealthRecordOptions & { type: string },
   load: HealthDataReaderLoader = loadHealthDataReader,
+  signal?: AbortSignal,
 ) {
   const type = resolveHealthDataType(input.type);
-  const result = await withNativeToolTimeout(
-    (await load()).getRecord(type, input),
-    'Health record query',
-    type === 'cdaDocument' ? 210_000 : 60_000,
-  );
+  const reader = await load();
+  signal?.throwIfAborted();
+  // Document queries own their native timeout. A JS timeout must not release an open sheet.
+  const result =
+    type === 'cdaDocument' && !input.attachmentId
+      ? await devicePermissions.runWithSystemPrompt(() => reader.getRecord(type, input), signal)
+      : await withNativeToolTimeout(reader.getRecord(type, input), 'Health record query', 60_000);
   return { ...result, type, valueDefinitions: valueDefinitions(type), accessNote: ACCESS_NOTE };
 }
 
 export async function shareVerifiableHealthRecords(
   input: HealthVerifiableRecordOptions,
   load: HealthDataReaderLoader = loadHealthDataReader,
+  signal?: AbortSignal,
 ) {
-  return withNativeToolTimeout(
-    (await load()).shareVerifiableRecords(input),
-    'Verifiable health record sharing',
-    210_000,
-  );
+  const reader = await load();
+  return devicePermissions.runWithSystemPrompt(() => reader.shareVerifiableRecords(input), signal);
 }
 
 function valueDefinitions(type: HealthDataType) {

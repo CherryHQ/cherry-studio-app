@@ -548,9 +548,13 @@ library names while unknown future numeric activity types remain available.
 Queries default to seven days and allow at most 90 days per request; system history access may
 further restrict results. Characteristics and the current/archived medication list ignore dates.
 Activity rings cover complete local calendar days. Blood-pressure and food authorization follows
-the contained quantities. Vision prescriptions use per-object selection; `reselectRecords` opens
-that selection again through the application permission queue. CDA content can prompt for document
-selection. Clinical reads require the extra Health Records entitlement and usage description.
+the contained quantities. Vision prescriptions and medications use per-object selection;
+medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
+selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
+selections, CDA content prompts and verifiable credential prompts share the application permission
+queue. Queued reads respect cancellation; an open selection retains the queue until native
+completion or timeout. Clinical reads require the extra Health Records entitlement and usage
+description.
 
 Verifiable credentials use a separate one-time selection query and explicit application approval,
 with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;

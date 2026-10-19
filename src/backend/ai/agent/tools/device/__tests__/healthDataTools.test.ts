@@ -48,6 +48,39 @@ function setup(statuses: PermissionStatuses) {
 }
 
 describe('extended health read boundaries', () => {
+  test('requests medication selection before the first dose query', async () => {
+    const { execute, permissions, reader } = setup({
+      'health.userAnnotatedMedication.read': { state: 'undetermined', canAskAgain: true },
+    });
+    permissions.request.mockResolvedValue({ 'health.userAnnotatedMedication.read': requested });
+    const result = await execute(1, { ...queryInput, type: 'medicationDoseEvent' });
+    expect(permissions.getStatuses).toHaveBeenCalledWith(['health.userAnnotatedMedication.read']);
+    expect(permissions.request).toHaveBeenCalledWith(
+      ['health.userAnnotatedMedication.read'],
+      expect.any(AbortSignal),
+    );
+    expect(reader.query).toHaveBeenCalledWith('medicationDoseEvent', expect.any(Object));
+    expect(result.value).toMatchObject({ type: 'medicationDoseEvent', data: [] });
+  });
+
+  test.each([
+    ['visionPrescription', 'health.visionPrescription.read'],
+    ['userAnnotatedMedication', 'health.userAnnotatedMedication.read'],
+    ['medicationDoseEvent', 'health.userAnnotatedMedication.read'],
+  ] as const)('reselects %s before querying its records', async (type, scope) => {
+    const { execute, permissions, reader } = setup({ [scope]: requested });
+    permissions.request.mockImplementation(async () => {
+      expect(reader.query).not.toHaveBeenCalled();
+      return { [scope]: requested };
+    });
+    const result = await execute(1, { ...queryInput, type, reselectRecords: true });
+    expect(permissions.request).toHaveBeenCalledTimes(1);
+    expect(permissions.request).toHaveBeenCalledWith([scope], expect.any(AbortSignal), {
+      reselectHealthRecords: true,
+    });
+    expect(result.value).toMatchObject({ type, data: [] });
+  });
+
   test('blood pressure requires both constituent quantities and workout filtering adds its own scope', async () => {
     const { execute, permissions, reader } = setup({
       'health.bloodPressureSystolic.read': requested,

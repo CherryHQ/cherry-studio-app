@@ -201,17 +201,42 @@ describe('DevicePermissions', () => {
     expect(health.request).toHaveBeenCalledWith(['steps']);
   });
 
-  test('only reopens an already requested vision selection when explicitly requested', async () => {
-    health.getStatuses.mockImplementation(async (types) =>
-      nativeHealthStatuses(types, 'requested'),
-    );
-    await service.request(['health.visionPrescription.read']);
-    expect(health.request).not.toHaveBeenCalled();
-    await service.request(['health.visionPrescription.read', 'health.steps.read'], undefined, {
-      reselectHealthRecords: true,
-    });
-    expect(health.request).toHaveBeenCalledTimes(1);
-    expect(health.request).toHaveBeenCalledWith(['visionPrescription']);
+  test.each(['visionPrescription', 'userAnnotatedMedication', 'medicationDoseEvent'] as const)(
+    'only reopens an already requested %s selection when explicitly requested',
+    async (type) => {
+      health.getStatuses.mockImplementation(async (types) =>
+        nativeHealthStatuses(types, 'requested'),
+      );
+      await service.request([`health.${type}.read`]);
+      expect(health.request).not.toHaveBeenCalled();
+      await service.request([`health.${type}.read`, 'health.steps.read'], undefined, {
+        reselectHealthRecords: true,
+      });
+      expect(health.request).toHaveBeenCalledTimes(1);
+      expect(health.request).toHaveBeenCalledWith([type]);
+    },
+  );
+
+  test('keeps a native selection ahead of ordinary permissions until it settles after cancellation', async () => {
+    const started = createDeferred();
+    const finishSelection = createDeferred();
+    const controller = new AbortController();
+    jest.mocked(ImagePicker.getCameraPermissionsAsync).mockResolvedValue(unrequested as never);
+    const selection = service.runWithSystemPrompt(async () => {
+      started.resolve();
+      await finishSelection.promise;
+    }, controller.signal);
+    const rejected = expect(selection).rejects.toThrow();
+    await started.promise;
+    controller.abort();
+    const camera = service.request(['camera.read']);
+    await Promise.resolve();
+    expect(ImagePicker.getCameraPermissionsAsync).not.toHaveBeenCalled();
+
+    finishSelection.resolve();
+    await rejected;
+    await camera;
+    expect(ImagePicker.requestCameraPermissionsAsync).toHaveBeenCalledTimes(1);
   });
 
   test('reports health as unsupported on Android without a native bridge', async () => {
