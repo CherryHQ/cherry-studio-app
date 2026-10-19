@@ -26,7 +26,6 @@ const CIRCLED_CITATION_MARKERS = [
 ] as const;
 
 type CitationSource = {
-  native?: boolean;
   content?: string;
   id: string;
   title: string;
@@ -72,10 +71,10 @@ export function resolveMessageCitations(
           }
 
           const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
-          if (markdown && source.native && source.url) {
+          if (markdown && source.url) {
             return `[${marker}](cite:${encodeURIComponent(source.url)})`;
           }
-          return markdown ? `^${marker}^` : `[${number}]`;
+          return markdown ? marker : `[${number}]`;
         }),
       );
 
@@ -101,13 +100,11 @@ function collectCitationSources(parts: readonly CherryMessagePart[]): Map<string
   for (const part of parts) {
     if (part.type === 'source-url') {
       const source = {
-        native: part.providerMetadata?.cherry?.nativeWeb === true,
         id: part.sourceId,
         title: part.title ?? part.url,
         url: part.url,
       };
       const existing = sourceByUrl.get(part.url);
-      if (existing && source.native) existing.native = true;
       sourceById.set(part.sourceId, existing ?? source);
       if (!existing) sourceByUrl.set(part.url, source);
       continue;

@@ -32,7 +32,7 @@ describe('resolveMessageCitations', () => {
     const citations = resolveMessageCitations(parts);
 
     expect(citations.textByPartIndex.get(1)).toEqual({
-      markdown: 'See ^❶^.',
+      markdown: 'See [❶](cite:https%3A%2F%2Fcherry-ai.com).',
       plainText: 'See [1].',
     });
     expect(citations.sourceNumberById.get('aaaa1111-1')).toBe(1);
@@ -56,7 +56,8 @@ describe('resolveMessageCitations', () => {
     const citations = resolveMessageCitations(parts);
 
     expect(citations.textByPartIndex.get(1)).toEqual({
-      markdown: 'Second ^❶^, first ^❷^.',
+      markdown:
+        'Second [❶](cite:https%3A%2F%2Fb.example), first [❷](cite:https%3A%2F%2Fa.example).',
       plainText: 'Second [1], first [2].',
     });
     expect(citations.sourceNumberById).toEqual(
@@ -65,6 +66,46 @@ describe('resolveMessageCitations', () => {
         ['aaaa1111-2', 1],
       ]),
     );
+  });
+
+  test('renders consecutive search citations as separate links without literal carets', () => {
+    const parts = [
+      {
+        output: [
+          { id: 'result-1', title: 'A', url: 'https://a.example' },
+          { id: 'result-2', title: 'B', url: 'https://b.example' },
+        ],
+        state: 'output-available',
+        toolCallId: 'call-1',
+        type: 'tool-web_search',
+      },
+      { text: 'Answer [cite:result-1][cite:result-2].', type: 'text' },
+    ] as CherryMessagePart[];
+
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)).toEqual({
+      markdown: 'Answer [❶](cite:https%3A%2F%2Fa.example)[❷](cite:https%3A%2F%2Fb.example).',
+      plainText: 'Answer [1][2].',
+    });
+  });
+
+  test('keeps citations without URLs readable without inventing links or caret delimiters', () => {
+    const parts = [
+      {
+        output: [
+          { id: 'result-1', title: 'A', content: 'First excerpt' },
+          { id: 'result-2', title: 'B', content: 'Second excerpt' },
+        ],
+        state: 'output-available',
+        toolCallId: 'call-1',
+        type: 'tool-kb_search',
+      },
+      { text: 'Answer [cite:result-1][cite:result-2].', type: 'text' },
+    ] as CherryMessagePart[];
+
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)).toEqual({
+      markdown: 'Answer ❶❷.',
+      plainText: 'Answer [1][2].',
+    });
   });
 
   test('keeps unknown markers and code examples literal', () => {
@@ -82,7 +123,7 @@ describe('resolveMessageCitations', () => {
     ] as CherryMessagePart[];
 
     expect(resolveMessageCitations(parts).textByPartIndex.get(1)?.markdown).toBe(
-      '`[cite:aaaa1111-1]` [cite:missing] ^❶^',
+      '`[cite:aaaa1111-1]` [cite:missing] [❶](cite:https%3A%2F%2Fa.example)',
     );
   });
 
