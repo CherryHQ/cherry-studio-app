@@ -144,8 +144,10 @@ test('catalog changes and row actions refresh lists, and retired actions cannot 
   expect(f.protocol.renameSession).toHaveBeenCalledWith({ sessionId: 'session', name: 'Renamed' });
   expect(changed).toHaveBeenLastCalledWith('sessions');
   expect(f.sessionChanged).toHaveBeenLastCalledWith('session');
+  changed.mockClear();
   expect(await preview.remove!.execute(undefined)).toMatchObject({ state: 'applied' });
   expect(f.protocol.deleteSession).toHaveBeenCalledWith({ sessionId: 'session' });
+  expect(changed).toHaveBeenCalledWith('sessions');
   f.source.dispose();
   expect(f.changes.size).toBe(0);
   expect(await preview.remove!.execute(undefined)).toMatchObject({
