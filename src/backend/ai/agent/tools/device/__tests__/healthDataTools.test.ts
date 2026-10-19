@@ -1,6 +1,7 @@
 import type { HealthDataReaderLoader } from '@/backend/services/device';
 import type { PermissionStatuses, PermissionsModule } from '@/shared/contracts';
 
+import type { RuntimeJsonValue } from '../../../runtime';
 import { createHealthDataTools } from '../healthDataTools';
 
 jest.mock('@/backend/services/device', () =>
@@ -37,7 +38,7 @@ function setup(statuses: PermissionStatuses) {
     permissions,
     reader,
     load,
-    execute: (index: number, input: Record<string, unknown>) =>
+    execute: (index: number, input: RuntimeJsonValue) =>
       tools[index]!.execute({
         input,
         signal: new AbortController().signal,
