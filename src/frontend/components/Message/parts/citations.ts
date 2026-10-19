@@ -72,7 +72,11 @@ export function resolveMessageCitations(
 
           const marker = CIRCLED_CITATION_MARKERS[number - 1] ?? String(number);
           if (markdown && source.url) {
-            return `[${marker}](cite:${encodeURIComponent(source.url)})`;
+            // encodeURIComponent leaves parentheses unescaped; Markdown treats them as delimiters.
+            const target = encodeURIComponent(source.url).replace(/[()]/g, (character) =>
+              character === '(' ? '%28' : '%29',
+            );
+            return `[${marker}](cite:${target})`;
           }
           return markdown ? marker : `[${number}]`;
         }),

@@ -3,7 +3,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 import { resolveMessageCitations } from '../citations';
 
 describe('resolveMessageCitations', () => {
-  test('makes native provider citations clickable while keeping copied text readable', () => {
+  test('makes native provider citations clickable while retaining plain-text numbering', () => {
     const parts: CherryMessagePart[] = [
       { type: 'text', text: 'Answer [cite:native-1]' },
       {
@@ -36,6 +36,27 @@ describe('resolveMessageCitations', () => {
       plainText: 'See [1].',
     });
     expect(citations.sourceNumberById.get('aaaa1111-1')).toBe(1);
+  });
+
+  test.each([
+    ['https://example.com/a)b', 'https%3A%2F%2Fexample.com%2Fa%29b'],
+    ['https://example.com/a(b', 'https%3A%2F%2Fexample.com%2Fa%28b'],
+    ['https://example.com/a(b)', 'https%3A%2F%2Fexample.com%2Fa%28b%29'],
+    [
+      'https://example.com/search?q=a(b)#section)c',
+      'https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Da%28b%29%23section%29c',
+    ],
+    ['https://example.com/a%28b%29', 'https%3A%2F%2Fexample.com%2Fa%2528b%2529'],
+  ])('keeps URL parentheses inside the citation link: %s', (url, target) => {
+    const parts = [
+      { type: 'source-url', sourceId: 'result-1', url },
+      { type: 'text', text: 'Answer [cite:result-1].' },
+    ] satisfies CherryMessagePart[];
+
+    expect(resolveMessageCitations(parts).textByPartIndex.get(1)).toEqual({
+      markdown: `Answer [❶](cite:${target}).`,
+      plainText: 'Answer [1].',
+    });
   });
 
   test('resolves message-local tool result IDs by first marker appearance', () => {
