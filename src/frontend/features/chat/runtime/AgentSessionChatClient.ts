@@ -76,20 +76,19 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
  * treated as busy rather than silently unlocking the composer and retry action.
  */
 export function isAgentSessionBusy(state: AgentSessionChatState): boolean {
+  return Boolean(state.isSubmitting || state.queuedInputs.length || isAgentSessionExecuting(state));
+}
+
+export function isAgentSessionExecuting(state: AgentSessionChatState): boolean {
   return Boolean(
-    state.isSubmitting ||
-    state.queuedInputs.length ||
-    isAgentSessionExecuting(state) ||
+    (state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status)) ||
+    // The latest turn event can be terminal while another model still answers.
     state.liveMessages.some(
       (message) =>
         message.role === 'assistant' &&
         (message.status === 'pending' || message.status === 'streaming'),
     ),
   );
-}
-
-export function isAgentSessionExecuting(state: AgentSessionChatState): boolean {
-  return Boolean(state.activeTurn && !TERMINAL_TURN_STATUSES.has(state.activeTurn.status));
 }
 
 function createSessionState(sessionId: string): AgentSessionChatState {

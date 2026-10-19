@@ -33,7 +33,6 @@ import { latestAgentImageResult, latestConversationImageResult } from './agentIm
 import { createPendingChatMessages } from './agentMessageProjection';
 import {
   AgentSessionChatClient,
-  isAgentSessionBusy,
   isAgentSessionExecuting,
   type AgentSessionChatState,
 } from './AgentSessionChatClient';
@@ -253,7 +252,7 @@ export function useAgentChatControls(input: {
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
-  const isSessionBusy = useAgentSessionSelection(client, sessionId, isAgentSessionBusy);
+  const isSessionExecuting = useAgentSessionSelection(client, sessionId, isAgentSessionExecuting);
   const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
   const [submission, setSubmission] = useState<{
     composerKey: number;
@@ -368,7 +367,7 @@ export function useAgentChatControls(input: {
     enteringUserMessageId: currentSubmission?.userMessageId,
     canSend:
       isAdmitting ||
-      (isSessionBusy && !isComposerBusy) ||
+      (isSessionExecuting && !isComposerBusy) ||
       (pendingSend && (pendingSend.isSubmitting || (sessionId && observationStatus !== 'ready')))
         ? false
         : undefined,
