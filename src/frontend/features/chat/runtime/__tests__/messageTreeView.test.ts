@@ -1,6 +1,12 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
 
-import { readQuestionAnswers, selectedLiveMessages, withLiveSiblings } from '../messageTreeView';
+import {
+  type LiveSiblingViews,
+  readQuestionAnswers,
+  selectedBranchMessages,
+  selectedLiveMessages,
+  withLiveSiblings,
+} from '../messageTreeView';
 
 function message(
   id: string,
@@ -52,6 +58,39 @@ describe('message tree view', () => {
     const [, , , answer] = withLiveSiblings(shown, [question, first, second], new Map());
     expect(answer?.siblings?.map((sibling) => sibling.id)).toEqual(['a2', 'b2']);
     expect(withLiveSiblings(persisted, [question, first], new Map())).toBe(persisted);
+  });
+
+  test('shows one answer per question until the transcript is read again', () => {
+    // History still holds A1 and its follow-up; the live B1 was just selected.
+    const followUp = message('q2', 'a1', 'user');
+    const live = message('b1', 'q1');
+    const merged = [...persisted, live, followUp];
+    expect(selectedBranchMessages(merged, 'b1').map((row) => row.id)).toEqual(['q1', 'b1']);
+    // An unread selected leaf keeps the first answer rather than two rows for one question.
+    expect(selectedBranchMessages(merged, 'unread').map((row) => row.id)).toEqual([
+      'q1',
+      'a1',
+      'q2',
+    ]);
+    expect(selectedBranchMessages(persisted, 'a1')).toBe(persisted);
+  });
+
+  test('keeps the shown answer while only another answer streams text', () => {
+    const question = message('q2', 'a1', 'user');
+    const first = message('a2', 'q2', 'assistant', 'success');
+    const second = message('b2', 'q2', 'assistant', 'streaming');
+    const shown = [...persisted, question, first];
+    const views: LiveSiblingViews = new WeakMap();
+    const [, , , before] = withLiveSiblings(shown, [question, first, second], new Map(), views);
+    const streamed = {
+      ...second,
+      parts: [{ id: 't', type: 'text' as const, text: 'more', state: 'streaming' as const }],
+    };
+    const [, , , after] = withLiveSiblings(shown, [question, first, streamed], new Map(), views);
+    expect(after).toBe(before);
+    const settled = { ...second, status: 'success' as const };
+    const [, , , changed] = withLiveSiblings(shown, [question, first, settled], new Map(), views);
+    expect(changed).not.toBe(before);
   });
 
   test('keeps the answers last read for a question while another answer to it runs', () => {

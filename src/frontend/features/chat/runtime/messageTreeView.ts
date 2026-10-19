@@ -27,6 +27,40 @@ export function selectedLiveMessages(
   return live.filter((message) => persistedIds.has(message.id) || visible.has(message.id));
 }
 
+/**
+ * The transcript keeps one child per message. Between selecting another answer and reading the
+ * transcript again, history still holds the previous answer while live rows hold the selected
+ * one; the child on the walk from the selected leaf wins, else the first, and rows below a
+ * dropped child go with it. Returns `messages` itself when nothing is dropped.
+ */
+export function selectedBranchMessages(
+  messages: readonly AgentMessageView[],
+  activeNodeId: string | null | undefined,
+): readonly AgentMessageView[] {
+  const byId = new Map(messages.map((message) => [message.id, message]));
+  const chosen = new Map<string | null, string>();
+  const walked = new Set<string>();
+  let id = activeNodeId;
+  while (id && byId.has(id) && !walked.has(id)) {
+    walked.add(id);
+    const message: AgentMessageView = byId.get(id)!;
+    if (message.parentId === undefined) break;
+    chosen.set(message.parentId, id);
+    id = message.parentId;
+  }
+  const dropped = new Set<string>();
+  const next = messages.filter((message) => {
+    if (message.parentId === undefined) return true;
+    const keep =
+      !(message.parentId && dropped.has(message.parentId)) &&
+      (chosen.get(message.parentId) ?? message.id) === message.id;
+    if (keep) chosen.set(message.parentId, message.id);
+    else dropped.add(message.id);
+    return keep;
+  });
+  return dropped.size ? next : messages;
+}
+
 /** Each question's answers as last read, carried over from the previous reading. */
 export function readQuestionAnswers(
   history: readonly AgentMessageView[],
@@ -39,16 +73,21 @@ export function readQuestionAnswers(
   return byQuestion;
 }
 
+/** A message with its alternatives attached, kept while those alternatives read the same. */
+export type LiveSiblingViews = WeakMap<AgentMessageView, AgentMessageView>;
+
 /**
  * Answers stream before their persisted rows carry `siblings`, and settled history omits a
  * question's whole turn while one of its answers runs. A running answer's alternatives are the
  * answers last read for its question plus the live answers sharing it. Returns the same objects
- * when nothing changes, so row projections stay cached.
+ * when nothing changes, so row projections stay cached: another answer streaming text does not
+ * change the alternatives of the one shown.
  */
 export function withLiveSiblings(
   messages: readonly AgentMessageView[],
   live: readonly AgentMessageView[],
   readAnswers: ReadonlyMap<string, readonly AgentMessageSibling[]>,
+  views: LiveSiblingViews = new WeakMap(),
 ): readonly AgentMessageView[] {
   const answers = new Map<string, AgentMessageView[]>();
   for (const message of live)
@@ -78,7 +117,22 @@ export function withLiveSiblings(
       } satisfies AgentMessageSibling);
     if (siblings.size < 2) return message;
     changed = true;
-    return { ...message, siblings: [...siblings.values()] };
+    const list = [...siblings.values()];
+    const previous = views.get(message);
+    if (
+      previous?.siblings?.length === list.length &&
+      previous.siblings.every(
+        (sibling, index) =>
+          sibling.id === list[index]!.id &&
+          sibling.status === list[index]!.status &&
+          sibling.modelId === list[index]!.modelId &&
+          sibling.siblingsGroupId === list[index]!.siblingsGroupId,
+      )
+    )
+      return previous;
+    const view = { ...message, siblings: list };
+    views.set(message, view);
+    return view;
   });
   return changed ? next : messages;
 }

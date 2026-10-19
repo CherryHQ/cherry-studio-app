@@ -693,7 +693,18 @@ export class AgentSessionChatClient {
         entry.liveMessages.set(event.message.id, event.message);
         this.toolInputPreviews.clearMessage(event.message.id);
         this.commitLiveMessages(entry);
-        this.options.onTranscriptChanged?.(entry.state.sessionId);
+        // Settled history omits a turn while any of its answers runs; only the last answer to
+        // finish changes what it reads.
+        if (
+          !event.message.turnId ||
+          ![...entry.liveMessages.values()].some(
+            (message) =>
+              message.role === 'assistant' &&
+              message.turnId === event.message.turnId &&
+              !isTerminalMessage(message),
+          )
+        )
+          this.options.onTranscriptChanged?.(entry.state.sessionId);
         return;
       case 'turn.deleted': {
         for (const messageId of event.messageIds) {

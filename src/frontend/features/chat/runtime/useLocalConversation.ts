@@ -9,7 +9,13 @@ import type {
 import { mergeAgentMessageViews } from './agentMessageProjection';
 import { useAgentChatClient, useAgentSessionState } from './ChatProvider';
 import { createLocalConversationProjector } from './localConversationView';
-import { readQuestionAnswers, selectedLiveMessages, withLiveSiblings } from './messageTreeView';
+import {
+  type LiveSiblingViews,
+  readQuestionAnswers,
+  selectedBranchMessages,
+  selectedLiveMessages,
+  withLiveSiblings,
+} from './messageTreeView';
 import {
   type MessageNavigation,
   useAgentMessageHistoryWindow,
@@ -87,14 +93,16 @@ export function useLocalConversation(input: {
   }));
   if (readAnswers.history !== history)
     setReadAnswers({ history, byQuestion: readQuestionAnswers(history, readAnswers.byQuestion) });
+  const [siblingViews] = useState<LiveSiblingViews>(() => new WeakMap());
   const branchMessages = useMemo(() => {
     const live = selectedLiveMessages(state.liveMessages, history, activeNodeId);
     return withLiveSiblings(
-      mergeAgentMessageViews(history, live),
+      selectedBranchMessages(mergeAgentMessageViews(history, live), activeNodeId),
       state.liveMessages,
       readAnswers.byQuestion,
+      siblingViews,
     );
-  }, [activeNodeId, history, readAnswers.byQuestion, state.liveMessages]);
+  }, [activeNodeId, history, readAnswers.byQuestion, siblingViews, state.liveMessages]);
   const messages = useMemo(() => {
     if (!projector) return [];
     if (window.hasNewerMessages) return historyMessages;

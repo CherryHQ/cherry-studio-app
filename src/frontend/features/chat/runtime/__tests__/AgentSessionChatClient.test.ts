@@ -578,9 +578,37 @@ describe('AgentSessionChatClient', () => {
     ]);
     expect(onTranscriptChanged).not.toHaveBeenCalled();
 
-    listener?.({ type: 'message.finalized', message: assistantMessage() });
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), status: 'success' },
+    });
     expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
     expect(onTranscriptChanged).toHaveBeenCalledWith('session-1');
+  });
+
+  test('refreshes the transcript once the last parallel answer settles', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onTranscriptChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onTranscriptChanged });
+    await client.observe('session-1');
+    onTranscriptChanged.mockClear();
+    const second = { ...assistantMessage(), id: 'assistant-2' };
+    listener?.({ type: 'message.created', message: userMessage() });
+    listener?.({ type: 'message.created', message: assistantMessage() });
+    listener?.({ type: 'message.created', message: second });
+
+    // Settled history omits the turn until every answer settles, so reading it now shows nothing.
+    listener?.({
+      type: 'message.finalized',
+      message: { ...assistantMessage(), status: 'success' },
+    });
+    expect(onTranscriptChanged).not.toHaveBeenCalled();
+    listener?.({ type: 'message.finalized', message: { ...second, status: 'success' } });
+    expect(onTranscriptChanged).toHaveBeenCalledTimes(1);
   });
 
   test('drops a deleted turn from live state and refreshes the durable transcript', async () => {
