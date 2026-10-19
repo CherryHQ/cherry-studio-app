@@ -90,6 +90,8 @@ export const AgentSessionSnapshotSchema = z.strictObject({
   activeUserMessage: AgentMessageViewSchema.nullable(),
   hasHistoryBeforeActiveTurn: z.boolean().nullable(),
   streamingMessage: AgentMessageViewSchema.nullable(),
+  /** Other rows of active turns, including settled answers omitted from settled history. */
+  additionalMessages: z.array(AgentMessageViewSchema).optional(),
   pendingApprovals: z.array(AgentApprovalViewSchema),
   pendingQuestion: AgentPendingQuestionSchema.nullable(),
   contextStatus: AgentContextStatusSchema.optional(),

@@ -30,12 +30,6 @@
       "import": "./src/runtime/index.ts",
       "default": "./src/runtime/index.ts"
     },
-    "./tools": {
-      "types": "./src/tools/index.ts",
-      "react-native": "./src/tools/index.ts",
-      "import": "./src/tools/index.ts",
-      "default": "./src/tools/index.ts"
-    },
     "./utils": {
       "types": "./src/utils/index.ts",
       "react-native": "./src/utils/index.ts",

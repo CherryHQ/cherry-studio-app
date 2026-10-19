@@ -293,6 +293,11 @@ export type RuntimeTool = {
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';
+  /**
+   * `read` only for application-owned tools known not to change anything outside
+   * the conversation. Absent means unknown and is treated as a write.
+   */
+  effect?: 'read' | 'write';
   /** Tools in the same group stop together after a tool-scoped failure. */
   failureGroup?: string;
   /**

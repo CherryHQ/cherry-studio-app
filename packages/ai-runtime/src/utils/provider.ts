@@ -26,10 +26,6 @@ export function getExtraHeaders(provider: Provider): Record<string, string> {
   return { ...headers, 'X-Source': 'cherry-studio' };
 }
 
-export function isAwsBedrockProvider(provider: Provider): boolean {
-  return provider.authType === 'iam-aws' || provider.authType === 'api-key-aws';
-}
-
 export function defaultHeaders(
   provider: Provider,
   apiKey = '',

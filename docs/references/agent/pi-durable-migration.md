@@ -177,15 +177,38 @@ context to include background compaction that completed after the answer. There 
 replay: the Pi working copy itself keeps signed content between launches, and Cherry keeps only the
 transcript. The pre-Pi MMKV replay cache is cleared once when the Host dependencies become ready.
 
-## Fork, Retry And Delete
+## Branches, Fork, Retry And Delete
 
-Forks copy Cherry message rows with new message/turn identities. Checkpoints are cleared
-because their old turn anchors are not valid in the copy. The new session creates an independent Pi
-conversation on its first submission; it never uses Pi's shared-history fork tree.
+A Cherry Session's message tree runs on up to eight Pi conversations (working copies), one per
+fixed slot. Slot 0 keeps the bare Session id as its Pi key, so every pre-branching Session is
+unchanged; slot n uses `${sessionId}#${n}`. The key is private to the Pi adapter: runtime calls take
+a typed `RuntimeLane` (`{ sessionId, slot }`), and execution identities always carry the Cherry
+Session id plus the slot, so a working copy cannot be mistaken for a Session. Finding a Session's
+copies probes its eight slot bindings once per runtime, and every binding change discards that
+reading; no Session operation scans every copy in the engine.
 
-Regenerating a successful or older answer copies the prefix before its question into a new Cherry
-session and submits the original input. Retrying the latest failed answer retains its message ids,
-issues a new turn id, and rebuilds a fresh copy. A recorded completed-tool prefix is imported as
+A question below answer P continues the copy whose newest queued, running or settled answer is P,
+natively forks the copy that executed P at P's answer boundary otherwise (shared history and
+compaction state, no rebuild), and rebuilds from the Cherry branch when no current copy holds P.
+Engine tails are read only until that choice is made. Several answers needing a rebuild rebuild one
+copy, for the model that keeps the most history, and fork the rest from it; their preparation runs
+concurrently and reads each attached image once.
+A new copy takes a free slot, or replaces the least recently used idle copy. Copies are disposable:
+Pi stores no Cherry identity mapping, and an empty or deleted Pi database only means every branch is
+rebuilt from Cherry messages on its next use. A multi-model question gives every further answer its
+own copy, runs them in parallel with only automatically approved read tools, and keeps the Session
+busy until all of them settle; meanwhile further input is rejected rather than queued (Pi queues
+input but not per-input configuration, and Cherry keeps no queue of its own; see
+[Agent Protocol](./agent-protocol.md)). Rebuilds
+restore the messages and history, not loaded tool instructions or Skill sections.
+
+"Branch to a new chat" copies the selected branch into a new Cherry Session with new message/turn
+identities. Checkpoints are cleared because their old turn anchors are not valid in the copy. The
+new session creates an independent Pi conversation on its first submission.
+
+Regenerating any settled answer reserves a sibling answer to the same question in the same Session
+and submits the original input on its own working copy. Retrying a failed leaf answer retains its message
+ids, issues a new turn id, and rebuilds a fresh copy. A recorded completed-tool prefix is imported as
 history and a continuation input asks for the remaining answer; historical tools are not executed
 by import.
 
@@ -197,10 +220,29 @@ copy is rejected after a crash even if retirement failed. A missing Cherry sessi
 Deletion does not undo tool side effects or erase the independent usage ledger.
 
 `retireDoc` detaches application bindings; the unreachable upstream entries stay in the Pi file.
-Deletion removes Cherry data immediately, while retired Pi bytes remain inside the app sandbox until
-a separate cleanup feature removes orphaned conversations. The file is never part of a backup, and
-switching or resetting storage deletes it with `cherry.db`. There is no raw SQL erasure, archive
-tombstone, hidden-turn document or descendant-reclamation chain.
+Deletion removes Cherry data immediately, while retired Pi bytes remain inside the app sandbox. The
+file is never part of a backup, and switching or resetting storage deletes it with `cherry.db`.
+There is no raw SQL erasure, archive tombstone, hidden-turn document or descendant-reclamation chain.
+
+## Clearing The Working File
+
+Pi Durable has no public conversation deletion. Copying only live conversations into a new file
+is not lossless through the public Storage interface either: forks and rewinds read documents at
+an entry's commit sequence, and commit history is not exposed. Reclamation therefore removes the
+whole file, which Cherry ownership makes safe.
+
+Clearing is manual only: **Settings → Data → Storage → Clear conversation runtime cache**, which
+shows the file size including SQLite sidecars. Nothing clears it automatically, and the file stays
+outside OS-purgeable cache directories: it also holds running and queued inputs, pending approvals,
+undelivered usage receipts and settled answers that Cherry has not projected yet.
+
+The Host runs the normal backup quiescence (idle native work, reconciled rows, drained usage and
+captured context checkpoints), closes admission, suspends the runtime, deletes the file and reopens
+an empty one. Busy work rejects with `BackupError('busy')` and leaves the file open. A failed
+deletion reopens the existing file. Afterwards each Session rebuilds its working copy on its next
+continuation, with the rebuild caveats above: historical reasoning is omitted and the provider
+session identity is new. Upstream schema upgrades migrate the existing file in place, so a Pi
+Durable upgrade needs no separate cleanup.
 
 ## Startup And Background Work
 
@@ -262,7 +304,8 @@ one; that is not proof that no upstream work exists. Record an exact upstream is
 here when confirmed. Upstream
 [conversation reclamation #11026](https://github.com/earendil-works/pi/issues/11026) is a different
 storage-lifetime concern and is not a replacement for queue recovery. Mobile's
-[#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219) continues to own that cleanup.
+manual whole-file clearing ([#1219](https://github.com/CherryHQ/cherry-studio-app/issues/1219)) is
+described in [Clearing The Working File](#clearing-the-working-file).
 
 ### Other Behavioral And Platform Adaptations
 

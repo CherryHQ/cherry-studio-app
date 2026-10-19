@@ -14,7 +14,12 @@ import type {
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
+import {
+  laneKey,
+  type RuntimeConversationEvent,
+  type RuntimeConversationSnapshot,
+  type RuntimeLane,
+} from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
@@ -43,13 +48,13 @@ export class PiDurableObserver {
 
   constructor(
     private readonly runtime: PiDurableRuntime,
-    private readonly sessionId: string,
+    private readonly lane: RuntimeLane,
     private readonly listener: (event: RuntimeConversationEvent) => void,
   ) {}
 
   async start(): Promise<RuntimeConversationSnapshot> {
     if (this.stream) throw new Error('The Pi observer is already attached.');
-    const stream = await this.runtime.watch(this.sessionId);
+    const stream = await this.runtime.watch(laneKey(this.lane));
     this.stream = stream;
     try {
       await this.loadSnapshot(stream.snapshot);
@@ -116,7 +121,7 @@ export class PiDurableObserver {
       this.inputs.set(record.id, { ...input, record });
       if (!queued.has(record.id))
         for (const entry of await this.runtime.turnEntries(
-          this.sessionId,
+          laneKey(this.lane),
           record,
           BACKGROUND_CONTEXT,
           through,
@@ -272,7 +277,7 @@ export class PiDurableObserver {
             // Compaction and extension tasks need not belong to the currently displayed run.
             ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
               ? this.diagnosticContext()
-              : { sessionId: this.sessionId }),
+              : { sessionId: this.lane.sessionId, slot: this.lane.slot }),
             operation: 'pi.task',
             taskId: Number(event.taskId),
             taskKind: event.kind,
@@ -322,7 +327,8 @@ export class PiDurableObserver {
   private diagnosticContext() {
     const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
     return {
-      sessionId: this.sessionId,
+      sessionId: this.lane.sessionId,
+      slot: this.lane.slot,
       requestId: active?.record.requestId,
       turnId: active?.metadata?.turnId,
       assistantMessageId: active?.metadata?.assistantMessageId,
@@ -343,7 +349,7 @@ export class PiDurableObserver {
       .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
       .sort((a, b) => a.id - b.id);
     const turn = projectPiTurn({
-      sessionId: this.sessionId,
+      lane: this.lane,
       ...input,
       entries,
       active,

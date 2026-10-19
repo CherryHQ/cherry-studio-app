@@ -1,4 +1,4 @@
-import type { CallToolResult } from '@ai-sdk/mcp';
+import type { CallToolResult } from '@modelcontextprotocol/client';
 import * as z from 'zod';
 
 import { PluginError } from '@/shared/contracts/plugins';

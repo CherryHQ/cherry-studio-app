@@ -372,6 +372,9 @@ describe('Agent tool and managed-file contracts', () => {
         updatedAt: '2026-08-31T00:00:00.000Z',
       },
       streamingMessage: assistantMessage,
+      additionalMessages: [
+        { ...assistantMessage, id: 'settled-sibling', status: 'success', siblingsGroupId: 1 },
+      ],
     } as const;
 
     expect(AgentSessionSnapshotSchema.parse(roundTrip(snapshot))).toEqual(snapshot);

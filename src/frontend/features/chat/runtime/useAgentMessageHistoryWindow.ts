@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { queryKeys } from '@/frontend/data';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
@@ -58,7 +58,14 @@ function flattenMessagePages(pages: readonly AgentSessionMessagePage[]): AgentMe
 export function useAgentMessageHistoryWindow(
   sessionId: string | undefined,
   navigation: MessageNavigation = {},
-  { settledOnly = false }: { settledOnly?: boolean } = {},
+  {
+    settledOnly = false,
+    prepareAround,
+  }: {
+    settledOnly?: boolean;
+    /** Runs once before the first window around a message is read, such as selecting its branch. */
+    prepareAround?: (messageId: string) => Promise<void>;
+  } = {},
 ): AgentMessageHistoryWindow {
   const apiClient = useApiClient();
   const { messageId, messageRequestId } = navigation;
@@ -71,6 +78,9 @@ export function useAgentMessageHistoryWindow(
     ? `${navigationKey}:${isAroundMessage ? 'message' : 'latest'}`
     : (sessionId ?? '');
   const initialPageParam: ListAgentSessionMessagesQueryParams = { aroundMessageId };
+  // Preparing changes the transcript, which refetches this window; preparing again on that
+  // refetch would loop and undo the reader's later choices.
+  const preparedNavigationKey = useRef<string>(undefined);
   const query = useInfiniteQuery({
     enabled: Boolean(sessionId),
     getNextPageParam: (
@@ -83,6 +93,10 @@ export function useAgentMessageHistoryWindow(
       page.previousCursor ? { cursor: page.previousCursor, direction: 'newer' } : undefined,
     initialPageParam,
     queryFn: async ({ pageParam, signal }) => {
+      if (pageParam.aroundMessageId && preparedNavigationKey.current !== navigationKey) {
+        preparedNavigationKey.current = navigationKey;
+        await prepareAround?.(pageParam.aroundMessageId);
+      }
       const page = await apiClient.get(
         `/agent-sessions/${sessionId ?? '__missing_session__'}/messages`,
         {

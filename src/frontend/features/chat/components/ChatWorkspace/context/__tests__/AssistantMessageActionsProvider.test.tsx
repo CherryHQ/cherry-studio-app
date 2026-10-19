@@ -54,6 +54,8 @@ const mockAlert = {
   alert: { confirm: (input: { onConfirm: () => void }) => mockAlertConfirm(input) },
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
+jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
   useToast: () => mockToast,
@@ -93,7 +95,6 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
-      retryableMessageId="assistant-1"
       onShare={mockShare}
       snapshot={{
         title: mockSourceTitle ?? '',

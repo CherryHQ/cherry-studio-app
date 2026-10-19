@@ -1,4 +1,9 @@
-import type { CallToolResult, ListToolsResult, MCPClient } from '@ai-sdk/mcp';
+import type {
+  CallToolResult,
+  Implementation,
+  ListToolsRequest,
+  ListToolsResult,
+} from '@modelcontextprotocol/client';
 
 import type {
   PluginCatalogEntry,
@@ -17,9 +22,15 @@ import type { PluginGuideDefinition } from './pluginGuide';
 export type PluginToolPolicy = Readonly<Record<string, 'read' | 'write'>>;
 
 /** The tool-only boundary consumed by plugin setup and the existing MCP runtime. */
-export interface PluginClient extends Pick<MCPClient, 'serverInfo' | 'listTools' | 'close'> {
+export interface PluginClient {
+  readonly serverInfo: Implementation;
   /** Safe partial-discovery failures for the current catalog; never raw upstream messages. */
   readonly discoveryWarnings?: readonly string[];
+  listTools(input?: {
+    params?: ListToolsRequest['params'];
+    options?: { signal?: AbortSignal };
+  }): Promise<ListToolsResult>;
+  close(): Promise<void>;
   callTool(input: {
     name: string;
     args: Record<string, unknown>;

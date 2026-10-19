@@ -14,7 +14,7 @@ type ReasoningPartProps = {
 export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
   const handleDisclosureToggle = useMessageListDisclosureToggle();
-  const isThinking = part.state === 'streaming';
+  const isThinking = isStreaming && part.state === 'streaming';
   const statusText = t(
     isThinking ? 'chat.reasoningStatus.thinking' : 'chat.reasoningStatus.thought',
   );

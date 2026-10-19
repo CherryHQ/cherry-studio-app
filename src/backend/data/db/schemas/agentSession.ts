@@ -5,7 +5,7 @@ import { agentTable } from './agent';
 import { fileFolderTable } from './fileLibrary';
 
 /**
- * Agent Session table - one long-lived linear conversation
+ * Agent Session table - one long-lived conversation whose messages form a tree
  * (docs/references/agent/agent-persistence.md).
  *
  * An optional folder binding provides a shared file workspace without a shell
@@ -45,6 +45,10 @@ export const agentSessionTable = sqliteTable(
     // circular Session ↔ Message schema dependency; fork/delete transactions
     // maintain it together with forkedFromSessionId.
     forkBoundaryMessageId: text(),
+    // Selected leaf of the message tree (Desktop's topic.activeNodeId). Display
+    // and model history walk parentId upward from it. Application-owned, like
+    // forkBoundaryMessageId; NULL only for a Session without messages.
+    activeNodeId: text(),
   },
   (t) => [
     index('agent_session_agent_id_idx').on(t.agentId),

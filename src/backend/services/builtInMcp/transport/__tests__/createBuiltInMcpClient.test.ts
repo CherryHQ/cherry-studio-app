@@ -1,4 +1,4 @@
-import * as mcp from '@ai-sdk/mcp';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
 import { trackExpoAbortSignals } from '../../authorization/__tests__/_expoAbortSignal';
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
@@ -21,10 +21,19 @@ jest.mock('@/backend/services/http', () => ({
   createFetchBridge: () => jest.fn(),
   isHttpError: () => false,
 }));
-jest.mock('@ai-sdk/mcp', () => {
-  const actual = jest.requireActual<typeof mcp>('@ai-sdk/mcp');
-  return { ...actual, createMCPClient: jest.fn(actual.createMCPClient) };
+jest.mock('@modelcontextprotocol/client', () => {
+  const actual = jest.requireActual<typeof import('@modelcontextprotocol/client')>(
+    '@modelcontextprotocol/client',
+  );
+  return {
+    ...actual,
+    StreamableHTTPClientTransport: jest.fn(
+      (...args: ConstructorParameters<typeof actual.StreamableHTTPClientTransport>) =>
+        new actual.StreamableHTTPClientTransport(...args),
+    ),
+  };
 });
+const createTransport = jest.mocked(StreamableHTTPClientTransport);
 jest.mock('../../plugins/github/githubOauth', () => ({
   ...jest.requireActual('../../plugins/github/githubOauth'),
   getGithubApplication: () => ({
@@ -109,8 +118,16 @@ function toolRequests(): RpcRequest[] {
 /** The SDK opens its optional GET stream after initialization resolves; let it land first. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 beforeEach(() => {
-  jest.mocked(mcp.createMCPClient).mockClear();
+  createTransport.mockClear();
   mockFetch.mockReset().mockImplementation(respond);
   mockGetGrant.mockReset().mockImplementation(async (pluginId: string) => ({
     id: 'grant-1',
@@ -156,7 +173,6 @@ it.each([false, true])(
         await client.listTools(discovery);
         await expect(client.callTool({ name: 'fetch-doc', args: {}, options })).resolves.toEqual({
           content: [{ type: 'text', text: JSON.stringify({ login: 'cherry' }) }],
-          isError: false,
         });
         expect(tracked.listeners.size).toBe(0);
         expect(tracked.timers.size).toBe(0);
@@ -175,7 +191,7 @@ it.each([false, true])(
       expect(tracked.listeners.size).toBe(0);
       expect(tracked.timers.size).toBe(0);
       expect(caller.signal.aborted).toBe(false);
-      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(createTransport).toHaveBeenCalledTimes(1);
       expect(
         toolRequests().filter((request) => request.params?.name === 'create-doc'),
       ).toHaveLength(1);
@@ -196,14 +212,12 @@ it.each(['complete', 'cancel'] as const)(
       new AbortController().signal,
     );
     let pending: Promise<unknown> | undefined;
+    let responseController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let requestSignal: AbortSignal | undefined;
     try {
       await client.listTools();
       await settle();
-      const connectionSignal = mockFetch.mock.calls.find(([, init]) => init?.method === 'GET')?.[1]
-        .signal as AbortSignal;
       const caller = new AbortController();
-      let responseController!: ReadableStreamDefaultController<Uint8Array>;
-      let requestSignal!: AbortSignal;
       let requestId: number | undefined;
       let received!: () => void;
       const started = new Promise<void>((resolve) => {
@@ -219,12 +233,12 @@ it.each(['complete', 'cancel'] as const)(
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
             responseController = controller;
-            // Model fetch's response-body lifetime under the request's signal.
             const onAbort = () => {
-              requestSignal.removeEventListener('abort', onAbort);
-              controller.close();
+              requestSignal!.removeEventListener('abort', onAbort);
+              responseController?.close();
+              responseController = undefined;
             };
-            requestSignal.addEventListener('abort', onAbort);
+            requestSignal!.addEventListener('abort', onAbort);
           },
         });
         received();
@@ -242,35 +256,45 @@ it.each(['complete', 'cancel'] as const)(
       await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
         'content',
       );
-      expect(requestSignal.aborted).toBe(false);
-      expect(connectionSignal.aborted).toBe(false);
+      expect(requestSignal!.aborted).toBe(false);
 
       if (ending === 'complete') {
         const result = { content: [{ type: 'text', text: 'created' }] };
-        responseController.enqueue(
+        responseController!.enqueue(
           new TextEncoder().encode(
             `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n\n`,
           ),
         );
-        await expect(pending).resolves.toEqual({ ...result, isError: false });
+        await expect(pending).resolves.toEqual(result);
         expect(caller.signal.aborted).toBe(false);
       } else {
-        const outcome = expect(pending).rejects.toThrow();
+        const outcome = expect(pending).rejects.toMatchObject({ reason: 'unknown-write' });
         caller.abort();
         await outcome;
+        await settle();
+        // Keep the legacy cancellation notification as well as cancelling this HTTP stream.
+        expect(
+          mockFetch.mock.calls.some(
+            ([, init]: [string, RequestInit]) =>
+              typeof init?.body === 'string' &&
+              JSON.parse(init.body).method === 'notifications/cancelled' &&
+              JSON.parse(init.body).params?.requestId === requestId,
+          ),
+        ).toBe(true);
       }
-      expect(requestSignal.aborted).toBe(true);
-      expect(connectionSignal.aborted).toBe(false);
+      expect(requestSignal!.aborted).toBe(true);
+      expect(responseController).toBeUndefined();
       expect(tracked.listeners.size).toBe(0);
       expect(tracked.timers.size).toBe(0);
       await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
         'content',
       );
-      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(createTransport).toHaveBeenCalledTimes(1);
       expect(
         toolRequests().filter((request) => request.params?.name === 'create-doc'),
       ).toHaveLength(1);
     } finally {
+      responseController?.close();
       await client.close();
       await pending?.catch(() => undefined);
     }
@@ -360,8 +384,8 @@ it('connects Feishu as the user without storing credentials in MCP configuration
     accountLabel: 'Feishu user',
   });
   expect(toolRequests()).toEqual([]);
-  const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
-  expect(JSON.stringify(config)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
+  const [, options] = createTransport.mock.calls[0];
+  expect(JSON.stringify(options)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
   for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
     const headers = new Headers(init.headers);
     expect(url).toBe('https://mcp.feishu.cn/mcp');
@@ -402,18 +426,18 @@ it.each([
 ] as const)(
   'connects %s through the real HTTP SDK without storing credentials in its config',
   async (pluginId, endpoint) => {
-    const create = jest.mocked(mcp.createMCPClient);
     const signal = new AbortController().signal;
     const client = await createBuiltInMcpClient(pluginId, 'grant-1', signal);
     try {
       await client.listTools({ options: { signal } });
-      const config = create.mock.calls[0][0];
-      expect(config).toMatchObject({
-        maxRetries: 0,
-        transport: { type: 'http', url: endpoint, redirect: 'error' },
+      const [url, options] = createTransport.mock.calls[0];
+      expect(String(url)).toBe(endpoint);
+      expect(options).toMatchObject({
+        requestInit: { redirect: 'error' },
+        reconnectionOptions: { maxRetries: 0 },
       });
-      expect(config.transport).not.toHaveProperty('authProvider');
-      expect(JSON.stringify(config)).not.toContain('private-key');
+      expect(options).not.toHaveProperty('authProvider');
+      expect(JSON.stringify(options)).not.toContain('private-key');
       for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
         const headers = new Headers(init.headers);
         expect(init.redirect).toBe('error');
@@ -450,21 +474,18 @@ it('rejects a retired credential reference before another HTTP request', async (
 });
 
 it('rejects unexpected tool names and targets before credential injection', async () => {
-  const create = jest.mocked(mcp.createMCPClient);
   const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
   try {
-    const transport = create.mock.calls[0][0].transport as Extract<
-      mcp.MCPClientConfig['transport'],
-      { type: 'http' | 'sse' }
-    >;
+    const [url, options] = createTransport.mock.calls[0];
+    const fetch = options!.fetch!;
     await settle();
     mockFetch.mockClear();
     mockGetGrant.mockClear();
-    await expect(transport.fetch!('https://untrusted.example/mcp', {})).rejects.toMatchObject({
+    await expect(fetch('https://untrusted.example/mcp', {})).rejects.toMatchObject({
       reason: 'request',
     });
     await expect(
-      transport.fetch!(transport.url, {
+      fetch(url, {
         method: 'POST',
         body: JSON.stringify({ method: 'tools/call', params: { name: 'delete_repository' } }),
       }),
@@ -582,6 +603,188 @@ it('does not send a request cancelled while resolving credentials', async () => 
   }
 });
 
+it('does not submit a write after cancellation releases the caller before credential storage', async () => {
+  const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
+  await client.listTools();
+  await settle();
+  const entered = deferred<void>();
+  const grant = {
+    id: 'grant-1',
+    credential: { version: 1, token: 'private-key' },
+    authMethod: 'personal_token',
+  };
+  const credential = deferred<typeof grant>();
+  mockGetGrant.mockImplementationOnce(() => {
+    entered.resolve();
+    return credential.promise;
+  });
+  const controller = new AbortController();
+  const outcome = client
+    .callTool({
+      name: 'issue_write',
+      args: { method: 'create' },
+      options: { abortSignal: controller.signal },
+    })
+    .catch((error: unknown) => error);
+  try {
+    await entered.promise;
+    controller.abort();
+    expect(await outcome).toMatchObject({ reason: 'cancelled' });
+    credential.resolve(grant);
+    await settle();
+    expect(toolRequests()).toHaveLength(0);
+    await expect(client.callTool({ name: 'get_me', args: {} })).resolves.toHaveProperty('content');
+    expect(createTransport).toHaveBeenCalledTimes(1);
+  } finally {
+    await client.close();
+    credential.resolve(grant);
+    await outcome;
+  }
+});
+
+it('does not send a write cancelled before the SDK reaches fetch', async () => {
+  const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
+  await settle();
+  const controller = new AbortController();
+  const outcome = client
+    .callTool({ name: 'issue_write', args: {}, options: { abortSignal: controller.signal } })
+    .catch((error: unknown) => error);
+  try {
+    controller.abort();
+    expect(await outcome).toMatchObject({ reason: 'cancelled' });
+    await settle();
+    expect(toolRequests()).toHaveLength(0);
+  } finally {
+    await client.close();
+  }
+});
+
+it.each(['complete', 'cancel'] as const)(
+  'tracks concurrent same-name writes independently when the later call ends first (%s)',
+  async (ending) => {
+    const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
+    await client.listTools();
+    await settle();
+    const entered = deferred<void>();
+    const grant = {
+      id: 'grant-1',
+      credential: { version: 1, token: 'private-key' },
+      authMethod: 'personal_token',
+    };
+    const credential = deferred<typeof grant>();
+    mockGetGrant.mockImplementationOnce(() => {
+      entered.resolve();
+      return credential.promise;
+    });
+    const firstAbort = new AbortController();
+    const secondAbort = new AbortController();
+    const first = client
+      .callTool({
+        name: 'issue_write',
+        args: { method: 'create', title: 'first' },
+        options: { abortSignal: firstAbort.signal },
+      })
+      .catch((error: unknown) => error);
+    await entered.promise;
+    const submitted = deferred<void>();
+    if (ending === 'cancel')
+      mockFetch.mockImplementation((url, init) => {
+        if (init?.body && JSON.parse(init.body).method === 'tools/call') {
+          submitted.resolve();
+          return new Promise<Response>((_, reject) => {
+            init.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+              once: true,
+            });
+          });
+        }
+        return respond(url, init);
+      });
+    const second = client
+      .callTool({
+        name: 'issue_write',
+        args: { method: 'create', title: 'second' },
+        options: { abortSignal: secondAbort.signal },
+      })
+      .catch((error: unknown) => error);
+    try {
+      if (ending === 'cancel') {
+        await submitted.promise;
+        secondAbort.abort();
+        expect(await second).toMatchObject({ reason: 'unknown-write' });
+      } else {
+        expect(await second).toHaveProperty('content');
+      }
+      expect(toolRequests()).toHaveLength(1);
+      expect(toolRequests()[0].params?.arguments).toMatchObject({ title: 'second' });
+      firstAbort.abort();
+      expect(await first).toMatchObject({ reason: 'cancelled' });
+      credential.resolve(grant);
+      await settle();
+      expect(toolRequests()).toHaveLength(1);
+      for (const [, init] of mockFetch.mock.calls as [string, RequestInit][]) {
+        expect(new Headers(init.headers).has('X-Cherry-Plugin-Request')).toBe(false);
+      }
+    } finally {
+      await client.close();
+      credential.resolve(grant);
+      await Promise.all([first, second]);
+    }
+  },
+);
+
+it.each(['cancel', 'connect-timeout', 'validation-timeout'] as const)(
+  'ends initialization and aborts a stalled initialized notification (%s)',
+  async (ending) => {
+    jest.useFakeTimers();
+    const entered = deferred<void>();
+    const response = deferred<Response>();
+    let requestSignal: AbortSignal | undefined;
+    mockFetch.mockImplementation((url, init) => {
+      if (init?.body && JSON.parse(init.body).method === 'notifications/initialized') {
+        requestSignal = init.signal;
+        entered.resolve();
+        return new Promise<Response>((resolve, reject) => {
+          const onAbort = () => reject(new Error('aborted'));
+          requestSignal!.addEventListener('abort', onAbort, { once: true });
+          response.promise
+            .then(resolve, reject)
+            .finally(() => requestSignal!.removeEventListener('abort', onAbort));
+        });
+      }
+      return respond(url, init);
+    });
+    const controller = new AbortController();
+    let client: Awaited<ReturnType<typeof createBuiltInMcpClient>> | undefined;
+    const connecting =
+      ending === 'validation-timeout'
+        ? validatePluginConnection('github', 'personal_token', { version: 1, token: 'private-key' })
+        : createBuiltInMcpClient('github', 'grant-1', controller.signal).then((value) => {
+            client = value;
+          });
+    let state = 'pending';
+    const outcome = connecting.then(
+      () => {
+        state = 'connected';
+      },
+      () => {
+        state = 'rejected';
+      },
+    );
+    try {
+      await entered.promise;
+      if (ending === 'cancel') controller.abort();
+      await jest.advanceTimersByTimeAsync(ending === 'cancel' ? 0 : 15_001);
+      expect(state).toBe('rejected');
+      expect(requestSignal!.aborted).toBe(true);
+    } finally {
+      response.resolve(new Response(null, { status: 202 }));
+      await outcome;
+      await client?.close();
+      jest.useRealTimers();
+    }
+  },
+);
+
 it.each([
   ['github', 'get_me', {}, 'cherry'],
   ['amap', 'maps_weather', { city: '110000' }, 'Web Service'],
@@ -655,7 +858,7 @@ it('keeps collecting pages after finding the validation tool and returns the adm
   expect(result.catalog.serverInfo).toMatchObject({ name: 'official-fixture', version: '1' });
   expect(JSON.stringify(result)).not.toContain('entered-key');
   expect(toolRequests()).toHaveLength(1);
-  expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+  expect(createTransport).toHaveBeenCalledTimes(1);
 });
 
 it.each(['duplicate', 'repeated-cursor'])(
@@ -733,7 +936,7 @@ it('keeps unregistered plugins inert without resolving grants or starting a clie
     createBuiltInMcpClient('vendor.future-plugin', 'grant', new AbortController().signal),
   ).rejects.toMatchObject({ reason: 'unavailable' });
   expect(mockGetGrant).not.toHaveBeenCalled();
-  expect(mcp.createMCPClient).not.toHaveBeenCalled();
+  expect(createTransport).not.toHaveBeenCalled();
   expect(mockFetch).not.toHaveBeenCalled();
 });
 
@@ -802,7 +1005,7 @@ it('injects the latest GitHub user credential for each independent request witho
     expect(new Headers(mockFetch.mock.calls[0][1].headers).get('Authorization')).toBe(
       'Bearer new-github-access',
     );
-    expect(JSON.stringify(jest.mocked(mcp.createMCPClient).mock.calls[0][0])).not.toMatch(
+    expect(JSON.stringify(createTransport.mock.calls[0][1])).not.toMatch(
       /github-access|github-refresh|public-client-secret/,
     );
   } finally {

@@ -247,6 +247,8 @@ export function createMcpRuntimeTools(
       inputSchema,
       providerName,
       ref,
+      // Only a bundled plugin's own policy is trusted to declare a read.
+      ...(descriptor.pluginId && effect ? { effect } : {}),
     };
   });
 }

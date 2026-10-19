@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { AppState } from 'react-native';
 
@@ -124,9 +124,6 @@ const { testFiles: storedFiles } = jest.requireMock<{ testFiles: Map<string, str
 const catalogPath = (serverId: string) => `/cache/mcp-tool-catalog/${serverId}.json`;
 
 const mockCreateMCPClient = jest.fn();
-jest.mock('@ai-sdk/mcp', () => ({
-  createMCPClient: (...args: unknown[]) => mockSdkInitContract(...args),
-}));
 
 function abortable<T>(
   promise: Promise<T>,
@@ -887,14 +884,20 @@ describe('built-in plugin identities', () => {
   ] as const)(
     'classifies %s/%s when the HTTP SDK cannot read a successful response body',
     async (builtinId, toolName, code, retryable) => {
-      const sdk = jest.requireActual<typeof import('@ai-sdk/mcp')>('@ai-sdk/mcp');
+      const { Client, StreamableHTTPClientTransport } = jest.requireActual<
+        typeof import('@modelcontextprotocol/client')
+      >('@modelcontextprotocol/client');
       let calls = 0;
-      mockCreateMCPClient.mockImplementation(() =>
-        sdk.createMCPClient({
-          maxRetries: 0,
-          transport: {
-            type: 'http',
-            url: 'https://official.example/mcp',
+      mockCreateMCPClient.mockImplementation(async () => {
+        const client = new Client({ name: 'test', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL('https://official.example/mcp'), {
+            reconnectionOptions: {
+              maxRetries: 0,
+              initialReconnectionDelay: 1000,
+              maxReconnectionDelay: 1000,
+              reconnectionDelayGrowFactor: 1,
+            },
             fetch: async (_url, init) => {
               if (init?.method === 'GET') return new Response(null, { status: 405 });
               if (init?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -929,9 +932,16 @@ describe('built-in plugin identities', () => {
                 headers: { 'content-type': 'application/json' },
               });
             },
-          },
-        }),
-      );
+          }),
+        );
+        return {
+          serverInfo: client.getServerVersion(),
+          listTools: () => client.listTools(),
+          callTool: ({ name, args }: { name: string; args: Record<string, unknown> }) =>
+            client.callTool({ name, arguments: args }),
+          close: () => client.close(),
+        };
+      });
       const server: McpServer = {
         ...makeServer(),
         origin: 'builtin',

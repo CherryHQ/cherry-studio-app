@@ -69,7 +69,6 @@
     "@ai-sdk/google-vertex": "^4.0.112",
     "@ai-sdk/groq": "^3.0.39",
     "@ai-sdk/huggingface": "^1.0.50",
-    "@ai-sdk/mcp": "1.0.71",
     "@ai-sdk/mistral": "^3.0.37",
     "@ai-sdk/openai": "^3.0.109",
     "@ai-sdk/openai-compatible": "2.0.72",

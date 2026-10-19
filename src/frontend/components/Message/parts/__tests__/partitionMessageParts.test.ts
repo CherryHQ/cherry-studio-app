@@ -229,9 +229,18 @@ describe('partitionMessageParts', () => {
     expect(body.map(({ index }) => index)).toEqual([5]);
   });
 
-  test('keeps an empty streaming text part mounted while its first content arrives', () => {
+  test('does not create an empty process disclosure before streaming text arrives', () => {
     const part: CherryMessagePart = { state: 'streaming', text: '', type: 'text' };
-    expect(partitionMessageParts([part]).process).toEqual([{ index: 0, part }]);
+    expect(partitionMessageParts([part])).toEqual({
+      boundaries: [],
+      body: [],
+      files: [],
+      process: [],
+    });
+    const content = { ...part, text: 'Answer' };
+    expect(partitionMessageParts([content]).body).toEqual([
+      { index: 0, kind: 'part', part: content },
+    ]);
   });
 
   test('folds every visible part before the final result despite interleaved sources and files', () => {

@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 
 import type { PluginClientContext } from '../../../pluginDefinition';
 import { createOfficialMcpClient } from '../../../transport/createOfficialMcpClient';

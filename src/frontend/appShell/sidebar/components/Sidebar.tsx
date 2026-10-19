@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useGlobalSearchParams, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { useMemo } from 'react';
 import { View } from 'react-native';
@@ -24,18 +24,19 @@ type SidebarProps = {
 /** Drawer sidebar whose root owns the drawer-scoped actions. */
 export function Sidebar({ navigation }: SidebarProps) {
   const router = useRouter();
-  const chatRoute = parseChatRoute(useLocalSearchParams<ChatRouteParamsInput>());
+  const { source, remoteTarget, viewMode, startRemoteChat } = useChatSource();
+  // The drawer is outside the chat screen's local route-parameter context.
+  const chatRoute = parseChatRoute(useGlobalSearchParams<ChatRouteParamsInput>());
   const agentId =
-    chatRoute.status === 'ready' && chatRoute.target.kind === 'draft'
+    source === 'local' && chatRoute.status === 'ready' && chatRoute.target.kind === 'draft'
       ? chatRoute.target.agentId
       : undefined;
   const sessionId =
-    chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
+    source === 'local' && chatRoute.status === 'ready' && chatRoute.target.kind === 'session'
       ? chatRoute.target.sessionId
       : undefined;
   const startNewChat = useStartNewChat();
   const openSessionSearch = useSessionSearch();
-  const { source, remoteTarget, viewMode, startRemoteChat } = useChatSource();
 
   const actions = useMemo<SidebarActions>(
     () => ({

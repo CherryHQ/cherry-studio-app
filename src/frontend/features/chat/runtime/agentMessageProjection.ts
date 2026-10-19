@@ -372,6 +372,19 @@ export function toAgentMessageListItem(
       ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
       : {}),
     ...(model ? { model } : {}),
+    // Only answers are switched in the transcript; a question has one answer path to follow.
+    ...(message.siblings && message.role === 'assistant'
+      ? {
+          branch: {
+            key: `answers:${message.parentId}`,
+            siblings: message.siblings.map((sibling) => ({
+              id: sibling.id,
+              status: toDisplayStatus(sibling.status),
+              modelId: sibling.modelId,
+            })),
+          },
+        }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),

@@ -17,6 +17,7 @@ import type {
   FinalizeAssistantMessageInput,
   ForkSessionInput,
   ForkSessionResult,
+  ReserveAnswerInput,
   ReserveInitialSubmissionInput,
   ReserveInitialSubmissionResult,
   ReserveRetryInput,
@@ -63,6 +64,7 @@ function createSessionView(input: {
     isNameManuallyEdited: input.isNameManuallyEdited ?? input.name !== undefined,
     forkBoundaryMessageId: null,
     forkedFromSessionId: input.forkedFromSessionId ?? null,
+    activeNodeId: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };
@@ -100,12 +102,14 @@ function reserveInTranscript(
   transcript: StoredMessage[],
   input: ReserveSubmissionInput,
 ): ReserveSubmissionResult {
-  // Synchronous section: both message writes commit together or not at all.
+  // Synchronous section: all message writes commit together or not at all.
   const timestamp = nowIso();
   const turnId = uuidv7();
   const userMessage: AgentMessageView = {
     id: input.userMessageId,
     sessionId: input.sessionId,
+    parentId: input.parentMessageId ?? null,
+    siblingsGroupId: 0,
     turnId,
     role: 'user',
     status: 'success',
@@ -116,27 +120,62 @@ function reserveInTranscript(
     createdAt: timestamp,
     updatedAt: timestamp,
   };
-  const assistantMessage: AgentMessageView = {
-    id: input.assistantMessageId,
-    sessionId: input.sessionId,
-    turnId,
-    role: 'assistant',
-    status: 'pending',
-    parts: [],
-    stats: null,
-    modelId: input.modelId,
-    inferenceSnapshot: {
-      status: 'supported',
-      snapshot: cloneJson(input.inferenceSnapshot),
-    },
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
+  const answers = [input, ...(input.additionalReplies ?? [])];
+  const siblingsGroupId =
+    answers.length > 1
+      ? Math.max(0, ...transcript.map(({ view }) => view.siblingsGroupId ?? 0)) + 1
+      : 0;
+  const [assistantMessage, ...additionalAssistantMessages] = answers.map(
+    (answer): AgentMessageView => ({
+      id: answer.assistantMessageId,
+      sessionId: input.sessionId,
+      parentId: userMessage.id,
+      siblingsGroupId,
+      turnId,
+      role: 'assistant',
+      status: 'pending',
+      parts: [],
+      stats: null,
+      modelId: answer.modelId,
+      inferenceSnapshot: { status: 'supported', snapshot: cloneJson(answer.inferenceSnapshot) },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }),
+  );
   transcript.push(
     { view: userMessage, error: null, contextCheckpoint: null },
     { view: assistantMessage, error: null, contextCheckpoint: null },
+    ...additionalAssistantMessages.map((view) => ({ view, error: null, contextCheckpoint: null })),
   );
-  return { turnId, userMessage, assistantMessage };
+  return { turnId, userMessage, assistantMessage, additionalAssistantMessages };
+}
+
+/** Ancestor chain ending at `through`, oldest first; undefined selects the active leaf. */
+function pathOf(
+  transcript: readonly StoredMessage[],
+  session: AgentSessionView | undefined,
+  through?: string | null,
+): StoredMessage[] {
+  const byId = new Map(transcript.map((stored) => [stored.view.id, stored]));
+  const path: StoredMessage[] = [];
+  let id = through === undefined ? (session?.activeNodeId ?? null) : through;
+  while (id) {
+    const stored = byId.get(id);
+    if (!stored) break;
+    path.unshift(stored);
+    id = stored.view.parentId ?? null;
+  }
+  return path;
+}
+
+/** Newest leaf below `messageId`, the message itself when it has no children; null for any. */
+function newestLeaf(transcript: readonly StoredMessage[], messageId: string | null): string | null {
+  // Creation order lists every parent before its children.
+  const below = new Set<string | null>([messageId]);
+  for (const { view } of transcript) if (below.has(view.parentId ?? null)) below.add(view.id);
+  const parents = new Set(transcript.map(({ view }) => view.parentId ?? null));
+  const leaves = transcript.filter(({ view }) => below.has(view.id) && !parents.has(view.id));
+  return leaves.at(-1)?.view.id ?? messageId;
 }
 
 /**
@@ -252,11 +291,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     }
 
     const transcript = this.messages.get(input.sessionId) ?? [];
-    const anchorIndex = transcript.findIndex((stored) => stored.view.id === input.fromMessageId);
-    if (anchorIndex < 0) {
+    const anchor = transcript.find((stored) => stored.view.id === input.fromMessageId);
+    if (!anchor) {
       return { status: 'message-not-found' };
     }
-    if (UNSETTLED_MESSAGE_STATUSES.has(transcript[anchorIndex].view.status)) {
+    if (UNSETTLED_MESSAGE_STATUSES.has(anchor.view.status)) {
       return { status: 'fork-point-unsettled' };
     }
 
@@ -270,27 +309,40 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       workspaceFolderId: source.workspaceFolderId,
     });
     const reissuedTurnIds = new Map<string, string>();
-    const copied = transcript
-      .slice(0, anchorIndex + 1)
-      .filter((stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status));
-    const forkedTranscript = copied.map<StoredMessage>((stored) => ({
-      // Runtime-private and anchored to a turn id this copy no longer
-      // carries, so the fork replays full history instead.
-      contextCheckpoint: null,
-      error: stored.error === null ? null : cloneJson(stored.error),
-      view: cloneJson({
+    const copied = pathOf(transcript, source, anchor.view.id).filter(
+      (stored) => !UNSETTLED_MESSAGE_STATUSES.has(stored.view.status),
+    );
+    let parentId: string | null = null;
+    const forkedTranscript = copied.map<StoredMessage>((stored) => {
+      const id = uuidv7();
+      const view = cloneJson({
         ...stored.view,
-        id: uuidv7(),
+        id,
+        parentId,
+        siblingsGroupId: 0,
         sessionId: session.id,
         turnId: reissueTurnId(reissuedTurnIds, stored.view.turnId),
         updatedAt: nowIso(),
-      }),
-    }));
+      });
+      parentId = id;
+      // Runtime-private and anchored to a turn id this copy no longer
+      // carries, so the fork replays full history instead.
+      return {
+        contextCheckpoint: null,
+        error: stored.error === null ? null : cloneJson(stored.error),
+        view,
+      };
+    });
     const forkBoundaryMessageId = forkedTranscript.at(-1)?.view.id;
     if (!forkBoundaryMessageId) {
       throw new Error('Fork transcript is missing its settled boundary message.');
     }
-    const forkedSession = { ...session, forkBoundaryMessageId, updatedAt: nowIso() };
+    const forkedSession = {
+      ...session,
+      forkBoundaryMessageId,
+      activeNodeId: forkBoundaryMessageId,
+      updatedAt: nowIso(),
+    };
 
     this.sessions.set(session.id, forkedSession);
     this.messages.set(session.id, forkedTranscript);
@@ -346,21 +398,39 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       input.sessionId,
       (this.runtimeRevisions.get(input.sessionId) ?? 0) + 1,
     );
-    this.messages.set(
-      input.sessionId,
-      transcript.filter((stored) => stored.view.turnId !== input.turnId),
-    );
+    this.removeTurn(input.sessionId, input.turnId);
+    const current = this.sessions.get(input.sessionId)!;
     if (
-      session.forkBoundaryMessageId !== null &&
-      deletedMessageIds.includes(session.forkBoundaryMessageId)
+      current.forkBoundaryMessageId !== null &&
+      deletedMessageIds.includes(current.forkBoundaryMessageId)
     ) {
       this.sessions.set(input.sessionId, {
-        ...session,
+        ...current,
         forkBoundaryMessageId: null,
         updatedAt: nowIso(),
       });
     }
     return { deletedMessageIds, status: 'deleted' };
+  }
+
+  /** Removes the turn after moving the questions below its answers to the turn's parent. */
+  private removeTurn(sessionId: string, turnId: string) {
+    const transcript = this.messages.get(sessionId) ?? [];
+    const removed = transcript.filter((stored) => stored.view.turnId === turnId);
+    const ids = new Set(removed.map((stored) => stored.view.id));
+    const question = removed.find((stored) => stored.view.role === 'user') ?? removed[0];
+    const parentId = question?.view.parentId ?? null;
+    const remaining = transcript.filter((stored) => !ids.has(stored.view.id));
+    for (const stored of remaining)
+      if (stored.view.parentId && ids.has(stored.view.parentId))
+        stored.view = { ...stored.view, parentId };
+    this.messages.set(sessionId, remaining);
+    const session = this.sessions.get(sessionId);
+    if (session?.activeNodeId && ids.has(session.activeNodeId))
+      this.sessions.set(sessionId, {
+        ...session,
+        activeNodeId: newestLeaf(remaining, parentId),
+      });
   }
 
   async reserveInitialSubmission(
@@ -377,14 +447,15 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     });
     const transcript: StoredMessage[] = [];
     const reserved = reserveInTranscript(transcript, {
+      ...input,
       sessionId: session.id,
-      userMessageId: input.userMessageId,
-      assistantMessageId: input.assistantMessageId,
-      userParts: input.userParts,
-      modelId: input.modelId,
-      inferenceSnapshot: input.inferenceSnapshot,
+      parentMessageId: null,
     });
-    const activeSession = { ...session, updatedAt: reserved.assistantMessage.createdAt };
+    const activeSession = {
+      ...session,
+      activeNodeId: reserved.assistantMessage.id,
+      updatedAt: reserved.assistantMessage.createdAt,
+    };
     this.sessions.set(session.id, activeSession);
     this.messages.set(session.id, transcript);
     return cloneJson({ ...reserved, session: activeSession });
@@ -395,10 +466,7 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const selected = rows.filter((row) => row.view.turnId === input.turnId);
     if (!selected.some((row) => row.view.role === 'assistant' && row.view.status === 'pending'))
       return [];
-    this.messages.set(
-      input.sessionId,
-      rows.filter((row) => row.view.turnId !== input.turnId),
-    );
+    this.removeTurn(input.sessionId, input.turnId);
     return selected.map((row) => row.view.id);
   }
 
@@ -408,34 +476,94 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
     }
     this.assertNewMessageIds(input);
-    const reserved = reserveInTranscript(transcript, input);
     const session = this.sessions.get(input.sessionId);
+    const parentMessageId =
+      input.parentMessageId === undefined ? (session?.activeNodeId ?? null) : input.parentMessageId;
+    if (parentMessageId !== null && !transcript.some(({ view }) => view.id === parentMessageId))
+      throw new Error('The submission continues from a message that no longer exists.');
+    const reserved = reserveInTranscript(transcript, { ...input, parentMessageId });
     if (session) {
       this.sessions.set(input.sessionId, {
         ...session,
+        activeNodeId: reserved.assistantMessage.id,
         updatedAt: reserved.assistantMessage.createdAt,
       });
     }
     return cloneJson(reserved);
   }
 
+  async reserveAnswer(input: ReserveAnswerInput): Promise<ReserveSubmissionResult> {
+    const transcript = this.messages.get(input.sessionId) ?? [];
+    const user = transcript.find(({ view }) => view.id === input.userMessageId);
+    if (!user || user.view.role !== 'user' || !user.view.turnId)
+      throw new Error('The question to answer no longer exists.');
+    if (
+      [...this.messages.values()].some((rows) =>
+        rows.some(({ view }) => view.id === input.assistantMessageId),
+      )
+    )
+      throw new Error('Submission message IDs must be new and distinct.');
+    const timestamp = nowIso();
+    const assistantMessage: AgentMessageView = {
+      id: input.assistantMessageId,
+      sessionId: input.sessionId,
+      parentId: user.view.id,
+      siblingsGroupId: 0,
+      turnId: user.view.turnId,
+      role: 'assistant',
+      status: 'pending',
+      parts: [],
+      stats: null,
+      modelId: input.modelId,
+      inferenceSnapshot: { status: 'supported', snapshot: cloneJson(input.inferenceSnapshot) },
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    transcript.push({ view: assistantMessage, error: null, contextCheckpoint: null });
+    const session = this.sessions.get(input.sessionId)!;
+    this.sessions.set(input.sessionId, {
+      ...session,
+      activeNodeId: assistantMessage.id,
+      updatedAt: timestamp,
+    });
+    return cloneJson({
+      turnId: user.view.turnId,
+      userMessage: user.view,
+      assistantMessage,
+      additionalAssistantMessages: [],
+    });
+  }
+
+  async selectMessage(sessionId: string, messageId: string): Promise<AgentSessionView | null> {
+    const session = this.sessions.get(sessionId);
+    const transcript = this.messages.get(sessionId) ?? [];
+    if (!session || !transcript.some(({ view }) => view.id === messageId)) return null;
+    // Already on the selected branch: keep the current leaf instead of jumping below it.
+    if (pathOf(transcript, session).some(({ view }) => view.id === messageId))
+      return cloneJson(session);
+    const selected = { ...session, activeNodeId: newestLeaf(transcript, messageId) };
+    this.sessions.set(sessionId, selected);
+    return cloneJson(selected);
+  }
+
   async reserveRetry(input: ReserveRetryInput): Promise<ReserveSubmissionResult> {
     const source = this.messages.get(input.sessionId) ?? [];
-    const assistant = source.at(-1);
-    const user = source.at(-2);
+    const assistant = source.find(({ view }) => view.id === input.assistantMessageId);
+    const user = source.find(({ view }) => view.id === assistant?.view.parentId);
     if (
       !assistant ||
-      assistant.view.id !== input.assistantMessageId ||
       assistant.view.role !== 'assistant' ||
       UNSETTLED_MESSAGE_STATUSES.has(assistant.view.status) ||
+      source.some(({ view }) => view.parentId === assistant.view.id) ||
       !user ||
       user.view.id !== input.userMessageId ||
       user.view.role !== 'user' ||
       !assistant.view.turnId ||
       user.view.turnId !== assistant.view.turnId
     ) {
-      throw new Error('The retry source is not the settled latest answer of this session.');
+      throw new Error('The retry source is not a settled leaf answer of this session.');
     }
+    const previousTurnId = assistant.view.turnId;
     const session = this.sessions.get(input.sessionId)!;
     this.runtimeRevisions.set(
       input.sessionId,
@@ -463,30 +591,77 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     };
     assistant.error = null;
     assistant.contextCheckpoint = null;
-    this.sessions.set(session.id, { ...session, updatedAt });
+    for (const stored of source)
+      if (stored.view.turnId === previousTurnId) stored.view = { ...stored.view, turnId };
+    this.sessions.set(session.id, { ...session, activeNodeId: assistant.view.id, updatedAt });
     return cloneJson({
       turnId,
       userMessage: user.view,
       assistantMessage: assistant.view,
+      additionalAssistantMessages: [],
     });
   }
 
-  async listMessages(sessionId: string): Promise<AgentMessageView[]> {
-    return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
+  async listMessages(sessionId: string, through?: string | null): Promise<AgentMessageView[]> {
+    return cloneJson(this.path(sessionId, through).map((stored) => stored.view));
   }
 
-  private assertNewMessageIds(input: ReserveSubmissionInput): void {
-    const ids = new Set([input.userMessageId, input.assistantMessageId]);
+  async getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null> {
+    const stored = (this.messages.get(sessionId) ?? []).find(({ view }) => view.id === messageId);
+    return stored ? cloneJson(stored.view) : null;
+  }
+
+  async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
+    return cloneJson(
+      (this.messages.get(sessionId) ?? [])
+        .filter(({ view }) => view.turnId === turnId)
+        .map(({ view }) => view),
+    );
+  }
+
+  async listReferencedFileEntryIds(sessionId: string, through?: string | null) {
+    return [
+      ...new Set(
+        this.path(sessionId, through).flatMap(({ view }) =>
+          view.parts.flatMap((part) => (part.type === 'file' ? [part.fileEntryId] : [])),
+        ),
+      ),
+    ].sort();
+  }
+
+  async hasChildren(sessionId: string, messageId: string): Promise<boolean> {
+    return (this.messages.get(sessionId) ?? []).some(({ view }) => view.parentId === messageId);
+  }
+
+  private path(sessionId: string, through?: string | null) {
+    return pathOf(this.messages.get(sessionId) ?? [], this.sessions.get(sessionId), through);
+  }
+
+  private assertNewMessageIds(
+    input: Pick<
+      ReserveSubmissionInput,
+      'userMessageId' | 'assistantMessageId' | 'additionalReplies'
+    >,
+  ): void {
+    const answers = [input, ...(input.additionalReplies ?? [])];
+    const ids = new Set([
+      input.userMessageId,
+      ...answers.map((answer) => answer.assistantMessageId),
+    ]);
     if (
-      ids.size !== 2 ||
+      ids.size !== answers.length + 1 ||
       [...this.messages.values()].some((messages) => messages.some(({ view }) => ids.has(view.id)))
     ) {
       throw new Error('Submission message IDs must be new and distinct.');
     }
   }
 
-  async loadRuntimeTurnContext(sessionId: string, afterTurnId: string | null) {
-    const transcript = this.messages.get(sessionId) ?? [];
+  async loadRuntimeTurnContext(
+    sessionId: string,
+    afterTurnId: string | null,
+    through?: string | null,
+  ) {
+    const transcript = this.path(sessionId, through);
     let anchorIndex = -1;
     if (afterTurnId !== null) {
       for (let index = transcript.length - 1; index >= 0; index -= 1) {
@@ -500,30 +675,22 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const history = (
       anchorFound && afterTurnId !== null ? transcript.slice(anchorIndex + 1) : transcript
     ).map((stored) => stored.view);
-    const referencedFileEntryIds = [
-      ...new Set(
-        transcript.flatMap(({ view }) =>
-          view.parts.flatMap((part) => (part.type === 'file' ? [part.fileEntryId] : [])),
-        ),
-      ),
-    ].sort();
-
     return cloneJson({
       anchorFound,
       hasMessages: transcript.length > 0,
       history,
-      referencedFileEntryIds,
+      referencedFileEntryIds: await this.listReferencedFileEntryIds(sessionId, through),
     });
   }
 
-  async loadSkillActivations(sessionId: string) {
+  async loadSkillActivations(sessionId: string, through?: string | null) {
     return cloneJson(
-      collectSkillActivations((this.messages.get(sessionId) ?? []).map(({ view }) => view)),
+      collectSkillActivations(this.path(sessionId, through).map(({ view }) => view)),
     );
   }
 
-  async loadWorkflowLoads(sessionId: string) {
-    return (this.messages.get(sessionId) ?? []).flatMap(({ view }) =>
+  async loadWorkflowLoads(sessionId: string, through?: string | null) {
+    return this.path(sessionId, through).flatMap(({ view }) =>
       view.role === 'assistant'
         ? view.parts.flatMap((part) => {
             if (
@@ -547,8 +714,12 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     );
   }
 
-  async getLatestContextCheckpoint(sessionId: string, excludeAssistantMessageId?: string) {
-    const transcript = this.messages.get(sessionId) ?? [];
+  async getLatestContextCheckpoint(
+    sessionId: string,
+    excludeAssistantMessageId?: string,
+    through?: string | null,
+  ) {
+    const transcript = this.path(sessionId, through);
     for (let index = transcript.length - 1; index >= 0; index -= 1) {
       const stored = transcript[index];
       if (stored?.view.id === excludeAssistantMessageId) continue;
