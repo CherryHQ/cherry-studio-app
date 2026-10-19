@@ -632,6 +632,7 @@ type AgentSessionSnapshot = {
   activeUserMessage: AgentMessageView | null
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
+  additionalMessages?: AgentMessageView[] // includes settled siblings of active answers
   pendingApprovals: AgentApprovalView[]
   pendingQuestion: AgentPendingQuestion | null
   contextStatus?: 'compacting' | 'compaction-failed' | null
@@ -646,7 +647,8 @@ Session can render its first exchange immediately without waiting behind the his
 `queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
 membership. These inputs appear above the composer and do not create transcript rows in the live
 projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
-and render-window selection; observation supplies the active pair until it settles. `cancelQueuedInput`
+and render-window selection; observation supplies each active turn's question and all its answers,
+including completed siblings, until the turn settles. `cancelQueuedInput`
 atomically withdraws only waiting work: `already-started` preserves the active run and asks the
 client to reconcile observation. Withdrawal cleans up only its own reservation, so another input
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
@@ -823,7 +825,10 @@ question has, and the questions an answer has, are alternatives the client can s
   search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
   read. Approval-gated tools stay out even when the Agent approves automatically, as do
   `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
-  stays busy until every answer settles, and every submission meanwhile is rejected with
+  stays busy until every answer settles; a selected completed answer's send control is disabled
+  while another answer runs. Observation includes the completed siblings of active answers because
+  settled history omits their shared turn until all answers finish. Every parallel submission
+  meanwhile is rejected with
   `SESSION_BUSY`. Only a follow-up to the newest answer of a running single-answer copy can queue,
   in that copy's native Pi inbox. Pi queues input, not configuration: a follow-up to a parallel
   answer needs a different model and tool set, and changing a copy's configuration applies from its

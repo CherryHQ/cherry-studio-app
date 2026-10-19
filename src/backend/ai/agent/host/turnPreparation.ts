@@ -449,6 +449,8 @@ export async function prepareResolvedTurn(
     signal,
   });
   if (imageGeneration) {
+    if (scope.readOnlyTools)
+      fail('CAPABILITY_UNSUPPORTED', 'Multi-model replies do not support image generation.');
     if (agent.mode === 'minimal') {
       fail('CAPABILITY_UNSUPPORTED', 'Minimal mode requires a chat model.');
     }

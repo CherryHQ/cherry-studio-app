@@ -233,6 +233,39 @@ describe('AgentSessionChatClient', () => {
     client.dispose();
   });
 
+  test('reobserving restores a completed selected answer beside its running sibling', async () => {
+    const first = { ...assistantMessage(), parentId: userMessage().id };
+    const second = { ...first, id: 'assistant-2' };
+    let current: AgentSessionSnapshot = {
+      ...snapshot(),
+      session: { ...snapshot().session, activeNodeId: first.id },
+      activeUserMessage: userMessage(),
+      streamingMessage: first,
+      additionalMessages: [second],
+    };
+    const client = new AgentSessionChatClient(
+      protocolWithObservation(async () => ({ snapshot: current, unsubscribe() {} })),
+    );
+    const release = client.subscribe('session-1', () => {});
+    try {
+      await client.observe('session-1');
+      client.pauseObservedSessions();
+      const completed: AgentMessageView = {
+        ...first,
+        status: 'success',
+        parts: [{ id: 'text-1', type: 'text', text: 'Completed answer', state: 'done' }],
+      };
+      current = { ...current, streamingMessage: second, additionalMessages: [completed] };
+      await client.resumeObservedSessions();
+      expect(client.getState('session-1').snapshot?.session.activeNodeId).toBe(first.id);
+      expect(client.getState('session-1').liveMessages).toEqual([userMessage(), completed, second]);
+      expect(isAgentSessionBusy(client.getState('session-1'))).toBe(true);
+    } finally {
+      release();
+      client.dispose();
+    }
+  });
+
   test('pauses live observation in background and restores missed text from the next snapshot', async () => {
     let publish!: (event: AgentEvent) => void;
     let snapshotText = 'before';

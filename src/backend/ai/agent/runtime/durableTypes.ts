@@ -253,6 +253,8 @@ export interface DurableAgentRuntime {
   forkConversation(
     seed: Omit<RuntimeConversationSeed, 'history'> & {
       from: { lane: RuntimeLane; boundary: string };
+      /** Replaces source grants with the selected prefix and current input's grants. */
+      referencedFileEntryIds: readonly string[];
     },
     signal?: AbortSignal,
   ): Promise<void>;

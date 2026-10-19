@@ -112,8 +112,10 @@ export function withLiveSiblings(
         id: answer.id,
         modelId: answer.modelId,
         status: answer.status,
-        // Live answers sharing a question were reserved as one multi-model group.
-        siblingsGroupId: siblings.get(answer.id)?.siblingsGroupId ?? (group.length > 1 ? 1 : 0),
+        siblingsGroupId:
+          answer.siblingsGroupId ??
+          siblings.get(answer.id)?.siblingsGroupId ??
+          (group.length > 1 ? 1 : 0),
       } satisfies AgentMessageSibling);
     if (siblings.size < 2) return message;
     changed = true;

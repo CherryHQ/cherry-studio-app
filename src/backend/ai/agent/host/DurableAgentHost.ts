@@ -551,9 +551,9 @@ export class DurableAgentHost implements AgentProtocol {
       : prepareDurableTurn(
           this.preparation,
           input,
-          await this.conversations.resourceFileEntryIds(
-            choice.mode === 'fork' ? choice.from.lane : choice.lane,
-          ),
+          choice.mode === 'fork'
+            ? await this.store.listReferencedFileEntryIds(input.sessionId, scope.through)
+            : await this.conversations.resourceFileEntryIds(choice.lane),
           signal,
           scope,
         );
@@ -873,7 +873,13 @@ export class DurableAgentHost implements AgentProtocol {
       );
     } else if (target.mode === 'fork') {
       await this.conversations.forkConversation(
-        { lane: target.lane, revision, configuration, from: target.from },
+        {
+          lane: target.lane,
+          revision,
+          configuration,
+          from: target.from,
+          referencedFileEntryIds: [...plan.resources.fileEntryIds],
+        },
         signal,
       );
     } else {
@@ -1261,7 +1267,7 @@ export class DurableAgentHost implements AgentProtocol {
       queuedInputs: this.queuedInputs(states.flatMap((candidate) => candidate.queue)),
       activeUserMessage: view?.user ?? null,
       streamingMessage: view?.assistant ?? null,
-      additionalStreamingMessages: running
+      additionalMessages: running
         .slice(1)
         .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
       hasHistoryBeforeActiveTurn: state?.active
@@ -1276,13 +1282,34 @@ export class DurableAgentHost implements AgentProtocol {
     const listeners = this.listeners.get(sessionId) ?? new Set();
     this.listeners.set(sessionId, listeners);
     listeners.add(listener);
-    return {
-      snapshot,
-      unsubscribe: () => {
-        listeners.delete(listener);
-        if (!listeners.size) this.listeners.delete(sessionId);
-      },
+    const unsubscribe = () => {
+      listeners.delete(listener);
+      if (!listeners.size) this.listeners.delete(sessionId);
     };
+    try {
+      // Settled history omits an entire turn while any answer runs. Restore its completed
+      // siblings too. Subscribe before the read so terminal events during it cannot be lost.
+      const turnIds = new Set(running.map((candidate) => candidate.active!.identity.turnId));
+      const rows = await Promise.all(
+        [...turnIds].map((turnId) => this.store.listTurnMessages(sessionId, turnId)),
+      );
+      const messages = new Map(rows.flat().map((message) => [message.id, message]));
+      for (const message of snapshot.additionalMessages ?? [])
+        messages.set(message.id, { ...messages.get(message.id), ...message });
+      if (snapshot.activeUserMessage) messages.delete(snapshot.activeUserMessage.id);
+      if (snapshot.streamingMessage) {
+        snapshot.streamingMessage = {
+          ...messages.get(snapshot.streamingMessage.id),
+          ...snapshot.streamingMessage,
+        };
+        messages.delete(snapshot.streamingMessage.id);
+      }
+      snapshot.additionalMessages = [...messages.values()];
+      return { snapshot, unsubscribe };
+    } catch (error) {
+      unsubscribe();
+      throw error;
+    }
   }
 
   private get preparation(): TurnPreparationDependencies {

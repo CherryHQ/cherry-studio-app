@@ -60,6 +60,22 @@ describe('message tree view', () => {
     expect(withLiveSiblings(persisted, [question, first], new Map())).toBe(persisted);
   });
 
+  test('restored answers retain their persisted groups without a previously read history page', () => {
+    const question = message('q2', 'a1', 'user');
+    const first = { ...message('a2', 'q2'), siblingsGroupId: 3 };
+    const parallel = { ...message('b2', 'q2'), siblingsGroupId: 3 };
+    const retry = { ...message('retry', 'q2', 'assistant', 'streaming'), siblingsGroupId: 0 };
+    const live = [question, first, parallel, retry];
+    const shown = selectedLiveMessages(live, persisted, first.id);
+    expect(shown).toEqual([question, first]);
+    const [, answer] = withLiveSiblings(shown, live, new Map());
+    expect(answer?.siblings?.map(({ id, siblingsGroupId }) => ({ id, siblingsGroupId }))).toEqual([
+      { id: 'a2', siblingsGroupId: 3 },
+      { id: 'b2', siblingsGroupId: 3 },
+      { id: 'retry', siblingsGroupId: 0 },
+    ]);
+  });
+
   test('shows one answer per question until the transcript is read again', () => {
     // History still holds A1 and its follow-up; the live B1 was just selected.
     const followUp = message('q2', 'a1', 'user');

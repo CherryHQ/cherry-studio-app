@@ -76,7 +76,16 @@ const TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
  * treated as busy rather than silently unlocking the composer and retry action.
  */
 export function isAgentSessionBusy(state: AgentSessionChatState): boolean {
-  return Boolean(state.isSubmitting || state.queuedInputs.length || isAgentSessionExecuting(state));
+  return Boolean(
+    state.isSubmitting ||
+    state.queuedInputs.length ||
+    isAgentSessionExecuting(state) ||
+    state.liveMessages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message.status === 'pending' || message.status === 'streaming'),
+    ),
+  );
 }
 
 export function isAgentSessionExecuting(state: AgentSessionChatState): boolean {
@@ -556,8 +565,11 @@ export class AgentSessionChatClient {
     }
     for (const message of [
       ...(snapshot.streamingMessage ? [snapshot.streamingMessage] : []),
-      ...(snapshot.additionalStreamingMessages ?? []),
-    ]) {
+      ...(snapshot.additionalMessages ?? []),
+    ].sort(
+      (left, right) =>
+        Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id),
+    )) {
       entry.liveMessages.set(message.id, message);
       this.installToolInputPreviews(message);
     }

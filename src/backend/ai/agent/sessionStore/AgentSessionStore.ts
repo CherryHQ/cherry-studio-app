@@ -242,6 +242,12 @@ export interface AgentSessionStore {
 
   getMessage(sessionId: string, messageId: string): Promise<AgentMessageView | null>;
 
+  /** The question and all its answers, including settled siblings of an active answer. */
+  listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]>;
+
+  /** Managed-file grants on the ancestor chain, without loading message bodies. */
+  listReferencedFileEntryIds(sessionId: string, through?: string | null): Promise<string[]>;
+
   /** Whether any message continues from `messageId`. */
   hasChildren(sessionId: string, messageId: string): Promise<boolean>;
 

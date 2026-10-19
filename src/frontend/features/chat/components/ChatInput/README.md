@@ -26,7 +26,7 @@ exported through `index.ts` and receives the current Agent/Session and the conte
 - While a submission or the selected branch's answer is active, the send control becomes stop.
   Before the Host reserves the turn it calls `cancelSubmission` and the draft returns to the
   composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
-  a completed answer restores send even while another model continues in the background.
+  a completed answer restores the send control; it stays disabled until the other answers finish.
   A queued follow-up keeps its running ancestor as the stop target.
 - When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
   action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the

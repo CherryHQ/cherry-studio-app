@@ -611,6 +611,24 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     return stored ? cloneJson(stored.view) : null;
   }
 
+  async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
+    return cloneJson(
+      (this.messages.get(sessionId) ?? [])
+        .filter(({ view }) => view.turnId === turnId)
+        .map(({ view }) => view),
+    );
+  }
+
+  async listReferencedFileEntryIds(sessionId: string, through?: string | null) {
+    return [
+      ...new Set(
+        this.path(sessionId, through).flatMap(({ view }) =>
+          view.parts.flatMap((part) => (part.type === 'file' ? [part.fileEntryId] : [])),
+        ),
+      ),
+    ].sort();
+  }
+
   async hasChildren(sessionId: string, messageId: string): Promise<boolean> {
     return (this.messages.get(sessionId) ?? []).some(({ view }) => view.parentId === messageId);
   }
@@ -657,19 +675,11 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
     const history = (
       anchorFound && afterTurnId !== null ? transcript.slice(anchorIndex + 1) : transcript
     ).map((stored) => stored.view);
-    const referencedFileEntryIds = [
-      ...new Set(
-        transcript.flatMap(({ view }) =>
-          view.parts.flatMap((part) => (part.type === 'file' ? [part.fileEntryId] : [])),
-        ),
-      ),
-    ].sort();
-
     return cloneJson({
       anchorFound,
       hasMessages: transcript.length > 0,
       history,
-      referencedFileEntryIds,
+      referencedFileEntryIds: await this.listReferencedFileEntryIds(sessionId, through),
     });
   }
 

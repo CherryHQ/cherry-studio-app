@@ -443,6 +443,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         configuration: detachedJson(configuration),
         initialInstructions: configuration.initialInstructions,
         at: parseBoundary(seed.from.boundary),
+        resourceFileEntryIds: seed.referencedFileEntryIds,
       }),
     );
     await this.bindProvider(seed.lane);

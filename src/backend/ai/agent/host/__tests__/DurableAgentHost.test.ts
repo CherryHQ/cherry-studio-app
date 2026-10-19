@@ -1315,6 +1315,141 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       copy.turns.filter((turn) => turn.status === 'running'),
     );
 
+  test.each([false, true])(
+    'observation restores settled siblings and keeps events during its read (settle during read: %s)',
+    async (settleDuringRead) => {
+      const state = fixture();
+      await state.reserve('completed');
+      await state.host.initialize();
+      try {
+        await askTwoModels(state);
+        const [first, second] = runningTurns(state);
+        state.emit({
+          ...first!,
+          status: 'completed',
+          parts: [{ id: 'answer', type: 'text', text: 'First answer', state: 'done' }],
+        });
+        await settle();
+        if (settleDuringRead) {
+          const read = state.store.listTurnMessages.bind(state.store);
+          jest.spyOn(state.store, 'listTurnMessages').mockImplementationOnce(async (...args) => {
+            state.emit({ ...second!, status: 'completed' });
+            await settle();
+            return read(...args);
+          });
+        }
+        const events: AgentEvent[] = [];
+        const observation = await state.host.observeSession(state.sessionId, (event) =>
+          events.push(event),
+        );
+        try {
+          expect(observation.snapshot.session.activeNodeId).toBe(first!.assistantMessageId);
+          expect(observation.snapshot.streamingMessage?.id).toBe(second!.assistantMessageId);
+          expect(observation.snapshot.additionalMessages).toEqual([
+            expect.objectContaining({
+              id: first!.assistantMessageId,
+              status: 'success',
+              parts: [expect.objectContaining({ text: 'First answer' })],
+            }),
+          ]);
+          if (settleDuringRead)
+            expect(events).toContainEqual(
+              expect.objectContaining({
+                type: 'message.finalized',
+                message: expect.objectContaining({
+                  id: second!.assistantMessageId,
+                  status: 'success',
+                }),
+              }),
+            );
+        } finally {
+          observation.unsubscribe();
+        }
+      } finally {
+        await state.host.close();
+      }
+    },
+  );
+
+  test('rejects an implicit parallel image model before reserving messages or executing it', async () => {
+    const execute = jest.fn(async () => []);
+    const state = fixture({
+      imageGeneration: {
+        prepare: async ({ model }) =>
+          model.modelId === 'second-model'
+            ? { settings: { mode: 'generate', paramValues: {} }, execute }
+            : null,
+      },
+    });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const before = await state.store.listMessages(state.sessionId);
+      await expect(askTwoModels(state)).rejects.toMatchObject({
+        view: { code: 'CAPABILITY_UNSUPPORTED' },
+      });
+      expect(await state.store.listMessages(state.sessionId)).toEqual(before);
+      expect(state.conversations.submit).not.toHaveBeenCalled();
+      expect(execute).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('regenerating an earlier answer prepares and seeds only the fork prefix file grants', async () => {
+    const earlierFile = uuid();
+    const laterFile = uuid();
+    const scopes: string[][] = [];
+    const state = fixture({
+      tools: {
+        getTools: async ({ resources }) => {
+          scopes.push([...resources.fileEntryIds]);
+          return [];
+        },
+      },
+    });
+    await state.reserve('completed', [
+      {
+        id: 'file',
+        type: 'file',
+        fileEntryId: earlierFile,
+        mediaType: 'text/plain',
+        purpose: 'input-attachment',
+      },
+    ]);
+    await state.host.initialize();
+    try {
+      const answers: RuntimeDurableTurn[] = [];
+      for (const text of ['Q2', 'Q3']) {
+        await state.host.submitMessage({
+          sessionId: state.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text }],
+        });
+        const [turn] = runningTurns(state);
+        state.emit({ ...turn!, status: 'completed', answerBoundary: `pi:${answers.length + 3}` });
+        answers.push(turn!);
+        await state.host.quiesce();
+      }
+      // The source execution has since gained another file, beyond the requested prefix.
+      jest
+        .spyOn(state.conversations, 'resourceFileEntryIds')
+        .mockResolvedValue([earlierFile, laterFile]);
+      const fork = jest.spyOn(state.conversations, 'forkConversation');
+      scopes.length = 0;
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: answers[0]!.assistantMessageId,
+      });
+      expect(scopes).toEqual([[earlierFile]]);
+      expect(fork.mock.calls[0]?.[0].referencedFileEntryIds).toEqual([earlierFile]);
+      expect(fork.mock.calls[0]?.[0].from.boundary).toBe('pi:2');
+    } finally {
+      await state.host.close();
+    }
+  });
+
   test('parallel answers publish an unchanged running turn and their shared question once', async () => {
     const state = fixture();
     await state.reserve('completed');

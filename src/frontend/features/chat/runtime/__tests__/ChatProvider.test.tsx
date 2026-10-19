@@ -223,6 +223,13 @@ describe('ChatProvider Draft handoff', () => {
       renderer!.update(<Harness sessionId="session-1" />);
     });
     expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBe(false);
+    // The most recent turn event may describe A completing while B still runs.
+    mockChatState.activeTurn = { ...mockChatState.activeTurn!, status: 'completed' };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().canSend).toBe(false);
     mockCancelTurn.mockClear();
     await act(async () => {
       await cancel();
@@ -241,6 +248,17 @@ describe('ChatProvider Draft handoff', () => {
       await cancel();
     });
     expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.liveMessages = mockChatState.liveMessages.map((message) => ({
+      ...message,
+      status: 'success',
+    }));
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
 
     const queuedUser = {
       ...selected,

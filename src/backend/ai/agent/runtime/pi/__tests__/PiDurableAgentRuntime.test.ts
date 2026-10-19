@@ -990,7 +990,12 @@ describe('Persistent Agent facade', () => {
         },
       });
       expect(boundary).toMatch(/^pi:\d+$/);
-      await runtime.forkConversation({ ...seed, lane: fork, from: { lane, boundary: boundary! } });
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: ['retained-file'],
+      });
       expect(await runtime.resourceFileEntryIds(fork)).toEqual(['retained-file']);
       const complete = deferred<void>();
       const observation = await runtime.observe(fork, (event) => {

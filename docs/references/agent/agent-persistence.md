@@ -338,7 +338,8 @@ projection:
   modification timestamps.
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
-  cascading the source delete to its messages.
+  clearing the source messages' parent edges and cascading the source delete to its messages.
+  Clearing those edges avoids SQLite's recursive-trigger depth limit for long histories.
 - Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without

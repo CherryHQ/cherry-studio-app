@@ -1366,6 +1366,58 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     harness.cleanup();
   });
 
+  test('deletes a deep message chain and its search entries while preserving an independent fork', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const session = await harness.createEmptySession({ agentId: await harness.makeAgentId() });
+    const first = await settleTurn(store, session.id, 'Retained prefix');
+    const fork = await store.forkSession({
+      sessionId: session.id,
+      fromMessageId: first.assistantMessage.id,
+    });
+    if (fork.status !== 'forked') throw new Error('Expected a fork.');
+    const insert = raw.prepare(`INSERT INTO agent_session_message
+      (id, session_id, parent_id, turn_id, role, data, status, searchable_text, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'success', 'deepdelete', ?, ?)`);
+    let parentId = first.assistantMessage.id;
+    for (let index = 0; index < 1100; index++) {
+      const id = uuidv7();
+      insert.run(
+        id,
+        session.id,
+        parentId,
+        `deep-turn-${Math.floor(index / 2)}`,
+        index % 2 === 0 ? 'user' : 'assistant',
+        JSON.stringify({
+          parts: [{ id: 'text', type: 'text', text: 'deepdelete', state: 'done' }],
+        }),
+        index,
+        index,
+      );
+      parentId = id;
+    }
+    const matches = () =>
+      raw
+        .prepare(
+          "SELECT count(*) AS count FROM agent_session_message_fts WHERE agent_session_message_fts MATCH 'deepdelete'",
+        )
+        .get();
+    expect(matches()).toEqual({ count: 1100 });
+
+    expect(await store.deleteSession(session.id)).toBe(true);
+    expect(await store.getSession(session.id)).toBeNull();
+    expect(matches()).toEqual({ count: 0 });
+    expect(await store.getSession(fork.session.id)).toMatchObject({
+      forkedFromSessionId: null,
+      forkBoundaryMessageId: null,
+    });
+    expect(await store.listMessages(fork.session.id)).toHaveLength(2);
+    expect(raw.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual({
+      count: 2,
+    });
+    expect(raw.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+  });
+
   test('keeps Runtime replay strict when a stored part is unsupported', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');
@@ -2114,6 +2166,13 @@ describe.each([
     expect(await activeNode()).toBe(reserved.assistantMessage.id);
     expect(await ids()).toEqual([reserved.userMessage.id, reserved.assistantMessage.id]);
     expect(await ids(second!.id)).toEqual([reserved.userMessage.id, second!.id]);
+    await settle(reserved.assistantMessage.id);
+    expect(await store.listTurnMessages(sessionId, reserved.turnId)).toEqual([
+      expect.objectContaining({ id: reserved.userMessage.id, status: 'success' }),
+      expect.objectContaining({ id: reserved.assistantMessage.id, status: 'success' }),
+      expect.objectContaining({ id: second!.id, status: 'pending' }),
+    ]);
+    expect(await store.listTurnMessages(uuidv7(), reserved.turnId)).toEqual([]);
   });
 
   test('switching answers restores each answer’s own continuation', async () => {
@@ -2242,5 +2301,39 @@ describe.each([
     expect(await store.getMessage(sessionId, second.userMessage.id)).toMatchObject({
       parentId: first.assistantMessage.id,
     });
+  });
+
+  test('file grants follow the requested prefix instead of later attachments', async () => {
+    const turns = [];
+    for (const fileEntryId of [INPUT_FILE_ID, ARTIFACT_FILE_ID]) {
+      const reserved = await store.reserveSubmission({
+        ...messageIds(),
+        ...RESERVATION_FACTS,
+        sessionId,
+        userParts: [
+          {
+            id: 'file',
+            type: 'file',
+            fileEntryId,
+            mediaType: 'text/plain',
+            purpose: 'input-attachment',
+          },
+        ],
+      });
+      await settle(reserved.assistantMessage.id);
+      turns.push(reserved);
+    }
+    expect(
+      await store.listReferencedFileEntryIds(sessionId, turns[0]!.assistantMessage.id),
+    ).toEqual([INPUT_FILE_ID]);
+    expect(await store.listReferencedFileEntryIds(sessionId)).toEqual([
+      INPUT_FILE_ID,
+      ARTIFACT_FILE_ID,
+    ]);
+    expect(await store.listReferencedFileEntryIds(sessionId, null)).toEqual([]);
+    expect(
+      (await store.loadRuntimeTurnContext(sessionId, null, turns[0]!.assistantMessage.id))
+        .referencedFileEntryIds,
+    ).toEqual([INPUT_FILE_ID]);
   });
 });

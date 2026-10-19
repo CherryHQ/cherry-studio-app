@@ -193,7 +193,7 @@ export class PiDurableRuntime {
    */
   async forkConversation(
     source: string,
-    seed: PiConversationSeed & { at: EntryId },
+    seed: PiConversationSeed & { at: EntryId; resourceFileEntryIds: readonly string[] },
     context: Context = BACKGROUND_CONTEXT,
   ): Promise<Conversation> {
     const parent = await this.requireSession(source, context);
@@ -211,9 +211,8 @@ export class PiDurableRuntime {
       const provider = await tx.doc(ProviderDoc, conversation.id);
       await tx.doc(RequestOptions, provider.sessionId, jsonOptions(seed.options ?? {}));
       const resources = await tx.doc(ResourceScope, conversation.id);
-      resources.fileEntryIds = [
-        ...new Set([...resources.fileEntryIds, ...(seed.resourceFileEntryIds ?? [])]),
-      ];
+      // The Host supplies the fork prefix's grants; later source inputs must not survive.
+      resources.fileEntryIds = [...new Set(seed.resourceFileEntryIds)];
       binding.conversationId = conversation.id;
       return conversation.id;
     }, context);

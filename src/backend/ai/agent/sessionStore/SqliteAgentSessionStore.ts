@@ -168,7 +168,12 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionTable)
         .set({ forkBoundaryMessageId: null, forkedFromSessionId: null })
         .where(eq(agentSessionTable.forkedFromSessionId, sessionId));
-      // Messages go with the session via the ON DELETE CASCADE foreign key.
+      // Break the tree first: a deep self-FK cascade can exceed SQLite's trigger depth.
+      await tx
+        .update(agentSessionMessageTable)
+        .set({ parentId: null })
+        .where(eq(agentSessionMessageTable.sessionId, sessionId));
+      // The session FK still removes every message and its FTS entry.
       const deleted = await tx
         .delete(agentSessionTable)
         .where(eq(agentSessionTable.id, sessionId))
@@ -719,6 +724,21 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     return row ? toAgentMessageView(row) : null;
   }
 
+  async listTurnMessages(sessionId: string, turnId: string): Promise<AgentMessageView[]> {
+    const rows = await this.dbService
+      .getDb()
+      .select(agentMessageViewColumns)
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          eq(agentSessionMessageTable.turnId, turnId),
+        ),
+      )
+      .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
+    return rows.map(toAgentMessageView);
+  }
+
   async hasChildren(sessionId: string, messageId: string): Promise<boolean> {
     const [child] = await this.dbService
       .getDb()
@@ -778,24 +798,29 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       sql`SELECT id FROM agent_session_message AS message
         WHERE message.session_id = ${sessionId} AND ${onPath} LIMIT 1`,
     );
-    const fileRows = await readSqliteRows<{ fileEntryId: unknown }>(
-      sqlite,
-      sql`
-        SELECT DISTINCT json_extract(part.value, '$.fileEntryId') AS "fileEntryId"
-        FROM agent_session_message AS message,
-             json_each(json_extract(message.data, '$.parts')) AS part
-        WHERE message.session_id = ${sessionId} AND ${onPath}
-          AND json_extract(part.value, '$.type') = 'file'
-      `,
-    );
     return {
       anchorFound,
       hasMessages: messageRows.length > 0,
       history: historyRows.map((row) => toAgentMessageView(fromAgentMessageViewSqlRow(row))),
-      referencedFileEntryIds: fileRows
-        .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
-        .sort(),
+      referencedFileEntryIds: await this.listReferencedFileEntryIds(sessionId, through),
     };
+  }
+
+  async listReferencedFileEntryIds(sessionId: string, through?: string | null) {
+    const fileRows = await readSqliteRows<{ fileEntryId: unknown }>(
+      this.dbService.getSqlite(),
+      sql`
+        SELECT DISTINCT json_extract(part.value, '$.fileEntryId') AS "fileEntryId"
+        FROM agent_session_message AS message,
+             json_each(json_extract(message.data, '$.parts')) AS part
+        WHERE message.session_id = ${sessionId}
+          AND message.id IN (${messagePathIdsSql(sessionId, through)})
+          AND json_extract(part.value, '$.type') = 'file'
+      `,
+    );
+    return fileRows
+      .flatMap(({ fileEntryId }) => (typeof fileEntryId === 'string' ? [fileEntryId] : []))
+      .sort();
   }
 
   /** Receipts across the history, without materializing its messages. */

@@ -283,6 +283,20 @@ describe('turn preparation', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  test('parallel replies reject an implicit image plan before executing it', async () => {
+    const harness = createHarness();
+    const execute = jest.fn(async () => []);
+    harness.dependencies.imageGeneration = {
+      prepare: async () => ({ settings: { mode: 'generate', paramValues: {} }, execute }),
+    };
+    await expect(
+      prepareDurableTurn(harness.dependencies, textInput(), [], new AbortController().signal, {
+        readOnlyTools: true,
+      }),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   test.each(['existing', 'initial'] as const)(
     'freezes the parser before %s preparation yields and shares it with read_file',
     async (kind) => {
