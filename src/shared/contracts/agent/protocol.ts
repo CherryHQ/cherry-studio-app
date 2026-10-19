@@ -32,6 +32,15 @@ export interface AgentProtocol {
   /** Status-only observation: does not load or subscribe to the transcript. */
   subscribeSessionStatus(sessionId: string, listener: () => void): () => void;
 
+  /** Bytes held by disposable execution copies; transcripts and attachments are excluded. */
+  getWorkingStorageSize(): Promise<number>;
+  /**
+   * Removes every execution copy, including those of deleted Sessions and replaced answers.
+   * Rejects with `BackupError('busy')` while any work runs; a Session continued afterwards
+   * rebuilds its copy from the transcript.
+   */
+  clearWorkingStorage(): Promise<void>;
+
   renameSession(input: { sessionId: string; name: string }): Promise<AgentSessionView>;
   deleteSession(input: { sessionId: string }): Promise<void>;
 

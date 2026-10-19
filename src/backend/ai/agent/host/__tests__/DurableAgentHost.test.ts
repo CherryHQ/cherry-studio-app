@@ -214,6 +214,8 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     }),
     durableStorage: {
       open: async () => ({}) as never,
+      size: () => 0,
+      discard: () => {},
       notifyTranscript: () => {
         steps.push('persisted');
       },
@@ -770,6 +772,8 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         open: async () => {
           throw Object.assign(new Error('private database path'), { code: 'SQLITE_CANTOPEN' });
         },
+        size: () => 0,
+        discard: () => {},
         notifyTranscript: () => {},
       },
     });
@@ -829,6 +833,59 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       ).rejects.toThrow('watch failed');
       expect(state.conversations.submit).not.toHaveBeenCalled();
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('clearing working storage deletes the closed file before reopening it', async () => {
+    const discard = jest.fn(() => {
+      state.steps.push('discard');
+    });
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript: () => {},
+      },
+    });
+    await state.host.initialize();
+    try {
+      state.steps.length = 0;
+      await state.host.clearWorkingStorage();
+      const fileSteps = () => state.steps.filter((step) => step !== 'usage');
+      expect(fileSteps()).toEqual(['close', 'discard', 'open', 'resume']);
+      expect(state.host.isReady).toBe(true);
+
+      state.steps.length = 0;
+      discard.mockImplementationOnce(() => {
+        throw new Error('locked');
+      });
+      await expect(state.host.clearWorkingStorage()).rejects.toThrow('locked');
+      expect(fileSteps()).toEqual(['close', 'open', 'resume']);
+      expect(state.host.isReady).toBe(true);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('clearing working storage leaves the file open while native work runs', async () => {
+    const discard = jest.fn();
+    const state = fixture({
+      durableStorage: {
+        open: async () => ({}) as never,
+        size: () => 0,
+        discard,
+        notifyTranscript: () => {},
+      },
+    });
+    jest.spyOn(state.conversations, 'hasUnfinishedWork').mockResolvedValue(true);
+    await state.host.initialize();
+    try {
+      await expect(state.host.clearWorkingStorage()).rejects.toMatchObject({ code: 'busy' });
+      expect(discard).not.toHaveBeenCalled();
+      expect(state.conversations.close).not.toHaveBeenCalled();
     } finally {
       await state.host.close();
     }
