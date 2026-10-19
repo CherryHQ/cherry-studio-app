@@ -1610,6 +1610,7 @@
   "settings.model.translate.title": "翻訳モデル",
   "settings.notifications.completion.description": "アプリがバックグラウンドの間に返信が完了すると通知します。",
   "settings.notifications.completion.permissionDenied": "システム設定で Cherry Studio の通知がオフになっています。",
+  "settings.notifications.completion.permissionFailed": "通知の許可をリクエストできませんでした。システム設定で通知をオンにしてください。",
   "settings.notifications.completion.saveFailed": "返信完了通知の設定を保存できませんでした。もう一度お試しください。",
   "settings.notifications.completion.settingsFailed": "システム設定を開けませんでした。",
   "settings.notifications.completion.systemSettings": "システム設定を開く",

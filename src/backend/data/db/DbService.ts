@@ -170,10 +170,12 @@ export class DbService extends BaseService {
   }
 
   private async configurePragmas(): Promise<void> {
+    // Cascades and restrictions depend on foreign keys, so a failure fails startup; the
+    // performance settings below may degrade.
+    this.sqlite.execSync('PRAGMA foreign_keys = ON');
     try {
       this.sqlite.execSync('PRAGMA journal_mode = WAL');
       this.sqlite.execSync('PRAGMA synchronous = NORMAL');
-      this.sqlite.execSync('PRAGMA foreign_keys = ON');
     } catch (error) {
       logger.warn('Failed to configure database PRAGMAs', error as Error);
     }

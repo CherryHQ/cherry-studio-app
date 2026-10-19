@@ -1625,6 +1625,7 @@
   "settings.model.translate.title": "Übersetzungsmodell",
   "settings.notifications.completion.description": "Benachrichtigt Sie, wenn eine Antwort fertig ist, während sich die App im Hintergrund befindet.",
   "settings.notifications.completion.permissionDenied": "Benachrichtigungen sind in den Systemeinstellungen für Cherry Studio deaktiviert.",
+  "settings.notifications.completion.permissionFailed": "Die Benachrichtigungsberechtigung konnte nicht angefordert werden. Aktivieren Sie Benachrichtigungen in den Systemeinstellungen.",
   "settings.notifications.completion.saveFailed": "Die Einstellung für Abschluss-Benachrichtigungen wurde nicht gespeichert. Versuchen Sie es erneut.",
   "settings.notifications.completion.settingsFailed": "Systemeinstellungen konnten nicht geöffnet werden.",
   "settings.notifications.completion.systemSettings": "Systemeinstellungen öffnen",

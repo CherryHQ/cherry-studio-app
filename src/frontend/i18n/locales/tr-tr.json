@@ -1625,6 +1625,7 @@
   "settings.model.translate.title": "Çeviri modeli",
   "settings.notifications.completion.description": "Uygulama arka plandayken bir yanıt bittiğinde sizi bilgilendirir.",
   "settings.notifications.completion.permissionDenied": "Cherry Studio bildirimleri sistem ayarlarında kapalı.",
+  "settings.notifications.completion.permissionFailed": "Bildirim izni istenemedi. Bildirimleri sistem ayarlarından açın.",
   "settings.notifications.completion.saveFailed": "Yanıt tamamlanma bildirimi ayarı kaydedilemedi. Tekrar deneyin.",
   "settings.notifications.completion.settingsFailed": "Sistem ayarları açılamadı.",
   "settings.notifications.completion.systemSettings": "Sistem ayarlarını aç",

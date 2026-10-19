@@ -1610,6 +1610,7 @@
   "settings.model.translate.title": "Mô hình dịch thuật",
   "settings.notifications.completion.description": "Thông báo cho bạn khi một câu trả lời hoàn tất trong khi ứng dụng ở chế độ nền.",
   "settings.notifications.completion.permissionDenied": "Thông báo của Cherry Studio đang bị tắt trong cài đặt hệ thống.",
+  "settings.notifications.completion.permissionFailed": "Không thể yêu cầu quyền thông báo. Hãy bật thông báo trong cài đặt hệ thống.",
   "settings.notifications.completion.saveFailed": "Không thể lưu cài đặt thông báo hoàn tất. Hãy thử lại.",
   "settings.notifications.completion.settingsFailed": "Không thể mở cài đặt hệ thống.",
   "settings.notifications.completion.systemSettings": "Mở cài đặt hệ thống",
