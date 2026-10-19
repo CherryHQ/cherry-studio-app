@@ -18,12 +18,15 @@ const MIN_PARALLEL_MODELS = 2;
  */
 export function useChatInputModelPicker({
   agentId,
+  agentModelAnswersInParallel,
   replyModels,
   selectedModelId,
   selectModel,
   setReplyModels,
 }: {
   agentId?: string;
+  /** Whether the Agent's model can be one of several; image models cannot. */
+  agentModelAnswersInParallel: boolean;
   replyModels: readonly UniqueModelId[] | null;
   /** The Agent's model. */
   selectedModelId: UniqueModelId | null;
@@ -61,13 +64,19 @@ export function useChatInputModelPicker({
     () => ({
       enabled: pickerModels !== null,
       onEnabledChange: (enabled) => {
-        setPickerModels(enabled ? (selectedModelId ? [selectedModelId] : []) : null);
+        setPickerModels(
+          enabled
+            ? selectedModelId && agentModelAnswersInParallel
+              ? [selectedModelId]
+              : []
+            : null,
+        );
         if (!enabled) setReplyModels(null);
       },
       selectedModelIds: pickerModels ?? [],
       maxCount: MAX_PARALLEL_ANSWERS,
     }),
-    [pickerModels, selectedModelId, setReplyModels],
+    [agentModelAnswersInParallel, pickerModels, selectedModelId, setReplyModels],
   );
   return { close, isOpen, multiSelect, open, select };
 }

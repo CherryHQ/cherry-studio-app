@@ -9,7 +9,7 @@ import {
   type TabsItem,
 } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import { memo, useRef } from 'react';
+import { memo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -44,8 +44,14 @@ export const MessageAnswerTabs = memo(function MessageAnswerTabs({
   const fadeColor = useThemeColor('chat-background');
   const scrollRef = useRef<ScrollView>(null);
   const viewportWidth = useRef(0);
+  const contentWidth = useRef(0);
+  // The answer last brought into view; a status icon resizing the group must not undo a swipe.
+  const revealedId = useRef<string>(undefined);
+  // The tab moves on press; the answer itself follows once the transcript is read again.
+  const [choice, setChoice] = useState<{ from: string; to: string }>();
   const siblings = message.branch?.siblings;
   if (!siblings || !selectBranch) return null;
+  const shownId = choice?.from === message.id ? choice.to : message.id;
 
   const models = siblings.map((sibling) => getModelItem(sibling.modelId));
   // A removed model still names the shown answer from its own snapshot.
@@ -87,7 +93,18 @@ export const MessageAnswerTabs = memo(function MessageAnswerTabs({
       ),
     };
   });
-  const selectedIndex = siblings.findIndex((sibling) => sibling.id === message.id);
+  const selectedIndex = siblings.findIndex((sibling) => sibling.id === shownId);
+  // A remounted row starts scrolled to the start, and an added answer lands at the end.
+  const revealShown = () => {
+    if (!viewportWidth.current || !contentWidth.current || revealedId.current === shownId) return;
+    revealedId.current = shownId;
+    const overflow = contentWidth.current - viewportWidth.current;
+    if (overflow > 0 && siblings.length > 1)
+      scrollRef.current?.scrollTo({
+        animated: false,
+        x: (overflow * selectedIndex) / (siblings.length - 1),
+      });
+  };
 
   return (
     <BackgroundPressExclusion>
@@ -96,17 +113,13 @@ export const MessageAnswerTabs = memo(function MessageAnswerTabs({
         <ScrollView
           contentContainerClassName="px-4"
           horizontal
-          // A remounted row starts scrolled to the start; keep the shown answer in view.
-          onContentSizeChange={(contentWidth) => {
-            const overflow = contentWidth - viewportWidth.current;
-            if (overflow > 0 && siblings.length > 1)
-              scrollRef.current?.scrollTo({
-                animated: false,
-                x: (overflow * selectedIndex) / (siblings.length - 1),
-              });
+          onContentSizeChange={(width) => {
+            contentWidth.current = width;
+            revealShown();
           }}
           onLayout={(event) => {
             viewportWidth.current = event.nativeEvent.layout.width;
+            revealShown();
           }}
           ref={scrollRef}
           showsHorizontalScrollIndicator={false}
@@ -116,8 +129,16 @@ export const MessageAnswerTabs = memo(function MessageAnswerTabs({
             accessibilityLabel={t('chat.branch.answers')}
             items={items}
             layout="hug"
-            onValueChange={(targetId) => selectBranch({ messageId: message.id, targetId })}
-            value={message.id}
+            onValueChange={(targetId) => {
+              const from = message.id;
+              revealedId.current = targetId;
+              setChoice({ from, to: targetId });
+              void selectBranch({ messageId: from, targetId }).then((applied) => {
+                if (!applied)
+                  setChoice((current) => (current?.to === targetId ? undefined : current));
+              });
+            }}
+            value={shownId}
           />
         </ScrollView>
       </ScrollShadow>

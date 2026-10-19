@@ -51,8 +51,11 @@ type AssistantMessageActions = {
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
   deleteMessageTurn?: (input: { turnId: string }) => void;
-  /** Shows another alternative at a branch point, restoring its own continuation. */
-  selectBranch?: (input: { messageId: string; targetId: string }) => void;
+  /**
+   * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
+   * the choice was applied.
+   */
+  selectBranch?: (input: { messageId: string; targetId: string }) => Promise<boolean>;
   /** Stops one parallel answer while the others continue. */
   stopAnswer?: (input: { messageId: string }) => void;
   /** Chooses a model that adds one more answer to this answer's question. */
@@ -138,15 +141,19 @@ export function AssistantMessageActionsProvider({
       errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed' | 'branchFailed',
       applied?: (result: Output) => void,
     ) => {
-      if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key)) return;
+      if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key))
+        return false;
       inFlight.current.add(key);
       try {
         const outcome = await action.execute(value);
-        if (!mounted.current) return;
+        if (!mounted.current) return false;
         const { t: translate, toast: currentToast } = latest.current;
-        if (outcome.state === 'applied') applied?.(outcome.value);
+        if (outcome.state === 'applied') {
+          applied?.(outcome.value);
+          return true;
+        }
         // A retry the user stopped before its turn was reserved did not fail.
-        else if (
+        if (
           (outcome.state === 'rejected' && outcome.failure.detail?.code !== 'CANCELLED') ||
           outcome.state === 'interrupted'
         )
@@ -158,6 +165,7 @@ export function AssistantMessageActionsProvider({
             ),
             variant: 'danger',
           });
+        return false;
       } catch (error) {
         logger.error('Conversation message action failed', error as Error);
         if (mounted.current)
@@ -165,6 +173,7 @@ export function AssistantMessageActionsProvider({
             label: latest.current.t(`chat.messageActions.${errorLabel}`),
             variant: 'danger',
           });
+        return false;
       } finally {
         inFlight.current.delete(key);
       }
@@ -234,7 +243,13 @@ export function AssistantMessageActionsProvider({
     ({ messageId, targetId }: { messageId: string; targetId: string }) => {
       const action = latest.current.messages.find((message) => message.key === messageId)?.actions
         .select;
-      void run(`select:${messageId}`, action, { messageId: targetId }, 'branchFailed');
+      // Keyed by target too: a quick second choice is the one the reader wants, not a duplicate.
+      return run(
+        `select:${messageId}:${targetId}`,
+        action,
+        { messageId: targetId },
+        'branchFailed',
+      );
     },
     [run],
   );

@@ -29,7 +29,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillAction } from '@/shared/data/types/skill';
-import { isImageGenerationModel } from '@/shared/utils/modelPurpose';
+import { isImageGenerationModel, isTextGenerationModel } from '@/shared/utils/modelPurpose';
 
 import { type useAgentChatControls, useAgentChatImageResult } from '../../runtime';
 import { ChatInputAccessories, ChatInputComposer, ChatInputSurface } from './ChatInputSurface';
@@ -115,6 +115,7 @@ export function ChatInput({
   // them.
   const [replyModels, setReplyModels] = useState<readonly UniqueModelId[] | null>(null);
   const selectedModelItem = modelPickerData.getModelItem(replyModels?.[0] ?? selectedModelId);
+  const agentModel = modelPickerData.getModelItem(selectedModelId)?.model;
   // Effort levels differ per model, so several models answer at their own defaults.
   const reasoningEfforts = useChatInputReasoningEfforts(
     replyModels ? undefined : selectedModelItem?.model,
@@ -172,6 +173,7 @@ export function ChatInput({
             reasoningEfforts={reasoningEfforts}
             reasoningSelection={reasoningSelection}
             replyModels={replyModels}
+            agentModelAnswersInParallel={Boolean(agentModel && isTextGenerationModel(agentModel))}
             selectedModelId={selectedModelId}
             selectedModelItem={selectedModelItem}
             selectModel={selectModel}
@@ -186,6 +188,7 @@ export function ChatInput({
 function TextChatInput({
   mode,
   agentId,
+  agentModelAnswersInParallel,
   skillAction,
   controls,
   dismissKeyboardOnSend,
@@ -205,6 +208,8 @@ function TextChatInput({
   reasoningSelection: ReturnType<typeof useChatInputReasoningEffortSelection>;
   /** Models answering the next send in parallel, in pick order; null asks the Agent's model. */
   replyModels: readonly UniqueModelId[] | null;
+  /** Parallel answers refuse image generation, so an image Agent model starts no multi-select. */
+  agentModelAnswersInParallel: boolean;
   /** The Agent's model. */
   selectedModelId: UniqueModelId | null;
   /** The model the composer shows: the first parallel model, else the Agent's. */
@@ -257,6 +262,7 @@ function TextChatInput({
   };
   const modelPicker = useChatInputModelPicker({
     agentId,
+    agentModelAnswersInParallel,
     replyModels,
     selectedModelId,
     selectModel,

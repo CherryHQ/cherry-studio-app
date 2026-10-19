@@ -62,9 +62,20 @@ describe('useChatInputModelPicker', () => {
     expect(snapshot().multiSelect.selectedModelIds).toHaveLength(MAX_PARALLEL_ANSWERS);
     expect(snapshot().replyModels).toHaveLength(MAX_PARALLEL_ANSWERS);
   });
+
+  test('starts multi-select empty when the Agent model generates images', () => {
+    // The text-only list could neither show nor clear a preselected image model.
+    const { snapshot } = renderPicker(null, false);
+    act(() => snapshot().open());
+    act(() => snapshot().multiSelect.onEnabledChange(true));
+    expect(snapshot().multiSelect.selectedModelIds).toEqual([]);
+  });
 });
 
-function renderPicker(initialReplyModels: readonly UniqueModelId[] | null) {
+function renderPicker(
+  initialReplyModels: readonly UniqueModelId[] | null,
+  agentModelAnswersInParallel = true,
+) {
   const selectModel = jest.fn();
   let latest: Snapshot | undefined;
   function Harness() {
@@ -72,6 +83,7 @@ function renderPicker(initialReplyModels: readonly UniqueModelId[] | null) {
     latest = {
       ...useChatInputModelPicker({
         agentId: 'agent',
+        agentModelAnswersInParallel,
         replyModels,
         selectedModelId: agentModel,
         selectModel,

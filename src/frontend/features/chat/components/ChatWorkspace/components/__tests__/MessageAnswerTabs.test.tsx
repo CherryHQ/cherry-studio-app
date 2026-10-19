@@ -54,6 +54,7 @@ describe('MessageAnswerTabs', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSelectBranch.mockResolvedValue(true);
     mockActions = { selectBranch: mockSelectBranch, stopAnswer: mockStopAnswer };
   });
 
@@ -77,6 +78,20 @@ describe('MessageAnswerTabs', () => {
 
     act(() => tabs.props.onValueChange('a2'));
     expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'a1', targetId: 'a2' });
+  });
+
+  test('moves the tab at once and back when the choice is not applied', async () => {
+    let settle: (applied: boolean) => void = () => {};
+    mockSelectBranch.mockReturnValue(new Promise<boolean>((resolve) => (settle = resolve)));
+    act(() => {
+      renderer = create(<MessageAnswerTabs message={answer()} />);
+    });
+    const tabs = () => renderer!.root.findByType('Tabs' as never);
+
+    act(() => tabs().props.onValueChange('a2'));
+    expect(tabs().props.value).toBe('a2');
+    await act(async () => settle(false));
+    expect(tabs().props.value).toBe('a1');
   });
 
   test('renders nothing where answers cannot be switched', () => {
