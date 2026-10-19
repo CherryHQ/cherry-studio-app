@@ -28,7 +28,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   } = jest.requireActual('react-native');
   const { createElement } = jest.requireActual('react');
   const Button = (props: object) => createElement('Button', props);
-  Button.Label = ({ children }: { children: ReactNode }) => <MockText>{children}</MockText>;
+  Button.Label = function ButtonLabel({ children }: { children: ReactNode }) {
+    return <MockText>{children}</MockText>;
+  };
 
   return {
     BottomSheet: ({
