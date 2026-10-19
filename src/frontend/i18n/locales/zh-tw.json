@@ -277,6 +277,7 @@
   "chat.builtinTool.office.inspect": "檢查 Office 檔案",
   "chat.builtinTool.office.presentation": "產生簡報",
   "chat.builtinTool.office.read": "讀取 Office 內容",
+  "chat.builtinTool.office.script": "執行 Office 腳本",
   "chat.builtinTool.office.workbook": "產生活頁簿",
   "chat.builtinTool.reminders.create": "創建提醒事項",
   "chat.builtinTool.reminders.delete": "刪除提醒事項",

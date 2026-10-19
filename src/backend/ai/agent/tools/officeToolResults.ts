@@ -127,6 +127,9 @@ const content = z.union([
 // These schemas describe value; the Runtime owns the { value, artifacts } envelope.
 const creationSchema = z.toJSONSchema(z.union([created, error])) as RuntimeJsonValue;
 const editSchema = z.toJSONSchema(z.union([edited, error])) as RuntimeJsonValue;
+const scriptSchema = z.toJSONSchema(
+  z.union([created.extend({ logs: z.string().optional() }), error]),
+) as RuntimeJsonValue;
 export const officeToolOutputSchemas = {
   create_document: creationSchema,
   create_workbook: creationSchema,
@@ -136,4 +139,5 @@ export const officeToolOutputSchemas = {
   edit_document: editSchema,
   edit_workbook: editSchema,
   edit_presentation: editSchema,
+  run_office_script: scriptSchema,
 };

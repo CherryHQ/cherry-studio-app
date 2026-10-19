@@ -23,6 +23,7 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   create_document: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.document' },
   create_workbook: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.workbook' },
   create_presentation: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.presentation' },
+  run_office_script: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.script' },
   list_workspace: { iconName: 'fileText', titleKey: 'workspace.list' },
   find_workspace_files: { iconName: 'fileText', titleKey: 'workspace.find' },
   create_workspace_folder: { iconName: 'fileEdit', titleKey: 'library.folders.create' },

@@ -279,6 +279,7 @@
   "chat.builtinTool.office.inspect": "Office dosyasını incele",
   "chat.builtinTool.office.presentation": "Sunum oluştur",
   "chat.builtinTool.office.read": "Office içeriğini oku",
+  "chat.builtinTool.office.script": "Office betiğini çalıştır",
   "chat.builtinTool.office.workbook": "Çalışma kitabı oluştur",
   "chat.builtinTool.reminders.create": "Hatırlatıcı oluştur",
   "chat.builtinTool.reminders.delete": "Hatırlatıcıyı sil",

@@ -43,6 +43,7 @@ const OFFICE_TOOL_NAMES = new Set([
   'edit_document',
   'edit_workbook',
   'edit_presentation',
+  'run_office_script',
 ]);
 const MANAGED_FILE_TOOL_NAMES = new Set([
   WRITE_FILE_TOOL_NAME,

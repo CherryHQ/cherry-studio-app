@@ -3,15 +3,15 @@ import {
   officeZipLibraryCode,
   officeXmlLibraryCode,
 } from './officePackageCode';
-import type { OfficeImage, OfficeRequest } from './officeSpec';
+import type { OfficeFormat, OfficeImage, OfficeRequest } from './officeSpec';
 import docx from './vendor/docx.json';
 import pptxgenjs from './vendor/pptxgenjs.json';
 import xlsx from './vendor/xlsx.json';
 import { workbookImagesCode } from './workbookImagesCode';
 
 // JSZip schedules in-memory compression chunks through setImmediate. This shim is private to
-// this trusted compute job; it neither installs timers nor changes the model's Code Mode VM.
-const scheduler = String.raw`
+// this compute job; it neither installs timers nor changes the model's Code Mode VM.
+export const officeSchedulerCode = String.raw`
 const pending = new Map();
 let nextTask = 0;
 globalThis.setImmediate = (callback, ...args) => {
@@ -114,22 +114,24 @@ for (const input of spec.slides) {
 return deck.write({ outputType: 'base64', compression: true });
 `;
 
+/** An expression evaluating to the pinned generator library for one format. */
+export function officeLibraryCode(format: OfficeFormat): string {
+  if (format === 'docx')
+    return `(() => { const module = { exports: {} }; const exports = module.exports;\n${docx.code}\nreturn module.exports; })()`;
+  if (format === 'xlsx') return `(() => {\n${xlsx.code}\nreturn XLSX; })()`;
+  return `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn PptxGenJS; })()`;
+}
+
+const renderers: Record<OfficeFormat, string> = {
+  docx: documentRenderer,
+  xlsx: `${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${workbookRenderer}`,
+  pptx: presentationRenderer,
+};
+
 /** Only app-owned code is executable; model text and managed images are JSON data. */
 export function createOfficeCode(
   request: OfficeRequest,
   images: Readonly<Record<string, OfficeImage>>,
 ): string {
-  let library: string;
-  let renderer: string;
-  if (request.format === 'docx') {
-    library = `(() => { const module = { exports: {} }; const exports = module.exports;\n${docx.code}\nreturn module.exports; })()`;
-    renderer = documentRenderer;
-  } else if (request.format === 'xlsx') {
-    library = `(() => {\n${xlsx.code}\nreturn XLSX; })()`;
-    renderer = `${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${workbookRenderer}`;
-  } else {
-    library = `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn PptxGenJS; })()`;
-    renderer = presentationRenderer;
-  }
-  return `${officeTextEncoderCode}\n${scheduler}\nconst library = ${library};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderer}`;
+  return `${officeTextEncoderCode}\n${officeSchedulerCode}\nconst library = ${officeLibraryCode(request.format)};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderers[request.format]}`;
 }

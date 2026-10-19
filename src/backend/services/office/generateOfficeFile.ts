@@ -40,32 +40,40 @@ export async function generateOfficeFile(input: {
         `Office generation failed (${outcome.kind}). Reduce the document size or complexity and try again.`,
       );
     }
-    if (!outcome.result || outcome.resultTruncated) {
-      throw new OfficeGenerationError(
-        'Office generation returned an incomplete file. Reduce its size and try again.',
-      );
-    }
-    const result: unknown = JSON.parse(outcome.result);
-    if (
-      typeof result !== 'string' ||
-      result.length > Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 ||
-      result.length % 4 !== 0 ||
-      !/^[A-Za-z0-9+/]+={0,2}$/.test(result)
-    ) {
-      throw new OfficeGenerationError('Office generation returned an invalid file.');
-    }
-    const bytes = toByteArray(result);
-    if (
-      bytes.length > OFFICE_MAX_OUTPUT_BYTES ||
-      bytes[0] !== 0x50 ||
-      bytes[1] !== 0x4b ||
-      bytes[2] !== 3 ||
-      bytes[3] !== 4
-    ) {
-      throw new OfficeGenerationError('Office generation returned an invalid or oversized file.');
-    }
-    return bytes;
+    return decodeOfficeResult(outcome);
   } finally {
     if (!submitted) input.onSettled();
   }
+}
+
+/** Validates a sandbox result holding one base64 ZIP package within the output limit. */
+export function decodeOfficeResult(outcome: {
+  result?: string;
+  resultTruncated?: boolean;
+}): Uint8Array {
+  if (!outcome.result || outcome.resultTruncated) {
+    throw new OfficeGenerationError(
+      'Office generation returned an incomplete file. Reduce its size and try again.',
+    );
+  }
+  const result: unknown = JSON.parse(outcome.result);
+  if (
+    typeof result !== 'string' ||
+    result.length > Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 ||
+    result.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(result)
+  ) {
+    throw new OfficeGenerationError('Office generation returned an invalid file.');
+  }
+  const bytes = toByteArray(result);
+  if (
+    bytes.length > OFFICE_MAX_OUTPUT_BYTES ||
+    bytes[0] !== 0x50 ||
+    bytes[1] !== 0x4b ||
+    bytes[2] !== 3 ||
+    bytes[3] !== 4
+  ) {
+    throw new OfficeGenerationError('Office generation returned an invalid or oversized file.');
+  }
+  return bytes;
 }

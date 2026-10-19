@@ -22,3 +22,8 @@ export {
   type OfficeTransformRequest,
 } from './officeEditSpec';
 export { transformOfficeFile } from './transformOfficeFile';
+export {
+  OFFICE_SCRIPT_MAX_INPUT_BYTES,
+  runOfficeScript,
+  type OfficeScriptInput,
+} from './runOfficeScript';

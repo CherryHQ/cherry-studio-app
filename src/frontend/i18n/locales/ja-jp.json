@@ -277,6 +277,7 @@
   "chat.builtinTool.office.inspect": "Office ファイルを調査",
   "chat.builtinTool.office.presentation": "プレゼンテーションを作成",
   "chat.builtinTool.office.read": "Office の内容を読み取る",
+  "chat.builtinTool.office.script": "Office スクリプトを実行",
   "chat.builtinTool.office.workbook": "ワークブックを作成",
   "chat.builtinTool.reminders.create": "リマインダーを作成する",
   "chat.builtinTool.reminders.delete": "リマインダーを削除",

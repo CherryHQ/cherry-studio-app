@@ -277,6 +277,7 @@
   "chat.builtinTool.office.inspect": "Kiểm tra tệp Office",
   "chat.builtinTool.office.presentation": "Tạo bản trình chiếu",
   "chat.builtinTool.office.read": "Đọc nội dung Office",
+  "chat.builtinTool.office.script": "Chạy tập lệnh Office",
   "chat.builtinTool.office.workbook": "Tạo sổ tính",
   "chat.builtinTool.reminders.create": "Tạo lời nhắc",
   "chat.builtinTool.reminders.delete": "Xóa lời nhắc",
