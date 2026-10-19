@@ -273,7 +273,7 @@ export async function resolveRuntimeContentAttachments(
  * notes when it does not (image bytes are never read in that case).
  */
 export async function materializeRuntimeAttachments(input: {
-  files: ManagedFileResolver;
+  files: Pick<ManagedFileResolver, 'readAsDataUrl'>;
   history: AgentMessageView[];
   inputParts: AgentInputPart[];
   modelPreflight: RuntimeModelPreflight;
@@ -311,7 +311,7 @@ export async function materializeRuntimeAttachments(input: {
 }
 
 async function resolveRuntimeImages(
-  files: ManagedFileResolver,
+  files: Pick<ManagedFileResolver, 'readAsDataUrl'>,
   resources: TurnResourceLedger,
   signal: AbortSignal,
 ): Promise<RuntimeAttachmentContents> {

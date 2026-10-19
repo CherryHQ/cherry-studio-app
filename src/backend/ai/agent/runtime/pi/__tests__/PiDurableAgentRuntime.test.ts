@@ -967,6 +967,89 @@ describe('Persistent Agent facade', () => {
     },
   );
 
+  test('another lane forks a rebuilt history at the boundary the rebuild returns', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const fork = runtimeLane('session', 1);
+    try {
+      const boundary = await runtime.ensureConversation({
+        ...seed,
+        history: {
+          history: [
+            {
+              turnId: 'earlier',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Question earlier' }] },
+                { role: 'assistant', parts: [{ type: 'text', text: 'Imported answer' }] },
+              ],
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: ['retained-file'],
+        },
+      });
+      expect(boundary).toMatch(/^pi:\d+$/);
+      await runtime.forkConversation({ ...seed, lane: fork, from: { lane, boundary: boundary! } });
+      expect(await runtime.resourceFileEntryIds(fork)).toEqual(['retained-file']);
+      const complete = deferred<void>();
+      const observation = await runtime.observe(fork, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') complete.resolve();
+      });
+      await runtime.submit(fork, input('forked'));
+      await complete.promise;
+      await observation.unsubscribe();
+      expect(
+        state.requests[0]?.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => JSON.stringify(message.content)),
+      ).toEqual([
+        expect.stringContaining('Question earlier'),
+        expect.stringContaining('Imported answer'),
+        expect.stringContaining('Question forked'),
+      ]);
+      // A copy without history offers no boundary.
+      expect(await runtime.ensureConversation({ ...seed, lane: runtimeLane('empty') })).toBe(
+        undefined,
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('reads a Session slot bindings once until a binding changes', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const binding = jest.spyOn(PiDurableRuntime.prototype, 'binding');
+    try {
+      await runtime.ensureConversation(seed);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).not.toHaveBeenCalled();
+      const second = runtimeLane('session', 2);
+      await runtime.ensureConversation({ ...seed, lane: second });
+      expect(await runtime.lanes('session')).toEqual([
+        { lane, revision: 0 },
+        { lane: second, revision: 0 },
+      ]);
+      await runtime.discardConversation(lane);
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      // A reopened file is read again.
+      await runtime.close();
+      await runtime.initialize(state.database, state.ports);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+    } finally {
+      binding.mockRestore();
+      await runtime.close();
+    }
+  });
+
   test('detaching a UI observer preserves the active native execution', async () => {
     const state = fixture();
     const runtime = state.create();

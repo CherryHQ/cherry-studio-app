@@ -184,11 +184,15 @@ fixed slot. Slot 0 keeps the bare Session id as its Pi key, so every pre-branchi
 unchanged; slot n uses `${sessionId}#${n}`. The key is private to the Pi adapter: runtime calls take
 a typed `RuntimeLane` (`{ sessionId, slot }`), and execution identities always carry the Cherry
 Session id plus the slot, so a working copy cannot be mistaken for a Session. Finding a Session's
-copies probes its eight slot bindings; no Session operation scans every copy in the engine.
+copies probes its eight slot bindings once per runtime, and every binding change discards that
+reading; no Session operation scans every copy in the engine.
 
 A question below answer P continues the copy whose newest queued, running or settled answer is P,
 natively forks the copy that executed P at P's answer boundary otherwise (shared history and
 compaction state, no rebuild), and rebuilds from the Cherry branch when no current copy holds P.
+Engine tails are read only until that choice is made. Several answers needing a rebuild rebuild one
+copy, for the model that keeps the most history, and fork the rest from it; their preparation runs
+concurrently and reads each attached image once.
 A new copy takes a free slot, or replaces the least recently used idle copy. Copies are disposable:
 Pi stores no Cherry identity mapping, and an empty or deleted Pi database only means every branch is
 rebuilt from Cherry messages on its next use. A multi-model question gives every further answer its

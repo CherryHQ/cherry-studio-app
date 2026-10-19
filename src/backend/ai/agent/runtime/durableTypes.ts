@@ -238,10 +238,17 @@ export interface DurableAgentRuntime {
   unfinishedLanes(): Promise<readonly RuntimeLane[]>;
   configuration(lane: RuntimeLane): Promise<RuntimeConversationConfiguration>;
   resourceFileEntryIds(lane: RuntimeLane): Promise<readonly string[]>;
-  ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void>;
   /**
-   * Natively forks `from.lane` at an answer boundary it returned into the new
-   * lane `seed.lane`, which then continues from that answer with its own configuration.
+   * Returns the copy's newest history boundary, from which other lanes may fork;
+   * undefined while it holds no history.
+   */
+  ensureConversation(
+    seed: RuntimeConversationSeed,
+    signal?: AbortSignal,
+  ): Promise<string | undefined>;
+  /**
+   * Natively forks `from.lane` at a boundary it returned into the new lane
+   * `seed.lane`, which then continues from there with its own configuration.
    */
   forkConversation(
     seed: Omit<RuntimeConversationSeed, 'history'> & {

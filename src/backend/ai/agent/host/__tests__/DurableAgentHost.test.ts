@@ -105,6 +105,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     resourceFileEntryIds: async () => [],
     ensureConversation: async (seed) => {
       copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
+      return seed.history ? 'pi:imported' : undefined;
     },
     forkConversation: async (seed) => {
       copies.set(laneKey(seed.lane), { revision: seed.revision, turns: [] });
@@ -223,17 +224,18 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     recordDurableUsage: async () => {},
     ...overrides,
   };
+  const reply = {
+    updateContent: jest.fn(),
+    awaitApproval: jest.fn(),
+    finish: jest.fn(),
+    retire: jest.fn(),
+    update: jest.fn(),
+  };
   const background = {
     acquirePreparation: () => ({ release() {} }),
     clearSession() {},
     updateSessionTitle() {},
-    startTurn: () => ({
-      updateContent() {},
-      awaitApproval() {},
-      finish() {},
-      retire() {},
-      update() {},
-    }),
+    startTurn: jest.fn(() => reply),
   };
   const host = new DurableAgentHost(store, ports, background, new FakeRuntime(), conversations);
   const reserve = async (
@@ -291,8 +293,15 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     copies,
     emit,
     reserve,
+    background,
+    reply,
     execution: () => execution,
   };
+}
+
+/** Lets settlement and background presentation finish their store round trips. */
+async function settle() {
+  for (let round = 0; round < 20; round++) await new Promise((resolve) => setImmediate(resolve));
 }
 
 describe('durable tool diagnostics', () => {
@@ -1281,6 +1290,196 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
         }),
       ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
       expect(state.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  /** Two answers below the reserved question's answer, one continuing lane 0 and one forked. */
+  const askTwoModels = (
+    state: ReturnType<typeof fixture>,
+    parts = [{ type: 'text' as const, text: 'Compare' }],
+  ) =>
+    state.host.submitMessage({
+      sessionId: state.sessionId,
+      userMessageId: uuid(),
+      assistantMessageId: uuid(),
+      modelId: inferenceSnapshot.model.uniqueModelId,
+      additionalReplies: [
+        { modelId: createUniqueModelId('provider', 'second-model'), assistantMessageId: uuid() },
+      ],
+      parts,
+    });
+  const runningTurns = (state: ReturnType<typeof fixture>) =>
+    [...state.copies.values()].flatMap((copy) =>
+      copy.turns.filter((turn) => turn.status === 'running'),
+    );
+
+  test('parallel answers publish an unchanged running turn and their shared question once', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const events: AgentEvent[] = [];
+      const observation = await state.host.observeSession(state.sessionId, (event) =>
+        events.push(event),
+      );
+      const submitted = await askTwoModels(state);
+      const running = runningTurns(state);
+      expect(running).toHaveLength(2);
+      // The answers stream in turns; their turn views do not change.
+      for (let index = 0; index < 3; index++)
+        for (const turn of running)
+          state.emit({
+            ...turn,
+            parts: [{ id: 'text', type: 'text', text: `Part ${index}`, state: 'streaming' }],
+          });
+      const turns = events.filter((event) => event.type === 'turn.updated');
+      expect(turns).toHaveLength(2);
+      expect(
+        events.filter(
+          (event) =>
+            event.type === 'message.created' && event.message.id === submitted.userMessageId,
+        ),
+      ).toHaveLength(1);
+      // A changed view is still published.
+      state.emit({ ...running[1]!, isRetrying: true });
+      expect(events.filter((event) => event.type === 'turn.updated')).toHaveLength(3);
+      expect(events.at(-1)).toMatchObject({
+        type: 'turn.updated',
+        turn: { assistantMessageId: running[1]!.assistantMessageId, isRetrying: true },
+      });
+      observation.unsubscribe();
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('the background reply passes to a running answer and ends with the last one', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      const running = runningTurns(state);
+      const holder = running.find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id === turn.assistantMessageId,
+      )!;
+      const other = running.find((turn) => turn !== holder)!;
+      state.emit({ ...holder, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      // Neither restarted nor finished while the other answer runs.
+      expect(state.reply.finish).not.toHaveBeenCalled();
+      expect(state.reply.update).toHaveBeenLastCalledWith(
+        expect.objectContaining({ id: other.assistantMessageId }),
+      );
+      state.emit({
+        ...other,
+        status: 'failed',
+        error: { code: 'TIMEOUT', message: 'Timeout', retryable: true },
+      });
+      await settle();
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+      expect(state.reply.finish).toHaveBeenCalledTimes(1);
+      expect(state.reply.finish).toHaveBeenCalledWith('completed');
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('prepares parallel answers together and reads a shared image once', async () => {
+    const image = { fileEntryId: uuid(), mediaType: 'image/png', name: 'photo.png', size: 3 };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const resolveTools = jest.fn(async () => {
+      await gate;
+      return { tools: [], pluginGuides: [] };
+    });
+    const readAsDataUrl = jest.fn(async () => 'data:image/png;base64,AAAA');
+    const state = fixture({
+      runtimeTools: { resolve: resolveTools },
+      files: {
+        resolveAvailable: async (ids) =>
+          new Map(ids.includes(image.fileEntryId) ? [[image.fileEntryId, image]] : []),
+        readAsBytes: async () => undefined,
+        readDocumentText: async () => undefined,
+        readAsDataUrl,
+      },
+    });
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      const submitted = askTwoModels(state, [
+        { type: 'text', text: 'Compare' },
+        {
+          type: 'file',
+          fileEntryId: image.fileEntryId,
+          mediaType: 'image/png',
+          filename: 'photo.png',
+        } as never,
+      ]);
+      await settle();
+      // The second answer did not wait for the first one's tool discovery.
+      expect(resolveTools).toHaveBeenCalledTimes(2);
+      release();
+      await submitted;
+      expect(readAsDataUrl).toHaveBeenCalledTimes(1);
+      expect(state.conversations.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('answers without a working copy rebuild the history once and fork the rest', async () => {
+    const state = fixture();
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      // The runtime cache was cleared: Cherry history is the only source left.
+      state.copies.clear();
+      const ensure = jest.spyOn(state.conversations, 'ensureConversation');
+      const fork = jest.spyOn(state.conversations, 'forkConversation');
+      await askTwoModels(state);
+      expect(ensure).toHaveBeenCalledTimes(1);
+      const [rebuilt] = ensure.mock.calls[0]!;
+      expect(rebuilt.history?.history).not.toHaveLength(0);
+      expect(fork).toHaveBeenCalledTimes(1);
+      expect(fork.mock.calls[0]![0]).toMatchObject({
+        from: { lane: rebuilt.lane, boundary: 'pi:imported' },
+      });
+      expect(state.conversations.submit).toHaveBeenCalledTimes(2);
+    } finally {
+      await state.host.close();
+    }
+  });
+
+  test('a follow-up reads the tail of only the copy that ran the selected answer', async () => {
+    const state = fixture();
+    const original = await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await state.host.retryMessage({
+        sessionId: state.sessionId,
+        messageId: original.assistantMessageId,
+      });
+      const [lane] = (state.conversations.submit as jest.Mock).mock.calls.at(-1)!;
+      expect(lane).toEqual(runtimeLane(state.sessionId, 1));
+      const sibling = state.copies.get(laneKey(lane))!.turns.at(-1)!;
+      state.emit({ ...sibling, status: 'completed', answerBoundary: 'pi:2' });
+      await state.host.quiesce();
+      const history = jest.spyOn(state.conversations, 'history');
+      await state.host.submitMessage({
+        sessionId: state.sessionId,
+        userMessageId: uuid(),
+        assistantMessageId: uuid(),
+        parts: [{ type: 'text', text: 'Follow up' }],
+      });
+      expect((state.conversations.submit as jest.Mock).mock.calls.at(-1)![0]).toEqual(lane);
+      expect(history.mock.calls.map(([read]) => read)).toEqual([lane]);
     } finally {
       await state.host.close();
     }

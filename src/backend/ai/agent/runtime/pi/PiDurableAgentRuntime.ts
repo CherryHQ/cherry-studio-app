@@ -106,6 +106,14 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   /** Keyed by {@link laneKey}, the engine's session key. */
   private readonly configurations = new Map<string, PiStoredConfiguration>();
   private readonly providerOwners = new Map<string, RuntimeLane>();
+  /**
+   * Bound slots by Cherry Session. Pi reads every unbound slot from storage, so they are
+   * probed once; this facade is the only writer of slot bindings, and each write drops the entry.
+   */
+  private readonly slots = new Map<
+    string,
+    Promise<readonly { lane: RuntimeLane; revision: number }[]>
+  >();
   private readonly requestOwners = new WeakMap<AbortSignal, RuntimeExecutionIdentity>();
   /** Requests after an exhausted tool budget, which must not select tools. */
   private readonly toolFreeRequests = new WeakSet<AbortSignal>();
@@ -222,6 +230,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         this.ports = undefined;
         this.configurations.clear();
         this.providerOwners.clear();
+        this.slots.clear();
       }
       throw error;
     }
@@ -267,6 +276,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       this.ports = undefined;
       this.configurations.clear();
       this.providerOwners.clear();
+      this.slots.clear();
       this.observers.clear();
       for (const extension of this.registry.snapshot().installed())
         this.registry.uninstall(extension);
@@ -283,14 +293,38 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
   /** Probes the Session's fixed slots instead of scanning every working copy. */
   async lanes(sessionId: string) {
     const runtime = this.requireRuntime();
-    const lanes: { lane: RuntimeLane; revision: number }[] = [];
-    for (let slot = 0; slot < LANES_PER_SESSION; slot++) {
-      const lane = runtimeLane(sessionId, slot);
-      const binding = await runtime.binding(laneKey(lane));
-      if (binding?.conversationId !== undefined && binding.conversationId !== null)
-        lanes.push({ lane, revision: binding.revision });
+    const cached = this.slots.get(sessionId);
+    if (cached) return cached;
+    const probe = (async () => {
+      const lanes: { lane: RuntimeLane; revision: number }[] = [];
+      for (let slot = 0; slot < LANES_PER_SESSION; slot++) {
+        const lane = runtimeLane(sessionId, slot);
+        const binding = await runtime.binding(laneKey(lane));
+        if (binding?.conversationId !== undefined && binding.conversationId !== null)
+          lanes.push({ lane, revision: binding.revision });
+      }
+      return lanes;
+    })();
+    this.slots.set(sessionId, probe);
+    probe.catch(() => {
+      if (this.slots.get(sessionId) === probe) this.slots.delete(sessionId);
+    });
+    return probe;
+  }
+
+  /** Drops the Session's bound slots once a binding write settles; a probe begun meanwhile is stale. */
+  private async rebinding<Value>(lane: RuntimeLane, write: () => Promise<Value>) {
+    try {
+      return await write();
+    } finally {
+      this.slots.delete(lane.sessionId);
     }
-    return lanes;
+  }
+
+  /** The newest entry of a copy: a boundary that other lanes can fork from. */
+  private async newestBoundary(key: string) {
+    const [newest] = (await this.requireRuntime().history(key, 1)).entries;
+    return newest ? `pi:${newest.id}` : undefined;
   }
 
   async hasConversation(lane: RuntimeLane) {
@@ -346,13 +380,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     return this.requireRuntime().resourceFileEntryIds(laneKey(lane));
   }
 
-  async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal): Promise<void> {
+  async ensureConversation(seed: RuntimeConversationSeed, signal?: AbortSignal) {
     const runtime = this.requireRuntime();
     const key = laneKey(seed.lane);
     if (await runtime.conversation(key)) {
       if ((await runtime.binding(key))?.revision !== seed.revision)
         throw new Error('The working copy is obsolete.');
-      return;
+      return this.newestBoundary(key);
     }
     const configuration = await this.configurationBlueprint(seed.configuration);
     const agent = await this.installConfiguration(seed.lane, configuration);
@@ -374,17 +408,20 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
         )
       : undefined;
     signal?.throwIfAborted();
-    await runtime.ensureConversation({
-      sessionId: key,
-      revision: seed.revision,
-      agent,
-      options: configuration.options,
-      configuration: detachedJson(configuration),
-      initialInstructions: configuration.initialInstructions,
-      resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
-      entries: originalEntries,
-    });
+    await this.rebinding(seed.lane, () =>
+      runtime.ensureConversation({
+        sessionId: key,
+        revision: seed.revision,
+        agent,
+        options: configuration.options,
+        configuration: detachedJson(configuration),
+        initialInstructions: configuration.initialInstructions,
+        resourceFileEntryIds: seed.history?.referencedFileEntryIds ?? [],
+        entries: originalEntries,
+      }),
+    );
     await this.bindProvider(seed.lane);
+    return this.newestBoundary(key);
   }
 
   async forkConversation(
@@ -397,15 +434,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     const configuration = await this.configurationBlueprint(seed.configuration);
     const agent = await this.installConfiguration(seed.lane, configuration);
     signal?.throwIfAborted();
-    await runtime.forkConversation(laneKey(seed.from.lane), {
-      sessionId: laneKey(seed.lane),
-      revision: seed.revision,
-      agent,
-      options: configuration.options,
-      configuration: detachedJson(configuration),
-      initialInstructions: configuration.initialInstructions,
-      at: parseBoundary(seed.from.boundary),
-    });
+    await this.rebinding(seed.lane, () =>
+      runtime.forkConversation(laneKey(seed.from.lane), {
+        sessionId: laneKey(seed.lane),
+        revision: seed.revision,
+        agent,
+        options: configuration.options,
+        configuration: detachedJson(configuration),
+        initialInstructions: configuration.initialInstructions,
+        at: parseBoundary(seed.from.boundary),
+      }),
+    );
     await this.bindProvider(seed.lane);
   }
 
@@ -563,7 +602,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     if (!(await runtime.conversation(key))) return;
     await runtime.stop(key);
     await this.drainUsage();
-    await runtime.retireSession(key);
+    await this.rebinding(lane, () => runtime.retireSession(key));
     this.configurations.delete(key);
     for (const [providerId, owner] of this.providerOwners)
       if (sameLane(owner, lane)) this.providerOwners.delete(providerId);
