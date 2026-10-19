@@ -236,8 +236,6 @@
   "chat.branch.answers": "Câu trả lời",
   "chat.branch.failed": "Thất bại",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Dừng câu trả lời này",
-  "chat.branch.stopModel": "Dừng {{model}}",
   "chat.branch.unknownModel": "Mô hình không xác định",
   "chat.builtinTool.calendar.createEvent": "Tạo sự kiện lịch",
   "chat.builtinTool.calendar.deleteEvent": "Xóa sự kiện lịch",

@@ -56,8 +56,6 @@ type AssistantMessageActions = {
    * the choice was applied.
    */
   selectBranch?: (input: { messageId: string; targetId: string }) => Promise<boolean>;
-  /** Stops one parallel answer while the others continue. */
-  stopAnswer?: (input: { messageId: string }) => void;
   /** Chooses a model that adds one more answer to this answer's question. */
   answerWithModel?: (input: { messageId: string }) => void;
 };
@@ -253,14 +251,6 @@ export function AssistantMessageActionsProvider({
     },
     [run],
   );
-  const stopAnswer = useCallback(
-    ({ messageId }: { messageId: string }) => {
-      const action = latest.current.messages.find((message) => message.key === messageId)?.actions
-        .stop;
-      void run(`stop:${messageId}`, action, undefined, 'branchFailed');
-    },
-    [run],
-  );
   const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
     if (!latest.current.isBusy) setAnsweringMessageId(messageId);
   }, []);
@@ -288,7 +278,6 @@ export function AssistantMessageActionsProvider({
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
       onRetry={retryableMessageIds.size ? retry : undefined}
       onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
-      onStopAnswer={messages.some((message) => message.actions.stop) ? stopAnswer : undefined}
       onAnswerWithModel={
         messages.some((message) => message.actions.answerWith) ? answerWithModel : undefined
       }
@@ -321,7 +310,6 @@ export function ChatMessageActionsProvider({
   onDelete: deleteMessageTurn,
   onRetry: retryAssistantMessage,
   onSelectBranch: selectBranch,
-  onStopAnswer: stopAnswer,
   onAnswerWithModel: answerWithModel,
   isDeleteDisabled = true,
   isRetryDisabled = true,
@@ -333,7 +321,6 @@ export function ChatMessageActionsProvider({
   onDelete?: AssistantMessageActions['deleteMessageTurn'];
   onRetry?: AssistantMessageActions['retryAssistantMessage'];
   onSelectBranch?: AssistantMessageActions['selectBranch'];
-  onStopAnswer?: AssistantMessageActions['stopAnswer'];
   onAnswerWithModel?: AssistantMessageActions['answerWithModel'];
   isDeleteDisabled?: boolean;
   isRetryDisabled?: boolean;
@@ -407,7 +394,6 @@ export function ChatMessageActionsProvider({
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
-      stopAnswer,
     }),
     [
       answerWithModel,
@@ -417,7 +403,6 @@ export function ChatMessageActionsProvider({
       retryAssistantMessage,
       selectBranch,
       shareAssistantMessage,
-      stopAnswer,
     ],
   );
 

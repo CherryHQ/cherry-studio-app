@@ -238,8 +238,6 @@
   "chat.branch.answers": "Yanıtlar",
   "chat.branch.failed": "Başarısız",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Bu yanıtı durdur",
-  "chat.branch.stopModel": "{{model}} modelini durdur",
   "chat.branch.unknownModel": "Bilinmeyen model",
   "chat.builtinTool.calendar.createEvent": "Takvim etkinliği oluştur",
   "chat.builtinTool.calendar.deleteEvent": "Takvim etkinliğini sil",

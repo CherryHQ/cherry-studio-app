@@ -236,8 +236,6 @@
   "chat.branch.answers": "回答",
   "chat.branch.failed": "失敗",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "停止此回答",
-  "chat.branch.stopModel": "停止 {{model}}",
   "chat.branch.unknownModel": "未知模型",
   "chat.builtinTool.calendar.createEvent": "創建日程",
   "chat.builtinTool.calendar.deleteEvent": "刪除日程",

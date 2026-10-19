@@ -236,8 +236,6 @@
   "chat.branch.answers": "回答",
   "chat.branch.failed": "失敗",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "この回答を停止",
-  "chat.branch.stopModel": "{{model}} を停止",
   "chat.branch.unknownModel": "不明なモデル",
   "chat.builtinTool.calendar.createEvent": "Create calendar event",
   "chat.builtinTool.calendar.deleteEvent": "Delete calendar event",

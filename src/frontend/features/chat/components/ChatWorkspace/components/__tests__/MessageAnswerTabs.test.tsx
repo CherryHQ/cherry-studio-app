@@ -3,21 +3,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
-import { MessageAnswerStop, MessageAnswerTabs } from '../MessageAnswerTabs';
+import { MessageAnswerTabs } from '../MessageAnswerTabs';
 
 const mockSelectBranch = jest.fn();
-const mockStopAnswer = jest.fn();
 let mockActions: Record<string, jest.Mock | undefined> = {};
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
-  const Button = (props: object) => createElement('Button', props);
-  Button.Label = ({ children }: { children: ReactNode }) => children;
   return {
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
-    Button,
     ScrollShadow: ({ children }: { children: ReactNode }) => children,
-    Spinner: () => null,
+    Spinner: () => createElement('Spinner'),
     Tabs: (props: object) => createElement('Tabs', props),
   };
 });
@@ -55,7 +51,7 @@ describe('MessageAnswerTabs', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSelectBranch.mockResolvedValue(true);
-    mockActions = { selectBranch: mockSelectBranch, stopAnswer: mockStopAnswer };
+    mockActions = { selectBranch: mockSelectBranch };
   });
 
   afterEach(() => {
@@ -103,29 +99,21 @@ describe('MessageAnswerTabs', () => {
     expect(renderer!.root.findAllByType('Tabs' as never)).toHaveLength(0);
   });
 
-  test('stops only a running parallel answer', () => {
-    const running: MessageListItem = {
-      ...answer(),
-      model: { id: 'openai::gpt', modelId: 'gpt', name: 'GPT', providerId: 'openai' },
-      status: 'pending',
-    };
+  test('only shows a running indicator for answers outside the selected tab', () => {
     act(() => {
-      renderer = create(<MessageAnswerStop message={running} />);
+      renderer = create(<MessageAnswerTabs message={answer()} />);
     });
-    act(() => renderer!.root.findByProps({ testID: 'message-answer-stop' }).props.onPress());
-    expect(mockStopAnswer).toHaveBeenCalledWith({ messageId: 'a1' });
-
-    const alone = running.branch!.siblings.map((sibling) =>
-      sibling.id === 'a2' ? { ...sibling, status: 'success' as const } : sibling,
-    );
-    act(() =>
-      renderer!.update(
-        <MessageAnswerStop
-          message={{ ...running, branch: { ...running.branch!, siblings: alone } }}
-        />,
-      ),
-    );
-    expect(renderer!.root.findAllByProps({ testID: 'message-answer-stop' })).toHaveLength(0);
+    const item = renderer!.root.findByType('Tabs' as never).props.items[0];
+    let tab: ReactTestRenderer;
+    act(() => {
+      tab = create(item.children({ isSelected: true }));
+    });
+    expect(tab!.root.findAllByType('Spinner' as never)).toHaveLength(0);
+    act(() => {
+      tab!.update(item.children({ isSelected: false }));
+    });
+    expect(tab!.root.findAllByType('Spinner' as never)).toHaveLength(1);
+    act(() => tab!.unmount());
   });
 });
 

@@ -60,7 +60,6 @@ jest.mock('../AssistantMessageToolbar', () => ({
 jest.mock('../MessageAnswerTabs', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    MessageAnswerStop: () => null,
     MessageAnswerTabs: (props: object) => createElement('MessageAnswerTabs', props),
   };
 });

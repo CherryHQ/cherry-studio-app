@@ -126,6 +126,7 @@ describe('ChatProvider Draft handoff', () => {
     mockChatState.activeTurn = null;
     mockChatState.queuedInputs = [];
     mockChatState.isSubmitting = false;
+    mockChatState.snapshot = undefined;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
   });
@@ -165,7 +166,112 @@ describe('ChatProvider Draft handoff', () => {
     act(() => {
       void currentControls().cancel();
     });
-    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1', 'active-answer');
+  });
+
+  it('follows the selected answer instead of another model still running in the background', async () => {
+    const selected: AgentMessageView = {
+      ...imageMessage('selected'),
+      parentId: 'question',
+      status: 'streaming',
+    };
+    const background: AgentMessageView = { ...selected, id: 'background', turnId: 'other-turn' };
+    mockChatState.liveMessages = [selected, background];
+    mockChatState.activeTurn = {
+      id: background.turnId!,
+      sessionId: 'session-1',
+      assistantMessageId: background.id,
+      status: 'running',
+      startedAt: selected.createdAt,
+      endedAt: null,
+      error: null,
+    };
+    mockChatState.snapshot = {
+      agent: { id: 'agent-1', name: 'Agent' },
+      capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
+      session: {
+        id: 'session-1',
+        agentId: 'agent-1',
+        name: '',
+        isNameManuallyEdited: false,
+        activeNodeId: selected.id,
+        forkBoundaryMessageId: null,
+        forkedFromSessionId: null,
+        createdAt: selected.createdAt,
+        updatedAt: selected.updatedAt,
+      },
+      activeTurn: mockChatState.activeTurn,
+      activeUserMessage: null,
+      streamingMessage: background,
+      queuedInputs: [],
+      pendingApprovals: [],
+      pendingQuestion: null,
+      hasHistoryBeforeActiveTurn: false,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    const cancel = currentControls().cancel;
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'selected');
+
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    mockCancelTurn.mockClear();
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).not.toHaveBeenCalled();
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: background.id },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    const queuedUser = {
+      ...selected,
+      id: 'queued-user',
+      role: 'user' as const,
+      parentId: background.id,
+    };
+    mockChatState.queuedInputs = [
+      { turnId: 'queued-turn', assistantMessageId: 'queued-answer', userMessage: queuedUser },
+    ];
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'queued-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'historical-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {

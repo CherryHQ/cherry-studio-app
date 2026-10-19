@@ -444,10 +444,19 @@ export class AgentSessionChatClient {
     }
   }
 
-  /** Stops the active turn, or only one of its parallel answers when `messageId` names it. */
+  /** Stops the active turn, or the named live answer on its own turn. */
   async cancelTurn(sessionId: string, messageId?: string): Promise<void> {
     const entry = this.getEntry(sessionId);
     const turn = entry.state.activeTurn;
+    if (messageId) {
+      const message = entry.liveMessages.get(messageId);
+      if (message) {
+        if (!message.turnId || isTerminalMessage(message)) return;
+        await this.protocol.cancelTurn({ sessionId, turnId: message.turnId, messageId });
+        return;
+      }
+      if (turn?.assistantMessageId !== messageId) return;
+    }
     if (turn && !TERMINAL_TURN_STATUSES.has(turn.status)) {
       await this.protocol.cancelTurn({
         sessionId,

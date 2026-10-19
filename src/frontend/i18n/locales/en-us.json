@@ -238,8 +238,6 @@
   "chat.branch.answers": "Answers",
   "chat.branch.failed": "Failed",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Stop this reply",
-  "chat.branch.stopModel": "Stop {{model}}",
   "chat.branch.unknownModel": "Unknown model",
   "chat.builtinTool.calendar.createEvent": "Create calendar event",
   "chat.builtinTool.calendar.deleteEvent": "Delete calendar event",

@@ -240,8 +240,6 @@
   "chat.branch.answers": "Răspunsuri",
   "chat.branch.failed": "Eșuat",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Oprește acest răspuns",
-  "chat.branch.stopModel": "Oprește {{model}}",
   "chat.branch.unknownModel": "Model necunoscut",
   "chat.builtinTool.calendar.createEvent": "Creați un eveniment din calendar",
   "chat.builtinTool.calendar.deleteEvent": "Șterge evenimentul din calendar",

@@ -251,7 +251,7 @@ export function useAgentChatControls(input: {
   const { agentId, composerKey, sessionId, workspaceFolderId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
-  const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
+  const isComposerBusy = useAgentSessionSelection(client, sessionId, selectComposerBusy);
   const isAdmitting = useAgentSessionSelection(client, sessionId, selectIsAdmitting);
   const [submission, setSubmission] = useState<{
     composerKey: number;
@@ -272,7 +272,14 @@ export function useAgentChatControls(input: {
 
   const cancellationSessionId = sessionId ?? pendingSend?.sessionId;
   const cancel = useCallback(() => {
-    return cancellationSessionId ? client.cancelTurn(cancellationSessionId) : Promise.resolve();
+    if (!cancellationSessionId) return Promise.resolve();
+    const state = client.getState(cancellationSessionId);
+    const messageId = selectRunningAnswerId(state);
+    if (messageId) return client.cancelTurn(cancellationSessionId, messageId);
+    // A settled or historical branch must not stop another model's background reply.
+    return isAgentSessionExecuting(state)
+      ? Promise.resolve()
+      : client.cancelTurn(cancellationSessionId);
   }, [client, cancellationSessionId]);
   const send = useCallback(
     async ({
@@ -364,7 +371,7 @@ export function useAgentChatControls(input: {
         : undefined,
     isApprovalPending:
       activeTurnStatus === 'awaiting-approval' || activeTurnStatus === 'awaiting-input',
-    isBusy: isSessionBusy || Boolean(pendingSend?.isSubmitting),
+    isBusy: isComposerBusy || Boolean(pendingSend?.isSubmitting),
     sendMessage: send,
   };
 }
@@ -388,8 +395,31 @@ function useAgentSessionSelection<TValue>(
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
 }
-function selectSessionBusy(state: AgentSessionChatState) {
-  return Boolean(state.isSubmitting || isAgentSessionExecuting(state));
+function selectComposerBusy(state: AgentSessionChatState) {
+  return Boolean(state.isSubmitting || selectRunningAnswerId(state));
+}
+
+/** The composer follows the selected branch, including its unstarted follow-up inputs. */
+function selectRunningAnswerId(state: AgentSessionChatState): string | undefined {
+  const turn = isAgentSessionExecuting(state) ? state.activeTurn : null;
+  let id = state.snapshot?.session.activeNodeId ?? turn?.assistantMessageId;
+  while (id) {
+    const message = state.liveMessages.find((candidate) => candidate.id === id);
+    if (message) {
+      if (message.role === 'assistant')
+        return message.status === 'pending' || message.status === 'streaming'
+          ? message.id
+          : undefined;
+      id = message.parentId ?? '';
+    } else {
+      const queued = state.queuedInputs.find(
+        (input) => input.assistantMessageId === id || input.userMessage.id === id,
+      );
+      if (!queued) return id === turn?.assistantMessageId ? id : undefined;
+      id = queued.userMessage.parentId ?? '';
+    }
+  }
+  return undefined;
 }
 
 /** Queue subscribers do not rerender for streamed message content. */

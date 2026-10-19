@@ -167,8 +167,6 @@ export type ConversationMessage = {
     fork?: ConversationAction<{ title?: string }, ConversationRef>;
     /** Shows the branch containing another alternative at this message's branch point. */
     select?: ConversationAction<{ messageId: string }, void>;
-    /** Stops this answer alone while other answers to the same question continue. */
-    stop?: ConversationAction<void, void>;
   };
 };
 export type ConversationSnapshot = {

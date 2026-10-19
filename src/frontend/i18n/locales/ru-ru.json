@@ -242,8 +242,6 @@
   "chat.branch.answers": "Ответы",
   "chat.branch.failed": "Ошибка",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Остановить этот ответ",
-  "chat.branch.stopModel": "Остановить {{model}}",
   "chat.branch.unknownModel": "Неизвестная модель",
   "chat.builtinTool.calendar.createEvent": "Создать событие календаря",
   "chat.builtinTool.calendar.deleteEvent": "Удалить событие календаря",

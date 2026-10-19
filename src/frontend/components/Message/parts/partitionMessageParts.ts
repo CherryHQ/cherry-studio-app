@@ -181,9 +181,8 @@ function findResultTextIndex(parts: readonly CherryMessagePart[]): number | unde
 
 function isInvisiblePart(part: CherryMessagePart) {
   return (
-    ((part.type === 'reasoning' || part.type === 'text') &&
-      part.state !== 'streaming' &&
-      !part.text.trim()) ||
+    (part.type === 'text' && !part.text.trim()) ||
+    (part.type === 'reasoning' && part.state !== 'streaming' && !part.text.trim()) ||
     part.type === 'step-start' ||
     part.type === 'source-document' ||
     part.type === 'data-video' ||

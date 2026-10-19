@@ -2,7 +2,6 @@ import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import SquareIcon from '@cherrystudio/app-icons/icons/square';
 import {
   BackgroundPressExclusion,
-  Button,
   ScrollShadow,
   Spinner,
   Tabs,
@@ -88,7 +87,9 @@ export const MessageAnswerTabs = memo(function MessageAnswerTabs({
           >
             {name}
           </Text>
-          <AnswerStatusIcon status={sibling.status} />
+          {sibling.status !== 'pending' || !isSelected ? (
+            <AnswerStatusIcon status={sibling.status} />
+          ) : null}
         </View>
       ),
     };
@@ -152,35 +153,3 @@ function AnswerStatusIcon({ status }: { status: MessageStatus }) {
   if (status === 'paused') return <SquareIcon className="size-3 text-muted-foreground" />;
   return null;
 }
-
-/** Stops the shown parallel answer alone; the composer's stop ends every answer. */
-export const MessageAnswerStop = memo(function MessageAnswerStop({
-  message,
-}: {
-  message: MessageListItem;
-}) {
-  const { t } = useTranslation();
-  const { stopAnswer } = useAssistantMessageActions();
-  // A single running answer stops with the composer; only parallel ones stop apart.
-  const running = message.branch?.siblings.filter((sibling) => sibling.status === 'pending');
-  if (!stopAnswer || message.status !== 'pending' || (running?.length ?? 0) < 2) return null;
-  return (
-    <BackgroundPressExclusion>
-      <View className="flex-row">
-        <Button
-          icon={<SquareIcon className="text-muted-foreground" size={12} />}
-          onPress={() => stopAnswer({ messageId: message.id })}
-          size="xs"
-          testID="message-answer-stop"
-          variant="ghost"
-        >
-          <Button.Label>
-            {message.model?.name
-              ? t('chat.branch.stopModel', { model: message.model.name })
-              : t('chat.branch.stopAnswer')}
-          </Button.Label>
-        </Button>
-      </View>
-    </BackgroundPressExclusion>
-  );
-});

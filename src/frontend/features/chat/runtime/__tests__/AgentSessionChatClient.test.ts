@@ -671,6 +671,40 @@ describe('AgentSessionChatClient', () => {
     });
   });
 
+  test.each(['streaming', 'success'] as const)(
+    'cancels a selected %s answer by its own turn without stopping another active turn',
+    async (status) => {
+      const selected = { ...assistantMessage(), status };
+      const activeTurn: AgentTurnView = {
+        id: 'background-turn',
+        sessionId: 'session-1',
+        assistantMessageId: 'background-answer',
+        status: 'running',
+        startedAt: selected.createdAt,
+        endedAt: null,
+        error: null,
+      };
+      const protocol = protocolWithObservation(async () => ({
+        snapshot: { ...snapshot(), activeTurn, streamingMessage: selected },
+        unsubscribe: jest.fn(),
+      }));
+      const client = new AgentSessionChatClient(protocol);
+      try {
+        await client.observe('session-1');
+        await client.cancelTurn('session-1', selected.id);
+        if (status === 'streaming')
+          expect(protocol.cancelTurn).toHaveBeenCalledWith({
+            sessionId: 'session-1',
+            turnId: selected.turnId,
+            messageId: selected.id,
+          });
+        else expect(protocol.cancelTurn).not.toHaveBeenCalled();
+      } finally {
+        client.dispose();
+      }
+    },
+  );
+
   test('stops a submission the Host is still admitting and releases the composer', async () => {
     const protocol = protocolWithObservation(async () => ({
       snapshot: snapshot(),

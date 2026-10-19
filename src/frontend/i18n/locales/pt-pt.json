@@ -240,8 +240,6 @@
   "chat.branch.answers": "Respostas",
   "chat.branch.failed": "Falhou",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Parar esta resposta",
-  "chat.branch.stopModel": "Parar {{model}}",
   "chat.branch.unknownModel": "Modelo desconhecido",
   "chat.builtinTool.calendar.createEvent": "Criar evento de calendário",
   "chat.builtinTool.calendar.deleteEvent": "Apagar evento do calendário",

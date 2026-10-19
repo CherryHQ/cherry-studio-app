@@ -145,7 +145,7 @@ describe('MessageParts', () => {
     },
   );
 
-  test('keeps feedback below an answered question until the answer starts streaming', () => {
+  test('does not restore connection feedback between visible question, reasoning and tool steps', () => {
     const question = {
       type: 'dynamic-tool' as const,
       toolName: 'ask_user_question',
@@ -185,20 +185,20 @@ describe('MessageParts', () => {
     expect(feedbackOrder()).toEqual(['MessagePartRenderer']);
 
     update([answeredQuestion]);
-    expect(feedbackOrder()).toEqual(['MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['MessagePartRenderer']);
 
     update([answeredQuestion, reasoning]);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     update([answeredQuestion, { ...reasoning, state: 'done' }, tool]);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     const completed = [
       answeredQuestion,
       { ...tool, state: 'output-available', output: {} },
     ] as const;
     update(completed);
-    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer', 'Pending']);
+    expect(feedbackOrder()).toEqual(['ProcessGroupPart', 'MessagePartRenderer']);
 
     update([...completed, { type: 'text', state: 'streaming', text: 'Done.' }]);
     expect(feedbackOrder()).toEqual([
@@ -214,7 +214,7 @@ describe('MessageParts', () => {
   test.each(['success', 'error', 'paused'] as const)(
     'removes waiting when a silent reply becomes %s',
     (status) => {
-      const message = { ...makeMessage('pending'), data: { parts: [answeredQuestion] } };
+      const message = { ...makeMessage('pending'), data: { parts: [] } };
       const renderer = render(<MessageParts message={message} />);
       expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
 
@@ -230,7 +230,7 @@ describe('MessageParts', () => {
     expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
   });
 
-  test('keeps waiting when streaming text contains only a removed generated-image reference', () => {
+  test('ends connection feedback when an image appears before its explanatory text', () => {
     const id = '01a0c213-4cfb-741d-807e-624fedfa1ab8';
     const image = makeFilePart(id, 'result.png', 'image/png');
     const text = {
@@ -243,7 +243,7 @@ describe('MessageParts', () => {
     );
 
     expect(renderer.root.findAllByType('GeneratedFileStrip')).toHaveLength(1);
-    expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+    expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
 
     act(() => {
       renderer.update(
@@ -267,7 +267,7 @@ describe('MessageParts', () => {
     {
       name: 'completed text',
       parts: [{ type: 'text', state: 'done', text: 'Working on it.' }],
-      waiting: true,
+      waiting: false,
     },
     {
       name: 'empty streaming text',
@@ -319,7 +319,7 @@ describe('MessageParts', () => {
           output: {},
         },
       ],
-      waiting: true,
+      waiting: false,
     },
   ] satisfies {
     name: string;

@@ -16,7 +16,7 @@ import { useAssistantMessageActions } from '../context/AssistantMessageActionsPr
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerStop, MessageAnswerTabs } from './MessageAnswerTabs';
+import { MessageAnswerTabs } from './MessageAnswerTabs';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -75,7 +75,6 @@ function renderChatAssistantMessage(
       <AssistantMessage message={message}>
         {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
         {accessories}
-        <MessageAnswerStop message={message} />
         {message.status !== 'pending' ? (
           <BackgroundPressExclusion>
             <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">

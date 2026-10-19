@@ -238,8 +238,6 @@
   "chat.branch.answers": "Απαντήσεις",
   "chat.branch.failed": "Απέτυχε",
   "chat.branch.repeatedModel": "{{model}} · {{index}}",
-  "chat.branch.stopAnswer": "Διακοπή αυτής της απάντησης",
-  "chat.branch.stopModel": "Διακοπή {{model}}",
   "chat.branch.unknownModel": "Άγνωστο μοντέλο",
   "chat.builtinTool.calendar.createEvent": "Δημιουργία συμβάντος ημερολογίου",
   "chat.builtinTool.calendar.deleteEvent": "Διαγραφή συμβάντος ημερολογίου",

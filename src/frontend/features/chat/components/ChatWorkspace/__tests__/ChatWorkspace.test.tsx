@@ -51,7 +51,6 @@ jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => nul
 jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
 
 jest.mock('../components/MessageAnswerTabs', () => ({
-  MessageAnswerStop: () => null,
   MessageAnswerTabs: () => null,
 }));
 
