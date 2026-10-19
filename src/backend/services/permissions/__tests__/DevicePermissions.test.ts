@@ -201,6 +201,19 @@ describe('DevicePermissions', () => {
     expect(health.request).toHaveBeenCalledWith(['steps']);
   });
 
+  test('only reopens an already requested vision selection when explicitly requested', async () => {
+    health.getStatuses.mockImplementation(async (types) =>
+      nativeHealthStatuses(types, 'requested'),
+    );
+    await service.request(['health.visionPrescription.read']);
+    expect(health.request).not.toHaveBeenCalled();
+    await service.request(['health.visionPrescription.read', 'health.steps.read'], undefined, {
+      reselectHealthRecords: true,
+    });
+    expect(health.request).toHaveBeenCalledTimes(1);
+    expect(health.request).toHaveBeenCalledWith(['visionPrescription']);
+  });
+
   test('reports health as unsupported on Android without a native bridge', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     service = new DevicePermissions(() => null);

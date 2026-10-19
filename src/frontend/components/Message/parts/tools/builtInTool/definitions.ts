@@ -59,6 +59,13 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
     iconName: 'location',
     titleKey: 'chat.builtinTool.location.current',
   },
+  health_list_data_types: { iconName: 'health', titleKey: 'chat.builtinTool.health.listDataTypes' },
+  health_query_data: { iconName: 'health', titleKey: 'chat.builtinTool.health.queryData' },
+  health_get_record: { iconName: 'health', titleKey: 'chat.builtinTool.health.getRecord' },
+  health_share_verifiable_records: {
+    iconName: 'health',
+    titleKey: 'chat.builtinTool.health.shareVerifiableRecords',
+  },
   health_get_summary: {
     iconName: 'health',
     titleKey: 'chat.builtinTool.health.summary',

@@ -6,6 +6,7 @@ import { Linking, Platform } from 'react-native';
 
 import {
   canRequestDevicePermission,
+  canUseDevicePermission,
   type DevicePermission,
   type DevicePermissionScope,
   type DevicePermissionStatus,
@@ -66,11 +67,12 @@ export class DevicePermissions implements PermissionsModule {
   request(
     scopes: readonly DevicePermissionScope[],
     signal?: AbortSignal,
+    options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses> {
     // Only one system authorization sheet at a time, including requests from an Agent.
     // Keep the queue locked until an already-open native sheet settles, even after cancellation.
     const unique = [...new Set(scopes)];
-    const result = this.requestQueue.then(() => this.requestPermissions(unique, signal));
+    const result = this.requestQueue.then(() => this.requestPermissions(unique, signal, options));
     this.requestQueue = result.then(
       () => undefined,
       () => undefined,
@@ -159,11 +161,18 @@ export class DevicePermissions implements PermissionsModule {
   private async requestPermissions(
     scopes: readonly DevicePermissionScope[],
     signal?: AbortSignal,
+    options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses> {
     signal?.throwIfAborted();
     const before = await this.getStatuses(scopes);
     signal?.throwIfAborted();
-    const requestable = scopes.filter((scope) => canRequestDevicePermission(before[scope]));
+    const requestable = scopes.filter(
+      (scope) =>
+        canRequestDevicePermission(before[scope]) ||
+        (options?.reselectHealthRecords === true &&
+          scope === 'health.visionPrescription.read' &&
+          canUseDevicePermission(scope, before[scope])),
+    );
     const healthTypes = healthTypesForScopes(requestable);
     if (healthTypes.length) {
       const health = this.loadHealthAccess();

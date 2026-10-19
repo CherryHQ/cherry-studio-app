@@ -9,10 +9,12 @@
  * permission, and application configuration.
  */
 
+import { HEALTH_SUMMARY_METRICS } from '@/shared/contracts/health';
 import {
   type DevicePermissionScope,
   HEALTH_PERMISSION_SCOPES,
 } from '@/shared/contracts/permissions';
+import { healthPermissionScope } from '@/shared/contracts/permissions';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
@@ -44,6 +46,10 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'generate_image',
   'health_get_summary',
   'health_list_workouts',
+  'health_list_data_types',
+  'health_query_data',
+  'health_get_record',
+  'health_share_verifiable_records',
   'location_get_current',
   'read_file',
   'reminder_create_item',
@@ -160,7 +166,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('health_get_summary', 'ask', {
     agentCapability: 'health',
     autoApprovalEligible: false,
-    permissionScopes: HEALTH_PERMISSION_SCOPES.filter((scope) => scope !== 'health.workouts.read'),
+    permissionScopes: HEALTH_SUMMARY_METRICS.map(healthPermissionScope),
     permissionMatch: 'any',
     platforms: ['ios'],
   }),
@@ -168,6 +174,24 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     agentCapability: 'health',
     autoApprovalEligible: false,
     permissionScopes: ['health.workouts.read'],
+    platforms: ['ios'],
+  }),
+  describe('health_list_data_types', 'auto', {
+    agentCapability: 'health',
+    platforms: ['ios'],
+  }),
+  ...(['health_query_data', 'health_get_record'] as const).map((id) =>
+    describe(id, 'ask', {
+      agentCapability: 'health',
+      autoApprovalEligible: false,
+      permissionScopes: HEALTH_PERMISSION_SCOPES,
+      permissionMatch: 'any',
+      platforms: ['ios'],
+    }),
+  ),
+  describe('health_share_verifiable_records', 'ask', {
+    agentCapability: 'health',
+    autoApprovalEligible: false,
     platforms: ['ios'],
   }),
   describe('location_get_current', 'auto', {
