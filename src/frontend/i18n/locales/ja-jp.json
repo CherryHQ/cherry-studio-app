@@ -378,6 +378,7 @@
   "chat.media.unavailable": "利用不可",
   "chat.message.renderFailed": "このメッセージを表示できません。",
   "chat.message.scrollToBottom": "一番下までスクロールします",
+  "chat.message.stopped": "停止しました",
   "chat.message.unknownPart": "不明部分",
   "chat.message.waitingForResponse": "応答待ち",
   "chat.messageActions.branchFailed": "この回答を切り替えられませんでした。もう一度お試しください。",

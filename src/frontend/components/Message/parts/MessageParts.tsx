@@ -1,7 +1,7 @@
 import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
@@ -57,6 +57,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   const isWaitingForResponse =
     message.role === 'assistant' && isStreaming && !showsLiveActivity(parts, body);
   const hasContent = boundaries.length > 0 || body.length > 0 || process.length > 0;
+  const isStoppedWithoutAnswer =
+    message.role === 'assistant' &&
+    message.status === 'paused' &&
+    body.length === 0 &&
+    files.length === 0;
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
   const initialImageAspectRatio = message.imageGeneration
     ? imageParamsAspectRatio(message.imageGeneration.paramValues)
@@ -130,6 +135,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
       ) : null}
       {isWaitingForResponse ? (
         <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
+      ) : null}
+      {isStoppedWithoutAnswer ? (
+        <MessagePart.Status testID="chat-message-stopped">
+          <Text className="text-muted-foreground text-sm">{t('chat.message.stopped')}</Text>
+        </MessagePart.Status>
       ) : null}
     </>
   );

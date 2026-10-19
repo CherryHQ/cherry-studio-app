@@ -386,6 +386,7 @@
   "chat.media.unavailable": "Indisponibil",
   "chat.message.renderFailed": "Acest mesaj nu poate fi afișat.",
   "chat.message.scrollToBottom": "Derulați în jos",
+  "chat.message.stopped": "Oprit",
   "chat.message.unknownPart": "Parte necunoscută",
   "chat.message.waitingForResponse": "Se așteaptă răspuns",
   "chat.messageActions.branchFailed": "Răspunsul nu a putut fi schimbat. Încearcă din nou.",

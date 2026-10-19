@@ -382,6 +382,7 @@
   "chat.media.unavailable": "Kullanılamıyor",
   "chat.message.renderFailed": "Bu mesaj görüntülenemiyor.",
   "chat.message.scrollToBottom": "Aşağıya doğru kaydır",
+  "chat.message.stopped": "Durduruldu",
   "chat.message.unknownPart": "Bilinmeyen Parça",
   "chat.message.waitingForResponse": "Yanıt bekleniyor",
   "chat.messageActions.branchFailed": "Bu yanıt değiştirilemedi. Tekrar deneyin.",

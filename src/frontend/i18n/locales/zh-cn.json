@@ -378,6 +378,7 @@
   "chat.media.unavailable": "不可用",
   "chat.message.renderFailed": "无法显示这条消息。",
   "chat.message.scrollToBottom": "滚动到底部",
+  "chat.message.stopped": "已停止",
   "chat.message.unknownPart": "未知内容",
   "chat.message.waitingForResponse": "等待回复",
   "chat.messageActions.branchFailed": "无法切换此回答，请重试。",

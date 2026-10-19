@@ -386,6 +386,7 @@
   "chat.media.unavailable": "No disponible",
   "chat.message.renderFailed": "No se puede mostrar este mensaje.",
   "chat.message.scrollToBottom": "Desplazarse hacia abajo",
+  "chat.message.stopped": "Detenido",
   "chat.message.unknownPart": "Parte Desconocida",
   "chat.message.waitingForResponse": "Esperando respuesta",
   "chat.messageActions.branchFailed": "No se pudo cambiar esta respuesta. Inténtalo de nuevo.",

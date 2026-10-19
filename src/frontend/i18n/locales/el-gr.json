@@ -382,6 +382,7 @@
   "chat.media.unavailable": "Μη διαθέσιμο",
   "chat.message.renderFailed": "Δεν είναι δυνατή η εμφάνιση αυτού του μηνύματος.",
   "chat.message.scrollToBottom": "Κάντε κύλιση προς τα κάτω",
+  "chat.message.stopped": "Διακόπηκε",
   "chat.message.unknownPart": "Άγνωστο μέρος",
   "chat.message.waitingForResponse": "Αναμονή απάντησης",
   "chat.messageActions.branchFailed": "Δεν ήταν δυνατή η εναλλαγή αυτής της απάντησης. Δοκιμάστε ξανά.",

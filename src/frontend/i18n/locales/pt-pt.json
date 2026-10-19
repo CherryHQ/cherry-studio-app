@@ -386,6 +386,7 @@
   "chat.media.unavailable": "Indisponível",
   "chat.message.renderFailed": "Não é possível apresentar esta mensagem.",
   "chat.message.scrollToBottom": "Desça",
+  "chat.message.stopped": "Interrompido",
   "chat.message.unknownPart": "Parte Desconhecida",
   "chat.message.waitingForResponse": "Aguarda resposta",
   "chat.messageActions.branchFailed": "Não foi possível alternar esta resposta. Tente novamente.",

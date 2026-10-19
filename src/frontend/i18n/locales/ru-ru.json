@@ -390,6 +390,7 @@
   "chat.media.unavailable": "Недоступно",
   "chat.message.renderFailed": "Не удаётся показать это сообщение.",
   "chat.message.scrollToBottom": "Прокрутите вниз",
+  "chat.message.stopped": "Остановлено",
   "chat.message.unknownPart": "Неизвестная часть",
   "chat.message.waitingForResponse": "Ожидание ответа",
   "chat.messageActions.branchFailed": "Не удалось переключить ответ. Повторите попытку.",

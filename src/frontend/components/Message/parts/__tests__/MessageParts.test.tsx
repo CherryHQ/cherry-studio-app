@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageStatus } from '@/shared/data/types/message';
@@ -10,6 +11,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
   ContextMenuExclusion: (props: object) => jest.requireActual('react').createElement('View', props),
   MessagePart: {
     Pending: (props: object) => jest.requireActual('react').createElement('Pending', props),
+    Status: (props: object) => jest.requireActual('react').createElement('Status', props),
   },
 }));
 
@@ -76,6 +78,72 @@ describe('MessageParts', () => {
       'chat.message.waitingForResponse',
     );
   });
+
+  test.each([
+    { name: 'no parts', parts: [] },
+    {
+      name: 'only reasoning and empty text',
+      parts: [
+        { type: 'reasoning', state: 'done', text: 'Thinking about the answer.' },
+        { type: 'text', state: 'done', text: '   ' },
+      ],
+    },
+  ] satisfies { name: string; parts: NonNullable<MessageListItem['data']['parts']> }[])(
+    'shows a stopped outcome with $name and returns to waiting on retry',
+    ({ parts }) => {
+      const pending = { ...makeMessage('pending'), data: { parts: [] } };
+      const renderer = render(<MessageParts message={pending} />);
+
+      act(() =>
+        renderer.update(
+          <MessageParts message={{ ...pending, status: 'paused', data: { parts } }} />,
+        ),
+      );
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).toContain(
+        'chat.message.stopped',
+      );
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(0);
+
+      act(() => renderer.update(<MessageParts message={pending} />));
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).not.toContain(
+        'chat.message.stopped',
+      );
+      expect(renderer.root.findAllByType('Pending')).toHaveLength(1);
+    },
+  );
+
+  test.each([
+    { name: 'partial answer', parts: [{ type: 'text', state: 'done', text: 'Partial answer' }] },
+    { name: 'image', parts: [makeFilePart('image', 'result.png', 'image/png')] },
+    { name: 'downloadable file', parts: [makeFilePart('file', 'report.md')] },
+    {
+      name: 'interruption error',
+      parts: [
+        {
+          type: 'data-error',
+          data: { code: 'INTERRUPTED', message: 'The app stopped.', retryable: true },
+        },
+      ],
+    },
+  ] satisfies { name: string; parts: NonNullable<MessageListItem['data']['parts']> }[])(
+    'keeps the $name without an empty-answer stopped notice',
+    ({ parts }) => {
+      const renderer = render(
+        <MessageParts message={{ ...makeMessage('paused'), data: { parts } }} />,
+      );
+
+      expect(renderer.root.findAllByType(Text).map((node) => node.props.children)).not.toContain(
+        'chat.message.stopped',
+      );
+      expect(
+        renderer.root.findAll(
+          (node) => node.type === 'MessagePartRenderer' || node.type === 'GeneratedFileStrip',
+        ),
+      ).toHaveLength(1);
+    },
+  );
 
   test('keeps feedback below an answered question until the answer starts streaming', () => {
     const question = {
