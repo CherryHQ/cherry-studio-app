@@ -8,6 +8,7 @@ import {
   installLogWriter,
   loggerService,
 } from '@/shared/core/logger/LoggerService';
+import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
 
 type RejectionOptions = {
   allRejections: boolean;
@@ -33,6 +34,29 @@ try {
   // Unavailable file storage must not turn diagnostic setup into a boot failure.
   logger.warn('Diagnostic file logging unavailable', { error });
 }
+
+try {
+  // React Native's optional native milestones use performance.timeOrigin, not wall time.
+  const timing = (
+    performance as typeof performance & {
+      rnStartupTiming?: {
+        startTime?: number | null;
+        initializeRuntimeStart?: number | null;
+        executeJavaScriptBundleEntryPointStart?: number | null;
+      };
+    }
+  ).rnStartupTiming;
+  if (timing) {
+    recordStartupEvent('startup.react_native.milestones', 'completed', {
+      rnStartupStartMs: timing.startTime,
+      rnRuntimeStartMs: timing.initializeRuntimeStart,
+      rnBundleEntryStartMs: timing.executeJavaScriptBundleEntryPointStart,
+    });
+  }
+} catch {
+  // Native timing support must not become a startup dependency.
+}
+
 const runtime = globalThis as typeof globalThis & RuntimeGlobals;
 const previousHandler = runtime.ErrorUtils?.getGlobalHandler();
 if (previousHandler) {

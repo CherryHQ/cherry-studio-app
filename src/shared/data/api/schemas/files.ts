@@ -56,7 +56,6 @@ export type FileSchemas = {
     };
   };
   '/files/history': { GET: { query: { id: string }; response: FileEntry[] } };
-  '/files/versions/:id': { DELETE: { params: { id: string }; response: undefined } };
   '/files/folders': {
     GET: { response: FileFolder[] };
     POST: { body: z.infer<typeof CreateFileFolderSchema>; response: FileFolder };

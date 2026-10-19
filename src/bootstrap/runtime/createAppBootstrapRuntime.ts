@@ -55,6 +55,7 @@ import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import { BackupError } from '@/shared/contracts/backup';
+import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -146,6 +147,7 @@ export function createAppBootstrapRuntime(
     'ProviderRegistryUpdaterService',
   );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
+  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   const services = createBackendServices({
     agent,
     ai,
@@ -159,9 +161,11 @@ export function createAppBootstrapRuntime(
     backend,
     dataApiDependencies,
     disposeSystemEntry,
+    disposeSkills,
     initializeSkills,
     hasPendingSkillStorageWork,
   } = createBackend(services, {
+    resourceScopes: host.container.get('ResourceScopeCoordinator'),
     backgroundExecution: host.container.get<KeepAliveCoordinator>('KeepAliveCoordinator'),
     remoteBackground: {
       replies: host.container.get<BackgroundReplyRuntime>('BackgroundReplyRuntime'),
@@ -178,13 +182,14 @@ export function createAppBootstrapRuntime(
     diagnostics,
     languageServing,
     providerRegistryUpdater,
+    trash,
   });
-  const trash = host.container.get<TrashRuntime>('TrashRuntime');
   backup.configure(
     () =>
       agent.hasPendingStorageWork() ||
       jobRuntime.hasPendingStorageWork() ||
       hasPendingSkillStorageWork() ||
+      mcpRuntime.hasPendingStorageWork() ||
       trash.hasPendingStorageWork(),
     () => {
       void jobRuntime.pump({ reason: 'timer' });
@@ -235,7 +240,7 @@ export function createAppBootstrapRuntime(
       // Host-owned JobRuntime still settles through reverse dependency teardown.
       disposePromise ??= (async () => {
         unsubscribeVisibleTask();
-        await disposeSystemEntry();
+        await Promise.all([disposeSystemEntry(), disposeSkills()]);
         // The expected-host check runs inside Application's serialized
         // transition, closing the replacement/dispose race. Calling the host
         // directly afterwards also covers a runtime disposed before install;
@@ -267,9 +272,9 @@ export function createAppBootstrapRuntime(
           frontendCache.resetForRestore();
           resetFilePreviewsForRestore();
         }
-        await application.install(host);
+        await measureStartupStage('startup.host', () => application.install(host));
         await initializeAppRuntime(services);
-        await initializeSkills();
+        await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();
         try {
           cleanupStorageAfterBoot();

@@ -17,7 +17,8 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import type { PaintingBoardData, PaintingBoardNode } from '../hooks/usePaintingBoard';
 import { layoutPaintingBoard } from '../utils/paintingBoardGraph';
 
-const NODE_WIDTH = 112;
+const IMAGE_WIDTH = 112;
+const NODE_WIDTH = IMAGE_WIDTH + 24;
 const IMAGE_HEIGHT = 140;
 const LABEL_HEIGHT = 44;
 const MIN_SCALE = 0.35;
@@ -235,7 +236,10 @@ function BoardNodeCard({
             )
           : prompt;
   const caption = (
-    <View className="flex-row items-center gap-1" style={{ height: labelHeight }}>
+    <View
+      className="flex-row items-center gap-1"
+      style={{ height: labelHeight, width: NODE_WIDTH }}
+    >
       <Text className="min-w-0 flex-1 text-muted-foreground text-xs" numberOfLines={1}>
         {label}
       </Text>
@@ -243,7 +247,7 @@ function BoardNodeCard({
     </View>
   );
   return (
-    <View className="absolute" style={{ left: x, top: y, width: NODE_WIDTH }}>
+    <View className="absolute items-center" style={{ left: x, top: y, width: NODE_WIDTH }}>
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
@@ -254,7 +258,7 @@ function BoardNodeCard({
             : 'items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary active:opacity-80'
         }
         onPress={onPress}
-        style={{ height: IMAGE_HEIGHT }}
+        style={{ height: IMAGE_HEIGHT, width: IMAGE_WIDTH }}
       >
         {thumbnail ? (
           <Image

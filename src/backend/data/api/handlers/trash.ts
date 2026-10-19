@@ -9,6 +9,7 @@ import {
 import type { HandlersFor } from '@/shared/data/api/types';
 
 export type TrashMutations = {
+  trashFolder(id: string): Promise<void>;
   delete(kind: TrashKind, id: string): Promise<void>;
   empty(): Promise<void>;
   restore(kind: TrashKind, id: string): Promise<void>;

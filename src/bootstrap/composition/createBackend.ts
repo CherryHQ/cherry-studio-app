@@ -6,6 +6,7 @@ import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
+import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import {
   createMcpServerMutations,
@@ -73,17 +74,20 @@ import {
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
   initializeSkills(): Promise<void>;
   hasPendingSkillStorageWork(): boolean;
+  disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
@@ -101,6 +105,7 @@ export function createBackend(
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
+    resourceScopes: ResourceScopeCoordinator;
     providerAccounts: ProviderAccountRuntime;
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
@@ -110,6 +115,7 @@ export function createBackend(
     diagnostics: DiagnosticsModule;
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    trash: Pick<TrashRuntime, 'trashFile'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -197,6 +203,7 @@ export function createBackend(
     },
   });
   const paintings = createPaintingsModule({
+    scopes: infrastructure.resourceScopes,
     db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },
     files: services.fileContent,
     jobs: {
@@ -271,7 +278,8 @@ export function createBackend(
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
   const cherryinClient = createCherryinSkillClient();
   const cherryinSkills = createCherryinSkillSource(cherryinClient);
-  let skillStorageWrites = 0;
+  const skillStorageWrites = new Set<Promise<unknown>>();
+  let skillsStopped = false;
   const skills = createSkillsModule({
     marketplace: createSkillMarketplace(githubSkills, {
       client: cherryinClient,
@@ -280,11 +288,16 @@ export function createBackend(
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
-        skillStorageWrites += 1;
+        if (skillsStopped) throw new Error('Skill storage has stopped');
+        const pending = dbService.withWriteTx(async (tx) => {
+          if (skillsStopped) throw new Error('Skill storage has stopped');
+          return fn(tx);
+        });
+        skillStorageWrites.add(pending);
         try {
-          return await dbService.withWriteTx(fn);
+          return await pending;
         } finally {
-          skillStorageWrites -= 1;
+          skillStorageWrites.delete(pending);
         }
       },
     },
@@ -306,7 +319,11 @@ export function createBackend(
 
   return {
     disposeSystemEntry: systemEntry.dispose,
-    hasPendingSkillStorageWork: () => skillStorageWrites > 0,
+    hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
+    disposeSkills: async () => {
+      skillsStopped = true;
+      await Promise.allSettled([...skillStorageWrites]);
+    },
     initializeSkills: async () => {
       try {
         await skills.reconcileStorage();
@@ -331,13 +348,12 @@ export function createBackend(
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
-        moveToTrash: services.fileContent.moveToTrash,
+        moveToTrash: (id) => infrastructure.trash.trashFile(FileEntryIdSchema.parse(id)),
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
         getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
-        subscribeChanges: services.fileContent.subscribeChanges,
       },
       mcp: services.mcpRuntime,
       models,

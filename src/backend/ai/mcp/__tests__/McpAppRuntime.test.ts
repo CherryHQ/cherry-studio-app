@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/client';
 import type { McpAppChannel } from '@/shared/contracts/mcpApp';
 
 import { McpAppRuntime } from '../McpAppRuntime';
+import { McpRuntimeToolError } from '../mcpRuntimeAdapter';
 
 const reference = {
   serverId: 'server',
@@ -95,6 +96,29 @@ function createHarness() {
 }
 
 describe('MCP App session boundaries', () => {
+  it('preserves uncertain outcomes while redacting private errors at the bridge', async () => {
+    const app = createHarness();
+    const view = await app.open();
+    try {
+      await app.initialize();
+      app.ports.call.mockRejectedValueOnce(
+        new McpRuntimeToolError('mcp_tool_outcome_unknown', 'private credentials', false),
+      );
+      const uncertain = await app.request(2, 'tools/call', { name: 'write', arguments: {} });
+      expect(uncertain).toMatchObject({
+        error: { message: expect.stringContaining('mcp_tool_outcome_unknown') },
+      });
+      expect(JSON.stringify(uncertain)).not.toContain('private credentials');
+      app.ports.call.mockRejectedValueOnce(new Error('private endpoint'));
+      const rejected = await app.request(3, 'tools/call', { name: 'write', arguments: {} });
+      expect(rejected).toMatchObject({
+        error: { message: expect.stringContaining('denied, cancelled, or unavailable') },
+      });
+      expect(JSON.stringify(rejected)).not.toContain('private endpoint');
+    } finally {
+      await app.runtime.close(view.id);
+    }
+  });
   it('synchronizes the native fullscreen mode before delivering tool input to initialized views', async () => {
     const app = createHarness();
     const view = await app.open();

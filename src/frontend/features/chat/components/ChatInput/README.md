@@ -114,10 +114,16 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
   remain selectable when user invocation is allowed. Selection never creates an Agent binding.
-- The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
-  and batched previews with the library screen. Selection stays local until Add is pressed; the
-  action appears only for newly selected, available attachments. Already attached files are marked
-  and cannot be added twice. Close discards the selection. Search is not offered.
+- The menu's File row opens the full-height library picker with only a centered title in its header.
+  Like the library, each level lists its folders first, then its files newest first. A folder's
+  own timestamp does not change when files are added inside it, so folders are not ordered among
+  files. Folder rows only expand/collapse; their children remain under the folder and reuse the
+  library's cursor pages and batched previews. Expanded directories use the workspace tree's inline
+  paging pattern. File dates are content modification dates, as in the library.
+  Selection belongs to the sheet and survives collapsing or recycling a directory. A fixed footer
+  appears for newly selected, available attachments and confirms their count. Already attached files
+  are marked and cannot be added twice. Dismissing by drag, scrim, back, or accessibility escape
+  discards the pending selection. Search is not offered.
   The app-wide file-change subscription keeps these shared pages current; opening the picker
   reuses fresh pages without forcing another fetch.
 - Upload files closes the library picker and presents the system document picker from chat. Each

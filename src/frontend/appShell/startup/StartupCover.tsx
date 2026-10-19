@@ -15,6 +15,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
+
 import {
   getStartupExitDurationMs,
   STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
@@ -89,6 +91,7 @@ export function StartupCover({
       return;
     }
 
+    recordStartupEvent('startup.cover.exit', 'started');
     if (exitDurationMs === 0) {
       onExitComplete();
       return;

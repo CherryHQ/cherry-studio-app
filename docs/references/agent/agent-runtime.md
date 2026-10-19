@@ -589,7 +589,7 @@ A turn has no wall-clock deadline. Long generations, such as writing a large fil
 legitimate progress, and the step and call budgets already bound runaway tool loops. A turn ends only
 by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
 callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
-stall: each model request shares a 120-second waiting budget across all API-key attempts. Switching
+stall: each model request shares a 30-minute waiting budget across all API-key attempts. Switching
 keys or receiving stream-start or empty text/thinking events does not reset it; content events
 reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
 request settles on cancellation, source failure, or premature stream closure, even when the source

@@ -21,8 +21,22 @@ export function DataApiProvider({ children, dataApi }: DataApiProviderProps) {
         const changed = new Set(paths);
         paths.clear();
         timer = undefined;
+        const fileIds = new Set(
+          [...changed].flatMap((path) =>
+            path.startsWith('/files/entries/') ? [path.slice('/files/entries/'.length)] : [],
+          ),
+        );
         void queryClient.invalidateQueries({
-          predicate: (query) => changed.has(String(query.queryKey[0])),
+          predicate: ({ queryKey: [resource, idOrKind, entries], meta }) =>
+            changed.has(String(resource)) ||
+            (fileIds.size > 0 &&
+              ((Array.isArray(meta?.fileEntryIds) &&
+                meta.fileEntryIds.some((id) => fileIds.has(id))) ||
+                (resource === 'files' &&
+                  (fileIds.has(String(idOrKind)) ||
+                    (idOrKind === 'preview-uri-page' &&
+                      Array.isArray(entries) &&
+                      entries.some((entry) => fileIds.has(entry.id))))))),
         });
       }, 300);
     });

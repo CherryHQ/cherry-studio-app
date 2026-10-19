@@ -1,3 +1,5 @@
+import { isWebSearchError } from '@cherrystudio/web-search';
+
 import { HttpError } from '@/backend/services/http';
 import type { WebSearchFailure } from '@/shared/data/types/webSearch';
 
@@ -10,8 +12,11 @@ export function toWebSearchFailure(input: string, error: unknown): WebSearchFail
     .split(/\n\s+at\s+/)[0]
     .trim()
     .slice(0, 1_000);
+  const sharedError = isWebSearchError(error) ? error : undefined;
   let kind: WebSearchFailure['kind'] = 'unknown';
-  if (error instanceof WebSearchConfigError) {
+  if (sharedError) {
+    if (sharedError.kind !== 'cancelled') kind = sharedError.kind;
+  } else if (error instanceof WebSearchConfigError) {
     kind = 'configuration';
   } else if (error instanceof HttpError) {
     if (error.kind !== 'internal' && error.kind !== 'cancelled') kind = error.kind;
@@ -24,14 +29,18 @@ export function toWebSearchFailure(input: string, error: unknown): WebSearchFail
   ) {
     kind = 'network';
   }
-  const code =
-    error instanceof HttpError || error instanceof WebSearchConfigError ? error.code : undefined;
+  const code = sharedError
+    ? (sharedError.providerCode ?? sharedError.code)
+    : error instanceof HttpError || error instanceof WebSearchConfigError
+      ? error.code
+      : undefined;
+  const status = sharedError?.status ?? (error instanceof HttpError ? error.status : undefined);
   return {
     input,
     kind,
     message,
     ...(code ? { code: code.slice(0, 128) } : {}),
-    ...(error instanceof HttpError && error.status !== undefined ? { status: error.status } : {}),
+    ...(status !== undefined ? { status } : {}),
   };
 }
 

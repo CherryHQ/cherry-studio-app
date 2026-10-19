@@ -12,7 +12,7 @@ import {
   type FileFolderRow,
   type LibraryFileRow,
 } from '@/backend/data/db/schemas';
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import { publishFileEntryChanges } from '@/backend/data/fileEntryChanges';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { TrashItem, TrashKind } from '@/shared/data/api/schemas/trash';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
@@ -132,6 +132,11 @@ export class FileLibraryService {
     return row?.file ?? null;
   }
 
+  /** Look up the stable logical identity, independently of its current version. */
+  file(id: string): Promise<LibraryFileRow> {
+    return this.requireFile(this.db, id);
+  }
+
   async history(id: string): Promise<FileEntry[]> {
     const file = await this.requireFile(this.db, id);
     await requireActiveFolder(this.db, file.folderId);
@@ -148,12 +153,12 @@ export class FileLibraryService {
     ).map(rowToFileEntry);
   }
 
-  createFolder(
+  async createFolder(
     parentId: string | null,
     requestedName: string,
     workspaceFolderId?: string,
   ): Promise<FileFolder> {
-    return this.mutate(async (tx) => {
+    const folder = await this.mutate(async (tx) => {
       await requireWorkspaceDestination(tx, parentId, workspaceFolderId);
       const name = await availableLibraryName(tx, parentId, requestedName);
       const [row] = await tx
@@ -163,10 +168,16 @@ export class FileLibraryService {
       if (!row) throw new Error('Insert did not return a FileFolder');
       return folderView(row);
     });
+    publishDataApiChanges(['/files/folders']);
+    return folder;
   }
 
-  updateFolder(id: string, changes: { name?: string; parentId?: string | null }): Promise<void> {
-    return this.mutate(async (tx) => {
+  async updateFolder(
+    id: string,
+    changes: { name?: string; parentId?: string | null },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.mutate(async (tx) => {
       const [folder] = await tx
         .select()
         .from(fileFolderTable)
@@ -184,11 +195,16 @@ export class FileLibraryService {
         .update(fileFolderTable)
         .set({ parentId, name, nameKey: fileNameKey(name) })
         .where(eq(fileFolderTable.id, id));
-    });
+    }, signal);
+    publishDataApiChanges(['/files/folders', '/files/workspace', '/files/library']);
   }
 
-  updateFile(id: string, changes: { name?: string; folderId?: string | null }): Promise<void> {
-    return this.mutate(async (tx) => {
+  async updateFile(
+    id: string,
+    changes: { name?: string; folderId?: string | null },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.mutate(async (tx) => {
       const file = await this.requireFile(tx, id);
       const folderId = changes.folderId === undefined ? file.folderId : changes.folderId;
       const name = await availableLibraryName(tx, folderId, changes.name ?? file.name, {
@@ -200,7 +216,8 @@ export class FileLibraryService {
         .update(libraryFileTable)
         .set({ folderId, name, nameKey: fileNameKey(name) })
         .where(eq(libraryFileTable.id, id));
-    });
+    }, signal);
+    publishDataApiChanges(['/files/library']);
   }
 
   async workspace(sessionId: string): Promise<FileFolder | null> {
@@ -228,7 +245,7 @@ export class FileLibraryService {
         .returning({ id: agentSessionTable.id });
       if (!rows.length) throw DataApiErrorFactory.notFound('AgentSession', sessionId);
     });
-    publishDataApiChanges([`/agent-sessions/${sessionId}`]);
+    publishDataApiChanges(['/files/workspace', '/agent-sessions', `/agent-sessions/${sessionId}`]);
     return folderId ? this.folder(folderId) : null;
   }
 
@@ -281,8 +298,9 @@ export class FileLibraryService {
     return { folderId: folder.id, name, file: file ?? null };
   }
 
-  trashFileEntry(entryId: string, versionOnly = false): Promise<string[]> {
-    return this.mutate(async (tx) => {
+  /** Trash the logical file that owns this version, with all its versions. */
+  async trashFileEntry(entryId: string, signal?: AbortSignal): Promise<string[]> {
+    const ids = await this.mutate(async (tx) => {
       const [entry] = await tx
         .select()
         .from(fileEntryTable)
@@ -290,33 +308,23 @@ export class FileLibraryService {
       if (!entry?.libraryFileId) throw DataApiErrorFactory.notFound('FileEntry', entryId);
       const file = await this.requireFile(tx, entry.libraryFileId);
       const deletedAt = Date.now();
-      if (versionOnly && file.currentEntryId === entry.id)
-        throw DataApiErrorFactory.invalidOperation(
-          'trashVersion',
-          'Delete the whole file to remove its current version.',
-        );
-      if (!versionOnly)
-        await tx
-          .update(libraryFileTable)
-          .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
-          .where(eq(libraryFileTable.id, file.id));
+      await tx
+        .update(libraryFileTable)
+        .set({ deletedAt, trashedWith: null, updatedAt: sql`${libraryFileTable.updatedAt}` })
+        .where(eq(libraryFileTable.id, file.id));
       const rows = await tx
         .update(fileEntryTable)
-        .set({
-          deletedAt,
-          trashedWith: versionOnly ? null : file.id,
-          updatedAt: sql`${fileEntryTable.updatedAt}`,
-        })
-        .where(
-          versionOnly ? eq(fileEntryTable.id, entryId) : eq(fileEntryTable.libraryFileId, file.id),
-        )
+        .set({ deletedAt, trashedWith: file.id, updatedAt: sql`${fileEntryTable.updatedAt}` })
+        .where(eq(fileEntryTable.libraryFileId, file.id))
         .returning({ id: fileEntryTable.id });
       return rows.map((row) => row.id);
-    });
+    }, signal);
+    publishFileEntryChanges(ids);
+    return ids;
   }
 
-  trashFolder(id: string): Promise<string[]> {
-    return this.mutate(async (tx) => {
+  async trashFolder(id: string, signal?: AbortSignal): Promise<string[]> {
+    const entryIds = await this.mutate(async (tx) => {
       await requireActiveFolder(tx, id);
       const ids = await this.descendants(tx, id, true);
       const deletedAt = Date.now();
@@ -346,11 +354,13 @@ export class FileLibraryService {
         )
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
+    publishFileEntryChanges(entryIds, ['/files/folders', '/files/workspace']);
+    return entryIds;
   }
 
-  restore(kind: TrashKind, id: string): Promise<string[]> {
-    return this.mutate(async (tx) => {
+  async restore(kind: TrashKind, id: string, signal?: AbortSignal): Promise<string[]> {
+    const entryIds = await this.mutate(async (tx) => {
       if (kind === 'folder') {
         const [folder] = await tx.select().from(fileFolderTable).where(eq(fileFolderTable.id, id));
         if (!folder || folder.deletedAt === null || folder.trashedWith !== null)
@@ -373,7 +383,11 @@ export class FileLibraryService {
           .where(eq(fileFolderTable.id, id));
         await tx
           .update(fileFolderTable)
-          .set({ deletedAt: null, trashedWith: null, updatedAt: sql`${fileFolderTable.updatedAt}` })
+          .set({
+            deletedAt: null,
+            trashedWith: null,
+            updatedAt: sql`${fileFolderTable.updatedAt}`,
+          })
           .where(eq(fileFolderTable.trashedWith, id));
         await tx
           .update(libraryFileTable)
@@ -383,7 +397,7 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.trashedWith, id));
-      } else if (kind === 'file') {
+      } else {
         const [file] = await tx.select().from(libraryFileTable).where(eq(libraryFileTable.id, id));
         if (!file || file.deletedAt === null || file.trashedWith !== null)
           throw DataApiErrorFactory.notFound('TrashItem', id);
@@ -403,60 +417,26 @@ export class FileLibraryService {
             updatedAt: sql`${libraryFileTable.updatedAt}`,
           })
           .where(eq(libraryFileTable.id, id));
-      } else {
-        const [entry] = await tx.select().from(fileEntryTable).where(eq(fileEntryTable.id, id));
-        if (!entry || entry.deletedAt === null || entry.trashedWith !== null)
-          throw DataApiErrorFactory.notFound('TrashItem', id);
-        const [file] = entry.libraryFileId
-          ? await tx
-              .select()
-              .from(libraryFileTable)
-              .where(eq(libraryFileTable.id, entry.libraryFileId))
-          : [];
-        if (!file || file.deletedAt !== null) {
-          const fileId = createOrderedUuid();
-          const name = await availableLibraryName(tx, null, entry.filename, { suffix: true });
-          await tx.insert(libraryFileTable).values({
-            id: fileId,
-            folderId: null,
-            name,
-            nameKey: fileNameKey(name),
-            currentEntryId: entry.id,
-          });
-          await tx
-            .update(fileEntryTable)
-            .set({ libraryFileId: fileId, updatedAt: sql`${fileEntryTable.updatedAt}` })
-            .where(eq(fileEntryTable.id, id));
-        }
       }
       const entries = await tx
         .update(fileEntryTable)
         .set({ deletedAt: null, trashedWith: null, updatedAt: sql`${fileEntryTable.updatedAt}` })
-        .where(kind === 'version' ? eq(fileEntryTable.id, id) : eq(fileEntryTable.trashedWith, id))
+        .where(eq(fileEntryTable.trashedWith, id))
         .returning({ id: fileEntryTable.id });
       return entries.map((entry) => entry.id);
-    });
+    }, signal);
+    publishFileEntryChanges(
+      entryIds,
+      kind === 'folder' ? ['/files/folders', '/files/workspace'] : [],
+    );
+    return entryIds;
   }
 
   /** Remove group ownership atomically, then return its blobs for best-effort cleanup. */
-  purge(item: TrashItem): Promise<FileEntry[] | null> {
-    return this.mutate(async (tx) => {
+  async purge(item: TrashItem): Promise<FileEntry[] | null> {
+    const paths: string[] = item.kind === 'folder' ? ['/files/folders', '/files/workspace'] : [];
+    const removedEntries = await this.mutate(async (tx) => {
       const entries = new FileEntryService(this.dbService);
-      if (item.kind === 'version') {
-        const [row] = await tx
-          .select()
-          .from(fileEntryTable)
-          .where(
-            and(
-              eq(fileEntryTable.id, item.id),
-              eq(fileEntryTable.deletedAt, item.deletedAt),
-              isNull(fileEntryTable.trashedWith),
-            ),
-          );
-        if (!row) return null;
-        await entries.deleteTx(tx, row.id);
-        return [rowToFileEntry(row)];
-      }
       let fileIds: string[];
       if (item.kind === 'folder') {
         const [folder] = await tx
@@ -499,12 +479,37 @@ export class FileLibraryService {
       for (const row of rows) await entries.deleteTx(tx, row.id);
       if (fileIds.length)
         await tx.delete(libraryFileTable).where(inArray(libraryFileTable.id, fileIds));
-      if (item.kind === 'folder')
+      if (item.kind === 'folder') {
+        const folders = await tx
+          .select({ id: fileFolderTable.id })
+          .from(fileFolderTable)
+          .where(or(eq(fileFolderTable.id, item.id), eq(fileFolderTable.trashedWith, item.id)));
+        const sessions = await tx
+          .select({ id: agentSessionTable.id })
+          .from(agentSessionTable)
+          .where(
+            inArray(
+              agentSessionTable.workspaceFolderId,
+              folders.map((folder) => folder.id),
+            ),
+          );
+        if (sessions.length)
+          paths.push(
+            '/agent-sessions',
+            ...sessions.map((session) => `/agent-sessions/${session.id}`),
+          );
         await tx
           .delete(fileFolderTable)
           .where(or(eq(fileFolderTable.id, item.id), eq(fileFolderTable.trashedWith, item.id)));
+      }
       return rows.map(rowToFileEntry);
     });
+    if (removedEntries)
+      publishFileEntryChanges(
+        removedEntries.map((entry) => entry.id),
+        paths,
+      );
+    return removedEntries;
   }
 
   private async restoreParent(tx: Database, id: string | null): Promise<string | null> {
@@ -541,23 +546,20 @@ export class FileLibraryService {
     return [...ids];
   }
 
-  private async mutate<T>(operation: (tx: Database) => Promise<T>): Promise<T> {
+  private async mutate<T>(
+    operation: (tx: Database) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    signal?.throwIfAborted();
     storageMutationGate.assertWritable();
-    const result = await this.dbService.withWriteTx(async (tx) => {
+    return this.dbService.withWriteTx(async (tx) => {
+      signal?.throwIfAborted();
       storageMutationGate.assertWritable();
-      return operation(tx);
+      const value = await operation(tx);
+      // Abort before commit so a queued or in-flight tool mutation rolls back as one unit.
+      signal?.throwIfAborted();
+      return value;
     });
-    publishDataApiChanges([
-      '/files/library',
-      '/files/history',
-      '/files/folders',
-      '/files/workspace',
-      '/files/entries',
-      '/trash',
-      '/trash/summary',
-      '/agent-sessions',
-    ]);
-    return result;
   }
 }
 

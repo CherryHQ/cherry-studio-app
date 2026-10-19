@@ -163,6 +163,22 @@ describe('McpServerService', () => {
     await expect(service.getById(server.id)).resolves.toEqual(authorized);
   });
 
+  it('does not save an OAuth connection whose service stopped while waiting for a transaction', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outer = dbService.withWriteTx(async () => pending);
+    const controller = new AbortController();
+    const save = service.saveOAuthConnection(oauthInput, oauth, undefined, controller.signal);
+    const rejected = expect(save).rejects.toThrow('Service stopped');
+    controller.abort(new Error('Service stopped'));
+    release();
+    await outer;
+    await rejected;
+    await expect(service.list()).resolves.toMatchObject({ items: [], total: 0 });
+  });
+
   it('lists by id and enabled state, oldest first', async () => {
     const first = await service.create({
       endpointUrl: 'https://first.example/mcp',

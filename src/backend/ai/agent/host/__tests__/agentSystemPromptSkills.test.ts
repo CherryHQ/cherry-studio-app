@@ -20,7 +20,6 @@ function entry(id: string, overrides: Partial<SkillTurnEntry> = {}): SkillTurnEn
 const base = {
   agentInstructions: '',
   appLanguage: 'en-US' as const,
-  currentDate: '2026-09-22',
   tools: [],
 };
 

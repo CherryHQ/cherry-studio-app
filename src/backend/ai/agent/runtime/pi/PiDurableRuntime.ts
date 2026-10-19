@@ -242,14 +242,18 @@ export class PiDurableRuntime {
       .then((document) => document?.value);
   }
 
-  async saveConfiguration(
+  /** Migrate recovered configuration without resetting loaded tools or retained instructions. */
+  async restoreConfiguration(
     sessionId: string,
     value: JsonObject,
+    agent: AgentChange,
     context: Context = BACKGROUND_CONTEXT,
   ) {
-    await this.harness.commit(async (tx) => {
+    const conversation = await this.requireSession(sessionId, context);
+    await conversation.commit(async (tx) => {
       const document = await tx.doc(Configuration, sessionId, value);
       document.value = value;
+      await configure(tx, conversation.id, agent);
     }, context);
   }
 

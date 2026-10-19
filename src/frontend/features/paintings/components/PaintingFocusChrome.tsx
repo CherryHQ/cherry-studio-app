@@ -1,9 +1,9 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import PresentationIcon from '@cherrystudio/app-icons/icons/presentation';
 import type { MenuItem } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
 import {
@@ -97,22 +97,25 @@ export function PaintingFocusChrome({
     <HeaderChrome
       leftActions={leftActions}
       rightActions={rightActions}
+      titleAlign="left"
       titleElement={
-        <Pressable
-          accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
-          accessibilityRole="button"
-          className="max-w-56 flex-row items-center gap-1.5 rounded-full bg-card/95 px-3.5 py-2 active:opacity-70"
-          disabled={!onOpenOverview}
-          onPress={onOpenOverview}
-        >
-          <NetworkIcon className="size-4 text-card-foreground" />
-          <Text
-            className="min-w-0 shrink font-semibold text-card-foreground text-sm"
-            numberOfLines={1}
+        <View className="max-w-56 items-start">
+          <Pressable
+            accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
+            accessibilityRole="button"
+            className="max-w-full flex-row items-center gap-1.5 rounded-full bg-card/95 px-3.5 py-2 active:opacity-70"
+            disabled={!onOpenOverview}
+            onPress={onOpenOverview}
           >
-            {boardTitle}
-          </Text>
-        </Pressable>
+            <PresentationIcon className="size-4 shrink-0 text-card-foreground" />
+            <Text
+              className="min-w-0 shrink font-semibold text-card-foreground text-sm"
+              numberOfLines={1}
+            >
+              {boardTitle}
+            </Text>
+          </Pressable>
+        </View>
       }
     />
   );

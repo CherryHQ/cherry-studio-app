@@ -8,9 +8,9 @@ const DEFAULT_PRIORITY = 100;
 
 export type PhaseAdjustment = {
   serviceName: string;
+  requiredBy: string;
   from: Phase;
   to: Phase;
-  reason: string;
 };
 
 /**
@@ -111,9 +111,9 @@ export class DependencyResolver {
 
           adjustments.push({
             serviceName: dependency.name,
+            requiredBy: node.name,
             from: dependency.phase,
             to: Phase.Gate,
-            reason: `required by gate service '${node.name}'`,
           });
           dependency.phase = Phase.Gate;
           changed = true;
@@ -122,9 +122,13 @@ export class DependencyResolver {
     }
 
     for (const adjustment of adjustments) {
-      logger.warn(
-        `Service '${adjustment.serviceName}' declared ${adjustment.from} but is ${adjustment.reason}; promoted to ${adjustment.to}`,
-      );
+      logger.warn('Service promoted to startup gate', {
+        operation: 'service.phase.promote',
+        serviceName: adjustment.serviceName,
+        requiredBy: adjustment.requiredBy,
+        fromPhase: adjustment.from,
+        toPhase: adjustment.to,
+      });
     }
 
     return adjustments;

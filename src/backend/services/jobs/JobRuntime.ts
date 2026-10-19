@@ -92,7 +92,7 @@ const DELAYED_TIMER_READ_RETRY_MS = 1_000;
 /**
  * `user-continued` states the product promise ("keeps running while you do
  * something else"); a keep-alive lease around `execute` is the mechanism
- * honoring it through iOS background audio or Android's dataSync foreground
+ * requesting a finite iOS UIKit window or Android's dataSync foreground
  * service. The execution class does not bypass OS background-start restrictions.
  */
 const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
@@ -133,7 +133,7 @@ export type JobRuntimeOptions = {
    * Keep-alive lease source for `user-continued` handlers: the dispatch loop
    * wraps their `execute` in acquire/release so the work survives
    * backgrounding, and neither the coordinator observes job state nor the
-   * handler owns audio. Optional so tests without one keep exercising the
+   * handler owns the platform execution window. Optional so tests without one keep exercising the
    * pipeline.
    */
   keepAlive?: KeepAliveSource;

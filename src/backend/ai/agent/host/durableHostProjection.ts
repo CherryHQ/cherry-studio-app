@@ -19,6 +19,8 @@ export const DurableTurnMetadataSchema = z.object({
   userParts: z.array(AgentMessagePartSchema),
   retainedParts: z.array(AgentMessagePartSchema).optional(),
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
+  // Released turns predating workspace support remain unbound on recovery.
+  workspaceFolderId: z.string().min(1).nullable().default(null),
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
   /** One answer of a multi-model question: its tools are limited to automatic reads. */
