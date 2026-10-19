@@ -123,9 +123,7 @@ export function SidebarSelectionProvider({
               failed.add(entry.key);
             }
           }
-          await Promise.allSettled(
-            [...store.getSnapshot().lists.values()].map((list) => list.refresh()),
-          );
+          const lists = [...store.getSnapshot().lists.values()];
           store.finishDeletion(selection, failed);
           toast.show(
             failed.size
@@ -135,6 +133,8 @@ export function SidebarSelectionProvider({
                   variant: 'success',
                 },
           );
+          // Catalog refresh must not keep completed deletions or their controls pending.
+          void Promise.allSettled(lists.map(async (list) => list.refresh()));
         })();
       },
     });
