@@ -92,7 +92,11 @@ export function resolveCitationWebSources(
   });
 }
 
-export function getFaviconUrls(source: WebSource): string[] {
+export function getFaviconSiteKey(source: Pick<WebSource, 'url'>): string | undefined {
+  return parseHttpUrl(source.url)?.origin;
+}
+
+export function getFaviconUrls(source: Pick<WebSource, 'url' | 'faviconUrl'>): string[] {
   const urls: string[] = [];
   const parsedUrl = parseHttpUrl(source.url);
 

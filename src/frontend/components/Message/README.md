@@ -134,6 +134,15 @@ streaming and appears once the message reaches any terminal status. New
 interactive message parts may introduce a distinct compact trigger only when their semantics cannot
 be expressed by `MessagePart.Summary`; they must not introduce another bottom-sheet shell.
 
+Source previews and detail cards share favicon resolution by URL origin (scheme, full hostname,
+and port). TanStack Query coordinates pending selection and keeps failed image URLs in memory for
+five minutes. An explicit favicon change gets its own query identity; article paths do not.
+`cacheService` persists up to 256 successful selections, evicting the oldest resolution records.
+Selections stay fresh for seven days, while `expo-image` owns image bytes under their actual URLs
+with its `memory-disk` policy. A native display failure invalidates the selection and tries the
+remaining candidates. Refresh retains the previous image until resolution finishes; an unavailable
+image retains the site's initial. Cache sharing never merges articles or changes source counts.
+
 A process uses tighter internal spacing than the separation between the process and the answer,
 both during streaming and when expanded after completion. Settled blank text parts are excluded
 from the visual partition so they cannot insert empty layout rows between status summaries.

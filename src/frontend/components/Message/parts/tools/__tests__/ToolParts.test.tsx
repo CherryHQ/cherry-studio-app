@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -29,7 +30,11 @@ jest.mock('react-i18next', () => ({
 jest.mock('expo-image', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  return { Image: (props: Record<string, unknown>) => <MockView {...props} /> };
+  return {
+    Image: Object.assign((props: Record<string, unknown>) => <MockView {...props} />, {
+      prefetch: jest.fn().mockResolvedValue(false),
+    }),
+  };
 });
 
 jest.mock('@/frontend/components/MarkdownText', () => {
@@ -116,8 +121,13 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 describe('tool message detail sheets', () => {
   let renderer: ReactTestRenderer | undefined;
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = new QueryClient();
+  });
   afterEach(async () => {
     await act(async () => renderer?.unmount());
+    queryClient.clear();
     renderer = undefined;
     mockSetStringAsync.mockClear();
     mockToastShow.mockClear();
@@ -697,7 +707,7 @@ describe('tool message detail sheets', () => {
 
   async function render(element: ReactElement) {
     await act(async () => {
-      renderer = create(element);
+      renderer = create(<QueryClientProvider client={queryClient}>{element}</QueryClientProvider>);
     });
   }
 

@@ -44,6 +44,13 @@ export type ChatScrollAnchor = Readonly<{
   offset: number;
 }> | null;
 
+export type SiteFaviconCacheEntry = {
+  url: string;
+  resolvedAt: number;
+  /** Explicit icon considered when choosing this site's successful URL. */
+  faviconUrl?: string;
+};
+
 /**
  * Frontend memory cache schema (TTL-capable, lost on app restart).
  */
@@ -87,6 +94,8 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  /** Bounded successful favicon locations, indexed by URL origin. Images stay in the native cache. */
+  'chat.site_favicons': Record<string, SiteFaviconCacheEntry>;
   /** Skill document translations indexed by content hash and target language. */
   'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
@@ -99,6 +108,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'chat.site_favicons': {},
   'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},

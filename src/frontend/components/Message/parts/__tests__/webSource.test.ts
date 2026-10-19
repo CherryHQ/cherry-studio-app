@@ -2,6 +2,7 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import {
   enrichWebSources,
+  getFaviconSiteKey,
   getFaviconUrls,
   parseWebSources,
   resolveCitationWebSources,
@@ -201,15 +202,28 @@ describe('webSource', () => {
   test('uses the site favicon before the cached favicon service fallback', () => {
     expect(
       getFaviconUrls({
-        id: 1,
-        siteName: 'Cherry Studio',
-        title: 'Cherry Studio',
         url: 'https://cherry-ai.com/docs',
       }),
     ).toEqual([
       'https://cherry-ai.com/favicon.ico',
       'https://icons.duckduckgo.com/ip3/cherry-ai.com.ico',
     ]);
+  });
+
+  test('shares favicon identity across article paths while preserving origin boundaries', () => {
+    expect(getFaviconSiteKey({ url: 'https://EXAMPLE.com:443/first?query=1#part' })).toBe(
+      'https://example.com',
+    );
+    expect(getFaviconSiteKey({ url: 'https://example.com/second' })).toBe('https://example.com');
+    for (const origin of [
+      'http://example.com',
+      'https://news.example.com',
+      'https://example.com:8443',
+    ]) {
+      expect(getFaviconSiteKey({ url: `${origin}/article` })).toBe(origin);
+    }
+    expect(getFaviconSiteKey({ url: 'not a URL' })).toBeUndefined();
+    expect(getFaviconSiteKey({ url: 'file:///article' })).toBeUndefined();
   });
 
   test('removes page navigation from fetched content and reads a date from the article URL', () => {

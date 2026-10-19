@@ -1,4 +1,5 @@
 import { BackgroundPressExclusion } from '@cherrystudio/ui/components';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
-import { getFaviconUrls, type WebSource } from './webSource';
+import type { WebSource } from './webSource';
+import { rejectWebSourceFavicon, webSourceFaviconQueryOptions } from './webSourceFavicon';
 
 type WebSourceCardProps = {
   source: WebSource;
@@ -63,23 +65,10 @@ export function WebSourceCard({ source }: WebSourceCardProps) {
 type FaviconStatus = 'failed' | 'loaded' | 'loading';
 
 export function WebSourceFavicon({ source }: { source: WebSource }) {
-  const faviconUrls = getFaviconUrls(source);
-  const [sourceIndex, setSourceIndex] = useState(0);
-  const [status, setStatus] = useState<FaviconStatus>(
-    faviconUrls.length > 0 ? 'loading' : 'failed',
-  );
-  const faviconUrl = faviconUrls[sourceIndex];
+  const client = useQueryClient();
+  const options = webSourceFaviconQueryOptions(client, source);
+  const { data: faviconUrl } = useQuery(options);
   const fallbackInitial = source.siteName.charAt(0).toUpperCase() || '?';
-
-  const handleError = () => {
-    if (sourceIndex < faviconUrls.length - 1) {
-      setSourceIndex(sourceIndex + 1);
-      setStatus('loading');
-      return;
-    }
-
-    setStatus('failed');
-  };
 
   return (
     <View
@@ -87,21 +76,53 @@ export function WebSourceFavicon({ source }: { source: WebSource }) {
       className="relative size-5 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border border-continuous bg-secondary"
       importantForAccessibility="no-hide-descendants"
     >
+      <FaviconImage
+        key={faviconUrl ?? 'fallback'}
+        initial={fallbackInitial}
+        onError={() => {
+          const query = client.getQueryCache().find({ queryKey: options.queryKey, exact: true });
+          if (faviconUrl && query?.isActive() && query.state.data === faviconUrl) {
+            void rejectWebSourceFavicon(client, source, faviconUrl);
+          }
+        }}
+        url={faviconUrl ?? null}
+      />
+    </View>
+  );
+}
+
+/** Display state belongs to one image URL, independently of shared resolution. */
+function FaviconImage({
+  initial,
+  onError,
+  url,
+}: {
+  initial: string;
+  onError: () => void;
+  url: string | null;
+}) {
+  const [status, setStatus] = useState<FaviconStatus>(url ? 'loading' : 'failed');
+
+  return (
+    <>
       {status !== 'loaded' ? (
-        <Text className="font-semibold text-foreground-tertiary text-xs">{fallbackInitial}</Text>
+        <Text className="font-semibold text-foreground-tertiary text-xs">{initial}</Text>
       ) : null}
-      {faviconUrl && status !== 'failed' ? (
+      {url && status !== 'failed' ? (
         <Image
           accessible={false}
           cachePolicy="memory-disk"
           contentFit="contain"
-          onDisplay={() => setStatus('loaded')}
-          onError={handleError}
-          recyclingKey={faviconUrl}
-          source={{ uri: faviconUrl }}
+          onDisplay={() => setStatus((current) => (current === 'loading' ? 'loaded' : current))}
+          onError={() => {
+            setStatus('failed');
+            onError();
+          }}
+          recyclingKey={url}
+          source={{ uri: url }}
           style={StyleSheet.absoluteFill}
         />
       ) : null}
-    </View>
+    </>
   );
 }
