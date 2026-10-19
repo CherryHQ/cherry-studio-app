@@ -83,7 +83,6 @@ export function usePaintingJobs(): PaintingJobs {
     if (!settled && !started) {
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
     void queryClient.invalidateQueries({
       predicate: (query) => queryKeys.paintings.isBoardQuery(query.queryKey),
     });

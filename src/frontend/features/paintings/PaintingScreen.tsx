@@ -10,16 +10,15 @@ import { useUniwind } from 'uniwind';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePainting } from '@/frontend/data/paintings/usePaintings';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { consumePaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 
 import { PaintingBoardWorkspace } from './components/PaintingBoardWorkspace';
 
 /**
- * `/paintings` opens a painting board. A `paintingId` (task notification,
- * gallery tile, file library) opens its board focused on that painting, with
- * `fileEntryId` choosing one of its images; a draft handoff (new painting,
- * template, album photo) starts a new board.
+ * `/paintings` opens a painting board. A `boardId` (gallery card) opens the
+ * board where the user last left it; a `paintingId` (task notification, file
+ * library) opens its board focused on that painting, with `fileEntryId`
+ * choosing one of its images; neither starts a new board.
  */
 export function PaintingScreen() {
   const { t } = useTranslation();
@@ -30,32 +29,28 @@ export function PaintingScreen() {
   // into whatever route is focused by then.
   const navigation = useNavigation<{
     setParams(params: {
+      boardId: undefined;
       fileEntryId: undefined;
-      handoff: undefined;
       paintingId: string | undefined;
     }): void;
   }>();
   const params = useLocalSearchParams<{
+    boardId?: string | string[];
     fileEntryId?: string | string[];
-    handoff?: string | string[];
     paintingId?: string | string[];
   }>();
-  const handoffToken = getSingleRouteParam(params.handoff);
-  const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
   // Only the opening painting locates the board; later receipts rewrite the
   // route for task identity without re-entering this gate.
-  const [opening] = useState(() =>
-    handoffToken ? undefined : getSingleRouteParam(params.paintingId),
-  );
+  const [opening] = useState(() => getSingleRouteParam(params.paintingId));
   const [initialFileEntryId] = useState(() => getSingleRouteParam(params.fileEntryId));
-  const [openingBoardId, setOpeningBoardId] = useState<string>();
+  const [openingBoardId, setOpeningBoardId] = useState(() => getSingleRouteParam(params.boardId));
   const paintingQuery = usePainting(openingBoardId ? undefined : opening);
   // Once located, the board outlives the opening painting, which may be deleted on this page.
   if (!openingBoardId && paintingQuery.data) setOpeningBoardId(paintingQuery.data.boardId);
   const foreground = useThemeColor('foreground');
   const handleReceipt = useCallback(
     (paintingId: string | undefined) =>
-      navigation.setParams({ fileEntryId: undefined, handoff: undefined, paintingId }),
+      navigation.setParams({ boardId: undefined, fileEntryId: undefined, paintingId }),
     [navigation],
   );
   const close = useCallback(() => {
@@ -94,7 +89,6 @@ export function PaintingScreen() {
     content = (
       <PaintingBoardWorkspace
         boardId={openingBoardId}
-        handoff={handoff}
         initialFocus={
           opening ? { fileEntryId: initialFileEntryId, paintingId: opening } : undefined
         }

@@ -33,6 +33,18 @@ export const PaintingBoardSchema = z.strictObject({
 
 export type PaintingBoard = z.infer<typeof PaintingBoardSchema>;
 
+/** One gallery entry: the board with what its cover needs, so the list stays one request. */
+export const PaintingBoardSummarySchema = z.strictObject({
+  board: PaintingBoardSchema,
+  paintingCount: z.number().int().nonnegative(),
+  /** Newest first, at most {@link PAINTING_BOARD_RECENT_LIMIT}. */
+  recentPaintings: z.array(PaintingSchema),
+});
+
+export type PaintingBoardSummary = z.infer<typeof PaintingBoardSummarySchema>;
+
+export const PAINTING_BOARD_RECENT_LIMIT = 3;
+
 export type UpdatePaintingBoardDto = {
   focusPaintingId?: string | null;
   title?: string;

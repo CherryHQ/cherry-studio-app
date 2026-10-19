@@ -173,6 +173,11 @@ use `popover` with a neutral `secondary` overlay, matching the raised menu surfa
 reinforces separation. Scroll fades match their host surface, and sheet footers inherit the sheet's
 fill so they do not fall back to the page's black background.
 
+A full-screen stage that presents one image at a time, such as the painting template stage, may use
+that image as its backdrop: heavily blurred and covered by a `background` scrim so `foreground` text
+stays readable in both themes. The colour is the content's own, not decoration; do not put it behind
+lists, forms, or other screens.
+
 When a screen feels cluttered, separate **volume** from **loudness**. Volume is fixed by removing, merging, or reordering content. Loudness is fixed by reducing competing colours, sizes, weights, borders, surfaces, and motion. Keep one deliberate anchor — restraint is not flattening everything into having no focus.
 
 ## Motion

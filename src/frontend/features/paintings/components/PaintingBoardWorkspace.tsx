@@ -31,7 +31,6 @@ import {
 import { useMutation } from '@/frontend/data';
 import { paintingJobParamValues } from '@/frontend/data/paintings/usePaintingJobs';
 import { useDeletePaintings } from '@/frontend/data/paintings/usePaintings';
-import type { PaintingDraftHandoff } from '@/frontend/utils/paintingDraftHandoff';
 import { AiFailureSnapshotSchema, type AiFailureSnapshot } from '@/shared/contracts/aiFailure';
 import { isUniqueModelId } from '@/shared/data/types/model';
 import { type ImageParamDraft, imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
@@ -67,29 +66,23 @@ type Focus = { imageIndex: number; nodeId: string };
  */
 export function PaintingBoardWorkspace({
   boardId,
-  handoff,
   initialFocus,
   onClose,
   onReceipt,
 }: {
   boardId: string | undefined;
-  handoff?: PaintingDraftHandoff;
   initialFocus?: { fileEntryId?: string; paintingId: string };
   onClose: () => void;
   onReceipt: (paintingId: string | undefined) => void;
 }) {
   return (
-    <ComposerSessionProvider
-      initialAttachments={handoff?.attachments ?? []}
-      initialDraft={handoff?.draft ?? ''}
-    >
+    <ComposerSessionProvider>
       <Composer.Expansion>
         {/* The board attaches the focused image itself; a sent image never lingers. */}
         <PaintingInputProvider adoptSubmittedReference={false}>
           <PaintingBoardContent
             initialBoardId={boardId}
             initialFocus={initialFocus}
-            initialParamValues={handoff?.paramValues}
             onClose={onClose}
             onReceipt={onReceipt}
           />
@@ -102,13 +95,11 @@ export function PaintingBoardWorkspace({
 function PaintingBoardContent({
   initialBoardId,
   initialFocus,
-  initialParamValues,
   onClose,
   onReceipt,
 }: {
   initialBoardId: string | undefined;
   initialFocus?: { fileEntryId?: string; paintingId: string };
-  initialParamValues?: ImageParamDraft;
   onClose: () => void;
   onReceipt: (paintingId: string | undefined) => void;
 }) {
@@ -162,6 +153,8 @@ function PaintingBoardContent({
 
   // Remember where the user was, so reopening the board lands there.
   const { trigger: updateBoard } = useMutation('PATCH', '/painting-boards/:id', {
+    // The gallery orders boards by their latest change, and renames show there too.
+    refresh: ['/painting-boards'],
     onSuccess: (updated) => {
       queryClient.setQueryData([`/painting-boards/${updated.id}`], updated);
     },
@@ -270,7 +263,7 @@ function PaintingBoardContent({
   }, [alert, board, boardId, t, toast, updateBoard]);
 
   const { trigger: deleteBoardRequest } = useMutation('DELETE', '/painting-boards/:id', {
-    refresh: ['/paintings', '/paintings/ids'],
+    refresh: ['/painting-boards'],
   });
   const confirmDeleteBoard = useCallback(() => {
     if (!boardId) return;
@@ -527,7 +520,6 @@ function PaintingBoardContent({
       ) : null}
       <ComposerDock layoutMode="expandable" onHeightChange={(height) => dockHeight.set(height)}>
         <PaintingWorkspaceInput
-          initialParamValues={initialParamValues}
           onCancel={handleCancel}
           onGenerate={handleGenerate}
           onRatioChange={prepareRatioChange}

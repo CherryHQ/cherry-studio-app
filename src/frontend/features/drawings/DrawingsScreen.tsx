@@ -1,81 +1,69 @@
-import PlusIcon from '@cherrystudio/app-icons/icons/plus';
-import { useMemo } from 'react';
+import { Composer } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
+import { RouteHeader } from '@/frontend/appShell/header';
+import { ComposerDock, ComposerSessionProvider } from '@/frontend/components/Composer';
 import {
-  SelectionControls,
-  SelectionProvider,
-  useSelectionActions,
-  useSelectionState,
-} from '@/frontend/components/Selection';
+  PaintingInputProvider,
+  type PaintingInputSubmission,
+  PaintingWorkspaceInput,
+} from '@/frontend/components/PaintingInput';
+import { paintingGenerationInput } from '@/frontend/components/PaintingInput/paintingGenerationInput';
+import { useStartPaintingGeneration } from '@/frontend/data/paintings/usePaintings';
 
-import { DrawingList } from './components/DrawingList';
-import { useOpenPainting } from './hooks/useOpenPainting';
-
-const paintingSelectionScope = 'drawings';
+import { PaintingBoardList } from './components/PaintingBoardList';
 
 /**
- * Drawings history (`/drawings`), the sidebar's drawings destination: the
- * gallery grid plus multi-select batch deletion. Back exits selection before
- * leaving this root-stack page.
- * Creating and editing paintings stays on the root stack's `/paintings`, which
- * the gallery shares one admission callback for every draft entry point.
+ * Drawings home (`/drawings`), the sidebar's paintings destination: templates
+ * on top, every board below, and a composer whose first send starts a board.
  */
+export function DrawingsScreen() {
+  return (
+    <ComposerSessionProvider>
+      <Composer.Expansion>
+        <PaintingInputProvider>
+          <DrawingsScreenBody />
+        </PaintingInputProvider>
+      </Composer.Expansion>
+    </ComposerSessionProvider>
+  );
+}
+
 function DrawingsScreenBody() {
   const { t } = useTranslation();
-  const openPainting = useOpenPainting();
+  const router = useRouter();
   const { left, right } = useSafeAreaInsets();
-  const { exitEditing } = useSelectionActions();
-  const { isDeletionPending, isEditing } = useSelectionState();
-  const createActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('painting.history.createNew'),
-        icon: PlusIcon,
-        key: 'create-painting',
-        onPress: () => openPainting(),
-        testID: 'painting-history-create-header',
-        type: 'icon',
-      },
-    ],
-    [openPainting, t],
-  );
-  const doneActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.done'),
-        disabled: isDeletionPending,
-        key: 'finish-selecting-paintings',
-        label: t('common.done'),
-        onPress: exitEditing,
-        type: 'label',
-      },
-    ],
-    [exitEditing, isDeletionPending, t],
+  const startGeneration = useStartPaintingGeneration();
+  const [dockHeight, setDockHeight] = useState(0);
+  const handleGenerate = useCallback(
+    async (input: PaintingInputSubmission) => {
+      const started = await startGeneration(paintingGenerationInput(input));
+      router.push({ params: { paintingId: started.paintingId }, pathname: '/paintings' });
+    },
+    [router, startGeneration],
   );
 
   return (
     <>
-      <RouteHeader
-        onBack={isEditing ? exitEditing : undefined}
-        rightActions={isEditing ? doneActions : createActions}
-        title={t('painting.history.title')}
-      />
+      <RouteHeader title={t('navigation.paintings')} />
       <View className="flex-1" style={{ paddingLeft: left, paddingRight: right }}>
-        <DrawingList openPainting={openPainting} />
-        <SelectionControls scope={paintingSelectionScope} />
+        <PaintingBoardList bottomInset={dockHeight} />
+        <ComposerDock layoutMode="expandable" onHeightChange={setDockHeight}>
+          <PaintingWorkspaceInput
+            onCancel={noop}
+            onGenerate={handleGenerate}
+            onRatioChange={noop}
+            placeholder={t('painting.home.placeholder')}
+            status="idle"
+          />
+        </ComposerDock>
       </View>
     </>
   );
 }
 
-export function DrawingsScreen() {
-  return (
-    <SelectionProvider>
-      <DrawingsScreenBody />
-    </SelectionProvider>
-  );
-}
+function noop() {}

@@ -12,10 +12,13 @@ last focused. Edges are derived, never stored: within a board, a painting whose 
 another painting's output was made from it, and an input no painting on the board produced is an
 "imported" node. `utils/paintingBoardGraph.ts` builds that graph and its top-to-bottom layout.
 
-Every entry opens a board focused on one image: a gallery tile, a generated image in the file
-library, or a task notification passes `paintingId` (and `fileEntryId` for one of several images);
-a new painting, template, or album photo starts a new board through the draft handoff. The board is
-created by its first generation, titled from the request, and renamable from the overview.
+Every entry opens a board. A gallery card passes `boardId` and the board reopens on the node the
+user last focused; a generated image in the file library or a task notification passes `paintingId`
+(and `fileEntryId` for one of several images) and focuses that image. The gallery composer and a
+used template start their first generation themselves and then open the new board by its
+`paintingId`; `/paintings` without parameters is an empty board. The board is created by its first
+generation, titled from the request (a template's title for template generations), and renamable
+from the overview.
 
 ## One Page, Two Layers
 
@@ -78,6 +81,5 @@ reference-image contract; they are not masks.
 - `hooks/` holds board data, generation control, the focus reference, and annotation drafts.
 - `utils/` holds the board graph, annotation prompts, and change-ratio options.
 
-The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries and job
-observation shared with it live in `src/frontend/data/paintings`; draft handoff lives in
-`src/frontend/utils/paintingDraftHandoff.ts`.
+The gallery at `/drawings` lives in `src/frontend/features/drawings`. Painting queries, the board
+list, starting generations, and job observation shared with it live in `src/frontend/data/paintings`.
