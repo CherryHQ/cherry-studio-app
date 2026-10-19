@@ -1,14 +1,7 @@
-export const HEALTH_DATA_TYPES = [
-  'steps',
-  'activeEnergy',
-  'distance',
-  'heartRate',
-  'restingHeartRate',
-  'hrv',
-  'sleep',
-  'workouts',
-] as const;
-export type HealthDataType = (typeof HEALTH_DATA_TYPES)[number];
+import { HEALTH_DATA_TYPES, type HealthDataType } from './health';
+
+export { HEALTH_DATA_TYPES, type HealthDataType } from './health';
+
 export type HealthPermissionScope = `health.${HealthDataType}.read`;
 export const healthPermissionScope = (type: HealthDataType): HealthPermissionScope =>
   `health.${type}.read`;
@@ -58,6 +51,7 @@ export interface PermissionsModule {
   request(
     scopes: readonly DevicePermissionScope[],
     signal?: AbortSignal,
+    options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses>;
 }
 

@@ -4,9 +4,10 @@ import type { PermissionStatuses, PermissionsModule } from '@/shared/contracts';
 
 import { createHealthTools } from '../healthTools';
 
-jest.mock('@/backend/services/device', () =>
-  jest.requireActual('@/backend/services/device/health'),
-);
+jest.mock('@/backend/services/device', () => ({
+  ...jest.requireActual('@/backend/services/device/health'),
+  ...jest.requireActual('@/backend/services/device/healthData'),
+}));
 
 const callInput = {
   startDate: '2026-09-01T00:00:00Z',
