@@ -1,15 +1,13 @@
 # AI Behavior Contracts
 
 This suite protects the model-backed `AiService` behavior used during refactoring. It exercises the
-real `AiService -> ai-core` paths against the AI SDK V3 mock model interface from `ai/test`.
-Text requests use `buildAgentParams`; image requests resolve their connection and build only image
-parameters. It does not emulate provider HTTP endpoints or SSE wire formats.
+real `AiService -> ai-core` image path against the AI SDK V3 mock model interface from `ai/test`.
+Image requests resolve their connection and build only image parameters. It does not emulate
+provider HTTP endpoints or SSE wire formats.
 
 ## Ownership
 
-- `AiService.generateText.test.ts` and `AiService.generateImage.test.ts` own the other model-backed
-  entry points; `AiService.checkModel.test.ts` owns language health probes and mobile's explicit
-  rejection of Embedding/Rerank execution.
+- `AiService.generateImage.test.ts` owns the model-backed image entry point.
 - Provider capabilities, provider-native tools, message rules, tool approval, MCP transport, and
   `listModels` remain owned by their existing focused suites.
 

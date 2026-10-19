@@ -1,17 +1,17 @@
 # AI Runtime
 
-Provider adapters and AI SDK support for Cherry Mobile's non-conversation AI path: provider
-connection facts, per-vendor request and transport shaping, image generation, model listing, AI SDK
-loop plumbing, tool adapters, and usage capture.
+Provider adapters and AI SDK support for Cherry Mobile's image and model-list path: provider
+connection facts, per-vendor request and transport shaping, image generation, model listing, and
+usage capture. Language generation, including single-call text, runs through Pi.
 
 Despite the package name, this is not Cherry Mobile's Agent Runtime. Pi is the sole local
 conversation engine and lives in `src/backend/ai/agent/runtime/pi/`. What is here serves the AI SDK
 path behind `AiService`, plus the connection facts Pi and the AI SDK share.
 
-The platform-neutral DeepSeek DSML decoder is also shared through `provider`. It recognizes wire
-markup and returns text or tool-call data; Pi and the AI SDK separately own event projection,
-terminal errors, and tool execution. Malformed or incomplete markup produces an explicit error
-instead of being published as ordinary model output.
+The platform-neutral DeepSeek DSML decoder is also exported through `provider`. It recognizes wire
+markup and returns text or tool-call data; Pi owns event projection, terminal errors, and tool
+execution. Malformed or incomplete markup produces an explicit error instead of being published as
+ordinary model output.
 
 ## Why this is a package
 
@@ -29,7 +29,7 @@ not desktop's structure.
 
 ## Boundaries
 
-- Consumers use only the declared `image`, `provider`, `runtime`, `tools`, and `utils` subpaths.
+- Consumers use only the declared `image`, `provider`, `runtime`, and `utils` subpaths.
   Anything reached through a deep path is an accident, not an interface. `image` is the portable
   boundary for canonical image parameters, wire profiles, and submit/poll transports; application
   jobs, storage, downloads, and presentation remain outside the package.
