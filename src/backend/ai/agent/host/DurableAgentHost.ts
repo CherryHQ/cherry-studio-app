@@ -1780,6 +1780,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       displayName: tool.displayName,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
       inputPreview: tool.inputPreview,
       approval: tool.approval,
       failureGroup: tool.failureGroup,

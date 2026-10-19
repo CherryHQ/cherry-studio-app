@@ -33,6 +33,8 @@ const xlsxAnchor = z.strictObject({
   range: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}(?::[A-Z]{1,3}[1-9][0-9]{0,6})?$/),
 });
 
+export const officeAnchorSchemas = { docx: docxAnchor, xlsx: xlsxAnchor, pptx: pptxAnchor };
+
 const source = { file_entry_id: FileEntryIdSchema };
 export const officeInspectSchema = z.strictObject({
   ...source,

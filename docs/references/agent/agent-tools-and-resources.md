@@ -549,6 +549,31 @@ original and unrelated package parts remain unchanged. All five use the same cat
 file grants and durable receipt boundaries as generation. Workbook edits request recalculation;
 they do not calculate formulas themselves.
 
+Office tools declare success and business-error return schemas for Code Mode. The Runtime wraps
+each result as `{ value, artifacts }`. Creation and editing return `value.status: "created"` and
+`value.fileEntryId`; inspection and reads return `value.status: "read"`, `file_entry_id` and
+`source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
+exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
+use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
+A business error returns `{ status: "error", message }`.
+`library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
+`fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
+creation script after storing file ids, then run dependent work in a separate script:
+
+```javascript
+const { value } = await tools.create_document({
+  filename: "notes.docx",
+  spec: { version: 1, blocks: [{ type: "paragraph", text: "Hello" }] },
+});
+if (value.status === "error") throw new Error(value.message);
+store("documentId", value.fileEntryId);
+text({ fileEntryId: value.fileEntryId });
+```
+
+```javascript
+text(await tools.inspect_office_file({ file_entry_id: load("documentId") }));
+```
+
 The existing preview page hands selections and their original attachments to a new editable chat
 draft. Each `selection-ref` carries the managed file id, structural anchor and excerpt. The Agent
 reads the current referenced content and compares it with the excerpt before editing, following

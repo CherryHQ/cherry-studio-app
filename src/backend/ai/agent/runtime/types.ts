@@ -288,6 +288,8 @@ export type RuntimeTool = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
+  /** Built-in result.value JSON Schema, including business errors; MCP uses bounded content. */
+  outputSchema?: RuntimeJsonValue;
   /** Opt-in text fields to preview while input is incomplete; never executable input. */
   inputPreview?: { textField: string; nameField?: string };
   approval: 'auto' | 'ask' | 'deny';

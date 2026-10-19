@@ -14,6 +14,7 @@ export {
 } from './officeSpec';
 
 export {
+  officeAnchorSchemas,
   officeEditSchemas,
   officeInspectSchema,
   officeReadSchema,

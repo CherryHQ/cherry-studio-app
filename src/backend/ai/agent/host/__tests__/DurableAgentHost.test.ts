@@ -281,6 +281,46 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
 }
 
 describe('durable tool diagnostics', () => {
+  test('refuses queueing with a changed tool return contract during an active turn', async () => {
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'create_document' },
+      providerName: 'create_document',
+      displayName: 'Create document',
+      description: '',
+      inputSchema: { type: 'object' },
+      outputSchema: { type: 'object', required: ['fileEntryId'] },
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const f = fixture({
+      runtimeTools: { resolve: async () => ({ tools: [tool], pluginGuides: [] }) },
+    });
+    await f.reserve('running');
+    jest.spyOn(f.conversations, 'configuration').mockResolvedValue({
+      ...configuration,
+      instructions: buildAgentSystemPrompt({
+        agentInstructions: '',
+        appLanguage: 'zh-CN',
+        tools: [tool],
+      }),
+      tools: [{ ...tool, outputSchema: undefined }],
+    });
+    await f.host.initialize();
+    try {
+      await expect(
+        f.host.submitMessage({
+          sessionId: f.sessionId,
+          userMessageId: uuid(),
+          assistantMessageId: uuid(),
+          parts: [{ type: 'text', text: 'Create another document.' }],
+        }),
+      ).rejects.toMatchObject({ view: { code: 'SESSION_BUSY' } });
+      expect(f.conversations.submit).not.toHaveBeenCalled();
+    } finally {
+      await f.host.close();
+    }
+  });
+
   test('publishes the recovered queue to observations installed before initialization', async () => {
     const f = fixture();
     const queued = { ...(await f.reserve('queued')), inputBoundary: null, answerBoundary: null };

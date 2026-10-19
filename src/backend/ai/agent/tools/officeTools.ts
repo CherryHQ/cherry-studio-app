@@ -18,12 +18,13 @@ import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/d
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
 import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
+import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 const formats: readonly {
   format: OfficeFormat;
-  name: string;
+  name: 'create_document' | 'create_workbook' | 'create_presentation';
   displayName: string;
   description: string;
 }[] = [
@@ -60,8 +61,9 @@ export function createOfficeTools(
       ref: { source: 'builtin', capabilityId: name },
       providerName: name,
       displayName,
-      description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments or the selected workspace. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension.`,
+      description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments or the selected workspace. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension. In Code Mode, check result.value.status === "created" and use result.value.fileEntryId; status "error" includes a message. store() changes survive only a successful script. Finish a short creation script after storing ids, then perform dependent reads and edits in another script.`,
       inputSchema: toRuntimeInputSchema(officeInputSchemas[format]),
+      outputSchema: officeToolOutputSchemas[name],
       approval: 'auto',
       deferred: true,
       async execute({ input, signal }) {

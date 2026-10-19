@@ -17,6 +17,7 @@ import { sha256Hex } from '@/shared/utils/sha256';
 
 import type { RuntimeTool } from '../runtime';
 import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
+import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
@@ -35,10 +36,12 @@ const definitions = [
     operation: 'read',
     schema: officeReadSchema,
     description:
-      'Read an exact Word body paragraph, Excel A1 range (up to 1000 cells), or PowerPoint shape/table-cell paragraph. Returns source_sha256 and exact text for edits. Spreadsheet formulas expose saved cached values; this tool does not calculate.',
+      'Read an exact Word body paragraph, Excel A1 range (up to 1000 cells), or PowerPoint shape/table-cell paragraph. Returns source_sha256 and exact text for edits. Excel rows is a two-dimensional array of cell objects: result.value.rows.flat().find(cell => cell.address === "B2")?.value reads B2. Spreadsheet formulas expose saved cached values; this tool does not calculate.',
   },
   ...(['docx', 'xlsx', 'pptx'] as const).map((format) => ({
-    name: { docx: 'edit_document', xlsx: 'edit_workbook', pptx: 'edit_presentation' }[format],
+    name: ({ docx: 'edit_document', xlsx: 'edit_workbook', pptx: 'edit_presentation' } as const)[
+      format
+    ],
     title: { docx: 'Edit document', xlsx: 'Edit workbook', pptx: 'Edit presentation' }[format],
     operation: 'edit',
     format,
@@ -57,8 +60,9 @@ export function createOfficeEditTools(
       ref: { source: 'builtin', capabilityId: definition.name },
       providerName: definition.name,
       displayName: definition.title,
-      description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace.`,
+      description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace. ${definition.operation === 'edit' ? 'In Code Mode, success is result.value.status === "created"; use result.value.fileEntryId for the new copy.' : 'In Code Mode, success is result.value.status === "read". Inspection returns items: Word items have excerpt and anchor; Excel items have sheet; PowerPoint items have slide and shapes. Exact reads return text or rows of cells with address and value. Use the returned source_sha256 for edits.'} Status "error" includes a message.`,
       inputSchema: toRuntimeInputSchema(definition.schema),
+      outputSchema: officeToolOutputSchemas[definition.name],
       approval: 'auto',
       deferred: true,
       async execute({ input, signal }) {

@@ -2,6 +2,7 @@ import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { TSchema } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
+import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
 import {
   AssistantEntry,
   createRegistry,
@@ -621,6 +622,79 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test.each([
+    [{ status: 'created', fileEntryId: 'file' }, false],
+    [{ status: 'error', message: 'Invalid Office source' }, false],
+    [{ status: 'success', file_id: 'file' }, true],
+  ] as const)('validates declared built-in child output %j', async (value, isError) => {
+    const results: unknown[] = [];
+    const extension = capabilityExtension({
+      name: 'cherry',
+      approve: async () => true,
+      tools: [
+        scriptCapability(),
+        capability({
+          outputSchema: {
+            anyOf: [
+              {
+                type: 'object',
+                properties: { status: { const: 'created' }, fileEntryId: { type: 'string' } },
+                required: ['status', 'fileEntryId'],
+              },
+              {
+                type: 'object',
+                properties: { status: { const: 'error' }, message: { type: 'string' } },
+                required: ['status', 'message'],
+              },
+            ],
+          },
+          execute: async () => ({ value, artifacts: [] }),
+        }),
+      ],
+      codemode: defineExtension({
+        name: 'test-codemode',
+        tools: [
+          defineTool({
+            name: 'codemode',
+            parameters: { type: 'object' } as TSchema,
+            description: 'Exercise the declared child result.',
+            replay: 'safe',
+            async execute(_args, api, context) {
+              const result = await api.executeTool('create_file', { name: 'note.txt' }, context, {
+                key: 'c1',
+              });
+              results.push(result);
+              return { output: [{ type: 'text', text: 'Done' }] };
+            },
+          }),
+        ],
+      }),
+    });
+    const registered = extension.tools!.find((tool) => tool.name === 'create_file')!;
+    const declaration = renderToolSignature({
+      name: registered.name,
+      inputSchema: registered.parameters,
+      outputSchema: registered.structuredOutputSchema,
+    });
+    expect(declaration).toContain('fileEntryId: string');
+    expect(declaration).toContain('status: "created"');
+    expect(declaration).toContain('artifacts: Array<');
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({ isError });
+      if (!isError)
+        expect(results[0]).toMatchObject({ structuredOutput: { value, artifacts: [] } });
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test.each(['completed', 'cancelled'])(
     'nested MCP app results survive a %s parent and reopening, outside the script/model channel',
     async (outcome) => {
@@ -662,6 +736,8 @@ describe('durable capability boundary', () => {
             providerName: 'mcp_widget',
             displayName: 'Widget',
             approval: 'auto',
+            // Raw MCP metadata cannot describe Cherry's bounded script-visible projection.
+            outputSchema: { type: 'object', required: ['counter'] },
             execute,
           }),
         ],
