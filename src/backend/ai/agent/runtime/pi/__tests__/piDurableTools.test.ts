@@ -2,6 +2,7 @@ import type { Context, JsonValue } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { TSchema } from '@earendil-works/pi-ai';
 import { createModels } from '@earendil-works/pi-ai/models';
+import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
 import {
   AssistantEntry,
@@ -673,8 +674,8 @@ describe('durable capability boundary', () => {
     const registered = extension.tools!.find((tool) => tool.name === 'create_file')!;
     const declaration = renderToolSignature({
       name: registered.name,
-      inputSchema: registered.parameters,
-      outputSchema: registered.structuredOutputSchema,
+      inputSchema: registered.parameters as CodemodeJsonSchema,
+      outputSchema: registered.structuredOutputSchema as CodemodeJsonSchema | undefined,
     });
     expect(declaration).toContain('fileEntryId: string');
     expect(declaration).toContain('status: "created"');

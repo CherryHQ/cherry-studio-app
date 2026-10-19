@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
-import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer, type Element } from '@xmldom/xmldom';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { createOfficeCode } from '../createOfficeCode';
@@ -134,7 +134,7 @@ async function fixture(format: OfficeFormat) {
   const doc = document(parts, owners[format]);
   let nodes = doc.getElementsByTagNameNS(pictureNamespaces[format], 'pic');
   if (format === 'pptx') {
-    const copy = nodes[0].cloneNode(true);
+    const copy = nodes[0].cloneNode(true) as Element;
     copy.getElementsByTagNameNS(P, 'cNvPr')[0].setAttribute('id', '42');
     nodes[0].parentNode!.appendChild(copy);
     nodes = doc.getElementsByTagNameNS(pictureNamespaces[format], 'pic');
@@ -459,7 +459,7 @@ test('refuses shared worksheet drawings instead of changing pictures on both she
   const path = 'xl/workbook.xml';
   const doc = document(source, path);
   const sheet = doc.getElementsByTagNameNS(S, 'sheet')[0];
-  const copy = sheet.cloneNode(true);
+  const copy = sheet.cloneNode(true) as Element;
   copy.setAttribute('name', 'Other');
   copy.setAttribute('sheetId', '2');
   sheet.parentNode!.appendChild(copy);

@@ -2,6 +2,7 @@ import { runInNewContext } from 'node:vm';
 
 import type { TSchema } from '@earendil-works/pi-ai';
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
+import type { CodemodeJsonSchema } from '@earendil-works/pi-codemode';
 import { renderToolSignature } from '@earendil-works/pi-codemode/declarations';
 
 import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
@@ -198,7 +199,7 @@ test.each([
     const { execute } = setup();
     const created = await execute(fixture.create, {
       filename: `source.${fixture.format}`,
-      spec: fixture.spec as RuntimeJsonValue,
+      spec: fixture.spec as unknown as RuntimeJsonValue,
     });
     expect(created.status).toBe('created');
     const source = { file_entry_id: created.fileEntryId };
@@ -247,8 +248,8 @@ test('Code Mode declarations expose the fields that callers previously had to gu
     const tool = tools.find((candidate) => candidate.providerName === name)!;
     return renderToolSignature({
       name,
-      inputSchema: tool.inputSchema as TSchema,
-      outputSchema: tool.outputSchema as TSchema,
+      inputSchema: tool.inputSchema as CodemodeJsonSchema,
+      outputSchema: tool.outputSchema as CodemodeJsonSchema,
     });
   };
   expect(signature('create_document')).toContain('status: "created"');
@@ -318,8 +319,8 @@ test('declares the file search result as a paged files object without a status',
   );
   const declaration = renderToolSignature({
     name: tool.providerName,
-    inputSchema: tool.inputSchema as TSchema,
-    outputSchema: tool.outputSchema as TSchema,
+    inputSchema: tool.inputSchema as CodemodeJsonSchema,
+    outputSchema: tool.outputSchema as CodemodeJsonSchema,
   });
   expect(declaration).toContain('files: Array<');
   expect(declaration).toContain('fileEntryId: string');
