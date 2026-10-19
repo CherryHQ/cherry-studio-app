@@ -83,10 +83,10 @@ export default function SettingsScreen() {
           </Section>
           <Section>
             <Section.Item
-              label={t('backup.title')}
+              label={t('settings.data.title')}
               leading={<DatabaseIcon className="size-4 text-foreground" />}
-              onPress={() => router.push('/settings/backup')}
-              testID="settings-backup"
+              onPress={() => router.push('/settings/data')}
+              testID="settings-data"
             />
             <Section.Item
               label={t('settings.privacy.title')}

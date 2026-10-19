@@ -128,10 +128,12 @@ function protocolWithObservation(
       ReturnType<AgentProtocol['cancelQueuedInput']>,
       Parameters<AgentProtocol['cancelQueuedInput']>
     >(async () => 'withdrawn'),
+    clearWorkingStorage: jest.fn(),
     deleteSession: jest.fn(),
     deleteTurn: jest.fn(),
     forkSession: jest.fn(),
     retryMessage: jest.fn(),
+    getWorkingStorageSize: jest.fn(),
     getSessionStatus: jest.fn<
       ReturnType<AgentProtocol['getSessionStatus']>,
       Parameters<AgentProtocol['getSessionStatus']>

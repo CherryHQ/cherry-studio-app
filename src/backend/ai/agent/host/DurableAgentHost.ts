@@ -170,6 +170,26 @@ export class DurableAgentHost implements AgentProtocol {
     await this.captureCheckpoints();
     await this.naming.drain();
   }
+  getWorkingStorageSize() {
+    return Promise.resolve(this.ports.durableStorage?.size() ?? 0);
+  }
+  /**
+   * Pi keeps retired and superseded copies until its file is removed. Cherry transcripts and
+   * checkpoints stay authoritative, so each Session rebuilds a copy when it next continues.
+   */
+  async clearWorkingStorage() {
+    await this.quiesce();
+    // Suspension closes admission synchronously; input admitted during the drain stays busy.
+    if (this.admissions.size) throw new BackupError('busy');
+    this.suspension = this.suspend(new Error('Clearing the Agent working storage.')).then(() =>
+      this.ports.durableStorage!.discard(),
+    );
+    try {
+      await this.suspension;
+    } finally {
+      await this.resumeSuspended();
+    }
+  }
   pendingTurns(sessionId: string) {
     return this.live.get(sessionId)?.queue ?? [];
   }
