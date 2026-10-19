@@ -951,7 +951,7 @@
         },
         "agent_session_message_parent_id_idx": {
           "name": "agent_session_message_parent_id_idx",
-          "columns": ["parent_id"],
+          "columns": ["parent_id", "session_id"],
           "isUnique": false
         },
         "agent_session_message_status_idx": {

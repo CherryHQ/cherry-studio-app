@@ -90,8 +90,9 @@ export const agentSessionMessageTable = sqliteTable(
     // Mobile short-word search scans bounded global history windows between input events.
     index('agent_session_message_created_id_idx').on(t.createdAt, t.id),
     index('agent_session_message_turn_id_idx').on(t.turnId),
-    // Children lookups for branch switchers and the FK cascade.
-    index('agent_session_message_parent_id_idx').on(t.parentId),
+    // Children lookups for branch switchers and the FK cascade; the Session column finds a
+    // Session's first questions, whose parent is NULL.
+    index('agent_session_message_parent_id_idx').on(t.parentId, t.sessionId),
     // Backs boot reconciliation of unsettled messages. Plain, not partial —
     // Drizzle binds `status = ?`, which SQLite can't match to a partial index.
     index('agent_session_message_status_idx').on(t.status),

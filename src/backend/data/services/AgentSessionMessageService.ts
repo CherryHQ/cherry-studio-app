@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, inArray, isNull, notExists, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  notExists,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 
 import { application } from '@/backend/core/application/Application';
@@ -193,18 +205,27 @@ export class AgentSessionMessageService {
     limit: number,
     settledOnly = false,
   ) {
-    const [target] = await this.db
-      .select(agentMessageViewColumns)
-      .from(agentSessionMessageTable)
-      .where(
-        and(
-          eq(agentSessionMessageTable.sessionId, sessionId),
-          eq(agentSessionMessageTable.id, messageId),
-          this.onSelectedPath(sessionId),
-          this.settledTurnFilter(settledOnly),
-        ),
-      )
-      .limit(1);
+    const readTarget = (candidates: SQL) =>
+      this.db
+        .select(agentMessageViewColumns)
+        .from(agentSessionMessageTable)
+        .where(
+          and(
+            eq(agentSessionMessageTable.sessionId, sessionId),
+            candidates,
+            this.onSelectedPath(sessionId),
+            this.settledTurnFilter(settledOnly),
+          ),
+        )
+        .orderBy(desc(agentSessionMessageTable.createdAt), desc(agentSessionMessageTable.id))
+        .limit(1);
+    let [target] = await readTarget(eq(agentSessionMessageTable.id, messageId));
+    // Selecting another answer above it takes the message out of the transcript; read around its
+    // nearest ancestor still shown, where the branches part.
+    if (!target && !(await this.isOnSelectedPath(sessionId, messageId)))
+      [target] = await readTarget(
+        sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId, messageId)})`,
+      );
     if (!target) {
       throw DataApiErrorFactory.notFound('AgentSessionMessage', messageId);
     }
@@ -259,6 +280,21 @@ export class AgentSessionMessageService {
       .limit(limit);
   }
 
+  private async isOnSelectedPath(sessionId: string, messageId: string): Promise<boolean> {
+    const [row] = await this.db
+      .select({ id: agentSessionMessageTable.id })
+      .from(agentSessionMessageTable)
+      .where(
+        and(
+          eq(agentSessionMessageTable.id, messageId),
+          eq(agentSessionMessageTable.sessionId, sessionId),
+          this.onSelectedPath(sessionId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  }
+
   /** The transcript is the selected leaf's ancestor chain (docs/references/agent/agent-persistence.md). */
   private onSelectedPath(sessionId: string) {
     return sql`${agentSessionMessageTable.id} IN (${messagePathIdsSql(sessionId)})`;
@@ -280,15 +316,17 @@ export class AgentSessionMessageService {
         siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
       })
       .from(agentSessionMessageTable)
+      // Parent ids already belong to this Session; a Session filter beside them lets SQLite pick
+      // the Session index and scan the whole transcript instead of the parent index.
       .where(
-        and(
-          eq(agentSessionMessageTable.sessionId, sessionId),
-          or(
-            parents.length ? inArray(agentSessionMessageTable.parentId, parents) : undefined,
-            items.some((item) => item.parentId === null)
-              ? isNull(agentSessionMessageTable.parentId)
-              : undefined,
-          ),
+        or(
+          parents.length ? inArray(agentSessionMessageTable.parentId, parents) : undefined,
+          items.some((item) => item.parentId === null)
+            ? and(
+                isNull(agentSessionMessageTable.parentId),
+                eq(agentSessionMessageTable.sessionId, sessionId),
+              )
+            : undefined,
         ),
       )
       .orderBy(asc(agentSessionMessageTable.createdAt), asc(agentSessionMessageTable.id));

@@ -53,9 +53,11 @@ describe('AgentSessionMessageService persistence', () => {
     sqlite.exec(`UPDATE agent_session SET active_node_id = 'b1' WHERE id = 'session-1'`);
     const other = await agentSessionMessageService.listByCursor('session-1');
     expect(other.items.map((message) => message.id)).toEqual(['b1', 'q1']);
-    await expect(
-      agentSessionMessageService.listByCursor('session-1', { aroundMessageId: 'a2' }),
-    ).rejects.toThrow();
+    // A2 left the transcript with its branch: read around Q1, where the branches part.
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'a2',
+    });
+    expect(around.items.map((message) => message.id)).toEqual(['b1', 'q1']);
   });
 
   test('merges concurrent languages into message data and returns them with history and selection', async () => {

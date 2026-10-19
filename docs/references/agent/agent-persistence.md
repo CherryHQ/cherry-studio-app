@@ -350,7 +350,9 @@ projection:
   answering with another model, reserves a sibling answer to the same question. Selecting a message
   keeps the leaf when the message is already on the selected branch, otherwise it selects the
   newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
-  wherever the branch passes a parent with several children.
+  wherever the branch passes a parent with several children. A search result is selected once when
+  its conversation opens; a window read around a message that has since left the selected branch
+  reads around its nearest ancestor still on it.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
