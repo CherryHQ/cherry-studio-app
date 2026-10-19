@@ -154,8 +154,8 @@ boundary, not in `AgentService`: resolving it is file-system work under `backend
 an Agent is refused while Sessions exist (`RESTRICT`). Session deletion aborts execution, drains
 settlement/usage, then hard-deletes Cherry rows and cascades messages. Forks are independent row
 copies and survive source deletion. The Host retires the Pi binding; no owner can be recreated from
-Pi. Retired upstream bytes remain until the next idle initialization closes and deletes the Pi
-file. No raw upstream SQL or archive tombstone is involved.
+Pi. Retired upstream bytes remain in the Pi file until the user clears the conversation runtime
+cache in Data settings. No raw upstream SQL or archive tombstone is involved.
 
 The deletable message unit is a whole settled turn, keeping tool calls and results paired. Deleting
 its Cherry rows also clears checkpoints that may include the turn and increments `runtimeRevision`

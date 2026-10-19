@@ -6,6 +6,23 @@ import { databaseDirectory } from '@/backend/data/storage/storagePaths';
 import { captureDatabase } from './backupDatabase';
 
 export const AGENT_DATABASE_NAME = 'pi-agent.db';
+const AGENT_DATABASE_FILES = ['', '-wal', '-shm'].map((suffix) => AGENT_DATABASE_NAME + suffix);
+
+/** Bytes of the Agent database and its SQLite sidecars in the active store. */
+export function agentDatabaseSize(directory = databaseDirectory()): number {
+  return AGENT_DATABASE_FILES.reduce((total, name) => {
+    const file = new File(directory, name);
+    return total + (file.exists ? file.size : 0);
+  }, 0);
+}
+
+/** Removes the closed Agent database; the next open creates an empty file. */
+export function discardAgentDatabase(directory = databaseDirectory()): void {
+  for (const name of AGENT_DATABASE_FILES) {
+    const file = new File(directory, name);
+    if (file.exists) file.delete();
+  }
+}
 
 /** Portable values used by the Agent's storage; no upstream runtime types enter data. */
 export type AgentSqlValue = null | number | bigint | string | Uint8Array;

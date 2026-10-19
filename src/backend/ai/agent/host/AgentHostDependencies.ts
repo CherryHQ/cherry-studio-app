@@ -19,7 +19,11 @@ import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
-import { AgentSqlDatabase } from '@/backend/data/db/AgentSqlDatabase';
+import {
+  AgentSqlDatabase,
+  agentDatabaseSize,
+  discardAgentDatabase,
+} from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
@@ -119,6 +123,8 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     this.keepAlive.acquire('agent.durable', onInterrupt);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
+    size: () => agentDatabaseSize(),
+    discard: () => discardAgentDatabase(),
     notifyTranscript: (sessionId: string) =>
       publishDataApiChanges([
         '/agent-sessions',
