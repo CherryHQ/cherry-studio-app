@@ -49,6 +49,11 @@ All eight names are registered in source. Creation uses version 1 specs; edits r
 version 1 and an exact source SHA-256. Current inspection lists body paragraphs, sheets, and
 slides/shapes with bounded paging; exact reads resolve one supported anchor. These are narrower
 than the full target matrix above. Native and Office acceptance remain required before release.
+Image inspection and replacement are also implemented through these same tools: `kind: "images"`
+lists bounded picture anchors/metadata and replacement eligibility; each edit tool accepts an
+optional `images` array and permits image-only edits. Replacement retains the existing frame,
+crop and transforms and changes only the selected occurrence, including when media is shared.
+See the service contract for unsupported picture representations and exact format coverage.
 `read_file` remains the general reading tool. `read_office_content` exists for structural addresses
 needed by edits, not as a second plain-text extraction path.
 
@@ -59,9 +64,9 @@ operation matrix before enabling mutations on that format.
 
 | Format | Initial generation target | Initial edit target | Deferred |
 | --- | --- | --- | --- |
-| DOCX | Headings, paragraphs, lists, simple tables, managed images, and named style presets | Replace a unique literal occurrence in an inspected body paragraph, preserving surrounding runs/hyperlinks | Word table/header editing, arbitrary page layout, tracked changes, fields and embedded objects |
-| XLSX | Named sheets, explicitly typed scalar cells, simple number formats, column widths and cell-anchored PNG/JPEG images | Write or clear a bounded range of ordinary cells without changing sheet structure | Formula authoring/evaluation, row or column insertion, merges, charts, pivot tables, and external-data refresh |
-| PPTX | Fixed layouts with editable title/body text, simple tables, and managed images | Replace text in an inspected supported text shape | Arbitrary shape/layout editing, animations, embedded media, charts, and master/theme editing |
+| DOCX | Headings, paragraphs, lists, simple tables, managed images, and named style presets | Replace a unique literal occurrence in an inspected body paragraph; replace supported body pictures, including table pictures | Word table text/header editing, picture insertion/deletion, arbitrary page layout, tracked changes, fields and embedded objects |
+| XLSX | Named sheets, explicitly typed scalar cells, simple number formats, column widths and cell-anchored PNG/JPEG images | Write or clear ordinary cells; replace supported worksheet pictures without changing sheet structure | Formula authoring/evaluation, row or column insertion, picture insertion/deletion, merges, charts, pivot tables, and external-data refresh |
+| PPTX | Fixed layouts with editable title/body text, simple tables, and managed images | Replace text in supported text shapes and replace supported slide pictures | Arbitrary shape/layout editing, picture insertion/deletion, animations, embedded media, charts, and master/theme editing |
 
 Deferred features in imported files are not automatically discarded or grounds to reject the whole
 file. Inspection distinguishes an unsupported target from an untouched feature the patcher can

@@ -34,6 +34,13 @@ function setup() {
     async readAsBytes(file) {
       return entries.get(file.fileEntryId)!.data;
     },
+    async readImage(file) {
+      const stored = entries.get(file.fileEntryId)!;
+      return {
+        data: Buffer.from(stored.data).toString('base64'),
+        mediaType: stored.entry.mediaType,
+      };
+    },
     async resolveAvailable(ids) {
       return new Map(
         ids.map((id) => {
@@ -85,8 +92,86 @@ function setup() {
     );
     return value;
   }
-  return { tools, execute };
+  return { tools, execute, files };
 }
+
+test.each(['docx', 'xlsx', 'pptx'] as const)(
+  '%s image inspection and image-only editing match the Code Mode contracts',
+  async (format) => {
+    const { execute, files } = setup();
+    const image = await files.createBytesEntry(
+      {
+        name: 'photo.png',
+        mediaType: 'image/png',
+        provenance: 'generated',
+        data: new Uint8Array(
+          Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+            'base64',
+          ),
+        ),
+      },
+      new AbortController().signal,
+    );
+    const picture = { file_entry_id: image.id, width_px: 100, height_px: 60, alt: 'Photo' };
+    const formats = {
+      docx: {
+        create: 'create_document',
+        edit: 'edit_document',
+        spec: { version: 1, blocks: [{ ...picture, type: 'image' }] },
+      },
+      xlsx: {
+        create: 'create_workbook',
+        edit: 'edit_workbook',
+        spec: {
+          version: 1,
+          sheets: [{ name: 'Data', rows: [['Photo']], images: [{ ...picture, cell: 'B2' }] }],
+        },
+      },
+      pptx: {
+        create: 'create_presentation',
+        edit: 'edit_presentation',
+        spec: { version: 1, slides: [{ ...picture, type: 'image', title: 'Photo' }] },
+      },
+    };
+    const fixture = formats[format];
+    const created = await execute(fixture.create, {
+      filename: `source.${format}`,
+      spec: fixture.spec,
+    });
+    expect(created.status).toBe('created');
+    const inspected = await execute('inspect_office_file', {
+      file_entry_id: created.fileEntryId,
+      kind: 'images',
+    });
+    expect(inspected).toMatchObject({
+      status: 'read',
+      kind: 'images',
+      total: 1,
+      items: [{ replaceable: true }],
+    });
+    const [item] = inspected.items as Record<string, RuntimeJsonValue>[];
+    const edited = await execute(fixture.edit, {
+      version: 1,
+      file_entry_id: created.fileEntryId,
+      filename: `copy.${format}`,
+      source_sha256: inspected.source_sha256,
+      ...(format === 'xlsx' ? { sheet: 'Data' } : {}),
+      images: [{ anchor: item.anchor, file_entry_id: image.id }],
+    });
+    expect(edited).toMatchObject({ status: 'created', source_file_entry_id: created.fileEntryId });
+    expect(edited.fileEntryId).not.toBe(created.fileEntryId);
+    expect(edited.warnings).toBeUndefined();
+    expect(
+      await execute('inspect_office_file', { file_entry_id: edited.fileEntryId, kind: 'images' }),
+    ).toMatchObject({
+      status: 'read',
+      kind: 'images',
+      total: 1,
+      items: [{ anchor: item.anchor, replaceable: true }],
+    });
+  },
+);
 
 test.each([
   {

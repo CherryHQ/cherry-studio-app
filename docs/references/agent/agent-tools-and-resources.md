@@ -546,8 +546,18 @@ returns exact paragraphs or bounded cell ranges, including saved formula values.
 source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
 hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
 original and unrelated package parts remain unchanged. All five use the same catalog, compute,
-file grants and durable receipt boundaries as generation. Workbook edits request recalculation;
+file grants and durable receipt boundaries as generation. Workbook cell edits request recalculation;
 they do not calculate formulas themselves.
+
+`inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
+frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
+optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
+PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
+2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
+is the caller's responsibility. Shared original media stays unchanged for other occurrences.
+Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
+request recalculation. See the service contract for exact format-specific coverage.
 
 Office tools declare success and business-error return schemas for Code Mode. The Runtime wraps
 each result as `{ value, artifacts }`. Creation and editing return `value.status: "created"` and
@@ -579,7 +589,7 @@ draft. Each `selection-ref` carries the managed file id, structural anchor and e
 reads the current referenced content and compares it with the excerpt before editing, following
 Desktop's workflow. Selection references do not widen file grants.
 
-Template filling, formula authoring/evaluation, arbitrary layouts, image changes in existing files
+Template filling, formula authoring/evaluation, arbitrary layouts, image insertion/deletion in existing files
 and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
 pending. Executed tests cover package contents and supported patch preservation in a Node VM;
 they do not establish native QuickJS compatibility or Office visual fidelity.

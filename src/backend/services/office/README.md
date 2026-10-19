@@ -13,16 +13,16 @@ There is no new native module, remote service, job queue or model-written render
 | `create_document` | Paragraphs (`normal`, `title`, `heading1`, `heading2`), ordered/unordered lists, rectangular tables, PNG/JPEG images | DOCX |
 | `create_workbook` | Unique named sheets, rectangular rows of string/number/boolean/null cells, column widths, numeric formats and PNG/JPEG images anchored to cells | XLSX |
 | `create_presentation` | Widescreen title, bullet, table and image slides; light/dark theme | PPTX with editable supported elements |
-| `inspect_office_file` | Managed source, item offset/limit and optional PPTX shape offset | Sheet names, body paragraph anchors, or slides/shapes; source SHA-256 |
+| `inspect_office_file` | Managed source, `kind` (`content` or `images`), item offset/limit and optional PPTX shape offset | Content outline or picture anchors/metadata and replacement eligibility; source SHA-256 |
 | `read_office_content` | Managed source and one structural anchor | Exact paragraph text or up to 1000 cells with saved formula values; source SHA-256 |
-| `edit_document` | Version 1, source/hash, filename, exact paragraph precondition and unique literal replacement | New DOCX copy, retaining surrounding runs and hyperlinks |
-| `edit_workbook` | Version 1, source/hash, filename, one sheet and up to 1000 scalar cell edits | New XLSX copy, retaining untouched package parts |
-| `edit_presentation` | Version 1, source/hash, filename, slide/shape/table-cell paragraph replacements | New PPTX copy, retaining surrounding runs and hyperlinks |
+| `edit_document` | Version 1, source/hash, filename, exact paragraph replacements and/or existing picture replacements | New DOCX copy, retaining surrounding runs, hyperlinks and picture layout |
+| `edit_workbook` | Version 1, source/hash, filename, one sheet, up to 1000 scalar cell edits and/or existing picture replacements | New XLSX copy, retaining untouched package parts |
+| `edit_presentation` | Version 1, source/hash, filename, slide/shape/table-cell paragraph replacements and/or existing picture replacements | New PPTX copy, retaining surrounding runs, hyperlinks and picture layout |
 
 Creation inputs have `filename` and `spec`, and every creation spec requires `version: 1`.
 Edit inputs require top-level `version: 1`. Unknown properties and
 invalid XML text are rejected. Workbook strings are literal, including strings beginning with `=`;
-there is no formula authoring or calculation. Images require an authorized managed `file_entry_id`,
+there is no formula authoring or calculation. Creation images require an authorized managed `file_entry_id`,
 `width_px` and `height_px`; these dimensions specify the intended aspect ratio. Images are fitted
 inside the document/slide area. Workbook images additionally specify `cell` (A1 address), with
 size in pixels and a one-cell DrawingML anchor. Images cannot name paths, URLs or arbitrary data URIs.
@@ -90,7 +90,7 @@ the entire batch before publication; earlier in-memory mutations never escape th
   cannot introduce tabs or line breaks. Multiple edits to one paragraph use sequential preconditions.
 - XLSX writes numbers, booleans, literal text or clears with null. Cell style attributes survive.
   Ordinary formulas may be explicitly replaced; grouped/shared/array/data-table formulas, merged
-  follower cells, cells carrying rich-value/dynamic-array metadata and protected sheets are refused. Writes request full recalculation. Replacing
+  follower cells, cells carrying rich-value/dynamic-array metadata and protected sheets are refused. Cell writes request full recalculation; image-only edits do not change cells or calculation settings. Replacing
   a formula removes its calculation-chain package bookkeeping. No formula evaluator runs, so
   cached dependent values and preview values may remain stale until a spreadsheet app recalculates.
 - Sources and outputs are limited to 4 MiB. Archives admit at most 2048 entries, 16 MiB expanded
@@ -105,6 +105,43 @@ the entire batch before publication; earlier in-memory mutations never escape th
 Inspection/read return `source_sha256`. Every edit checks that digest against its source snapshot,
 creates a new managed file with generated provenance, and emits a `derived` artifact. Successful
 edit receipts include source id/hash and output hash; there is no new lineage database.
+
+### Existing Picture Replacement
+
+Inspect with `kind: "images"` before supplying the edit tool's optional `images` array. Each entry
+contains the returned `anchor` and a replacement managed `file_entry_id`. Image-only and mixed
+text/cell-plus-image edits are supported, with at most 8 replacements and 2 MiB of replacement
+images per call. Workbook image anchors must match the top-level `sheet`. At least one text/cell
+edit or image replacement is required. Every source and replacement passes file authorization
+before any source or image bytes are read; the source digest is checked before image resolution.
+
+Inspection pages across pictures, returning `kind: "images"`, `total`, `offset` and `items`. Items
+include `anchor`, `name`, `alt`, `replaceable`, an optional unsupported `reason`, and media type,
+local frame dimensions in pixels and worksheet anchor cell when available. Names and alt text are
+bounded to 300 characters. `replaceable` describes the picture representation, not proof that a
+protected, signed or macro-containing package can be edited. These anchors are for `images`, not
+`read_office_content` or the preview's text selection references.
+
+- DOCX indexes DrawingML pictures in the main body, including tables, with zero-based
+  `image_index`. Headers, footers, legacy VML, content controls and tracked-change pictures are
+  outside the supported replacement surface.
+- XLSX indexes DrawingML pictures within each `sheet`, with zero-based `image_index`. Existing
+  one-cell, two-cell and absolute anchors retain their geometry. Protected worksheets and drawing
+  parts shared by multiple worksheet references are refused.
+- PPTX uses one-based `slide` and the picture's `nodeId`, including ordinary grouped pictures.
+  Masters, layouts and backgrounds are not inspected. Ambiguous shape ids and slide parts shared
+  by multiple slide references are refused.
+
+Replacement supports existing embedded PNG/JPEG pictures. Linked images, alternate content,
+tiled fills and picture BLIP effects/extensions (including SVG alternatives) are refused rather
+than leaving competing image sources. The existing frame, crop, rotation, grouping and alt text
+remain unchanged: this operation does not automatically fit a different aspect ratio, so prepare
+the replacement accordingly. Inserting/deleting pictures and changing layout remain future work.
+
+Only the chosen picture reference is redirected to newly added media and a fresh relationship.
+Other occurrences sharing the original image are unchanged. The old media/relationships are
+retained, and repeated replacement can grow the package up to the existing limits. Any invalid
+replacement rejects the entire batch; the tool publishes no partial result.
 
 The file viewer's selection mode uses the already-shared `@cherrystudio/file-preview`.
 **Reference in new chat** opens an editable standard-Agent draft with the original attachment and a
@@ -149,7 +186,7 @@ device behavior. Before release, complete both-platform native acceptance, open
 the files in Office without a repair prompt, and check preview, text wrapping and editability.
 
 Template filling, arbitrary layouts, formula authoring/evaluation, chart authoring, editing Word
-tables/headers, changing images in existing files, and macros remain outside this slice. Untouched
+table text/headers, inserting/deleting images in existing files, and macros remain outside this slice. Untouched
 images, charts, themes and other parts are preserved rather than reconstructed. The preview HTML
 must be regenerated by an authorized package build before device acceptance of the selection UI. See
 [Office Tools Design](../../../../docs/references/agent/office-tools-design.md).

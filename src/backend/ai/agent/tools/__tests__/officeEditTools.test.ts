@@ -10,6 +10,7 @@ import { WorkspaceFileAccess } from '../workspaceFileAccess';
 const SOURCE = '00000000-0000-7000-8000-000000000001';
 const OUTPUT = '00000000-0000-7000-8000-000000000002';
 const WORKSPACE_ID = '00000000-0000-7000-8000-000000000003';
+const IMAGE = '00000000-0000-7000-8000-000000000004';
 const bytes = new Uint8Array([80, 75, 3, 4]);
 const entry = FileEntrySchema.parse({
   id: OUTPUT,
@@ -36,6 +37,7 @@ function setup(allowed = true, folderId: string | null = null) {
               mediaType: OFFICE_MEDIA_TYPES.docx,
             },
           ],
+          [IMAGE, { fileEntryId: IMAGE, name: 'photo.png', size: 10, mediaType: 'image/png' }],
         ]),
     ),
     readAsBytes: jest.fn(async () => bytes),
@@ -55,11 +57,12 @@ function setup(allowed = true, folderId: string | null = null) {
       },
     ),
   };
+  const allowedIds = new Set(allowed ? [SOURCE] : []);
   const library = { contains: jest.fn(async () => false) };
   const access = new WorkspaceFileAccess(
     folderId,
     {
-      fileEntryIds: new Set(allowed ? [SOURCE] : []),
+      fileEntryIds: allowedIds,
       availableFiles: new Map(),
       draftFileEntryIds: new Set(),
       grantFile: jest.fn(),
@@ -84,8 +87,74 @@ function setup(allowed = true, folderId: string | null = null) {
   };
   const execute = (override = {}, signal = new AbortController().signal) =>
     tool.execute({ input: { ...input, ...override }, signal, turnId: 'turn', toolCallId: 'call' });
-  return { execute, files, sandbox, library, tools };
+  return { execute, files, sandbox, library, tools, allowedIds };
 }
+
+const imageEdit = {
+  edits: undefined,
+  images: [{ anchor: { format: 'docx', image_index: 0 }, file_entry_id: IMAGE }],
+};
+
+test('authorizes every replacement before reading the source or image bytes', async () => {
+  const { execute, files, sandbox } = setup();
+  await expect(execute(imageEdit)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+  expect(files.resolveAvailable).not.toHaveBeenCalled();
+  expect(files.readAsBytes).not.toHaveBeenCalled();
+  expect(files.readImage).not.toHaveBeenCalled();
+  expect(sandbox.run).not.toHaveBeenCalled();
+});
+
+test('publishes an image-only derivative and keeps the resolved media inside the compute job', async () => {
+  const { execute, files, sandbox, allowedIds } = setup();
+  allowedIds.add(IMAGE);
+  files.readImage.mockResolvedValue({ mediaType: 'image/png', data: 'aW1hZ2U=' });
+  expect((await execute(imageEdit)).value).toMatchObject({
+    status: 'created',
+    fileEntryId: OUTPUT,
+  });
+  expect(files.readImage).toHaveBeenCalledTimes(1);
+  expect(jest.mocked(sandbox.run).mock.calls[0][0].code).toContain('"data":"aW1hZ2U="');
+  expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+});
+
+test('stale sources and unavailable replacement images never publish a derivative', async () => {
+  const { execute, files, sandbox, allowedIds } = setup();
+  allowedIds.add(IMAGE);
+  expect((await execute({ ...imageEdit, source_sha256: '0'.repeat(64) })).value).toMatchObject({
+    status: 'error',
+  });
+  expect(files.readImage).not.toHaveBeenCalled();
+  files.readImage.mockResolvedValue(undefined);
+  expect((await execute(imageEdit)).value).toMatchObject({ status: 'error' });
+  expect(sandbox.run).not.toHaveBeenCalled();
+  expect(files.createBytesEntry).not.toHaveBeenCalled();
+});
+
+test('rechecks workspace replacement access on each edit', async () => {
+  const { execute, files, library } = setup(false, WORKSPACE_ID);
+  library.contains.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+  files.readImage.mockResolvedValue({ mediaType: 'image/png', data: 'aW1hZ2U=' });
+  expect((await execute(imageEdit)).value).toMatchObject({ status: 'created' });
+  library.contains.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  await expect(execute(imageEdit)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
+  expect(files.readImage).toHaveBeenCalledTimes(1);
+  expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+});
+
+test('rejects oversized replacement images before native work or publication', async () => {
+  const { execute, files, sandbox, allowedIds } = setup();
+  allowedIds.add(IMAGE);
+  const facts = await files.resolveAvailable();
+  facts.get(IMAGE)!.size = 2 * 1024 * 1024 + 1;
+  files.resolveAvailable.mockResolvedValue(facts);
+  expect((await execute(imageEdit)).value).toMatchObject({
+    status: 'error',
+    message: expect.stringContaining('2 MiB'),
+  });
+  expect(files.readImage).not.toHaveBeenCalled();
+  expect(sandbox.run).not.toHaveBeenCalled();
+  expect(files.createBytesEntry).not.toHaveBeenCalled();
+});
 
 test('unauthorized source references cannot read storage', async () => {
   const { execute, files } = setup(false);

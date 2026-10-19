@@ -1,5 +1,7 @@
 // Trusted code for a fresh QuickJS compute job. No model-written code, paths, network or DOM UI.
 // The algorithms follow Desktop's office-transform patch-copy and run-edit recipes.
+import { officeImageTransformCode } from './officeImageTransformCode';
+
 export const officeTransformCode = String.raw`
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -214,6 +216,7 @@ function address(col, row) {
   while (col) { col--; letters = String.fromCharCode(65 + col % 26) + letters; col = Math.floor(col / 26); }
   return letters + row;
 }
+${officeImageTransformCode}
 function sheetCells(root) {
   const map = new Map();
   for (const cell of all(one(root, S, 'sheetData'), S, 'c')) {
@@ -311,6 +314,7 @@ function editSheet() {
   }
 }
 function inspect() {
+  if (request.kind === 'images') return inspectPictures();
   const offset = request.offset, limit = request.limit;
   if (request.format === 'xlsx') {
     const list = sheets();
@@ -356,13 +360,17 @@ if (parts['[Content_Types].xml']) {
 }
 if (hasMacros) fail('Macro-enabled Office documents are not supported for editing.');
 if (request.format === 'docx' && parts['word/settings.xml'] && all(document('word/settings.xml'), W, 'documentProtection').some(node => ['true', '1', 'on'].includes(node.getAttributeNS(W, 'enforcement')))) fail('Protected Word documents cannot be edited.');
-if (request.format === 'xlsx') editSheet();
-else for (const edit of request.edits) replaceParagraph(request.format === 'docx' ? wordParagraph(edit.anchor) : slideParagraph(edit.anchor), edit);
+if (request.format === 'xlsx') { if (request.cells?.length) editSheet(); }
+else for (const edit of request.edits || []) replaceParagraph(request.format === 'docx' ? wordParagraph(edit.anchor) : slideParagraph(edit.anchor), edit);
+replacePictures();
 for (const path of dirty) {
   const text = new xml.XMLSerializer().serializeToString(docs.get(path).documentElement);
   parse(text);
   parts[path] = zip.strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + text);
 }
+const outputParts = Object.values(parts);
+if (outputParts.length > 2048 || outputParts.some(part => part.length > 4 * 1024 * 1024) || outputParts.reduce((total, part) => total + part.length, 0) > 16 * 1024 * 1024)
+  fail('Edited Office package exceeds the package limits.');
 const output = zip.zipSync(parts, { level: 6 });
 if (output.length > 4 * 1024 * 1024) fail('Edited Office file exceeds 4 MiB.');
 let binary = '';

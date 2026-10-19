@@ -6,18 +6,16 @@ import {
   OfficeGenerationError,
   officeImageIds,
   officeInputSchemas,
-  OFFICE_MAX_IMAGE_BYTES,
   OFFICE_MAX_INPUT_BYTES,
   OFFICE_MEDIA_TYPES,
   type OfficeFormat,
-  type OfficeImage,
   type OfficeRequest,
 } from '@/backend/services/office';
-import { FileEntryIdSchema, filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
+import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
-import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
+import { officeOperationSlots, readOfficeImages, type OfficeFiles } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -93,7 +91,7 @@ export function createOfficeTools(
         let nativeSettled = true;
         let finished = false;
         try {
-          const images = await readImages(ids, files, signal);
+          const images = await readOfficeImages(ids, files, signal);
           nativeSettled = false;
           const data = await generateOfficeFile({
             request,
@@ -146,48 +144,6 @@ export function createOfficeTools(
     }),
   );
   return [...generators, ...createOfficeEditTools(sandbox, files, access)];
-}
-
-async function readImages(
-  ids: string[],
-  files: OfficeFiles,
-  signal: AbortSignal,
-): Promise<Record<string, OfficeImage>> {
-  const images: Record<string, OfficeImage> = {};
-  if (!ids.length) return images;
-  const facts = await files.resolveAvailable(ids.map((id) => FileEntryIdSchema.parse(id)));
-  signal.throwIfAborted();
-  let totalBytes = 0;
-  for (const id of ids) {
-    const fact = facts.get(id);
-    if (
-      !fact ||
-      !Number.isSafeInteger(fact.size) ||
-      fact.size <= 0 ||
-      !['image/png', 'image/jpeg'].includes(fact.mediaType)
-    ) {
-      throw new OfficeGenerationError('An image is unavailable or is not PNG/JPEG.');
-    }
-    totalBytes += fact.size;
-  }
-  if (totalBytes > OFFICE_MAX_IMAGE_BYTES)
-    throw new OfficeGenerationError('Images exceed 2 MiB. Use smaller images.');
-  let encodedBytes = 0;
-  for (const id of ids) {
-    signal.throwIfAborted();
-    const image = await files.readImage?.(facts.get(id)!, signal);
-    signal.throwIfAborted();
-    if (!image || (image.mediaType !== 'image/png' && image.mediaType !== 'image/jpeg')) {
-      throw new OfficeGenerationError('An image could not be read as PNG/JPEG.');
-    }
-    encodedBytes += Math.ceil(image.data.length / 4) * 3;
-    if (encodedBytes > OFFICE_MAX_IMAGE_BYTES)
-      throw new OfficeGenerationError(
-        'Images exceed 2 MiB after normalization. Use smaller images.',
-      );
-    images[id] = { data: image.data, mediaType: image.mediaType };
-  }
-  return images;
 }
 
 function invalid(message: string): RuntimeToolResult {

@@ -10,11 +10,13 @@ import {
   officeZipLibraryCode,
   officeXmlLibraryCode,
 } from './officePackageCode';
+import type { OfficeImage } from './officeSpec';
 import { officeTransformCode } from './officeTransformCode';
 
 export function createOfficeTransformCode(
   bytes: Uint8Array,
   request: OfficeTransformRequest,
+  images: Readonly<Record<string, OfficeImage>> = {},
 ): string {
   return `
 ${officeTextEncoderCode}
@@ -22,6 +24,7 @@ ${officeZipLibraryCode}
 ${officeXmlLibraryCode}
 const request = ${JSON.stringify(request)};
 const sourceBase64 = ${JSON.stringify(fromByteArray(bytes))};
+const images = ${JSON.stringify(images)};
 try { return (() => { ${officeTransformCode} })(); }
 catch (error) { return { error: String(error.message || error).slice(0, 500) }; }
 `;
@@ -30,6 +33,7 @@ catch (error) { return { error: String(error.message || error).slice(0, 500) }; 
 export async function transformOfficeFile(input: {
   bytes: Uint8Array;
   request: OfficeTransformRequest;
+  images?: Readonly<Record<string, OfficeImage>>;
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
@@ -39,7 +43,7 @@ export async function transformOfficeFile(input: {
     input.signal.throwIfAborted();
     if (input.bytes.length > OFFICE_MAX_OUTPUT_BYTES)
       throw new OfficeGenerationError('Source Office file exceeds 4 MiB.');
-    const code = createOfficeTransformCode(input.bytes, input.request);
+    const code = createOfficeTransformCode(input.bytes, input.request, input.images);
     submitted = true;
     const outcome = await input.sandbox.run({
       code,

@@ -16,7 +16,7 @@ import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 import { sha256Hex } from '@/shared/utils/sha256';
 
 import type { RuntimeTool } from '../runtime';
-import { officeOperationSlots, type OfficeFiles } from './officeToolResources';
+import { officeOperationSlots, readOfficeImages, type OfficeFiles } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -28,7 +28,7 @@ const definitions = [
     operation: 'inspect',
     schema: officeInspectSchema,
     description:
-      'List Word body paragraphs, Excel sheet names, or PowerPoint slides and shape ids. Paginated, bounded structural inspection; returns source_sha256 for edits. Text excerpts may be shortened; use read_office_content for exact text.',
+      'List Word body paragraphs, Excel sheet names, or PowerPoint slides and shape ids. Use kind "images" to list DrawingML pictures in the Word body (including tables), worksheets or slides, with anchors, names, alt text and replacement eligibility. Image indexes are zero-based; PowerPoint uses slide and shape ids. Headers, footers, masters, backgrounds and legacy VML images are not listed. Paginated; returns source_sha256 for edits. Text excerpts may be shortened; use read_office_content for exact text.',
   },
   {
     name: 'read_office_content',
@@ -46,7 +46,7 @@ const definitions = [
     operation: 'edit',
     format,
     schema: officeEditSchemas[format],
-    description: `Create a NEW edited ${format.toUpperCase()} copy; source_sha256 must match a prior inspection/read. ${format === 'xlsx' ? 'Change scalar cells on one worksheet; retain other package parts, images and charts. Strings are literal, null clears a cell. Reject shared/array/data-table formulas and merged followers. Excel recalculates on open; cached formula results may be stale.' : 'Replace one unique literal text occurrence per anchored paragraph (or its optional Word character range); expect_text must match the complete current text. Preserve surrounding runs, formatting and hyperlinks. Fields, drawings, bookmarks, comments and tracked changes in the target paragraph are refused.'} Never overwrites the original.`,
+    description: `Create a NEW edited ${format.toUpperCase()} copy; source_sha256 must match a prior inspection/read. ${format === 'xlsx' ? 'Change scalar cells on one worksheet; retain other package parts, images and charts. Strings are literal, null clears a cell. Reject shared/array/data-table formulas and merged followers. Cell edits request recalculation on open; cached formula results may be stale.' : 'Replace one unique literal text occurrence per anchored paragraph (or its optional Word character range); expect_text must match the complete current text. Preserve surrounding runs, formatting and hyperlinks. Fields, drawings, bookmarks, comments and tracked changes in the target paragraph are refused for text edits.'} Optionally replace up to 8 existing pictures through images, using anchors from inspect_office_file kind "images" and authorized PNG/JPEG file_entry_id values. Image-only edits are allowed. Replacement affects only the selected occurrence and keeps its frame, crop, transforms and alt text; it does not auto-fit a different aspect ratio. Images together must fit 2 MiB. Unsupported picture extensions and external images are refused. Never overwrites the original.`,
   })),
 ] as const;
 
@@ -76,6 +76,15 @@ export function createOfficeEditTools(
         const parsed = definition.schema.safeParse(input);
         if (!parsed.success) return invalid(z.prettifyError(parsed.error));
         const sourceId = await access.resolveRead(parsed.data);
+        const imageIds =
+          'images' in parsed.data
+            ? [...new Set(parsed.data.images?.map((image) => image.file_entry_id) ?? [])]
+            : [];
+        // Authorize every replacement before reading any source or image bytes.
+        for (const id of imageIds) {
+          signal.throwIfAborted();
+          await access.resolveRead({ file_entry_id: id });
+        }
         const release = await officeOperationSlots.acquire(signal);
         let settled = true,
           finished = false;
@@ -118,10 +127,12 @@ export function createOfficeEditTools(
             operation: definition.operation,
             format,
           } as OfficeTransformRequest;
+          const images = await readOfficeImages(imageIds, files, signal);
           settled = false;
           const result = await transformOfficeFile({
             bytes,
             request,
+            images,
             sandbox,
             signal,
             onSettled: () => {
@@ -162,7 +173,7 @@ export function createOfficeEditTools(
               source_file_entry_id: sourceId,
               source_sha256: digest,
               sha256: sha256Hex(result.data),
-              ...(format === 'xlsx'
+              ...(format === 'xlsx' && 'cells' in parsed.data && parsed.data.cells?.length
                 ? {
                     warnings: [
                       'Formula caches are not recalculated here. Excel is requested to recalculate on open.',

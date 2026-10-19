@@ -1,6 +1,6 @@
 import * as z from 'zod';
 
-import { officeAnchorSchemas } from '@/backend/services/office';
+import { officeAnchorSchemas, officeImageAnchorSchemas } from '@/backend/services/office';
 
 import type { RuntimeJsonValue } from '../runtime';
 
@@ -26,6 +26,29 @@ const read = {
 const page = { total: z.number(), offset: z.number() };
 const inspect = z.union([
   error,
+  z.strictObject({
+    ...read,
+    ...page,
+    kind: z.literal('images'),
+    format: z.enum(['docx', 'xlsx', 'pptx']),
+    items: z.array(
+      z.strictObject({
+        anchor: z.discriminatedUnion('format', [
+          officeImageAnchorSchemas.docx,
+          officeImageAnchorSchemas.xlsx,
+          officeImageAnchorSchemas.pptx,
+        ]),
+        name: z.string(),
+        alt: z.string(),
+        replaceable: z.boolean(),
+        reason: z.string().optional(),
+        mediaType: z.string().optional(),
+        width_px: z.number().optional(),
+        height_px: z.number().optional(),
+        cell: z.string().optional(),
+      }),
+    ),
+  }),
   z.strictObject({
     ...read,
     ...page,

@@ -35,9 +35,39 @@ const xlsxAnchor = z.strictObject({
 
 export const officeAnchorSchemas = { docx: docxAnchor, xlsx: xlsxAnchor, pptx: pptxAnchor };
 
+export const officeImageAnchorSchemas = {
+  docx: z.strictObject({ format: z.literal('docx'), image_index: z.int().nonnegative() }),
+  xlsx: z.strictObject({
+    format: z.literal('xlsx'),
+    sheet: z.string().min(1).max(31),
+    image_index: z.int().nonnegative(),
+  }),
+  pptx: z.strictObject({
+    format: z.literal('pptx'),
+    slide: z.int().min(1).max(10_000),
+    nodeId: z.string().regex(/^\d+$/),
+  }),
+};
+
+function imageReplacements<T extends z.ZodType>(anchor: T) {
+  return z
+    .array(
+      z.strictObject({
+        anchor,
+        file_entry_id: FileEntryIdSchema.describe(
+          'Replacement PNG/JPEG from the conversation or selected workspace. Keeps the existing image frame, crop and transforms; prepare a matching aspect ratio to avoid stretching.',
+        ),
+      }),
+    )
+    .min(1)
+    .max(8)
+    .optional();
+}
+
 const source = { file_entry_id: FileEntryIdSchema };
 export const officeInspectSchema = z.strictObject({
   ...source,
+  kind: z.enum(['content', 'images']).default('content'),
   offset: z.int().nonnegative().default(0),
   limit: z.int().min(1).max(100).default(30),
   shape_offset: z
@@ -74,39 +104,56 @@ const replacement = {
   replace: officeText(16_000).regex(/^[^\r\n\t]*$/),
 };
 export const officeEditSchemas = {
-  docx: z.strictObject({
-    ...editSource,
-    edits: z
-      .array(z.strictObject({ anchor: docxAnchor, ...replacement }))
-      .min(1)
-      .max(100),
-  }),
-  xlsx: z.strictObject({
-    ...editSource,
-    sheet: z.string().min(1).max(31),
-    cells: z
-      .array(
-        z.strictObject({
-          address: cellAddress,
-          value: z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
-        }),
-      )
-      .min(1)
-      .max(1000),
-  }),
-  pptx: z.strictObject({
-    ...editSource,
-    edits: z
-      .array(z.strictObject({ anchor: pptxAnchor, ...replacement }))
-      .min(1)
-      .max(100),
-  }),
+  docx: z
+    .strictObject({
+      ...editSource,
+      edits: z
+        .array(z.strictObject({ anchor: docxAnchor, ...replacement }))
+        .min(1)
+        .max(100)
+        .optional(),
+      images: imageReplacements(officeImageAnchorSchemas.docx),
+    })
+    .refine((input) => input.edits?.length || input.images?.length, 'Provide edits or images.'),
+  xlsx: z
+    .strictObject({
+      ...editSource,
+      sheet: z.string().min(1).max(31),
+      cells: z
+        .array(
+          z.strictObject({
+            address: cellAddress,
+            value: z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
+          }),
+        )
+        .min(1)
+        .max(1000)
+        .optional(),
+      images: imageReplacements(officeImageAnchorSchemas.xlsx),
+    })
+    .refine((input) => input.cells?.length || input.images?.length, 'Provide cells or images.')
+    .refine(
+      (input) => input.images?.every((image) => image.anchor.sheet === input.sheet) ?? true,
+      'Every image anchor must use the selected sheet.',
+    ),
+  pptx: z
+    .strictObject({
+      ...editSource,
+      edits: z
+        .array(z.strictObject({ anchor: pptxAnchor, ...replacement }))
+        .min(1)
+        .max(100)
+        .optional(),
+      images: imageReplacements(officeImageAnchorSchemas.pptx),
+    })
+    .refine((input) => input.edits?.length || input.images?.length, 'Provide edits or images.'),
 };
 
 export type OfficeTransformRequest =
   | {
       operation: 'inspect';
       format: 'docx' | 'xlsx' | 'pptx';
+      kind?: 'content' | 'images';
       offset: number;
       limit: number;
       shape_offset: number;

@@ -15,6 +15,7 @@ export {
 
 export {
   officeAnchorSchemas,
+  officeImageAnchorSchemas,
   officeEditSchemas,
   officeInspectSchema,
   officeReadSchema,
