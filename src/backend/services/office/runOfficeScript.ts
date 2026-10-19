@@ -68,7 +68,10 @@ ${script}
 })();
 if (output === undefined || output === null) return null;
 let bytes;
-if (typeof output === 'string') bytes = Uint8Array.from(atob(output), c => c.charCodeAt(0));
+if (typeof output === 'string') {
+  if (!output.startsWith('UEsD')) throw new Error('A returned string must be the base64 file, which starts with "UEsD". Return nothing to only inspect inputs.');
+  bytes = Uint8Array.from(atob(output), c => c.charCodeAt(0));
+}
 else if (output instanceof ArrayBuffer) bytes = new Uint8Array(output);
 else if (ArrayBuffer.isView(output)) bytes = new Uint8Array(output.buffer, output.byteOffset, output.byteLength);
 else throw new Error('Return the ${format.toUpperCase()} file as a base64 string, Uint8Array or ArrayBuffer.');

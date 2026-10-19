@@ -130,6 +130,7 @@ describe('Office scripts', () => {
 
   test.each([
     ['return 42;', 'Return the DOCX file as a base64 string'],
+    ['return "ok";', 'Return nothing to only inspect inputs'],
     ['return zip.zipSync({ a: zip.strToU8("x") });', 'word/document.xml is missing'],
     ['return new Uint8Array([1, 2, 3]);', 'not a ZIP package'],
     [
