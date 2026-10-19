@@ -1655,6 +1655,7 @@
   "settings.model.translate.title": "Модель перевода",
   "settings.notifications.completion.description": "Уведомляет, когда ответ готов, пока приложение находится в фоне.",
   "settings.notifications.completion.permissionDenied": "Уведомления для Cherry Studio отключены в настройках системы.",
+  "settings.notifications.completion.permissionFailed": "Не удалось запросить разрешение на уведомления. Включите уведомления в настройках системы.",
   "settings.notifications.completion.saveFailed": "Не удалось сохранить настройку уведомлений о завершении. Попробуйте снова.",
   "settings.notifications.completion.settingsFailed": "Не удалось открыть настройки системы.",
   "settings.notifications.completion.systemSettings": "Открыть настройки системы",

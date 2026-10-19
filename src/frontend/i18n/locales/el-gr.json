@@ -1625,6 +1625,7 @@
   "settings.model.translate.title": "Μεταφραστικό μοντέλο",
   "settings.notifications.completion.description": "Λάβετε ειδοποίηση όταν ολοκληρωθεί μια απάντηση ενώ η εφαρμογή βρίσκεται στο παρασκήνιο.",
   "settings.notifications.completion.permissionDenied": "Οι ειδοποιήσεις για το Cherry Studio είναι απενεργοποιημένες στις ρυθμίσεις του συστήματος.",
+  "settings.notifications.completion.permissionFailed": "Δεν ήταν δυνατό να ζητηθεί η άδεια ειδοποιήσεων. Ενεργοποιήστε τις ειδοποιήσεις στις ρυθμίσεις του συστήματος.",
   "settings.notifications.completion.saveFailed": "Η ρύθμιση ειδοποιήσεων ολοκλήρωσης δεν αποθηκεύτηκε. Δοκιμάστε ξανά.",
   "settings.notifications.completion.settingsFailed": "Δεν ήταν δυνατό το άνοιγμα των ρυθμίσεων συστήματος.",
   "settings.notifications.completion.systemSettings": "Άνοιγμα ρυθμίσεων συστήματος",

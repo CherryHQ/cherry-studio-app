@@ -1640,6 +1640,7 @@
   "settings.model.translate.title": "Modèle de traduction",
   "settings.notifications.completion.description": "Vous prévient lorsqu'une réponse se termine pendant que l'application est en arrière-plan.",
   "settings.notifications.completion.permissionDenied": "Les notifications de Cherry Studio sont désactivées dans les réglages du système.",
+  "settings.notifications.completion.permissionFailed": "Impossible de demander l'autorisation des notifications. Activez-les dans les réglages du système.",
   "settings.notifications.completion.saveFailed": "Le paramètre de notification de fin n'a pas été enregistré. Réessayez.",
   "settings.notifications.completion.settingsFailed": "Impossible d'ouvrir les réglages système.",
   "settings.notifications.completion.systemSettings": "Ouvrir les réglages système",

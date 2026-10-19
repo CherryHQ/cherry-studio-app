@@ -1610,6 +1610,7 @@
   "settings.model.translate.title": "翻譯模型",
   "settings.notifications.completion.description": "應用在背景時，回覆生成完畢會通知你。",
   "settings.notifications.completion.permissionDenied": "系統設定中已關閉 Cherry Studio 的通知。",
+  "settings.notifications.completion.permissionFailed": "無法請求通知權限，請在系統設定中開啟通知。",
   "settings.notifications.completion.saveFailed": "回覆完成通知設定未能儲存，請重試。",
   "settings.notifications.completion.settingsFailed": "無法開啟系統設定。",
   "settings.notifications.completion.systemSettings": "開啟系統設定",
