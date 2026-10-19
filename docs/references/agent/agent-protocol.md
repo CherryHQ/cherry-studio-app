@@ -816,12 +816,17 @@ question has, and the questions an answer has, are alternatives the client can s
   The question gets one answer per model in one sibling group, sharing the turn id; the first is
   selected. Each runs separately, can be stopped alone with `cancelTurn({ messageId })`, and may use
   only tools that are read-only and automatically approved, so parallel answers neither change the
-  outside world nor stop to ask the user. Skills and image generation are refused. The Session stays
-  busy until every answer settles, and every submission meanwhile is rejected with `SESSION_BUSY`.
-  Only a follow-up to the newest answer of a running single-answer copy can queue, in that copy's
-  native Pi inbox. Pi queues input, not configuration: a follow-up to a parallel answer needs a
-  different model and tool set, and changing a copy's configuration applies from its next request,
-  which would reach the answer still running. Cherry does not emulate a queue around this.
+  outside world nor stop to ask the user. Read-only means a declared `effect: 'read'`: built-in web,
+  calendar, reminder and location reads, workspace listing, search and file reads, and file-library
+  search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
+  read. Approval-gated tools stay out even when the Agent approves automatically, as do
+  `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
+  stays busy until every answer settles, and every submission meanwhile is rejected with
+  `SESSION_BUSY`. Only a follow-up to the newest answer of a running single-answer copy can queue,
+  in that copy's native Pi inbox. Pi queues input, not configuration: a follow-up to a parallel
+  answer needs a different model and tool set, and changing a copy's configuration applies from its
+  next request, which would reach the answer still running. Cherry does not emulate a queue around
+  this.
 - **Switching.** `selectMessage` selects the branch containing a message. Switching never calls a
   model and never stops work on another branch; it restores the newest continuation below the chosen
   alternative.
@@ -832,6 +837,10 @@ question has, and the questions an answer has, are alternatives the client can s
 - **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
   selected branch up to the fork point, without its sibling alternatives, inside one transaction.
   Turns and approvals are not copied; the new Session starts idle.
+- **Workspace.** The workspace binding belongs to the Session, not to a branch. Every branch and
+  every parallel answer uses it, switching never changes it, and rebinding applies to every branch
+  from the next submission. Each admitted answer records the folder it captured, so recovery after a
+  restart uses that folder. A fork copies the binding.
 
 Rules:
 
