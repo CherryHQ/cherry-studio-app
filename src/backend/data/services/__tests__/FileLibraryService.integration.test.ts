@@ -1,3 +1,4 @@
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import { validateFileLibraryReferences } from '@/backend/data/db/fileLibraryValidation';
 import { createServiceTestDatabase } from '@/backend/data/serviceTestDatabase';
 
@@ -35,6 +36,33 @@ describe('file library folders, versions, and workspaces', () => {
     });
     expect(database.sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
   }
+
+  it.each([1, 50])('publishes one committed batch for %i versions in a folder', async (count) => {
+    const folder = await library.createFolder(null, 'Folder');
+    for (let index = 1; index <= count; index += 1)
+      await create(index, { folderId: folder.id, filename: `File-${index}.txt` });
+    const changed = jest.fn();
+    const unsubscribe = subscribeDataApiChanges(changed);
+    try {
+      await library.trashFolder(folder.id);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(
+        changed.mock.calls[0]![0].filter((path: string) => path.startsWith('/files/entries/')),
+      ).toHaveLength(count);
+      expect(changed.mock.calls[0]![0]).not.toContain('/agent-sessions');
+      changed.mockClear();
+      await library.restore('folder', folder.id);
+      expect(changed).toHaveBeenCalledTimes(1);
+      expect(
+        changed.mock.calls[0]![0].filter((path: string) => path.startsWith('/files/entries/')),
+      ).toHaveLength(count);
+      changed.mockClear();
+      await library.updateFile(id(1), { name: 'Renamed.txt' });
+      expect(changed).toHaveBeenCalledWith(['/files/library']);
+    } finally {
+      unsubscribe();
+    }
+  });
 
   it('keeps duplicate root files and resolves normalized collisions when moving into folders', async () => {
     const folder = await library.createFolder(null, 'Research');
@@ -139,29 +167,6 @@ describe('file library folders, versions, and workspaces', () => {
     validate();
   });
 
-  it('keeps deleted history recoverable when a cancelled draft has no active predecessor', async () => {
-    await create(1);
-    await create(2, { baseFileEntryId: id(1) });
-    await library.trashFileEntry(id(1), true);
-    await entries.delete(id(2));
-    expect((await library.list()).items).toEqual([]);
-    validate();
-    await library.restore('file', id(1));
-    expect((await library.list()).items).toMatchObject([{ id: id(1), entry: { id: id(1) } }]);
-    validate();
-  });
-
-  it('restores a separately deleted version without changing the current path', async () => {
-    await create(1);
-    await create(2, { baseFileEntryId: id(1) });
-    await expect(library.trashFileEntry(id(2), true)).rejects.toThrow();
-    await library.trashFileEntry(id(1), true);
-    expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2)]);
-    await library.restore('version', id(1));
-    expect((await library.fileForEntry(id(1)))?.currentEntryId).toBe(id(2));
-    validate();
-  });
-
   it('restores into the root when the original parent is unavailable and disambiguates names', async () => {
     const parent = await library.createFolder(null, 'Parent');
     const child = await library.createFolder(parent.id, 'Reports');
@@ -174,6 +179,24 @@ describe('file library folders, versions, and workspaces', () => {
       name: 'Reports (2)',
       deletedAt: null,
     });
+    validate();
+  });
+
+  it('rolls back a cancelled folder deletion before committing any of its subtree', async () => {
+    const folder = await library.createFolder(null, 'Reports');
+    await create(1, { folderId: folder.id });
+    await create(2, { baseFileEntryId: id(1) });
+    const controller = new AbortController();
+    database.sqlite.function('cancel_tool', () => {
+      controller.abort();
+      return null;
+    });
+    database.sqlite.exec(`CREATE TRIGGER cancel_folder_mutation BEFORE UPDATE ON file_folder
+      BEGIN SELECT cancel_tool(); END;`);
+
+    await expect(library.trashFolder(folder.id, controller.signal)).rejects.toThrow();
+    expect(await library.folder(folder.id)).toMatchObject({ deletedAt: null });
+    expect((await library.history(id(1))).map((entry) => entry.id)).toEqual([id(2), id(1)]);
     validate();
   });
 });

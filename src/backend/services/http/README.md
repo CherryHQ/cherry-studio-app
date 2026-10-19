@@ -60,10 +60,11 @@ Desktop pairing, provider export, and remote Agent discovery use credential-scop
 `desktopConnectionClient`; encrypted Agent WebSocket traffic remains outside HTTP.
 
 Current production consumers include the provider-registry updater's separate GitCode and GitHub
-routes, plus the non-streaming Web Search JSON adapter. Web Search drivers continue to own provider
-request/response schemas and credentials; the adapter owns URL routing, query serialization, safe
-HTTP error decoding, and the shared transport call. The hosted Exa MCP driver reads its JSON-RPC
-reply as text over the same transport because the service may answer with a buffered event stream.
+routes, plus `mobileWebSearchTransport` for the shared Web Search protocols. The
+`@cherrystudio/web-search` package owns provider request/response schemas and protocol error
+decoding; Mobile supplies credentials and the transport. The transport preserves serialized bodies
+and encoded paths/queries, returning all HTTP statuses and text bodies for package parsing.
+Hosted Exa MCP uses the same route for its finite JSON or buffered event-stream responses.
 
 `createFetchBridge()` adapts SDKs that expect a non-streaming `fetch` to this transport. It accepts
 only `GET` and `POST`, serializes `URLSearchParams` bodies, creates one `statusPolicy: 'all'` route

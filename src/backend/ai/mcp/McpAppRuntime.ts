@@ -27,6 +27,8 @@ import {
 } from '@/shared/contracts/mcpApp';
 import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
 
+import { McpRuntimeToolError } from './mcpRuntimeAdapter';
+
 type AppPorts = {
   read(reference: McpAppReference, uri: string, signal: AbortSignal): Promise<ReadResourceResult>;
   resources(reference: McpAppReference, signal: AbortSignal): Promise<ListResourcesResult>;
@@ -309,8 +311,22 @@ export class McpAppRuntime {
 async function safeRequest<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
-  } catch {
+  } catch (error) {
+    // A cause would expose private remote diagnostics across the App bridge.
+    /* oxlint-disable preserve-caught-error */
+    if (error instanceof McpRuntimeToolError) {
+      if (
+        error.code === 'mcp_tool_write_outcome_unknown' ||
+        error.code === 'mcp_tool_outcome_unknown'
+      ) {
+        // Use fixed host copy; never reflect transport messages or remote diagnostics to the App.
+        throw new Error(
+          `${error.code}: The outcome could not be confirmed. Check the service before retrying; repeating this request may duplicate its effects.`,
+        );
+      }
+    }
     throw new Error('The MCP App request was denied, cancelled, or unavailable.');
+    /* oxlint-enable preserve-caught-error */
   }
 }
 function asToolResult(value: unknown): CallToolResult {

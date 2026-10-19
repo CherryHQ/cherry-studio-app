@@ -51,7 +51,8 @@ export function createDiagnosticLogAggregator(write: (record: DiagnosticLog) => 
   }
 
   function record(record: DiagnosticLog) {
-    if (record.facts.isFatal === true) {
+    // Startup timings must retain each attempt, including retries inside one error window.
+    if (record.level === 'info' || record.facts.isFatal === true) {
       write(record);
       return;
     }

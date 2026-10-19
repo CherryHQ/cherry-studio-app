@@ -91,6 +91,23 @@ Until resource-scope cancellation intent is persisted, do not register a scoped 
 `recovery: 'retry'`: a process restart could otherwise revive work cancelled for a deleted resource.
 See [Job Runtime](../references/job-runtime.md).
 
+## Change A Resource Or Async Write Owner
+
+Before changing file identity, trash, workspace binding or parent resources, trace admission,
+execution, cancellation, deletion and restart recovery together. State which identity is persisted
+and which availability/permission checks stay live. Update the
+[ownership matrix](../references/runtime-ownership.md#admission-identity-and-live-resources) and
+cover the affected transition at its owner; import layering alone does not prove this contract.
+Parent deletion fences the parent before draining, and registrations last through actual settlement.
+
+For work that can commit after its initiating UI action returns, identify the lifetime signal,
+transaction guard and settlement promise. Integrate persistent work with the explicit backup owner
+list in `createAppBootstrapRuntime`, check `StorageMutationGate` before admission, and drain accepted
+writes before their dependencies stop. Disposable staging or read-only inspection need not block
+backup. See [Async Storage Admission And Teardown](../references/runtime-ownership.md#async-storage-admission-and-teardown).
+Publish affected file IDs/resource paths once after commit through the Data API bus; do not add a
+second event protocol or invalidate unrelated Session queries.
+
 ## Add UI
 
 - Route files stay thin under `src/app` and import the exact page boundary.

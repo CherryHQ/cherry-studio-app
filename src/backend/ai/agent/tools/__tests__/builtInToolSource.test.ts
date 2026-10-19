@@ -54,22 +54,43 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
   });
 
-  test('requires explicit approval for every file-library call and honors the group deny-list', async () => {
+  test('applies the shared read/mutation approval to file-library tools, defers management, and honors the group deny-list', async () => {
     const tools = await resolve({});
-    for (const name of ['library_search_files', 'library_read_file']) {
+    const reads = ['library_search_files', 'library_read_file'];
+    const management = {
+      library_list_folders: 'auto',
+      library_move_item: 'ask',
+      library_rename_item: 'ask',
+      library_trash_item: 'ask',
+      library_list_trash: 'auto',
+      library_restore_item: 'ask',
+    };
+    const names = [...reads, ...Object.keys(management)];
+    for (const name of reads) {
+      const tool = tools.find((item) => item.providerName === name);
+      expect(tool).toMatchObject({ approval: 'auto', autoApprovalEligible: true });
+      expect(tool?.deferred).toBeUndefined();
+    }
+    for (const [name, approval] of Object.entries(management)) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
-        approval: 'ask',
-        autoApprovalEligible: false,
+        approval,
+        autoApprovalEligible: true,
+        deferred: true,
       });
     }
     const disabled = await resolve({ disabledCapabilities: ['fileLibrary'] });
-    expect(capabilityIds(disabled)).not.toContain('library_search_files');
-    expect(capabilityIds(disabled)).not.toContain('library_read_file');
+    for (const name of names) expect(capabilityIds(disabled)).not.toContain(name);
     expect(capabilityIds(disabled)).toContain('read_file');
   });
 
@@ -106,7 +127,7 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
-  test('offers Office generation with the compute sandbox even without a Code Mode bridge', async () => {
+  test('defers Office tools with the compute sandbox even without a Code Mode bridge', async () => {
     const office = [
       'create_document',
       'create_workbook',
@@ -121,9 +142,13 @@ describe('createSystemCapabilitySource', () => {
     expect(absent.some((id) => office.includes(id))).toBe(false);
     const tools = await resolve({ jsSandbox: { run: jest.fn() } });
     for (const name of office) {
-      expect(capabilityIds(tools)).toContain(name);
-      expect(approvalOf(tools, name)).toBe('auto');
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'auto',
+        deferred: true,
+      });
     }
+    expect(capabilityIds(tools)).toContain('library_move_item');
+    expect(capabilityIds(tools)).not.toContain('run_js');
   });
 
   test('adds a device tool once every scope it needs is grantable', async () => {
@@ -139,6 +164,12 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
@@ -184,6 +215,12 @@ describe('createSystemCapabilitySource', () => {
       'edit_file',
       'library_search_files',
       'library_read_file',
+      'library_list_folders',
+      'library_move_item',
+      'library_rename_item',
+      'library_trash_item',
+      'library_list_trash',
+      'library_restore_item',
       'read_file',
       'write_file',
     ]);
@@ -696,6 +733,7 @@ const SERVICES: SystemCapabilityServices = {
   model: { getById: jest.fn() },
   preference: { get: jest.fn() },
   webSearch: { fetchUrls: jest.fn(), searchKeywords: jest.fn() },
+  trash: { entries: { list: jest.fn() }, restore: jest.fn() },
 } as unknown as SystemCapabilityServices;
 
 function dependencies(scenario: Scenario): Partial<SystemCapabilitySourceDependencies> {

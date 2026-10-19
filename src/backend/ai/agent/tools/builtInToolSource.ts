@@ -55,6 +55,10 @@ import {
   type DeviceToolDependencies,
 } from './device';
 import { createEditFileTool } from './editFileTool';
+import {
+  createFileLibraryManagementTools,
+  type FileLibraryTrashAccess,
+} from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
 import { createOfficeTools } from './officeTools';
 import {
@@ -110,6 +114,7 @@ export type SystemCapabilitySource = {
 export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
+    trash: FileLibraryTrashAccess;
     /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
@@ -129,6 +134,7 @@ export type SystemCapabilityServices = {
   model: Pick<ModelService, 'getById'>;
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
+  trash: FileLibraryTrashAccess;
 };
 
 export function createSystemCapabilitySource(
@@ -269,6 +275,7 @@ function createCatalog(
     createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
     createWriteFileTool(fileContent, fileAccess),
     ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
+    ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     ...(deps.jsSandbox
       ? createOfficeTools(
           deps.jsSandbox,
@@ -422,6 +429,7 @@ function resolveDependencies(
 ): SystemCapabilitySourceDependencies {
   return {
     agents: overrides.agents ?? agentService,
+    trash: overrides.trash ?? services.trash,
     devicePermissions: overrides.devicePermissions ?? devicePermissions,
     jsSandbox: overrides.jsSandbox !== undefined ? overrides.jsSandbox : createJsSandbox(),
     painting: overrides.painting ?? productionPaintingDependencies(services),

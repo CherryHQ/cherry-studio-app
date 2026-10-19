@@ -234,7 +234,8 @@ describe('MCP Runtime adapter', () => {
   );
 
   it.each([
-    [undefined, 'mcp_tool_cancelled'],
+    [undefined, 'mcp_tool_outcome_unknown'],
+    ['read', 'mcp_tool_cancelled'],
     ['write', 'mcp_tool_write_outcome_unknown'],
   ] as const)('reports stopping a sent %s call as %s', async (effect, code) => {
     const controller = new AbortController();

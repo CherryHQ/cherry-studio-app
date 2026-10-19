@@ -173,6 +173,9 @@ describe('durable capability boundary', () => {
         capability({
           ref: { source: 'builtin', capabilityId: name },
           providerName: name,
+          ...(['find_skills', 'install_skill', 'adapt_skill'].includes(name)
+            ? { deferred: true }
+            : {}),
           execute,
         }),
       ),
@@ -240,7 +243,11 @@ describe('durable capability boundary', () => {
       name: 'cherry',
       approve: async () => true,
       tools: names.map((name) =>
-        capability({ ref: { source: 'builtin', capabilityId: name }, providerName: name }),
+        capability({
+          ref: { source: 'builtin', capabilityId: name },
+          providerName: name,
+          deferred: true,
+        }),
       ),
     });
     const harness = await open(new MemoryStorage(), extension);

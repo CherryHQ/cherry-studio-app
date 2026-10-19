@@ -51,8 +51,9 @@ before cleanup. Code Mode uses its existing separate bridge pool, so a script wa
 child tool does not occupy the child's compute slot.
 
 All eight tools are absent without the native compute sandbox. They do not require its interactive
-bridge. Pi exposes their schemas through `tool_search`, and its normal callable catalog also makes
-them available as Code Mode child tools. They retain the existing `replay: 'unsafe'` policy. A
+bridge. Each tool declares `RuntimeTool.deferred`; Pi exposes its schema through `tool_search`,
+and its normal callable catalog also makes the tools available as Code Mode child tools.
+They retain the existing `replay: 'unsafe'` policy. A
 recorded child artifact survives parent interruption through the existing durable receipt. The
 managed-file commit and Pi receipt are not one transaction: a crash in that gap may leave an orphan;
 this implementation neither retries that unsafe write automatically nor claims exactly-once output.

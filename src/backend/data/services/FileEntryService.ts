@@ -246,11 +246,7 @@ export class FileEntryService {
       .select()
       .from(fileEntryTable)
       .where(eq(fileEntryTable.libraryFileId, removed.libraryFileId))
-      .orderBy(
-        sql`${fileEntryTable.deletedAt} IS NOT NULL`,
-        desc(fileEntryTable.createdAt),
-        desc(fileEntryTable.id),
-      )
+      .orderBy(desc(fileEntryTable.createdAt), desc(fileEntryTable.id))
       .limit(1);
     if (!latest)
       await tx.delete(libraryFileTable).where(eq(libraryFileTable.id, removed.libraryFileId));
@@ -260,22 +256,10 @@ export class FileEntryService {
         .from(libraryFileTable)
         .where(eq(libraryFileTable.id, removed.libraryFileId));
       if (file.currentEntryId !== id) return;
-      const deletedAt = file.deletedAt ?? latest.deletedAt;
       await tx
         .update(libraryFileTable)
-        .set({ currentEntryId: latest.id, deletedAt })
+        .set({ currentEntryId: latest.id })
         .where(eq(libraryFileTable.id, file.id));
-      // Cancellation can discard the current draft after the user trashed all older versions.
-      // Keep that remaining history recoverable without resurrecting deleted content.
-      if (deletedAt !== null)
-        await tx
-          .update(fileEntryTable)
-          .set({
-            deletedAt,
-            trashedWith: file.trashedWith ?? file.id,
-            updatedAt: sql`${fileEntryTable.updatedAt}`,
-          })
-          .where(eq(fileEntryTable.libraryFileId, file.id));
     }
   }
 }

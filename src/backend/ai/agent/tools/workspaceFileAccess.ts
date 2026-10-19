@@ -38,7 +38,7 @@ export class WorkspaceFileAccess {
     ) {
       throw DataApiErrorFactory.invalidOperation(
         'read_file',
-        'Use library_read_file and ask the user before reading a file outside the workspace.',
+        'Use library_read_file to read a file outside the workspace.',
       );
     }
     return id;
@@ -53,7 +53,7 @@ export class WorkspaceFileAccess {
     ) {
       throw DataApiErrorFactory.invalidOperation(
         'edit_file',
-        'Read this file with library_read_file and user approval first.',
+        'Read this file with library_read_file first.',
       );
     }
     if (input.path && (input.base_file_entry_id !== id || input.base_revision === undefined))

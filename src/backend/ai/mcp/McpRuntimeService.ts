@@ -1,9 +1,10 @@
 import type { ListToolsResult } from '@ai-sdk/mcp';
-import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
+import { ProtocolError } from '@modelcontextprotocol/client';
 import { AppState } from 'react-native';
 import * as z from 'zod';
 
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolRef } from '@/backend/ai/agent';
+import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
 import {
   AppStatePolicy,
   BaseService,
@@ -12,6 +13,7 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import {
@@ -36,7 +38,6 @@ import {
   type McpPromptEntry,
 } from '@/shared/contracts/mcp';
 import type {
-  McpAppReference,
   McpAppLaunch,
   McpAppChannel,
   McpAppView,
@@ -46,13 +47,14 @@ import { McpResultSourceSchema, type McpResourceReference } from '@/shared/contr
 import type { McpElicitationResponse } from '@/shared/contracts/mcpInteraction';
 import { PluginError } from '@/shared/contracts/plugins';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { PluginId } from '@/shared/data/types/plugin';
 import { enablesMcpServer } from '@/shared/utils/agentMcpBinding';
 import { isSameMcpConnectionConfig } from '@/shared/utils/mcpConnectionConfig';
 
 import type { TraceRecorder } from '../observability';
 import { endMcpTrace } from './endMcpTrace';
+import { McpAppAccess, type McpAppConnection } from './McpAppAccess';
 import { mcpToolAppUri, mcpToolVisible } from './mcpAppMetadata';
 import { McpAppRuntime } from './McpAppRuntime';
 import { listMcpPrompts, readMcpContent } from './mcpContent';
@@ -146,7 +148,8 @@ type ServerRuntimeState = {
   clientListed: boolean;
   connectionConfig: McpRuntimeConnectionConfig;
   connectionKey?: Promise<string>;
-  connectionPromise?: Promise<McpRuntimeClient>;
+  /** Setup shared by every caller; cancelled only once no caller still waits for it. */
+  connection?: { client: Promise<McpRuntimeClient>; cancel: AbortController; waiters: number };
   discoveryFailure?: { attempts: number; nextAttemptAt: number };
   prompts?: McpPromptEntry[];
   generation: number;
@@ -278,6 +281,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
   readonly pluginAuthorizations: PluginAuthorizationManager;
   private readonly oauth = new McpOAuthRuntime();
   private readonly oauthCompletions = new Map<string, Promise<McpServer>>();
+  private readonly lifetime = new AbortController();
+  private readonly temporaryOperations = new Set<Promise<unknown>>();
   private foreground = AppState.currentState === 'active';
   private nextGeneration = 0;
   private readonly catalogPreparations = new Map<string, Promise<void>>();
@@ -291,19 +296,27 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   async beginOAuth(input: McpOAuthStartInput) {
+    this.lifetime.signal.throwIfAborted();
     const previous = input.serverId ? await mcpServerService.getById(input.serverId) : undefined;
+    this.lifetime.signal.throwIfAborted();
     if (previous?.origin === 'builtin') throw new McpAuthorizationError('configuration');
     return this.oauth.begin(input, previous);
   }
 
   completeOAuth(attemptId: string, callbackUrl: string): Promise<McpServer> {
+    this.lifetime.signal.throwIfAborted();
     const current = this.oauthCompletions.get(attemptId);
     if (current) return current;
+    storageMutationGate.assertWritable();
     const completion = this.saveOAuthConnection(attemptId, callbackUrl).finally(() => {
       this.oauthCompletions.delete(attemptId);
     });
     this.oauthCompletions.set(attemptId, completion);
     return completion;
+  }
+
+  hasPendingStorageWork(): boolean {
+    return this.oauthCompletions.size > 0;
   }
 
   async receiveOAuthCallback(callbackUrl: string): Promise<McpServer | undefined> {
@@ -314,11 +327,14 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private async saveOAuthConnection(attemptId: string, callbackUrl: string): Promise<McpServer> {
     const completed = await this.oauth.complete(attemptId, callbackUrl);
     try {
+      this.lifetime.signal.throwIfAborted();
       await this.getServerInfo({
         endpointUrl: completed.input.endpointUrl,
         headers: completed.input.headers,
         oauth: { authorizationId: completed.authorizationId, clientId: completed.clientId },
       });
+      this.lifetime.signal.throwIfAborted();
+      storageMutationGate.assertWritable();
       const server = await mcpServerService.saveOAuthConnection(
         {
           name: completed.input.name,
@@ -327,6 +343,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         },
         { authorizationId: completed.authorizationId, clientId: completed.clientId },
         completed.previous,
+        this.lifetime.signal,
       );
       this.invalidateServer(server.id);
       if (completed.previous?.origin !== 'builtin' && completed.previous?.oauth) {
@@ -358,47 +375,28 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   private readonly elicitations = new McpElicitationBroker();
-  private readonly apps = new McpAppRuntime({
-    resources: (reference, signal) =>
-      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
-        if (!client.listResources) throw unavailableToolError();
-        return client.listResources(undefined, { signal: requestSignal, cacheMode: 'refresh' });
-      }),
-    templates: (reference, signal) =>
-      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
-        if (!client.listResourceTemplates) throw unavailableToolError();
-        return client.listResourceTemplates(undefined, {
-          signal: requestSignal,
-          cacheMode: 'refresh',
-        });
-      }),
-    read: (reference, uri, signal) =>
-      this.withAppClient(reference, signal, async (client, _server, requestSignal) => {
-        if (!client.readResource) throw unavailableToolError();
-        const result = await client.readResource(
-          { uri },
-          { signal: requestSignal, cacheMode: 'refresh', timeout: 10 * 60 * 1000 },
-        );
-        if (JSON.stringify(result).length > 4 * 1024 * 1024) throw unavailableToolError();
-        return result;
-      }),
-    tools: (reference, signal) =>
-      this.withAppClient(reference, signal, async (client, server, requestSignal) => {
-        const { tools } = await client.listTools({ options: { signal: requestSignal } });
-        const permitted: Tool[] = [];
-        for (const tool of tools) {
-          if (!mcpToolVisible(tool, 'app') || server.disabledTools.includes(tool.name)) continue;
-          try {
-            await this.assertAppBinding(reference, tool.name);
-            permitted.push(tool as Tool);
-          } catch {
-            requestSignal.throwIfAborted();
-          }
-        }
-        return permitted;
-      }),
-    call: (reference, name, args, signal) => this.callAppTool(reference, name, args, signal),
+  private readonly appAccess = new McpAppAccess({
+    isForeground: () => this.foreground,
+    assertBinding: async (reference, name) => {
+      if (!reference.agentId) throw unavailableToolError();
+      const binding = await agentToolBindingService.resolveMcpTool(reference.agentId, {
+        serverId: reference.serverId,
+        rawToolName: name,
+        isToolAvailable: true,
+      });
+      if (!binding.enabled || binding.approval === 'deny') throw unavailableToolError();
+    },
+    withConnection: (serverId, signal, operation) =>
+      this.withContentClient(serverId, signal, operation),
+    requestConsent: (server, name, args, signal) =>
+      this.elicitations.request(
+        { serverId: server.id, serverName: server.name, endpointUrl: server.endpointUrl },
+        { mode: 'form', message: name, requestedSchema: { type: 'object', properties: {} } },
+        signal,
+        { name, arguments: args },
+      ),
   });
+  private readonly apps = new McpAppRuntime(this.appAccess);
   openApp(input: McpAppLaunch, channel: McpAppChannel, signal: AbortSignal): Promise<McpAppView> {
     return this.apps.open(input, channel, signal);
   }
@@ -410,104 +408,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
   closeApp(id: string): Promise<void> {
     return this.apps.close(id);
-  }
-
-  private async assertAppBinding(
-    reference: McpAppReference,
-    name = reference.toolName,
-  ): Promise<void> {
-    if (!reference.agentId) throw unavailableToolError();
-    const binding = await agentToolBindingService.resolveMcpTool(reference.agentId, {
-      serverId: reference.serverId,
-      rawToolName: name,
-      isToolAvailable: true,
-    });
-    if (!binding.enabled || binding.approval === 'deny') throw unavailableToolError();
-  }
-  private async withAppClient<T>(
-    reference: McpAppReference,
-    signal: AbortSignal,
-    operation: (
-      client: McpToolCallingClient,
-      server: RemoteMcpServer,
-      signal: AbortSignal,
-    ) => Promise<T>,
-  ): Promise<T> {
-    if (!this.foreground) throw unavailableToolError();
-    await this.assertAppBinding(reference);
-    return this.withContentClient(
-      reference.serverId,
-      signal,
-      async (client, server, requestSignal) => {
-        if (
-          (await createMcpConnectionKey(server)) !== reference.connectionKey ||
-          !isMcpToolCallingClient(client)
-        )
-          throw unavailableToolError();
-        const { tools } = await client.listTools({ options: { signal: requestSignal } });
-        const source = tools.find((tool) => tool.name === reference.toolName);
-        if (
-          !source ||
-          mcpToolAppUri(source) !== reference.resourceUri ||
-          server.disabledTools.includes(source.name)
-        )
-          throw unavailableToolError();
-        const result = await operation(client, server, requestSignal);
-        await this.assertAppBinding(reference);
-        requestSignal.throwIfAborted();
-        return result;
-      },
-    );
-  }
-  private async callAppTool(
-    reference: McpAppReference,
-    name: string,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<CallToolResult> {
-    if (JSON.stringify(args).length > 64 * 1024) throw unavailableToolError();
-    const inspect = async (
-      client: McpToolCallingClient,
-      server: McpServer,
-      requestSignal: AbortSignal,
-    ) => {
-      await this.assertAppBinding(reference, name);
-      const { tools } = await client.listTools({ options: { signal: requestSignal } });
-      const tool = tools.find((item) => item.name === name);
-      if (!tool || !mcpToolVisible(tool, 'app') || server.disabledTools.includes(name))
-        throw unavailableToolError();
-      const validator = z.fromJSONSchema(
-        tool.inputSchema as Parameters<typeof z.fromJSONSchema>[0],
-      );
-      if (!validator.safeParse(args).success) throw unavailableToolError();
-    };
-    const server = await this.withAppClient(
-      reference,
-      signal,
-      async (client, current, requestSignal) => {
-        await inspect(client, current, requestSignal);
-        return current;
-      },
-    );
-    // Only currently allowed tools can prompt. Human waiting is outside the network deadline.
-    const response = await this.elicitations.request(
-      { serverId: server.id, serverName: server.name, endpointUrl: server.endpointUrl },
-      { mode: 'form', message: name, requestedSchema: { type: 'object', properties: {} } },
-      signal,
-      { name, arguments: args },
-    );
-    if (response.action !== 'accept') throw unavailableToolError();
-    return this.withAppClient(reference, signal, async (client, currentServer, requestSignal) => {
-      await inspect(client, currentServer, requestSignal);
-      const result = await client.callTool({ name, args, options: { abortSignal: requestSignal } });
-      if (JSON.stringify(result).length > 4 * 1024 * 1024)
-        throw new McpRuntimeToolError(
-          'mcp_tool_write_outcome_unknown',
-          'The tool result exceeded the size limit. Check the service before retrying.',
-          false,
-        );
-      return result as CallToolResult;
-    });
   }
 
   readonly getElicitations = this.elicitations.getSnapshot;
@@ -628,7 +528,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return this.withContentClient(
       source.serverId,
       signal,
-      async (client, server, requestSignal) => {
+      async ({ client, server, signal: requestSignal }) => {
         if ((await createMcpConnectionKey(server)) !== source.connectionKey)
           throw unavailableToolError();
         // A returned resource need not appear in resources/list. Its URI is interpreted only by this server.
@@ -646,44 +546,49 @@ export class McpRuntimeService extends BaseService implements McpModule {
   private async withContentClient<T>(
     serverId: string,
     signal: AbortSignal | undefined,
-    operation: (
-      client: McpRuntimeClient,
-      server: RemoteMcpServer,
-      signal: AbortSignal,
-    ) => Promise<T>,
+    operation: (connection: McpAppConnection) => Promise<T>,
   ): Promise<T> {
     const server = await mcpServerService.getById(serverId);
     if (!server.isEnabled || server.origin === 'builtin' || !isRunnableMcpServer(server))
       throw unavailableToolError();
     const state = this.getRuntimeState(server);
+    const generation = state.generation;
     const bound = createBoundedSignal(60_000, state.abort.signal, ...(signal ? [signal] : []));
-    let client: McpRuntimeClient | undefined;
+    const progress: McpInvocationProgress = { sent() {}, waiting: bound.setPaused };
+    state.calls.add(progress);
     try {
-      client = await createRemoteMcpClient({
-        config: server,
+      const client = await this.getClient(server, state, bound.signal);
+      let catalog: Promise<ListToolsResult['tools']> | undefined;
+      const result = await operation({
+        client,
+        server,
         signal: bound.signal,
-        foreground: this.foreground,
-        authorization: this.oauth,
-        elicit: async (params, requestSignal) => {
-          bound.setPaused(true);
-          try {
-            return await this.elicitations.request(
-              { serverId, serverName: server.name, endpointUrl: server.endpointUrl },
-              params,
-              AbortSignal.any([bound.signal, requestSignal]),
-            );
-          } finally {
-            bound.setPaused(false);
-          }
-        },
+        tools: () => (catalog ??= this.listAndRecord(server, state, client, bound.signal)),
+        invoke: (name, args, invocationProgress) =>
+          this.invokeTool(
+            { source: 'mcp', serverId, rawToolName: name },
+            args as RuntimeJsonValue,
+            bound.signal,
+            server.endpointUrl,
+            state.catalogGeneration,
+            invocationProgress,
+          ),
       });
-      const result = await operation(client, server, bound.signal);
       bound.signal.throwIfAborted();
-      if (!this.isCurrentState(state)) throw unavailableToolError();
+      if (!this.isCurrentState(state, generation)) throw unavailableToolError();
       return result;
+    } catch (error) {
+      if (error instanceof McpRuntimeToolError || !this.isCurrentState(state, generation))
+        throw error;
+      const rejection = classifyMcpCallRejection(error);
+      if (rejection?.staleCatalog) this.refreshChangedCatalog(state);
+      // A JSON-RPC error answer proves the shared connection; resetting it would abort Agent calls.
+      else if (!signal?.aborted && !ProtocolError.isInstance(error)) this.resetConnection(state);
+      throw rejection?.failure ?? error;
     } finally {
       bound.done();
-      await client?.close().catch(() => undefined);
+      state.calls.delete(progress);
+      if (state.calls.size === 0) for (const question of state.questions) question.abort();
     }
   }
 
@@ -817,6 +722,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * against a service nothing will read again.
    */
   protected async onStop(): Promise<void> {
+    this.lifetime.abort();
     this.promptCatalogListeners.clear();
     await this.apps.stop();
     this.elicitations.stop();
@@ -826,8 +732,11 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     this.runtimeSnapshots.clear();
-    await this.pluginAuthorizations.stop();
+    // Abort token exchanges first. Then join outer completion/inspection work while persistence
+    // dependencies remain alive; failed completions can still remove their newly created grant.
     await this.oauth.stop();
+    await Promise.allSettled([...this.oauthCompletions.values(), ...this.temporaryOperations]);
+    await this.pluginAuthorizations.stop();
   }
 
   /**
@@ -971,6 +880,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
    * the config it was taken against and is discarded once that no longer matches.
    */
   private getRuntimeState(server: McpServer): ServerRuntimeState {
+    this.lifetime.signal.throwIfAborted();
     const connectionConfig = toMcpConnectionConfig(server);
     const snapshot = this.runtimeSnapshots.get(server.id);
     if (snapshot && !isSameMcpConnectionConfig(snapshot.connectionConfig, connectionConfig)) {
@@ -1044,7 +954,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     server: McpServer,
     state: ServerRuntimeState,
     signal: AbortSignal,
-    didTimeout?: () => boolean,
   ): Promise<McpRuntimeClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
@@ -1053,51 +962,66 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (state.client) {
       return state.client;
     }
-    if (state.connectionPromise) {
-      return state.connectionPromise;
+
+    let connection = state.connection;
+    if (!connection) {
+      const generation = state.generation;
+      const cancel = new AbortController();
+      const setupSignal = AbortSignal.any([state.abort.signal, cancel.signal]);
+      const trace = this.traces?.startTrace('mcp.connect', undefined, {
+        'mcp.server.id': state.serverId,
+        'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
+        'mcp.connection.generation': generation,
+      });
+      const pending: Promise<McpRuntimeClient> = createMcpClient(
+        state.connectionConfig,
+        setupSignal,
+        this.pluginAuthorizations,
+        this.foreground,
+        this.oauth,
+        {
+          elicit: (params, requestSignal) =>
+            this.askForServer(server, state, params, requestSignal),
+          onCatalogChanged: () => {
+            if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
+          },
+        },
+      )
+        .then((client) => {
+          if (state.connection?.client !== pending || !this.isCurrentState(state, generation)) {
+            this.closeQuietly(client);
+            throw new McpEvictedError(
+              `MCP server ${server.name} was reconfigured while connecting`,
+            );
+          }
+          state.client = client;
+          client.setForeground?.(this.foreground);
+          trace?.end('ok');
+          return client;
+        })
+        .catch((error: unknown) => {
+          endMcpTrace(trace, error, setupSignal);
+          throw error;
+        })
+        .finally(() => {
+          if (state.connection?.client === pending) {
+            state.connection = undefined;
+          }
+        });
+      connection = { client: pending, cancel, waiters: 0 };
+      state.connection = connection;
     }
 
-    const generation = state.generation;
-    const trace = this.traces?.startTrace('mcp.connect', undefined, {
-      'mcp.server.id': state.serverId,
-      'plugin.id': server.origin === 'builtin' ? server.builtinId : undefined,
-      'mcp.connection.generation': generation,
-    });
-    const initPromise: Promise<McpRuntimeClient> = createMcpClient(
-      state.connectionConfig,
-      signal,
-      this.pluginAuthorizations,
-      this.foreground,
-      this.oauth,
-      {
-        elicit: (params, requestSignal) => this.askForServer(server, state, params, requestSignal),
-        onCatalogChanged: () => {
-          if (this.isCurrentState(state, generation)) this.refreshChangedCatalog(state);
-        },
-      },
-    )
-      .then((client) => {
-        if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
-          this.closeQuietly(client);
-          throw new McpEvictedError(`MCP server ${server.name} was reconfigured while connecting`);
-        }
-        state.client = client;
-        client.setForeground?.(this.foreground);
-        trace?.end('ok');
-        return client;
-      })
-      .catch((error: unknown) => {
-        endMcpTrace(trace, error, signal, didTimeout?.());
-        throw error;
-      })
-      .finally(() => {
-        if (state.connectionPromise === initPromise) {
-          state.connectionPromise = undefined;
-        }
-      });
-
-    state.connectionPromise = initPromise;
-    return initPromise;
+    connection.waiters += 1;
+    try {
+      return await raceAbort(connection.client, signal);
+    } finally {
+      connection.waiters -= 1;
+      if (connection.waiters === 0 && state.connection === connection) {
+        state.connection = undefined;
+        connection.cancel.abort();
+      }
+    }
   }
 
   private closeQuietly(client: McpRuntimeClient): void {
@@ -1109,7 +1033,22 @@ export class McpRuntimeService extends BaseService implements McpModule {
     label: string,
     operation: (client: McpRuntimeClient) => Promise<TValue> | TValue,
   ): Promise<TValue> {
-    const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS);
+    this.lifetime.signal.throwIfAborted();
+    const pending = this.runTemporaryClient(config, label, operation);
+    this.temporaryOperations.add(pending);
+    try {
+      return await pending;
+    } finally {
+      this.temporaryOperations.delete(pending);
+    }
+  }
+
+  private async runTemporaryClient<TValue>(
+    config: McpConnectionConfig,
+    label: string,
+    operation: (client: McpRuntimeClient) => Promise<TValue> | TValue,
+  ): Promise<TValue> {
+    const bound = createBoundedSignal(TOOLS_FETCH_TIMEOUT_MS, this.lifetime.signal);
     const trace = this.traces?.startTrace('mcp.connect', undefined, {
       'mcp.connection.temporary': true,
     });
@@ -1122,6 +1061,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
         this.foreground,
         this.oauth,
       );
+      bound.signal.throwIfAborted();
       trace?.end('ok');
       return await operation(client);
     } catch (error) {
@@ -1133,7 +1073,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     } finally {
       bound.done();
       if (client) {
-        this.closeQuietly(client);
+        await client.close().catch(() => undefined);
       }
     }
   }
@@ -1146,7 +1086,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.generation = this.allocateGeneration();
     state.abort.abort();
     state.abort = new AbortController();
-    state.connectionPromise = undefined;
+    state.connection = undefined;
     state.clientListed = false;
     if (state.client) {
       this.closeQuietly(state.client);
@@ -1160,7 +1100,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     state.generation = this.allocateGeneration();
     state.abort.abort();
-    state.connectionPromise = undefined;
+    state.connection = undefined;
     if (state.client) {
       this.closeQuietly(state.client);
       state.client = undefined;
@@ -1225,6 +1165,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
     const generation = state.generation;
     const invocationSignal = AbortSignal.any([signal, state.abort.signal]);
+    let sent = false;
     try {
       const client = await this.getClient(server, state, invocationSignal);
       if (!this.isCurrentState(state, generation)) {
@@ -1249,7 +1190,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
       let result: unknown;
       state.calls.add(progress);
       try {
+        invocationSignal.throwIfAborted();
         progress.sent();
+        sent = true;
         result = await client.callTool({
           args: input,
           name: ref.rawToolName,
@@ -1260,14 +1203,13 @@ export class McpRuntimeService extends BaseService implements McpModule {
         if (state.calls.size === 0) for (const question of state.questions) question.abort();
       }
       if (!this.isCurrentState(state, generation)) {
-        throw unavailableToolError();
+        throw new McpEvictedError('MCP connection changed after transmission');
       }
       signal.throwIfAborted();
       return result;
     } catch (error) {
-      if (error instanceof McpRuntimeToolError || !this.isCurrentState(state, generation)) {
-        throw error instanceof McpRuntimeToolError ? error : unavailableToolError();
-      }
+      if (error instanceof McpRuntimeToolError) throw error;
+      if (!this.isCurrentState(state, generation)) throw sent ? error : unavailableToolError();
       const rejection = classifyMcpCallRejection(error);
       if (rejection?.staleCatalog) {
         // The server answered, so the connection is sound; its catalog is what went stale.
@@ -1369,7 +1311,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
       ...(signal ? [signal] : []),
     );
     try {
-      const client = await this.getClient(server, state, bound.signal, bound.didTimeout);
+      const client = await this.getClient(server, state, bound.signal);
       return await this.listAndRecord(server, state, client, bound.signal, bound.didTimeout);
     } catch (error) {
       if (error instanceof McpEvictedError) {

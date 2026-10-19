@@ -1,4 +1,4 @@
-import { sliceByTokens } from 'tokenx';
+import { sliceContent } from '@cherrystudio/web-search/tools/content';
 
 import type {
   WebSearchExecutionConfig,
@@ -61,13 +61,15 @@ function applyCutoff<TResult extends Pick<WebSearchResult, 'content' | 'truncate
   perResultLimit: number,
 ): TResult[] {
   return results.map((result) => {
-    const boundedContent = result.content.slice(0, perResultLimit * MAX_CHARS_PER_TOKEN);
-    const sliced = sliceByTokens(boundedContent, 0, perResultLimit).replace(/[\uD800-\uDBFF]$/, '');
-    if (sliced.length >= result.content.length) return result;
+    const sliced = sliceContent(result.content, {
+      maxCharacters: perResultLimit * MAX_CHARS_PER_TOKEN,
+      maxTokens: perResultLimit,
+    });
+    if (!sliced.truncated) return result;
 
     return {
       ...result,
-      content: sliced,
+      content: sliced.content,
       truncated: true,
     };
   });

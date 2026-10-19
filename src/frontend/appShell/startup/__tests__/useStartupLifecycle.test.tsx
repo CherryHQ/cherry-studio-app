@@ -5,6 +5,7 @@ import { useStartupLifecycle } from '../useStartupLifecycle';
 
 const mockHideAsync = jest.fn(async (): Promise<void> => undefined);
 const mockWarn = jest.fn();
+const mockInfo = jest.fn();
 
 jest.mock('expo-splash-screen', () => ({
   hideAsync: () => mockHideAsync(),
@@ -12,7 +13,10 @@ jest.mock('expo-splash-screen', () => ({
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
-    withContext: () => ({ warn: (...args: unknown[]) => mockWarn(...args) }),
+    withContext: () => ({
+      warn: (...args: unknown[]) => mockWarn(...args),
+      info: (...args: unknown[]) => mockInfo(...args),
+    }),
   },
 }));
 
@@ -65,6 +69,7 @@ describe('useStartupLifecycle', () => {
     mockHideAsync.mockReset();
     mockHideAsync.mockResolvedValue(undefined);
     mockWarn.mockClear();
+    mockInfo.mockClear();
   });
 
   afterEach(() => {
@@ -189,6 +194,28 @@ describe('useStartupLifecycle', () => {
 
     act(() => jest.advanceTimersByTime(1));
     expect(mockWarn).toHaveBeenCalledTimes(1);
+    lifecycle.unmount();
+  });
+
+  test('retains cover and content milestones in startup order without repeating content readiness', async () => {
+    const lifecycle = renderLifecycle(false);
+    act(() => lifecycle.current.handleCoverLayout());
+    await advanceToCoverPresented();
+    lifecycle.rerender(true);
+    act(() => {
+      lifecycle.current.reportContentReady();
+      lifecycle.current.reportContentReady();
+      jest.advanceTimersByTime(STARTUP_MINIMUM_VISIBLE_MS);
+    });
+    act(() => lifecycle.current.handleCoverExitComplete());
+
+    expect(mockInfo.mock.calls.map(([, facts]) => facts.operation)).toEqual([
+      'startup.cover.layout',
+      'startup.cover.presented',
+      'startup.content.ready',
+      'startup.cover.minimum_elapsed',
+      'startup.cover.hidden',
+    ]);
     lifecycle.unmount();
   });
 

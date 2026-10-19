@@ -167,8 +167,9 @@ Model direct call OR Code Mode script in native QuickJS
   stable `ToolRef` identities. Adapt them through `createPiDurableToolExtension`, which already
   supplies `defineTool`, `ToolTask` hooks, and result projection. Keep Pi imports inside the runtime
   adapter rather than adding them to the Office service.
-- Propose deferred exposure for these larger, occasional schemas. Extend the adapter's current
-  deferred classification, which now covers MCP and selected Skill tools. The model discovers
+- All eight Office tools declare `RuntimeTool.deferred`, following the same contract as Skill
+  installation/adaptation and library management. The Pi adapter forwards this metadata rather
+  than maintaining a separate list of Office names. The model discovers
   Office tools through upstream `tool_search`; scripts use `searchTools`, `describeTool`, and
   `describeNamespace`. Keep both direct-model and nested-tool callers allowed. Discovery affects
   prompt loading, not the tool's authorization or availability.

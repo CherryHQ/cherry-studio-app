@@ -63,6 +63,7 @@ export function createOfficeTools(
       description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments or the selected workspace. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension.`,
       inputSchema: toRuntimeInputSchema(officeInputSchemas[format]),
       approval: 'auto',
+      deferred: true,
       async execute({ input, signal }) {
         signal.throwIfAborted();
         if (new TextEncoder().encode(JSON.stringify(input)).length > OFFICE_MAX_INPUT_BYTES) {

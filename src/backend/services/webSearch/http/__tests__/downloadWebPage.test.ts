@@ -45,6 +45,7 @@ test('follows relative redirects and preserves the final URL and query', async (
   );
   expect(request.mock.calls[1][0]).toMatchObject({
     path: '/article?a=1&a=2',
+    logPath: '/article',
     credentials: 'omit',
     redirect: 'manual',
     maxResponseBytes: 1024 * 1024,

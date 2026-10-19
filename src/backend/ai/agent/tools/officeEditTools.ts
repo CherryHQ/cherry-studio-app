@@ -60,6 +60,7 @@ export function createOfficeEditTools(
       description: `${definition.description} Source and output are limited to 4 MiB. Use managed file ids from conversation attachments or the selected workspace; no paths or URLs. Edited copies are saved in the selected workspace, or at the library root without a workspace.`,
       inputSchema: toRuntimeInputSchema(definition.schema),
       approval: 'auto',
+      deferred: true,
       async execute({ input, signal }) {
         signal.throwIfAborted();
         const invalid = (message: string) => ({

@@ -26,7 +26,6 @@ describe('buildAgentSystemPrompt', () => {
       mode: 'minimal',
       agentInstructions: 'Explain simply.',
       appLanguage: 'zh-CN',
-      currentDate: '2026-10-10',
       tools: [
         tool('web_search'),
         tool('read_file'),
@@ -46,7 +45,7 @@ describe('buildAgentSystemPrompt', () => {
       "model provider's native web search and page reading may be available",
     );
     expect(prompt).toContain('Application tools, Skills and plugins are unavailable');
-    expect(prompt).toContain('`2026-10-10`');
+    expect(prompt).not.toContain('The current local date');
     expect(prompt).toContain('`zh-CN`');
     expect(prompt).toContain('<agent_instructions>\nExplain simply.\n</agent_instructions>');
     for (const heading of [
@@ -124,7 +123,6 @@ describe('buildAgentSystemPrompt', () => {
     const prompt = buildAgentSystemPrompt({
       agentInstructions: '   ',
       appLanguage: 'zh-CN',
-      currentDate: '2026-09-03',
       tools: [],
     });
 
@@ -133,8 +131,8 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('carry it through the necessary tool steps');
     expect(prompt).toContain('persistent memory, or background execution');
     expect(prompt).toContain('The current Cherry Studio App language is `zh-CN`.');
-    expect(prompt).toContain('The current local date is `2026-09-03`.');
-    expect(prompt).toContain('You must write every response in this language');
+    expect(prompt).not.toContain('The current local date');
+    expect(prompt).toContain('Use the app language only as a fallback');
     expect(prompt).not.toContain('## Agent Instructions');
     expect(prompt).not.toContain('## Web Citations');
     expect(prompt).not.toContain('## Web Research');
@@ -142,20 +140,36 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).not.toContain('## Plugin Guides');
   });
 
-  test('preserves user-configured Agent instructions behind the platform rules', () => {
-    const prompt = buildAgentSystemPrompt({
-      agentInstructions: 'Be a playful travel planner.\nAlways propose two options.',
-      appLanguage: 'en-US',
-      tools: [],
-    });
+  test.each(['standard', 'minimal'] as const)(
+    '%s mode respects response-language preferences without weakening platform rules',
+    (mode) => {
+      const prompt = buildAgentSystemPrompt({
+        mode,
+        agentInstructions: 'Be a playful travel planner.\nAlways respond in Persian.',
+        appLanguage: 'en-US',
+        tools: [],
+      });
 
-    expect(prompt).toContain(
-      '<agent_instructions>\nBe a playful travel planner.\nAlways propose two options.\n</agent_instructions>',
-    );
-    expect(prompt.indexOf('## Runtime Rules')).toBeLessThan(
-      prompt.indexOf('## Agent Instructions'),
-    );
-  });
+      expect(prompt).toContain(
+        '<agent_instructions>\nBe a playful travel planner.\nAlways respond in Persian.\n</agent_instructions>',
+      );
+      expect(prompt).toContain("1. Follow the user's explicit request for an output language.");
+      expect(prompt).toContain(
+        '2. Otherwise, follow any response-language preference in the Agent Instructions.',
+      );
+      expect(prompt).toContain("3. Otherwise, match the language of the user's own message");
+      expect(prompt).toContain('using conversation context when it is ambiguous');
+      expect(prompt).toContain('Use the app language only as a fallback');
+      expect(prompt).toContain(
+        "Replies are not limited to the app's supported interface languages",
+      );
+      expect(prompt).not.toContain('You must write every response in this language');
+      expect(prompt).not.toContain('This rule takes precedence over the Agent Instructions');
+      expect(prompt.indexOf('## Runtime Rules')).toBeLessThan(
+        prompt.indexOf('## Agent Instructions'),
+      );
+    },
+  );
 
   test('adds citation rules only for citable built-in web tools', () => {
     const withWeb = buildAgentSystemPrompt({
