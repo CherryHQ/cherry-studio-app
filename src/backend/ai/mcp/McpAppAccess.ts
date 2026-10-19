@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/client';
 import { CallToolResultSchema } from '@modelcontextprotocol/core';
 import * as z from 'zod';

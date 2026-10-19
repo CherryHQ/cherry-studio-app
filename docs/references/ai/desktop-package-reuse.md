@@ -101,8 +101,8 @@ check, platform exports, and device acceptance before the registry compatibility
 | Remote manifest compatibility | Implemented with an independent registry compatibility version | Downloads v3; older cached schemas remain readable offline; baseline `2.1.4` |
 | Model and override lookup | Implemented with parameter-size-preserving normalized indexes | Shared model materialization used by Pi and AI SDK paths |
 | Reasoning support metadata | Implemented in materialized Model data | Pi consumes supported/default thinking levels |
-| Reasoning wire dialects | Implemented for AI SDK and Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
-| Service tiers | Implemented for the AI SDK request path | Does not add service-tier delivery to Pi conversation requests |
+| Reasoning wire dialects | Implemented for Pi request serialization | Pi translates the shared interpreter's emissions into native endpoint payloads |
+| Service tiers | Materialized in Model data only | No request path sends a service tier |
 | Endpoint dialect and actual-cost reporting | Partially implemented | Cost trust is shared; stream usage and reasoning summary are AI SDK concerns |
 | Server tools and model eligibility | Implemented for the Pi conversation path from the bundled declarations; live-provider validation pending | Downloaded catalogs cannot grant a native tool; endpoints without an adapter keep the application Web Search |
 | Compatibility validator and catalog publishing tools | Desktop/shared-package responsibility | Their audit differences do not represent missing Mobile runtime behavior |

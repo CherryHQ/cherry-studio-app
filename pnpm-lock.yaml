@@ -190,9 +190,6 @@ importers:
       '@ai-sdk/huggingface':
         specifier: ^1.0.50
         version: 1.0.50(zod@4.4.3)
-      '@ai-sdk/mcp':
-        specifier: 1.0.71
-        version: 1.0.71(zod@4.4.3)
       '@ai-sdk/mistral':
         specifier: ^3.0.37
         version: 3.0.37(zod@4.4.3)
@@ -1043,12 +1040,6 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4
-
-  '@ai-sdk/mcp@1.0.71':
-    resolution: {integrity: sha512-woKUwm/yiqxEC+E863tqAjEpiyWCERmy//k9pdNYP8Ta6+PF6Ge2X6p99e72BdBovB+/McUWgbJ4+Fiht+41WQ==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/mistral@3.0.37':
     resolution: {integrity: sha512-KkdaMjs4C2y+vrZWJE990E3ZxBFiOTHQ94ZlquuIttpphcqJTMxNoIpnKT/4UzMVWXL0BUEE2vs+1UEVXkN8Kg==}
@@ -10165,13 +10156,6 @@ snapshots:
       '@ai-sdk/openai-compatible': 2.0.72(patch_hash=e1c53c511799253d3cc69a6a2bdcba7cb2ea5792b27b243fd82cb8f086d50480)(zod@4.4.3)
       '@ai-sdk/provider': 3.0.15
       '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
-      zod: 4.4.3
-
-  '@ai-sdk/mcp@1.0.71(zod@4.4.3)':
-    dependencies:
-      '@ai-sdk/provider': 3.0.15
-      '@ai-sdk/provider-utils': 4.0.49(zod@4.4.3)
-      pkce-challenge: 5.0.1
       zod: 4.4.3
 
   '@ai-sdk/mistral@3.0.37(zod@4.4.3)':

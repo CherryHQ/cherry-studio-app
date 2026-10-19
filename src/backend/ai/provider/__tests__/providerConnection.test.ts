@@ -20,7 +20,6 @@ describe('resolveProviderConnection', () => {
         'X-App-Name': 'CherryStudioMobile',
         'X-Custom': 'custom',
       },
-      providerOptionsKey: undefined,
       wireModelId: 'gemini-2.5-flash',
     });
   });

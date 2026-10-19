@@ -18,18 +18,3 @@ export type ProviderConfig<
    */
   endpoint?: string;
 };
-
-/**
- * Model capability flags computed from model properties and assistant settings.
- * Used by provider-specific option builders to decide which parameters to include.
- */
-export interface ProviderCapabilities {
-  /** Whether reasoning/thinking parameters should be sent to the provider. */
-  enableReasoning: boolean;
-  /** Whether the model should generate images inline. */
-  enableGenerateImage: boolean;
-  /** Whether provider-native URL context should be enabled. */
-  enableUrlContext: boolean;
-  /** Whether the model should stream output (vs. a single simulated chunk). */
-  streamOutput: boolean;
-}

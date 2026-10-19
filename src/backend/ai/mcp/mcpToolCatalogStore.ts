@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import { CryptoDigestAlgorithm, digestStringAsync } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as z from 'zod';
