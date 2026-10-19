@@ -1734,6 +1734,58 @@ describe('SqliteAgentSessionStore database guarantees', () => {
     expect(readActivity()).toBe(keptActivity);
   });
 
+  test('publishes the complete fork after commit and skips rejected forks', async () => {
+    const { store, raw } = harness;
+    if (!raw) throw new Error('sqlite harness provides raw access');
+    const agentId = await harness.makeAgentId();
+    const source = await harness.createEmptySession({ agentId });
+    const anchor = await settleTurn(store, source.id, 'Fork this answer');
+    const notices: unknown[] = [];
+    const unsubscribe = subscribeDataApiChanges((paths) => {
+      notices.push({
+        paths,
+        inTransaction: raw.isTransaction,
+        rows: raw
+          .prepare(
+            `SELECT s.id, s.active_node_id AS activeNodeId, COUNT(m.id) AS messageCount
+             FROM agent_session s JOIN agent_session_message m ON m.session_id = s.id
+             WHERE s.forked_from_session_id = ? GROUP BY s.id`,
+          )
+          .all(source.id),
+      });
+    });
+    try {
+      const result = await store.forkSession({
+        sessionId: source.id,
+        fromMessageId: anchor.assistantMessage.id,
+      });
+      expect(result.status).toBe('forked');
+      if (result.status !== 'forked') throw new Error('expected fork');
+      expect(notices).toEqual([
+        {
+          paths: ['/agent-sessions', `/agent-sessions/${result.session.id}`],
+          inTransaction: false,
+          rows: [
+            {
+              id: result.session.id,
+              activeNodeId: result.session.forkBoundaryMessageId,
+              messageCount: 2,
+            },
+          ],
+        },
+      ]);
+      await expect(
+        store.forkSession({ sessionId: source.id, fromMessageId: uuidv7() }),
+      ).resolves.toEqual({ status: 'message-not-found' });
+      await expect(
+        store.forkSession({ sessionId: uuidv7(), fromMessageId: anchor.assistantMessage.id }),
+      ).resolves.toEqual({ status: 'session-not-found' });
+      expect(notices).toHaveLength(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('a fork indexes its copied rows and outlives the source it cites', async () => {
     const { store, raw } = harness;
     if (!raw) throw new Error('sqlite harness provides raw access');

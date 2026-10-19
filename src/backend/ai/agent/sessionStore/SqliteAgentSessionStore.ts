@@ -315,7 +315,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
   }
 
   async forkSession(input: ForkSessionInput): Promise<ForkSessionResult> {
-    return this.dbService.withWriteTx(async (tx) => {
+    const result = await this.dbService.withWriteTx<ForkSessionResult>(async (tx) => {
       const [source] = await tx
         .select()
         .from(agentSessionTable)
@@ -456,6 +456,10 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
 
       return { session: toAgentSessionView(forkedWithBoundary), status: 'forked', messageCopies };
     });
+    if (result.status === 'forked') {
+      publishDataApiChanges(['/agent-sessions', `/agent-sessions/${result.session.id}`]);
+    }
+    return result;
   }
 
   async discardQueuedTurn(input: DeleteTurnInput): Promise<string[]> {
