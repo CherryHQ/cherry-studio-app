@@ -911,6 +911,7 @@
   "painting.board.nodeCount_many": "{{count}} nodos",
   "painting.board.nodeCount_one": "{{count}} nodo",
   "painting.board.nodeCount_other": "{{count}} nodos",
+  "painting.board.openHint": "Toca de nuevo para verla a pantalla completa",
   "painting.board.rename": "Cambiar nombre del tablero",
   "painting.board.renameFailed": "No se pudo cambiar el nombre del tablero. Inténtalo de nuevo.",
   "painting.board.showPrompt": "Mostrar la solicitud completa",

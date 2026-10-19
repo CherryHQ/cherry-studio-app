@@ -911,6 +911,7 @@
   "painting.board.nodeCount_many": "{{count}} nœuds",
   "painting.board.nodeCount_one": "{{count}} nœud",
   "painting.board.nodeCount_other": "{{count}} nœuds",
+  "painting.board.openHint": "Touchez à nouveau pour l’afficher en plein écran",
   "painting.board.rename": "Renommer le tableau",
   "painting.board.renameFailed": "Impossible de renommer le tableau. Réessayez.",
   "painting.board.showPrompt": "Afficher la demande complète",

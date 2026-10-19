@@ -911,6 +911,7 @@
   "painting.board.nodeCount_many": "{{count}} nós",
   "painting.board.nodeCount_one": "{{count}} nó",
   "painting.board.nodeCount_other": "{{count}} nós",
+  "painting.board.openHint": "Toque novamente para ver em ecrã inteiro",
   "painting.board.rename": "Mudar o nome do quadro",
   "painting.board.renameFailed": "Não foi possível mudar o nome do quadro. Tente novamente.",
   "painting.board.showPrompt": "Mostrar o pedido completo",

@@ -889,6 +889,7 @@
   "painting.board.newBoard": "新画板",
   "painting.board.newRootPlaceholder": "描述一个新画面",
   "painting.board.nodeCount_other": "{{count}} 个节点",
+  "painting.board.openHint": "再点一次查看大图",
   "painting.board.rename": "重命名画板",
   "painting.board.renameFailed": "画板重命名失败，请重试。",
   "painting.board.showPrompt": "查看完整提示词",

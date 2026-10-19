@@ -911,6 +911,7 @@
   "painting.board.nodeCount_few": "{{count}} noduri",
   "painting.board.nodeCount_one": "{{count}} nod",
   "painting.board.nodeCount_other": "{{count}} de noduri",
+  "painting.board.openHint": "Atinge din nou pentru ecran complet",
   "painting.board.rename": "Redenumiți tabla",
   "painting.board.renameFailed": "Tabla nu a putut fi redenumită. Încercați din nou.",
   "painting.board.showPrompt": "Afișează solicitarea completă",

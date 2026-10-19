@@ -900,6 +900,7 @@
   "painting.board.newRootPlaceholder": "Περιγράψτε μια νέα εικόνα",
   "painting.board.nodeCount_one": "{{count}} κόμβος",
   "painting.board.nodeCount_other": "{{count}} κόμβοι",
+  "painting.board.openHint": "Πατήστε ξανά για πλήρη οθόνη",
   "painting.board.rename": "Μετονομασία πίνακα",
   "painting.board.renameFailed": "Η μετονομασία του πίνακα απέτυχε. Δοκιμάστε ξανά.",
   "painting.board.showPrompt": "Εμφάνιση πλήρους αιτήματος",

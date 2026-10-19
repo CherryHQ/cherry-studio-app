@@ -119,7 +119,11 @@ function PaintingBoardContent({
   const { dismissInput } = useComposerPresentationActions();
   const isEditorPresented = useComposerExpansion()?.state.isPresented ?? false;
   const models = useModelPickerData({ modelType: 'image' });
-  const [mode, setMode] = useState<'focus' | 'overview'>('focus');
+  // A board opened as a whole lands on its canvas; a specific image opens on that image.
+  const [mode, setMode] = useState<'focus' | 'overview'>(() =>
+    initialBoardId && !initialFocus ? 'overview' : 'focus',
+  );
+  const [isSelectionCleared, setIsSelectionCleared] = useState(false);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -142,11 +146,17 @@ function PaintingBoardContent({
   const shownImage = previewNode?.images[0] ?? focusedImage;
   const focusedPainting = focusedNode?.painting;
   const isGenerating = isAwaitingNode || focusedNode?.status.kind === 'generating';
+  // On the canvas the selection is what the composer edits; clearing it starts a new branch.
+  const selectedNodeId =
+    mode === 'overview' && !isSelectionCleared ? (activeFocus?.nodeId ?? null) : null;
 
   const referenceImage =
-    mode === 'focus' && focusedNode?.status.kind === 'ready' ? (focusedImage ?? null) : null;
+    (mode === 'focus' || selectedNodeId !== null) && focusedNode?.status.kind === 'ready'
+      ? (focusedImage ?? null)
+      : null;
   usePaintingFocusReference(referenceImage);
-  const annotationKey = referenceImage?.fileEntryId ?? null;
+  // Notes are drawn on the full-screen image, so only it can send them.
+  const annotationKey = mode === 'focus' ? (referenceImage?.fileEntryId ?? null) : null;
   const annotation = usePaintingAnnotationDraft(annotationKey);
   const hasAnnotations = annotation.annotations.length > 0;
   const showBoardChrome = !isEditorPresented;
@@ -174,6 +184,14 @@ function PaintingBoardContent({
     setPreviewNodeId(null);
     setMode('focus');
   }, []);
+  const selectNode = useCallback((nodeId: string) => {
+    setFocus({ imageIndex: 0, nodeId });
+    setIsSelectionCleared(false);
+  }, []);
+  const openCanvas = useCallback(() => {
+    setIsSelectionCleared(false);
+    setMode('overview');
+  }, []);
 
   const handleGenerate = useCallback(
     async (input: PaintingInputSubmission) => {
@@ -182,11 +200,13 @@ function PaintingBoardContent({
         annotation.clearSubmitted(annotationKey);
       }
       setPending({ paintingId: started.paintingId, paramValues: input.paramValues });
-      focusNode(paintingNodeId(started.paintingId));
+      // The new node appears where the request was made: selected on the canvas, or full screen.
+      if (mode === 'overview') selectNode(paintingNodeId(started.paintingId));
+      else focusNode(paintingNodeId(started.paintingId));
       onReceipt(started.paintingId);
       return started;
     },
-    [annotation, annotationKey, focusNode, generation, onReceipt],
+    [annotation, annotationKey, focusNode, generation, mode, onReceipt, selectNode],
   );
 
   const handlePaintingRemoved = useCallback(
@@ -283,10 +303,7 @@ function PaintingBoardContent({
     });
   }, [alert, board.paintings.length, boardId, deleteBoardRequest, onClose, t, toast]);
 
-  const focusedModel =
-    focusedPainting?.modelId && isUniqueModelId(focusedPainting.modelId)
-      ? models.getModelItem(focusedPainting.modelId)?.model
-      : undefined;
+  const modelName = paintingModelName(focusedPainting?.modelId, models.getModelItem);
   const lastRatioPrompt = useRef<string | null>(null);
   const prepareRatioChange = useCallback(
     (ratio: string) => {
@@ -337,7 +354,6 @@ function PaintingBoardContent({
   }));
 
   const boardTitle = board.board?.title ?? t('painting.board.newBoard');
-  const modelName = focusedModel?.name ?? focusedPainting?.modelId?.split('::').at(-1) ?? undefined;
   const generationParams =
     (focusedNode?.status.kind === 'generating' || focusedNode?.status.kind === 'stopped'
       ? paintingJobParamValues(focusedNode.status.job)
@@ -349,12 +365,19 @@ function PaintingBoardContent({
   );
 
   let canvas;
-  if (mode === 'overview' && boardId) {
+  if (mode === 'overview' && boardId && board.isLoading) {
+    // The canvas positions itself from the first layout it sees, so it waits for the board.
+    canvas = <View className="flex-1" />;
+  } else if (mode === 'overview' && boardId) {
     canvas = (
       <PaintingBoardOverview
+        active={isScreenFocused && !isEditorPresented}
         board={board}
-        focusedNodeId={activeFocus?.nodeId ?? null}
-        onSelect={focusNode}
+        modelName={(node) => paintingModelName(node.painting?.modelId, models.getModelItem)}
+        onClearSelection={() => setIsSelectionCleared(true)}
+        onOpen={focusNode}
+        onSelect={selectNode}
+        selectedNodeId={selectedNodeId}
       />
     );
   } else if (shownImage && (focusedNode?.status.kind === 'ready' || previewNode)) {
@@ -461,7 +484,7 @@ function PaintingBoardContent({
             image={focusedNode?.status.kind === 'ready' ? focusedImage : undefined}
             onBack={onClose}
             onDelete={focusedPainting ? confirmDeleteNode : undefined}
-            onOpenOverview={boardId ? () => setMode('overview') : undefined}
+            onOpenOverview={boardId ? openCanvas : undefined}
             onShowInfo={focusedPainting ? () => setIsInfoOpen(true) : undefined}
           />
         )
@@ -526,7 +549,9 @@ function PaintingBoardContent({
           painting={focusedPainting}
           placeholder={
             mode === 'overview'
-              ? t('painting.board.newRootPlaceholder')
+              ? referenceImage
+                ? t('painting.focus.editPlaceholder')
+                : t('painting.board.newRootPlaceholder')
               : annotation.selectedId !== null
                 ? t('painting.editor.annotationPlaceholder', { number: annotation.selectedId })
                 : referenceImage
@@ -550,6 +575,16 @@ function PaintingBoardContent({
       ) : null}
     </View>
   );
+}
+
+/** The model's catalog name, or the raw id's model part when it is no longer configured. */
+function paintingModelName(
+  modelId: string | null | undefined,
+  getModelItem: ReturnType<typeof useModelPickerData>['getModelItem'],
+): string | undefined {
+  if (!modelId) return undefined;
+  const name = isUniqueModelId(modelId) ? getModelItem(modelId)?.model.name : undefined;
+  return name ?? modelId.split('::').at(-1);
 }
 
 /**

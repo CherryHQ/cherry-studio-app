@@ -922,6 +922,7 @@
   "painting.board.nodeCount_many": "{{count}} узлов",
   "painting.board.nodeCount_one": "{{count}} узел",
   "painting.board.nodeCount_other": "{{count}} узла",
+  "painting.board.openHint": "Нажмите ещё раз, чтобы открыть на весь экран",
   "painting.board.rename": "Переименовать доску",
   "painting.board.renameFailed": "Не удалось переименовать доску. Попробуйте ещё раз.",
   "painting.board.showPrompt": "Показать запрос полностью",

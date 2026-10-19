@@ -900,6 +900,7 @@
   "painting.board.newRootPlaceholder": "Neues Bild beschreiben",
   "painting.board.nodeCount_one": "{{count}} Knoten",
   "painting.board.nodeCount_other": "{{count}} Knoten",
+  "painting.board.openHint": "Erneut tippen für Vollbild",
   "painting.board.rename": "Board umbenennen",
   "painting.board.renameFailed": "Das Board konnte nicht umbenannt werden. Versuchen Sie es erneut.",
   "painting.board.showPrompt": "Vollständige Anfrage anzeigen",

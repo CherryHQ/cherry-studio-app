@@ -68,37 +68,38 @@ describe('paintingBoardGraph', () => {
     expect(graph.edges).toEqual([{ from: paintingNodeId('root'), to: paintingNodeId('again') }]);
   });
 
-  it('lays generations out top to bottom with imports above their first consumer', () => {
+  it('lays generations out left to right with imports before their first consumer', () => {
     const layout = layoutPaintingBoard(buildPaintingBoardGraph(paintings), metrics);
-    const row = (id: string) => layout.nodes.get(id)!.y / (metrics.nodeHeight + metrics.rowGap);
+    const column = (id: string) =>
+      layout.nodes.get(id)!.x / (metrics.nodeWidth + metrics.columnGap);
 
-    expect(row(paintingNodeId('root'))).toBe(0);
-    expect(row(paintingNodeId('sunset'))).toBe(1);
-    expect(row(paintingNodeId('snow'))).toBe(1);
-    expect(row(importNodeId('photo'))).toBe(1);
-    expect(row(paintingNodeId('merged'))).toBe(2);
-    expect(row(paintingNodeId('pending'))).toBe(2);
-    // Widest row has three nodes.
+    expect(column(paintingNodeId('root'))).toBe(0);
+    expect(column(paintingNodeId('sunset'))).toBe(1);
+    expect(column(paintingNodeId('snow'))).toBe(1);
+    expect(column(importNodeId('photo'))).toBe(1);
+    expect(column(paintingNodeId('merged'))).toBe(2);
+    expect(column(paintingNodeId('pending'))).toBe(2);
+    // Three columns; the tallest has three nodes.
     expect(layout.width).toBe(170);
     expect(layout.height).toBe(340);
-    // Children of `sunset` stay to the left of the `snow` branch.
-    expect(layout.nodes.get(paintingNodeId('sunset'))!.x).toBeLessThan(
-      layout.nodes.get(paintingNodeId('snow'))!.x,
+    // Children of `sunset` stay above the `snow` branch.
+    expect(layout.nodes.get(paintingNodeId('sunset'))!.y).toBeLessThan(
+      layout.nodes.get(paintingNodeId('snow'))!.y,
     );
   });
 
-  it('pushes a first generation below a photo it started from', () => {
+  it('places a first generation after a photo it started from', () => {
     const layout = layoutPaintingBoard(
       buildPaintingBoardGraph([painting('edit', ['photo'], ['edit-out'])]),
       metrics,
     );
 
-    expect(layout.nodes.get(importNodeId('photo'))!.y).toBe(0);
-    expect(layout.nodes.get(paintingNodeId('edit'))!.y).toBe(120);
-    expect(layout.nodes.get(paintingNodeId('edit'))!.x).toBe(0);
+    expect(layout.nodes.get(importNodeId('photo'))!.x).toBe(0);
+    expect(layout.nodes.get(paintingNodeId('edit'))!.x).toBe(60);
+    expect(layout.nodes.get(paintingNodeId('edit'))!.y).toBe(0);
   });
 
-  it('centres narrower rows on the widest one', () => {
+  it('centres shorter columns on the tallest one', () => {
     const layout = layoutPaintingBoard(
       buildPaintingBoardGraph([
         painting('root', [], ['root-out']),
@@ -108,8 +109,8 @@ describe('paintingBoardGraph', () => {
       metrics,
     );
 
-    expect(layout.nodes.get(paintingNodeId('root'))!.x).toBe(30);
-    expect(layout.nodes.get(paintingNodeId('a'))!.x).toBe(0);
-    expect(layout.nodes.get(paintingNodeId('b'))!.x).toBe(60);
+    expect(layout.nodes.get(paintingNodeId('root'))!.y).toBe(60);
+    expect(layout.nodes.get(paintingNodeId('a'))!.y).toBe(0);
+    expect(layout.nodes.get(paintingNodeId('b'))!.y).toBe(120);
   });
 });

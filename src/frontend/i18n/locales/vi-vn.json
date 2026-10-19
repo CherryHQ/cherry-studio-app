@@ -889,6 +889,7 @@
   "painting.board.newBoard": "Bảng vẽ mới",
   "painting.board.newRootPlaceholder": "Mô tả một hình ảnh mới",
   "painting.board.nodeCount_other": "{{count}} nút",
+  "painting.board.openHint": "Chạm lần nữa để xem toàn màn hình",
   "painting.board.rename": "Đổi tên bảng vẽ",
   "painting.board.renameFailed": "Không thể đổi tên bảng vẽ. Hãy thử lại.",
   "painting.board.showPrompt": "Xem toàn bộ yêu cầu",

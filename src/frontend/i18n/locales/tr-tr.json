@@ -900,6 +900,7 @@
   "painting.board.newRootPlaceholder": "Yeni bir görsel tanımlayın",
   "painting.board.nodeCount_one": "{{count}} düğüm",
   "painting.board.nodeCount_other": "{{count}} düğüm",
+  "painting.board.openHint": "Tam ekran görmek için tekrar dokunun",
   "painting.board.rename": "Panoyu yeniden adlandır",
   "painting.board.renameFailed": "Pano yeniden adlandırılamadı. Tekrar deneyin.",
   "painting.board.showPrompt": "İsteğin tamamını göster",
