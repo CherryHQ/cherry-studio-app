@@ -375,16 +375,14 @@ export function ChatInputEffortOverlay({
           style={{ height: viewportHeight, position: 'absolute', width: viewportWidth }}
         >
           {/* One full-window backdrop lets the blur sample across the app/keyboard boundary. */}
-          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            <ChatInputEffortBackdrop
-              focusFrame={focusFrame}
-              progress={progress}
-              scrimColor={scrimColor}
-              tint={keyboard.appearance}
-              variant="keyboard"
-            />
-          </View>
-          {keyboardOverlayVisible ? overlayControls : null}
+          <ChatInputEffortBackdrop
+            focusFrame={focusFrame}
+            progress={progress}
+            scrimColor={scrimColor}
+            tint={keyboard.appearance}
+            variant="keyboard"
+          />
+          {overlayControls}
         </GestureHandlerRootView>
       </OverKeyboardView>
     </>
