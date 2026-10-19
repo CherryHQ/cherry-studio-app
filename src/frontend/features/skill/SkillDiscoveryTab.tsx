@@ -1,14 +1,8 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import {
-  Button,
-  ContentState,
-  OptionPickerBottomSheet,
-  Section,
-} from '@cherrystudio/ui/components';
+import { ActionMenu, Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { queryOptions, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -183,7 +177,6 @@ export function SkillDiscoveryTab({
   const { t } = useTranslation();
   const skills = useBackendModule('skills');
   const { fromCherryin, open } = useDiscoveryResult();
-  const [isSourcePickerOpen, setSourcePickerOpen] = useState(false);
 
   const catalog = useInfiniteQuery({
     queryKey: ['skills', 'cherryin'],
@@ -208,14 +201,27 @@ export function SkillDiscoveryTab({
   return (
     <>
       <View className="flex-row">
-        <Button
-          accessibilityLabel={t('skills.marketplace.source')}
-          onPress={() => setSourcePickerOpen(true)}
-          variant="ghost"
+        <ActionMenu
+          items={[
+            {
+              id: 'cherryin',
+              label: 'CherryIN',
+              checked: source === 'cherryin',
+              onPress: () => onSourceChange('cherryin'),
+            },
+            {
+              id: 'skills-sh',
+              label: 'skills.sh',
+              checked: source === 'skills-sh',
+              onPress: () => onSourceChange('skills-sh'),
+            },
+          ]}
         >
-          <Button.Label>{source === 'cherryin' ? 'CherryIN' : 'skills.sh'}</Button.Label>
-          <ChevronDownIcon className="size-4 text-muted-foreground" />
-        </Button>
+          <Button accessibilityLabel={t('skills.marketplace.source')} variant="ghost">
+            <Button.Label>{source === 'cherryin' ? 'CherryIN' : 'skills.sh'}</Button.Label>
+            <ChevronDownIcon className="size-4 text-muted-foreground" />
+          </Button>
+        </ActionMenu>
       </View>
       {current.isLoading ? (
         <ContentState.Loading title={t('skills.loading')} />
@@ -275,18 +281,6 @@ export function SkillDiscoveryTab({
           {catalog.isFetchNextPageError ? t('common.retry') : t('skills.loadMore')}
         </Button>
       ) : null}
-      <OptionPickerBottomSheet
-        open={isSourcePickerOpen}
-        onClose={() => setSourcePickerOpen(false)}
-        onValueChange={onSourceChange}
-        options={[
-          { value: 'cherryin', label: 'CherryIN' },
-          { value: 'skills-sh', label: 'skills.sh' },
-        ]}
-        selectedValue={source}
-        size="compact"
-        title={t('skills.marketplace.source')}
-      />
     </>
   );
 }
