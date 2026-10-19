@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import {
   Client,
   ProtocolError,

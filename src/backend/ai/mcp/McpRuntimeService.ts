@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import { ProtocolError } from '@modelcontextprotocol/client';
 import { AppState } from 'react-native';
 import * as z from 'zod';
@@ -83,10 +83,10 @@ import {
 
 const logger = loggerService.withContext('McpRuntimeService');
 
-/** Ceiling for connect + tools/list, enforced through the abort signal each
- * client stack forwards to its transport: the official MCP SDK for remote
- * servers and `@ai-sdk/mcp` for built-in plugins. Without it a server that
- * accepts the socket then stalls would pin a client slot indefinitely. */
+/** Ceiling for connect + tools/list, enforced through the abort signal the
+ * official MCP SDK forwards to its transport for remote servers and built-in
+ * plugins alike. Without it a server that accepts the socket then stalls would
+ * pin a client slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 
 /** A failed discovery is not retried on the send path until this much time

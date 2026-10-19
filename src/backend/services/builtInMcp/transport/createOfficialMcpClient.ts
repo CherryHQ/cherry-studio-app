@@ -1,4 +1,10 @@
-import { createMCPClient, type MCPClient, type MCPClientConfig } from '@ai-sdk/mcp';
+import {
+  Client,
+  type FetchLike,
+  ProtocolError,
+  StreamableHTTPClientTransport,
+} from '@modelcontextprotocol/client';
+import Constants from 'expo-constants';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import { PluginError } from '@/shared/contracts/plugins';
@@ -6,7 +12,6 @@ import { PluginError } from '@/shared/contracts/plugins';
 import type { PluginClient, PluginClientContext } from '../pluginDefinition';
 
 const CONNECTION_TIMEOUT_MS = 15_000;
-type HttpTransportConfig = Extract<MCPClientConfig['transport'], { type: 'http' | 'sse' }>;
 
 type OfficialMcpConnection = {
   readonly url: string;
@@ -20,11 +25,14 @@ export async function createOfficialMcpClient(
   connection: OfficialMcpConnection,
 ): Promise<PluginClient> {
   const endpoint = new URL(connection.url);
-  const fetch: NonNullable<HttpTransportConfig['fetch']> = async (input, init) => {
+  // The SDK settles a cut-off call without our fetch error, so the call records its own submission.
+  const pendingCalls: { name: string; submitted: boolean }[] = [];
+  const fetch: FetchLike = async (input, init) => {
+    let toolName: string | undefined;
     let isWrite = false;
     let submitted = false;
     try {
-      const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);
+      const url = new URL(input);
       if (url.href !== connection.url) {
         throw new PluginError('request', 'The plugin request target is not allowed.');
       }
@@ -35,6 +43,7 @@ export async function createOfficialMcpClient(
           if (typeof name !== 'string' || !Object.hasOwn(context.tools, name)) {
             throw new PluginError('access', 'The plugin tool is not admitted.');
           }
+          toolName = name;
           isWrite = context.tools[name] === 'write';
         }
       }
@@ -69,6 +78,8 @@ export async function createOfficialMcpClient(
       });
       init?.signal?.throwIfAborted();
       submitted = true;
+      const call = pendingCalls.find((entry) => entry.name === toolName && !entry.submitted);
+      if (call) call.submitted = true;
       const response = await expoFetch(url.href, {
         ...init,
         headers,
@@ -122,52 +133,74 @@ export async function createOfficialMcpClient(
       throw new PluginError('network', 'Could not reach the official MCP service.');
     }
   };
-  const client = await withRequestSignal(context.signal, (signal) =>
-    createMCPClient({
-      clientName: 'Cherry Studio',
-      initializationOptions: { signal },
+  const client = new Client({
+    name: 'Cherry Studio',
+    version: Constants.expoConfig?.version ?? 'unknown',
+  });
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    fetch,
+    requestInit: { redirect: 'error' },
+    // No authProvider: a 401 must not replay a possibly committed write.
+    reconnectionOptions: {
       maxRetries: 0,
-      // No authProvider: a 401 must not replay a possibly committed write.
-      transport: { type: 'http', url: connection.url, fetch, redirect: 'error' },
-    }),
+      initialReconnectionDelay: 1000,
+      maxReconnectionDelay: 1000,
+      reconnectionDelayGrowFactor: 1,
+    },
+  });
+  await withPluginError(() =>
+    client.connect(transport, { signal: context.signal, timeout: CONNECTION_TIMEOUT_MS }),
   );
-  // The pinned SDK implements callTool, but omits it from its public interface.
-  // Keep that dependency at the transport boundary instead of exposing the full SDK.
-  if (typeof (client as MCPClient & Partial<PluginClient>).callTool !== 'function') {
+  const serverInfo = client.getServerVersion();
+  if (!serverInfo) {
     await client.close();
-    throw new PluginError('unavailable', 'The MCP client cannot invoke plugin tools.');
+    throw new PluginError('unavailable', 'The official MCP service did not return its identity.');
   }
-  const toolClient = client as MCPClient & PluginClient;
   return {
-    get serverInfo() {
-      return client.serverInfo;
-    },
-    listTools(input) {
-      return withRequestSignal(input?.options?.signal, (signal) =>
-        client.listTools({ ...input, options: { ...input?.options, signal } }),
-      );
-    },
-    callTool(input) {
-      return withRequestSignal(input.options?.abortSignal, (abortSignal) =>
-        toolClient.callTool({ ...input, options: { ...input.options, abortSignal } }),
-      );
+    serverInfo,
+    // One raw page per call: plugin discovery owns pagination and its cursor checks.
+    listTools: (input) =>
+      withPluginError(() =>
+        client.request(
+          { method: 'tools/list', params: input?.params },
+          { signal: input?.options?.signal },
+        ),
+      ),
+    async callTool({ name, args, options }) {
+      const call = { name, submitted: false };
+      pendingCalls.push(call);
+      try {
+        return await withPluginError(() =>
+          client.callTool({ name, arguments: args }, { signal: options?.abortSignal }),
+        );
+      } catch (error) {
+        if (error instanceof PluginError || ProtocolError.isInstance(error)) throw error;
+        // Cancelling or closing does not stop a write the service may already have committed.
+        if (call.submitted && context.tools[name] === 'write') {
+          throw unknownWriteError(context.pluginId);
+        }
+        if (options?.abortSignal?.aborted) {
+          throw new PluginError('cancelled', 'The plugin request was cancelled.');
+        }
+        throw error;
+      } finally {
+        pendingCalls.splice(pendingCalls.indexOf(call), 1);
+      }
     },
     close: () => client.close(),
   };
 }
 
-/** The SDK's nested AbortSignal.any links need an abort even when a request succeeds. */
-async function withRequestSignal<TResult>(
-  caller: AbortSignal | undefined,
-  operation: (signal: AbortSignal) => Promise<TResult>,
-): Promise<TResult> {
-  const request = new AbortController();
-  const signal = caller ? AbortSignal.any([caller, request.signal]) : request.signal;
+/** The SDK wraps what the fetch boundary threw; plugin callers match on the original. */
+async function withPluginError<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
   try {
-    return await operation(signal);
-  } finally {
-    // The RPC has settled; release its links/response stream without closing the shared transport.
-    request.abort();
+    return await operation();
+  } catch (error) {
+    for (let current = error, depth = 0; current instanceof Error && depth < 4; depth += 1) {
+      if (current instanceof PluginError) throw current;
+      current = current.cause;
+    }
+    throw error;
   }
 }
 

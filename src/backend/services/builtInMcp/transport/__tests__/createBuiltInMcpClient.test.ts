@@ -1,4 +1,4 @@
-import * as mcp from '@ai-sdk/mcp';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
 import { trackExpoAbortSignals } from '../../authorization/__tests__/_expoAbortSignal';
 import { isBuiltInMcpToolAllowed } from '../../pluginRegistry';
@@ -21,10 +21,19 @@ jest.mock('@/backend/services/http', () => ({
   createFetchBridge: () => jest.fn(),
   isHttpError: () => false,
 }));
-jest.mock('@ai-sdk/mcp', () => {
-  const actual = jest.requireActual<typeof mcp>('@ai-sdk/mcp');
-  return { ...actual, createMCPClient: jest.fn(actual.createMCPClient) };
+jest.mock('@modelcontextprotocol/client', () => {
+  const actual = jest.requireActual<typeof import('@modelcontextprotocol/client')>(
+    '@modelcontextprotocol/client',
+  );
+  return {
+    ...actual,
+    StreamableHTTPClientTransport: jest.fn(
+      (...args: ConstructorParameters<typeof actual.StreamableHTTPClientTransport>) =>
+        new actual.StreamableHTTPClientTransport(...args),
+    ),
+  };
 });
+const createTransport = jest.mocked(StreamableHTTPClientTransport);
 jest.mock('../../plugins/github/githubOauth', () => ({
   ...jest.requireActual('../../plugins/github/githubOauth'),
   getGithubApplication: () => ({
@@ -110,7 +119,7 @@ function toolRequests(): RpcRequest[] {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
-  jest.mocked(mcp.createMCPClient).mockClear();
+  createTransport.mockClear();
   mockFetch.mockReset().mockImplementation(respond);
   mockGetGrant.mockReset().mockImplementation(async (pluginId: string) => ({
     id: 'grant-1',
@@ -156,7 +165,6 @@ it.each([false, true])(
         await client.listTools(discovery);
         await expect(client.callTool({ name: 'fetch-doc', args: {}, options })).resolves.toEqual({
           content: [{ type: 'text', text: JSON.stringify({ login: 'cherry' }) }],
-          isError: false,
         });
         expect(tracked.listeners.size).toBe(0);
         expect(tracked.timers.size).toBe(0);
@@ -175,7 +183,7 @@ it.each([false, true])(
       expect(tracked.listeners.size).toBe(0);
       expect(tracked.timers.size).toBe(0);
       expect(caller.signal.aborted).toBe(false);
-      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(createTransport).toHaveBeenCalledTimes(1);
       expect(
         toolRequests().filter((request) => request.params?.name === 'create-doc'),
       ).toHaveLength(1);
@@ -196,14 +204,11 @@ it.each(['complete', 'cancel'] as const)(
       new AbortController().signal,
     );
     let pending: Promise<unknown> | undefined;
+    let responseController: ReadableStreamDefaultController<Uint8Array> | undefined;
     try {
       await client.listTools();
       await settle();
-      const connectionSignal = mockFetch.mock.calls.find(([, init]) => init?.method === 'GET')?.[1]
-        .signal as AbortSignal;
       const caller = new AbortController();
-      let responseController!: ReadableStreamDefaultController<Uint8Array>;
-      let requestSignal!: AbortSignal;
       let requestId: number | undefined;
       let received!: () => void;
       const started = new Promise<void>((resolve) => {
@@ -214,17 +219,10 @@ it.each(['complete', 'cancel'] as const)(
         const request: RpcRequest = JSON.parse(init.body);
         if (request.method !== 'tools/call' || request.params?.name !== 'create-doc')
           return respond(url, init);
-        requestSignal = init.signal;
         requestId = request.id;
         const body = new ReadableStream<Uint8Array>({
           start(controller) {
             responseController = controller;
-            // Model fetch's response-body lifetime under the request's signal.
-            const onAbort = () => {
-              requestSignal.removeEventListener('abort', onAbort);
-              controller.close();
-            };
-            requestSignal.addEventListener('abort', onAbort);
           },
         });
         received();
@@ -242,35 +240,44 @@ it.each(['complete', 'cancel'] as const)(
       await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
         'content',
       );
-      expect(requestSignal.aborted).toBe(false);
-      expect(connectionSignal.aborted).toBe(false);
 
       if (ending === 'complete') {
         const result = { content: [{ type: 'text', text: 'created' }] };
-        responseController.enqueue(
+        responseController!.enqueue(
           new TextEncoder().encode(
             `event: message\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: requestId, result })}\n\n`,
           ),
         );
-        await expect(pending).resolves.toEqual({ ...result, isError: false });
+        await expect(pending).resolves.toEqual(result);
         expect(caller.signal.aborted).toBe(false);
       } else {
-        const outcome = expect(pending).rejects.toThrow();
+        const outcome = expect(pending).rejects.toMatchObject({ reason: 'unknown-write' });
         caller.abort();
         await outcome;
+        await settle();
+        // A 2025-era server learns of the cancellation through the protocol, not a dropped stream.
+        expect(
+          mockFetch.mock.calls.some(
+            ([, init]: [string, RequestInit]) =>
+              typeof init?.body === 'string' &&
+              JSON.parse(init.body).method === 'notifications/cancelled' &&
+              JSON.parse(init.body).params?.requestId === requestId,
+          ),
+        ).toBe(true);
       }
-      expect(requestSignal.aborted).toBe(true);
-      expect(connectionSignal.aborted).toBe(false);
+      responseController!.close();
+      responseController = undefined;
       expect(tracked.listeners.size).toBe(0);
       expect(tracked.timers.size).toBe(0);
       await expect(client.callTool({ name: 'fetch-doc', args: {} })).resolves.toHaveProperty(
         'content',
       );
-      expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+      expect(createTransport).toHaveBeenCalledTimes(1);
       expect(
         toolRequests().filter((request) => request.params?.name === 'create-doc'),
       ).toHaveLength(1);
     } finally {
+      responseController?.close();
       await client.close();
       await pending?.catch(() => undefined);
     }
@@ -360,8 +367,8 @@ it('connects Feishu as the user without storing credentials in MCP configuration
     accountLabel: 'Feishu user',
   });
   expect(toolRequests()).toEqual([]);
-  const config = jest.mocked(mcp.createMCPClient).mock.calls[0][0];
-  expect(JSON.stringify(config)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
+  const [, options] = createTransport.mock.calls[0];
+  expect(JSON.stringify(options)).not.toMatch(/private-app-secret|user-token-first|user-refresh/);
   for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
     const headers = new Headers(init.headers);
     expect(url).toBe('https://mcp.feishu.cn/mcp');
@@ -402,18 +409,18 @@ it.each([
 ] as const)(
   'connects %s through the real HTTP SDK without storing credentials in its config',
   async (pluginId, endpoint) => {
-    const create = jest.mocked(mcp.createMCPClient);
     const signal = new AbortController().signal;
     const client = await createBuiltInMcpClient(pluginId, 'grant-1', signal);
     try {
       await client.listTools({ options: { signal } });
-      const config = create.mock.calls[0][0];
-      expect(config).toMatchObject({
-        maxRetries: 0,
-        transport: { type: 'http', url: endpoint, redirect: 'error' },
+      const [url, options] = createTransport.mock.calls[0];
+      expect(String(url)).toBe(endpoint);
+      expect(options).toMatchObject({
+        requestInit: { redirect: 'error' },
+        reconnectionOptions: { maxRetries: 0 },
       });
-      expect(config.transport).not.toHaveProperty('authProvider');
-      expect(JSON.stringify(config)).not.toContain('private-key');
+      expect(options).not.toHaveProperty('authProvider');
+      expect(JSON.stringify(options)).not.toContain('private-key');
       for (const [url, init] of mockFetch.mock.calls as [string, RequestInit][]) {
         const headers = new Headers(init.headers);
         expect(init.redirect).toBe('error');
@@ -450,21 +457,18 @@ it('rejects a retired credential reference before another HTTP request', async (
 });
 
 it('rejects unexpected tool names and targets before credential injection', async () => {
-  const create = jest.mocked(mcp.createMCPClient);
   const client = await createBuiltInMcpClient('github', 'grant-1', new AbortController().signal);
   try {
-    const transport = create.mock.calls[0][0].transport as Extract<
-      mcp.MCPClientConfig['transport'],
-      { type: 'http' | 'sse' }
-    >;
+    const [url, options] = createTransport.mock.calls[0];
+    const fetch = options!.fetch!;
     await settle();
     mockFetch.mockClear();
     mockGetGrant.mockClear();
-    await expect(transport.fetch!('https://untrusted.example/mcp', {})).rejects.toMatchObject({
+    await expect(fetch('https://untrusted.example/mcp', {})).rejects.toMatchObject({
       reason: 'request',
     });
     await expect(
-      transport.fetch!(transport.url, {
+      fetch(url, {
         method: 'POST',
         body: JSON.stringify({ method: 'tools/call', params: { name: 'delete_repository' } }),
       }),
@@ -655,7 +659,7 @@ it('keeps collecting pages after finding the validation tool and returns the adm
   expect(result.catalog.serverInfo).toMatchObject({ name: 'official-fixture', version: '1' });
   expect(JSON.stringify(result)).not.toContain('entered-key');
   expect(toolRequests()).toHaveLength(1);
-  expect(mcp.createMCPClient).toHaveBeenCalledTimes(1);
+  expect(createTransport).toHaveBeenCalledTimes(1);
 });
 
 it.each(['duplicate', 'repeated-cursor'])(
@@ -733,7 +737,7 @@ it('keeps unregistered plugins inert without resolving grants or starting a clie
     createBuiltInMcpClient('vendor.future-plugin', 'grant', new AbortController().signal),
   ).rejects.toMatchObject({ reason: 'unavailable' });
   expect(mockGetGrant).not.toHaveBeenCalled();
-  expect(mcp.createMCPClient).not.toHaveBeenCalled();
+  expect(createTransport).not.toHaveBeenCalled();
   expect(mockFetch).not.toHaveBeenCalled();
 });
 
@@ -802,7 +806,7 @@ it('injects the latest GitHub user credential for each independent request witho
     expect(new Headers(mockFetch.mock.calls[0][1].headers).get('Authorization')).toBe(
       'Bearer new-github-access',
     );
-    expect(JSON.stringify(jest.mocked(mcp.createMCPClient).mock.calls[0][0])).not.toMatch(
+    expect(JSON.stringify(createTransport.mock.calls[0][1])).not.toMatch(
       /github-access|github-refresh|public-client-secret/,
     );
   } finally {

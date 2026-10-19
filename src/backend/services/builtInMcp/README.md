@@ -133,9 +133,11 @@ own this user-facing copy independently of Agent guide content.
   `PluginSecretReference` belongs to the database authorization schema. The database service accepts
   `credentialReference`; the native store accepts `credential`. The SQL column remains `credential`.
 - `createBuiltInMcpClient` binds the selected method to one grant. `createOfficialMcpClient` uses
-  `@ai-sdk/mcp` Streamable HTTP and `expo/fetch`, checks authorization before and after credential
-  resolution, enforces fixed endpoints and admitted tools, rejects redirects and never replays
-  writes. A rotating credential retains its grant ID; reconnecting replaces that ID.
+  the official MCP SDK's Streamable HTTP transport, the same client as custom servers, over
+  `expo/fetch`. It checks authorization before and after credential resolution, enforces fixed
+  endpoints and admitted tools, rejects redirects and never replays writes. A write that was
+  submitted before cancellation, closing or a lost response reports an unknown outcome. A rotating
+  credential retains its grant ID; reconnecting replaces that ID.
 - GitHub injects a Bearer token and `X-MCP-Tools`; Amap injects a key only into the outgoing URL.
   Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT`
   plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and
