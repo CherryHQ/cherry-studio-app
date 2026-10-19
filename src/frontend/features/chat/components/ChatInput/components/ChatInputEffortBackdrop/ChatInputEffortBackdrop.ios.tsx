@@ -4,15 +4,11 @@ import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
 import type { ChatInputEffortBackdropProps } from './ChatInputEffortBackdrop.types';
-import { ChatInputEffortBackdropFocus } from './ChatInputEffortBackdropFocus';
 
 const blurIntensity = 30;
 const scrimOpacity = { app: 0.07, keyboard: 0.08 } as const;
-const FOCUS_BLUR_INSETS = [0, 0.07, 0.14, 0.21] as const;
-const FOCUS_BLUR_INTENSITY = 9;
 
 export function ChatInputEffortBackdrop({
-  focusFrame,
   progress,
   scrimColor,
   tint,
@@ -36,24 +32,6 @@ export function ChatInputEffortBackdrop({
         pointerEvents="none"
         style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }, scrimStyle]}
       />
-      <ChatInputEffortBackdropFocus focusFrame={focusFrame} progress={progress}>
-        {/* Unmasked, nested bands follow SidebarFade's native backdrop path. */}
-        {focusFrame ? (
-          <Animated.View style={[StyleSheet.absoluteFill, blurStyle]}>
-            {FOCUS_BLUR_INSETS.map((inset) => (
-              <BlurView
-                key={inset}
-                intensity={FOCUS_BLUR_INTENSITY}
-                style={[
-                  StyleSheet.absoluteFill,
-                  { bottom: focusFrame.height * inset, top: focusFrame.height * inset },
-                ]}
-                tint={blurTint}
-              />
-            ))}
-          </Animated.View>
-        ) : null}
-      </ChatInputEffortBackdropFocus>
     </>
   );
 }

@@ -176,9 +176,8 @@ export function ChatInputEffortOverlay({
     return undefined;
   }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
 
-  // Portal content mounts one commit after the overlay, and mounting the iOS blurs stalls a frame.
-  // Layout events precede that native mount, so the morph starts two frames after the portal's
-  // first layout; the stall then lands before anything moves instead of skipping the eased start.
+  // Start after the active overlay host has laid out and its native blur has mounted, so mount
+  // work lands before the morph instead of skipping its eased start.
   const reveal = useCallback(() => {
     if (!revealPendingRef.current) {
       return;
@@ -253,10 +252,6 @@ export function ChatInputEffortOverlay({
         top: layout.labelFrame.top - EFFORT_BACKDROP_FADE_INSET,
       }
     : null;
-  const keyboardFocusFrame =
-    focusFrame && layout
-      ? { ...focusFrame, top: focusFrame.top - (viewportHeight - layout.keyboardHeight) }
-      : null;
   const overlayControls = layout ? (
     <>
       <Pressable
@@ -349,13 +344,13 @@ export function ChatInputEffortOverlay({
         {children(gauge)}
       </View>
 
-      {layout ? (
+      {layout && !keyboardOverlayVisible ? (
         <Portal name={`chat-input-effort-${portalName}`}>
           <View
             accessibilityViewIsModal
             onAccessibilityEscape={close}
             onLayout={reveal}
-            pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
+            pointerEvents="box-none"
             style={StyleSheet.absoluteFill}
           >
             <ChatInputEffortBackdrop
@@ -364,7 +359,7 @@ export function ChatInputEffortOverlay({
               scrimColor={scrimColor}
               variant="app"
             />
-            {keyboardOverlayVisible ? null : overlayControls}
+            {overlayControls}
           </View>
         </Portal>
       ) : null}
@@ -375,15 +370,14 @@ export function ChatInputEffortOverlay({
           accessibilityViewIsModal
           collapsable={false}
           onAccessibilityEscape={close}
+          onLayout={reveal}
           pointerEvents="box-none"
           style={{ height: viewportHeight, position: 'absolute', width: viewportWidth }}
         >
-          <View
-            pointerEvents="none"
-            style={[keyboardBackdropContainerStyle, { height: layout?.keyboardHeight ?? 0 }]}
-          >
+          {/* One full-window backdrop lets the blur sample across the app/keyboard boundary. */}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             <ChatInputEffortBackdrop
-              focusFrame={keyboardFocusFrame}
+              focusFrame={focusFrame}
               progress={progress}
               scrimColor={scrimColor}
               tint={keyboard.appearance}
@@ -412,11 +406,4 @@ const labelContainerStyle = {
   justifyContent: 'center',
   position: 'absolute',
   zIndex: 2,
-} as const;
-const keyboardBackdropContainerStyle = {
-  bottom: 0,
-  left: 0,
-  overflow: 'hidden',
-  position: 'absolute',
-  right: 0,
 } as const;
