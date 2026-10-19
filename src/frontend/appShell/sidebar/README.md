@@ -21,8 +21,8 @@ The sidebar owns conversation browsing, rename, and individual deletion. There i
 Session history/management route or chat-header history action.
 
 Multi-select deletion removes sessions serially so active work settles before its rows are deleted.
-The selection controls unlock when those deletions finish; catalog refresh runs independently and
-cannot keep the sidebar in its deleting state. Failed deletions remain selected for retry.
+Deleted rows hide immediately, and each removal's catalog change notification refreshes the lists;
+selection never refreshes them itself. Failed deletions remain selected for retry.
 
 The recent-list menu switches between a flat conversation list and conversations grouped by Agent.
 Every Agent group starts collapsed, including the current chat's. Tapping an Agent's header toggles

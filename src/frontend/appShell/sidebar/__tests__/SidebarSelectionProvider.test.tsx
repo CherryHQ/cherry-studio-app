@@ -44,7 +44,7 @@ function Probe() {
   return null;
 }
 
-function register(refresh: () => Promise<unknown>) {
+function register() {
   const remove = jest.fn(
     async (_sessionId: string): Promise<OperationOutcome<void>> => ({
       state: 'applied',
@@ -76,7 +76,7 @@ function register(refresh: () => Promise<unknown>) {
     title: sessionId,
   }));
   act(() => {
-    selection.registerList('sessions', source, sessions, refresh);
+    selection.registerList('sessions', source, sessions);
     selection.enter();
     selection.toggleAll();
     selection.requestDelete();
@@ -96,10 +96,9 @@ beforeEach(() => {
 });
 afterEach(() => act(() => renderer.unmount()));
 
-test('waits for serial deletions, then unlocks without waiting for catalog refresh', async () => {
+test('deletes serially, then unlocks with deleted rows hidden', async () => {
   const deletion = Promise.withResolvers<OperationOutcome<void>>();
-  const refresh = Promise.withResolvers<void>();
-  const { remove, confirm } = register(() => refresh.promise);
+  const { remove, confirm } = register();
   remove.mockImplementationOnce(() => deletion.promise);
 
   act(confirm);
@@ -116,14 +115,10 @@ test('waits for serial deletions, then unlocks without waiting for catalog refre
     label: 'session.selection.deleted',
     variant: 'success',
   });
-  refresh.resolve();
-  await refresh.promise;
 });
 
-test('keeps failed deletions selected even when refreshing throws synchronously', async () => {
-  const { remove, confirm } = register(() => {
-    throw new Error('Catalog unavailable');
-  });
+test('keeps failed deletions selected for retry', async () => {
+  const { remove, confirm } = register();
   remove.mockRejectedValueOnce(new Error('Could not stop the running turn'));
   await act(async () => confirm());
 

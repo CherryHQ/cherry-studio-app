@@ -29,13 +29,12 @@ import type {
 import { areAllSelected, toggleSelection } from '@/frontend/components/Selection';
 
 type SelectionEntry = { key: string; source: ConversationSource; ref: ConversationRef };
-type SelectionList = { ids: readonly string[]; refresh: () => Promise<unknown> };
 type SelectionSnapshot = {
   isSelecting: boolean;
   isDeleting: boolean;
   selectedIds: ReadonlySet<string>;
   deletedIds: ReadonlySet<string>;
-  lists: ReadonlyMap<string, SelectionList>;
+  lists: ReadonlyMap<string, readonly string[]>;
 };
 type SelectionStore = ReturnType<typeof createSelectionStore>;
 type SidebarSelection = SelectionStore & {
@@ -123,7 +122,6 @@ export function SidebarSelectionProvider({
               failed.add(entry.key);
             }
           }
-          const lists = [...store.getSnapshot().lists.values()];
           store.finishDeletion(selection, failed);
           toast.show(
             failed.size
@@ -133,8 +131,6 @@ export function SidebarSelectionProvider({
                   variant: 'success',
                 },
           );
-          // Catalog refresh must not keep completed deletions or their controls pending.
-          void Promise.allSettled(lists.map(async (list) => list.refresh()));
         })();
       },
     });
@@ -184,9 +180,7 @@ function createSelectionStore() {
     listeners.forEach((listener) => listener());
   };
   const shownIds = () =>
-    [...new Set([...state.lists.values()].flatMap((list) => list.ids))].filter(
-      (id) => !state.deletedIds.has(id),
-    );
+    [...new Set([...state.lists.values()].flat())].filter((id) => !state.deletedIds.has(id));
 
   return {
     getSnapshot: () => state,
@@ -203,7 +197,6 @@ function createSelectionStore() {
       key: string,
       source: ConversationSource,
       sessions: readonly ConversationSummary[],
-      refresh: SelectionList['refresh'],
     ) => {
       const ids = sessions.flatMap((session) => {
         // Desktop catalogs currently expose no delete action. Never open transcripts to obtain one.
@@ -217,10 +210,9 @@ function createSelectionStore() {
         entries.set(selectionKey, { key: selectionKey, source, ref: session.ref });
         return [selectionKey];
       });
-      const list = { ids, refresh };
-      update({ ...state, lists: new Map(state.lists).set(key, list) });
+      update({ ...state, lists: new Map(state.lists).set(key, ids) });
       return () => {
-        if (state.lists.get(key) !== list) return;
+        if (state.lists.get(key) !== ids) return;
         const lists = new Map(state.lists);
         lists.delete(key);
         update({ ...state, lists });
