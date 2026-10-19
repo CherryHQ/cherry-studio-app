@@ -131,6 +131,10 @@ jest.mock('../runtime', () => ({
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileWorkspace: () => ({ folderId: null }),
+}));
+
 jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
 
 jest.mock('../components/ChatInput', () => ({
@@ -192,7 +196,13 @@ describe('ChatScreen composer dock wiring', () => {
     expect(dockProps).toMatchObject({
       layoutMode: 'expandable',
     });
-    expect(dockProps?.onHeightChange).toBeUndefined();
+    const onHeightChange = dockProps?.onHeightChange as (height: number) => void;
+    act(() => onHeightChange(180));
+    expect(chatWorkspaceProps).toMatchObject({
+      contentBottomInset: 8,
+      keyboardOffset: 26,
+      feedbackHintBottomOffset: 180,
+    });
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       controls: mockChatControls,

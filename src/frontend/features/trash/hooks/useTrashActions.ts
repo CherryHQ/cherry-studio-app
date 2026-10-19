@@ -11,8 +11,8 @@ export function useTrashActions() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const { toast } = useToast();
-  const restoreMutation = useMutation('POST', '/trash/:id/restore', { refresh });
-  const deleteMutation = useMutation('DELETE', '/trash/:id', { refresh });
+  const restoreMutation = useMutation('POST', '/trash/:kind/:id/restore', { refresh });
+  const deleteMutation = useMutation('DELETE', '/trash/:kind/:id', { refresh });
   const emptyMutation = useMutation('DELETE', '/trash', { refresh });
 
   async function perform(operation: () => Promise<unknown>, success: string) {
@@ -25,7 +25,10 @@ export function useTrashActions() {
   }
 
   function restore(item: TrashItem) {
-    return perform(() => restoreMutation.trigger({ params: { id: item.id } }), t('trash.restored'));
+    return perform(
+      () => restoreMutation.trigger({ params: { kind: item.kind, id: item.id } }),
+      t('trash.restored'),
+    );
   }
 
   function requestDelete(item: TrashItem) {
@@ -35,7 +38,10 @@ export function useTrashActions() {
       confirmLabel: t('trash.deletePermanently'),
       role: 'destructive',
       onConfirm: () => {
-        void perform(() => deleteMutation.trigger({ params: { id: item.id } }), t('trash.deleted'));
+        void perform(
+          () => deleteMutation.trigger({ params: { kind: item.kind, id: item.id } }),
+          t('trash.deleted'),
+        );
       },
     });
   }

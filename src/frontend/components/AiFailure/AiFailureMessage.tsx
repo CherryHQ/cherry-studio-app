@@ -38,6 +38,11 @@ function isAiFailureReason(value: unknown): value is AiFailureReason {
   );
 }
 
+/** Translation key naming a classified failure reason; undefined for anything else. */
+export function aiFailureReasonTitleKey(reasonCode: unknown): string | undefined {
+  return isAiFailureReason(reasonCode) ? AI_FAILURE_TITLE_KEYS[reasonCode] : undefined;
+}
+
 export function AiFailureMessage({
   data,
   title: fallbackTitle,
@@ -53,9 +58,8 @@ export function AiFailureMessage({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const { reasonCode, retryable } = data;
 
-  const title = isAiFailureReason(reasonCode)
-    ? t(AI_FAILURE_TITLE_KEYS[reasonCode])
-    : (fallbackTitle ?? t('chat.errorPart.title'));
+  const titleKey = aiFailureReasonTitleKey(reasonCode);
+  const title = titleKey ? t(titleKey) : (fallbackTitle ?? t('chat.errorPart.title'));
   const message =
     fallbackMessage ??
     t(
@@ -89,7 +93,7 @@ export function AiFailureMessage({
  * Diagnostic detail the user explicitly asked for: the persisted `message`
  * and failure snapshot are shown verbatim here, never inline in the card.
  */
-function AiFailureDetailSheet({
+export function AiFailureDetailSheet({
   data,
   onClose,
   testID,

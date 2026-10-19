@@ -185,8 +185,8 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and low-frequency Skill installation/adaptation tools register as upstream `deferred`
-tools. Upstream `tool_search` ranks names,
+MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation and library
+management) register as upstream `deferred` tools. Upstream `tool_search` ranks names,
 descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
@@ -225,27 +225,52 @@ records that real catalog, not Pi's meta catalog tools. Deferred tool discovery 
 tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
 Configuration changes therefore still affect the next turn only.
 
-Mobile exposes no shell, working directory, dynamic extension loader, or unrestricted filesystem.
+Mobile exposes no shell, device working directory, dynamic extension loader, or unrestricted filesystem.
 Code Mode can call only the authorized application tools; scripts have no direct network, device,
 or filesystem access.
 
 ## Controlled File Ledger
 
-Mobile has no desktop-style working directory. Every file first enters Cherry managed storage and
-receives a [`file_entry`](../data/file-model.md) id. Protocol operations and file tools accept only
-that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
-import sources, never authority.
+Mobile uses logical workspace paths over managed storage. Every version has a
+[`file_entry`](../data/file-model.md) id; paths resolve through the Session's selected library folder
+to its current version. Raw `file://`, `content://`, sandbox, and provider URIs are import sources,
+never authority. Absolute paths, backslashes, URI schemes, and traversal above the workspace fail.
 
-The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools receive only
-its membership view; `generate_image` rejects an `image_id` outside that view and `read_file`
-rejects a `file_entry_id` outside it, both before touching the global managed-file service. A
-Host-owned catalog wrapper validates and grants every built-in artifact before returning the tool
-result to Pi, and Host event projection repeats the grant idempotently. `write_file` needs no read
-grant because it only creates entries. `edit_file` is the deliberate exception to ledger-scoped
-reads: knowing an active managed `fileEntryId` is sufficient for it to resolve that source anywhere
-in the application file library. It never lists or searches the library, accepts no path, and
-never returns the source's content, so the exception widens what the model can change but not what
-it can see.
+The Host creates `TurnResourceLedger` and captures `workspaceFolderId` before freezing the catalog.
+`read_file` and `edit_file` may use conversation references or live workspace membership. Listing,
+name search, and subfolder creation use `list_workspace`, `find_workspace_files`, and
+`create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
+live destination ancestry. Without a workspace, new outputs use the library root.
+
+The `fileLibrary` capability adds library search/read and management tools, enabled by default
+through the Agent's deny-list model. They follow the shared approval rule: reads
+(`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
+`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+Agent's approval mode decides whether a mutation waits for the user. A successful library read
+permits editing that source into a workspace copy during this turn and leaves the source unchanged.
+It does not grant `read_file` future outside-library access.
+
+The six management tools are deferred; `library_search_files` names them for `tool_search`.
+`library_list_folders` searches active folder names or lists direct children, returning stable ids
+and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
+and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
+rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
+changes only its display name. The existing library service owns cycle prevention, active
+destinations, collision rules, transactions, and cache invalidation. Move results report any
+collision suffix selected by that service.
+
+`library_trash_item` moves a file with all versions or an active folder subtree into the existing
+30-day trash. `library_list_trash` pages recoverable files and folders; `library_restore_item`
+restores one group by its exact `kind` and `id`. Both use the host-owned `TrashRuntime`, the same
+owner as the library screen, which notifies file subscribers after commit. These tools work without
+a selected workspace. Mutations recheck turn cancellation when their write transaction starts and
+before it commits; cancellation rolls back the whole change. The Agent cannot permanently purge
+items or empty the trash.
+
+`generate_image` still scopes input images to conversation references; outputs use the
+workspace, as do direct image generation and managed MCP result files. Code Mode calls these same
+authorized tools and has no filesystem of its own.
 
 The ledger also records which entries this turn produced: its **drafts**. Every grant that arrives
 during the turn is a draft, because only tool artifacts are granted after the ledger is frozen.
@@ -501,23 +526,22 @@ the Agent health analysis and how to reach it. See [Health Review](../../guides/
 
 ### Managed File Write And Edit
 
-`write_file` accepts a display name rather than a path, writes
-bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. It
-refuses content holding NUL, the one character `read_file` treats as binary, so nothing it writes is
-unreadable later. The
-model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
-`{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
-opaque failure.
+`write_file` accepts a relative workspace path in `filename`, or a plain name without a workspace,
+and stores bounded UTF-8 text (1 MiB). Creating an occupied path without its current
+`base_file_entry_id` and `base_revision` fails. Read results expose both values. An existing path
+advances to a new version across turns; a draft created by this turn is rewritten in place. Invalid
+names, NUL content, and stale writes return actionable errors. Outputs include
+`{ status, fileEntryId, revision, filename, size }`.
 
-`edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
+`edit_file` takes `file_entry_id` or a relative `path`, non-empty `old_string`, `new_string`, and optional `replace_all`.
 It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
 larger than 1 MiB; a `replace_all` result is bounded before it is built, so a short match with a long
 replacement cannot allocate far past the limit. Like `write_file`, it refuses a `new_string` holding
 NUL. Matching is exact and case-sensitive: a single edit requires exactly one
 non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
 BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
-tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
-`{ status, sourceFileEntryId, fileEntryId, filename, size, replacements, snippet, snippetStartLine }`,
+tool's fuzzy matching, empty-search overwrite, or device path semantics. Path edits require the last read's `base_file_entry_id` and `base_revision`. The model receives
+`{ status, sourceFileEntryId, fileEntryId, revision, filename, size, replacements, snippet, snippetStartLine }`,
 where the snippet is the edited region with two lines of context on each side, capped at 1,200
 characters, so the model can confirm the change without reading the file back. When those context
 lines are longer than the cap — minified HTML, one paragraph per line — the cut keeps the change and
@@ -531,25 +555,20 @@ file however many edits it took, and across turns a file keeps its history as ve
 - **Draft rewrite.** When the source is one of this turn's drafts, the edit rewrites that entry in
   place. The id, name, and media type are unchanged, `fileEntryId` equals `sourceFileEntryId`, and
   no artifact is returned. This is the only content write in the file model and it is legal only
-  because nothing outside the active turn can yet reference the draft.
-- **New version.** When the source is anything else — an attachment, or an artifact of an earlier
-  turn — the source is never changed and the edit is saved as a new `generated` entry with a
-  version in its name: `report.html` becomes `report v2.html`, and editing `report v2.html` in a
-  later turn produces `report v3.html`. A number already taken by a file the Session can see is
-  skipped, so two versions of one source never share a name. The version is carried in the name
-  because the name is what both the file library and the model see; there is no lineage column. The
-  new entry is a `derived` artifact and immediately becomes a draft of the current turn, so further
-  edits in the same turn rewrite it — including edits that name the original source again, which
-  continue that version rather than forking a second one.
+  while the entry remains the current version and its revision still matches.
+- **New version.** Editing an existing workspace file creates a `generated` entry, preserves the
+  source, and atomically advances the logical file's current pointer. Its path keeps the same name;
+  history joins versions by file id. Editing an authorized outside source creates a new workspace
+  file instead. Without a workspace, edits to root files retain their lineage, and outside copies
+  land at the root. A derived version becomes this turn's draft, so subsequent edits continue it.
 
-Both rules assume one writer at a time, and a message's tool calls run in parallel, so `edit_file`
-serializes calls that name the same file: each edit reads what the previous one wrote, in the order
-the model listed them. Without it two edits of one draft would both read the pre-edit bytes and the
-second write would drop the first — harmless while every edit created its own entry, silent data
-loss once a draft is rewritten in place. Edits of different files stay concurrent.
+`edit_file` serializes calls naming the same source within a turn. The database transaction also
+compares the current entry id and content revision before committing; a competing Session cannot
+silently fork or overwrite a shared file. It rejects stale drafts and destinations moved outside
+the captured workspace. The Agent must re-read after a conflict.
 
-`read_file` is ledger-scoped: only attachments, earlier artifacts of the Session, and this turn's
-drafts can be read. It shares `readAttachmentContent` with attachment preparation and captures the
+`read_file` accepts the conversation ledger and the selected workspace. Outside-library reads
+require the separately approved library tool. It shares `readAttachmentContent` with attachment preparation and captures the
 same per-turn `file.document_parser.mode`; changing the preference affects the next turn, not a
 later tool call in this turn. No parser failure silently switches engines.
 
@@ -643,7 +662,7 @@ it. Lasting results belong in managed files. No parallel long-term store is main
 A client without the native module, or whose native module predates the interactive bridge, offers
 no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
-`read_file` can explicitly read PNG, JPEG, WebP and GIF within the same conversation file ledger.
+`read_file` can explicitly read PNG, JPEG, WebP and GIF within its conversation or workspace access scope.
 It reuses native image normalization and the existing attachment byte limit. Vision-capable model
 calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
 details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
@@ -709,7 +728,7 @@ desktop event labels or persistence shapes.
 - MCP exposes only configured Streamable HTTP tools without losing other persisted transport data.
 - Calendar access requires both OS permission and tool policy.
 - Managed-file tools accept no arbitrary paths; only validated application-created outputs can
-  extend the turn resource ledger, and file writes and edits never overwrite an existing entry.
+  extend the turn resource ledger, and only same-turn drafts may be rewritten after conflict checks.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.

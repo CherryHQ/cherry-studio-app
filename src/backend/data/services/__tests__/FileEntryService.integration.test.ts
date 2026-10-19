@@ -58,6 +58,8 @@ describe('FileEntryService integration', () => {
       filename: 'report.pdf',
       id: id(1),
       media_type: 'application/pdf',
+      library_file_id: id(1),
+      trashed_with: null,
       provenance: 'imported',
       size: 12,
       updated_at: now,

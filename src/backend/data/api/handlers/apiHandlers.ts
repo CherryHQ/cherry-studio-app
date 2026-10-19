@@ -80,7 +80,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
       dependencies.desktopConnections,
       dependencies.desktopConnectionEndpointsChanged,
     ),
-    ...createFileHandlers(dependencies.files),
+    ...createFileHandlers(dependencies.files, dependencies.trashMutations),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createModelHandlers(dependencies.models, dependencies.systemModelSupport),

@@ -24,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
+import { useNavigationOverlay } from '../portal/overlay-navigation';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
@@ -59,6 +60,8 @@ type BottomSheetBaseProps = {
   open: boolean;
   testID?: string;
   title: string;
+  /** Title-only sheets may center their heading without reserving action slots. */
+  titleAlign?: 'start' | 'center';
   /**
    * `heading` (default) is a short name, truncated after two lines. `prompt` is a question or
    * request the user must read in full: body-sized and never truncated.
@@ -107,6 +110,7 @@ export function BottomSheet(props: BottomSheetProps) {
     open,
     testID,
     title,
+    titleAlign,
     titleVariant = 'heading',
   } = props;
   const insets = useSafeAreaInsets();
@@ -149,6 +153,8 @@ export function BottomSheet(props: BottomSheetProps) {
     Keyboard.dismiss();
     setIndex(CLOSED_INDEX);
   }, [dismissible]);
+
+  useNavigationOverlay(open, dismissible ? requestClose : undefined);
 
   const handleHardwareBackPress = useCallback(() => {
     if (backAction) {
@@ -269,7 +275,9 @@ export function BottomSheet(props: BottomSheetProps) {
                 'min-w-0 font-semibold text-foreground',
                 // Both variants fill the 44-point first line that the header controls centre on.
                 titleVariant === 'prompt' ? 'py-2.5 text-base' : 'py-2 text-lg',
-                isCloseActionVisible ? 'shrink px-2 text-center' : 'flex-1',
+                isCloseActionVisible ? 'shrink px-2' : 'flex-1',
+                (titleAlign ?? (isCloseActionVisible ? 'center' : 'start')) === 'center' &&
+                  'text-center',
               )}
               numberOfLines={titleVariant === 'prompt' ? undefined : 2}
             >

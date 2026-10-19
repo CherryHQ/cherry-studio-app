@@ -1,15 +1,20 @@
 import * as z from 'zod';
 
 import type { TrashService } from '@/backend/data/services/TrashService';
-import type { TrashSchemas } from '@/shared/data/api/schemas/trash';
+import {
+  TrashKindSchema,
+  type TrashKind,
+  type TrashSchemas,
+} from '@/shared/data/api/schemas/trash';
 import type { HandlersFor } from '@/shared/data/api/types';
 
 export type TrashMutations = {
-  delete(id: string): Promise<void>;
+  trashFolder(id: string): Promise<void>;
+  delete(kind: TrashKind, id: string): Promise<void>;
   empty(): Promise<void>;
-  restore(id: string): Promise<void>;
+  restore(kind: TrashKind, id: string): Promise<void>;
 };
-const paramsSchema = z.strictObject({ id: z.uuid() });
+const paramsSchema = z.strictObject({ kind: TrashKindSchema, id: z.uuid() });
 
 export function createTrashHandlers(
   entries: TrashService,
@@ -21,16 +26,16 @@ export function createTrashHandlers(
       DELETE: () => mutations.empty(),
     },
     '/trash/summary': { GET: () => entries.summary() },
-    '/trash/:id': {
+    '/trash/:kind/:id': {
       DELETE: ({ params }) => {
-        const { id } = paramsSchema.parse(params);
-        return mutations.delete(id);
+        const { kind, id } = paramsSchema.parse(params);
+        return mutations.delete(kind, id);
       },
     },
-    '/trash/:id/restore': {
+    '/trash/:kind/:id/restore': {
       POST: ({ params }) => {
-        const { id } = paramsSchema.parse(params);
-        return mutations.restore(id);
+        const { kind, id } = paramsSchema.parse(params);
+        return mutations.restore(kind, id);
       },
     },
   };

@@ -72,7 +72,7 @@ export function TrashScreen() {
           contentInsetAdjustmentBehavior="automatic"
           data={entries}
           recycleItems
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => `${item.kind}:${item.id}`}
           extraData={{ actions, now }}
           ListHeaderComponent={
             <View className="pt-2 pb-4">

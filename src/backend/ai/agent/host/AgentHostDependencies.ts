@@ -47,6 +47,7 @@ import {
   createSystemCapabilitySource,
   type SystemCapabilitySource,
 } from '../tools/builtInToolSource';
+import type { FileLibraryTrashAccess } from '../tools/fileLibraryManagementTools';
 import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { createAgentImageGeneration } from './agentImageGeneration';
@@ -69,6 +70,7 @@ const logger = loggerService.withContext('AgentHostDependencies');
   'WebSearchService',
   'TraceStorageService',
   'AgentRuntime',
+  'TrashRuntime',
   'KeepAliveCoordinator',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
@@ -82,7 +84,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       : undefined;
   }
   readonly writeToolOutput: NonNullable<MobileAgentHostPorts['writeToolOutput']> = async (
-    { name, data },
+    { name, data, folderId },
     signal,
   ) => {
     const entry = await createInternalEntry(
@@ -96,6 +98,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
             ? 'text/plain'
             : imageMediaTypeFromExtension(name.split('.').at(-1)),
         provenance: 'generated',
+        folderId,
       },
       signal,
     );
@@ -151,6 +154,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly webSearchService: WebSearchService,
     readonly traces: TraceRecorder,
     private readonly textGenerator: RuntimeTextGenerator,
+    private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
   ) {
     super();
@@ -194,6 +198,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       model: modelService,
       preference: this.preferenceService,
       webSearch: this.webSearchService,
+      trash: this.trash,
     }));
   }
 

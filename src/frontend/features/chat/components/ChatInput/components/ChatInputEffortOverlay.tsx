@@ -12,6 +12,7 @@ import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
+  withDelay,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -29,6 +30,7 @@ import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop/ChatInputEffo
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
+const openMountSettleMs = 34;
 const closeDurationMs = duration.base;
 const EFFORT_BACKDROP_FADE_INSET = 96;
 
@@ -64,6 +66,7 @@ export function ChatInputEffortOverlay({
   const progress = useSharedValue(0);
   const rootRef = useRef<View>(null);
   const openingRef = useRef(false);
+  const revealPendingRef = useRef(false);
   const [layout, setLayout] = useState<ActiveEffortLayout | null>(null);
   const portalName = useId();
   const scrimColor = useThemeColor('constant-black');
@@ -91,6 +94,8 @@ export function ChatInputEffortOverlay({
     if (!layout) {
       return;
     }
+
+    revealPendingRef.current = false;
 
     if (reducedMotion) {
       progress.set(0);
@@ -131,6 +136,7 @@ export function ChatInputEffortOverlay({
         }
 
         progress.set(reducedMotion ? 1 : 0);
+        revealPendingRef.current = !reducedMotion;
         setLayout({
           ...nextLayout,
           keyboardHeight: keyboard.height,
@@ -138,11 +144,6 @@ export function ChatInputEffortOverlay({
           viewportHeight,
           viewportWidth,
         });
-        if (!reducedMotion) {
-          requestAnimationFrame(() => {
-            progress.set(withTiming(1, { duration: openDurationMs, easing: easing.settle }));
-          });
-        }
       });
     },
     [
@@ -174,6 +175,22 @@ export function ChatInputEffortOverlay({
 
     return undefined;
   }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
+
+  // Start after the active overlay host has laid out and its native blur has mounted, so mount
+  // work lands before the morph instead of skipping its eased start.
+  const reveal = useCallback(() => {
+    if (!revealPendingRef.current) {
+      return;
+    }
+
+    revealPendingRef.current = false;
+    progress.set(
+      withDelay(
+        openMountSettleMs,
+        withTiming(1, { duration: openDurationMs, easing: easing.settle }),
+      ),
+    );
+  }, [progress]);
 
   const handleChange = useCallback(
     (value: string) => onChange(value as ChatInputReasoningEffort),
@@ -235,10 +252,6 @@ export function ChatInputEffortOverlay({
         top: layout.labelFrame.top - EFFORT_BACKDROP_FADE_INSET,
       }
     : null;
-  const keyboardFocusFrame =
-    focusFrame && layout
-      ? { ...focusFrame, top: focusFrame.top - (viewportHeight - layout.keyboardHeight) }
-      : null;
   const overlayControls = layout ? (
     <>
       <Pressable
@@ -331,12 +344,13 @@ export function ChatInputEffortOverlay({
         {children(gauge)}
       </View>
 
-      {layout ? (
+      {layout && !keyboardOverlayVisible ? (
         <Portal name={`chat-input-effort-${portalName}`}>
           <View
             accessibilityViewIsModal
             onAccessibilityEscape={close}
-            pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
+            onLayout={reveal}
+            pointerEvents="box-none"
             style={StyleSheet.absoluteFill}
           >
             <ChatInputEffortBackdrop
@@ -345,7 +359,7 @@ export function ChatInputEffortOverlay({
               scrimColor={scrimColor}
               variant="app"
             />
-            {keyboardOverlayVisible ? null : overlayControls}
+            {overlayControls}
           </View>
         </Portal>
       ) : null}
@@ -356,22 +370,19 @@ export function ChatInputEffortOverlay({
           accessibilityViewIsModal
           collapsable={false}
           onAccessibilityEscape={close}
+          onLayout={reveal}
           pointerEvents="box-none"
           style={{ height: viewportHeight, position: 'absolute', width: viewportWidth }}
         >
-          <View
-            pointerEvents="none"
-            style={[keyboardBackdropContainerStyle, { height: layout?.keyboardHeight ?? 0 }]}
-          >
-            <ChatInputEffortBackdrop
-              focusFrame={keyboardFocusFrame}
-              progress={progress}
-              scrimColor={scrimColor}
-              tint={keyboard.appearance}
-              variant="keyboard"
-            />
-          </View>
-          {keyboardOverlayVisible ? overlayControls : null}
+          {/* One full-window backdrop lets the blur sample across the app/keyboard boundary. */}
+          <ChatInputEffortBackdrop
+            focusFrame={focusFrame}
+            progress={progress}
+            scrimColor={scrimColor}
+            tint={keyboard.appearance}
+            variant="keyboard"
+          />
+          {overlayControls}
         </GestureHandlerRootView>
       </OverKeyboardView>
     </>
@@ -393,11 +404,4 @@ const labelContainerStyle = {
   justifyContent: 'center',
   position: 'absolute',
   zIndex: 2,
-} as const;
-const keyboardBackdropContainerStyle = {
-  bottom: 0,
-  left: 0,
-  overflow: 'hidden',
-  position: 'absolute',
-  right: 0,
 } as const;

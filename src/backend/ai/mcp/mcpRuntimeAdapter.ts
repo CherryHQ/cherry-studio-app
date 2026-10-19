@@ -57,6 +57,7 @@ export type McpExecutableToolDescriptor = {
 };
 
 export type McpRuntimeToolSelection = {
+  workspaceFolderId?: string | null;
   descriptor: McpExecutableToolDescriptor;
   approval: 'ask' | 'deny';
 };
@@ -77,6 +78,7 @@ export type McpToolInvocationCapability = {
   storeResult?(
     result: unknown,
     signal: AbortSignal,
+    workspaceFolderId?: string | null,
   ): Promise<{
     value: unknown;
     artifacts: import('../agent/runtime/types').RuntimeArtifact[];
@@ -178,7 +180,7 @@ export function createMcpRuntimeTools(
   const providerNames = new Set<string>();
   const invoke = capability.invoke.bind(capability);
 
-  return selections.map(({ approval, descriptor }) => {
+  return selections.map(({ approval, descriptor, workspaceFolderId }) => {
     if (
       !descriptor.serverId ||
       !descriptor.rawToolName ||
@@ -229,6 +231,7 @@ export function createMcpRuntimeTools(
       execute: (call) =>
         executeMcpRuntimeTool({
           call,
+          workspaceFolderId,
           app: descriptor.app,
           connectionKey: descriptor.connectionKey,
           pluginId: descriptor.pluginId,
@@ -249,6 +252,7 @@ export function createMcpRuntimeTools(
 }
 
 async function executeMcpRuntimeTool(input: {
+  workspaceFolderId?: string | null;
   connectionKey?: string;
   call: RuntimeToolCall;
   app?: McpExecutableToolDescriptor['app'];
@@ -305,7 +309,7 @@ async function executeMcpRuntimeTool(input: {
       artifacts: RuntimeToolResult['artifacts'];
       images?: McpRetainedImage[];
       fullTextFileEntryId?: string;
-    } = (await input.storeResult?.(remoteResult, call.signal)) ?? {
+    } = (await input.storeResult?.(remoteResult, call.signal, input.workspaceFolderId)) ?? {
       value: remoteResult,
       artifacts: [],
     };
@@ -489,7 +493,7 @@ function timeoutError(): McpRuntimeToolError {
  * reading the body, or this boundary may time out before invoke() settles; neither proves
  * the service did nothing.
  */
-function incompleteCallError(call: {
+export function incompleteCallError(call: {
   cancelled: boolean;
   effect: McpExecutableToolDescriptor['effect'];
   sent: boolean;
@@ -501,8 +505,7 @@ function incompleteCallError(call: {
     return new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
   }
   if (call.effect === 'write') return unknownWriteError();
-  // The user stopped a call whose effect the server never declared; the stop is what happened.
-  if (call.cancelled && !call.timedOut) return cancelledError();
+  // Cancellation stops local waiting; an undeclared remote effect may already have happened.
   return new McpRuntimeToolError(
     'mcp_tool_outcome_unknown',
     'The MCP tool call did not complete, so its outcome is unknown. Retry only if repeating it is harmless; otherwise check the service first.',

@@ -62,6 +62,7 @@ export function createSkillAdaptationTool(
   return {
     ref: { source: 'builtin', capabilityId: 'adapt_skill' },
     providerName: 'adapt_skill',
+    deferred: true,
     displayName: 'Adapt local Skill',
     approval: 'auto',
     description:

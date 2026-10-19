@@ -27,6 +27,7 @@ async function render() {
 beforeEach(() => {
   mockState = {
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,

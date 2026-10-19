@@ -24,6 +24,7 @@ type CapabilityRow = {
 const CAPABILITY_DISPLAY_ORDER = [
   'web',
   'image',
+  'fileLibrary',
   'agents',
   'calendar',
   'reminders',

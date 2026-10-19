@@ -1,4 +1,5 @@
 import FileIcon from '@cherrystudio/app-icons/icons/file';
+import FolderIcon from '@cherrystudio/app-icons/icons/folder';
 import { ActionMenu, Image, type MenuItem } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -59,7 +60,7 @@ export function TrashEntryRow({
           if (nativeEvent.actionName === 'restore') void onRestore(item);
           if (nativeEvent.actionName === 'delete') onDelete(item);
         }}
-        testID={`trash-entry-${item.id}`}
+        testID={`trash-entry-${item.kind}-${item.id}`}
       >
         <TrashThumbnail item={item} />
         <View className="min-w-0 flex-1 gap-0.5">
@@ -75,10 +76,14 @@ export function TrashEntryRow({
 
 function TrashThumbnail({ item }: { item: TrashItem }) {
   const file = useBackendModule('file');
+  const entryId = item.thumbnailEntryId;
   const thumbnail = useQuery({
+    enabled: entryId !== null,
     networkMode: 'always',
-    queryFn: async () => ({ uri: await file.getTrashThumbnailUri(item.id, item.deletedAt) }),
-    queryKey: queryKeys.files.trashThumbnailUri(item.id, item.deletedAt),
+    queryFn: async () => ({
+      uri: entryId ? await file.getTrashThumbnailUri(entryId, item.deletedAt) : undefined,
+    }),
+    queryKey: queryKeys.files.trashThumbnailUri(entryId ?? item.id, item.deletedAt),
     retry: false,
     staleTime: Infinity,
   });
@@ -90,13 +95,17 @@ function TrashThumbnail({ item }: { item: TrashItem }) {
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
     >
-      <FileIcon className="size-6 text-foreground" />
-      {thumbnail.data?.uri ? (
+      {item.kind === 'folder' ? (
+        <FolderIcon className="size-6 text-foreground" />
+      ) : (
+        <FileIcon className="size-6 text-foreground" />
+      )}
+      {entryId && thumbnail.data?.uri ? (
         <Image
           accessible={false}
           className="absolute inset-0 size-full"
           contentFit="cover"
-          recyclingKey={`${item.id}:${item.deletedAt}`}
+          recyclingKey={`${entryId}:${item.deletedAt}`}
           source={thumbnail.data.uri}
         />
       ) : null}

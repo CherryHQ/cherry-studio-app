@@ -1,6 +1,13 @@
-const { parseStreamingJson, parseJsonWithRepair } = jest.requireActual<{
+import type { JsonObject } from '@earendil-works/pi-ai';
+import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
+
+const { parseStreamingJson, parseJsonWithRepair, parseToolCallArguments } = jest.requireActual<{
   parseStreamingJson: (input: string) => unknown;
   parseJsonWithRepair: (input: string) => unknown;
+  parseToolCallArguments: (input: string) => {
+    arguments: JsonObject;
+    argumentsError?: string;
+  };
 }>(`${process.cwd()}/node_modules/@earendil-works/pi-ai/dist/utils/json-parse.js`);
 
 afterEach(() => jest.restoreAllMocks());
@@ -41,13 +48,38 @@ describe('Pi streaming JSON patch', () => {
     const encoded = JSON.stringify(input);
     expect(parseStreamingJson(encoded)).toEqual(input);
     expect(parseJsonWithRepair(encoded)).toEqual(input);
+    expect(parseToolCallArguments(encoded)).toEqual({ arguments: input });
   });
 
   test.each([
     ['{"content":"line\nnext"}', { content: 'line\nnext' }],
     [String.raw`{"content":"C:\path\q"}`, { content: 'C:\\path\\q' }],
+    [
+      String.raw`{"content":"\usepackage{amsmath}","filename":"document.tex"}`,
+      { content: '\\usepackage{amsmath}', filename: 'document.tex' },
+    ],
   ])('retains repair of malformed complete strings: %p', (input, expected) => {
     expect(parseStreamingJson(input as string)).toEqual(expected);
     expect(parseJsonWithRepair(input as string)).toEqual(expected);
+    expect(parseToolCallArguments(input as string)).toEqual({ arguments: expected });
+  });
+
+  test('keeps the streamed preview but refuses a truncated completed tool call', () => {
+    const input = '{"filename":"notes.txt","content":"unfinished';
+    expect(parseStreamingJson(input)).toEqual({ filename: 'notes.txt', content: 'unfinished' });
+    const call = {
+      type: 'toolCall' as const,
+      id: 'write-file',
+      name: 'write_file',
+      ...parseToolCallArguments(input),
+    };
+    expect(call.arguments).toEqual({});
+    expect(call.argumentsError).toContain(input);
+    expect(() =>
+      validateToolArguments(
+        { name: call.name, description: 'Write a file.', parameters: { type: 'object' } },
+        call,
+      ),
+    ).toThrow('Invalid arguments for tool "write_file"');
   });
 });

@@ -114,10 +114,16 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
   remain selectable when user invocation is allowed. Selection never creates an Agent binding.
-- The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
-  and batched previews with the library screen. Selection stays local until Add is pressed; the
-  action appears only for newly selected, available attachments. Already attached files are marked
-  and cannot be added twice. Close discards the selection. Search is not offered.
+- The menu's File row opens the full-height library picker with only a centered title in its header.
+  Like the library, each level lists its folders first, then its files newest first. A folder's
+  own timestamp does not change when files are added inside it, so folders are not ordered among
+  files. Folder rows only expand/collapse; their children remain under the folder and reuse the
+  library's cursor pages and batched previews. Expanded directories use the workspace tree's inline
+  paging pattern. File dates are content modification dates, as in the library.
+  Selection belongs to the sheet and survives collapsing or recycling a directory. A fixed footer
+  appears for newly selected, available attachments and confirms their count. Already attached files
+  are marked and cannot be added twice. Dismissing by drag, scrim, back, or accessibility escape
+  discards the pending selection. Search is not offered.
   The app-wide file-change subscription keeps these shared pages current; opening the picker
   reuses fresh pages without forcing another fetch.
 - Upload files closes the library picker and presents the system document picker from chat. Each
@@ -127,4 +133,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
+- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
+  row shows the original text/attachment summary and can withdraw that one waiting input. The
+  queue comes from the Session observation snapshot and `queue.updated` events, so route changes
+  and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
+  Queue removal never falls back to stopping an active turn when placement wins the race.
+  Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
+  deletes their unexecuted message pair without invalidating the current model context. Steering
+  remains outside this composer.

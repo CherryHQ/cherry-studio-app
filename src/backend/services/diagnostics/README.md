@@ -6,18 +6,19 @@ resolve credentials, refresh tokens, connect plugins or make discovery requests.
 
 ## Feedback flow
 
-Settings → About → Feedback opens a compact dialog. The user writes a required description
+Settings → About → Feedback opens the feedback form page. Shaking captures the visible page first
+and opens the same form. The user writes a required description
 (at most 4096 UTF-8 bytes after newline normalization), reviews the attached-data notice, and
-confirms submission. The same dialog shows indeterminate progress, then success or a failure.
+confirms submission. The same page shows indeterminate progress, then success or a failure.
 There is no range selector or file-save step. Desktop's current report
 form and IPC schema accept only a description, so Mobile does not invent issue categories.
 
 Submission uses the last 24 hours with logs and traces included. The description draft survives
-failure and returning to the form; closing the dialog discards it. Submission blocks dialog
-closure until the operation settles. Retrying from the form creates a fresh archive.
+failure and returning to the form; leaving the form discards it. Submission blocks navigation
+back until the operation settles. Retrying from the form creates a fresh archive.
 
-`uploadBundle` takes `DiagnosticReportInput`, which carries only the description; the backend
-validates it. The 24-hour range and the log/trace selection are service constants, recorded in the
+`uploadBundle` takes `DiagnosticReportInput`, which carries the description and optional selected
+screenshot ID; the backend validates it. The 24-hour range and the log/trace selection are service constants, recorded in the
 manifest. Archives include `feedback.txt` beside the manifest. Description text stays separate from
 technical metadata.
 
@@ -61,6 +62,15 @@ and a stable WebView source prevent status writes from reloading the page.
 
 - Warning/error summaries: timestamp, module, fixed message templates and allowlisted error facts.
   Arbitrary messages, stacks, causes and nested payloads are excluded before writing to disk.
+- Startup metadata: JS entry, bootstrap, host/service phases, database open/configuration/migrations/
+  seeding, cover handoff, theme/i18n, default Agent and skill initialization, first-content readiness,
+  minimum cover duration and cover exit. Stages retain starts, terminal outcomes and monotonic
+  durations; service phase promotions retain the service, requiring service and old/new phases.
+  Every event carries `startupStartedAt`, identifying the JS launch by wall time, and `elapsedMs`
+  since JS entry; the JS entry event alone carries `jsEntryStartMs`, its monotonic clock reading. Available React Native startup/runtime/bundle-entry milestones
+  are sampled from `performance.rnStartupTiming`, relative to `performance.timeOrigin`. Missing
+  native milestones remain absent; JS events alone do not measure the OS's entire launch interval.
+  No preference values, database paths, translated names or route parameters are recorded.
 - Model and MCP request metadata from the existing `TraceStorageService`: correlation identifiers,
   operation, timing, outcome, status/error codes and plugin authorization steps. Capture runs
   during ordinary use; there is no developer-mode setting or separate Agent event recorder.
@@ -84,8 +94,16 @@ existing [Sentry integration](../../../frontend/appShell/observability/README.md
 ## Storage and collection
 
 The process-owned logger and JS exception/rejection observer are installed before router imports.
-They preserve React Native's existing handlers and persist only projected warning/error metadata.
+They preserve React Native's existing handlers and persist projected warning/error metadata plus
+the fixed `Startup` / `Startup stage` info event. Other info logs remain excluded. Startup events
+use the same local retention and submission path; they do not add an external reporting channel.
 Logs live under `Diagnostics/logs-v1`, rotate at 1 MiB and retain at most 7 days / 20 MiB.
+Startup events retain separate records without repetition aggregation, preserving retry timings.
+They share a bounded 64 KiB buffer and append together after 100 ms, before crossing a UTC day or
+the buffer limit, or on explicit flush. Database stages run synchronously and would block the
+timer, so each flushes its start before running. Warning/error writes first drain preceding startup events
+in the same append, so fatal exceptions remain synchronous. File inspection and history pruning
+start with the first flush, outside the ordinary startup logging call path.
 The first matching error is written immediately. Within a 30-second window, repeated records with
 matching level/module/template and stable error/context facts are summarized. Request/turn/message
 ids, elapsed time, token totals and cumulative storage counters do not split a group; summaries omit
@@ -93,8 +111,9 @@ those per-occurrence values. `repetition.count` counts **additional** occurrence
 and last timestamps; add the separately written first record when counting the complete burst.
 At most 64 groups are retained in memory, and pending counts are written before a group is evicted.
 Fatal exceptions bypass aggregation. Summaries flush on a timer, backgrounding, writer replacement,
-and submission. An abrupt process exit can lose pending repeat counts, but not the already
-written first occurrence. Collection limits are upper bounds, not a guarantee of seven days of history.
+and submission; these flushes also drain pending startup events. An abrupt process exit can lose
+pending startup events and repeat counts, but not the already written first error occurrence.
+Collection limits are upper bounds, not a guarantee of seven days of history.
 
 Request traces retain at most 7 days / 20 MiB / 512 files under `Runtime/trace/v1`. Flushes append to
 the current file, rotating at 1 MiB or a UTC day boundary instead of creating a file per request
@@ -113,7 +132,7 @@ at 200 connections, with truncation reported. The manifest declares `privacy.cap
 for collected diagnostics.
 `privacy.containsUnredactedData` is true because the user-authored feedback is included verbatim
 (after trimming and newline normalization); `feedback` identifies its file and user origin.
-Technical identifiers can still be private; the dialog describes the scope before submission.
+Technical identifiers can still be private; the form describes the scope before submission.
 
 ## Upload
 
@@ -149,9 +168,10 @@ redirects are not followed.
 
 Each upload attempt owns its temporary directory. A `finally` block removes the ZIP on success,
 rejection, an uncertain result, an exception, or service cancellation. Preparation failures also
-remove staged files. There is no retained ZIP, save-original action, or automatic retry. Only the
-in-memory description survives a failed attempt; an uncertain result warns about duplicate reports.
-`modules/diagnostics` supplies file identity, signing, foreground upload and cancellation; the
+remove staged files. There is no retained ZIP, save-original action, or automatic retry. The form
+retains its in-memory description and screenshot selection after a failed attempt; an uncertain
+result warns about duplicate reports. `modules/diagnostics` supplies file identity, signing,
+foreground upload and cancellation; the
 archive hash comes from the file module's shared native hash.
 
 ## Build Configuration
@@ -174,3 +194,15 @@ error facts, the v2 request/acknowledgement/error contract and upload lifecycle 
 Executing tests, type checks, native builds, device acceptance or a real submission requires
 explicit user authorization. A schema-v2
 manifest alone does not establish server acceptance of mobile metadata payloads.
+
+
+## Screenshot attachments
+
+Shake feedback may supply an optional UUID `screenshotId`. Preparation reads only the matching PNG
+in the app-owned `FeedbackScreenshots` cache directory, rejects empty files or files above 8 MiB,
+and copies it into the attempt directory before asynchronous source collection. The ZIP includes
+`screenshot.png` and an explicit `screenshot` manifest entry. The screenshot is not redacted and
+may show conversation content; the form previews it and discloses this separately from metadata
+collection. Inclusion defaults to off for each report; deselecting or removing it omits the ID
+entirely. No screenshot is taken during bundle preparation.
+The existing multipart request and signature remain unchanged.

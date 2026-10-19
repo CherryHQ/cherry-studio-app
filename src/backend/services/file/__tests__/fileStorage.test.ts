@@ -1,3 +1,4 @@
+import { subscribeDataApiChanges } from '@/backend/data/dataApiChanges';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/types/file';
 import type { CherryMessagePart } from '@/shared/data/types/message';
@@ -16,7 +17,6 @@ import {
   readFileUriBytes,
   resolveFileEntry,
   rewriteInternalTextEntry,
-  subscribeFileChanges,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -145,7 +145,7 @@ describe('fileStorage', () => {
 
   beforeEach(() => {
     onFileChange = jest.fn();
-    unsubscribe = subscribeFileChanges(onFileChange);
+    unsubscribe = subscribeDataApiChanges(onFileChange);
     testState.copies.length = 0;
     testState.directories.clear();
     testState.failures.clear();
@@ -614,6 +614,7 @@ describe('fileStorage', () => {
     const tx = {};
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(async (_tx: unknown, id: string, size: number) => ({
         ...entry,
         id,
@@ -635,13 +636,16 @@ describe('fileStorage', () => {
     expect(entries.updateSizeTx).toHaveBeenCalledWith(tx, entry.id, 14);
     expect(rewritten.size).toBe(14);
     expect(onFileChange).toHaveBeenCalledTimes(1);
-    expect(onFileChange).toHaveBeenCalledWith(entry.id);
+    expect(onFileChange).toHaveBeenCalledWith(
+      expect.arrayContaining([`/files/entries/${entry.id}`]),
+    );
   });
 
   test('refuses to rewrite a draft whose bytes are missing', async () => {
     const entry = { ...internalEntry(), provenance: 'generated' as const };
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
       withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
@@ -664,6 +668,7 @@ describe('fileStorage', () => {
     });
     const entries = {
       findByIdTx: jest.fn(() => lookup),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(),
       withWriteTx: jest.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({})),
     };
@@ -693,6 +698,7 @@ describe('fileStorage', () => {
     const controller = new AbortController();
     const entries = {
       findByIdTx: jest.fn(async () => entry),
+      assertCurrentTx: jest.fn(async () => undefined),
       updateSizeTx: jest.fn(async (_tx: unknown, _id: string, size: number) => {
         expect(testState.writes).toHaveLength(1);
         controller.abort();
@@ -709,7 +715,9 @@ describe('fileStorage', () => {
       ),
     ).resolves.toMatchObject({ size: 14 });
     expect(testState.files.get(uri)).toBe(14);
-    expect(onFileChange).toHaveBeenCalledWith(entry.id);
+    expect(onFileChange).toHaveBeenCalledWith(
+      expect.arrayContaining([`/files/entries/${entry.id}`]),
+    );
   });
 
   test('reports a missing entry row without deleting anything', async () => {
@@ -819,7 +827,15 @@ function createEntryStore() {
   const stored = new Map<string, FileEntry>();
   const create = jest.fn(
     async (values: Parameters<FileEntryService['create']>[0]): Promise<FileEntry> => {
-      const entry = FileEntrySchema.parse({ ...values, createdAt: 1, updatedAt: 1 });
+      const entry = FileEntrySchema.parse({
+        id: values.id,
+        filename: values.filename,
+        mediaType: values.mediaType,
+        size: values.size,
+        provenance: values.provenance,
+        createdAt: 1,
+        updatedAt: 1,
+      });
       stored.set(entry.id, entry);
       return entry;
     },

@@ -6,7 +6,7 @@ import {
   type EditFileImageInput,
 } from '@/shared/contracts/fileImageEdit';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { nextVersionFilename, type FileEntry } from '@/shared/data/types/file';
+import type { FileEntry } from '@/shared/data/types/file';
 
 import { generateFilePreviewUri } from './filePreviewStorage';
 import { createInternalEntry, discardInternalEntries, resolveFileEntry } from './fileStorage';
@@ -37,7 +37,8 @@ export async function editFileImage(
       fileEntryService,
       {
         uri: temporary.uri,
-        name: nextVersionFilename(source.entry.filename),
+        name: source.entry.filename,
+        baseFileEntryId: source.entry.id,
         mediaType: source.entry.mediaType,
         provenance: source.entry.provenance,
         source: 'uri',

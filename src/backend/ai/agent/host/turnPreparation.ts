@@ -121,6 +121,8 @@ export type TurnPreparationDependencies = {
 /** Everything the Host needs to reserve and execute a turn, frozen before the first write. */
 export type TurnPlan = {
   agent: AgentDefinition;
+  /** Captured before tools resolve; subsequent Session switches do not alter this turn. */
+  workspaceFolderId?: string;
   documentParserMode: DocumentParserMode;
   /** False only for a truly empty Session; drives first-message auto-naming. */
   hasMessages: boolean;
@@ -293,6 +295,7 @@ export async function prepareInitialTurn(
   const session = {
     agentId: parsed.agentId,
     name: '',
+    workspaceFolderId: parsed.workspaceFolderId ?? null,
   };
   const emptyContext: StoredRuntimeTurnContext = {
     anchorFound: true,
@@ -319,6 +322,8 @@ export async function prepareDurableTurn(
   parsed: AgentSubmitMessageInput,
   referencedFileEntryIds: readonly string[],
   signal: AbortSignal,
+  /** Recovery supplies the admitted identity; null must not inherit the current binding. */
+  workspaceFolderId?: string | null,
 ): Promise<TurnPlan> {
   const session = await raceAbort(dependencies.store.getSession(parsed.sessionId), signal);
   if (!session) fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
@@ -327,7 +332,7 @@ export async function prepareDurableTurn(
   return prepareResolvedTurn(
     dependencies,
     parsed,
-    session,
+    workspaceFolderId === undefined ? session : { ...session, workspaceFolderId },
     agent,
     {
       anchorFound: true,
@@ -344,7 +349,7 @@ export async function prepareDurableTurn(
 export async function prepareResolvedTurn(
   dependencies: TurnPreparationDependencies,
   parsed: AgentSubmitMessageInput | AgentStartSessionInput,
-  session: Pick<AgentSessionView, 'agentId' | 'name'>,
+  session: Pick<AgentSessionView, 'agentId' | 'name' | 'workspaceFolderId'>,
   configuredAgent: AgentDefinition,
   storedTurnContext: StoredRuntimeTurnContext,
   runtimeContextCheckpoint: RuntimeContextCheckpoint | null,
@@ -407,6 +412,7 @@ export async function prepareResolvedTurn(
     }
   };
   const imageGeneration = await dependencies.imageGeneration?.prepare({
+    workspaceFolderId: session.workspaceFolderId ?? null,
     instructions: agent.instructions,
     model: agent.model,
     parts,
@@ -422,6 +428,7 @@ export async function prepareResolvedTurn(
       fail('CAPABILITY_UNSUPPORTED', 'Skills cannot be used with image generation.');
     return {
       agent,
+      ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
       documentParserMode,
       hasMessages: storedTurnContext.hasMessages,
       history: storedTurnContext.history,
@@ -506,6 +513,7 @@ export async function prepareResolvedTurn(
     try {
       systemTools = await raceAbort(
         dependencies.systemCapabilities.getTools({
+          workspaceFolderId: session.workspaceFolderId ?? null,
           agentId: agent.id,
           askUser: dependencies.askUser,
           disabledCapabilities: agent.disabledCapabilities,
@@ -530,6 +538,7 @@ export async function prepareResolvedTurn(
             if (!signal.aborted) toolDiscoveryWarnings.push(warning);
           },
           signal,
+          session.workspaceFolderId ?? null,
         ),
         signal,
       );
@@ -681,6 +690,7 @@ export async function prepareResolvedTurn(
 
   return {
     agent,
+    ...(session.workspaceFolderId ? { workspaceFolderId: session.workspaceFolderId } : {}),
     documentParserMode,
     hasMessages: storedTurnContext.hasMessages,
     history: storedTurnContext.history,

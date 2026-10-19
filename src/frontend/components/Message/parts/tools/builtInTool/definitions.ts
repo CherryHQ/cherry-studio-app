@@ -15,6 +15,17 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  list_workspace: { iconName: 'fileText', titleKey: 'workspace.list' },
+  find_workspace_files: { iconName: 'fileText', titleKey: 'workspace.find' },
+  create_workspace_folder: { iconName: 'fileEdit', titleKey: 'library.folders.create' },
+  library_search_files: { iconName: 'fileText', titleKey: 'library.search' },
+  library_read_file: { iconName: 'fileText', titleKey: 'library.read' },
+  library_list_folders: { iconName: 'fileText', titleKey: 'chat.builtinTool.library.findFolders' },
+  library_move_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.move' },
+  library_rename_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.rename' },
+  library_trash_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.trash' },
+  library_list_trash: { iconName: 'fileText', titleKey: 'chat.builtinTool.library.listTrash' },
+  library_restore_item: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.library.restore' },
   create_skill: { iconName: 'fileText', titleKey: 'skills.create.name' },
   adapt_skill: { iconName: 'fileEdit', titleKey: 'skills.adaptation.title' },
   find_skills: { iconName: 'fileText', titleKey: 'skills.find.name' },

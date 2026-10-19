@@ -12,8 +12,6 @@ const meta = {
   args: {
     accessibilityLabel: 'Generating image',
     active: true,
-    label: 'Generating image',
-    resolution: '1024 \u00d7 1024',
     size: 208,
   },
   argTypes: {
@@ -49,7 +47,7 @@ export const Static: Story = {
 
 /** One masonry column of the drawings gallery, at the ratio that was requested. */
 export const Tile: Story = {
-  args: { height: 99, resolution: '1664 × 928', width: 177 },
+  args: { height: 99, width: 177 },
   render: (args) => (
     <View className="flex-1 items-center justify-center bg-background p-4">
       <ImageGenerationLoader {...args} />
@@ -58,7 +56,7 @@ export const Tile: Story = {
 };
 
 export const Portrait: Story = {
-  args: { height: 224, resolution: '928 \u00d7 1664', width: 128 },
+  args: { height: 224, width: 128 },
   render: (args) => (
     <View className="flex-1 items-center justify-center bg-background p-4">
       <ImageGenerationLoader {...args} />

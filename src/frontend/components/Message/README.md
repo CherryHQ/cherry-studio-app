@@ -156,6 +156,12 @@ article body. Earlier prose, reasoning, and tool calls enter the timed process d
 followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
 executed web searches render nothing; sources and non-image files retain their footer rows.
 
+An approved `generate_image` call that is still running leaves the process disclosure for the body,
+where `PendingImagePart` holds the requested shape with the shared `ImageGenerationLoader`. The
+image's own file part replaces it on success; a settled or failed call returns to the process
+disclosure as an ordinary tool row. Direct image-model turns use the same placeholder until their
+first part arrives.
+
 Automatic context compaction uses the Desktop-compatible `data-compaction-anchor` part. Turn-start
 markers stay visible as dashed separators before the process disclosure; in-loop markers remain
 between the corresponding tool steps inside it. Running markers show progress, completed markers

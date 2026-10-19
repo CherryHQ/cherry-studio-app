@@ -6,7 +6,7 @@ import { withPiApiKeyFallback } from '../piApiKeyFallback';
 import type { PiStreamFn as StreamFn } from '../piModelTypes';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
 
-const IDLE_MS = 120_000;
+const IDLE_MS = 30 * 60_000;
 
 const MODEL: Model<'openai-completions'> = {
   api: 'openai-completions',
@@ -111,18 +111,22 @@ describe('Pi stream idle timeout', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test('fails a request that produces no data and aborts the provider request', async () => {
+  test('waits thirty minutes without data before failing and aborting the provider request', async () => {
     const source = controlledSource();
-    const stream = await withPiStreamIdleTimeout(source.streamFn, IDLE_MS)(
+    const stream = await withPiStreamIdleTimeout(source.streamFn)(
       MODEL,
       normalizeContext({ messages: [] }),
     );
 
-    await jest.advanceTimersByTimeAsync(IDLE_MS);
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(source.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(IDLE_MS - 120_000 - 1);
+    expect(source.signal?.aborted).toBe(false);
+    await jest.advanceTimersByTimeAsync(1);
     const { result } = await collect(stream);
     expect(result).toMatchObject({
       stopReason: 'error',
-      errorMessage: 'The model response timed out after 120 seconds without data.',
+      errorMessage: 'The model response timed out after 1800 seconds without data.',
     });
     expect(result.diagnostics?.at(-1)).toMatchObject({
       type: 'provider_response_failure',
@@ -361,7 +365,7 @@ describe('Pi stream idle timeout', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test('shares two minutes across key failures without restarting the budget', async () => {
+  test('shares thirty minutes across key failures without restarting the budget', async () => {
     const first = controlledSource();
     const second = controlledSource();
     const unused = jest.fn(async () => controlledSource().streamFn);
@@ -371,7 +375,7 @@ describe('Pi stream idle timeout', () => {
 
     await jest.advanceTimersByTimeAsync(60_000);
     first.fail(503);
-    await jest.advanceTimersByTimeAsync(59_999);
+    await jest.advanceTimersByTimeAsync(IDLE_MS - 60_000 - 1);
     expect(second.signal?.aborted).toBe(false);
     await jest.advanceTimersByTimeAsync(1);
 
@@ -383,7 +387,7 @@ describe('Pi stream idle timeout', () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test('lets a replacement key stream beyond two minutes after it begins producing content', async () => {
+  test('lets a replacement key stream beyond thirty minutes after it begins producing content', async () => {
     const first = controlledSource();
     const second = controlledSource();
     const stream = await withPiStreamIdleTimeout(
@@ -392,7 +396,7 @@ describe('Pi stream idle timeout', () => {
 
     await jest.advanceTimersByTimeAsync(60_000);
     first.fail(401);
-    await jest.advanceTimersByTimeAsync(59_999);
+    await jest.advanceTimersByTimeAsync(IDLE_MS - 60_000 - 1);
     second.text('Recovered');
     await jest.advanceTimersByTimeAsync(IDLE_MS - 1);
     second.done('Recovered');

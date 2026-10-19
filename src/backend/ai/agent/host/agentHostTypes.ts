@@ -33,7 +33,8 @@ export type MobileAgentHostNaming = Pick<
 export type MobileAgentHostPorts = {
   scriptSandbox?(): RuntimeScriptSandbox | undefined;
   writeToolOutput?(
-    output: { name: string; data: string | Uint8Array },
+    /** `folderId` is the turn's workspace; outputs land beside the Agent's other writes. */
+    output: { name: string; data: string | Uint8Array; folderId: string | null },
     signal: AbortSignal,
   ): ReturnType<NonNullable<RuntimeExecutionPorts['writeToolOutput']>>;
   executionLease?(onInterrupt: (reason: Error) => void | Promise<void>): { release(): void };

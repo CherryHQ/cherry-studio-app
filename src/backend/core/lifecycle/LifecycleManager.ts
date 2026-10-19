@@ -1,5 +1,7 @@
 import { loggerService } from '@logger';
 
+import { startStartupStage } from '@/shared/core/logger/startupDiagnostics';
+
 import type { BaseService } from './BaseService';
 import { DependencyResolver } from './DependencyResolver';
 import type { ServiceContainer } from './ServiceContainer';
@@ -111,25 +113,27 @@ export class LifecycleManager {
     }
 
     const layers = this.resolver.resolveLayered(graph);
-    const startedAt = performance.now();
+    const finish = startStartupStage('startup.phase', { phase });
 
-    for (const layer of layers) {
-      const results = await Promise.allSettled(
-        layer.map((serviceName) => this.initializeService(serviceName)),
-      );
-      // Failed initialization can already own resources. Include every settled
-      // peer before propagating a failure so rollback visits the entire layer.
-      this.initializationOrder.push(...layer);
-      for (const result of results) {
-        if (result.status === 'rejected') {
-          throw result.reason;
+    try {
+      for (const layer of layers) {
+        const results = await Promise.allSettled(
+          layer.map((serviceName) => this.initializeService(serviceName)),
+        );
+        // Failed initialization can already own resources. Include every settled
+        // peer before propagating a failure so rollback visits the entire layer.
+        this.initializationOrder.push(...layer);
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            throw result.reason;
+          }
         }
       }
+      finish();
+    } catch (error) {
+      finish('failed');
+      throw error;
     }
-
-    logger.info(
-      `Phase '${phase}' initialized (${graph.length} services, ${(performance.now() - startedAt).toFixed(1)}ms)`,
-    );
   }
 
   /**
@@ -200,6 +204,7 @@ export class LifecycleManager {
     const metadata = this.container.getMetadata(serviceName);
     if (!metadata) return;
 
+    const finish = startStartupStage('startup.service', { serviceName, phase: metadata.phase });
     try {
       const instance = this.container.get<BaseService>(serviceName);
       const startedAt = performance.now();
@@ -213,7 +218,9 @@ export class LifecycleManager {
 
       const duration = performance.now() - startedAt;
       this.serviceTiming.set(serviceName, duration);
+      finish();
     } catch (error) {
+      finish('failed');
       this.handleInitError(serviceName, error as Error);
     }
   }

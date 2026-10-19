@@ -62,7 +62,7 @@ The current execution classes are:
 | Class | Current behavior |
 | --- | --- |
 | `foreground-only` | Dispatched by the in-process pump without a background keep-alive lease |
-| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: silent background audio on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
+| `user-continued` | Dispatched with a `KeepAliveCoordinator` lease: a finite UIKit background execution window on iOS, the `dataSync` foreground service on Android, and a no-op elsewhere |
 | `bounded-background` | Defined but not dispatched; no background-task adapter is installed |
 | `system-transfer` | Defined but not dispatched; no system-transfer adapter is installed |
 
@@ -126,16 +126,19 @@ contract.
 - queue `painting`, concurrency one;
 - execution class `user-continued`;
 - recovery `abandon`, no retry, and a ten-minute timeout;
-- painting scope derived from `paintingId`;
-- managed input files recorded by the painting receipt;
+- painting and parent-board scopes derived from `paintingId` and `boardId`;
+- managed input version IDs recorded by the painting receipt and resolved for current availability at execution;
 - image generation through `AiService`, managed output import, receipt finalization, and failed
   output cleanup; and
 - an optional `PaintingActivity` presentation while work is active.
 
-`PaintingsModule.startGeneration()` materializes draft files, then creates or resets the painting
-receipt and enqueues the job in one write transaction. It returns `{ jobId, paintingId }`. The
+`PaintingsModule.startGeneration()` validates managed attachments, then creates or resets the painting
+receipt and enqueues the job in one write transaction. Its admission scope remains registered through
+commit/rollback. It returns `{ jobId, paintingId, boardId }`. The
 frontend polls the ledger while work is active and can adopt an existing job after remount. Explicit
-cancel reaches `JobRuntime.cancel()`; deleting the receipt drains the painting scope first.
+cancel reaches `JobRuntime.cancel()`; deleting the receipt drains the painting scope first, and deleting
+a board fences/drains the parent scope. Before reading inputs or calling the provider, execution
+requires an existing receipt under that board. A trashed input fails even while its blob remains on disk.
 
 Process death during the provider call has an ambiguous external outcome, so recovery abandons the
 row rather than charging for an automatic resubmission. The receipt remains visible as interrupted
@@ -144,11 +147,12 @@ and may be retried explicitly.
 ## Current Boundaries
 
 - The ledger survives process death; an in-memory `JobHandle.finished` promise does not.
-- `user-continued` is best effort. iOS depends on silent background audio; Android depends on the
-  `dataSync` foreground service in
-  [Android Background Generation](./android-background-generation.md). Neither is an exact
-  scheduler or a guarantee after force quit. Silent-audio keep-alive is also an App Store review
-  risk, so replacing it with OS continuation APIs remains a release concern.
+- `user-continued` is best effort. `IosBackgroundExecutionSource` shares one finite UIKit window
+  across holders; expiry interrupts them and does not renew the window while backgrounded. For
+  painting jobs the interruption aborts/cancels execution; Durable Agent work instead suspends its
+  Harness for later recovery. Android uses the `dataSync` foreground service in
+  [Android Background Generation](./android-background-generation.md). Neither guarantees continuous
+  execution, an exact scheduler, or continuation after force quit.
 - No Expo background task, iOS Continued Processing, system-transfer adapter, schedule runtime, or
   server executor is installed.
 - Progress callbacks have no shared consumer; current UI observes ledger state and domain output.

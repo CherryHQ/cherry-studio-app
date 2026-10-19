@@ -8,11 +8,16 @@ import {
 } from '@/backend/core/lifecycle';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import type { DbService } from '@/backend/data/db/DbService';
-import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { FileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { TrashService } from '@/backend/data/services/TrashService';
-import { deleteInternalEntry, notifyFileChange } from '@/backend/services/file/fileStorage';
+import { deleteInternalEntryFiles } from '@/backend/services/file/fileStorage';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { TRASH_RETENTION_MS, type TrashItem } from '@/shared/data/api/schemas/trash';
+import {
+  TRASH_RETENTION_MS,
+  type TrashItem,
+  type TrashKind,
+} from '@/shared/data/api/schemas/trash';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 const logger = loggerService.withContext('TrashRuntime');
 
@@ -22,15 +27,16 @@ const logger = loggerService.withContext('TrashRuntime');
 @AppStatePolicy('foreground-refresh')
 export class TrashRuntime extends BaseService {
   readonly entries: TrashService;
-  private readonly files: FileEntryService;
+  private readonly files: FileLibraryService;
   private pending = 0;
   private stopped = false;
   private tail: Promise<unknown> = Promise.resolve();
+  private readonly trashWrites = new Set<Promise<unknown>>();
 
   constructor(dbService: DbService) {
     super();
     this.entries = new TrashService(dbService);
-    this.files = new FileEntryService(dbService);
+    this.files = new FileLibraryService(dbService);
   }
 
   protected override onInit() {
@@ -44,19 +50,33 @@ export class TrashRuntime extends BaseService {
   }
 
   hasPendingStorageWork() {
-    return this.pending > 0;
+    return this.pending > 0 || this.trashWrites.size > 0;
   }
 
-  restore(id: string) {
-    return this.mutate(async () => {
-      await this.entries.restore(id);
-      notifyFileChange(id);
+  /** Trash the logical file and retain ownership until its transaction settles. */
+  trashFile(entryId: FileEntryId, signal?: AbortSignal) {
+    return this.trackTrashWrite(async () => {
+      const ids = await this.files.trashFileEntry(entryId, signal);
+      return ids.length > 0;
     });
   }
 
-  delete(id: string) {
+  /** Trash a folder with its active subtree. */
+  trashFolder(id: string, signal?: AbortSignal) {
+    return this.trackTrashWrite(async () => {
+      await this.files.trashFolder(id, signal);
+    });
+  }
+
+  restore(kind: TrashKind, id: string, signal?: AbortSignal) {
     return this.mutate(async () => {
-      await this.purge(await this.entries.get(id));
+      await this.entries.restore(kind, id, signal);
+    });
+  }
+
+  delete(kind: TrashKind, id: string) {
+    return this.mutate(async () => {
+      await this.purge(await this.entries.get(kind, id));
     });
   }
 
@@ -89,7 +109,7 @@ export class TrashRuntime extends BaseService {
   }
 
   private requestSweep() {
-    if (this.stopped || storageMutationGate.isFrozen || this.pending) return;
+    if (this.stopped || storageMutationGate.isFrozen || this.hasPendingStorageWork()) return;
     void this.sweep().catch((error: unknown) =>
       logger.warn('Trash sweep deferred', error as Error),
     );
@@ -97,7 +117,18 @@ export class TrashRuntime extends BaseService {
 
   private async purge(item: TrashItem) {
     storageMutationGate.assertWritable();
-    await deleteInternalEntry(this.files, item.id, item.deletedAt);
+    const entries = await this.files.purge(item);
+    for (const entry of entries ?? []) deleteInternalEntryFiles(entry);
+  }
+
+  private trackTrashWrite<T>(operation: () => Promise<T>): Promise<T> {
+    storageMutationGate.assertWritable();
+    if (this.stopped) return Promise.reject(new Error('Trash runtime has stopped'));
+    // Admit the metadata transaction immediately so a later draft edit cannot
+    // overtake deletion. Byte cleanup still uses the serialized mutation tail.
+    const result = operation();
+    this.trashWrites.add(result);
+    return result.finally(() => this.trashWrites.delete(result));
   }
 
   private mutate<T>(operation: () => Promise<T>): Promise<T> {
@@ -118,6 +149,6 @@ export class TrashRuntime extends BaseService {
 
   protected override async onStop() {
     this.stopped = true;
-    await this.tail;
+    await Promise.allSettled([this.tail, ...this.trashWrites]);
   }
 }

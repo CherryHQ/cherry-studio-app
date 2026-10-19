@@ -18,7 +18,11 @@ import type { ConversationImageResult } from '@/frontend/appShell/conversation';
 import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import { AgentProtocolError, type AgentSubmitMessageInput } from '@/shared/contracts/agent';
+import {
+  AgentProtocolError,
+  type AgentQueuedInput,
+  type AgentSubmitMessageInput,
+} from '@/shared/contracts/agent';
 
 import {
   type AgentChatDraftHandoff,
@@ -28,13 +32,14 @@ import { latestAgentImageResult, latestConversationImageResult } from './agentIm
 import { createPendingChatMessages } from './agentMessageProjection';
 import {
   AgentSessionChatClient,
-  isAgentSessionBusy,
+  isAgentSessionExecuting,
   type AgentSessionChatState,
 } from './AgentSessionChatClient';
 import { localImageResult } from './localImageResult';
 
 type AgentChatSendInput = AgentSubmitMessageInput & {
   agentId?: string;
+  workspaceFolderId?: string;
   isNewSession: boolean;
   isCurrent: () => boolean;
 };
@@ -57,6 +62,7 @@ type AgentChatContextValue = {
 
 const EMPTY_AGENT_SESSION_STATE: AgentSessionChatState = Object.freeze({
   activeTurn: null,
+  queuedInputs: Object.freeze([]),
   liveMessages: Object.freeze([]),
   pendingApprovals: Object.freeze([]),
   pendingQuestion: null,
@@ -236,11 +242,12 @@ export function useAgentChatDraftHandoff(
 
 export function useAgentChatControls(input: {
   agentId?: string;
+  workspaceFolderId?: string | null;
   sessionId?: string;
   composerKey: number;
 }) {
   const { client, sendMessage } = useAgentChatContext();
-  const { agentId, composerKey, sessionId } = input;
+  const { agentId, composerKey, sessionId, workspaceFolderId } = input;
   const activeTurnStatus = useAgentSessionSelection(client, sessionId, selectActiveTurnStatus);
   const observationStatus = useAgentSessionSelection(client, sessionId, selectObservationStatus);
   const isSessionBusy = useAgentSessionSelection(client, sessionId, selectSessionBusy);
@@ -285,11 +292,20 @@ export function useAgentChatControls(input: {
       };
       setSubmission({ composerKey, userMessageId: request.userMessageId, send: pending });
       try {
-        await sendMessage({ ...request, agentId, isCurrent, isNewSession: pending.isNewSession });
+        await sendMessage({
+          ...request,
+          agentId,
+          isCurrent,
+          isNewSession: pending.isNewSession,
+          ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
+        });
         if (isCurrent()) {
           setSubmission((current) =>
             current?.send === pending
-              ? { ...current, send: { ...pending, isSubmitting: false } }
+              ? {
+                  ...current,
+                  send: pending.isNewSession ? { ...pending, isSubmitting: false } : undefined,
+                }
               : current,
           );
         }
@@ -304,7 +320,7 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, composerKey, sendMessage, sessionId],
+    [agentId, composerKey, sendMessage, sessionId, workspaceFolderId],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {
@@ -356,7 +372,19 @@ function useAgentSessionSelection<TValue>(
 function selectActiveTurnStatus(state: AgentSessionChatState) {
   return state.activeTurn?.status;
 }
-const selectSessionBusy = isAgentSessionBusy;
+function selectSessionBusy(state: AgentSessionChatState) {
+  return Boolean(state.isSubmitting || isAgentSessionExecuting(state));
+}
+
+/** Queue subscribers do not rerender for streamed message content. */
+export function useAgentQueuedInputs(sessionId: string | undefined): readonly AgentQueuedInput[] {
+  const { client } = useAgentChatContext();
+  return useAgentSessionSelection(client, sessionId, selectQueuedInputs);
+}
+
+function selectQueuedInputs(state: AgentSessionChatState) {
+  return state.queuedInputs;
+}
 function selectIsAdmitting(state: AgentSessionChatState) {
   return Boolean(state.isSubmitting);
 }

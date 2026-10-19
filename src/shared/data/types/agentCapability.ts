@@ -13,6 +13,7 @@ export const AGENT_CAPABILITIES = [
   'agents',
   'calendar',
   'health',
+  'fileLibrary',
   'image',
   'location',
   'reminders',

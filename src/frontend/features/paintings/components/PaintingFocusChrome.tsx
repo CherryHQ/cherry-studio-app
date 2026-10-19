@@ -1,10 +1,9 @@
-import DownloadIcon from '@cherrystudio/app-icons/icons/download';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import PresentationIcon from '@cherrystudio/app-icons/icons/presentation';
 import type { MenuItem } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { useSaveImageToPhotos, useShareFile } from '@/frontend/appShell/fileExport';
 import {
@@ -19,8 +18,8 @@ import type { PaintingBoardImage } from '../hooks/usePaintingBoard';
 
 /**
  * Focus chrome: back returns to wherever the board was opened from, the board
- * pill opens the overview, and the focused image's actions sit on the right —
- * save directly, everything else in one menu.
+ * pill opens the overview, and the focused image's actions share one menu
+ * on the right.
  */
 export function PaintingFocusChrome({
   boardTitle,
@@ -50,8 +49,12 @@ export function PaintingFocusChrome({
     const items: MenuItem[] = [];
     if (image) {
       items.push({
+        id: 'save',
+        label: t('painting.focus.save'),
+        onPress: () => void save(),
+      });
+      items.push({
         disabled: !file.data || isSharing,
-        group: 'share',
         id: 'share',
         label: t('painting.focus.share'),
         onPress: () => void share(),
@@ -59,7 +62,6 @@ export function PaintingFocusChrome({
     }
     if (onShowInfo) {
       items.push({
-        group: 'info',
         id: 'info',
         label: t('painting.focus.info.title'),
         onPress: onShowInfo,
@@ -68,26 +70,16 @@ export function PaintingFocusChrome({
     if (onDelete) {
       items.push({
         destructive: true,
-        group: 'delete',
         id: 'delete',
         label: t('painting.focus.delete'),
         onPress: onDelete,
       });
     }
     return items;
-  }, [file.data, image, isSharing, onDelete, onShowInfo, share, t]);
+  }, [file.data, image, isSharing, onDelete, onShowInfo, save, share, t]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(() => {
     const actions: HeaderToolbarAction[] = [];
-    if (image) {
-      actions.push({
-        accessibilityLabel: t('painting.focus.save'),
-        icon: DownloadIcon,
-        key: 'save',
-        onPress: () => void save(),
-        type: 'icon',
-      });
-    }
     if (menuItems.length > 0) {
       actions.push({
         accessibilityLabel: t('painting.focus.more'),
@@ -98,29 +90,32 @@ export function PaintingFocusChrome({
       });
     }
     return actions;
-  }, [image, menuItems, save, t]);
+  }, [menuItems, t]);
   const leftActions = useMemo(() => [leadingAction], [leadingAction]);
 
   return (
     <HeaderChrome
       leftActions={leftActions}
       rightActions={rightActions}
+      titleAlign="left"
       titleElement={
-        <Pressable
-          accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
-          accessibilityRole="button"
-          className="max-w-56 flex-row items-center gap-1.5 rounded-full bg-card/95 px-3.5 py-2 active:opacity-70"
-          disabled={!onOpenOverview}
-          onPress={onOpenOverview}
-        >
-          <NetworkIcon className="size-4 text-card-foreground" />
-          <Text
-            className="min-w-0 shrink font-semibold text-card-foreground text-sm"
-            numberOfLines={1}
+        <View className="max-w-56 items-start">
+          <Pressable
+            accessibilityLabel={t('painting.focus.openBoard', { title: boardTitle })}
+            accessibilityRole="button"
+            className="max-w-full flex-row items-center gap-1.5 rounded-full bg-card/95 px-3.5 py-2 active:opacity-70"
+            disabled={!onOpenOverview}
+            onPress={onOpenOverview}
           >
-            {boardTitle}
-          </Text>
-        </Pressable>
+            <PresentationIcon className="size-4 shrink-0 text-card-foreground" />
+            <Text
+              className="min-w-0 shrink font-semibold text-card-foreground text-sm"
+              numberOfLines={1}
+            >
+              {boardTitle}
+            </Text>
+          </Pressable>
+        </View>
       }
     />
   );

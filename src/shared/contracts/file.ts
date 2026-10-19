@@ -21,6 +21,8 @@ export type ResolvedFileUris = {
 };
 
 export type CreateInternalEntryInput = {
+  workspaceSessionId?: string;
+  folderId?: string | null;
   /** Authoritative media type from the picker; extension inference is the fallback. */
   mediaType?: string;
   name?: string;
@@ -40,10 +42,14 @@ export type PreparedFile = ResolvedFile & {
 };
 
 export interface FileModule {
-  /** Subscribe to committed managed-file creates, rewrites, deletions, and discards. */
-  subscribeChanges(listener: (entryId: FileEntryId) => void): () => void;
   /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
+  /** Reuse a workspace file or copy an explicitly attached outside version into it. */
+  prepareWorkspaceAttachment(
+    input: {
+      fileEntryId: FileEntryId;
+    } & ({ sessionId: string; folderId?: never } | { folderId: string; sessionId?: never }),
+  ): Promise<ResolvedFile>;
   /** Crops/rotates a still image into a new managed entry, preserving the source. */
   editImage(input: EditFileImageInput, signal?: AbortSignal): Promise<ResolvedFile>;
   /** Validates managed references and parses supported content only when the caller submits. */

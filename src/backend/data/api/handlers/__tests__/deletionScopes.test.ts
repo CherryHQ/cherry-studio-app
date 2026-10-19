@@ -60,21 +60,22 @@ describe('Data API deletion scopes', () => {
         }, 0);
       },
       kind: 'painting.generate',
-      scopes: [{ id: 'painting-2', kind: 'painting' }],
+      scopes: [
+        { id: 'painting-2', kind: 'painting' },
+        { id: 'board-1', kind: 'painting-board' },
+      ],
       settled,
     });
     const service = {
       deleteBoard: jest.fn(async () => {
         trace.push('deleteBoard');
       }),
-      listByBoard: jest.fn(async () => [{ id: 'painting-1' }, { id: 'painting-2' }]),
     } as unknown as PaintingService;
 
     await createPaintingHandlers(service)['/painting-boards/:id'].DELETE({
       params: { id: 'board-1' },
     });
 
-    expect(service.listByBoard).toHaveBeenCalledWith('board-1');
     expect(trace).toEqual(['cancel', 'settled', 'deleteBoard']);
   });
 });

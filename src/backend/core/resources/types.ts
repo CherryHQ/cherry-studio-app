@@ -8,7 +8,7 @@
  */
 
 /** A domain resource that owns cancellable work. */
-export type ScopeKind = 'painting';
+export type ScopeKind = 'painting' | 'painting-board';
 
 export type ResourceScope = {
   readonly kind: ScopeKind;

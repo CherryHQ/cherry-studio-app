@@ -1,3 +1,4 @@
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { Database } from '@/backend/data/db/DbService';
 import type { PaintingsModule } from '@/shared/contracts';
 import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
@@ -42,6 +43,7 @@ function fileEntry(id: FileEntryId): FileEntry {
 
 function createSubject() {
   const dependencies: PaintingsModuleDependencies = {
+    scopes: new ResourceScopeCoordinator(),
     db: {
       withWriteTx: jest.fn(async (fn) => fn(tx)),
     },
@@ -119,7 +121,7 @@ describe('createPaintingsModule', () => {
       tx,
       {
         boardId: 'board-1',
-        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///managed.png' }],
+        images: [{ fileEntryId: inputFileId }],
         mode: 'edit',
         modelId,
         modelName: 'GPT Image 2',
@@ -149,11 +151,10 @@ describe('createPaintingsModule', () => {
     const { backend, dependencies } = createSubject();
     jest
       .mocked(dependencies.jobs.findActiveGenerateTx)
-      .mockResolvedValue({ id: 'job-9', input: { paintingId: 'painting-9' } });
+      .mockResolvedValue({ id: 'job-9', input: { paintingId: 'painting-9', boardId: 'board-9' } });
 
-    // A job enqueued before boards existed reports its receipt's migrated board.
     await expect(backend.startGeneration(generationInput)).resolves.toEqual({
-      boardId: 'painting-9',
+      boardId: 'board-9',
       jobId: 'job-9',
       paintingId: 'painting-9',
     });
@@ -227,6 +228,70 @@ describe('createPaintingsModule', () => {
     expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
   });
 
+  it('rejects admission while a parent board deletion is draining another operation', async () => {
+    const { backend, dependencies } = createSubject();
+    const scopes = dependencies.scopes as ResourceScopeCoordinator;
+    let finish!: () => void;
+    const settled = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    scopes.register({
+      kind: 'painting.generate',
+      scopes: [{ id: 'board-1', kind: 'painting-board' }],
+      settled,
+      cancel() {},
+    });
+    const remove = jest.fn(async () => undefined);
+    const deletion = scopes.delete([{ id: 'board-1', kind: 'painting-board' }], remove);
+    try {
+      await expect(
+        backend.startGeneration({ ...generationInput, boardId: 'board-1' }),
+      ).rejects.toMatchObject({ name: 'ScopeFencedError' });
+      expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    } finally {
+      finish();
+      await deletion;
+    }
+  });
+
+  it('drains an admission transaction before deleting its board', async () => {
+    const { backend, dependencies } = createSubject();
+    const scopes = dependencies.scopes as ResourceScopeCoordinator;
+    let entered!: () => void;
+    const enqueueEntered = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let finish!: () => void;
+    const enqueuePending = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const trace: string[] = [];
+    jest.mocked(dependencies.db.withWriteTx).mockImplementation(async (operation) => {
+      try {
+        return await operation(tx);
+      } catch (error) {
+        trace.push('rollback');
+        throw error;
+      }
+    });
+    jest.mocked(dependencies.jobs.enqueueGenerateTx).mockImplementation(async () => {
+      entered();
+      await enqueuePending;
+      return { id: 'job-1' };
+    });
+    const admission = backend.startGeneration({ ...generationInput, boardId: 'board-1' });
+    const rejected = expect(admission).rejects.toThrow('resource-deleted');
+    await enqueueEntered;
+    const deletion = scopes.delete([{ id: 'board-1', kind: 'painting-board' }], async () => {
+      trace.push('delete');
+    });
+    expect(trace).toEqual([]);
+    finish();
+    await Promise.all([rejected, deletion]);
+    expect(trace).toEqual(['rollback', 'delete']);
+  });
+
   it('propagates an enqueue failure out of the transaction', async () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.jobs.enqueueGenerateTx).mockRejectedValue(new Error('enqueue failed'));
@@ -279,7 +344,7 @@ describe('createPaintingsModule', () => {
       tx,
       expect.objectContaining({
         mode: 'generate',
-        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///managed.png' }],
+        images: [{ fileEntryId: inputFileId }],
       }),
       expect.anything(),
     );

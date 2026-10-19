@@ -7,6 +7,7 @@ import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
+import { LIST_WORKSPACE_TOOL_NAME } from '../tools/fileLibraryTools';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
 import { LOAD_SKILL_TOOL_NAME, LIST_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
@@ -45,7 +46,6 @@ export type BuildAgentSystemPromptInput = {
   agentInstructions: string;
   mode?: AgentMode;
   appLanguage: LanguageVarious;
-  currentDate?: string;
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
   skills?: TurnSkillPlan;
@@ -63,7 +63,6 @@ export function buildAgentSystemPrompt({
   agentInstructions,
   mode = DEFAULT_AGENT_MODE,
   appLanguage,
-  currentDate = formatLocalDate(new Date()),
   tools,
   pluginGuides = [],
   skills,
@@ -72,7 +71,6 @@ export function buildAgentSystemPrompt({
 }: BuildAgentSystemPromptInput): string {
   const sections = [
     mode === 'minimal' ? MINIMAL_CHAT_RULES : MOBILE_RUNTIME_RULES,
-    `## Current Date\n\nThe current local date is \`${currentDate}\`.`,
     buildResponseLanguageSection(appLanguage),
   ];
   if (mode === 'standard') {
@@ -136,6 +134,16 @@ ${JSON.stringify(toolDiscoveryWarnings.slice(0, 20).map((warning) => warning.sli
 
   if (findBuiltInToolNames(tools, MANAGED_FILE_TOOL_NAMES).length > 0) {
     sections.push(buildManagedFilesSection(tools));
+  }
+  // Only a conversation with a workspace receives the workspace tools.
+  if (
+    tools.some(
+      (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === LIST_WORKSPACE_TOOL_NAME,
+    )
+  ) {
+    sections.push(`## Workspace
+
+The user linked this conversation to a file-library folder; \`${LIST_WORKSPACE_TOOL_NAME}\` names it. Relative paths in file tools resolve inside it, and files you save or generate are stored there. When a request involves the workspace or its files, list or search it first instead of assuming what it contains.`);
   }
   if (
     tools.some(
@@ -289,17 +297,15 @@ export function buildInitialSkillInstructions(skills: TurnSkillPlan) {
   );
 }
 
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function buildResponseLanguageSection(appLanguage: LanguageVarious): string {
   return `## Response Language
 
-The current Cherry Studio App language is \`${appLanguage}\`. You must write every response in this language unless the user explicitly requests another language. This rule takes precedence over the Agent Instructions.`;
+The current Cherry Studio App language is \`${appLanguage}\`. Choose the response language in this order:
+1. Follow the user's explicit request for an output language.
+2. Otherwise, follow any response-language preference in the Agent Instructions.
+3. Otherwise, match the language of the user's own message, using conversation context when it is ambiguous.
+
+Use the app language only as a fallback when these do not establish a language. Replies are not limited to the app's supported interface languages.`;
 }
 
 function findBuiltInToolNames(

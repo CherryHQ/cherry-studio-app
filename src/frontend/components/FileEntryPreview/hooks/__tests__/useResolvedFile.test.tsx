@@ -4,7 +4,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
 import { FileEntrySchema } from '@/shared/data/types/file';
@@ -22,13 +21,18 @@ const entry = FileEntrySchema.parse({
 });
 
 it('hides cached file references when trashed and revives them with the same id after restoration', async () => {
+  jest.useFakeTimers();
   let trashed = false;
-  let changed!: (id: string) => void;
+  let changed!: (paths: readonly string[]) => void;
   let snapshot!: ReturnType<typeof useResolvedFile>;
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   const dataApi = {
+    subscribeChanges: (listener: (paths: readonly string[]) => void) => {
+      changed = listener;
+      return () => {};
+    },
     get: async () => {
       if (trashed) throw new Error('File entry is unavailable');
       return entry;
@@ -37,10 +41,6 @@ it('hides cached file references when trashed and revives them with the same id 
   const backend = {
     file: {
       getUri: async () => (trashed ? undefined : 'file:///managed/notes.txt'),
-      subscribeChanges: (listener: (id: string) => void) => {
-        changed = listener;
-        return () => {};
-      },
     },
   } as unknown as Backend;
 
@@ -57,7 +57,6 @@ it('hides cached file references when trashed and revives them with the same id 
       <QueryClientProvider client={client}>
         <BackendProvider backend={backend}>
           <DataApiProvider dataApi={dataApi}>
-            <FileQueryBridge />
             <Probe />
           </DataApiProvider>
         </BackendProvider>
@@ -69,19 +68,20 @@ it('hides cached file references when trashed and revives them with the same id 
     expect(snapshot.data?.uri).toBe('file:///managed/notes.txt');
     trashed = true;
     await act(async () => {
-      changed(entry.id);
+      changed([`/files/entries/${entry.id}`]);
     });
     await waitForCondition(() => snapshot.data === null);
     expect(snapshot.data).toBeNull();
     trashed = false;
     await act(async () => {
-      changed(entry.id);
+      changed([`/files/entries/${entry.id}`]);
     });
     await waitForCondition(() => snapshot.data?.uri === 'file:///managed/notes.txt');
     expect(snapshot.data).toEqual({ entry, uri: 'file:///managed/notes.txt' });
   } finally {
     await act(async () => renderer.unmount());
     client.clear();
+    jest.useRealTimers();
   }
 });
 
@@ -89,7 +89,7 @@ async function waitForCondition(predicate: () => boolean) {
   for (let index = 0; index < 20; index += 1) {
     if (predicate()) return;
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await jest.advanceTimersByTimeAsync(300);
     });
   }
   throw new Error('Timed out waiting for the managed file reference');

@@ -1,10 +1,23 @@
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { streamSimple as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { streamSimple as streamGoogle } from '@earendil-works/pi-ai/api/google-generative-ai';
 import { streamSimple as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions';
 import { streamSimple as streamResponses } from '@earendil-works/pi-ai/api/openai-responses';
+import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
-import { MemoryStorage } from '@earendil-works/pi-durable';
+import { getCurrentSystemPrompt, getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
+import {
+  AgentDoc,
+  createRegistry,
+  defineDocFamily,
+  GenerationTask,
+  LiveDoc,
+  MemoryStorage,
+  SystemEntry,
+  UserEntry,
+  type JsonObject,
+} from '@earendil-works/pi-durable';
 
 import {
   buildAgentSystemPrompt,
@@ -22,9 +35,12 @@ import type {
 import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
+import { piSubmissionMetadata, piToolBlueprint } from '../piDurableProjection';
+import { PiDurableRuntime } from '../PiDurableRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
+import { ToolInstructions } from '../piToolInstructions';
 import type { PiNativeWebTools } from '../piWebTools';
 
 class ReopenableMemoryStorage extends MemoryStorage {
@@ -163,6 +179,360 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('migrates an unfinished v1 conversation across midnight without resetting loaded instructions', async () => {
+    const state = fixture();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+    const tools: RuntimeTool[] = [
+      {
+        ref: { source: 'builtin', capabilityId: 'find_skills' },
+        providerName: 'find_skills',
+        displayName: 'Find skills',
+        description: 'Find available skills.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'auto',
+        deferred: true,
+        execute: async () => {
+          throw new Error('Recovery must not replay tools.');
+        },
+      },
+    ];
+    const instructions = buildAgentSystemPrompt({
+      agentInstructions: 'Help.',
+      appLanguage: 'en-US',
+      tools,
+    });
+    const legacyInstructions = instructions.replace(
+      '\n\n## Response Language\n',
+      '\n\n## Current Date\n\nThe current local date is `2026-12-31`.\n\n## Response Language\n',
+    );
+    const initial = { key: 'skill:selected', text: 'Selected skill body.' };
+    const loaded = { key: 'plugin:loaded', text: 'Guide loaded during the unfinished turn.' };
+    const legacy = await PiDurableRuntime.open(state.storage, {
+      models: createModels({
+        authContext: { env: async () => undefined, fileExists: async () => false },
+      }),
+      registry: createRegistry(),
+    });
+    const runtime = state.create();
+    try {
+      const conversation = await legacy.ensureConversation({
+        sessionId: seed.sessionId,
+        revision: seed.revision,
+        agent: {
+          model: { provider: reference.providerId, modelId: reference.modelId },
+          extensions: [{ name: 'cherry.capabilities:session' }],
+          instructions: legacyInstructions,
+        },
+        configuration: {
+          ...seed.configuration,
+          version: 1,
+          instructions: legacyInstructions,
+          initialInstructions: [initial],
+          tools: tools.map(piToolBlueprint),
+        },
+        initialInstructions: [initial],
+      });
+      // Seed a persisted run without scheduling it, as if the previous process closed before prepare.
+      const submission = input('unfinished');
+      const metadata = piSubmissionMetadata(submission, tools);
+      const submissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.submission',
+        version: 1,
+        scope: 'session',
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      await conversation.commit(async (tx) => {
+        const agent = await tx.doc(AgentDoc, conversation.id);
+        agent.modelTools = { add: ['find_skills'] };
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const retained = await tx.doc(ToolInstructions, conversation.id);
+        retained.sections.push(loaded);
+        await tx.doc(submissionMetadata, `${conversation.id}:${submission.requestId}`, metadata);
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'Question unfinished', timestamp: Date.now() }],
+        });
+        await tx.appendEntry(SystemEntry, conversation.id, {
+          model: [
+            {
+              role: 'system',
+              content: '',
+              sections: { instructions: `<instructions>\n${legacyInstructions}\n</instructions>` },
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const record = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'placed',
+          requestId: submission.requestId,
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        live.run = { taskId, inputs: [record.id] };
+      }, BACKGROUND_CONTEXT);
+      await legacy.close();
+
+      now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+      await runtime.initialize(state.database, state.ports);
+      expect((await runtime.configuration(seed.sessionId)).instructions).toBe(instructions);
+      expect(await runtime.unfinishedSessions()).toEqual([seed.sessionId]);
+      expect(state.requests).toHaveLength(0);
+      await runtime.close();
+
+      // The migration is durable; reopening again must retain loaded content and tool selection.
+      const inspection = await PiDurableRuntime.open(state.storage, {
+        models: createModels({
+          authContext: { env: async () => undefined, fileExists: async () => false },
+        }),
+        registry: createRegistry(),
+      });
+      try {
+        expect(await inspection.configuration(seed.sessionId)).toMatchObject({
+          version: 2,
+          instructions,
+        });
+        const restored = (await inspection.conversation(seed.sessionId))!;
+        await restored.commit(async (tx) => {
+          const agent = await tx.doc(AgentDoc, restored.id);
+          expect(agent.instructions).toBeUndefined();
+          expect(agent.modelTools).toEqual({ add: ['find_skills'] });
+          expect((await tx.doc(ToolInstructions, restored.id)).sections).toEqual([initial, loaded]);
+        }, BACKGROUND_CONTEXT);
+      } finally {
+        await inspection.close();
+      }
+
+      await runtime.initialize(state.database, state.ports);
+      const completed = deferred<void>();
+      const observation = await runtime.observe(seed.sessionId, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
+      });
+      try {
+        runtime.resume();
+        await completed.promise;
+        expect(state.requests).toHaveLength(1);
+        const prompt = getCurrentSystemPrompt(state.requests[0]!.messages);
+        expect(prompt.match(/# Cherry Studio Mobile Runtime/g)).toHaveLength(1);
+        expect(prompt).toContain('2027-01-01');
+        expect(prompt).not.toContain('2026-12-31');
+        expect(prompt).toContain(initial.text);
+        expect(prompt).toContain(loaded.text);
+        expect(getCurrentTools(state.requests[0]!.messages).map((tool) => tool.name)).toContain(
+          'find_skills',
+        );
+      } finally {
+        await observation.unsubscribe();
+      }
+    } finally {
+      await legacy.close();
+      await runtime.close();
+      now.mockRestore();
+    }
+  });
+
+  test('replays an interrupted prepared request unchanged, then refreshes the date for new input', async () => {
+    const state = fixture();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+    const started = deferred<void>();
+    const resolveModel = state.dependencies.resolveModel;
+    let interrupt = true;
+    state.dependencies.resolveModel = async (...args) => {
+      const resolved = await resolveModel(...args);
+      return {
+        ...resolved,
+        streamFn: withPiStreamIdleTimeout((model, context, options) => {
+          if (!interrupt) return resolved.streamFn(model, context, options);
+          interrupt = false;
+          state.requests.push(context);
+          started.resolve();
+          return new AssistantMessageEventStream();
+        }),
+      };
+    };
+    let runtime = state.create();
+    try {
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      await runtime.submit('session', input('interrupted'));
+      await started.promise;
+      expect(getCurrentSystemPrompt(state.requests[0]!.messages)).toContain('2026-12-31');
+      await runtime.close();
+
+      now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      const completed = deferred<void>();
+      const observation = await runtime.observe('session', (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
+      });
+      try {
+        runtime.resume();
+        await completed.promise;
+        expect(state.requests).toHaveLength(2);
+        expect(state.requests[1]!.messages).toEqual(state.requests[0]!.messages);
+      } finally {
+        await observation.unsubscribe();
+      }
+
+      await submitAndWait(runtime, input('next'));
+      const prompt = getCurrentSystemPrompt(state.requests[2]!.messages);
+      expect(prompt).toContain('2027-01-01');
+      expect(prompt).not.toContain('2026-12-31');
+    } finally {
+      await runtime.close();
+      now.mockRestore();
+    }
+  });
+
+  test.each(['openai-responses', 'openai-completions'] as const)(
+    'preserves the %s request prefix across midnight and reopen, updating only the date',
+    async (api) => {
+      const state = fixture();
+      const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+      type Payload = { input?: unknown[]; messages?: unknown[] };
+      const payloads: unknown[] = [];
+      const stream = (
+        api === 'openai-responses' ? streamResponses : streamCompletions
+      ) as PiStreamFn;
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => {
+        const resolved = await resolveModel(...args);
+        return {
+          ...resolved,
+          model: {
+            ...wire,
+            api,
+            baseUrl: 'https://provider.example.test/v1',
+            compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
+          },
+          streamFn: async (model, context, options) => {
+            const serialized = await stream(model, context, {
+              ...options,
+              apiKey: 'test-key',
+              maxRetries: 0,
+              fetch: async () => {
+                throw new Error('This test must not contact a provider.');
+              },
+              onPayload: (payload) => {
+                payloads.push(payload);
+                throw new Error('Request captured before transport.');
+              },
+            });
+            await serialized.result();
+            return resolved.streamFn(model, context, options);
+          },
+        };
+      };
+      let runtime = state.create();
+      try {
+        await runtime.initialize(state.database, state.ports);
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        const first = payloads[0] as Payload;
+        expect(JSON.stringify(first)).toContain('2026-12-31');
+        expect(JSON.stringify(first).indexOf('Help.')).toBeLessThan(
+          JSON.stringify(first).indexOf('<current-date>'),
+        );
+
+        await runtime.close();
+        now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+        runtime = state.create();
+        await runtime.initialize(state.database, state.ports);
+        await runtime.configure('session', seed.configuration);
+        await submitAndWait(runtime, input('second'));
+        const firstItems = first.input ?? first.messages!;
+        const second = payloads[1] as Payload;
+        expect((second.input ?? second.messages!).slice(0, firstItems.length)).toEqual(firstItems);
+        const updates = state.requests[1]!.messages.filter((message) => message.role === 'system');
+        expect(updates).toHaveLength(2);
+        expect(updates[1]!.sections).toEqual({
+          'current-date':
+            '<current-date>\nThe current local date is `2027-01-01`.\n</current-date>',
+        });
+
+        await submitAndWait(runtime, input('third'));
+        expect(state.requests[2]!.messages.filter((message) => message.role === 'system')).toEqual(
+          updates,
+        );
+      } finally {
+        await runtime.close();
+        now.mockRestore();
+      }
+    },
+  );
+
+  test('starts the next queued input after a terminal provider failure without resubmission', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    const firstStream = new AssistantMessageEventStream();
+    const started = deferred<void>();
+    let calls = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        calls++;
+        if (calls === 1) {
+          started.resolve();
+          return firstStream;
+        }
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason: 'stop',
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        });
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    const completed = deferred<void>();
+    const observed = await runtime.observe(seed.sessionId, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'second' &&
+        event.turn.status === 'completed'
+      )
+        completed.resolve();
+    });
+    try {
+      await runtime.submit(seed.sessionId, input('first'));
+      await started.promise;
+      await runtime.submit(seed.sessionId, input('second'));
+      firstStream.push(
+        providerErrorEvent(emptyAssistantMessage(wire), {
+          message: 'Invalid request',
+          retryable: false,
+        }),
+      );
+      await completed.promise;
+      const history = await runtime.history(seed.sessionId, { limit: 10 });
+      expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
+        ['second', 'completed'],
+        ['first', 'failed'],
+      ]);
+      expect(calls).toBe(2);
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
   test.each(['openai-completions', 'openai-responses'] as const)(
     'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {
@@ -232,7 +602,6 @@ describe('Persistent Agent facade', () => {
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
-        currentDate: '2026-10-09',
         tools,
         skills,
         pluginGuides,
@@ -291,7 +660,7 @@ describe('Persistent Agent facade', () => {
         const serialized = JSON.stringify(payload);
         expect(serialized).toContain(text);
         expect(serialized).toContain('# Cherry Studio Mobile Runtime');
-        expect(serialized).toContain('2026-10-09');
+        expect(serialized).toContain('<current-date>');
         expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
         expect(serialized).toContain('## Reading Attachments');
@@ -531,53 +900,69 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('rebuilds independent history from Cherry parts without model requests', async () => {
-    const state = fixture();
-    const runtime = state.create();
-    await runtime.initialize(state.database, state.ports);
-    try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
-      await runtime.discardConversation('session');
-      expect(await runtime.hasConversation('session')).toBe(false);
-      await runtime.ensureConversation({
-        ...seed,
-        revision: 1,
-        history: {
-          history: [
-            {
-              turnId: 'first',
-              messages: [
-                { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
-                {
-                  role: 'assistant',
-                  parts: [
-                    { type: 'reasoning', text: 'Unsigned thought, never resent.' },
-                    { type: 'text', text: 'Response 1' },
-                  ],
-                },
-              ],
-            },
-          ],
-          contextCheckpoint: null,
-          referencedFileEntryIds: ['retained-file'],
-        },
-      });
-      expect(state.requests).toHaveLength(1);
-      expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
-      await submitAndWait(runtime, input('next'));
-      expect(state.requests[1]?.messages).toContainEqual(
-        expect.objectContaining({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Response 1' }],
-        }),
-      );
-      expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
-    } finally {
-      await runtime.close();
-    }
-  });
+  test.each([false, true])(
+    'rebuilds independent history with the system baseline first (compacted: %s)',
+    async (compacted) => {
+      const state = fixture();
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
+        await runtime.discardConversation('session');
+        expect(await runtime.hasConversation('session')).toBe(false);
+        await runtime.ensureConversation({
+          ...seed,
+          revision: 1,
+          history: {
+            history: [
+              {
+                turnId: 'first',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
+                  {
+                    role: 'assistant',
+                    parts: [
+                      { type: 'reasoning', text: 'Unsigned thought, never resent.' },
+                      { type: 'text', text: 'Response 1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+            contextCheckpoint: compacted
+              ? {
+                  version: 1,
+                  anchorTurnId: 'earlier',
+                  payload: {
+                    kind: 'pi-context-compaction',
+                    summary: 'Earlier user preferences.',
+                    tokensBefore: 8000,
+                  },
+                }
+              : null,
+            referencedFileEntryIds: ['retained-file'],
+          },
+        });
+        expect(state.requests).toHaveLength(1);
+        expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
+        await submitAndWait(runtime, input('next'));
+        expect(state.requests[1]?.messages[0]?.role).toBe('system');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('Help.');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('<current-date>');
+        expect(state.requests[1]?.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Response 1' }],
+          }),
+        );
+        expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
 
   test('detaching a UI observer preserves the active native execution', async () => {
     const state = fixture();

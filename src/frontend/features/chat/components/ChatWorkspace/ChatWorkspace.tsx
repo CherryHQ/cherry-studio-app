@@ -21,6 +21,7 @@ import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
+import { useConversationFeedbackHint } from './hooks/useConversationFeedbackHint';
 import { useIsScreenReaderEnabled } from './hooks/useIsScreenReaderEnabled';
 import { shouldWaitForInitialHistoryLayout } from './hooks/useMessageListInitialRenderGate';
 import { getTimestampMessageIds } from './messageTimestamps';
@@ -41,6 +42,7 @@ type ChatWorkspaceProps = {
   /** Direct source Session named by the fork-origin divider. */
   forkedFromSessionId?: string;
   keyboardOffset: number;
+  feedbackHintBottomOffset?: number;
   messageWindow: ConversationHistoryView;
   /** History and live rows already reconciled by the source; the workspace only presents them. */
   messages: readonly ConversationMessage[];
@@ -67,6 +69,7 @@ export function ChatWorkspace({
   forkBoundaryMessageId,
   forkedFromSessionId,
   keyboardOffset,
+  feedbackHintBottomOffset = 0,
   messageWindow,
   isAssistantToolbarEnabled,
   sessionId,
@@ -87,6 +90,11 @@ export function ChatWorkspace({
     returnToLatest,
     retry,
   } = messageWindow;
+  useConversationFeedbackHint(
+    messageWindow.dataKey || sessionId || 'draft',
+    live,
+    feedbackHintBottomOffset,
+  );
   const listKey = sessionId ?? pendingSend?.sessionId;
   const { t } = useTranslation();
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
@@ -115,7 +123,7 @@ export function ChatWorkspace({
           ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
           : message.display,
       );
-    if (!pendingSend) return projected;
+    if (!pendingSend || !pendingSend.isNewSession) return projected;
     const [user, assistant] = pendingSend.messages;
     const userIndex = projected.findIndex((message) => message.id === user.id);
     const assistantIndex = projected.findIndex((message) => message.id === assistant.id);

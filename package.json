@@ -1,7 +1,7 @@
 {
   "name": "cherry-studio-app",
   "main": "index.ts",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "engines": {
     "node": "24.x"
   },
@@ -92,11 +92,12 @@
     "@cherrystudio/remote-transport": "0.2.1",
     "@cherrystudio/ui": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
+    "@cherrystudio/web-search": "0.1.0",
     "@e965/xlsx": "0.20.3",
-    "@earendil-works/chord": "1.2.0",
-    "@earendil-works/pi-ai": "1.2.0",
-    "@earendil-works/pi-codemode": "1.2.0",
-    "@earendil-works/pi-durable": "1.2.0",
+    "@earendil-works/chord": "1.3.0",
+    "@earendil-works/pi-ai": "1.3.0",
+    "@earendil-works/pi-codemode": "1.3.0",
+    "@earendil-works/pi-durable": "1.3.0",
     "@expo/dom-webview": "^57.0.1",
     "@expo/metro-runtime": "~57.0.15",
     "@expo/ui": "~57.0.17",

@@ -4,11 +4,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
-import { FileQueryBridge } from '@/frontend/data/FileQueryBridge';
 import { queryKeys } from '@/frontend/data/queryKeys';
 import type { Backend } from '@/shared/contracts';
 import type { ApiClient } from '@/shared/data/api/types';
-import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
+import { FileEntrySchema, type FileEntry, type FileEntryId } from '@/shared/data/types/file';
 
 import { useFileEntries, type FileLibraryFilter } from '../useFileEntries';
 
@@ -44,12 +43,23 @@ const generatedEntry = FileEntrySchema.parse({
   size: 512,
   updatedAt: 3,
 });
+const libraryFile = (entry: FileEntry) => ({
+  id: entry.id,
+  name: entry.filename,
+  folderId: null,
+  entry,
+  versionCount: 1,
+});
 const dataApi = {
   delete: jest.fn(),
-  get: jest.fn(async () => ({ items: [entry, documentEntry] })),
+  get: jest.fn(async () => ({ items: [entry, documentEntry].map(libraryFile) })),
   patch: jest.fn(),
   post: jest.fn(),
   put: jest.fn(),
+  subscribeChanges: (listener: (paths: readonly string[]) => void) => {
+    fileChangeListeners.add(listener);
+    return () => fileChangeListeners.delete(listener);
+  },
 } as unknown as jest.Mocked<ApiClient>;
 const resolveUris = jest.fn(async (entries: readonly (typeof entry)[]) =>
   entries.map((item) => {
@@ -64,15 +74,11 @@ const generatePreviewUri = jest.fn(
       completePreview = resolve;
     }),
 );
-const fileChangeListeners = new Set<(entryId: FileEntryId) => void>();
+const fileChangeListeners = new Set<(paths: readonly string[]) => void>();
 const backend = {
   file: {
     generatePreviewUri,
     resolveUris,
-    subscribeChanges: (listener: (entryId: FileEntryId) => void) => {
-      fileChangeListeners.add(listener);
-      return () => fileChangeListeners.delete(listener);
-    },
   },
 } as unknown as Backend;
 
@@ -85,17 +91,14 @@ function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <BackendProvider backend={backend}>
-        <DataApiProvider dataApi={dataApi}>
-          <FileQueryBridge />
-          {children}
-        </DataApiProvider>
+        <DataApiProvider dataApi={dataApi}>{children}</DataApiProvider>
       </BackendProvider>
     </QueryClientProvider>
   );
 }
 
 function Probe({ enabled, filter = 'all' }: { enabled: boolean; filter?: FileLibraryFilter }) {
-  const result = useFileEntries(filter, { enabled });
+  const result = useFileEntries(filter, { enabled, folderId: null });
 
   useEffect(() => {
     latestResult = result;
@@ -107,6 +110,7 @@ function Probe({ enabled, filter = 'all' }: { enabled: boolean; filter?: FileLib
 
 describe('useFileEntries', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     completePreview = undefined;
     latestResult = undefined;
@@ -120,6 +124,7 @@ describe('useFileEntries', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
     queryClient.clear();
+    jest.useRealTimers();
   });
 
   test('sharing partitions the same loaded pages by source while keeping exported images in the image tab', async () => {
@@ -134,7 +139,7 @@ describe('useFileEntries', () => {
       provenance: 'document-export',
     });
     dataApi.get.mockResolvedValueOnce({
-      items: [exportedImage, generatedEntry, exportedDocument, entry],
+      items: [exportedImage, generatedEntry, exportedDocument, entry].map(libraryFile),
     });
     await act(async () => {
       renderer = create(
@@ -190,8 +195,8 @@ describe('useFileEntries', () => {
     await flushQueryNotifications();
 
     expect(dataApi.get).toHaveBeenCalledTimes(1);
-    expect(dataApi.get).toHaveBeenCalledWith('/files/entries', {
-      query: { cursor: undefined, limit: 30 },
+    expect(dataApi.get).toHaveBeenCalledWith('/files/library', {
+      query: { cursor: undefined, limit: 30, folderId: null },
     });
     expect(resolveUris).toHaveBeenCalledTimes(1);
     expect(resolveUris).toHaveBeenCalledWith([entry, documentEntry]);
@@ -200,11 +205,13 @@ describe('useFileEntries', () => {
     expect(latestResult?.entries).toEqual([
       {
         entry,
+        libraryFile: libraryFile(entry),
         previewUri: undefined,
         uri: 'file:///documents/photo.png',
       },
       {
         entry: documentEntry,
+        libraryFile: libraryFile(documentEntry),
         previewUri: 'file:///documents/notes.pdf',
         uri: 'file:///documents/notes.pdf',
       },
@@ -218,6 +225,7 @@ describe('useFileEntries', () => {
 
     expect(latestResult?.entries[0]).toEqual({
       entry,
+      libraryFile: libraryFile(entry),
       previewUri: `file:///cache/${entry.id}.webp`,
       uri: 'file:///documents/photo.png',
     });
@@ -230,7 +238,7 @@ describe('useFileEntries', () => {
       ...entry,
       mediaType: 'Image/PNG;charset=binary',
     });
-    dataApi.get.mockResolvedValueOnce({ items: [parameterizedImage] });
+    dataApi.get.mockResolvedValueOnce({ items: [parameterizedImage].map(libraryFile) });
     resolveUris.mockResolvedValueOnce([
       { previewUri: undefined, uri: 'file:///documents/photo.png' },
     ]);
@@ -281,7 +289,9 @@ describe('useFileEntries', () => {
 
     // Background generation finishes with only the app-wide bridge mounted.
     await act(async () => renderer?.update(<Providers>{null}</Providers>));
-    dataApi.get.mockResolvedValueOnce({ items: [generatedEntry, entry, documentEntry] });
+    dataApi.get.mockResolvedValueOnce({
+      items: [generatedEntry, entry, documentEntry].map(libraryFile),
+    });
     await act(async () => notifyFileChange(generatedEntry.id));
     expect(dataApi.get).toHaveBeenCalledTimes(1);
 
@@ -316,8 +326,8 @@ describe('useFileEntries', () => {
     await act(async () => completePreview?.(`file:///cache/${entry.id}.webp`));
     await flushQueryNotifications();
 
-    const otherPageSizeKey = ['/files/entries', { limit: 10 }] as const;
-    queryClient.setQueryData(otherPageSizeKey, { items: [entry, documentEntry] });
+    const otherPageSizeKey = ['/files/library', { limit: 10 }] as const;
+    queryClient.setQueryData(otherPageSizeKey, { items: [entry, documentEntry].map(libraryFile) });
     queryClient.setQueryData(queryKeys.files.uri(entry.id), `file:///documents/${entry.filename}`);
     const viewerTextKey = queryKeys.files.viewerText(
       documentEntry,
@@ -332,7 +342,9 @@ describe('useFileEntries', () => {
     ];
     const previews = previewKeys.map((key) => queryClient.getQueryData(key));
 
-    dataApi.get.mockResolvedValueOnce({ items: [generatedEntry, entry, documentEntry] });
+    dataApi.get.mockResolvedValueOnce({
+      items: [generatedEntry, entry, documentEntry].map(libraryFile),
+    });
     await act(async () => notifyFileChange(generatedEntry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
@@ -350,14 +362,16 @@ describe('useFileEntries', () => {
     expect(generatePreviewUri).toHaveBeenCalledTimes(1);
 
     const rewrittenEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024 });
-    dataApi.get.mockResolvedValueOnce({ items: [rewrittenEntry, entry, documentEntry] });
+    dataApi.get.mockResolvedValueOnce({
+      items: [rewrittenEntry, entry, documentEntry].map(libraryFile),
+    });
     await act(async () => notifyFileChange(generatedEntry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
     expect(latestResult?.entries[0].entry).toEqual(rewrittenEntry);
 
     // Deletion uses the same notification, regardless of which workflow owns it.
-    dataApi.get.mockResolvedValueOnce({ items: [documentEntry] });
+    dataApi.get.mockResolvedValueOnce({ items: [documentEntry].map(libraryFile) });
     await act(async () => notifyFileChange(entry.id));
     await flushQueryNotifications();
     await flushQueryNotifications();
@@ -367,7 +381,9 @@ describe('useFileEntries', () => {
   test.each([false, true])(
     'keeps surviving files visible through consecutive deletions with a ready preview: %s',
     async (isPreviewReady) => {
-      dataApi.get.mockResolvedValueOnce({ items: [entry, documentEntry, generatedEntry] });
+      dataApi.get.mockResolvedValueOnce({
+        items: [entry, documentEntry, generatedEntry].map(libraryFile),
+      });
       await act(async () => {
         renderer = create(
           <Providers>
@@ -392,7 +408,7 @@ describe('useFileEntries', () => {
       );
       observedResults = [];
       try {
-        dataApi.get.mockResolvedValueOnce({ items: [entry, generatedEntry] });
+        dataApi.get.mockResolvedValueOnce({ items: [entry, generatedEntry].map(libraryFile) });
         await act(async () => notifyFileChange(documentEntry.id));
         await flushQueryNotifications();
         await flushQueryNotifications();
@@ -401,7 +417,7 @@ describe('useFileEntries', () => {
           generatedEntry.id,
         ]);
 
-        dataApi.get.mockResolvedValueOnce({ items: [entry] });
+        dataApi.get.mockResolvedValueOnce({ items: [entry].map(libraryFile) });
         await act(async () => notifyFileChange(generatedEntry.id));
         await flushQueryNotifications();
         await flushQueryNotifications();
@@ -413,6 +429,7 @@ describe('useFileEntries', () => {
           expect(result.isLoading).toBe(false);
           expect(result.entries.find((item) => item.entry.id === entry.id)).toEqual({
             entry,
+            libraryFile: libraryFile(entry),
             previewUri: isPreviewReady ? `file:///cache/${entry.id}.webp` : undefined,
             uri: 'file:///documents/photo.png',
           });
@@ -426,9 +443,9 @@ describe('useFileEntries', () => {
         expect(latestResult?.entries.map((item) => item.entry.id)).toEqual([entry.id]);
         expect(generatePreviewUri).toHaveBeenCalledTimes(1);
 
-        dataApi.get.mockResolvedValueOnce({ items: [] });
+        dataApi.get.mockResolvedValueOnce({ items: [].map(libraryFile) });
         await act(async () => notifyFileChange(entry.id));
-        await flushQueryNotifications();
+        await flushFileChange();
         await act(async () => {
           for (const complete of pendingUriPages) await complete();
         });
@@ -442,8 +459,8 @@ describe('useFileEntries', () => {
   );
 
   test('unsubscribes from file changes when the app provider unmounts', async () => {
-    const pagesKey = ['/files/entries', { limit: 30 }] as const;
-    queryClient.setQueryData(pagesKey, { items: [] });
+    const pagesKey = ['/files/library', { limit: 30 }] as const;
+    queryClient.setQueryData(pagesKey, { items: [].map(libraryFile) });
     await act(async () => {
       renderer = create(<Providers>{null}</Providers>);
     });
@@ -486,7 +503,7 @@ describe('useFileEntries', () => {
     content = 'rewritten content';
     currentEntry = FileEntrySchema.parse({ ...generatedEntry, size: 1024 });
     await act(async () => notifyFileChange(generatedEntry.id));
-    await flushQueryNotifications();
+    await flushFileChange();
 
     expect(displayedText).toBe('rewritten content');
     expect(readText).toHaveBeenCalledTimes(2);
@@ -534,7 +551,10 @@ describe('useFileEntries', () => {
 
   test('keeps loaded entries and stops automatic pagination after a later page fails', async () => {
     const error = new Error('Next page failed');
-    dataApi.get.mockResolvedValueOnce({ items: [documentEntry], nextCursor: 'next' });
+    dataApi.get.mockResolvedValueOnce({
+      items: [documentEntry].map(libraryFile),
+      nextCursor: 'next',
+    });
     dataApi.get.mockRejectedValueOnce(error);
     await act(async () => {
       renderer = create(
@@ -554,11 +574,18 @@ describe('useFileEntries', () => {
 });
 
 function notifyFileChange(entryId: FileEntryId) {
-  for (const listener of fileChangeListeners) listener(entryId);
+  for (const listener of fileChangeListeners)
+    listener(['/files/library', '/files/entries', `/files/entries/${entryId}`]);
+}
+
+/** One window lets DataApiProvider coalesce the change; the next lets the refetch it starts land. */
+async function flushFileChange() {
+  await flushQueryNotifications();
+  await flushQueryNotifications();
 }
 
 async function flushQueryNotifications() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await jest.advanceTimersByTimeAsync(300);
   });
 }
