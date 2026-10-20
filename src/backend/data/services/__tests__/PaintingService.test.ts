@@ -79,6 +79,14 @@ describe('PaintingService integration', () => {
     insertPainting(sqlite, 'busy-2', 'a1', 2, { input: [], output: [] }, 'board-busy');
     insertPainting(sqlite, 'busy-3', 'a2', 3, { input: [], output: ['busy-3-out'] }, 'board-busy');
     insertPainting(sqlite, 'busy-4', 'a3', 4, { input: [], output: ['busy-4-out'] }, 'board-busy');
+    insertPainting(
+      sqlite,
+      'busy-5',
+      'a6',
+      7,
+      { input: [], output: ['busy-5-a', 'busy-5-b'] },
+      'board-busy',
+    );
     insertPainting(sqlite, 'quiet-1', 'a4', 5, { input: [], output: ['quiet-out'] }, 'board-quiet');
     insertPainting(sqlite, 'old-1', 'a5', 6, { input: [], output: [] }, 'board-old');
     touchBoard(sqlite, 'board-busy', 30);
@@ -95,14 +103,16 @@ describe('PaintingService integration', () => {
       'board-busy',
       'board-quiet',
     ]);
-    expect(firstPage.items[0]).toMatchObject({ paintingCount: 4 });
+    expect(firstPage.items[0]).toMatchObject({ imageCount: 5, paintingCount: 5 });
     expect(firstPage.items[0].recentPaintings.map(({ id }) => id)).toEqual([
+      'busy-5',
       'busy-4',
       'busy-3',
       'busy-2',
     ]);
-    expect(firstPage.items[0].recentPaintings[2].files).toEqual({ input: [], output: [] });
-    expect(firstPage.items[1]).toMatchObject({ paintingCount: 1 });
+    expect(firstPage.items[0].recentPaintings[3].files).toEqual({ input: [], output: [] });
+    expect(firstPage.items[1]).toMatchObject({ imageCount: 1, paintingCount: 1 });
+    expect(secondPage.items[0]).toMatchObject({ imageCount: 0, paintingCount: 1 });
     expect(secondPage.items.map((summary) => summary.board.id)).toEqual(['board-old']);
     expect(secondPage.nextCursor).toBeUndefined();
   });

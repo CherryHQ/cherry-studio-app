@@ -83,16 +83,22 @@ export class PaintingService {
     const pageRows = rows.slice(0, limit);
     const last = pageRows.at(-1);
     const boardIds = pageRows.map((row) => row.id);
-    const counts = new Map<string, number>();
+    const counts = new Map<string, { images: number; paintings: number }>();
     const recent = new Map<string, Painting[]>();
 
     if (boardIds.length > 0) {
       const countRows = await this.db
-        .select({ boardId: paintingTable.boardId, count: sql<number>`count(*)` })
+        .select({
+          boardId: paintingTable.boardId,
+          images: sql<number>`coalesce(sum(json_array_length(${paintingTable.files}, '$.output')), 0)`,
+          paintings: sql<number>`count(*)`,
+        })
         .from(paintingTable)
         .where(inArray(paintingTable.boardId, boardIds))
         .groupBy(paintingTable.boardId);
-      for (const row of countRows) counts.set(row.boardId, Number(row.count));
+      for (const row of countRows) {
+        counts.set(row.boardId, { images: Number(row.images), paintings: Number(row.paintings) });
+      }
 
       const ranked = this.db
         .select({
@@ -119,7 +125,8 @@ export class PaintingService {
     return {
       items: pageRows.map((row) => ({
         board: rowToBoard(row),
-        paintingCount: counts.get(row.id) ?? 0,
+        imageCount: counts.get(row.id)?.images ?? 0,
+        paintingCount: counts.get(row.id)?.paintings ?? 0,
         recentPaintings: recent.get(row.id) ?? [],
       })),
       ...(rows.length > limit && last

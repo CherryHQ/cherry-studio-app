@@ -181,7 +181,7 @@ function BoardCard({
         active={extraData.active}
         cells={card.cells}
         height={coverHeight}
-        layout={layout}
+        moreCount={card.moreCount}
         width={width}
       />
       <View className="gap-0.5">

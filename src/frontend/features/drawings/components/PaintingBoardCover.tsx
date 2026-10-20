@@ -1,33 +1,36 @@
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import { Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import type { PaintingBoardCoverCell } from '@/frontend/data/paintings/paintingBoardCover';
+import {
+  PAINTING_BOARD_COVER_CELLS,
+  type PaintingBoardCoverCell,
+} from '@/frontend/data/paintings/paintingBoardCover';
 
 const cellGap = 2;
 
-type CoverLayout = 'grid' | 'wide';
 type Frame = { height: number; left: number; top: number; width: number };
 
 /**
- * A board's newest work as one mosaic. The wide card lays its cells side by
- * side with the newest one leading; a grid card gives the newest a tall column
- * and stacks the next two beside it.
+ * A board's newest work as one mosaic split in halves: two cells sit side by
+ * side, with three the newest keeps the left half while the next two stack in
+ * the right half, and past three the bottom-right cell splits again so its
+ * right half can say how many more the board holds.
  */
 export function PaintingBoardCover({
   active,
   cells,
   height,
-  layout,
+  moreCount,
   width,
 }: {
   active: boolean;
   cells: readonly PaintingBoardCoverCell[];
   height: number;
-  layout: CoverLayout;
+  moreCount: number;
   width: number;
 }) {
-  const frames = coverFrames(cells.length, layout, width, height);
+  const frames = coverFrames(cells.length, width, height);
 
   return (
     <View
@@ -64,6 +67,11 @@ export function PaintingBoardCover({
                   width={frame.width}
                 />
               )}
+              {index === PAINTING_BOARD_COVER_CELLS - 1 && moreCount > 0 ? (
+                <View className="absolute inset-0 items-center justify-center bg-constant-black/50">
+                  <Text className="font-semibold text-base text-constant-white">+{moreCount}</Text>
+                </View>
+              ) : null}
             </View>
           );
         })
@@ -72,25 +80,23 @@ export function PaintingBoardCover({
   );
 }
 
-function coverFrames(count: number, layout: CoverLayout, width: number, height: number): Frame[] {
+function coverFrames(count: number, width: number, height: number): Frame[] {
   if (count <= 1) return [{ height, left: 0, top: 0, width }];
-  if (layout === 'wide' || count === 2) {
-    // The newest cell is wider so the eye lands on it first.
-    const weights = count === 2 ? [1.5, 1] : [1.5, 1, 1];
-    const unit = (width - cellGap * (count - 1)) / weights.reduce((sum, weight) => sum + weight);
-    let left = 0;
-    return weights.map((weight) => {
-      const frame = { height, left, top: 0, width: unit * weight };
-      left += frame.width + cellGap;
-      return frame;
-    });
+  const halfWidth = (width - cellGap) / 2;
+  const right = halfWidth + cellGap;
+  const left = { height, left: 0, top: 0, width: halfWidth };
+  if (count === 2) return [left, { height, left: right, top: 0, width: halfWidth }];
+  const halfHeight = (height - cellGap) / 2;
+  const bottom = halfHeight + cellGap;
+  const topRight = { height: halfHeight, left: right, top: 0, width: halfWidth };
+  if (count === 3) {
+    return [left, topRight, { height: halfHeight, left: right, top: bottom, width: halfWidth }];
   }
-  const leadWidth = (width - cellGap) * 0.6;
-  const sideWidth = width - cellGap - leadWidth;
-  const sideHeight = (height - cellGap) / 2;
+  const quarterWidth = (halfWidth - cellGap) / 2;
   return [
-    { height, left: 0, top: 0, width: leadWidth },
-    { height: sideHeight, left: leadWidth + cellGap, top: 0, width: sideWidth },
-    { height: sideHeight, left: leadWidth + cellGap, top: sideHeight + cellGap, width: sideWidth },
+    left,
+    topRight,
+    { height: halfHeight, left: right, top: bottom, width: quarterWidth },
+    { height: halfHeight, left: right + quarterWidth + cellGap, top: bottom, width: quarterWidth },
   ];
 }

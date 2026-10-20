@@ -18,7 +18,7 @@ import {
 import type { PaintingGenerationInput, PaintingsModule, ResolvedFile } from '@/shared/contracts';
 import type { Painting, PaintingBoard, PaintingBoardSummary } from '@/shared/data/types/painting';
 
-import { type PaintingBoardCoverCell, paintingBoardCoverCells } from './paintingBoardCover';
+import { type PaintingBoardCoverContent, paintingBoardCover } from './paintingBoardCover';
 import { usePaintingJobs } from './usePaintingJobs';
 
 const boardPageSize = 20;
@@ -45,9 +45,8 @@ export function usePaintingBoards() {
   };
 }
 
-export type PaintingBoardCard = {
+export type PaintingBoardCard = PaintingBoardCoverContent & {
   board: PaintingBoard;
-  cells: PaintingBoardCoverCell[];
   paintingCount: number;
 };
 
@@ -62,12 +61,13 @@ export function usePaintingBoardCards(summaries: readonly PaintingBoardSummary[]
   const cards = useMemo<PaintingBoardCard[]>(() => {
     const activePaintingIds = new Set(activeByPaintingId.keys());
     return summaries.map((summary) => ({
-      board: summary.board,
-      cells: paintingBoardCoverCells(
+      ...paintingBoardCover(
         summary.recentPaintings,
         outputs.byPaintingId,
         activePaintingIds,
+        summary.imageCount,
       ),
+      board: summary.board,
       paintingCount: summary.paintingCount,
     }));
   }, [activeByPaintingId, outputs.byPaintingId, summaries]);

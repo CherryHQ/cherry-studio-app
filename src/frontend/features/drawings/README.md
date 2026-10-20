@@ -8,8 +8,10 @@ This page owns `/drawings`, the sidebar's paintings destination, and its child r
 The home is one vertical list. A compact row of bundled templates comes first; "All" or any card
 opens the template stage. Every board follows, most recently touched first: the latest one full
 width so it is easy to pick up again, the rest two to a row. A card shows the board's newest work as
-a mosaic — a running generation holds its place with the shared loader, and receipts that stopped
-without images are skipped — then the title and the generation count with the last-change date.
+a mosaic split in halves — two side by side; three as the newest on the left with two stacked on
+the right; past three the bottom-right cell splits again and its right half shows `+n` for the rest.
+A running generation holds its place with the shared loader, and receipts that stopped without
+images are skipped. Below the cover sit the title and the generation count with the last-change date.
 Tapping a card opens `/paintings` with its `boardId`. The composer at the bottom is the board's own
 painting composer; its first send starts a new board and opens it.
 
