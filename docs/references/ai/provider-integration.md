@@ -65,7 +65,9 @@ sharing chat's OAuth and protocol adapters without creating conversation history
 
 Image generation captures an immutable usage context through ai-core's `onProviderCallStart` for
 each provider invocation, including each batch and retry. Its completion handler keeps that
-context paired with the upstream request ID, image count, usage, timing, and completion time.
+context paired with the ai-core-generated invocation ID, image count, usage, timing, and completion
+time. The invocation ID is generated locally as `ai-core:image:<UUID>` and is distinct from any
+provider-issued request ID.
 The credential receipt describes the key actually selected for the operation; observing a new
 invocation does not rotate credentials. Failed attempts have no successful usage event and do not
 produce invented billing records. `AiUsageRecordService` deduplicates successful records by request
