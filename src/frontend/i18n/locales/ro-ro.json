@@ -700,6 +700,7 @@
   "fileViewer.selection.openChat": "Citează într-o conversație nouă",
   "fileViewer.selection.requiresAgent": "Creează un Agent în modul standard pentru a lucra cu această selecție.",
   "fileViewer.selection.select": "Selectează conținutul de citat",
+  "fileViewer.selection.slide": "Diapozitivul {{slide}}",
   "fileViewer.share": "Distribuie",
   "fileViewer.shareFailed": "Nu s-a putut partaja acest fișier. Încearcă din nou.",
   "fileViewer.shareUnavailable": "Partajarea fișierelor nu este disponibilă pe acest dispozitiv.",

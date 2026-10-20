@@ -2405,6 +2405,7 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
           text: part.text,
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
+          ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
         }),
       ];
     if (part.type === 'file')

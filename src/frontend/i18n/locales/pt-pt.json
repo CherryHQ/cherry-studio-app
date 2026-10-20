@@ -700,6 +700,7 @@
   "fileViewer.selection.openChat": "Citar numa nova conversa",
   "fileViewer.selection.requiresAgent": "Crie um Agent no modo padrão para trabalhar com esta seleção.",
   "fileViewer.selection.select": "Selecionar conteúdo para citar",
+  "fileViewer.selection.slide": "Diapositivo {{slide}}",
   "fileViewer.share": "Partilhar",
   "fileViewer.shareFailed": "Não foi possível partilhar este ficheiro. Tente novamente.",
   "fileViewer.shareUnavailable": "A partilha de ficheiros não está disponível neste dispositivo.",

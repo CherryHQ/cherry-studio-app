@@ -690,6 +690,7 @@
   "fileViewer.selection.openChat": "Αναφορά σε νέα συνομιλία",
   "fileViewer.selection.requiresAgent": "Δημιουργήστε έναν Agent σε τυπική λειτουργία για να επεξεργαστείτε αυτήν την επιλογή.",
   "fileViewer.selection.select": "Επιλογή περιεχομένου για αναφορά",
+  "fileViewer.selection.slide": "Διαφάνεια {{slide}}",
   "fileViewer.share": "Κοινή χρήση",
   "fileViewer.shareFailed": "Δεν ήταν δυνατή η κοινή χρήση αυτού του αρχείου. Προσπαθήστε ξανά.",
   "fileViewer.shareUnavailable": "Η κοινή χρήση αρχείων δεν είναι διαθέσιμη σε αυτήν τη συσκευή.",

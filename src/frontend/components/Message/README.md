@@ -333,8 +333,10 @@ child's tap, native selection, or scrolling behavior.
 | Fenced code and Markdown tables | Native renderer owns block copy menus and nested scrolling inside the excluded text or process region |
 | Video/source-document/step-start parts | No rendered touch target |
 
-Plugin and Skill references stay inline as an icon and name in the input's link color, using their
-recorded UTF-16 text ranges. User messages do not show a separate Skill selection or revision caption.
+Plugin, Skill and Office selection references stay inline as an icon and name in the input's link
+color, using their recorded UTF-16 text ranges. A selection chip shows only its file and location
+label; its anchor and excerpt reach the model through runtime input. User messages do not show a
+separate Skill selection or revision caption.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
 the Skill's name and description. Instruction bodies, revision hashes and library navigation belong

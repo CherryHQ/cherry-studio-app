@@ -49,6 +49,7 @@ import { toAgentInputParts } from './utils/agentInputParts';
 import { getConnectedChatInputPlugins } from './utils/chatInputPlugins';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 import { readPluginMentions } from './utils/pluginMentions';
+import { readSelectionMentions } from './utils/selectionMentions';
 import { getSendErrorLabelKey } from './utils/sendErrorLabel';
 import { readSkillMentions, removeSkillMentions } from './utils/skillMentions';
 
@@ -291,10 +292,18 @@ function TextChatInput({
       } = mode === 'standard'
         ? readSkillMentions(plugins.text, plugins.pluginReferences)
         : { skills: [], skillAction: undefined, skillReferences: [], pluginReferences: [], text };
+      // Selection chips come from Office previews in any mode; their parsing shifts earlier offsets.
+      const selections = readSelectionMentions(prompt);
+      const shifted = <T extends { offset: number }>(references: T[]) =>
+        references.map((reference) => ({
+          ...reference,
+          offset: selections.shift(reference.offset),
+        }));
       const parts = toAgentInputParts(
-        { attachments, text: prompt },
-        pluginReferences,
-        skillReferences,
+        { attachments, text: selections.text },
+        shifted(pluginReferences),
+        shifted(skillReferences),
+        selections.selectionReferences,
       );
       const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
       for (const context of appContexts)

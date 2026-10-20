@@ -690,6 +690,7 @@
   "fileViewer.selection.openChat": "Reference in new chat",
   "fileViewer.selection.requiresAgent": "Create a standard Agent to work with this selection.",
   "fileViewer.selection.select": "Select content to reference",
+  "fileViewer.selection.slide": "Slide {{slide}}",
   "fileViewer.share": "Share",
   "fileViewer.shareFailed": "Could not share this file. Try again.",
   "fileViewer.shareUnavailable": "File sharing is unavailable on this device.",

@@ -6,7 +6,7 @@ import {
 import type { ResolvedFile } from '@/shared/contracts/file';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
-import { officeSelectionDraft } from '../officeSelection';
+import { officeSelectionReference } from '../officeSelection';
 
 const ID = '00000000-0000-7000-8000-000000000001';
 const file: ResolvedFile = {
@@ -28,18 +28,35 @@ const selection: FilePreviewSelection = {
   excerpt: 'quoted ``` content',
 };
 
-test('preserves structural coordinates and the excerpt while excluding device paths', () => {
-  const draft = officeSelectionDraft(file, selection)!;
-  expect(draft).toContain('````selection-ref');
-  expect(draft).toContain('"paragraph":3');
-  expect(draft).toContain('"charRange":[1,5]');
-  expect(draft).toContain('"excerpt":"' + selection.excerpt + '"');
-  expect(draft).not.toContain(file.uri);
+const slide = (number: number) => `Slide ${number}`;
+
+test('labels the chip like desktop and keeps coordinates and the excerpt without device paths', () => {
+  expect(officeSelectionReference(file, selection, slide)).toEqual({
+    label: 'report.docx · ¶4',
+    selection: { file_entry_id: ID, anchor: selection.anchor, excerpt: selection.excerpt },
+  });
+  expect(JSON.stringify(officeSelectionReference(file, selection, slide))).not.toContain(file.uri);
+  expect(
+    officeSelectionReference(
+      file,
+      { ...selection, anchor: { format: 'xlsx', sheet: '假设', range: 'B4' } },
+      slide,
+    )?.label,
+  ).toBe('report.docx · 假设!B4');
+  expect(
+    officeSelectionReference(file, { ...selection, anchor: { format: 'pptx', slide: 2 } }, slide)
+      ?.label,
+  ).toBe('report.docx · Slide 2');
 });
 
-test('rejects a selection captured from another file or revision', () => {
-  expect(officeSelectionDraft(file, { ...selection, revision: '41' })).toBeUndefined();
-  expect(officeSelectionDraft(file, { ...selection, sourceId: 'another' })).toBeUndefined();
+test('rejects a selection captured from another file, revision or a PDF', () => {
+  expect(officeSelectionReference(file, { ...selection, revision: '41' }, slide)).toBeUndefined();
+  expect(
+    officeSelectionReference(file, { ...selection, sourceId: 'another' }, slide),
+  ).toBeUndefined();
+  expect(
+    officeSelectionReference(file, { ...selection, anchor: { format: 'pdf', page: 1 } }, slide),
+  ).toBeUndefined();
 });
 
 test('validates page selections before they can reach the composer', () => {

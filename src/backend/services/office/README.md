@@ -145,7 +145,8 @@ replacement rejects the entire batch; the tool publishes no partial result.
 
 The file viewer's selection mode uses the already-shared `@cherrystudio/file-preview`.
 **Reference in new chat** opens an editable standard-Agent draft with the original attachment and a
-`selection-ref` block containing its managed file id, structural anchor and excerpt; it does not send.
+selection chip; it does not send. Runtime input turns the chip into a `selection-ref` block with its
+managed file id, structural anchor and excerpt.
 Following Desktop's workflow, the Agent reads the current referenced content and compares it with
 the excerpt before editing. Selection references do not impose an additional backend digest check
 or grant file access. AnyDoc remains the reader; its intermediate representation is never the

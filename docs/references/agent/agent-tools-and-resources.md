@@ -589,7 +589,11 @@ text(await tools.inspect_office_file({ file_entry_id: load("documentId") }));
 ```
 
 The existing preview page hands selections and their original attachments to a new editable chat
-draft. Each `selection-ref` carries the managed file id, structural anchor and excerpt. The Agent
+draft. The composer and the sent message show each selection as a chip labelled like desktop's
+(`file · ¶4`, `file · Sheet!B2`, `file · Slide 2`); the message stores it as a text reference with
+the managed file id, structural anchor and excerpt. Runtime input expands each chip into the same
+fenced `selection-ref` block desktop sends, placed after its label, so the model contract is
+unchanged. Remote desktop conversations refuse selection chips instead of dropping them. The Agent
 reads the current referenced content and compares it with the excerpt before editing, following
 Desktop's workflow. Selection references do not widen file grants.
 

@@ -17,7 +17,7 @@ import {
 } from '@/shared/utils/documentFileTypes';
 
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
-import { officeSelectionDraft } from '../utils/officeSelection';
+import { officeSelectionReference } from '../utils/officeSelection';
 import { FileDocumentPreview } from './FileDocumentPreview';
 import { FileMenuGuide } from './FileMenuGuide';
 import { FileViewerHeader } from './FileViewerHeader';
@@ -50,8 +50,10 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
   };
   const openSelection = () => {
     if (!selection) return;
-    const draft = officeSelectionDraft(file, selection);
-    if (!draft) return;
+    const reference = officeSelectionReference(file, selection, (slide) =>
+      t('fileViewer.selection.slide', { slide }),
+    );
+    if (!reference) return;
     const agent = agents.find((agent) => agent.mode === 'standard');
     if (!agent) {
       toast.show({ label: t('fileViewer.selection.requiresAgent'), variant: 'danger' });
@@ -59,7 +61,8 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
     }
     const composerHandoff = createChatComposerHandoff({
       attachments: [createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`)],
-      draft: draft + '\n\n',
+      draft: '',
+      selection: reference,
     });
     router.dismissTo(chatHref({ kind: 'draft', agentId: agent.id, composerHandoff }));
   };

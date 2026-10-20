@@ -680,6 +680,7 @@
   "fileViewer.selection.openChat": "在新对话中引用",
   "fileViewer.selection.requiresAgent": "请先创建标准模式 Agent，再处理此选区。",
   "fileViewer.selection.select": "选择引用内容",
+  "fileViewer.selection.slide": "第 {{slide}} 页",
   "fileViewer.share": "分享",
   "fileViewer.shareFailed": "分享文件失败，请重试。",
   "fileViewer.shareUnavailable": "当前设备无法分享文件。",

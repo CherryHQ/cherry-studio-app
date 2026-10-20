@@ -690,6 +690,7 @@
   "fileViewer.selection.openChat": "In neuem Chat referenzieren",
   "fileViewer.selection.requiresAgent": "Erstellen Sie einen Agent im Standardmodus, um diese Auswahl zu bearbeiten.",
   "fileViewer.selection.select": "Inhalt zum Referenzieren auswählen",
+  "fileViewer.selection.slide": "Folie {{slide}}",
   "fileViewer.share": "Teilen",
   "fileViewer.shareFailed": "Diese Datei konnte nicht freigegeben werden. Versuchen Sie es erneut.",
   "fileViewer.shareUnavailable": "Die Dateifreigabe ist auf diesem Gerät nicht verfügbar.",
