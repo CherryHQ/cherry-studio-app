@@ -514,7 +514,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
           await this.connections.revoke(this.lease.connectionId, 'agent', this.lease.grantId);
         throw new RemoteAgentError(
           error.reason,
-          ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
+          error.failure.details?.retryable !== false &&
+            ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
           error.message,
         );
       }
