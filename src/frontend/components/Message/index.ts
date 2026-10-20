@@ -1,4 +1,6 @@
 export { MessageList } from './MessageList';
+export { useMessageListDisclosureToggle } from './list/MessageListDisclosureContext';
+export { type MessageListScroll, useMessageListScroll } from './list/MessageListScrollContext';
 export { ToolRendererProvider } from './parts/tools/ToolRendererContext';
 export {
   ToolInputPreviewProvider,

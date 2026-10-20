@@ -6,18 +6,24 @@ import {
   InfoPopover,
   type MenuItem,
 } from '@cherrystudio/ui/components';
-import { memo, type ReactElement, type ReactNode, useState } from 'react';
+import { memo, type ReactElement, type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
-import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
+import {
+  AssistantMessage,
+  type MessageListItem,
+  useMessageListDisclosureToggle,
+  UserMessage,
+} from '@/frontend/components/Message';
 
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
+import { AnswerReadingSection, type AnswerReadingSectionHandle } from './AnswerReadingSection';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
-import { MessageAnswerTabs } from './MessageAnswerTabs';
+import { AnswerReadingBar, MessageAnswerCards } from './MessageAnswerCards';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
@@ -56,7 +62,7 @@ function AssistantMessageHeader({
 }) {
   const { t } = useTranslation();
   const [isNameWrapped, setIsNameWrapped] = useState(false);
-  // Several answers name their models in the tabs below instead.
+  // Several answers name their models on their own cards instead.
   const model = message.branch ? undefined : message.model;
 
   const header = (
@@ -122,31 +128,93 @@ function AssistantMessageHeader({
   );
 }
 
-function renderChatAssistantMessage(
-  message: MessageListItem,
-  presentation: AssistantMessagePresentation,
-  attachments: ReactNode,
-  accessories: ReactNode,
-  renderUsage: ((message: MessageListItem) => ReactNode) | undefined,
-) {
+/**
+ * An answer with its header and actions. Several answers to one question are cards to swipe
+ * between until one is read in full; a source that cannot switch answers shows only the
+ * selected one.
+ */
+function AssistantChatMessage({
+  accessories,
+  attachments,
+  message,
+  presentation,
+  renderUsage,
+}: {
+  accessories: ReactNode;
+  attachments: ReactNode;
+  message: MessageListItem;
+  presentation: AssistantMessagePresentation;
+  renderUsage: ((message: MessageListItem) => ReactNode) | undefined;
+}) {
+  const { selectBranch } = useAssistantMessageActions();
+  // Opening, folding and switching the answer read in full move the reader, not the live edge.
+  const stopFollowing = useMessageListDisclosureToggle();
+  const [isReading, setIsReading] = useState(false);
+  const sectionRef = useRef<AnswerReadingSectionHandle>(null);
+  const isGrouped = Boolean(message.branch && selectBranch);
+  const header = <AssistantMessageHeader message={message} presentation={presentation} />;
+  const extras = (
+    <>
+      {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
+      {accessories}
+      {message.status !== 'pending' ? (
+        <BackgroundPressExclusion>
+          <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
+            <AssistantMessageToolbar message={message} />
+            <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
+          </ContextMenuExclusion>
+        </BackgroundPressExclusion>
+      ) : null}
+      <MessageTranslationContent message={message} />
+    </>
+  );
+
+  if (isGrouped && !isReading) {
+    return (
+      <View className="w-full gap-2.5">
+        {header}
+        <MessageAnswerCards
+          message={message}
+          onExpand={() => {
+            stopFollowing();
+            setIsReading(true);
+          }}
+        />
+        <View className="w-full gap-2">{extras}</View>
+      </View>
+    );
+  }
+  const answer = <AssistantMessage message={message}>{extras}</AssistantMessage>;
   return (
     <View className="w-full gap-2.5">
-      <AssistantMessageHeader message={message} presentation={presentation} />
-      {/* Above the answer so parallel answers can be compared while they still stream. */}
-      {message.branch ? <MessageAnswerTabs message={message} /> : null}
-      <AssistantMessage message={message}>
-        {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
-        {accessories}
-        {message.status !== 'pending' ? (
-          <BackgroundPressExclusion>
-            <ContextMenuExclusion className="w-full flex-row flex-wrap items-center gap-x-3 gap-y-1">
-              <AssistantMessageToolbar message={message} />
-              <View className="min-w-0 max-w-full flex-1 items-end">{renderUsage?.(message)}</View>
-            </ContextMenuExclusion>
-          </BackgroundPressExclusion>
-        ) : null}
-        <MessageTranslationContent message={message} />
-      </AssistantMessage>
+      {header}
+      {isGrouped ? (
+        <AnswerReadingSection
+          bar={
+            <AnswerReadingBar
+              message={message}
+              onCollapse={() => {
+                stopFollowing();
+                if (sectionRef.current) {
+                  sectionRef.current.revealTop(() => setIsReading(false));
+                } else {
+                  setIsReading(false);
+                }
+              }}
+              onSelect={(targetId) => {
+                stopFollowing();
+                void selectBranch?.({ messageId: message.id, targetId });
+              }}
+            />
+          }
+          ref={sectionRef}
+          revealKey={message.id}
+        >
+          <View className="pt-2.5">{answer}</View>
+        </AnswerReadingSection>
+      ) : (
+        answer
+      )}
     </View>
   );
 }
@@ -187,13 +255,13 @@ export const ChatMessage = memo(function ChatMessage({
         {accessories}
       </View>
     ) : (
-      renderChatAssistantMessage(
-        message,
-        assistantPresentation,
-        attachments,
-        accessories,
-        renderUsage,
-      )
+      <AssistantChatMessage
+        accessories={accessories}
+        attachments={attachments}
+        message={message}
+        presentation={assistantPresentation}
+        renderUsage={renderUsage}
+      />
     );
 
   return (

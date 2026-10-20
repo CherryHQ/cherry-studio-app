@@ -10,4 +10,5 @@ export {
   useAgentSessionState,
 } from './ChatProvider';
 export { latestAgentImageResult, latestConversationImageResult } from './agentImageResult';
+export { useAgentAnswers } from './useAgentAnswers';
 export { useLocalConversation } from './useLocalConversation';
