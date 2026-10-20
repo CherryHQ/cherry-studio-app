@@ -1,7 +1,38 @@
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
+  WebSearchProviderOverridesSchema,
   getWebSearchProviderPresetsByCapability,
 } from '../webSearchProviders';
+
+test('admits DeepSeek search and fetch with separate host settings and required keys', () => {
+  for (const capability of ['searchKeywords', 'fetchUrls'] as const) {
+    expect(
+      getWebSearchProviderPresetsByCapability(capability).find((item) => item.id === 'deepseek'),
+    ).toMatchObject({
+      name: 'DeepSeek',
+      capabilities: expect.arrayContaining([
+        {
+          feature: capability,
+          requiresApiHost: true,
+          requiresApiKey: true,
+          apiHost: 'https://api.deepseek.com',
+        },
+      ]),
+    });
+  }
+  const saved = {
+    jina: { apiKeys: ['existing'] },
+    deepseek: {
+      apiKeys: ['deepseek-key'],
+      capabilities: {
+        searchKeywords: { apiHost: 'https://search.example.com' },
+        fetchUrls: { apiHost: 'https://fetch.example.com' },
+      },
+    },
+  };
+  expect(WebSearchProviderOverridesSchema.parse(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+  expect(WebSearchProviderOverridesSchema.safeParse({ unknown: {} }).success).toBe(false);
+});
 
 test('keeps Exa MCP available for both keyword search and page reading', () => {
   for (const capability of ['searchKeywords', 'fetchUrls'] as const) {

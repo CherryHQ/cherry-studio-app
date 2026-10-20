@@ -54,6 +54,7 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
   'exa-mcp': ['searchKeywords', 'fetchUrls'],
   bocha: ['searchKeywords'],
   querit: ['searchKeywords', 'fetchUrls'],
+  deepseek: ['searchKeywords', 'fetchUrls'],
   jina: ['searchKeywords', 'fetchUrls'],
   firecrawl: ['searchKeywords', 'fetchUrls'],
   crawl4ai: ['fetchUrls'],
