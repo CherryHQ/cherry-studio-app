@@ -12,7 +12,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -337,19 +341,19 @@ function PaintingBoardContent({
   const dockHeight = useSharedValue(0);
   const { height: keyboardHeight, progress: keyboardProgress } = useReanimatedKeyboardAnimation();
   const keyboardOffset = getComposerKeyboardStickyOffset(insets.bottom);
-  const lift = () => {
-    'worklet';
-    return Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset);
-  };
+  // Keep keyboard motion observable by every style, even when the dock height stays fixed.
+  const keyboardLift = useDerivedValue(() =>
+    Math.max(0, -keyboardHeight.get() - keyboardProgress.get() * keyboardOffset),
+  );
   const canvasStyle = useAnimatedStyle(() => ({
-    paddingBottom: keyboardProgress.get() * (dockHeight.get() + 56) + lift(),
+    paddingBottom: keyboardProgress.get() * (dockHeight.get() + 56) + keyboardLift.get(),
     paddingTop: keyboardProgress.get() * (insets.top + 56),
   }));
   const overlayStyle = useAnimatedStyle(() => ({
-    bottom: dockHeight.get() + 10 + lift(),
+    bottom: dockHeight.get() + 10 + keyboardLift.get(),
   }));
   const generationStateStyle = useAnimatedStyle(() => ({
-    paddingBottom: dockHeight.get() + 24 + lift(),
+    paddingBottom: dockHeight.get() + 24 + keyboardLift.get(),
     paddingTop: insets.top + 64,
   }));
 

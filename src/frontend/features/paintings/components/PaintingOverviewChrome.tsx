@@ -35,7 +35,6 @@ export function PaintingOverviewChrome({
           { id: 'rename', label: t('painting.board.rename'), onPress: onRename },
           {
             destructive: true,
-            group: 'delete',
             id: 'delete',
             label: t('painting.board.delete'),
             onPress: onDelete,
