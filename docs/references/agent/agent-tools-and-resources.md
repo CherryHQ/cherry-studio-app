@@ -3,18 +3,21 @@
 > Status: as-built. Mobile Agent execution is device-local only.
 
 The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+`create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
-diverges from carry an **As-built** note.
+Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
+Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
+and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
+tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -186,9 +189,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation and library
-management) register as upstream `deferred` tools. Upstream `tool_search` ranks names,
-descriptions and parameter metadata with BM25, then loads matching real tools for the next model
+MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation, library
+management and Office operations) register as upstream `deferred` tools. Upstream `tool_search`
+ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
 only a small Unicode tokenization patch so Chinese service and capability names can be searched.
@@ -583,6 +586,77 @@ categories and selected AI service. See [Health Review](../../guides/health-revi
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
+
+### Office Files
+
+`create_document`, `create_workbook`, and `create_presentation` create new DOCX, XLSX and PPTX entries
+from strict version 1 specs. They are core file capabilities with `auto` approval, absent when the
+native compute sandbox is unavailable, and discovered through Pi's deferred `tool_search` catalog.
+They remain callable from Code Mode and retain the ordinary unsafe replay and child-artifact
+receipt rules. Generation uses the separate compute pool, not the waiting Code Mode bridge.
+
+The [Office service](../../../src/backend/services/office/README.md) defines the supported elements,
+libraries and limits. Inputs contain only structured data and authorized managed image references.
+Results contain managed file metadata and a created artifact, never package bytes or device paths.
+Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
+membership in the selected workspace. Outputs are separate logical files in that workspace, or at
+the library root when none is selected; storage validates workspace placement at commit.
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
+source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
+hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
+original and unrelated package parts remain unchanged. All five use the same catalog, compute,
+file grants and durable receipt boundaries as generation. Workbook cell edits request recalculation;
+they do not calculate formulas themselves.
+
+`inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
+frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
+optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
+PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
+2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
+is the caller's responsibility. Shared original media stays unchanged for other occurrences.
+Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
+request recalculation. See the service contract for exact format-specific coverage.
+
+Office tools declare success and business-error return schemas for Code Mode. The Runtime wraps
+each result as `{ value, artifacts }`. Creation and editing return `value.status: "created"` and
+`value.fileEntryId`; inspection and reads return `value.status: "read"`, `file_entry_id` and
+`source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
+exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
+use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
+A business error returns `{ status: "error", message }`.
+`library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
+`fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
+creation script after storing file ids, then run dependent work in a separate script:
+
+```javascript
+const { value } = await tools.create_document({
+  filename: "notes.docx",
+  spec: { version: 1, blocks: [{ type: "paragraph", text: "Hello" }] },
+});
+if (value.status === "error") throw new Error(value.message);
+store("documentId", value.fileEntryId);
+text({ fileEntryId: value.fileEntryId });
+```
+
+```javascript
+text(await tools.inspect_office_file({ file_entry_id: load("documentId") }));
+```
+
+The existing preview page hands selections and their original attachments to a new editable chat
+draft. The composer and the sent message show each selection as a chip labelled like desktop's
+(`file · ¶4`, `file · Sheet!B2`, `file · Slide 2`); the message stores it as a text reference with
+the managed file id, structural anchor and excerpt. Runtime input expands each chip into the same
+fenced `selection-ref` block desktop sends, placed after its label, so the model contract is
+unchanged. Remote desktop conversations refuse selection chips instead of dropping them. The Agent
+reads the current referenced content and compares it with the excerpt before editing, following
+Desktop's workflow. Selection references do not widen file grants.
+
+Template filling, formula authoring/evaluation, arbitrary layouts, image insertion/deletion in existing files
+and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
+pending. Executed tests cover package contents and supported patch preservation in a Node VM;
+they do not establish native QuickJS compatibility or Office visual fidelity.
 
 ### Managed File Write And Edit
 

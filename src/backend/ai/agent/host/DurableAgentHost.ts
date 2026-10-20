@@ -2355,6 +2355,7 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       displayName: tool.displayName,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
       inputPreview: tool.inputPreview,
       approval: tool.approval,
       failureGroup: tool.failureGroup,
@@ -2404,6 +2405,7 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
           text: part.text,
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
+          ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
         }),
       ];
     if (part.type === 'file')

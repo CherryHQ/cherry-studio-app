@@ -519,6 +519,7 @@ type RuntimeTool = {
   displayName: string
   description: string
   inputSchema: RuntimeJsonValue
+  outputSchema?: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
   failureGroup?: string
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
@@ -531,6 +532,13 @@ may expose that alias as a direct model function or as the exact target name acc
 model-binding tool; that encoding never changes the tool's `ref`, approval, input, or persisted
 identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
+
+`outputSchema` optionally describes a built-in tool's `RuntimeToolResult.value`, including business
+error values. Pi wraps it with the managed artifact schema when declaring and validating Code Mode
+results. Tools without a definition retain an unknown value. MCP uses its bounded content projection
+instead; an upstream MCP output schema must not be applied to that different shape. Output definitions
+participate in the Host's configuration identity, preventing queued turns from changing an active
+tool contract.
 
 The Host supplies an immutable tool snapshot after applying the system catalog, the Agent's
 capability-group deny-list, current Agent MCP configuration, platform availability, system

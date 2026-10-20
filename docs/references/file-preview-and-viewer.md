@@ -111,6 +111,15 @@ browser decoding limits still apply. The export page reuses this reader.
 
 ### Document
 
+Office previews up to 4 MiB also offer **Select content to reference** in the header menu.
+Selection mode is explicit; browsing does not capture references. The package owns document taps,
+scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
+footer action to open a new editable chat draft with the original attachment. The reference carries
+the managed file id, structural anchor and excerpt. The Agent reads the current referenced content
+and compares it with the excerpt before editing, following Desktop's workflow.
+This is an Agent handoff, not an in-preview Office editor, and requires authorized rebuild/device
+acceptance before its source implementation is treated as verified.
+
 PDF and Office Open XML documents render with `@cherrystudio/file-preview` inside a WebView. The
 package owns rendering, toolbars, zoom, selection and touch gestures inside the document; the app
 owns file access, the WebView container, theme, locale, logging and system opening. Behavior the

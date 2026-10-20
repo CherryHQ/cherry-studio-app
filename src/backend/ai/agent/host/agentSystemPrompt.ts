@@ -34,7 +34,21 @@ You operate inside Cherry Studio Mobile. These Runtime Rules and the application
 - Lead with the result and keep the default response easy to read on a phone.`;
 
 const CITABLE_WEB_TOOL_NAMES = new Set([WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME]);
-const MANAGED_FILE_TOOL_NAMES = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME]);
+const OFFICE_TOOL_NAMES = new Set([
+  'create_document',
+  'create_workbook',
+  'create_presentation',
+  'inspect_office_file',
+  'read_office_content',
+  'edit_document',
+  'edit_workbook',
+  'edit_presentation',
+]);
+const MANAGED_FILE_TOOL_NAMES = new Set([
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
+  ...OFFICE_TOOL_NAMES,
+]);
 
 const MINIMAL_CHAT_RULES = `# Cherry Studio Mobile Runtime
 
@@ -327,14 +341,16 @@ Results from ${tools} carry an \`id\` for each source. When a factual statement 
 }
 
 function buildManagedFilesSection(tools: readonly RuntimeTool[]): string {
+  const officeTools = findBuiltInToolNames(tools, OFFICE_TOOL_NAMES);
+  const canEditOffice = officeTools.some((name) => name.startsWith('edit_'));
   const canEdit = tools.some(
     (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === EDIT_FILE_TOOL_NAME,
   );
   return `## Managed Files
 
-Use a managed-file write or edit tool only when the user explicitly asks to save, export, download, create, or edit a text file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.${
+Use a managed-file write, generation, or edit tool only when the user explicitly asks to save, export, download, create, or edit a file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.${
     canEdit
       ? ` When the user asks to modify an existing managed text file or text attachment, call \`${EDIT_FILE_TOOL_NAME}\` with its \`file_entry_id\`; do not create a replacement with \`${WRITE_FILE_TOOL_NAME}\`.`
       : ''
-  }`;
+  }${officeTools.length ? ` For Office work, discover ${officeTools.map((name) => `\`${name}\``).join(' / ')} with \`tool_search\` and follow their schemas. Generation uses version 1 specifications.${canEditOffice ? ' Inspect/read structural anchors before editing. Editing requires the exact source_sha256 from inspection and creates a NEW copy. For selection-ref inputs, keep their file identity and structural anchor, read the current referenced content and compare it with the excerpt before editing. If it no longer matches, ask the user to select it again. Word/PPT text edits require complete exact paragraph text from read_office_content, not a shortened excerpt. For picture replacement, inspect with kind "images" and use a replaceable image anchor in the edit tool\'s images array; image anchors are not text-read anchors. Keep the existing frame/crop and use a matching replacement aspect ratio. Do not reconstruct an existing Office file from AnyDoc text/IR: that loses unsupported document parts.' : ''} \`write_file\` and \`edit_file\` handle text, not Office packages. Image inputs use only managed \`file_entry_id\` references from the conversation or selected workspace.` : ''}`;
 }

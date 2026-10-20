@@ -821,8 +821,8 @@ question has, and the questions an answer has, are alternatives the client can s
   selected. Each runs separately, can be stopped alone with `cancelTurn({ messageId })`, and may use
   only tools that are read-only and automatically approved, so parallel answers neither change the
   outside world nor stop to ask the user. Read-only means a declared `effect: 'read'`: built-in web,
-  calendar, reminder and location reads, workspace listing, search and file reads, and file-library
-  search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
+  calendar, reminder and location reads, workspace listing, search and file reads, Office file
+  inspection and content reads, and file-library search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
   read. Approval-gated tools stay out even when the Agent approves automatically, as do
   `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
   stays busy until every answer settles; a selected completed answer's send control is disabled

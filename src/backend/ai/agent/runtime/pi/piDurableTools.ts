@@ -216,8 +216,27 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         structuredOutputSchema: {
           type: 'object',
           properties: {
-            value: {},
-            artifacts: { type: 'array', items: {} },
+            value: tool.ref.source === 'builtin' ? (tool.outputSchema ?? {}) : {},
+            artifacts: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  ref: {
+                    type: 'object',
+                    properties: {
+                      kind: { const: 'managed-file' },
+                      fileEntryId: { type: 'string' },
+                    },
+                    required: ['kind', 'fileEntryId'],
+                  },
+                  mediaType: { type: 'string' },
+                  name: { type: 'string' },
+                  kind: { enum: ['created', 'derived'] },
+                },
+                required: ['ref', 'mediaType', 'name', 'kind'],
+              },
+            },
           },
           required: ['value', 'artifacts'],
         } as TSchema,

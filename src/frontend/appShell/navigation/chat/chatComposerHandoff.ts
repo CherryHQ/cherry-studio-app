@@ -1,12 +1,15 @@
 import { randomUUID } from 'expo-crypto';
 
 import type { ComposerInitialAttachment } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { OfficeSelection } from '@/shared/data/types/selectionReference';
 import type { SkillAction } from '@/shared/data/types/skill';
 
 export type ChatComposerHandoff = {
   attachments: readonly ComposerInitialAttachment[];
   draft: string;
   skillAction?: SkillAction;
+  /** An Office preview selection the composer shows as a chip ahead of the draft. */
+  selection?: { label: string; selection: OfficeSelection };
 };
 
 /**

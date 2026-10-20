@@ -54,6 +54,13 @@ export type CreateInternalEntryInput = FilePlacement & { provenance: FileEntryPr
         name: string;
         source: 'text';
       }
+    | {
+        /** Binary output produced in memory, with an explicit media type and filename. */
+        data: Uint8Array;
+        mediaType: string;
+        name: string;
+        source: 'bytes';
+      }
   );
 
 type WrittenInternalFile = {

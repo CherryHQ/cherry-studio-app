@@ -1,11 +1,15 @@
 import { PluginTextReferenceSchema, type PluginTextReference } from '@/shared/data/types/plugin';
 import {
+  SelectionTextReferenceSchema,
+  type SelectionTextReference,
+} from '@/shared/data/types/selectionReference';
+import {
   SkillActivationSchema,
   SkillTextReferenceSchema,
   type SkillTextReference,
 } from '@/shared/data/types/skill';
 
-type TextReference = PluginTextReference | SkillTextReference;
+type TextReference = PluginTextReference | SkillTextReference | SelectionTextReference;
 type TextSegment = { text: string; reference?: TextReference };
 const WORD_CHARACTER_PATTERN = /[\p{L}\p{N}_-]/u;
 
@@ -18,6 +22,10 @@ export function splitTextReferences(text: string, values: readonly unknown[] = [
     else {
       const skill = SkillTextReferenceSchema.safeParse(value);
       if (skill.success) references.push(skill.data);
+      else {
+        const selection = SelectionTextReferenceSchema.safeParse(value);
+        if (selection.success) references.push(selection.data);
+      }
     }
   }
 
