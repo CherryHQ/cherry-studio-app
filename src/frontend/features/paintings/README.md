@@ -34,9 +34,11 @@ lands on that image.
   the current image, and what was made from it; tapping a cell walks the edge and holding one
   previews it in place for comparison.
 - **Canvas** (the overview) draws every node and edge, generations reading left to right. Each
-  node is labelled with its generation number and model; tap the label to read the complete prompt
-  in an anchored information popover. Tapping a node selects it — an outline, corner handles, and
-  its pixel size — and the composer edits that image; tapping the selected node opens it in focus;
+  node is labelled with its generation number and model above the image, with a single-line prompt
+  preview below it. Tap either label or preview to read the complete prompt in an anchored
+  information popover. The selected image's size tag sits below the preview. Tapping a node selects
+  it — an outline, corner handles, and its pixel size — and the composer edits that image; tapping
+  the selected node opens it in focus;
   tapping the empty canvas clears the selection, and the composer then starts a new root. It opens
   scaled to fit (down to 60%) or around the selection; drag to pan, pinch to zoom, double tap to
   return to the opening view. Notes belong to focus and are only sent from there.

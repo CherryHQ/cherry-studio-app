@@ -1,5 +1,6 @@
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
+import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import { Image, ImageGenerationLoader, InfoPopover } from '@cherrystudio/ui/components';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +20,7 @@ import { layoutPaintingBoard } from '../utils/paintingBoardGraph';
 const IMAGE_WIDTH = 120;
 const IMAGE_HEIGHT = 160;
 const LABEL_HEIGHT = 22;
+const CAPTION_GAP = 8;
 const COLUMN_GAP = 36;
 const ROW_GAP = 48;
 const MIN_SCALE = 0.35;
@@ -57,7 +59,7 @@ export function PaintingBoardOverview({
   const { fontScale, height: screenHeight, width: screenWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const labelHeight = LABEL_HEIGHT * Math.max(1, fontScale);
-  const nodeHeight = labelHeight + IMAGE_HEIGHT;
+  const nodeHeight = labelHeight * 2 + IMAGE_HEIGHT + CAPTION_GAP;
   const layout = useMemo(
     () =>
       layoutPaintingBoard(board.graph, {
@@ -358,8 +360,31 @@ function BoardNodeCard({
           </View>
         ) : null}
       </Pressable>
+      {prompt ? (
+        <View style={{ paddingTop: CAPTION_GAP }}>
+          <InfoPopover
+            accessibilityLabel={t('painting.board.showPrompt')}
+            testID={`painting-prompt-preview-${node.id}`}
+            text={prompt}
+          >
+            <View
+              className="flex-row items-center gap-1"
+              style={{ height: labelHeight, width: IMAGE_WIDTH }}
+            >
+              <Text className="min-w-0 flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+                {prompt}
+              </Text>
+              <InfoIcon className="size-3 shrink-0 text-muted-foreground" />
+            </View>
+          </InfoPopover>
+        </View>
+      ) : null}
       {isSelected ? (
-        <SelectionFrame pixelSize={thumbnail ? pixelSize : undefined} top={labelHeight} />
+        <SelectionFrame
+          footerHeight={prompt ? labelHeight + CAPTION_GAP : 0}
+          pixelSize={thumbnail ? pixelSize : undefined}
+          top={labelHeight}
+        />
       ) : null}
     </View>
   );
@@ -367,9 +392,11 @@ function BoardNodeCard({
 
 /** Marks the node the composer will edit: an outline, corner handles, and its pixel size. */
 function SelectionFrame({
+  footerHeight,
   pixelSize,
   top,
 }: {
+  footerHeight: number;
   pixelSize: { height: number; width: number } | undefined;
   top: number;
 }) {
@@ -393,7 +420,10 @@ function SelectionFrame({
         />
       ))}
       {pixelSize ? (
-        <View className="absolute items-center" style={styles.sizeTag}>
+        <View
+          className="absolute items-center"
+          style={[styles.sizeTag, { top: IMAGE_HEIGHT + footerHeight + 10 }]}
+        >
           <View className="rounded-sm bg-foreground px-1.5 py-0.5">
             <Text className="font-mono text-[11px] text-background">
               {pixelSize.width} × {pixelSize.height}
@@ -410,5 +440,5 @@ const styles = StyleSheet.create({
   headerFade: { left: 0, position: 'absolute', right: 0, top: 0 },
   outline: { bottom: -3, left: -3, right: -3, top: -3 },
   selection: { height: IMAGE_HEIGHT, left: 0, position: 'absolute', width: IMAGE_WIDTH },
-  sizeTag: { left: -40, right: -40, top: IMAGE_HEIGHT + 10 },
+  sizeTag: { left: -40, right: -40 },
 });
