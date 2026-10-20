@@ -1,4 +1,8 @@
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
+import {
+  type BackgroundActivityNativePresentation,
+  CHERRY_ACTIVITY_LOGO_DARK_BASE64,
+  CHERRY_ACTIVITY_LOGO_LIGHT_BASE64,
+} from '@cherrystudio/ui/background-activity';
 import { File } from 'expo-file-system';
 
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
@@ -139,7 +143,7 @@ export class BackgroundActivityEnvironment extends BaseService {
     return [this.config.assistantPresenter, this.config.paintingPresenter];
   }
 
-  async prepareLogo(): Promise<string | undefined> {
+  async prepareLogos(): Promise<BackgroundActivityNativePresentation['logoUris']> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
       const { widgetsDirectory } = require('expo-widgets') as {
@@ -148,9 +152,11 @@ export class BackgroundActivityEnvironment extends BaseService {
       if (!widgetsDirectory) {
         return undefined;
       }
-      const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
-      destination.write(CHERRY_ACTIVITY_LOGO_BASE64, { encoding: 'base64' });
-      return destination.uri;
+      const dark = new File(widgetsDirectory, 'cherry-studio-logo-dark.png');
+      const light = new File(widgetsDirectory, 'cherry-studio-logo-light.png');
+      dark.write(CHERRY_ACTIVITY_LOGO_DARK_BASE64, { encoding: 'base64' });
+      light.write(CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, { encoding: 'base64' });
+      return { dark: dark.uri, light: light.uri };
     } catch (error) {
       logger.warn('Background activity logo preparation failed', error as Error);
       return undefined;

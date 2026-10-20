@@ -133,6 +133,24 @@ for the same window. Android terminal notices remain dismissable by persistent d
 across process restarts. Cold startup clears orphaned ongoing surfaces without replaying paid work.
 An ended Live Activity cannot be enumerated after restart; its dismissal date retires it.
 
+## Brand Artwork
+
+Brand artwork derives from the existing `assets/icon-light.png` and `assets/icon-dark.png`.
+iOS stages 32 × 32 PNG derivatives of both: Lock Screen banners follow the system surface's appearance,
+while every Dynamic Island size uses the dark artwork on its black background. Images retain
+full-color rendering; action/status colors must not recolor the logo. Generate these derivatives
+with `pnpm exec tsx scripts/generateBackgroundActivityLogos.ts` after updating the source artwork.
+The generator only downsamples, preserving the original colors and transparency. ExpoUI loads
+the PNG as `UIImage(data:)` at scale 1; a SwiftUI frame does not reduce its underlying bitmap.
+The 32px asset covers the largest logo slot and fits within the smallest Live Activity presentation.
+Do not embed the 1024px launcher originals: oversized images can prevent a Live Activity from
+starting. See [Apple's image constraints](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities).
+
+Android uses Cherry `brand` red for the system small-icon badge. The large-icon content slot is not
+used to repeat the app logo, following [Android's notification anatomy guidance](https://developer.android.com/develop/ui/compose/notifications#notification-anatomy).
+Standard Android status chips render their small icon as a system-controlled monochrome mask;
+Xiaomi's proprietary full-color island integration is not implemented.
+
 ## Privacy And Payloads
 
 Reply previews, titles, assistant attribution, and painting prompts use SwiftUI `privacySensitive`.

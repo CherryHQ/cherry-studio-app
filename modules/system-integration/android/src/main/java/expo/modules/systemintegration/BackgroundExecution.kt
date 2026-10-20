@@ -19,8 +19,8 @@ internal object BackgroundExecution {
   private const val OWNER = "cherry-background-activity"
   private const val RUNNING_CHANNEL = "RN_BACKGROUND_ACTIONS_CHANNEL"
   private const val ATTENTION_CHANNEL = "generation-updates"
-  /** DESIGN.md `primary` (light green-900); tints the small-icon badge, not actions. */
-  private const val ACCENT_COLOR = 0xFF107D32.toInt()
+  /** DESIGN.md `brand`; notification identity uses Cherry red, never action green. */
+  private const val BRAND_COLOR = 0xFFFF5757.toInt()
 
   @Synchronized
   fun notificationId(context: Context, key: String): Int {
@@ -80,7 +80,7 @@ internal object BackgroundExecution {
     val icon = context.resources.getIdentifier("notification_icon", "drawable", context.packageName)
     val content = if (ongoing && actions != null && actions["promoted"] != false) listOf(body.substringBefore('\n'), actions["prompt"] as? String).filterNotNull().joinToString("\n") else body
     val builder = NotificationCompat.Builder(context, channelId)
-      .setSmallIcon(icon).setColor(ACCENT_COLOR).setContentTitle(title)
+      .setSmallIcon(icon).setColor(BRAND_COLOR).setContentTitle(title)
       .setContentIntent(contentIntent).setOngoing(ongoing).setAutoCancel(!ongoing)
       .setSilent(!alert).setOnlyAlertOnce(!alert)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).addExtras(extras)
