@@ -12,8 +12,8 @@ Implemented in the paired working trees; native-device checksum acceptance remai
 The canonical cross-repository implementation contract is
 `CherryHQ/cherry-studio: docs/references/file/upload-integrity.md` (title: Upload Integrity).
 It defines the shared schemas, receiver checkpoint/recovery rules, compatibility matrix and
-acceptance cases. Mobile consumes published `@cherrystudio/remote-protocol@0.5.0` and
-`@cherrystudio/remote-transport@0.2.1`. Installation and validation use npm artifacts; no local
+acceptance cases. Mobile consumes published `@cherrystudio/remote-protocol@0.6.0` and
+`@cherrystudio/remote-transport@0.2.3`. Installation and validation use npm artifacts; no local
 protocol link or dependency override is required.
 
 Use `@preeternal/react-native-file-hash@3.0.1`, default native engine and SHA-256. Its

@@ -3,6 +3,7 @@ import { createRegistry, MemoryStorage } from '@earendil-works/pi-durable';
 
 import { normalizeAiError } from '@/backend/ai/normalizeAiError';
 
+import { runtimeLane } from '../durableTypes';
 import { RuntimeEventChannel } from '../RuntimeEventChannel';
 import type {
   AgentRuntime,
@@ -97,7 +98,7 @@ class PiModelProbeSession implements AgentRuntimeSession {
       },
     });
     const previous = new Map<string, RuntimeOutputPart>();
-    this.observer = new PiDurableObserver(this.runtime, request.sessionId, (event) => {
+    this.observer = new PiDurableObserver(this.runtime, runtimeLane(request.sessionId), (event) => {
       if (event.type !== 'turn.updated') return;
       for (const [index, part] of event.turn.parts.entries()) {
         const old = previous.get(part.id);

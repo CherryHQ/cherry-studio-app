@@ -1,9 +1,8 @@
 import { ContextMenuExclusion, MessagePart } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import type { MessageListItem } from '../types';
@@ -12,18 +11,9 @@ import { GeneratedFileStrip } from './GeneratedFileStrip';
 import { GoogleSearchSuggestions } from './GoogleSearchSuggestions';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import { omitGeneratedImageReferences } from './omitGeneratedImageReferences';
-import {
-  findLatestActivityPart,
-  type MessageBodyItem,
-  partitionMessageParts,
-} from './partitionMessageParts';
+import { partitionMessageParts } from './partitionMessageParts';
 import { ProcessGroupPart } from './ProcessGroupPart';
 import { SourceGroup } from './SourceGroup';
-import {
-  getToolDisplayState,
-  isProviderWebSearchToolPart,
-  isToolMessagePart,
-} from './tools/toolPartState';
 
 type MessagePartsProps = {
   message: MessageListItem;
@@ -53,10 +43,14 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   const { boundaries, body, files, process } = partitionMessageParts(parts);
   const isSettled = message.status !== 'pending';
   const isStreaming = !isSettled;
-  // Feedback uses the same normalized parts and layout as the rendered content.
-  const isWaitingForResponse =
-    message.role === 'assistant' && isStreaming && !showsLiveActivity(parts, body);
   const hasContent = boundaries.length > 0 || body.length > 0 || process.length > 0;
+  // Initial connection feedback ends when the reply has visible content, including process.
+  const isWaitingForResponse = message.role === 'assistant' && isStreaming && !hasContent;
+  const isStoppedWithoutAnswer =
+    message.role === 'assistant' &&
+    message.status === 'paused' &&
+    body.length === 0 &&
+    files.length === 0;
   const showSources = isSettled && parts.some((part) => part.type === 'source-url');
   const initialImageAspectRatio = message.imageGeneration
     ? imageParamsAspectRatio(message.imageGeneration.paramValues)
@@ -131,34 +125,11 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
       {isWaitingForResponse ? (
         <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
       ) : null}
+      {isStoppedWithoutAnswer ? (
+        <MessagePart.Status testID="chat-message-stopped">
+          <Text className="text-muted-foreground text-sm">{t('chat.message.stopped')}</Text>
+        </MessagePart.Status>
+      ) : null}
     </>
   );
-}
-
-/**
- * Whether an unfinished reply already shows its own live feedback. Body parts render after the
- * process group, so process activity is hidden above any of them, such as an answered question.
- */
-function showsLiveActivity(parts: readonly CherryMessagePart[], body: readonly MessageBodyItem[]) {
-  const latestActivityPart = findLatestActivityPart(parts);
-  const isAtBottom = (part: CherryMessagePart) =>
-    body.length === 0 || body.some((item) => item.part === part);
-  return parts.some((part) => {
-    if (part.type === 'data-compaction-anchor') return part.data.status === 'compacting';
-    if (isToolMessagePart(part)) {
-      return (
-        part.state === 'approval-requested' ||
-        (!isProviderWebSearchToolPart(part) &&
-          getToolDisplayState(part) === 'running' &&
-          isAtBottom(part))
-      );
-    }
-    return (
-      part === latestActivityPart &&
-      (part.type === 'text' || part.type === 'reasoning') &&
-      part.state === 'streaming' &&
-      (part.type === 'reasoning' || part.text.trim().length > 0) &&
-      isAtBottom(part)
-    );
-  });
 }

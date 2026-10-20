@@ -56,7 +56,7 @@ export function ProcessGroupPart({
 
   const renderItem = ({ index, key, part }: ProcessGroupItem) => (
     <MessagePartRenderer
-      isStreaming={isStreaming}
+      isStreaming={isStreaming && (part.type !== 'reasoning' || part === latestActivityPart)}
       key={key}
       messageId={message.id}
       messageParts={messageParts}

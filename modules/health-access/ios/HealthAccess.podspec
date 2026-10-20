@@ -1,8 +1,8 @@
 Pod::Spec.new do |s|
   s.name = 'HealthAccess'
   s.version = '1.0.0'
-  s.summary = 'Health data authorization for Cherry Studio'
-  s.description = 'Requests read access without claiming to know HealthKit read grants.'
+  s.summary = 'Read-only HealthKit access for Cherry Studio'
+  s.description = 'Requests scoped read access and queries public HealthKit types without claiming to know read grants.'
   s.author = 'Cherry Studio'
   s.homepage = 'https://github.com/kangfenmao/cherry-studio'
   s.platforms = { :ios => '17.0' }

@@ -1,9 +1,13 @@
-import type { AgentMessage, AgentPart, AgentSession } from '@cherrystudio/remote-protocol/agent';
+import type {
+  AgentMessageListItem,
+  AgentPart,
+  AgentSession,
+} from '@cherrystudio/remote-protocol/agent';
 
 import { REMOTE_READ_CACHE_POLICY } from './remoteReadCachePolicy';
 
 type Window = {
-  messages: AgentMessage[];
+  messages: AgentMessageListItem[];
   version: string;
   hasOlderMessages: boolean;
   readAt: number;
@@ -108,7 +112,7 @@ export class RemoteSessionReadCache {
         : {}),
     };
   }
-  partsKey(message: AgentMessage) {
+  partsKey(message: AgentMessageListItem) {
     return JSON.stringify(['parts', message.messageId, message.revision]);
   }
   setEpoch(entry: ReadCacheEntry, epoch: string) {

@@ -32,6 +32,7 @@ import type {
   RuntimeExecutionPorts,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
+import { runtimeLane } from '../../durableTypes';
 import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
@@ -59,8 +60,9 @@ const wire: Model<Api> = {
   reasoning: false,
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
+const lane = runtimeLane('session');
 const seed = {
-  sessionId: 'session',
+  lane,
   revision: 0,
   configuration: { model: reference, instructions: 'Help.', options: {}, tools: [] },
 };
@@ -162,7 +164,7 @@ async function submitAndWait(
   status: 'completed' | 'failed' = 'completed',
 ) {
   const complete = deferred<void>();
-  const observation = await runtime.observe('session', (event) => {
+  const observation = await runtime.observe(lane, (event) => {
     if (
       event.type === 'turn.updated' &&
       event.turn.identity.requestId === submission.requestId &&
@@ -171,7 +173,7 @@ async function submitAndWait(
       complete.resolve();
   });
   try {
-    await runtime.submit('session', submission);
+    await runtime.submit(lane, submission);
     await complete.promise;
   } finally {
     await observation.unsubscribe();
@@ -216,7 +218,7 @@ describe('Persistent Agent facade', () => {
     const runtime = state.create();
     try {
       const conversation = await legacy.ensureConversation({
-        sessionId: seed.sessionId,
+        sessionId: 'session',
         revision: seed.revision,
         agent: {
           model: { provider: reference.providerId, modelId: reference.modelId },
@@ -283,8 +285,8 @@ describe('Persistent Agent facade', () => {
 
       now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
       await runtime.initialize(state.database, state.ports);
-      expect((await runtime.configuration(seed.sessionId)).instructions).toBe(instructions);
-      expect(await runtime.unfinishedSessions()).toEqual([seed.sessionId]);
+      expect((await runtime.configuration(lane)).instructions).toBe(instructions);
+      expect(await runtime.unfinishedLanes()).toEqual([lane]);
       expect(state.requests).toHaveLength(0);
       await runtime.close();
 
@@ -296,11 +298,11 @@ describe('Persistent Agent facade', () => {
         registry: createRegistry(),
       });
       try {
-        expect(await inspection.configuration(seed.sessionId)).toMatchObject({
+        expect(await inspection.configuration('session')).toMatchObject({
           version: 2,
           instructions,
         });
-        const restored = (await inspection.conversation(seed.sessionId))!;
+        const restored = (await inspection.conversation('session'))!;
         await restored.commit(async (tx) => {
           const agent = await tx.doc(AgentDoc, restored.id);
           expect(agent.instructions).toBeUndefined();
@@ -313,7 +315,7 @@ describe('Persistent Agent facade', () => {
 
       await runtime.initialize(state.database, state.ports);
       const completed = deferred<void>();
-      const observation = await runtime.observe(seed.sessionId, (event) => {
+      const observation = await runtime.observe(lane, (event) => {
         if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
       });
       try {
@@ -362,7 +364,7 @@ describe('Persistent Agent facade', () => {
     try {
       await runtime.initialize(state.database, state.ports);
       await runtime.ensureConversation(seed);
-      await runtime.submit('session', input('interrupted'));
+      await runtime.submit(lane, input('interrupted'));
       await started.promise;
       expect(getCurrentSystemPrompt(state.requests[0]!.messages)).toContain('2026-12-31');
       await runtime.close();
@@ -371,7 +373,7 @@ describe('Persistent Agent facade', () => {
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
       const completed = deferred<void>();
-      const observation = await runtime.observe('session', (event) => {
+      const observation = await runtime.observe(lane, (event) => {
         if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
       });
       try {
@@ -447,7 +449,7 @@ describe('Persistent Agent facade', () => {
         now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
         runtime = state.create();
         await runtime.initialize(state.database, state.ports);
-        await runtime.configure('session', seed.configuration);
+        await runtime.configure(lane, seed.configuration);
         await submitAndWait(runtime, input('second'));
         const firstItems = first.input ?? first.messages!;
         const second = payloads[1] as Payload;
@@ -502,7 +504,7 @@ describe('Persistent Agent facade', () => {
     await runtime.ensureConversation(seed);
     runtime.resume();
     const completed = deferred<void>();
-    const observed = await runtime.observe(seed.sessionId, (event) => {
+    const observed = await runtime.observe(seed.lane, (event) => {
       if (
         event.type === 'turn.updated' &&
         event.turn.identity.requestId === 'second' &&
@@ -511,9 +513,9 @@ describe('Persistent Agent facade', () => {
         completed.resolve();
     });
     try {
-      await runtime.submit(seed.sessionId, input('first'));
+      await runtime.submit(seed.lane, input('first'));
       await started.promise;
-      await runtime.submit(seed.sessionId, input('second'));
+      await runtime.submit(seed.lane, input('second'));
       firstStream.push(
         providerErrorEvent(emptyAssistantMessage(wire), {
           message: 'Invalid request',
@@ -521,7 +523,7 @@ describe('Persistent Agent facade', () => {
         }),
       );
       await completed.promise;
-      const history = await runtime.history(seed.sessionId, { limit: 10 });
+      const history = await runtime.history(seed.lane, { limit: 10 });
       expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
         ['second', 'completed'],
         ['first', 'failed'],
@@ -751,16 +753,16 @@ describe('Persistent Agent facade', () => {
       configuration: { ...seed.configuration, tools: [tool] },
     });
     const terminal = deferred<string>();
-    const observation = await runtime.observe('session', (event) => {
+    const observation = await runtime.observe(lane, (event) => {
       if (event.type === 'turn.updated' && ['completed', 'failed'].includes(event.turn.status))
         terminal.resolve(event.turn.status);
     });
     try {
-      await runtime.submit('session', input('recovery'));
+      await runtime.submit(lane, input('recovery'));
       expect(await terminal.promise).toBe('completed');
       expect(requests).toBe(3);
       expect(execute).toHaveBeenCalledTimes(1);
-      expect((await runtime.message('session', 'answer-recovery'))?.turn.error).toBeNull();
+      expect((await runtime.message(lane, 'answer-recovery'))?.turn.error).toBeNull();
     } finally {
       await observation.unsubscribe();
       await runtime.close();
@@ -790,16 +792,16 @@ describe('Persistent Agent facade', () => {
     await runtime.ensureConversation(seed);
     const partial = deferred<void>();
     const stopped = deferred<void>();
-    const observation = await runtime.observe('session', (event) => {
+    const observation = await runtime.observe(lane, (event) => {
       if (event.type !== 'turn.updated') return;
       if (event.turn.parts.some((part) => part.type === 'text' && part.text === 'Partial answer'))
         partial.resolve();
       if (event.turn.status === 'cancelled') stopped.resolve();
     });
     try {
-      await runtime.submit('session', input('stopped'));
+      await runtime.submit(lane, input('stopped'));
       await partial.promise;
-      await runtime.abort('session');
+      await runtime.abort(lane);
       await stopped.promise;
       expect(signal?.aborted).toBe(true);
       expect(await runtime.hasUnfinishedWork()).toBe(false);
@@ -807,7 +809,7 @@ describe('Persistent Agent facade', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      expect((await runtime.message('session', 'answer-stopped'))?.turn).toMatchObject({
+      expect((await runtime.message(lane, 'answer-stopped'))?.turn).toMatchObject({
         status: 'cancelled',
         parts: [{ type: 'text', text: 'Partial answer', state: 'done' }],
       });
@@ -828,6 +830,7 @@ describe('Persistent Agent facade', () => {
       expect(state.ports.recordUsage).toHaveBeenCalledWith(
         {
           sessionId: 'session',
+          slot: 0,
           turnId: 'turn-owning-request',
           requestId: 'owning-request',
         },
@@ -849,7 +852,7 @@ describe('Persistent Agent facade', () => {
     runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {
-      expect((await runtime.history('session', { limit: 1 })).turns).toHaveLength(1);
+      expect((await runtime.history(lane, { limit: 1 })).turns).toHaveLength(1);
       expect(preflight).not.toHaveBeenCalled();
       expect(state.requests).toHaveLength(1);
     } finally {
@@ -863,27 +866,27 @@ describe('Persistent Agent facade', () => {
     await runtime.initialize(fixtureState.database, fixtureState.ports);
     try {
       await runtime.ensureConversation(seed);
-      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
+      expect(await runtime.sessions()).toEqual([{ lane, revision: 0 }]);
       await submitAndWait(runtime, input('first'));
-      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
+      expect(await runtime.sessions()).toEqual([{ lane, revision: 0 }]);
       await runtime.close();
       runtime = fixtureState.create();
       await runtime.initialize(fixtureState.database, fixtureState.ports);
       expect(fixtureState.requests).toHaveLength(1);
       // The Host reconstructs the current configuration before each idle submission.
-      await runtime.configure('session', seed.configuration);
+      await runtime.configure(lane, seed.configuration);
       await submitAndWait(runtime, input('second'));
       expect(
         fixtureState.requests[1]?.messages
           .filter((message) => message.role === 'user')
           .map((message) => message.content),
       ).toEqual(['Question first', 'Question second']);
-      expect(await runtime.message('session', 'answer-first')).toMatchObject({
+      expect(await runtime.message(lane, 'answer-first')).toMatchObject({
         role: 'assistant',
         turn: { status: 'completed', parts: [{ text: 'Response 1' }] },
       });
       expect(fixtureState.ports.recordUsage).toHaveBeenCalledWith(
-        { sessionId: 'session', turnId: 'turn-first', requestId: 'first' },
+        { sessionId: 'session', slot: 0, turnId: 'turn-first', requestId: 'first' },
         expect.objectContaining({
           usage: {
             inputTokens: 3,
@@ -909,9 +912,9 @@ describe('Persistent Agent facade', () => {
       try {
         await runtime.ensureConversation(seed);
         await submitAndWait(runtime, input('first'));
-        expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
-        await runtime.discardConversation('session');
-        expect(await runtime.hasConversation('session')).toBe(false);
+        expect(await runtime.exportTurn(lane, 'first')).toEqual({ contextCheckpoint: null });
+        await runtime.discardConversation(lane);
+        expect(await runtime.hasConversation(lane)).toBe(false);
         await runtime.ensureConversation({
           ...seed,
           revision: 1,
@@ -946,7 +949,7 @@ describe('Persistent Agent facade', () => {
           },
         });
         expect(state.requests).toHaveLength(1);
-        expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
+        expect(await runtime.resourceFileEntryIds(lane)).toEqual(['retained-file']);
         await submitAndWait(runtime, input('next'));
         expect(state.requests[1]?.messages[0]?.role).toBe('system');
         expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('Help.');
@@ -964,6 +967,94 @@ describe('Persistent Agent facade', () => {
     },
   );
 
+  test('another lane forks a rebuilt history at the boundary the rebuild returns', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const fork = runtimeLane('session', 1);
+    try {
+      const boundary = await runtime.ensureConversation({
+        ...seed,
+        history: {
+          history: [
+            {
+              turnId: 'earlier',
+              messages: [
+                { role: 'user', parts: [{ type: 'text', text: 'Question earlier' }] },
+                { role: 'assistant', parts: [{ type: 'text', text: 'Imported answer' }] },
+              ],
+            },
+          ],
+          contextCheckpoint: null,
+          referencedFileEntryIds: ['retained-file'],
+        },
+      });
+      expect(boundary).toMatch(/^pi:\d+$/);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: ['retained-file'],
+      });
+      expect(await runtime.resourceFileEntryIds(fork)).toEqual(['retained-file']);
+      const complete = deferred<void>();
+      const observation = await runtime.observe(fork, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') complete.resolve();
+      });
+      await runtime.submit(fork, input('forked'));
+      await complete.promise;
+      await observation.unsubscribe();
+      expect(
+        state.requests[0]?.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => JSON.stringify(message.content)),
+      ).toEqual([
+        expect.stringContaining('Question earlier'),
+        expect.stringContaining('Imported answer'),
+        expect.stringContaining('Question forked'),
+      ]);
+      // A copy without history offers no boundary.
+      expect(await runtime.ensureConversation({ ...seed, lane: runtimeLane('empty') })).toBe(
+        undefined,
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test('reads a Session slot bindings once until a binding changes', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const binding = jest.spyOn(PiDurableRuntime.prototype, 'binding');
+    try {
+      await runtime.ensureConversation(seed);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).not.toHaveBeenCalled();
+      const second = runtimeLane('session', 2);
+      await runtime.ensureConversation({ ...seed, lane: second });
+      expect(await runtime.lanes('session')).toEqual([
+        { lane, revision: 0 },
+        { lane: second, revision: 0 },
+      ]);
+      await runtime.discardConversation(lane);
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      // A reopened file is read again.
+      await runtime.close();
+      await runtime.initialize(state.database, state.ports);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+    } finally {
+      binding.mockRestore();
+      await runtime.close();
+    }
+  });
+
   test('detaching a UI observer preserves the active native execution', async () => {
     const state = fixture();
     const runtime = state.create();
@@ -971,11 +1062,11 @@ describe('Persistent Agent facade', () => {
     try {
       await runtime.ensureConversation(seed);
       const events: RuntimeConversationEvent[] = [];
-      const observation = await runtime.observe('session', (event) => events.push(event));
+      const observation = await runtime.observe(lane, (event) => events.push(event));
       await observation.unsubscribe();
       await submitAndWait(runtime, input('first'));
       expect(events).toEqual([]);
-      expect(await runtime.message('session', 'answer-first')).toMatchObject({
+      expect(await runtime.message(lane, 'answer-first')).toMatchObject({
         turn: { status: 'completed' },
       });
     } finally {
@@ -1157,7 +1248,7 @@ describe('Native web tools', () => {
       expect(state.payloads).toHaveLength(2);
       expect(state.payloads[1]!.messages.at(-1)).toEqual({ role: 'assistant', content: paused });
       expect(state.payloads[1]!.tools).toEqual(state.payloads[0]!.tools);
-      const result = (await runtime.message('session', 'answer-first'))!;
+      const result = (await runtime.message(lane, 'answer-first'))!;
       expect(result.turn.status).toBe('completed');
       expect(result.turn.contextTokens).toBe(10);
       expect(result.turn.usage).toMatchObject({
@@ -1231,11 +1322,11 @@ describe('Native web tools', () => {
         role: 'user',
         content: [expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_js' })],
       });
-      expect((await runtime.message('session', 'answer-first'))!.turn.status).toBe('completed');
+      expect((await runtime.message(lane, 'answer-first'))!.turn.status).toBe('completed');
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = state.payloads[2]!.messages;
       expect(
@@ -1268,7 +1359,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'), 'failed');
       expect(state.payloads).toHaveLength(6);
-      const result = (await runtime.message('session', 'answer-first'))!;
+      const result = (await runtime.message(lane, 'answer-first'))!;
       expect(result.turn.status).toBe('failed');
       expect(result.turn.parts.filter((part) => part.type === 'text')).toEqual([
         expect.objectContaining({ text: 'Searching. '.repeat(6) }),
@@ -1298,7 +1389,7 @@ describe('Native web tools', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       const source = parts.find((part) => part.type === 'source-url');
       expect(source).toMatchObject({ url: 'https://example.com/cherry', title: 'Cherry' });
       // The appended source facts are model context, never a second visible answer.
@@ -1308,7 +1399,7 @@ describe('Native web tools', () => {
         }),
       ]);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const replayed = state.payloads[1]!.input;
       const reasoning = replayed.findIndex((entry) => entry.id === 'rs_1');
@@ -1350,7 +1441,7 @@ describe('Native web tools', () => {
       expect(state.payloads).toHaveLength(2);
       expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'read_file']);
       expect(tools[1]!.execute).not.toHaveBeenCalled();
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       expect(parts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1451,14 +1542,14 @@ describe('Native web tools', () => {
         'web_search_20250305',
         'web_fetch_20250910',
       ]);
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       const source = parts.find((part) => part.type === 'source-url');
       const sourceId = source?.type === 'source-url' ? source.sourceId : '';
       expect(parts.filter((part) => part.type === 'text')).toEqual([
         expect.objectContaining({ text: `Searching. Cherries are red[cite:${sourceId}].` }),
       ]);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = JSON.stringify(state.payloads[1]!.messages);
       expect(history).not.toContain('Web sources from this response');
@@ -1514,10 +1605,10 @@ describe('Native web tools', () => {
       expect(request.tools.at(-1)).toEqual({ googleSearch: {} });
       expect(request.toolConfig.includeServerSideToolInvocations).toBe(true);
       expect(
-        (await runtime.message('session', 'answer-first'))!.turn.parts.map((part) => part.type),
+        (await runtime.message(lane, 'answer-first'))!.turn.parts.map((part) => part.type),
       ).toEqual(['text', 'source-url']);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const model = state.payloads[1]!.contents.find((content) => content.role === 'model')!;
       expect(model.parts.slice(0, 3)).toEqual([
@@ -1576,7 +1667,7 @@ describe('Native web tools', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = state.payloads[1]!.contents.find((content) => content.role === 'model')!;
       expect(history.parts.slice(0, 7)).toEqual([
@@ -1629,7 +1720,7 @@ describe('Native web tools', () => {
       expect(
         state.payloads[0]!.tools.map((tool) => (tool.function as { name?: string })?.name),
       ).not.toContain('web_search');
-      expect((await runtime.message('session', 'answer-first'))!.turn.parts).toEqual([
+      expect((await runtime.message(lane, 'answer-first'))!.turn.parts).toEqual([
         expect.objectContaining({ type: 'text', text: 'Cherries are red.' }),
         expect.objectContaining({ type: 'source-url', url: 'https://example.com/cherry' }),
       ]);

@@ -1,24 +1,4 @@
-import type { ImageModelV3CallOptions, LanguageModelV3CallOptions } from '@ai-sdk/provider';
-
-export function projectLanguageCall(call: LanguageModelV3CallOptions) {
-  const value = {
-    abortSignal: projectSignal(call.abortSignal),
-    frequencyPenalty: call.frequencyPenalty,
-    headers: call.headers,
-    maxOutputTokens: call.maxOutputTokens,
-    presencePenalty: call.presencePenalty,
-    prompt: call.prompt,
-    providerOptions: call.providerOptions,
-    seed: call.seed,
-    stopSequences: call.stopSequences,
-    temperature: call.temperature,
-    toolChoice: call.toolChoice,
-    tools: call.tools,
-    topK: call.topK,
-    topP: call.topP,
-  };
-  return sanitize(value, collectCitationIds(value));
-}
+import type { ImageModelV3CallOptions } from '@ai-sdk/provider';
 
 export function projectImageCall(call: ImageModelV3CallOptions) {
   return sanitize({

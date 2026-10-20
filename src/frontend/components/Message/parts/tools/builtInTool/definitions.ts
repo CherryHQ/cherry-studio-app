@@ -15,6 +15,15 @@ type BuiltInToolDefinition = {
 };
 
 export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
+  inspect_office_file: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.inspect' },
+  read_office_content: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.read' },
+  edit_document: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editDocument' },
+  edit_workbook: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editWorkbook' },
+  edit_presentation: { iconName: 'fileEdit', titleKey: 'chat.builtinTool.office.editPresentation' },
+  create_document: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.document' },
+  create_workbook: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.workbook' },
+  create_presentation: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.presentation' },
+  run_office_script: { iconName: 'fileText', titleKey: 'chat.builtinTool.office.script' },
   list_workspace: { iconName: 'fileText', titleKey: 'workspace.list' },
   find_workspace_files: { iconName: 'fileText', titleKey: 'workspace.find' },
   create_workspace_folder: { iconName: 'fileEdit', titleKey: 'library.folders.create' },
@@ -58,6 +67,13 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   location_get_current: {
     iconName: 'location',
     titleKey: 'chat.builtinTool.location.current',
+  },
+  health_list_data_types: { iconName: 'health', titleKey: 'chat.builtinTool.health.listDataTypes' },
+  health_query_data: { iconName: 'health', titleKey: 'chat.builtinTool.health.queryData' },
+  health_get_record: { iconName: 'health', titleKey: 'chat.builtinTool.health.getRecord' },
+  health_share_verifiable_records: {
+    iconName: 'health',
+    titleKey: 'chat.builtinTool.health.shareVerifiableRecords',
   },
   health_get_summary: {
     iconName: 'health',

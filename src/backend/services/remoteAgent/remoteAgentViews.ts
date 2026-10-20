@@ -1,5 +1,6 @@
 import type {
   AgentMessage,
+  AgentMessageListItem,
   AgentPart,
   AgentProjection,
   AgentSession,
@@ -101,7 +102,7 @@ function projectTool(
 }
 export function projectMessage(
   sessionId: string,
-  message: AgentMessage,
+  message: AgentMessageListItem,
   parts: readonly AgentPart[],
   issueResource: ResourceIssuer,
   partViews?: PartViewCache,

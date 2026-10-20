@@ -23,9 +23,6 @@ export const isWebSearchModel = (model: Model): boolean =>
 export const isFunctionCallingModel = (model: Model): boolean =>
   model.capabilities.includes(MODEL_CAPABILITY.FUNCTION_CALL);
 
-export const isSupportedThinkingTokenModel = (model: Model): boolean =>
-  model.reasoning?.thinkingTokenLimits != null;
-
 export const isSupportedReasoningEffortModel = (model: Model): boolean =>
   (model.reasoning?.selectableEfforts?.length ?? 0) > 0;
 
@@ -76,11 +73,9 @@ const vendorCheck =
   (model: Model): boolean =>
     pattern.test(getLowerBaseModelName(getRawModelId(model), '/'));
 
-export const isAnthropicModel = vendorCheck(VENDOR_PATTERNS.anthropic);
 export const isGeminiModel = vendorCheck(VENDOR_PATTERNS.gemini);
 export const isGrokModel = vendorCheck(VENDOR_PATTERNS.grok);
 export const isOpenAIModel = vendorCheck(VENDOR_PATTERNS.openai);
-export const isQwenModel = vendorCheck(VENDOR_PATTERNS.qwen);
 
 export const isDeepSeekModel = (model?: Model): boolean => {
   if (!model) return false;
@@ -97,54 +92,10 @@ const isOpenAIWebSearchChatCompletionOnlyModel = (model: Model): boolean => {
   return id.includes('gpt-4o-search-preview') || id.includes('gpt-4o-mini-search-preview');
 };
 
-export const isGPT5FamilyModel = (model: Model): boolean =>
-  getLowerBaseModelName(getRawModelId(model)).includes('gpt-5');
-
-export const isGPT5SeriesModel = (model: Model): boolean =>
-  /gpt-5(?!\.\d)/.test(getLowerBaseModelName(getRawModelId(model)));
-
-export const isGPT51SeriesModel = (model: Model): boolean =>
-  getLowerBaseModelName(getRawModelId(model)).includes('gpt-5.1');
-
-export const isGPT52SeriesModel = (model: Model): boolean =>
-  getLowerBaseModelName(getRawModelId(model)).includes('gpt-5.2');
-
-export const isSupportVerbosityModel = isGPT5FamilyModel;
-
-export const isSupportFlexServiceTierModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model));
-  return (
-    (id.includes('o3') && !id.includes('o3-mini')) || id.includes('o4-mini') || id.includes('gpt-5')
-  );
-};
-
-export const isSupportedThinkingTokenClaudeModel = (model: Model): boolean =>
-  isAnthropicModel(model) && isSupportedThinkingTokenModel(model);
-
-export const isClaude46SeriesModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return /(?:anthropic\.)?claude-(?:opus|sonnet)-4[.-]6(?:[@\-:][\w\-:]+)?$/i.test(id);
-};
-
 export const isClaude47SeriesModel = (model: Model): boolean => {
   const id = getLowerBaseModelName(getRawModelId(model), '/');
   return /(?:anthropic\.)?claude-opus-4[.-]7(?:[@\-:][\w\-:]+)?$/i.test(id);
 };
-
-export const isClaudeReasoningModel = (model: Model): boolean =>
-  isAnthropicModel(model) && isReasoningModel(model);
-
-/** Whether temperature and top_p are mutually exclusive for this model (Claude 4.5 reasoning). */
-export const isTemperatureTopPMutuallyExclusiveModel = (model: Model): boolean => {
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  return /claude-(sonnet|opus|haiku)-4(-|.)5(?:-[\w-]+)?$/i.test(id);
-};
-
-export const isSupportTemperatureModel = (model: Model): boolean =>
-  model.parameters?.temperature?.supported !== false;
-
-export const isSupportTopPModel = (model: Model): boolean =>
-  model.parameters?.topP?.supported !== false;
 
 export const isMaxTemperatureOneModel = (model: Model): boolean => {
   const max = model.parameters?.temperature?.range?.max;
@@ -160,22 +111,6 @@ export const isGemini3Model = (model: Model): boolean => {
   return id.includes('gemini-3') || id === 'gemini-flash-latest' || id === 'gemini-pro-latest';
 };
 
-export const isSupportedThinkingTokenQwenModel = (model: Model): boolean => {
-  if (!isQwenModel(model)) return false;
-  const id = getLowerBaseModelName(getRawModelId(model), '/');
-  if (
-    ['coder', 'asr', 'tts', 'reranker', 'embedding', 'instruct', 'thinking'].some((f) =>
-      id.includes(f),
-    )
-  ) {
-    return false;
-  }
-  return isSupportedThinkingTokenModel(model);
-};
-
-export const isQwen35to39Model = (model: Model): boolean =>
-  /^qwen3\.[5-9]/.test(getLowerBaseModelName(getRawModelId(model), '/'));
-
 export const isOpenAIWebSearchModel = (model: Model): boolean =>
   isOpenAIModel(model) && isWebSearchModel(model);
 
@@ -183,26 +118,6 @@ export const isOpenRouterBuiltInWebSearchModel = (model: Model): boolean => {
   if (model.providerId !== 'openrouter') return false;
   const id = getLowerBaseModelName(getRawModelId(model));
   return isOpenAIWebSearchChatCompletionOnlyModel(model) || id.includes('sonar');
-};
-
-export const getModelSupportedVerbosity = (
-  model: Model | undefined | null,
-): (string | null | undefined)[] => {
-  if (!model || !isSupportVerbosityModel(model)) return [undefined];
-
-  const id = getLowerBaseModelName(getRawModelId(model));
-  if (!isGPT5FamilyModel(model)) return [undefined];
-  if (id.includes('chat')) return [undefined, null, 'medium'];
-
-  if (id.includes('codex')) {
-    if (isGPT5SeriesModel(model) || isGPT51SeriesModel(model) || isGPT52SeriesModel(model)) {
-      return [undefined, null, 'medium'];
-    }
-    return [undefined, null, 'low', 'medium', 'high'];
-  }
-
-  if (id.includes('pro')) return [undefined, null, 'low', 'medium', 'high'];
-  return [undefined, null, 'low', 'medium', 'high'];
 };
 
 export const GEMINI_FLASH_MODEL_REGEX = /gemini.*flash/i;

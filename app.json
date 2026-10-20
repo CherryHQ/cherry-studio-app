@@ -19,7 +19,10 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": false,
-      "icon": "./assets/icon.png",
+      "icon": {
+        "light": "./assets/icon-light.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "bundleIdentifier": "com.cherryai.cherrystudio-app",
       "appleTeamId": "87242QY66T",
       "privacyManifests": {
@@ -79,6 +82,7 @@
       },
       "entitlements": {
         "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": ["health-records"],
         "com.apple.security.application-groups": ["group.com.cherryai.cherrystudio-app"]
       },
       "infoPlist": {
@@ -89,6 +93,7 @@
           "UIInterfaceOrientationLandscapeRight"
         ],
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add calendar events when you ask the assistant.",
+        "NSHealthClinicalHealthRecordsShareUsageDescription": "Allow Cherry Studio to read selected clinical health records when you ask and, with your approval, share them with your selected AI service for analysis.",
         "NSHealthShareUsageDescription": "Allow Cherry Studio to read selected health and fitness data when you ask the assistant and, with your approval, share it with your selected AI service for analysis.",
         "NSHealthUpdateUsageDescription": "Cherry Studio reads selected Apple Health data to answer your health and fitness questions. It does not save or modify data in Apple Health.",
         "NSLocalNetworkUsageDescription": "Allow Cherry Studio to connect to the Cherry Studio desktop app, AI providers, and MCP servers on your local network.",
@@ -102,6 +107,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
         "backgroundColor": "#F65D5D"
       },
       "package": "com.cherryai.cherrystudio_app",

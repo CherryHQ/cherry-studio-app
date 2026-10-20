@@ -219,14 +219,8 @@ function SidebarSessions({
   const { hasNextPage, isFetchingNextPage, fetchNextPage, items: sessions, isError } = query;
   const { registerList } = useSidebarSelection();
   useEffect(
-    () =>
-      registerList(
-        `${source.scope}:${agentRef ?? ''}`,
-        source,
-        sessions.slice(0, limit),
-        query.refetch,
-      ),
-    [agentRef, limit, query.refetch, registerList, sessions, source],
+    () => registerList(`${source.scope}:${agentRef ?? ''}`, source, sessions.slice(0, limit)),
+    [agentRef, limit, registerList, sessions, source],
   );
   const loadMore = useCallback(() => {
     if (isFetchingNextPage || isError || (limit >= sessions.length && !hasNextPage)) return;

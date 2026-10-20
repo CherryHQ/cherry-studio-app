@@ -63,7 +63,25 @@ export type SkillPackageValidation =
   | { ok: false; issues: SkillPackageIssue[] };
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
-const SHELL_INTERPOLATION = /!`[^`]+`/;
+/**
+ * Claude Code runs `!`command`` spans before loading a Skill. Only a `!` right before a code span's
+ * opening backtick on the same line is that syntax; a span that ends in `!` (`#DIV/0!`) is text.
+ */
+function hasShellInterpolation(body: string): boolean {
+  return body.split('\n').some((line) => {
+    let open = false;
+    for (const match of line.matchAll(/`+/g)) {
+      if (
+        !open &&
+        line[match.index - 1] === '!' &&
+        line.includes(match[0], match.index + match[0].length)
+      )
+        return true;
+      open = !open;
+    }
+    return false;
+  });
+}
 
 export function validateSkillPackage(
   files: SkillPackageFiles,
@@ -157,7 +175,7 @@ export function validateSkillPackage(
     if (frontmatter[key] !== undefined)
       issues.push({ code: 'unsupported-semantics', subject: key });
   }
-  if (SHELL_INTERPOLATION.test(body)) {
+  if (hasShellInterpolation(body)) {
     issues.push({ code: 'unsupported-semantics', subject: 'shell-interpolation' });
   }
   if (issues.length > 0) {

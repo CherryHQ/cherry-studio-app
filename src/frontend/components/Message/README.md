@@ -192,15 +192,12 @@ Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row st
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 
-An unfinished assistant row keeps the pending indicator after completed content while waiting for
-the next model response. `MessageParts` owns this fallback and evaluates the same normalized parts
-and body/process split it renders, so a removed generated-image reference cannot suppress feedback.
-The message status remains the source of whether the reply is unfinished. Active reasoning, visible
-running tools, and pending user questions or approvals supply their own feedback instead, unless
-that reasoning or tool renders in the process
-group above a body part such as an answered question. An empty streaming reasoning block stays visible;
-settled empty blocks remain hidden. Retry feedback clears only when the next attempt has response
-content, not when an empty text or thinking block starts.
+An unfinished assistant row shows the pending indicator only before any visible reply content.
+`MessageParts` uses the same normalized body/process split it renders: text, reasoning, tools,
+questions, compaction markers, and images replace the initial connection feedback. Finishing a
+part or waiting between steps does not restore it. Empty text does not create a process row;
+an empty streaming reasoning block supplies its own thinking feedback. Reasoning stops animating
+when a later activity arrives or the message settles, even if the part still says streaming.
 
 The tool content adapters are Generic, MCP, Web Search, Write File, Meta Search, Meta Inspect, Meta
 Invoke, and Meta Exec. Count renderer families, disclosure layers, and visual states separately; combining them
@@ -336,8 +333,10 @@ child's tap, native selection, or scrolling behavior.
 | Fenced code and Markdown tables | Native renderer owns block copy menus and nested scrolling inside the excluded text or process region |
 | Video/source-document/step-start parts | No rendered touch target |
 
-Plugin and Skill references stay inline as an icon and name in the input's link color, using their
-recorded UTF-16 text ranges. User messages do not show a separate Skill selection or revision caption.
+Plugin, Skill and Office selection references stay inline as an icon and name in the input's link
+color, using their recorded UTF-16 text ranges. A selection chip shows only its file and location
+label; its anchor and excerpt reach the model through runtime input. User messages do not show a
+separate Skill selection or revision caption.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
 the Skill's name and description. Instruction bodies, revision hashes and library navigation belong

@@ -2,19 +2,22 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+`create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-health, location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
-diverges from carry an **As-built** note.
+Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
+Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
+and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
+tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -74,8 +77,9 @@ own platform, permission, application-configuration, base approval, capability-g
 and auto-approval eligibility. The Agent editor enables or disables capability groups
 (`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota. Health
-tools are also ineligible: each call requires explicit consent to share health data with AI.
+auto-approval eligible: enabling the image group is not consent to spend provider quota. Personal-health
+reads are also ineligible: each call requires explicit consent to share health data with AI.
+Public HealthKit type discovery contains no personal data and can run automatically.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
 installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
@@ -185,9 +189,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation and library
-management) register as upstream `deferred` tools. Upstream `tool_search` ranks names,
-descriptions and parameter metadata with BM25, then loads matching real tools for the next model
+MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation, library
+management and Office operations) register as upstream `deferred` tools. Upstream `tool_search`
+ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
 only a small Unicode tokenization patch so Chinese service and capability names can be searched.
@@ -283,6 +287,10 @@ For Version 1, the Host derives the initial ledger grants from:
 - valid managed-file refs already visible in the Session transcript (the read callback still
   revalidates that the entry remains available); and
 - files created by earlier tools in the same active turn.
+
+History grants follow the selected branch. A native history fork replaces the source copy's
+resource grants with the selected prefix and current input's grants, just as a rebuild from Cherry
+does. Files introduced after the fork point do not carry over; workspace access remains independent.
 
 The Host creates a `TurnResourceLedger` containing explicit readable and derivable `fileEntryId`
 sets. Its initial grants are frozen from input and transcript facts. During the turn it may grow only
@@ -450,7 +458,8 @@ The native WebView shell isolates server HTML in an opaque-origin sandbox and re
 and resource origins using declared CSP domains. It denies nested frames, custom origins, browser
 device permissions, forms, popups, and direct navigation. External HTTPS links and messages require
 native confirmation. Messages are staged in the composer; text/structured model-context updates
-remain visible and removable until the user's next submission. Theme, locale, dimensions, and
+remain visible and removable until the user's next submission, which carries each as a JSON
+envelope labeled untrusted third-party app data. Theme, locale, dimensions, and
 teardown use the Apps protocol. Closing, backgrounding, revocation, or route disposal ends the view.
 The inline native shell enforces CSP through meta directives; this is a mobile implementation
 constraint, not evidence of complete CSP-header or Apps conformance. iOS/Android WebView behavior,
@@ -489,27 +498,82 @@ real OAuth providers, protocol negotiation, and third-party Apps still require a
 
 ### Health And Fitness
 
-Health is an iOS-only built-in tool group, not a separate page. System permissions own read
-authorization; `health_get_summary` and `health_list_workouts` belong to the `health` Agent
-capability. Android has no Health Connect bridge, native health module or health entry.
-The Agent created during first-run onboarding enables health; manually created Agents start with
-it disabled. Existing Agents retain their stored capability preferences without a data migration.
-Both tools always require application approval, including in automatic approval mode.
-The approval sheet identifies the receiving model service and explains sharing and conversation
-retention. It blocks approval if the receiving service cannot be resolved; denial remains available.
-The data is for the user's health and fitness management, not medical diagnosis.
+Health is an iOS-only built-in tool group, not a separate page. The `health` Agent capability
+contains these tools:
 
-`modules/health-access` owns read authorization for eight types and never requests writing,
-background delivery or extended history. HealthKit reports whether authorization was requested,
-not whether reading was granted. The `requested` status permits a read attempt without claiming
-access; missing records remain null rather than becoming zero. Summary tools can use a subset
-of available metrics. Native aggregate queries avoid unbounded raw quantity fetches, disable the
-library cache, and daily queries stop between days when the turn is cancelled. The dependency
-patch removes native logs of health values.
+| Tool | Purpose |
+| --- | --- |
+| `health_get_summary` | Existing seven-metric overview and sleep-stage hours |
+| `health_list_workouts` | Newest-first workout overview with truncation information |
+| `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
+| `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
+| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
+| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
 
-The initial App Store release removed this integration after a Guideline 2.5.1 finding. Restoring
-it requires a new native binary and a new submission; store metadata and review notes must describe
-the Agent health analysis and how to reach it. See [Health Review](../../guides/health-review.md).
+All personal-data tools require application approval even in automatic approval mode. Only public
+catalog discovery can run automatically. The approval sheet names the receiving model service and
+explains sharing and conversation retention; it blocks approval when that service cannot be
+resolved. The first-run Agent enables health; manually created Agents start with it disabled.
+Existing Agents retain their stored preference. Android has no Health Connect bridge or health entry.
+
+The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
+public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
+nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
+per type. Neither a supported type nor a completed authorization request proves that read access
+was granted. Empty data cannot distinguish denied access from missing records and must not be
+reported as measured zero. No writing, background delivery or extended-history access is requested.
+
+The existing overview retains these units: steps (count), active energy (kcal), walking/running
+distance (meters), heart rate and resting heart rate (average bpm), HRV SDNN (average milliseconds),
+and asleep time (hours). Other metrics use `health_query_data`; quantity statistics follow
+HealthKit's aggregation style, with cumulative sums or discrete averages/minima/maxima and most
+recent measurements. Units come from HealthKit. Percent values are fractions: `0.97` means `97%`.
+
+Sleep intervals are clipped to the range, merged and split at local midnight. The total includes
+unspecified, core, deep and REM sleep. `stages` separately returns in-bed, awake, unspecified, core,
+deep and REM hours; absent stages are null. Days with only in-bed or awake records can have stage
+details while asleep duration remains null and `metricStates.sleep` is `no-data`. Each stage merges
+its own overlaps, so conflicting sources can make stage totals overlap; never sum them to recreate
+total sleep. This does not reproduce Apple Health's source-priority algorithm. First/last sleep
+times are the clipped boundaries of the entire requested range. Raw stages are available through
+`health_query_data`. Apple exposes no public sleep-score type in this SDK.
+
+Generic samples use anchored pagination and retain their original times, values, UUID, source and
+device. They are not chronological or prorated. Continue the cursor with the exact returned dates,
+type and workout filter until `hasMore` is false; a full last page may require an empty continuation.
+Deleted IDs must be removed when combining pages. Use native statistics for quantity totals rather
+than summing overlapping source samples. Quantity series and workout-associated samples support
+heart-rate curves and pace/speed analysis. Record details expose workout events, activities and
+statistics; route records are queried with the workout UUID, then paged through record details.
+
+`health_list_workouts` retains `{ data, hasMore, limit, startDate, endDate }`, defaulting to 20 and
+allowing 50 records. Each row includes a UUID. For a complete list, use the generic `workouts`
+type and its cursor. The local native module reads one extra record to detect truncation and
+preserves missing distance/energy as null without adding a dependency patch.
+Workout quantities and durations describe whole workouts. SDK activity names replace incomplete
+library names while unknown future numeric activity types remain available.
+
+Queries default to seven days and allow at most 90 days per request; system history access may
+further restrict results. Characteristics and the current/archived medication list ignore dates.
+Activity rings cover complete local calendar days. Blood-pressure and food authorization follows
+the contained quantities. Vision prescriptions and medications use per-object selection;
+medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
+selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
+selections, CDA content prompts and verifiable credential prompts share the application permission
+queue. Queued reads respect cancellation; an open selection retains the queue until native
+completion or timeout. Clinical reads require the extra Health Records entitlement and usage
+description.
+
+Verifiable credentials use a separate one-time selection query and explicit application approval,
+with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
+continuations require selecting the same records. Original payload bytes are returned without
+verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
+which this change does not obtain or enable; an ordinary clinical capability does not suffice.
+
+A new native binary is required, including a signing profile with the clinical capability. The
+initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
+App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
+categories and selected AI service. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 
@@ -523,6 +587,83 @@ the Agent health analysis and how to reach it. See [Health Review](../../guides/
   confirms each call; the tool is absent unless the Agent's image group is enabled and a drawing
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
+
+### Office Files
+
+`create_document`, `create_workbook`, and `create_presentation` create new DOCX, XLSX and PPTX entries
+from strict version 1 specs. They are core file capabilities with `auto` approval, absent when the
+native compute sandbox is unavailable, and discovered through Pi's deferred `tool_search` catalog.
+They remain callable from Code Mode and retain the ordinary unsafe replay and child-artifact
+receipt rules. Generation uses the separate compute pool, not the waiting Code Mode bridge.
+
+The [Office service](../../../src/backend/services/office/README.md) defines the supported elements,
+libraries and limits. Inputs contain only structured data and authorized managed image references.
+Results contain managed file metadata and a created artifact, never package bytes or device paths.
+Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
+membership in the selected workspace. Outputs are separate logical files in that workspace, or at
+the library root when none is selected; storage validates workspace placement at commit.
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
+source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
+hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
+original and unrelated package parts remain unchanged. All five use the same catalog, compute,
+file grants and durable receipt boundaries as generation. Workbook cell edits request recalculation;
+they do not calculate formulas themselves.
+
+`inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
+frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
+optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
+PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
+2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
+is the caller's responsibility. Shared original media stays unchanged for other occurrences.
+Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
+request recalculation. See the service contract for exact format-specific coverage.
+
+Office tools declare success and business-error return schemas for Code Mode. The Runtime wraps
+each result as `{ value, artifacts }`. Creation and editing return `value.status: "created"` and
+`value.fileEntryId`; inspection and reads return `value.status: "read"`, `file_entry_id` and
+`source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
+exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
+use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
+A business error returns `{ status: "error", message }`.
+`library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
+`fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
+creation script after storing file ids, then run dependent work in a separate script:
+
+```javascript
+const { value } = await tools.create_document({
+  filename: "notes.docx",
+  spec: { version: 1, blocks: [{ type: "paragraph", text: "Hello" }] },
+});
+if (value.status === "error") throw new Error(value.message);
+store("documentId", value.fileEntryId);
+text({ fileEntryId: value.fileEntryId });
+```
+
+```javascript
+text(await tools.inspect_office_file({ file_entry_id: load("documentId") }));
+```
+
+The existing preview page hands selections and their original attachments to a new editable chat
+draft. The composer and the sent message show each selection as a chip labelled like desktop's
+(`file · ¶4`, `file · Sheet!B2`, `file · Slide 2`); the message stores it as a text reference with
+the managed file id, structural anchor and excerpt. Runtime input expands each chip into the same
+fenced `selection-ref` block desktop sends, placed after its label, so the model contract is
+unchanged. Remote desktop conversations refuse selection chips instead of dropping them. The Agent
+reads the current referenced content and compares it with the excerpt before editing, following
+Desktop's workflow. Selection references do not widen file grants.
+
+`run_office_script` runs model-written JavaScript with the pinned Office libraries in the same
+compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact. It covers what the
+spec tools cannot express, including template filling, formulas, free layouts and package-level edits
+of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
+job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
+and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
+not parse are refused before publication. Script errors and console output return as
+`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
+pending. Executed tests cover package contents and supported patch preservation in a Node VM;
+they do not establish native QuickJS compatibility or Office visual fidelity.
 
 ### Managed File Write And Edit
 

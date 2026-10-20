@@ -9,10 +9,12 @@
  * permission, and application configuration.
  */
 
+import { HEALTH_SUMMARY_METRICS } from '@/shared/contracts/health';
 import {
   type DevicePermissionScope,
   HEALTH_PERMISSION_SCOPES,
 } from '@/shared/contracts/permissions';
+import { healthPermissionScope } from '@/shared/contracts/permissions';
 import type { AgentCapability } from '@/shared/data/types/agentCapability';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
@@ -29,7 +31,13 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'calendar_list_collections',
   'calendar_list_events',
   'calendar_update_event',
+  'create_document',
+  'create_presentation',
+  'create_workbook',
+  'edit_document',
   'edit_file',
+  'edit_presentation',
+  'edit_workbook',
   'list_workspace',
   'find_workspace_files',
   'create_workspace_folder',
@@ -44,8 +52,15 @@ export const BUILT_IN_TOOL_CAPABILITY_IDS = [
   'generate_image',
   'health_get_summary',
   'health_list_workouts',
+  'health_list_data_types',
+  'health_query_data',
+  'health_get_record',
+  'health_share_verifiable_records',
+  'inspect_office_file',
   'location_get_current',
   'read_file',
+  'read_office_content',
+  'run_office_script',
   'reminder_create_item',
   'reminder_delete_item',
   'reminder_list_collections',
@@ -83,6 +98,8 @@ export type BuiltInToolDescriptor = {
   requiresPaintingModel: boolean;
   /** Needs a default web search provider configured for this capability. */
   requiresWebSearchCapability?: WebSearchCapability;
+  /** `read` marks a tool that changes nothing outside the conversation; absent is a write. */
+  effect?: 'read';
 };
 
 const DEFAULTS = {
@@ -108,17 +125,19 @@ function describe(
  */
 export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('agent_create', 'ask', { agentCapability: 'agents' }),
-  describe('agent_get', 'auto', { agentCapability: 'agents' }),
-  describe('agent_list', 'auto', { agentCapability: 'agents' }),
+  describe('agent_get', 'auto', { agentCapability: 'agents', effect: 'read' }),
+  describe('agent_list', 'auto', { agentCapability: 'agents', effect: 'read' }),
   describe('agent_update', 'ask', { agentCapability: 'agents' }),
   describe('ask_user_question', 'auto'),
   describe('calendar_list_collections', 'auto', {
     agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
+    effect: 'read',
   }),
   describe('calendar_list_events', 'auto', {
     agentCapability: 'calendar',
     permissionScopes: ['calendar.read'],
+    effect: 'read',
   }),
   describe('calendar_create_event', 'ask', {
     agentCapability: 'calendar',
@@ -136,11 +155,13 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
+    effect: 'read',
   }),
   describe('reminder_list_items', 'auto', {
     agentCapability: 'reminders',
     permissionScopes: ['reminders.read'],
     platforms: ['ios'],
+    effect: 'read',
   }),
   describe('reminder_create_item', 'ask', {
     agentCapability: 'reminders',
@@ -160,7 +181,7 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
   describe('health_get_summary', 'ask', {
     agentCapability: 'health',
     autoApprovalEligible: false,
-    permissionScopes: HEALTH_PERMISSION_SCOPES.filter((scope) => scope !== 'health.workouts.read'),
+    permissionScopes: HEALTH_SUMMARY_METRICS.map(healthPermissionScope),
     permissionMatch: 'any',
     platforms: ['ios'],
   }),
@@ -170,17 +191,38 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     permissionScopes: ['health.workouts.read'],
     platforms: ['ios'],
   }),
+  describe('health_list_data_types', 'auto', {
+    agentCapability: 'health',
+    platforms: ['ios'],
+  }),
+  ...(['health_query_data', 'health_get_record'] as const).map((id) =>
+    describe(id, 'ask', {
+      agentCapability: 'health',
+      autoApprovalEligible: false,
+      permissionScopes: HEALTH_PERMISSION_SCOPES,
+      permissionMatch: 'any',
+      platforms: ['ios'],
+    }),
+  ),
+  describe('health_share_verifiable_records', 'ask', {
+    agentCapability: 'health',
+    autoApprovalEligible: false,
+    platforms: ['ios'],
+  }),
   describe('location_get_current', 'auto', {
     agentCapability: 'location',
     permissionScopes: ['location.read'],
+    effect: 'read',
   }),
   describe('web_search', 'auto', {
     agentCapability: 'web',
     requiresWebSearchCapability: 'searchKeywords',
+    effect: 'read',
   }),
   describe('web_fetch', 'auto', {
     agentCapability: 'web',
     requiresWebSearchCapability: 'fetchUrls',
+    effect: 'read',
   }),
   describe('generate_image', 'ask', {
     agentCapability: 'image',
@@ -188,18 +230,27 @@ export const BUILT_IN_TOOL_DESCRIPTORS: readonly BuiltInToolDescriptor[] = [
     requiresPaintingModel: true,
   }),
   describe('edit_file', 'auto'),
-  describe('list_workspace', 'auto'),
-  describe('find_workspace_files', 'auto'),
+  describe('inspect_office_file', 'auto', { effect: 'read' }),
+  describe('read_office_content', 'auto', { effect: 'read' }),
+  describe('edit_document', 'auto'),
+  describe('edit_workbook', 'auto'),
+  describe('edit_presentation', 'auto'),
+  describe('create_document', 'auto'),
+  describe('create_workbook', 'auto'),
+  describe('create_presentation', 'auto'),
+  describe('run_office_script', 'auto'),
+  describe('list_workspace', 'auto', { effect: 'read' }),
+  describe('find_workspace_files', 'auto', { effect: 'read' }),
   describe('create_workspace_folder', 'auto'),
-  describe('library_search_files', 'auto', { agentCapability: 'fileLibrary' }),
-  describe('library_read_file', 'auto', { agentCapability: 'fileLibrary' }),
-  describe('library_list_folders', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_search_files', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
+  describe('library_read_file', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
+  describe('library_list_folders', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
   describe('library_move_item', 'ask', { agentCapability: 'fileLibrary' }),
   describe('library_rename_item', 'ask', { agentCapability: 'fileLibrary' }),
   describe('library_trash_item', 'ask', { agentCapability: 'fileLibrary' }),
-  describe('library_list_trash', 'auto', { agentCapability: 'fileLibrary' }),
+  describe('library_list_trash', 'auto', { agentCapability: 'fileLibrary', effect: 'read' }),
   describe('library_restore_item', 'ask', { agentCapability: 'fileLibrary' }),
-  describe('read_file', 'auto'),
+  describe('read_file', 'auto', { effect: 'read' }),
   describe('write_file', 'auto'),
   describe('run_js', 'auto'),
 ];

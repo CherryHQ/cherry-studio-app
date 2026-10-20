@@ -42,15 +42,15 @@ describe('createSystemCapabilitySource', () => {
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
-    // Every device tool needs a permission, web tools need a configured
-    // provider, and generate_image needs a drawing model, so only the
-    // permission-free Agent management, question and file tools survive.
+    // Personal device data requires permission; the public HealthKit type catalog does not.
     expect(capabilityIds(tools)).toEqual([
       'agent_create',
       'agent_get',
       'agent_list',
       'agent_update',
       'ask_user_question',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -127,6 +127,31 @@ describe('createSystemCapabilitySource', () => {
     expect(approvalOf(tools, 'run_js')).toBe('auto');
   });
 
+  test('defers Office tools with the compute sandbox even without a Code Mode bridge', async () => {
+    const office = [
+      'create_document',
+      'create_workbook',
+      'create_presentation',
+      'inspect_office_file',
+      'read_office_content',
+      'edit_document',
+      'edit_workbook',
+      'edit_presentation',
+      'run_office_script',
+    ];
+    const absent = capabilityIds(await resolve({}));
+    expect(absent.some((id) => office.includes(id))).toBe(false);
+    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    for (const name of office) {
+      expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
+        approval: 'auto',
+        deferred: true,
+      });
+    }
+    expect(capabilityIds(tools)).toContain('library_move_item');
+    expect(capabilityIds(tools)).not.toContain('run_js');
+  });
+
   test('adds a device tool once every scope it needs is grantable', async () => {
     const readOnly = await resolve({ deviceAccess: { 'calendar.read': 'granted' } });
     expect(capabilityIds(readOnly)).toEqual([
@@ -137,6 +162,8 @@ describe('createSystemCapabilitySource', () => {
       'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -188,6 +215,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_list',
       'agent_update',
       'ask_user_question',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -234,6 +263,23 @@ describe('createSystemCapabilitySource', () => {
     expect(
       tools.find((tool) => tool.providerName === 'health_list_workouts')?.autoApprovalEligible,
     ).toBe(false);
+  });
+
+  test('keeps extended personal health reads explicit while allowing public catalog lookup', async () => {
+    const tools = await resolve({ deviceAccess: { 'health.electrocardiogram.read': 'requested' } });
+    for (const id of [
+      'health_query_data',
+      'health_get_record',
+      'health_share_verifiable_records',
+    ]) {
+      expect(tools.find((tool) => tool.providerName === id)).toMatchObject({
+        approval: 'ask',
+        autoApprovalEligible: false,
+      });
+    }
+    expect(approvalOf(tools, 'health_list_data_types')).toBe('auto');
+    const disabled = await resolve({ disabledCapabilities: ['health'] });
+    expect(capabilityIds(disabled)).not.toContain('health_list_data_types');
   });
 
   test('offers each web tool only when its provider is configured', async () => {
@@ -503,6 +549,70 @@ describe('createSystemCapabilitySource', () => {
       ref: { kind: 'managed-file', fileEntryId: entry.id },
       kind: 'derived',
     });
+  });
+
+  test('publishes and grants Office output in the conversation workspace', async () => {
+    const folderId = '00000000-0000-7000-8000-000000000009';
+    jest.spyOn(fileLibraryService, 'folder').mockResolvedValue({
+      id: folderId,
+      name: 'Reports',
+      parentId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    });
+    const entry = FileEntrySchema.parse({
+      createdAt: 1,
+      updatedAt: 1,
+      filename: 'report.docx',
+      id: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      provenance: 'generated',
+      size: 4,
+    });
+    const save = jest.spyOn(fileContent, 'createBytesEntry').mockResolvedValueOnce(entry);
+    const grantFile = jest.fn();
+    const source = createSystemCapabilitySource(
+      SERVICES,
+      dependencies({
+        jsSandbox: {
+          run: async ({ onSettled }) => {
+            onSettled?.();
+            return {
+              status: 'ok',
+              result: '"UEsDBA=="',
+              logs: '',
+              logsTruncated: false,
+              durationMs: 1,
+            };
+          },
+        },
+      }),
+    );
+    const tools = await source.getTools({
+      askUser: noAskUser,
+      documentParserMode: 'builtin',
+      disabledCapabilities: [],
+      model: MODEL,
+      resources: { ...TURN_RESOURCES, grantFile },
+      workspaceFolderId: folderId,
+    });
+    const tool = tools.find((tool) => tool.providerName === 'create_document')!;
+    const result = await tool.execute({
+      input: {
+        filename: 'report.docx',
+        spec: { version: 1, blocks: [{ type: 'paragraph', text: 'Report' }] },
+      },
+      signal: new AbortController().signal,
+      toolCallId: 'office-call',
+      turnId: 'turn',
+    });
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ folderId, workspaceFolderId: folderId }),
+      expect.any(AbortSignal),
+    );
+    expect(result.artifacts[0]?.ref.fileEntryId).toBe(entry.id);
+    expect(grantFile).toHaveBeenCalledWith(entry.id);
   });
 
   test('rewrites a draft this turn produced instead of deriving a copy', async () => {

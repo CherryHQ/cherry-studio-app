@@ -24,6 +24,15 @@ export type MessageListItem = Readonly<{
   imageGeneration?: Readonly<{ paramValues: ParamValues }>;
   /** Model identity captured by this message's immutable inference snapshot. */
   model?: Readonly<Pick<Model, 'id' | 'modelId' | 'name' | 'providerId'>>;
+  /**
+   * The answers to this answer's question, oldest first and including this
+   * answer, when there is more than one.
+   */
+  branch?: Readonly<{
+    /** Shared by the answers to one question, so switching updates their row in place. */
+    key: string;
+    siblings: readonly Readonly<{ id: string; status: MessageStatus; modelId: string | null }>[];
+  }>;
   role: 'assistant' | 'system' | 'user';
   /** Feature-owned timeline event synthesized beside persisted messages. */
   systemEvent?: Readonly<{

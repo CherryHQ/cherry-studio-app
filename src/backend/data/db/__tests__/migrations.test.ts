@@ -6,6 +6,54 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('turns each linear transcript into one branch selected at its newest message', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0012_message_tree',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, runtime_revision, last_activity_at, created_at, updated_at)
+        VALUES ('linear', 'agent', 3, 4, 1, 4), ('empty', 'agent', 0, 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES
+          ('b-answer', 'linear', 't1', 'assistant', '{"parts":[]}', 'success', 2, 2),
+          ('a-question', 'linear', 't1', 'user', '{"parts":[]}', 'success', 2, 2),
+          ('c-question', 'linear', 't2', 'user', '{"parts":[]}', 'success', 3, 3),
+          ('d-answer', 'linear', 't2', 'assistant', '{"parts":[]}', 'success', 4, 4);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare(
+            'SELECT id, parent_id, siblings_group_id FROM agent_session_message ORDER BY created_at, id',
+          )
+          .all(),
+      ).toEqual([
+        { id: 'a-question', parent_id: null, siblings_group_id: 0 },
+        { id: 'b-answer', parent_id: 'a-question', siblings_group_id: 0 },
+        { id: 'c-question', parent_id: 'b-answer', siblings_group_id: 0 },
+        { id: 'd-answer', parent_id: 'c-question', siblings_group_id: 0 },
+      ]);
+      expect(
+        database
+          .prepare('SELECT id, active_node_id, runtime_revision FROM agent_session ORDER BY id')
+          .all(),
+      ).toEqual([
+        { id: 'empty', active_node_id: null, runtime_revision: 0 },
+        { id: 'linear', active_node_id: 'd-answer', runtime_revision: 3 },
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   test('adds logical identities without renaming legacy duplicates or dropping trash history', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -813,6 +861,7 @@ describe('bundled SQLite migrations', () => {
         'fork_boundary_message_id',
         'runtime_revision',
         'workspace_folder_id',
+        'active_node_id',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -830,6 +879,8 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'parent_id',
+        'siblings_group_id',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',

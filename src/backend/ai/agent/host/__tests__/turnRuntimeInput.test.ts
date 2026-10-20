@@ -115,6 +115,25 @@ describe('Turn Runtime input assembly', () => {
     expect(message.parts[0]).toEqual({ ...part, id: 'input-0', state: 'done' });
   });
 
+  test('expands selection chips into the selection-ref block desktop sends, after each label', () => {
+    const selection = {
+      file_entry_id: '00000000-0000-7000-8000-000000000001',
+      anchor: { format: 'docx' as const, paragraph: 30 },
+      excerpt: '原文 ``` 片段',
+    };
+    const [input] = toRuntimeInputParts([
+      {
+        type: 'text',
+        text: 'a.docx · ¶31 改正式',
+        selectionReferences: [{ type: 'selection', selection, label: 'a.docx · ¶31', offset: 0 }],
+      },
+    ]);
+    expect(input).toEqual({
+      type: 'text',
+      text: `a.docx · ¶31\n\`\`\`\`selection-ref\n${JSON.stringify(selection)}\n\`\`\`\`\n 改正式`,
+    });
+  });
+
   test('deduplicates repeated plugin mentions while preserving all selected plugins', () => {
     const input = toRuntimeInputParts([
       {

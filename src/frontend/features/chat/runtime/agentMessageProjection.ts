@@ -170,6 +170,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'text':
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
+        part.selectionReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction
         ? withCherryMeta(
@@ -178,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
+                ...(part.selectionReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',
@@ -372,6 +374,19 @@ export function toAgentMessageListItem(
       ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
       : {}),
     ...(model ? { model } : {}),
+    // Only answers are switched in the transcript; a question has one answer path to follow.
+    ...(message.siblings && message.role === 'assistant'
+      ? {
+          branch: {
+            key: `answers:${message.parentId}`,
+            siblings: message.siblings.map((sibling) => ({
+              id: sibling.id,
+              status: toDisplayStatus(sibling.status),
+              modelId: sibling.modelId,
+            })),
+          },
+        }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),

@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUniwind } from 'uniwind';
 
+import pluginInlineIcons from '@/assets/plugins/inline-icons.json';
 import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getPluginMentionLinkStyles } from '@/frontend/utils/pluginIcons';
@@ -51,7 +52,7 @@ export function ComposerField({
     [addAttachments, attachmentMode],
   );
 
-  // A plugin or Skill mention is the only link this field can contain — nothing here
+  // A plugin, Skill or Office selection mention is the only link this field can contain — nothing here
   // creates any other kind, and auto-detection is off — so the base `link`
   // style is set alongside the variant rather than left to the library's blue.
   const markdownStyle = useMemo(() => {
@@ -64,6 +65,7 @@ export function ComposerField({
         // The native editor needs raster bytes for an inline text attachment.
         // Menus and the sidebar use the same ToolCase shape as a Lucide SVG.
         '^skill://': { ...mentionStyle, icon: skillInlineIcon['tool-case'], iconTint: true },
+        '^selection://': { ...mentionStyle, icon: pluginInlineIcons['file-text'], iconTint: true },
       },
     };
   }, [linkColor, theme]);

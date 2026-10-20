@@ -7,7 +7,7 @@ The integration was removed for the initial release in [PR #1163](https://github
 
 Health remains a system permission plus built-in Agent tools; the app adds no separate health
 page. The feature is Agent health and fitness analysis: read-only authorization, explicit consent
-for every health tool call, and health enabled for the Agent created during first-run onboarding.
+for every personal-health read, and health enabled for the Agent created during first-run onboarding.
 Approval is never promoted by automatic approval mode. The submission must make that feature
 apparent through store metadata, review notes and a recording rather than through extra UI. See
 Apple's [2.5.1, 5.1.2 and 5.1.3 requirements](https://developer.apple.com/app-store/review/guidelines/).
@@ -24,8 +24,11 @@ backup/export and OS backup behavior before distribution.
 
 ## Suggested App Review Notes
 
-Cherry Studio uses Apple Health for AI-assisted health and fitness analysis of activity, sleep,
-heart-rate and workout data. The default Agent created on first launch has Health enabled; for
+Cherry Studio uses Apple Health for AI-assisted health and fitness analysis of the categories
+selected by the user, including activity, sleep, body measurements, symptoms, reproductive health,
+hearing, vision, medications and clinical records. Public type discovery reads no personal data;
+every personal-data read still requires sharing approval. Clinical records require the Health
+Records capability in the signing profile. The default Agent created on first launch has Health enabled; for
 other Agents, open Agents, edit the Agent and enable Health in its capabilities. Read access can
 be requested from Settings > System permissions > Health or on first use.
 

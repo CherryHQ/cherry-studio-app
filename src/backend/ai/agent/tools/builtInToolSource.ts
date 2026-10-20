@@ -60,6 +60,7 @@ import {
   type FileLibraryTrashAccess,
 } from './fileLibraryManagementTools';
 import { createFileLibraryTools } from './fileLibraryTools';
+import { createOfficeTools } from './officeTools';
 import {
   type ConfiguredPaintingModel,
   createGenerateImageTool,
@@ -114,7 +115,7 @@ export type SystemCapabilitySourceDependencies = DeviceToolDependencies &
   WebSearchToolDependencies & {
     agents: AgentManagementData;
     trash: FileLibraryTrashAccess;
-    /** Null on clients built without the native sandbox, which omits `run_js`. */
+    /** Null on clients built without the native sandbox, omitting JS and Office tools. */
     jsSandbox: JsSandbox | null;
     painting: PaintingToolDependencies;
     platform: string;
@@ -176,7 +177,14 @@ export function createSystemCapabilitySource(
       return BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => {
         const policy = resolveApproval(descriptor, scope);
         const tool = catalog.get(descriptor.capabilityId);
-        return policy && tool ? [bindTurnResources({ ...tool, ...policy }, resources)] : [];
+        return policy && tool
+          ? [
+              bindTurnResources(
+                { ...tool, ...policy, effect: descriptor.effect ?? 'write' },
+                resources,
+              ),
+            ]
+          : [];
       });
     },
   };
@@ -275,6 +283,18 @@ function createCatalog(
     createWriteFileTool(fileContent, fileAccess),
     ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
+    ...(deps.jsSandbox
+      ? createOfficeTools(
+          deps.jsSandbox,
+          {
+            createBytesEntry: fileContent.createBytesEntry,
+            readImage: managedFileResolver.readImage,
+            readAsBytes: managedFileResolver.readAsBytes,
+            resolveAvailable: managedFileResolver.resolveAvailable,
+          },
+          fileAccess,
+        )
+      : []),
     // Code Mode is the capability's only executor, so it needs the interactive bridge.
     ...(deps.jsSandbox?.startBridge ? [createRunJsTool()] : []),
     ...createCalendarTools(deviceDeps),

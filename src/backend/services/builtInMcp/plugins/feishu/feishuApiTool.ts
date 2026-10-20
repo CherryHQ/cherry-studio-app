@@ -1,4 +1,4 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
 import * as z from 'zod';
 
 import type { HttpQuery } from '@/backend/services/http';
@@ -36,7 +36,7 @@ export function defineFeishuApiTool<TInput>(tool: {
     definition: {
       name: tool.name,
       description: tool.description,
-      inputSchema: { ...schema, type: 'object' },
+      inputSchema: { ...schema, type: 'object' } as FeishuApiTool['definition']['inputSchema'],
       annotations: {
         readOnlyHint: tool.access === 'read',
         destructiveHint: tool.access === 'write',

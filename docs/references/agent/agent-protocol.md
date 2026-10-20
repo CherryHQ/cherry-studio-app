@@ -2,10 +2,10 @@
 
 The experimental [Pi Durable migration](./pi-durable-migration.md) adopts native forks, queued
 input, and archive. Existing local sessions retain their business identity when their history is
-handed to Pi. In the experimental branch, regenerating a completed answer returns a new Session for
-navigation, while retrying a failed answer stays in place; deleting a turn hides it and omits it from
-later model context; session removal archives after explicit stop. Ordinary submissions can queue
-while an answer streams; retries, deletion, and forks still require idle. The per-turn local
+handed to Pi. Regenerating a completed answer adds a sibling answer in the same Session, while
+retrying a failed leaf answer stays in place; deleting a turn hides it and omits it from later model
+context; session removal archives after explicit stop. Ordinary submissions can queue while an
+answer streams; retries, deletion, and forks still require idle. The per-turn local
 behavior descriptions below are historical where they conflict with the migration document. The PC
 adapter keeps its existing operations and transport.
 
@@ -432,8 +432,9 @@ interface AgentProtocol {
     userMessageId: string
     assistantMessageId: string
     agentId: string
-      parts: AgentInputPart[]
+    parts: AgentInputPart[]
     modelId?: UniqueModelId
+    additionalReplies?: { modelId: UniqueModelId; assistantMessageId: string }[]
     reasoningEffort?: ReasoningEffortOption
   }): Promise<AgentSessionView>
 
@@ -443,12 +444,14 @@ interface AgentProtocol {
     assistantMessageId: string
     parts: AgentInputPart[]
     modelId?: UniqueModelId
+    additionalReplies?: { modelId: UniqueModelId; assistantMessageId: string }[]
     reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
-  retryMessage(input: { sessionId: string; messageId: string }): Promise<void>
+  retryMessage(input: { sessionId: string; messageId: string; modelId?: UniqueModelId }): Promise<AgentSessionView | void>
+  selectMessage(input: { sessionId: string; messageId: string }): Promise<AgentSessionView>
 
-  cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
+  cancelTurn(input: { sessionId: string; turnId: string; messageId?: string }): Promise<void>
   cancelQueuedInput(input: { sessionId: string; turnId: string }): Promise<'withdrawn' | 'already-started' | 'not-found'>
   cancelSubmission(input: { sessionId: string }): Promise<void>
 
@@ -520,7 +523,7 @@ other system gates when it freezes the turn's tool snapshot. The assistant's inf
 records the concrete tools frozen for the turn, so history does not depend on reconstructing
 configuration state.
 
-`forkSession` copies the transcript up to and including `fromMessageId` into a new idle Session,
+`forkSession` copies the selected branch up to and including `fromMessageId` into a new idle Session,
 and is the only operation that creates a Session from existing history. It is refused with
 `SESSION_BUSY` while the source Session has an active turn, so the fork point is always a clean cut
 (see [Branching](#branching)). The new Session is not observed by the operation; the client
@@ -629,6 +632,7 @@ type AgentSessionSnapshot = {
   activeUserMessage: AgentMessageView | null
   hasHistoryBeforeActiveTurn: boolean | null
   streamingMessage: AgentMessageView | null
+  additionalMessages?: AgentMessageView[] // includes settled siblings of active answers
   pendingApprovals: AgentApprovalView[]
   pendingQuestion: AgentPendingQuestion | null
   contextStatus?: 'compacting' | 'compaction-failed' | null
@@ -643,7 +647,8 @@ Session can render its first exchange immediately without waiting behind the his
 `queuedInputs` is the durable follow-up inbox in submission order; `queue.updated` replaces its
 membership. These inputs appear above the composer and do not create transcript rows in the live
 projection. Local history requests `settledOnly`, excluding unsettled message pairs before paging
-and render-window selection; observation supplies the active pair until it settles. `cancelQueuedInput`
+and render-window selection; observation supplies each active turn's question and all its answers,
+including completed siblings, until the turn settles. `cancelQueuedInput`
 atomically withdraws only waiting work: `already-started` preserves the active run and asks the
 client to reconcile observation. Withdrawal cleans up only its own reservation, so another input
 being admitted cannot be mistaken for an interrupted submission. The active-turn stop operation
@@ -757,20 +762,23 @@ detail the user explicitly asked for, kept so a provider failure can be investig
 
 ## Manual answer retry
 
-`retryMessage({ sessionId, messageId })` replaces a settled assistant answer in place.
+`retryMessage({ sessionId, messageId, modelId? })` answers a settled question again.
 
-**Only the Session's last message is retryable.** An in-place replacement rewrites history that
-later messages already answered, so retrying an earlier answer would leave every message after it
-responding to a reply that no longer exists. The Host rejects any other message with
-`MESSAGE_NOT_FOUND`, the store repeats the check inside the reservation transaction, and the
-toolbar offers the action on the latest answer alone. Going back further is a fork, not a retry.
-The Host holds the Session's admission guard throughout preparation and reservation; running,
-awaiting-approval, cancelling, and admitting Sessions reject retry with `SESSION_BUSY`. The
-frontend disables the action while the Session is busy and hides it in an older transcript window.
+**A successful answer, or one that later questions continue, is regenerated as a sibling.** The
+Host reserves a new answer below the same question, selects it, and submits the original input with
+the original model; the earlier answer and its continuations stay in the tree (see
+[Branching](#branching)). **Naming a `modelId` answers with that model and always adds a sibling**,
+even below a failed answer: the user asked for another answer, not a repair. It submits the original
+question without the original reasoning effort or image settings, which belong to the original
+model. **A failed, interrupted or cancelled leaf answer is retried in place**: no
+later message responds to it, so replacing it rewrites nothing. The store checks the leaf inside the
+reservation transaction. The Host holds the Session's admission guard throughout preparation and
+reservation; running, awaiting-approval, cancelling, and admitting Sessions reject retry with
+`SESSION_BUSY`, and the frontend disables the action while the Session is busy.
 
-The replacement keeps the answer's message id and transcript position and takes a fresh turn id.
-The original user message is reused; retry never creates a Session, inserts a message, or
-navigates away. Model context stops at that original question.
+An in-place replacement keeps the answer's message id and tree position and takes a fresh turn id,
+which its sibling answers share. The original user message is reused; retry never creates a
+Session or navigates away. Model context stops at that original question.
 
 A **resumed** retry applies to a failed, interrupted, or cancelled answer that completed at least
 one tool call. Its recorded prefix through the last completed tool result survives; the unfinished
@@ -804,18 +812,43 @@ so a rejected admission simply restores the untouched answer.
 
 ## Branching
 
-Manual retry replaces the last answer; it does not create selectable answer versions, and it is
-never the way back to an earlier point in the transcript. Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
-alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
-the one real world that every branch would claim to share. In-place switching therefore
-misrepresents history, and an active-path concept would touch nearly every invariant above.
+A Session's messages form a tree (see [Agent Persistence](./agent-persistence.md)). The Session's
+selected leaf decides both the visible transcript and the next submission's history; the answers a
+question has, and the questions an answer has, are alternatives the client can switch between.
 
-Branching is instead a **fork**: `forkSession({ sessionId, fromMessageId })` creates a new Session
-and copies the transcript up to the fork point inside one transaction. Turns and approvals are not
-copied; the new Session starts idle. Because the Host already supplies complete normalized history
-for every turn, a forked Session executes through the unchanged flow — the Runtime never knows a
-fork happened. The explicit branch action and editing a question use a fork; retrying an answer
-uses the in-place replacement operation above.
+- **Parallel answers.** A submission with `additionalReplies` asks several models the same question.
+  The question gets one answer per model in one sibling group, sharing the turn id; the first is
+  selected. Each runs separately, can be stopped alone with `cancelTurn({ messageId })`, and may use
+  only tools that are read-only and automatically approved, so parallel answers neither change the
+  outside world nor stop to ask the user. Read-only means a declared `effect: 'read'`: built-in web,
+  calendar, reminder and location reads, workspace listing, search and file reads, Office file
+  inspection and content reads, and file-library search, reads and listings; a third-party MCP tool only when a bundled plugin's policy declares a
+  read. Approval-gated tools stay out even when the Agent approves automatically, as do
+  `ask_user_question`, `run_js` and Code Mode. Skills and image generation are refused. The Session
+  stays busy until every answer settles; a selected completed answer's send control is disabled
+  while another answer runs. Observation includes the completed siblings of active answers because
+  settled history omits their shared turn until all answers finish. Every parallel submission
+  meanwhile is rejected with
+  `SESSION_BUSY`. Only a follow-up to the newest answer of a running single-answer copy can queue,
+  in that copy's native Pi inbox. Pi queues input, not configuration: a follow-up to a parallel
+  answer needs a different model and tool set, and changing a copy's configuration applies from its
+  next request, which would reach the answer still running. Cherry does not emulate a queue around
+  this.
+- **Switching.** `selectMessage` selects the branch containing a message. Switching never calls a
+  model and never stops work on another branch; it restores the newest continuation below the chosen
+  alternative.
+- **Continuing.** A submission always continues the selected leaf: the answer the client shows is
+  the one the next question follows. To continue an earlier answer, the client selects it first.
+- **Regeneration.** Regenerating a settled answer reserves a sibling answer to the same question and
+  selects it. Answering with another model (`retryMessage` with `modelId`) does the same with the
+  chosen model, adding one more answer to the question.
+- **Fork.** `forkSession({ sessionId, fromMessageId })` still creates a new Session and copies the
+  selected branch up to the fork point, without its sibling alternatives, inside one transaction.
+  Turns and approvals are not copied; the new Session starts idle.
+- **Workspace.** The workspace binding belongs to the Session, not to a branch. Every branch and
+  every parallel answer uses it, switching never changes it, and rebinding applies to every branch
+  from the next submission. Each admitted answer records the folder it captured, so recovery after a
+  restart uses that folder. A fork copies the binding.
 
 Rules:
 
@@ -828,27 +861,13 @@ Rules:
    inherited prefix. The client synthesizes a display-only divider after that Message when the
    paginated history window contains it; no annotation Message or Message Part enters persistence
    or model context. Deleting the source clears both fields and leaves the fork intact.
-3. Copied history keeps past tool calls and results verbatim. A fork opens a new future; it does
-   not claim to undo executed side effects, and results in the copied transcript reflect the
-   world at fork time. Copied messages keep their original `createdAt` for the same reason: the
-   transcript shows when the conversation happened, not when it was copied.
+3. History keeps past tool calls and results verbatim. A branch, switch or fork opens or shows
+   another future; it does not undo executed side effects, and results in a branch reflect the world
+   when they ran. Copied messages keep their original `createdAt` for the same reason.
 
-Message editing is not implemented, and when it is it follows the same model. An edit-and-continue
-operation creates a new Session, copies the clean transcript before the edited user message, inserts
-the replacement input, and starts a new turn. It does not mutate an already-executed Agent history
-in place, copy later assistant output, or claim to undo tool side effects. Any display-only
-timeline event remains a client projection and does not change model context.
-
-Fork was an additive protocol extension: no existing operation, event, snapshot, or invariant
-changed.
-
-For the record, feeding a model from a tree is not the obstacle: model context is always a
-linear message array, and linearizing an active path is a trivial parent walk (current Chat does
-exactly this). The fork decision rests on the two costs that remain: an in-place branch switcher
-presents divergent timelines as interchangeable views of one conversation, which is dishonest
-once tool side effects exist, and an active-path selection is a new piece of mutable state that
-every operation, snapshot, event, and invariant would have to carry.
-
+Branches present alternatives in one conversation even though tool side effects were real in each
+of them; parallel answers are limited to reads for that reason, and the transcript never claims a
+switch reverted anything.
 
 ### User-question responses
 

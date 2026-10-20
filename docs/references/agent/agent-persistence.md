@@ -36,11 +36,12 @@ record for mobile-originated Agent Sessions only.
   The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
   migrated.
 
-Branching is a fork, not a message tree, so `agent_session` carries nullable source and copied-prefix
-boundary metadata but no per-message parent/active-path columns
-([Agent Protocol](./agent-protocol.md#branching)).
+Messages form a tree in the Session (aligned with Desktop's `message.parentId`,
+`siblingsGroupId` and `topic.activeNodeId`), so in-place branch switching, parallel multi-model
+answers and regenerated answers stay in one Session. "Branch to a new chat" remains a fork that copies
+the selected branch into a new Session ([Agent Protocol](./agent-protocol.md#branching)).
 
-Out of scope: message-tree columns and broader Pi provider coverage. Mobile Skill persistence and
+Out of scope: broader Pi provider coverage. Mobile Skill persistence and
 loading are documented in [Agent Skills](./agent-skills.md).
 The Host projects Agent-specific MCP bindings into each Runtime snapshot.
 System capability enablement persists on the Agent row as a capability-group deny-list
@@ -250,6 +251,7 @@ listing/cascade and MCP server delete-time disabling.
 | `createdAt` / `updatedAt` | integer | helper defaults | Hard delete; no `deletedAt` |
 | `forkedFromSessionId` | text | FK → `agent_session.id` ON DELETE SET NULL | Fork lineage; `NULL` for an ordinary Session and reset to `NULL` when the source is deleted |
 | `forkBoundaryMessageId` | text | NULL | Message inside the fork that closes the copied prefix; maintained atomically with lineage and not a cross-table FK |
+| `activeNodeId` | text | NULL | Selected leaf of the message tree; the visible transcript and model history are its ancestor chain. Application-owned, like the fork boundary; `NULL` only without messages |
 
 Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list ordering is
 recency; no `orderKey`).
@@ -260,8 +262,10 @@ recency; no `orderKey`).
 | --- | --- | --- | --- |
 | `id` | text | PK, UUID v7 | Time-ordered; transcript order is `(createdAt, id)` |
 | `sessionId` | text | NOT NULL, FK → `agent_session.id` ON DELETE CASCADE | |
-| `turnId` | text | NULL, indexed | Correlation id shared by a submission's user/assistant pair; nullable per protocol |
-| `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No `root`: transcript is linear |
+| `parentId` | text | NULL, FK → `agent_session_message.id` ON DELETE CASCADE, indexed | Previous message in the tree; `NULL` only for a Session's first question. Migration `0012` chained existing linear transcripts |
+| `siblingsGroupId` | integer | NOT NULL DEFAULT `0` | `0` for an ordinary branch; `>0` for the answers of one multi-model question under the same parent |
+| `turnId` | text | NULL, indexed | Correlation id shared by a question and every answer to it; nullable per protocol |
+| `role` | text | NOT NULL, CHECK `user`/`assistant`/`system` | No virtual root: the first question has no parent |
 | `data` | text (json) | NOT NULL | `{ parts: AgentMessagePart[] }` |
 | `status` | text | NOT NULL, CHECK in 6 protocol statuses | `pending` … `interrupted` |
 | `stats` | text (json) | NULL | Desktop-aligned `MessageStats`; current executions persist wall-clock, tool-execution, and approval-wait spans in `runtimeTiming`, and a completed answer's final-request context size in `contextTokens` |
@@ -334,11 +338,22 @@ projection:
   modification timestamps.
   Startup reconciliation is administrative recovery and preserves the reservation activity time.
   `deleteSession` explicitly clears surviving forks' source and boundary metadata, advancing their `updatedAt`, before
-  cascading the source delete to its messages.
+  clearing the source messages' parent edges and cascading the source delete to its messages.
+  Clearing those edges avoids SQLite's recursive-trigger depth limit for long histories.
 - Streaming state comes from Pi observation. Native execution persists its progress; the Cherry
   reservation stays unsettled until the full terminal write succeeds. Terminal events follow that
   write. Startup, next submission and backup retry matching native results; a reservation without
   native admission is interrupted with its saved parts retained.
+- History readers walk `parentId` upward from a leaf with a recursive query: transcript pages, model
+  history, checkpoints, Skill and workflow receipts, and fork copies all read the selected branch.
+  Reservation places the question below the selected leaf and selects its first answer; a
+  multi-model question reserves every answer in one new sibling group. Regeneration, including
+  answering with another model, reserves a sibling answer to the same question. Selecting a message
+  keeps the leaf when the message is already on the selected branch, otherwise it selects the
+  newest leaf below it, as Desktop's branch navigation does. Transcript pages attach `siblings`
+  wherever the branch passes a parent with several children. A search result is selected once when
+  its conversation opens; a window read around a message that has since left the selected branch
+  reads around its nearest ancestor still on it.
 - `forkSession` inserts the new Session and every copied message in one `withWriteTx` transaction.
   It copies `isNameManuallyEdited` from the source, takes `name` from the caller
   or else from the source, sets
@@ -349,7 +364,8 @@ projection:
   activity, so it does not move the fork to "now" in the recency list. Startup recovery preserves
   the original reservation activity because it is not new conversation activity. Copied rows keep
   `createdAt`, `role`, `data`, `status`, `stats`, `error`,
-  `modelId`, and `inferenceSnapshot` verbatim; `turnId` is reissued through a per-fork map so pairing
+  `modelId`, and `inferenceSnapshot` verbatim; only the anchor's ancestor chain is copied, as one
+  straight branch with sibling groups reset; `turnId` is reissued through a per-fork map so pairing
   survives without colliding across Sessions; `contextCheckpoint` is forced to `NULL` because a
   checkpoint anchors to a turn that no longer exists. Keeping `createdAt` deliberately breaks the
   "never set timestamps by hand" rule: transcript order is `(createdAt, id)`, the source is already
@@ -360,6 +376,9 @@ projection:
   multi-row statements with ids generated in transcript order.
   The boundary is Session metadata rather than a synthetic Message, so it does not enter FTS,
   transcript pagination counts, Runtime history, or recursive fork copies.
+- A turn is a question with all of its answers. Deleting one moves the questions below its answers
+  to the turn's own parent before the rows go (so the FK cascade removes nothing else), and a
+  selected leaf inside the deleted rows moves to the newest surviving leaf below that parent.
 - Deleting a turn increments `runtimeRevision` and clears, in the same transaction, every checkpoint in that Session whose anchor
   does not sit strictly before the deleted turn — including anchors the deletion itself orphans.
   A summary covers everything up to its anchor, and its text is opaque to the store, so a

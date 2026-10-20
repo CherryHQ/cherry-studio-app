@@ -1,4 +1,13 @@
+import { DocumentAnchorSchema } from '@cherrystudio/file-preview/core';
 import { z } from 'zod';
+
+export const FilePreviewSelectionSchema = z.strictObject({
+  sourceId: z.string().min(1).max(128),
+  revision: z.string().min(1).max(128),
+  anchor: DocumentAnchorSchema,
+  excerpt: z.string().min(1).max(2000),
+});
+export type FilePreviewSelection = z.infer<typeof FilePreviewSelectionSchema>;
 
 /**
  * The page's origin. It is never fetched: it only gives the inline document a real
@@ -27,6 +36,7 @@ const documentId = z.int().nonnegative();
 
 /** Messages the page posts to the app. The app validates every one before acting. */
 export const PageMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('selection'), selection: FilePreviewSelectionSchema.nullable() }),
   z.object({ type: z.literal('ready') }),
   z.object({ type: z.literal('open'), requestId }),
   z.object({
@@ -69,6 +79,7 @@ export interface FilePreviewSourceInfo {
 }
 
 export interface FilePreviewRenderOptions {
+  captureSelection?: boolean;
   source: FilePreviewSourceInfo;
   locale: string;
   isDark: boolean;

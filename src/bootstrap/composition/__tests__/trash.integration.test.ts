@@ -69,8 +69,8 @@ beforeEach(() => {
   sessions = new SqliteAgentSessionStore(db.dbService);
   sqlite.exec(`
     INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
-    INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
-    VALUES ('${sourceId}', 'agent', 'Source', 1, 1, 1);
+    INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at, active_node_id)
+    VALUES ('${sourceId}', 'agent', 'Source', 1, 1, 1, 'message');
     INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
     VALUES ('message', '${sourceId}', 'user', '{"parts":[]}', 'success', 1, 1);
     INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at, forked_from_session_id, fork_boundary_message_id)
