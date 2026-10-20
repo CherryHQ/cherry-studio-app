@@ -61,14 +61,7 @@ import {
 import { PiDurableRuntime } from './PiDurableRuntime';
 import { createPiDurableToolExtension } from './piDurableTools';
 import type { PiRuntimeDependencies } from './piModelTypes';
-import {
-  PI_TOOL_BUDGET,
-  PI_TOOL_BUDGET_FINAL_RESPONSE,
-  PiToolBudget,
-  admitPiToolCall,
-  PiToolBudgetExceededError,
-  piToolBudgetState,
-} from './piToolBudget';
+import { PiToolBudget } from './piToolBudget';
 import {
   PI_WEB_FAILURE_GROUP,
   resolvePiWebToolRoutes,
@@ -115,9 +108,7 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
     Promise<readonly { lane: RuntimeLane; revision: number }[]>
   >();
   private readonly requestOwners = new WeakMap<AbortSignal, RuntimeExecutionIdentity>();
-  /** Requests after an exhausted tool budget, which must not select tools. */
-  private readonly toolFreeRequests = new WeakSet<AbortSignal>();
-  /** Requests that may use a native web tool: the turn has budget left and no failed lookup. */
+  /** Conversation requests that may use a native web tool: no failed lookup in the turn. */
   private readonly webRequests = new WeakMap<AbortSignal, PiWebToolRoutes>();
   private readonly observers = new Set<PiDurableObserver>();
   private delivery: Promise<void> = Promise.resolve();
@@ -161,7 +152,6 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       },
       (providerId, signal) =>
         Promise.resolve(this.requirePorts().traceModel?.(this.executionOwner(providerId, signal))),
-      (signal) => signal !== undefined && this.toolFreeRequests.has(signal),
       (signal) => (signal ? this.webRequests.get(signal) : undefined),
     );
   }
@@ -712,33 +702,15 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       ),
       previousFailures: async (api, context) => {
         const inputs = await this.requireRuntime().inputsForTask(api, context);
-        const budget = await api.snapshot(PiToolBudget, api.conversationId, context);
+        const failures = await api.snapshot(PiToolBudget, api.conversationId, context);
         return inputs[0]
           ? [
-              ...(budget?.inputId === inputs[0].record.id ? budget.failedGroups : []),
+              ...(failures?.inputId === inputs[0].record.id ? failures.failedGroups : []),
               ...failedPiToolGroups(
                 await this.requireRuntime().turnEntries(key, inputs[0].record, context),
               ),
             ]
           : [];
-      },
-      admitCall: async (call, api, context) => {
-        const inputs = await this.requireRuntime().inputsForTask(api, context);
-        if (inputs.length !== 1) return false;
-        const conversation = await this.requireRuntime().conversation(key, context);
-        if (!conversation || conversation.id !== api.conversationId) return false;
-        // A script runs inside a tool round, so its calls meet no model call not yet admitted.
-        const modelCalls = call.parent
-          ? []
-          : (await this.requireRuntime().turnEntries(key, inputs[0]!.record, context))
-              .flatMap((entry) => entry.model ?? [])
-              .flatMap((message) =>
-                message.role === 'assistant'
-                  ? message.content.filter((part) => part.type === 'toolCall')
-                  : [],
-              )
-              .map((part) => part.id);
-        return admitPiToolCall(conversation, context, inputs[0]!.record.id, call, modelCalls);
       },
       beforeCall: async (call, api, context) => {
         // A failed native lookup is known only from the transcript, never from a tool result.
@@ -778,10 +750,17 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       },
       onResult: async (tool, result, api, context) => {
         if (result.failure?.scope === 'tool' && tool.failureGroup) {
+          const inputs = await this.requireRuntime().inputsForTask(api, context);
+          if (inputs.length !== 1)
+            throw new Error('Cherry capabilities require one owning input per Pi run.');
           await api.commit(async (tx) => {
-            const budget = await tx.doc(PiToolBudget, api.conversationId);
-            if (!budget.failedGroups.includes(tool.failureGroup!))
-              budget.failedGroups.push(tool.failureGroup!);
+            const failures = await tx.doc(PiToolBudget, api.conversationId);
+            if (failures.inputId !== inputs[0]!.record.id) {
+              failures.inputId = inputs[0]!.record.id;
+              failures.failedGroups = [];
+            }
+            if (!failures.failedGroups.includes(tool.failureGroup!))
+              failures.failedGroups.push(tool.failureGroup!);
           }, context);
         }
         if (!result.artifacts.length) return;
@@ -812,66 +791,13 @@ export class PiDurableAgentRuntime implements DurableAgentRuntime {
       hooks: [
         ...(extension.hooks ?? []),
         hook(GenerationTask, {
-          beforeRequest: async (request, api, context) => {
+          beforeRequest: async (_request, api, context) => {
             // The harness derives this context from the same invocation signal it forwards to Models.
             const signal = requireSignal(context);
             this.requestOwners.set(signal, await this.taskIdentity(lane, api, context));
-            const inputs = await this.requireRuntime().inputsForTask(api, context);
-            const admitted = await api.snapshot(PiToolBudget, api.conversationId, context);
-            const current = admitted?.inputId === inputs[0]?.record.id ? admitted : undefined;
-            const transcriptBudget = piToolBudgetState(
-              request.messages,
-              undefined,
-              current?.nestedCalls.length,
-            );
-            // Compaction may remove older model calls from the request, never from admission.
-            const budget =
-              transcriptBudget === 'available' &&
-              current &&
-              current.modelCalls.length + current.nestedCalls.length >= PI_TOOL_BUDGET.maxToolCalls
-                ? 'final-response'
-                : transcriptBudget;
-            if (budget === 'exceeded') throw new PiToolBudgetExceededError();
-            const afterUser =
-              request.messages.findLastIndex((message) => message.role === 'user') + 1;
-            const modelCalls = request.messages
-              .slice(afterUser)
-              .reduce(
-                (count, message) =>
-                  count +
-                  (message.role === 'assistant'
-                    ? message.content.filter((block) => block.type === 'toolCall').length
-                    : 0),
-                0,
-              );
-            if (
-              admitted?.inputId === inputs[0]?.record.id &&
-              admitted?.finalResponseModelCalls !== undefined &&
-              modelCalls > admitted.finalResponseModelCalls
-            )
-              throw new PiToolBudgetExceededError();
             this.webRequests.delete(signal);
-            if (budget === 'available') {
-              this.toolFreeRequests.delete(signal);
-              if (nativeWeb && !(await this.webLookupFailed(key, api, context)))
-                this.webRequests.set(signal, routes);
-              return undefined;
-            }
-            this.toolFreeRequests.add(signal);
-            const conversation = await this.requireRuntime().conversation(key, context);
-            if (!conversation || conversation.id !== api.conversationId)
-              throw new Error('The Pi conversation changed before budget settlement.');
-            await conversation.commit(async (tx) => {
-              const current = await tx.doc(PiToolBudget, api.conversationId);
-              if (current.inputId === inputs[0]?.record.id)
-                current.finalResponseModelCalls ??= modelCalls;
-            }, context);
-            return {
-              messages: [
-                ...request.messages,
-                { ...PI_TOOL_BUDGET_FINAL_RESPONSE, timestamp: Date.now() },
-              ],
-            };
+            if (nativeWeb && !(await this.webLookupFailed(key, api, context)))
+              this.webRequests.set(signal, routes);
           },
         }),
       ],

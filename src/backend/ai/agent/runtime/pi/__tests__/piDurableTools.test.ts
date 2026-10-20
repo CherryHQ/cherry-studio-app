@@ -28,7 +28,6 @@ import { PiCodemodeMcpResultEntry } from '../piCodemodeResults';
 import { projectPiTurn } from '../piDurableProjection';
 import { createPiDurableToolExtension } from '../piDurableTools';
 import { emptyAssistantMessage } from '../piStreamEvents';
-import { admitPiToolCall, PiToolBudget } from '../piToolBudget';
 import { ToolInstructions } from '../piToolInstructions';
 
 /** Preserve the same durable records across Harness instances, as a reopened SQL adapter does. */
@@ -274,32 +273,38 @@ describe('durable capability boundary', () => {
     }
   });
 
-  test('child calls consume the budget before task creation, and a refused call fails without ending the script', async () => {
-    let conversation!: Conversation;
-    const codes: (string | undefined)[] = [];
-    const execute = jest.fn(async () => ({ value: null, artifacts: [] }));
+  test('nested calls pass the former call limit while invalid arguments still fail without ending the script', async () => {
+    const saved: string[] = [];
+    const execute: RuntimeTool['execute'] = async ({ input }) => {
+      const name = (input as { name: string }).name;
+      saved.push(name);
+      return { value: name, artifacts: [] };
+    };
     const extension = capabilityExtension({
       name: 'cherry',
       tools: [capability({ approval: 'auto', execute }), scriptCapability()],
       approve: async () => true,
-      admitCall: (call, _api, context) => admitPiToolCall(conversation, context, 1, call, ['call']),
       codemode: defineExtension({
         name: 'test-codemode',
         tools: [
           defineTool({
             name: 'codemode',
             parameters: { type: 'object' } as TSchema,
-            description: 'Call with invalid arguments.',
+            description: 'Save a batch of files.',
             replay: 'safe',
             async execute(_args, api, context) {
-              for (let index = 0; index < 70; index++) {
-                const result = await api.executeTool('create_file', {}, context, {
+              for (let index = 0; index < 257; index++) {
+                const name = `note-${index}.txt`;
+                const result = await api.executeTool('create_file', { name }, context, {
                   key: `c${index}`,
                 });
-                expect(result.isError).toBe(true);
-                codes.push(result.diagnostics[0]?.code);
+                expect(result.isError).toBe(false);
+                expect(result.structuredOutput).toMatchObject({ value: name });
               }
-              return { output: [{ type: 'text', text: 'Partial result.' }] };
+              const invalid = await api.executeTool('create_file', {}, context, { key: 'invalid' });
+              expect(invalid.isError).toBe(true);
+              expect(invalid.diagnostics[0]?.code).toBe('invalid_arguments');
+              return { output: [{ type: 'text', text: 'Saved 257 files.' }] };
             },
           }),
         ],
@@ -307,24 +312,18 @@ describe('durable capability boundary', () => {
     });
     const harness = await open(new MemoryStorage(), extension);
     try {
-      conversation = await harness.createConversation(
+      const conversation = await harness.createConversation(
         { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
         BACKGROUND_CONTEXT,
       );
       const id = await toolTask(conversation, 'codemode', {});
       await harness.waitForTask(id, BACKGROUND_CONTEXT);
       expect((await harness.getTask(id, BACKGROUND_CONTEXT))?.state.status).toBe('terminal');
-      // The parent call holds one of the 64 admissions; invalid arguments still spend the rest.
-      expect(codes.slice(0, 63)).toEqual(Array(63).fill('invalid_arguments'));
-      expect(codes.slice(63)).toEqual(Array(7).fill('tool_call_limit_exceeded'));
-      expect(execute).not.toHaveBeenCalled();
-      expect(
-        (await harness.snapshot(PiToolBudget, conversation.id, BACKGROUND_CONTEXT))?.nestedCalls,
-      ).toHaveLength(63);
+      expect(saved).toEqual(Array.from({ length: 257 }, (_, index) => `note-${index}.txt`));
       expect((await conversation.context(BACKGROUND_CONTEXT)).messages.at(-1)).toMatchObject({
         role: 'toolResult',
         isError: false,
-        details: { kind: 'cherry.tool-result', output: { modelValue: 'Partial result.' } },
+        details: { kind: 'cherry.tool-result', output: { modelValue: 'Saved 257 files.' } },
       });
     } finally {
       await harness.close(BACKGROUND_CONTEXT);

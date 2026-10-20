@@ -762,12 +762,11 @@ adapts its transport to the existing native QuickJS-NG engine; no WASM runtime i
 approval, provider selection and usage attribution.
 
 A script receives structured tool results and can combine calls, but every nested call passes the
-same capability checks and approval as a direct model call. Parent and child calls share the
-sixty-four-call turn budget, including invalid child arguments. Admission happens before child-task
-creation and deduplicates resumed calls by their stable IDs; only model rounds count toward twenty
-steps. A child call past the budget fails without creating a task; the script receives the error,
-keeps running and returns what it gathered, and the next model request is the tool-free final
-response. The Code Mode prompt section states this limit. The live parent shows
+same capability checks and approval as a direct model call. Neither model-issued nor nested calls
+have a fixed per-turn count limit. Pi owns nested-task creation, argument validation and recovery
+by stable call keys. Invalid child arguments return an error to the script without executing the
+application callback. The Code Mode prompt section describes temporary working data and managed
+output paths. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
@@ -831,11 +830,11 @@ credentials and private payloads from errors, and returns portable values. Cance
 through MCP, provider, device, and file operations where their APIs support it; non-abortable native
 work must discard late results after the turn is terminal.
 
-Pi caps each turn at twenty tool-loop steps and sixty-four tool calls. Reaching either budget allows
-one final response with all tools disabled, using the current results and disclosing remaining gaps.
-This response remains subject to the context limit; the turn itself has no wall-clock deadline. The MCP
-adapter separately caps each remote call at 60 seconds and projects at most 256 KiB of JSON. These
-limits are application constants rather than user settings in Version 1.
+Cherry adds no fixed tool-loop step or tool-call count limit. Pi owns continuation and automatic
+context compaction; the turn itself has no wall-clock deadline. Cancellation, failure-group policy,
+and per-operation limits remain active. The MCP adapter caps each remote call at 60 seconds of active
+execution and projects at most 256 KiB of JSON. These per-operation limits are application constants
+rather than user settings in Version 1.
 
 ## Desktop Relationship
 

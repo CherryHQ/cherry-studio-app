@@ -41,6 +41,7 @@ import { PiDurableRuntime } from '../PiDurableRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
+import { PiToolBudget } from '../piToolBudget';
 import { ToolInstructions } from '../piToolInstructions';
 import type { PiNativeWebTools } from '../piWebTools';
 
@@ -699,6 +700,183 @@ describe('Persistent Agent facade', () => {
       }
     },
   );
+
+  test('completes more than 64 tool rounds and 256 calls without a forced final response', async () => {
+    const state = fixture();
+    const execute = jest.fn(async () => ({ value: 'Read.', artifacts: [] }));
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'read_file' },
+      providerName: 'read_file',
+      displayName: 'Read file',
+      description: 'Read a file.',
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      execute,
+    };
+    state.ports.resolveTool = async () => tool;
+    const resolveModel = state.dependencies.resolveModel;
+    let requests = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: (_model, context) => {
+        requests += 1;
+        state.requests.push(context);
+        const stream = new AssistantMessageEventStream();
+        const reason = requests <= 65 ? 'toolUse' : 'stop';
+        stream.push({
+          type: 'done',
+          reason,
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: reason,
+            content:
+              reason === 'toolUse'
+                ? Array.from({ length: 4 }, (_, index) => ({
+                    type: 'toolCall' as const,
+                    id: `read-${requests}-${index}`,
+                    name: 'read_file',
+                    arguments: {},
+                  }))
+                : [{ type: 'text', text: 'Read all 260 files.' }],
+          },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    const terminal = deferred<string>();
+    const observation = await runtime.observe(lane, (event) => {
+      if (event.type === 'turn.updated' && ['completed', 'failed'].includes(event.turn.status))
+        terminal.resolve(event.turn.status);
+    });
+    try {
+      await runtime.submit(lane, input('long'));
+      expect(await terminal.promise).toBe('completed');
+      expect(requests).toBe(66);
+      expect(execute).toHaveBeenCalledTimes(260);
+      expect(JSON.stringify(state.requests)).not.toContain('tool budget');
+      expect((await runtime.message(lane, 'answer-long'))?.turn.parts).toContainEqual(
+        expect.objectContaining({ type: 'text', text: 'Read all 260 files.' }),
+      );
+    } finally {
+      await observation.unsubscribe();
+      await runtime.close();
+    }
+  });
+
+  test('persists failed groups and resets them for the next input after reopening', async () => {
+    const state = fixture();
+    const executed: string[] = [];
+    const tools: RuntimeTool[] = ['web', 'files'].map((group) => ({
+      ref: { source: 'builtin', capabilityId: group },
+      providerName: group,
+      displayName: group,
+      description: `Call ${group}.`,
+      inputSchema: { type: 'object', properties: {} },
+      approval: 'auto',
+      failureGroup: group,
+      execute: async () => {
+        executed.push(group);
+        return {
+          value: null,
+          artifacts: [],
+          failure: {
+            scope: 'tool',
+            error: {
+              code: 'tool_execution_error',
+              message: `${group} unavailable.`,
+              retryable: false,
+              origin: 'tool',
+            },
+          },
+        };
+      },
+    }));
+    state.ports.resolveTool = async (_identity, ref) =>
+      tools.find(
+        (tool) =>
+          tool.ref.source === 'builtin' &&
+          ref.source === 'builtin' &&
+          tool.ref.capabilityId === ref.capabilityId,
+      )!;
+    const resolveModel = state.dependencies.resolveModel;
+    // Each repeated call must be denied. In the second input, a files failure must not retain
+    // the previous input's web failure when the stored document switches to the new input.
+    const calls = ['web', 'web', undefined, 'files', 'web', 'web', undefined];
+    let requests = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        const name = calls[requests++];
+        const reason = name ? 'toolUse' : 'stop';
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason,
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: reason,
+            content: name
+              ? [{ type: 'toolCall', id: `call-${requests}`, name, arguments: {} }]
+              : [{ type: 'text', text: 'Tools unavailable.' }],
+          },
+        });
+        stream.end();
+        return stream;
+      },
+    });
+    let runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    try {
+      await runtime.ensureConversation({
+        ...seed,
+        configuration: { ...seed.configuration, tools },
+      });
+      for (const [requestId, failedGroups] of [
+        ['first', ['web']],
+        ['second', ['files', 'web']],
+      ] as const) {
+        if (requestId === 'second') {
+          runtime = state.create();
+          await runtime.initialize(state.database, state.ports);
+          await runtime.configure(lane, { ...seed.configuration, tools });
+        }
+        await submitAndWait(runtime, input(requestId));
+        expect((await runtime.message(lane, `answer-${requestId}`))?.turn.parts).toContainEqual(
+          expect.objectContaining({ type: 'tool', providerName: 'web', state: 'denied' }),
+        );
+        await runtime.close();
+        const inspection = await PiDurableRuntime.open(state.storage, {
+          models: createModels({
+            authContext: { env: async () => undefined, fileExists: async () => false },
+          }),
+          registry: createRegistry(),
+        });
+        try {
+          const conversation = (await inspection.conversation('session'))!;
+          const record = (await inspection.inputRecord('session', requestId))!;
+          await conversation.commit(async (tx) => {
+            expect(await tx.doc(PiToolBudget, conversation.id)).toMatchObject({
+              inputId: record.id,
+              failedGroups,
+            });
+          }, BACKGROUND_CONTEXT);
+        } finally {
+          await inspection.close();
+        }
+      }
+      expect(executed).toEqual(['web', 'files', 'web']);
+      expect(requests).toBe(7);
+    } finally {
+      await runtime.close();
+    }
+  });
 
   test('recovers a structured transient failure after a tool without repeating its action', async () => {
     const state = fixture();

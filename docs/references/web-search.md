@@ -42,7 +42,7 @@ selected. Each request intersects the stored route with the credentials it actua
 
 Configuration readiness is local and makes no health-check request. Explicit denies and per-call
 approvals cannot be bypassed by a native tool. Requests without Host web policy, including probes,
-never gain native tools. Compaction and budget-exhausted final responses suppress them as well.
+never gain native tools. Compaction requests suppress them as well.
 
 Adapters, by the endpoint the model is actually requested on:
 
