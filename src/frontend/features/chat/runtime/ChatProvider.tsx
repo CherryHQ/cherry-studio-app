@@ -346,11 +346,18 @@ export function useAgentChatControls(input: {
           ...(!sessionId && workspaceFolderId ? { workspaceFolderId } : {}),
         });
         if (isCurrent()) {
+          // Waiting input is displayed by the queue. Otherwise keep the optimistic pair
+          // until the transcript displays both admitted rows, even in an existing Session.
+          const isQueued =
+            !pending.isNewSession &&
+            client
+              .getState(request.sessionId)
+              .queuedInputs.some((input) => input.userMessage.id === request.userMessageId);
           setSubmission((current) =>
             current?.send === pending
               ? {
                   ...current,
-                  send: pending.isNewSession ? { ...pending, isSubmitting: false } : undefined,
+                  send: isQueued ? undefined : { ...pending, isSubmitting: false },
                 }
               : current,
           );
@@ -366,7 +373,7 @@ export function useAgentChatControls(input: {
           : error;
       }
     },
-    [agentId, composerKey, sendMessage, sessionId, workspaceFolderId],
+    [agentId, client, composerKey, sendMessage, sessionId, workspaceFolderId],
   );
   const completePendingSend = useCallback(
     (userMessageId: string) => {

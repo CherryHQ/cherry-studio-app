@@ -117,7 +117,7 @@ export function ChatWorkspace({
           ? { ...message.display, status: 'pending' as const, data: { parts: [] } }
           : message.display,
       );
-    if (!pendingSend || !pendingSend.isNewSession) return projected;
+    if (!pendingSend) return projected;
     const [user, assistant] = pendingSend.messages;
     const userIndex = projected.findIndex((message) => message.id === user.id);
     const assistantIndex = projected.findIndex((message) => message.id === assistant.id);
