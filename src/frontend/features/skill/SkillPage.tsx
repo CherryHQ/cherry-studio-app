@@ -1,3 +1,4 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import type { ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -8,11 +9,13 @@ import { RouteHeader, type RouteHeaderProps } from '@/frontend/appShell/header';
 
 export function SkillPage({
   children,
+  contentClassName,
   footer,
   headerProps,
   testID,
 }: {
   children: ReactNode;
+  contentClassName?: string;
   footer?: ReactNode;
   headerProps: RouteHeaderProps;
   testID?: string;
@@ -30,7 +33,7 @@ export function SkillPage({
       >
         <ScrollView
           className="flex-1 bg-background"
-          contentContainerClassName="flex-grow gap-6 px-6 py-6"
+          contentContainerClassName={cn('flex-grow gap-6 px-6 py-6', contentClassName)}
           contentContainerStyle={footer ? undefined : { paddingBottom: bottom + 24 }}
           contentInsetAdjustmentBehavior="never"
           keyboardDismissMode="on-drag"
