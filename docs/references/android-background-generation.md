@@ -40,9 +40,9 @@ the documented `dataSync` time limit and does not enable indefinite background e
 
 The PC name is the connection notice's only identity anchor: it is the title, and the connection
 status sits in the header line with no timestamp. Cherry notifications use `brand` red for the
-system small-icon badge and supply the original launcher artwork as the full-color large icon.
+system small-icon badge. The large-icon content slot is not used to repeat the app logo.
 Android still renders the status-bar and Live Update chip's small icon as a monochrome mask;
-large-icon placement and OEM island presentation remain system-owned.
+OEM island presentation remains system-owned.
 The card shows **Running** while that PC has an observed unfinished session, including
 one awaiting a decision. Once its last session settles or retires, the card returns to the current
 connection state. Idle history, local tasks, and another PC's sessions do not affect it. These

@@ -47,6 +47,6 @@ export type BackgroundActivityNativePresentation<
   Presentation extends BackgroundActivityBasePresentation = BackgroundActivityPresentation,
 > = Presentation & {
   colorScheme?: 'dark' | 'light';
-  /** Original app artwork; the surface chooses the variant for its own background. */
+  /** Downsampled app artwork; the surface chooses the variant for its own background. */
   logoUris?: { dark: string; light: string };
 };

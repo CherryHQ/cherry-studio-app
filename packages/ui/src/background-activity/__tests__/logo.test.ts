@@ -1,5 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import sharp from 'sharp';
 
 import { CHERRY_ACTIVITY_LOGO_DARK_BASE64, CHERRY_ACTIVITY_LOGO_LIGHT_BASE64 } from '../logo';
 
@@ -8,10 +7,28 @@ describe('background activity logo', () => {
     ['dark', CHERRY_ACTIVITY_LOGO_DARK_BASE64],
     ['light', CHERRY_ACTIVITY_LOGO_LIGHT_BASE64],
   ])(
-    'preserves the original %s app artwork without recoloring or replacing it',
-    (theme, base64) => {
-      expect(Buffer.from(base64, 'base64')).toEqual(
-        readFileSync(join(process.cwd(), 'assets', `icon-${theme}.png`)),
+    'keeps the %s bitmap within Live Activity limits and preserves its background',
+    async (theme, base64) => {
+      const png = Buffer.from(base64, 'base64');
+      // UIImage(data:) loads these at scale 1. A small layout frame must not
+      // conceal an oversized bitmap from this regression check.
+      await expect(sharp(png).metadata()).resolves.toMatchObject({
+        format: 'png',
+        width: 32,
+        height: 32,
+      });
+
+      const { data, info } = await sharp(png)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      expect(data.length).toBe(32 * 32 * 4);
+      const alpha = Array.from(data).filter((_, index) => index % info.channels === 3);
+      expect(Math.max(...alpha)).toBe(255);
+      expect(Math.min(...alpha)).toBe(theme === 'dark' ? 0 : 255);
+      // The light mark keeps its red background; the dark mark stays transparent.
+      expect([...data.subarray(0, 4)]).toEqual(
+        theme === 'dark' ? [0, 0, 0, 0] : [255, 87, 87, 255],
       );
     },
   );

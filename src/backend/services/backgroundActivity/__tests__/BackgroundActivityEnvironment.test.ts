@@ -43,7 +43,7 @@ describe('BackgroundActivityEnvironment', () => {
     jest.restoreAllMocks();
   });
 
-  it('stages both original logo variants at distinct widget file URIs', async () => {
+  it('stages both downsampled logo variants at distinct widget file URIs', async () => {
     const environment = new BackgroundActivityEnvironment();
 
     await expect(environment.prepareLogos()).resolves.toEqual({

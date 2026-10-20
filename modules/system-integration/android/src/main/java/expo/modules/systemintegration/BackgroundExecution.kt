@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -82,7 +81,6 @@ internal object BackgroundExecution {
     val content = if (ongoing && actions != null && actions["promoted"] != false) listOf(body.substringBefore('\n'), actions["prompt"] as? String).filterNotNull().joinToString("\n") else body
     val builder = NotificationCompat.Builder(context, channelId)
       .setSmallIcon(icon).setColor(BRAND_COLOR).setContentTitle(title)
-      .setLargeIcon(Icon.createWithResource(context, context.applicationInfo.icon))
       .setContentIntent(contentIntent).setOngoing(ongoing).setAutoCancel(!ongoing)
       .setSilent(!alert).setOnlyAlertOnce(!alert)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).addExtras(extras)

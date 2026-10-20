@@ -94,10 +94,13 @@ Mobile follows desktop's neutral-first interface with green action emphasis. The
 
 App identity has two artwork variants: `assets/icon-light.png` (red) and `assets/icon-dark.png`
 (the existing dark-mode mark). Reuse their original artwork, including on background-activity
-surfaces. Never substitute the legacy cherry-and-leaf logo or tint the app mark with action or
-status colors. The black Dynamic Island uses the dark variant; other full-color surfaces choose
-the variant for their own background. Android's mandatory monochrome notification mask remains
-system-rendered, with `brand` red as the notification accent.
+surfaces, with downsampled derivatives sized for platform limits. Artwork fidelity does not require
+identical file bytes or launcher-size bitmaps. Never substitute the legacy cherry-and-leaf logo or
+tint the app mark with action or status colors. The black Dynamic Island uses the dark variant;
+other full-color surfaces choose the variant for their own background. Android's mandatory
+monochrome notification mask remains
+system-rendered, with `brand` red as the notification accent. Do not repeat the app logo in the
+notification's large-icon content slot.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,
 `link` for links and tool mentions,
