@@ -2,7 +2,7 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, iOS health summaries and workouts, location, web search and fetch, image
+The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
 generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
 `create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
@@ -77,8 +77,9 @@ own platform, permission, application-configuration, base approval, capability-g
 and auto-approval eligibility. The Agent editor enables or disables capability groups
 (`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota. Health
-tools are also ineligible: each call requires explicit consent to share health data with AI.
+auto-approval eligible: enabling the image group is not consent to spend provider quota. Personal-health
+reads are also ineligible: each call requires explicit consent to share health data with AI.
+Public HealthKit type discovery contains no personal data and can run automatically.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
 installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
@@ -496,27 +497,82 @@ real OAuth providers, protocol negotiation, and third-party Apps still require a
 
 ### Health And Fitness
 
-Health is an iOS-only built-in tool group, not a separate page. System permissions own read
-authorization; `health_get_summary` and `health_list_workouts` belong to the `health` Agent
-capability. Android has no Health Connect bridge, native health module or health entry.
-The Agent created during first-run onboarding enables health; manually created Agents start with
-it disabled. Existing Agents retain their stored capability preferences without a data migration.
-Both tools always require application approval, including in automatic approval mode.
-The approval sheet identifies the receiving model service and explains sharing and conversation
-retention. It blocks approval if the receiving service cannot be resolved; denial remains available.
-The data is for the user's health and fitness management, not medical diagnosis.
+Health is an iOS-only built-in tool group, not a separate page. The `health` Agent capability
+contains these tools:
 
-`modules/health-access` owns read authorization for eight types and never requests writing,
-background delivery or extended history. HealthKit reports whether authorization was requested,
-not whether reading was granted. The `requested` status permits a read attempt without claiming
-access; missing records remain null rather than becoming zero. Summary tools can use a subset
-of available metrics. Native aggregate queries avoid unbounded raw quantity fetches, disable the
-library cache, and daily queries stop between days when the turn is cancelled. The dependency
-patch removes native logs of health values.
+| Tool | Purpose |
+| --- | --- |
+| `health_get_summary` | Existing seven-metric overview and sleep-stage hours |
+| `health_list_workouts` | Newest-first workout overview with truncation information |
+| `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
+| `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
+| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
+| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
 
-The initial App Store release removed this integration after a Guideline 2.5.1 finding. Restoring
-it requires a new native binary and a new submission; store metadata and review notes must describe
-the Agent health analysis and how to reach it. See [Health Review](../../guides/health-review.md).
+All personal-data tools require application approval even in automatic approval mode. Only public
+catalog discovery can run automatically. The approval sheet names the receiving model service and
+explains sharing and conversation retention; it blocks approval when that service cannot be
+resolved. The first-run Agent enables health; manually created Agents start with it disabled.
+Existing Agents retain their stored preference. Android has no Health Connect bridge or health entry.
+
+The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
+public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
+nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
+per type. Neither a supported type nor a completed authorization request proves that read access
+was granted. Empty data cannot distinguish denied access from missing records and must not be
+reported as measured zero. No writing, background delivery or extended-history access is requested.
+
+The existing overview retains these units: steps (count), active energy (kcal), walking/running
+distance (meters), heart rate and resting heart rate (average bpm), HRV SDNN (average milliseconds),
+and asleep time (hours). Other metrics use `health_query_data`; quantity statistics follow
+HealthKit's aggregation style, with cumulative sums or discrete averages/minima/maxima and most
+recent measurements. Units come from HealthKit. Percent values are fractions: `0.97` means `97%`.
+
+Sleep intervals are clipped to the range, merged and split at local midnight. The total includes
+unspecified, core, deep and REM sleep. `stages` separately returns in-bed, awake, unspecified, core,
+deep and REM hours; absent stages are null. Days with only in-bed or awake records can have stage
+details while asleep duration remains null and `metricStates.sleep` is `no-data`. Each stage merges
+its own overlaps, so conflicting sources can make stage totals overlap; never sum them to recreate
+total sleep. This does not reproduce Apple Health's source-priority algorithm. First/last sleep
+times are the clipped boundaries of the entire requested range. Raw stages are available through
+`health_query_data`. Apple exposes no public sleep-score type in this SDK.
+
+Generic samples use anchored pagination and retain their original times, values, UUID, source and
+device. They are not chronological or prorated. Continue the cursor with the exact returned dates,
+type and workout filter until `hasMore` is false; a full last page may require an empty continuation.
+Deleted IDs must be removed when combining pages. Use native statistics for quantity totals rather
+than summing overlapping source samples. Quantity series and workout-associated samples support
+heart-rate curves and pace/speed analysis. Record details expose workout events, activities and
+statistics; route records are queried with the workout UUID, then paged through record details.
+
+`health_list_workouts` retains `{ data, hasMore, limit, startDate, endDate }`, defaulting to 20 and
+allowing 50 records. Each row includes a UUID. For a complete list, use the generic `workouts`
+type and its cursor. The local native module reads one extra record to detect truncation and
+preserves missing distance/energy as null without adding a dependency patch.
+Workout quantities and durations describe whole workouts. SDK activity names replace incomplete
+library names while unknown future numeric activity types remain available.
+
+Queries default to seven days and allow at most 90 days per request; system history access may
+further restrict results. Characteristics and the current/archived medication list ignore dates.
+Activity rings cover complete local calendar days. Blood-pressure and food authorization follows
+the contained quantities. Vision prescriptions and medications use per-object selection;
+medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
+selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
+selections, CDA content prompts and verifiable credential prompts share the application permission
+queue. Queued reads respect cancellation; an open selection retains the queue until native
+completion or timeout. Clinical reads require the extra Health Records entitlement and usage
+description.
+
+Verifiable credentials use a separate one-time selection query and explicit application approval,
+with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
+continuations require selecting the same records. Original payload bytes are returned without
+verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
+which this change does not obtain or enable; an ordinary clinical capability does not suffice.
+
+A new native binary is required, including a signing profile with the clinical capability. The
+initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
+App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
+categories and selected AI service. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 

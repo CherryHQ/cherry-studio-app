@@ -42,15 +42,15 @@ describe('createSystemCapabilitySource', () => {
   test('offers the always-available catalog when nothing is granted or configured', async () => {
     const tools = await resolve({ deviceAccess: {}, paintingModel: null });
 
-    // Every device tool needs a permission, web tools need a configured
-    // provider, and generate_image needs a drawing model, so only the
-    // permission-free Agent management, question and file tools survive.
+    // Personal device data requires permission; the public HealthKit type catalog does not.
     expect(capabilityIds(tools)).toEqual([
       'agent_create',
       'agent_get',
       'agent_list',
       'agent_update',
       'ask_user_question',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -161,6 +161,8 @@ describe('createSystemCapabilitySource', () => {
       'ask_user_question',
       'calendar_list_collections',
       'calendar_list_events',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -212,6 +214,8 @@ describe('createSystemCapabilitySource', () => {
       'agent_list',
       'agent_update',
       'ask_user_question',
+      'health_list_data_types',
+      'health_share_verifiable_records',
       'edit_file',
       'library_search_files',
       'library_read_file',
@@ -258,6 +262,23 @@ describe('createSystemCapabilitySource', () => {
     expect(
       tools.find((tool) => tool.providerName === 'health_list_workouts')?.autoApprovalEligible,
     ).toBe(false);
+  });
+
+  test('keeps extended personal health reads explicit while allowing public catalog lookup', async () => {
+    const tools = await resolve({ deviceAccess: { 'health.electrocardiogram.read': 'requested' } });
+    for (const id of [
+      'health_query_data',
+      'health_get_record',
+      'health_share_verifiable_records',
+    ]) {
+      expect(tools.find((tool) => tool.providerName === id)).toMatchObject({
+        approval: 'ask',
+        autoApprovalEligible: false,
+      });
+    }
+    expect(approvalOf(tools, 'health_list_data_types')).toBe('auto');
+    const disabled = await resolve({ disabledCapabilities: ['health'] });
+    expect(capabilityIds(disabled)).not.toContain('health_list_data_types');
   });
 
   test('offers each web tool only when its provider is configured', async () => {
