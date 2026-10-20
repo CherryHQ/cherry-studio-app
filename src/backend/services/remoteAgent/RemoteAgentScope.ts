@@ -3,7 +3,7 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
-  type AgentMessage,
+  type AgentMessageListItem,
   type ContentRef,
   type AgentPart,
   type AgentProjection,
@@ -612,7 +612,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
     );
   }
-  private messageParts(sessionId: string, message: AgentMessage, signal: AbortSignal) {
+  private messageParts(sessionId: string, message: AgentMessageListItem, signal: AbortSignal) {
     const entry = this.cacheEntry(sessionId);
     const generation = entry.generation;
     const key = this.readCache.partsKey(message);

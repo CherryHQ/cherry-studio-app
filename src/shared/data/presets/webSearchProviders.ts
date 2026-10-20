@@ -1,4 +1,3 @@
-import { REMOTE_PROVIDER_IDS, type RemoteProviderId } from '@cherrystudio/web-search';
 import { WEB_SEARCH_PROVIDER_CATALOG } from '@cherrystudio/web-search/catalog';
 import * as z from 'zod';
 
@@ -44,7 +43,10 @@ export interface WebSearchProviderPreset extends WebSearchProviderPresetConfig {
   id: WebSearchProviderId;
 }
 
-const MOBILE_REMOTE_CAPABILITIES: Record<RemoteProviderId, readonly WebSearchCapability[]> = {
+const MOBILE_REMOTE_CAPABILITIES: Record<
+  Exclude<WebSearchProviderId, 'fetch'>,
+  readonly WebSearchCapability[]
+> = {
   zhipu: ['searchKeywords'],
   tavily: ['searchKeywords'],
   searxng: ['searchKeywords'],
@@ -60,7 +62,7 @@ const MOBILE_REMOTE_CAPABILITIES: Record<RemoteProviderId, readonly WebSearchCap
 };
 
 const remotePresets = Object.fromEntries(
-  REMOTE_PROVIDER_IDS.map((id): [RemoteProviderId, WebSearchProviderPresetConfig] => {
+  WEB_SEARCH_PROVIDER_IDS.filter((id) => id !== 'fetch').map((id) => {
     const metadata = WEB_SEARCH_PROVIDER_CATALOG[id];
     return [
       id,
@@ -76,9 +78,9 @@ const remotePresets = Object.fromEntries(
             apiHost: item.defaultApiHost ?? '',
           })),
       },
-    ];
+    ] as const;
   }),
-) as Record<RemoteProviderId, WebSearchProviderPresetConfig>;
+) as Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderPresetConfig>;
 
 export const WEB_SEARCH_PROVIDER_PRESET_MAP: Record<
   WebSearchProviderId,

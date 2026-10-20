@@ -1,4 +1,4 @@
-import type { RemoteProviderId, WebSearchProviderModule } from '@cherrystudio/web-search';
+import type { WebSearchProviderModule } from '@cherrystudio/web-search';
 import { bocha } from '@cherrystudio/web-search/providers/bocha';
 import { crawl4ai } from '@cherrystudio/web-search/providers/crawl4ai';
 import { exa } from '@cherrystudio/web-search/providers/exa';
@@ -11,6 +11,8 @@ import { searxng } from '@cherrystudio/web-search/providers/searxng';
 import { serply } from '@cherrystudio/web-search/providers/serply';
 import { tavily } from '@cherrystudio/web-search/providers/tavily';
 import { zhipu } from '@cherrystudio/web-search/providers/zhipu';
+
+import type { WebSearchProviderId } from '@/shared/data/types/webSearch';
 
 export const REMOTE_WEB_SEARCH_PROVIDERS = {
   zhipu,
@@ -25,4 +27,4 @@ export const REMOTE_WEB_SEARCH_PROVIDERS = {
   crawl4ai,
   parallel,
   serply,
-} satisfies Record<RemoteProviderId, WebSearchProviderModule>;
+} satisfies Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderModule>;
