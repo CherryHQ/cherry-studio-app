@@ -149,27 +149,6 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     }
   }, [follow, scheduleStickToBottom]);
 
-  // The native keyboard adapter owns scrolling during its animation. Layout
-  // changes from the composer settle through one correction after it finishes.
-  useGenericKeyboardHandler(
-    {
-      onStart: () => {
-        'worklet';
-        isKeyboardTransitioning.set(true);
-      },
-      onInteractive: () => {
-        'worklet';
-        isKeyboardTransitioning.set(true);
-      },
-      onEnd: () => {
-        'worklet';
-        isKeyboardTransitioning.set(false);
-        runOnJS(stickToBottomIfFollowing)();
-      },
-    },
-    [isKeyboardTransitioning, stickToBottomIfFollowing],
-  );
-
   const saveScrollAnchor = useCallback(
     (immediate = false) => {
       const current = inputsRef.current;
@@ -234,8 +213,18 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
 
   const scheduleLocalSendScroll = useCallback(
     (messageId: string) => {
+      pendingEnteringMessageIdRef.current = messageId;
+      const current = inputsRef.current;
+      // Send intent precedes the transcript update. Keep the reader's position
+      // until the target exists, unless navigation must first load the live edge.
+      if (
+        (!current.onReturnToLatest &&
+          !current.messages.some((message) => message.id === messageId)) ||
+        isKeyboardTransitioning.get()
+      ) {
+        return;
+      }
       processedEnteringMessageIdRef.current = messageId;
-      pendingEnteringMessageIdRef.current = undefined;
       follow.enterFollowing('local-send');
       clearStoredAnchor();
       cancelScheduledStick();
@@ -249,10 +238,45 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
         if (generation !== restoreGenerationRef.current || !follow.isFollowing()) {
           return;
         }
+        // Keyboard dismissal can start after this frame was queued.
+        if (isKeyboardTransitioning.get()) {
+          return;
+        }
+        pendingEnteringMessageIdRef.current = undefined;
         void scrollToLiveEdge('local-send', { animated: true });
       });
     },
-    [cancelScheduledStick, clearStoredAnchor, follow, scrollToLiveEdge],
+    [cancelScheduledStick, clearStoredAnchor, follow, isKeyboardTransitioning, scrollToLiveEdge],
+  );
+
+  const handleKeyboardEnd = useCallback(() => {
+    const pendingMessageId = pendingEnteringMessageIdRef.current;
+    if (pendingMessageId && didRestoreRef.current) {
+      scheduleLocalSendScroll(pendingMessageId);
+    } else {
+      stickToBottomIfFollowing();
+    }
+  }, [scheduleLocalSendScroll, stickToBottomIfFollowing]);
+
+  // The native keyboard adapter owns scrolling during its animation. A send
+  // waiting for dismissal takes precedence over the ordinary layout correction.
+  useGenericKeyboardHandler(
+    {
+      onStart: () => {
+        'worklet';
+        isKeyboardTransitioning.set(true);
+      },
+      onInteractive: () => {
+        'worklet';
+        isKeyboardTransitioning.set(true);
+      },
+      onEnd: () => {
+        'worklet';
+        isKeyboardTransitioning.set(false);
+        runOnJS(handleKeyboardEnd)();
+      },
+    },
+    [handleKeyboardEnd, isKeyboardTransitioning],
   );
 
   const reportReadyAfterRestore = useCallback(
@@ -369,7 +393,7 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
     }
 
     scheduleLocalSendScroll(enteringMessageId);
-  }, [attemptRestore, inputs.enteringMessageId, scheduleLocalSendScroll]);
+  }, [attemptRestore, inputs.enteringMessageId, inputs.messages, scheduleLocalSendScroll]);
 
   const handleLoad = useCallback(() => {
     didListLoadRef.current = true;
@@ -392,6 +416,10 @@ export function useMessageListScrollController(inputs: MessageListScrollControll
   const enterReadingForUser = useCallback(
     (reason: ReadingReason) => {
       cancelScheduledStick();
+      if (pendingEnteringMessageIdRef.current) {
+        processedEnteringMessageIdRef.current = pendingEnteringMessageIdRef.current;
+        pendingEnteringMessageIdRef.current = undefined;
+      }
       follow.enterReading(reason);
       if (suppressSaveRef.current) {
         // A committed interaction outranks mount-time restoration. Invalidate

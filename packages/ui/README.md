@@ -632,14 +632,16 @@ tap and accessibility actions.
 The Android menus keep a 208-point width cap, wrapping labels, checkmarks, destructive text,
 bounded scrolling, and safe-area positioning. They open above or below their anchor according to
 available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
-`MenuOverlay`, `MenuRow`, `MenuPanel`, and lifecycle hooks. The transparent system modal isolates
-background accessibility, preserves the caller's theme/context, and owns Back/Escape. Opening
+overlay root, `MenuRow`, `MenuPanel`, and lifecycle hooks. Android menus and `Composer.Menu`
+use a focus-preserving overlay so opening or closing does not synthesize keyboard transitions
+and move an underlying chat list. The overlay isolates background accessibility, preserves the
+caller's theme/context, and owns Back/Escape. Opening
 focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
 change dismisses the measured presentation instead of retaining a stale anchor.
 
 Outside taps and system back close them; closing immediately disables item interaction and retains
-the modal until its animation and native dismissal finish. Reduced motion skips the animation.
-An enabled selection is accepted once and runs after native dismissal, so actions can safely open
+the overlay until its animation and removal finish. Reduced motion skips the animation.
+An enabled selection is accepted once and runs after dismissal, so actions can safely open
 a system picker or navigate; it does not restore old focus over the destination. Searchable pickers,
 selection sheets, forms, and system media/share interfaces retain their own interaction contracts.
 Expo Router page previews remain owned by `Link.Preview` / `Link.Menu`, not these components.
