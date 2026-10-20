@@ -232,6 +232,35 @@ describe('DesktopSession', () => {
     session.close();
   });
 
+  it.each([undefined, 1, 2])(
+    'retains the message summaries capability from each hello',
+    async (version) => {
+      const channel = fakeChannel({
+        'connection.hello': () => ({
+          ...hello['connection.hello'](),
+          agentFailureVersion: 1,
+          ...(version === undefined ? {} : { agentMessageSummariesVersion: version }),
+        }),
+        'agent.agents.list': () => ({ items: [], nextCursor: null }),
+      });
+      const first = await DesktopSession.connect(options({ '10.0.0.1': channel }));
+      let second: DesktopSession | undefined;
+      try {
+        expect(first.agentMessageSummariesVersion).toBe(version);
+        await expect(first.request('agent.agents.list', {})).resolves.toEqual({
+          items: [],
+          nextCursor: null,
+        });
+        second = await DesktopSession.connect(options({ '10.0.0.2': fakeChannel(hello) }));
+        expect(second.agentMessageSummariesVersion).toBeUndefined();
+        expect(first.agentMessageSummariesVersion).toBe(version);
+      } finally {
+        first.close();
+        second?.close();
+      }
+    },
+  );
+
   it('accepts Agent methods only when the desktop advertises the failure contract', async () => {
     const channel = fakeChannel({
       'connection.hello': () => ({ ...hello['connection.hello'](), agentFailureVersion: 1 }),

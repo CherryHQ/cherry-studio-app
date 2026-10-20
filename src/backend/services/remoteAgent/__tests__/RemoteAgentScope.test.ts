@@ -91,6 +91,7 @@ function fixture(
   });
   const notifications = new Set<(notification: DesktopNotification) => void>();
   const connection = {
+    agentMessageSummariesVersion: undefined as number | undefined,
     agentAttachmentSelections: false,
     agentUploadsVersion: 1,
     agentUploadChecksum: 'sha256',
@@ -1294,6 +1295,349 @@ it('classifies an already closed session as retryable instead of a local file fa
   await expect(
     test.source.listAgents(undefined, new AbortController().signal),
   ).rejects.toMatchObject({ code: 'CONNECTION_LOST', retryable: true });
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it.each([undefined, 0, 1, 2])(
+  'negotiates message-list mode for capability %s on initial and cursor reads',
+  async (version) => {
+    const test = fixture();
+    test.connection.agentMessageSummariesVersion = version;
+    test.request.mockResolvedValue({ items: [], nextCursor: 'older' });
+    const signal = new AbortController().signal;
+    for (const cursor of [undefined, 'older']) {
+      await test.source.history('s', '7', cursor, signal);
+      const [method, params] = test.request.mock.calls.at(-1)!;
+      expect(method).toBe('agent.messages.list');
+      expect(params).toEqual({
+        sessionId: 's',
+        historyRevision: '7',
+        cursor,
+        ...(version === 1 ? { partsMode: 'paged' } : {}),
+      });
+      if (version !== 1) expect(params).not.toHaveProperty('partsMode');
+    }
+    test.source.dispose();
+    await test.source.drain();
+  },
+);
+
+it.each([false, true])(
+  'sends a history request through the session used for negotiation',
+  async (reverse) => {
+    const test = fixture();
+    const a = {
+      ...test.connection,
+      agentMessageSummariesVersion: reverse ? undefined : 1,
+      request: jest.fn(async () => ({ items: [] })),
+    };
+    const b = {
+      ...test.connection,
+      agentMessageSummariesVersion: reverse ? 1 : undefined,
+      request: jest.fn(async () => ({ items: [] })),
+    };
+    jest
+      .mocked(test.lease.ready)
+      .mockResolvedValueOnce(a as never)
+      .mockResolvedValue(b as never);
+    await test.source.history('s', '1', undefined, new AbortController().signal);
+    expect(test.lease.ready).toHaveBeenCalledTimes(1);
+    expect(a.request).toHaveBeenCalledWith(
+      'agent.messages.list',
+      {
+        sessionId: 's',
+        historyRevision: '1',
+        cursor: undefined,
+        ...(reverse ? {} : { partsMode: 'paged' }),
+      },
+      expect.anything(),
+    );
+    expect(b.request).not.toHaveBeenCalled();
+    test.source.dispose();
+    await test.source.drain();
+  },
+);
+
+it('refreshes history negotiation across distinct reconnected sessions', async () => {
+  const test = fixture();
+  const sessions = [undefined, 1, undefined].map((version) => ({
+    ...test.connection,
+    agentMessageSummariesVersion: version,
+    request: jest.fn(async () => ({ items: [] })),
+  }));
+  for (const session of sessions) {
+    jest.mocked(test.lease.ready).mockResolvedValue(session as never);
+    await test.source.history('s', '1', undefined, new AbortController().signal);
+    expect(session.request).toHaveBeenCalledTimes(1);
+    expect(session.request).toHaveBeenCalledWith(
+      'agent.messages.list',
+      {
+        sessionId: 's',
+        historyRevision: '1',
+        cursor: undefined,
+        ...(session.agentMessageSummariesVersion === 1 ? { partsMode: 'paged' } : {}),
+      },
+      expect.anything(),
+    );
+    test.setState({ status: 'suspended' });
+    test.setState({ status: 'ready' });
+  }
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('loads history when the legacy part index exceeds the response budget', async () => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.messages.list') {
+      if (params.partsMode !== 'paged')
+        throw new RemoteFailureError({
+          reason: 'RESOURCE_EXHAUSTED',
+          message: 'Page item exceeds response byte budget',
+          details: {
+            kind: 'ITEM_TOO_LARGE',
+            itemBytes: 70000,
+            budgetBytes: 62279,
+            retryable: false,
+          },
+        });
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '1',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+      };
+    }
+    if (method === 'agent.parts.list')
+      return {
+        items: [
+          {
+            partId: 'p',
+            revision: '1',
+            kind: 'text',
+            state: 'completed',
+            content: { text: 'complete' },
+          },
+        ],
+      };
+    throw new Error(method);
+  });
+  await expect(
+    test.source.history('s', '1', undefined, new AbortController().signal),
+  ).resolves.toMatchObject({
+    items: [{ id: 'm', parts: [{ id: 'p', kind: 'text', text: 'complete', complete: true }] }],
+  });
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('reads every summary parts page in revision order and reuses completed parts', async () => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  const ref = {
+    contentId: 'body',
+    revision: '4',
+    byteLength: '4',
+    mediaType: 'text/plain',
+    sha256: integrity.sha256(new TextEncoder().encode('body')),
+  };
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '3',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+      };
+    if (method === 'agent.parts.list') {
+      const index = params.cursor === undefined ? 0 : params.cursor === 'a' ? 1 : 2;
+      return {
+        items: [
+          {
+            partId: `p${index}`,
+            revision: String(index + 1),
+            kind: 'text',
+            state: 'completed',
+            content: index === 1 ? { ref } : { text: `text${index}` },
+          },
+        ],
+        nextCursor: ['a', 'b', null][index],
+      };
+    }
+    if (method === 'agent.content.read')
+      return { ...ref, offset: '0', nextOffset: '4', eof: true, dataBase64: 'Ym9keQ==' };
+    throw new Error(method);
+  });
+  const signal = new AbortController().signal;
+  const first = await test.source.history('s', '7', undefined, signal);
+  expect(first.items[0].parts).toMatchObject([
+    { id: 'p0', text: 'text0', complete: true },
+    { id: 'p1', text: 'body', complete: true },
+    { id: 'p2', text: 'text2', complete: true },
+  ]);
+  const calls = test.request.mock.calls.filter(([method]) => method === 'agent.parts.list');
+  expect(calls.map(([, params]) => params)).toEqual(
+    [undefined, 'a', 'b'].map((cursor) => ({
+      sessionId: 's',
+      messageId: 'm',
+      messageRevision: '3',
+      cursor,
+    })),
+  );
+  for (const [, params] of calls) expect(params).not.toHaveProperty('partsMode');
+  expect(await test.source.history('s', '7', undefined, signal)).toEqual(first);
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.messages.list'),
+  ).toHaveLength(2);
+  expect(test.request.mock.calls.filter(([method]) => method === 'agent.parts.list')).toHaveLength(
+    3,
+  );
+  expect(
+    test.request.mock.calls.filter(([method]) => method === 'agent.content.read'),
+  ).toHaveLength(1);
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it.each([
+  ['a', 'a'],
+  ['a', 'b', 'a'],
+])('rejects repeated parts cursors without caching partial parts', async (...cursors) => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  let successful = false;
+  let page = 0;
+  test.request.mockImplementation(async (method) => {
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '1',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+      };
+    if (method === 'agent.parts.list')
+      return {
+        items: [
+          {
+            partId: successful ? 'fresh' : `partial${page}`,
+            revision: '1',
+            kind: 'text',
+            state: 'completed',
+            content: { text: successful ? 'complete' : 'partial' },
+          },
+        ],
+        nextCursor: successful ? null : cursors[page++],
+      };
+    throw new Error(method);
+  });
+  const signal = new AbortController().signal;
+  await expect(test.source.history('s', '1', undefined, signal)).rejects.toMatchObject({
+    code: 'PROTOCOL_ERROR',
+  });
+  const before = test.request.mock.calls.filter(([method]) => method === 'agent.parts.list').length;
+  expect(before).toBe(cursors.length);
+  successful = true;
+  const result = await test.source.history('s', '1', undefined, signal);
+  expect(result.items[0].parts).toMatchObject([{ id: 'fresh', text: 'complete' }]);
+  expect(result.items[0].parts).toHaveLength(1);
+  expect(test.request.mock.calls.filter(([method]) => method === 'agent.parts.list')).toHaveLength(
+    before + 1,
+  );
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('preserves non-retryable oversized parts failures after summary listing', async () => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  test.request.mockImplementation(async (method) => {
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'm',
+            revision: '1',
+            role: 'assistant',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+      };
+    if (method === 'agent.parts.list')
+      throw new RemoteFailureError({
+        reason: 'RESOURCE_EXHAUSTED',
+        message: 'Page item exceeds response byte budget',
+        details: { kind: 'ITEM_TOO_LARGE', itemBytes: 70000, budgetBytes: 62279, retryable: false },
+      });
+    throw new Error(method);
+  });
+  await expect(
+    test.source.history('s', '1', undefined, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: 'RESOURCE_EXHAUSTED',
+    retryable: false,
+  });
+  test.source.dispose();
+  await test.source.drain();
+});
+
+it('keeps history summaries outside the live projection', async () => {
+  const test = fixture();
+  test.connection.agentMessageSummariesVersion = 1;
+  test.projection.messages.live = {
+    messageId: 'live',
+    revision: '1',
+    role: 'assistant',
+    status: 'success',
+    partIds: [],
+  };
+  let snapshot: RemoteSessionSnapshot | undefined;
+  const unobserve = test.source.observe('s', (value) => {
+    snapshot = value;
+  });
+  await settle();
+  expect(snapshot!.current).toBe(true);
+  const messages = snapshot!.messages;
+  expect(messages.map((message) => message.id)).toEqual(['live']);
+  const original = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.messages.list')
+      return {
+        items: [
+          {
+            messageId: 'history',
+            revision: '1',
+            role: 'user',
+            status: 'success',
+            partsMode: 'paged',
+          },
+        ],
+      };
+    if (method === 'agent.parts.list') return { items: [] };
+    return original(method, params);
+  });
+  const history = await test.source.history('s', '1', undefined, new AbortController().signal);
+  expect(history.items.map((message) => message.id)).toEqual(['history']);
+  expect(snapshot!.messages).toEqual(messages);
+  expect(snapshot!.current).toBe(true);
+  unobserve();
   test.source.dispose();
   await test.source.drain();
 });

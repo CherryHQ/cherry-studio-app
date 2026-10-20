@@ -571,3 +571,45 @@ it('does not install or activate a checkpoint that finishes after suspension', a
     test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
   ).toBe(false);
 });
+
+it('rejects summary-only checkpoint messages before installation', async () => {
+  const state = projection();
+  state.messages.m = {
+    messageId: 'm',
+    revision: '1',
+    role: 'assistant',
+    status: 'success',
+    partIds: [],
+  };
+  const test = setup(state);
+  const original = test.request.getMockImplementation()!;
+  test.request.mockImplementation(async (method, params) => {
+    if (method === 'agent.checkpoints.read')
+      return {
+        ...test.page,
+        items: test.page.items.map((item) =>
+          item.kind === 'message'
+            ? {
+                kind: 'message',
+                value: {
+                  messageId: 'm',
+                  revision: '1',
+                  role: 'assistant',
+                  status: 'success',
+                  partsMode: 'paged',
+                },
+              }
+            : item,
+        ),
+      } as never;
+    return original(method, params);
+  });
+  await expect(test.sync.start()).rejects.toThrow('PROTOCOL_ERROR');
+  expect(test.sync.current).toBeUndefined();
+  expect(test.publish).not.toHaveBeenCalled();
+  expect(
+    test.request.mock.calls.some(([method]) => method === 'agent.subscriptions.activate'),
+  ).toBe(false);
+  test.sync.stop();
+  await test.sync.drain();
+});

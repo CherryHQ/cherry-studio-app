@@ -80,6 +80,7 @@ function withAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 /** One pinned encrypted stream; address selection belongs to the connection manager. */
 export class DesktopSession {
   agentFailureVersion?: number;
+  agentMessageSummariesVersion?: number;
   agentUploadsVersion?: number;
   agentUploadChecksum?: 'sha256';
   agentAttachmentSelections?: boolean;
@@ -104,6 +105,7 @@ export class DesktopSession {
         options.signal,
       );
       session.agentFailureVersion = hello.agentFailureVersion;
+      session.agentMessageSummariesVersion = hello.agentMessageSummariesVersion;
       session.agentUploadsVersion = hello.agentUploadsVersion;
       session.agentUploadChecksum = hello.agentUploadChecksum;
       session.agentAttachmentSelections = hello.agentAttachmentSelections;

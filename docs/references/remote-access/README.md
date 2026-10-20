@@ -169,7 +169,10 @@ content refs are fetched with `agent.content.read` at the given revision before 
 applied; the checkpoint lease covers those reads. History is read at the projection's
 `historyRevision` (`messages.list`, `parts.list`); `REVISION_EXPIRED` restarts that traversal at
 the current revision without touching the live overlay. `history.committed` invalidates the
-history queries; `message.removed` after it releases the live message.
+history queries; `message.removed` after it releases the live message. For each `messages.list` request Mobile adds `partsMode: 'paged'` only when the sending connection
+advertises `agentMessageSummariesVersion: 1`; otherwise it omits the mode. Summaries omit `partIds`, and
+Mobile enumerates every `parts.list` page using the message ID and revision. Live events and checkpoints
+still require complete `AgentMessage` snapshots.
 
 **Commands.** `RemoteAgentCommandJournal` persists `commandId` + params before sending. First send
 records both create/send IDs before creating a session and retains the created session if sending

@@ -3,6 +3,7 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
+  type AgentParams,
   type AgentMessageListItem,
   type ContentRef,
   type AgentPart,
@@ -54,6 +55,9 @@ import {
   type GetUploadTransport,
 } from './remoteUploads';
 import { SessionSync } from './SessionSync';
+
+// Version 1 supports paged message summaries without the legacy part index.
+const MESSAGE_SUMMARIES_VERSION = 1;
 
 export type RemoteBackgroundExecution = {
   replies: BackgroundReplyLifecycle;
@@ -476,7 +480,18 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.state = { ...this.state, attachments, preupload };
         for (const listener of this.stateListeners) listener();
       }
-      return await this.call(session, method, params, signal);
+      let requestParams: Parameters<AgentRequest>[1] = params;
+      if (method === 'agent.messages.list') {
+        // The method narrows the protocol params union.
+        const list: AgentParams<'agent.messages.list'> = {
+          ...(params as AgentParams<'agent.messages.list'>),
+        };
+        if (session.agentMessageSummariesVersion === MESSAGE_SUMMARIES_VERSION)
+          list.partsMode = 'paged';
+        else delete list.partsMode;
+        requestParams = list;
+      }
+      return await this.call(session, method, requestParams, signal);
     } finally {
       linked?.dispose();
     }
