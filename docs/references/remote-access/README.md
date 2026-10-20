@@ -171,6 +171,12 @@ applied; the checkpoint lease covers those reads. History is read at the project
 the current revision without touching the live overlay. `history.committed` invalidates the
 history queries; `message.removed` after it releases the live message.
 
+History requests opt into `partsMode: 'paged'` only when the current connection's hello advertises
+`agentMessageSummariesVersion: 1`. Older desktops receive the legacy request. Summary rows omit
+`partIds`; Mobile follows every `agent.parts.list` cursor at the message revision and only caches
+the complete part list. Reconnects negotiate again. Live events and checkpoints keep complete
+message snapshots, and oversized indivisible items retain their non-retryable failure semantics.
+
 **Commands.** `RemoteAgentCommandJournal` persists `commandId` + params before sending. First send
 records both create/send IDs before creating a session and retains the created session if sending
 fails. `accepted` remains pending until the owner outcome is known. `messages.send` carries `expectedIdleRevision` from the projection's session; `CONFLICT`
