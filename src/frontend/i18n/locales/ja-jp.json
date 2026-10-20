@@ -1560,7 +1560,7 @@
   "settings.deviceConnections.scan.invalidQr": "これは有効な Cherry Studio ペアリング QR コードではありません。",
   "settings.deviceConnections.scan.loadingCamera": "カメラを開いて…",
   "settings.deviceConnections.scan.pasteInvitation": "ペアリング招待を貼り付け",
-  "settings.deviceConnections.scan.permissionDescription": "スキャンするにはカメラへのアクセスが必要です。以下の QR コンテンツを貼り付けることもできます。",
+  "settings.deviceConnections.scan.permissionDescription": "スキャンするにはカメラへのアクセスが必要です。代わりに下からペアリング招待を貼り付けることもできます。",
   "settings.deviceConnections.scan.permissionTitle": "カメラが使用できません",
   "settings.deviceConnections.scan.title": "PCを接続する",
   "settings.deviceConnections.scan.verificationCode": "確認コード",

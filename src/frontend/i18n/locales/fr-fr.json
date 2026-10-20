@@ -1592,7 +1592,7 @@
   "settings.deviceConnections.scan.invalidQr": "Il ne s'agit pas d'un code QR d'appariement Cherry Studio valide.",
   "settings.deviceConnections.scan.loadingCamera": "Ouverture de la caméra…",
   "settings.deviceConnections.scan.pasteInvitation": "Coller l’invitation d’appairage",
-  "settings.deviceConnections.scan.permissionDescription": "L'accès à la caméra est nécessaire pour numériser. Vous pouvez toujours coller le contenu QR ci-dessous.",
+  "settings.deviceConnections.scan.permissionDescription": "L’accès à la caméra est nécessaire pour numériser. Vous pouvez aussi coller une invitation d’appairage ci-dessous.",
   "settings.deviceConnections.scan.permissionTitle": "Caméra indisponible",
   "settings.deviceConnections.scan.title": "Connecter le PC",
   "settings.deviceConnections.scan.verificationCode": "Code de vérification",

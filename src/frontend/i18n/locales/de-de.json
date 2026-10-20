@@ -1576,7 +1576,7 @@
   "settings.deviceConnections.scan.invalidQr": "Dies ist kein gültiger Cherry Studio-Pairing-QR-Code.",
   "settings.deviceConnections.scan.loadingCamera": "Kamera öffnen…",
   "settings.deviceConnections.scan.pasteInvitation": "Kopplungseinladung einfügen",
-  "settings.deviceConnections.scan.permissionDescription": "Zum Scannen ist Kamerazugriff erforderlich. Sie können den QR-Inhalt weiterhin unten einfügen.",
+  "settings.deviceConnections.scan.permissionDescription": "Zum Scannen ist Kamerazugriff erforderlich. Sie können stattdessen unten eine Kopplungseinladung einfügen.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera nicht verfügbar",
   "settings.deviceConnections.scan.title": "PC anschließen",
   "settings.deviceConnections.scan.verificationCode": "Bestätigungscode",

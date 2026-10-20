@@ -1576,7 +1576,7 @@
   "settings.deviceConnections.scan.invalidQr": "Bu geçerli bir Cherry Studio eşleştirme QR kodu değil.",
   "settings.deviceConnections.scan.loadingCamera": "Kamera açılıyor…",
   "settings.deviceConnections.scan.pasteInvitation": "Eşleştirme davetini yapıştır",
-  "settings.deviceConnections.scan.permissionDescription": "Tarama için kamera erişimi gerekiyor. Yine de QR içeriğini aşağıya yapıştırabilirsiniz.",
+  "settings.deviceConnections.scan.permissionDescription": "Tarama için kamera erişimi gerekiyor. Bunun yerine aşağıdan bir eşleştirme daveti yapıştırabilirsiniz.",
   "settings.deviceConnections.scan.permissionTitle": "Kamera kullanılamıyor",
   "settings.deviceConnections.scan.title": "PC'yi bağlayın",
   "settings.deviceConnections.scan.verificationCode": "Doğrulama kodu",

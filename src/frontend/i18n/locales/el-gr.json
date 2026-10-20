@@ -1576,7 +1576,7 @@
   "settings.deviceConnections.scan.invalidQr": "Αυτός δεν είναι έγκυρος κωδικός QR σύζευξης Cherry Studio.",
   "settings.deviceConnections.scan.loadingCamera": "Άνοιγμα κάμερας…",
   "settings.deviceConnections.scan.pasteInvitation": "Επικόλληση πρόσκλησης σύζευξης",
-  "settings.deviceConnections.scan.permissionDescription": "Απαιτείται πρόσβαση στην κάμερα για σάρωση. Μπορείτε ακόμα να επικολλήσετε το περιεχόμενο QR παρακάτω.",
+  "settings.deviceConnections.scan.permissionDescription": "Απαιτείται πρόσβαση στην κάμερα για σάρωση. Μπορείτε επίσης να επικολλήσετε μια πρόσκληση σύζευξης παρακάτω.",
   "settings.deviceConnections.scan.permissionTitle": "Η κάμερα δεν είναι διαθέσιμη",
   "settings.deviceConnections.scan.title": "Σύνδεση υπολογιστή",
   "settings.deviceConnections.scan.verificationCode": "Κωδικός επαλήθευσης",

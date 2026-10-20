@@ -1608,7 +1608,7 @@
   "settings.deviceConnections.scan.invalidQr": "Это недействительный QR-код сопряжения Cherry Studio.",
   "settings.deviceConnections.scan.loadingCamera": "Открытие камеры…",
   "settings.deviceConnections.scan.pasteInvitation": "Вставить приглашение для сопряжения",
-  "settings.deviceConnections.scan.permissionDescription": "Для сканирования необходим доступ к камере. Вы все равно можете вставить QR-содержимое ниже.",
+  "settings.deviceConnections.scan.permissionDescription": "Для сканирования нужен доступ к камере. Вместо этого можно вставить приглашение для сопряжения ниже.",
   "settings.deviceConnections.scan.permissionTitle": "Камера недоступна",
   "settings.deviceConnections.scan.title": "Подключите ПК",
   "settings.deviceConnections.scan.verificationCode": "Код подтверждения",

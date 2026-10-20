@@ -1592,7 +1592,7 @@
   "settings.deviceConnections.scan.invalidQr": "Este não é um código QR de emparelhamento Cherry Studio válido.",
   "settings.deviceConnections.scan.loadingCamera": "Abrir câmara…",
   "settings.deviceConnections.scan.pasteInvitation": "Colar convite de emparelhamento",
-  "settings.deviceConnections.scan.permissionDescription": "O acesso à câmara é necessário para digitalizar. Pode ainda colar o conteúdo QR abaixo.",
+  "settings.deviceConnections.scan.permissionDescription": "O acesso à câmara é necessário para digitalizar. Em alternativa, pode colar um convite de emparelhamento abaixo.",
   "settings.deviceConnections.scan.permissionTitle": "Câmara indisponível",
   "settings.deviceConnections.scan.title": "Ligar PC",
   "settings.deviceConnections.scan.verificationCode": "Código de verificação",
