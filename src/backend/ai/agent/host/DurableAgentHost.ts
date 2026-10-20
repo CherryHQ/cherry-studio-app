@@ -1578,7 +1578,8 @@ export class DurableAgentHost implements AgentProtocol {
       // Reservation committed, but admission did not. Preserve any recorded output as interrupted.
       const message = await this.store.getMessage(row.sessionId, row.assistantMessageId);
       if (!message) continue;
-      const completedAt = Date.now();
+      // Administrative recovery is not conversation activity: settle at the reservation time.
+      const reservedAt = Date.parse(message.createdAt);
       const error: AgentErrorView = {
         code: 'INTERRUPTED',
         message: 'The app stopped before this input was admitted.',
@@ -1597,7 +1598,7 @@ export class DurableAgentHost implements AgentProtocol {
         error,
         contextCheckpoint: null,
         runtimeStats: {
-          runtimeTiming: { startedAt: Date.parse(message.createdAt), completedAt, spans: [] },
+          runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
         },
       });
       this.ports.durableStorage?.notifyTranscript(row.sessionId);
