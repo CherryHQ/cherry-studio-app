@@ -6,7 +6,7 @@ import { ReasoningEffortOptionSchema } from '@cherrystudio/universal/types/aiSdk
 import * as z from 'zod';
 
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
-import { SkillIdSchema } from '@/shared/data/types/skill';
+import { SkillActionSchema, SkillIdSchema } from '@/shared/data/types/skill';
 
 import { AgentImageGenerationSchema, AgentInputPartSchema } from './views';
 
@@ -18,6 +18,22 @@ export const AgentRenameSessionInputSchema = z.strictObject({
 export const AgentDeleteSessionInputSchema = z.strictObject({
   sessionId: z.string().min(1),
 });
+/**
+ * Further models answering the same question in parallel. Each answer is an
+ * ordinary assistant message in the same multi-model sibling group.
+ */
+export const AgentAdditionalReplySchema = z.strictObject({
+  modelId: UniqueModelIdSchema,
+  assistantMessageId: z.string().min(1),
+});
+/** Models answering one question in parallel, the composer's own model included. */
+export const MAX_PARALLEL_ANSWERS = 8;
+export const AgentAdditionalRepliesSchema = z
+  .array(AgentAdditionalReplySchema)
+  .min(1)
+  .max(MAX_PARALLEL_ANSWERS - 1);
+export type AgentAdditionalReply = z.infer<typeof AgentAdditionalReplySchema>;
+
 export const AgentSubmitMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   /** Allocated once by the send action and reused for display and persistence. */
@@ -26,6 +42,7 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
@@ -36,17 +53,20 @@ export const AgentSubmitMessageInputSchema = z.strictObject({
    */
   skillIds: z.array(SkillIdSchema).max(8).optional(),
   /** App-owned composer action; no installation occurs until the user sends the request. */
-  skillAction: z.literal('find-and-install').optional(),
+  skillAction: SkillActionSchema.optional(),
 });
 export type AgentSubmitMessageInput = z.infer<typeof AgentSubmitMessageInputSchema>;
 export const AgentStartSessionInputSchema = z.strictObject({
   agentId: z.string().min(1),
+  /** Optional workspace chosen before sending the first message. */
+  workspaceFolderId: z.uuid().optional(),
   sessionId: z.string().min(1),
   userMessageId: z.string().min(1),
   assistantMessageId: z.string().min(1),
   parts: z.array(AgentInputPartSchema).min(1),
   /** Snapshots the draft composer's selected model while its Agent mutation settles. */
   modelId: UniqueModelIdSchema.optional(),
+  additionalReplies: AgentAdditionalRepliesSchema.optional(),
   /** Per-turn only; this value is never persisted back to the Agent. */
   reasoningEffort: ReasoningEffortOptionSchema.optional(),
   imageGeneration: AgentImageGenerationSchema.optional(),
@@ -57,7 +77,7 @@ export const AgentStartSessionInputSchema = z.strictObject({
    */
   skillIds: z.array(SkillIdSchema).max(8).optional(),
   /** App-owned composer action; no installation occurs until the user sends the request. */
-  skillAction: z.literal('find-and-install').optional(),
+  skillAction: SkillActionSchema.optional(),
 });
 export type AgentStartSessionInput = z.infer<typeof AgentStartSessionInputSchema>;
 export const AgentForkSessionInputSchema = z.strictObject({
@@ -82,14 +102,24 @@ export const AgentDeleteTurnInputSchema = z.strictObject({
   turnId: z.string().min(1),
 });
 export type AgentDeleteTurnInput = z.infer<typeof AgentDeleteTurnInputSchema>;
+/** Moves the Session's selected leaf into the branch that contains `messageId`. */
+export const AgentSelectMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+});
+export type AgentSelectMessageInput = z.infer<typeof AgentSelectMessageInputSchema>;
 export const AgentRetryMessageInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
+  /** Answers with this model instead of the original one, always as a sibling answer. */
+  modelId: UniqueModelIdSchema.optional(),
 });
 export type AgentRetryMessageInput = z.infer<typeof AgentRetryMessageInputSchema>;
 export const AgentCancelTurnInputSchema = z.strictObject({
   sessionId: z.string().min(1),
   turnId: z.string().min(1),
+  /** Stops one answer of a multi-model question; omitted, every answer of the turn stops. */
+  messageId: z.string().min(1).optional(),
 });
 export const AgentCancelSubmissionInputSchema = z.strictObject({
   sessionId: z.string().min(1),

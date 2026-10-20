@@ -14,12 +14,9 @@ import {
 import type { FileEntryId } from '@/shared/data/types/file';
 
 import { useComposerPresentation } from '../hooks/useComposerPresentation';
-import {
-  appendComposerAttachments,
-  type ComposerAttachmentDraft,
-  removeComposerAttachment,
-  replaceComposerAttachment,
-  type ComposerAttachmentReady,
+import type {
+  ComposerAttachmentDraft,
+  ComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
 /**
@@ -31,9 +28,12 @@ import {
 type ComposerStateContextValue = {
   attachments: readonly ComposerAttachmentDraft[];
   draft: string;
+  isSubmitting: boolean;
 };
 
 type ComposerActionsContextValue = {
+  beginSendAttempt: () => number | null;
+  endSendAttempt: () => void;
   subscribeAttachmentChanges?: (
     listener: (attachments: readonly ComposerAttachmentDraft[]) => void,
   ) => () => void;
@@ -90,12 +90,9 @@ const ComposerPresentationActionsContext =
   createContext<ComposerPresentationActionsContextValue | null>(null);
 
 type ComposerProviderProps = PropsWithChildren<{
-  attachmentStore?: ComposerAttachmentStore;
-  initialAttachments?: readonly ComposerAttachmentDraft[];
+  attachmentStore: ComposerAttachmentStore;
   initialDraft?: string | (() => string);
 }>;
-
-const EMPTY_ATTACHMENTS: readonly ComposerAttachmentDraft[] = [];
 
 /**
  * The draft, its attachments, and a handle on the field — the three things both
@@ -106,66 +103,45 @@ const EMPTY_ATTACHMENTS: readonly ComposerAttachmentDraft[] = [];
 export function ComposerProvider({
   attachmentStore,
   children,
-  initialAttachments = EMPTY_ATTACHMENTS,
   initialDraft = '',
 }: ComposerProviderProps) {
   const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
-  const presentation = useComposerPresentation(inputRef);
-  const [localAttachments, setLocalAttachmentState] = useState<ComposerAttachmentDraft[]>(() => [
-    ...initialAttachments,
-  ]);
-  const localAttachmentsRef = useRef(localAttachments);
-  const setLocalAttachments = useCallback((update: SetStateAction<ComposerAttachmentDraft[]>) => {
-    const next = typeof update === 'function' ? update(localAttachmentsRef.current) : update;
-    localAttachmentsRef.current = next;
-    setLocalAttachmentState(next);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeSendAttemptIdRef = useRef<number | null>(null);
+  const nextSendAttemptIdRef = useRef(0);
+  // The surface may remount while file preparation or draft recovery is pending.
+  const beginSendAttempt = useCallback(() => {
+    if (activeSendAttemptIdRef.current !== null) return null;
+    const attemptId = ++nextSendAttemptIdRef.current;
+    activeSendAttemptIdRef.current = attemptId;
+    setIsSubmitting(true);
+    return attemptId;
   }, []);
+  const endSendAttempt = useCallback(() => {
+    activeSendAttemptIdRef.current = null;
+    setIsSubmitting(false);
+  }, []);
+  const presentation = useComposerPresentation(inputRef);
+  const {
+    addAttachments,
+    attachments,
+    clearAttachments,
+    removeAttachment,
+    replaceAttachment,
+    setAttachments,
+    subscribeAttachmentChanges,
+  } = attachmentStore;
 
-  const addLocalAttachments = useCallback(
-    (nextAttachments: ComposerAttachmentDraft[]) => {
-      setLocalAttachments((current) => appendComposerAttachments(current, nextAttachments));
-    },
-    [setLocalAttachments],
+  const stateValue = useMemo(
+    () => ({ attachments, draft, isSubmitting }),
+    [attachments, draft, isSubmitting],
   );
-
-  const removeLocalAttachment = useCallback(
-    (attachmentId: string) => {
-      setLocalAttachments((current) => removeComposerAttachment(current, attachmentId));
-    },
-    [setLocalAttachments],
-  );
-
-  const clearLocalAttachments = useCallback(() => {
-    setLocalAttachments([]);
-  }, [setLocalAttachments]);
-
-  const attachments = attachmentStore?.attachments ?? localAttachments;
-  const addAttachments = attachmentStore?.addAttachments ?? addLocalAttachments;
-  const clearAttachments = attachmentStore?.clearAttachments ?? clearLocalAttachments;
-  const removeAttachment = attachmentStore?.removeAttachment ?? removeLocalAttachment;
-  const setAttachments = attachmentStore?.setAttachments ?? setLocalAttachments;
-  const replaceLocalAttachment = useCallback(
-    (attachmentId: string, sourceId: FileEntryId, replacement: ComposerAttachmentReady) => {
-      const next = replaceComposerAttachment(
-        localAttachmentsRef.current,
-        attachmentId,
-        sourceId,
-        replacement,
-      );
-      if (!next) return false;
-      setLocalAttachments(next);
-      return true;
-    },
-    [setLocalAttachments],
-  );
-  const replaceAttachment = attachmentStore?.replaceAttachment ?? replaceLocalAttachment;
-  const subscribeAttachmentChanges = attachmentStore?.subscribeAttachmentChanges;
-
-  const stateValue = useMemo(() => ({ attachments, draft }), [attachments, draft]);
 
   const actionsValue = useMemo(
     () => ({
+      beginSendAttempt,
+      endSendAttempt,
       addAttachments,
       clearAttachments,
       removeAttachment,
@@ -175,6 +151,8 @@ export function ComposerProvider({
       subscribeAttachmentChanges,
     }),
     [
+      beginSendAttempt,
+      endSendAttempt,
       addAttachments,
       clearAttachments,
       removeAttachment,

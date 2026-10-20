@@ -8,12 +8,13 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockAgent = { kind: 'agent', quiesce: jest.fn() };
+const mockAgent = { kind: 'agent', quiesce: jest.fn(), hasPendingStorageWork: () => false };
 const mockAgentRuntime = { kind: 'agent-runtime' };
 const mockAi = { kind: 'ai' };
 const mockTraces = { kind: 'traces' };
 const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
+const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
@@ -24,8 +25,8 @@ const mockDocumentExport = { kind: 'document-export' };
 const mockRemoteAgent = { kind: 'agent-controller' };
 const mockDesktopConnections = { kind: 'desktop-connections' };
 const mockDiagnostics = { kind: 'diagnostics' };
-const mockJobRuntime = { kind: 'job-runtime' };
-const mockMcpRuntime = { kind: 'mcp-runtime' };
+const mockJobRuntime = { kind: 'job-runtime', hasPendingStorageWork: () => false };
+const mockMcpRuntime = { kind: 'mcp-runtime', hasPendingStorageWork: jest.fn(() => false) };
 const mockPreference = {
   kind: 'preference',
   readCached: jest.fn(() => false),
@@ -37,6 +38,7 @@ const mockProviderRegistryUpdater = { kind: 'provider-registry-updater' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
 const mockKeepAlive = { acquire: jest.fn() };
+const mockResourceScopes = { register: jest.fn() };
 const mockBackgroundReply = { startTurn: jest.fn() };
 const mockServices = {
   ai: mockAi,
@@ -48,6 +50,7 @@ const mockServices = {
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockDisposeSystemEntry = jest.fn(async () => {});
+const mockDisposeSkills = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -55,6 +58,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   hasPendingSkillStorageWork: () => false,
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
+  disposeSkills: mockDisposeSkills,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -125,12 +129,14 @@ const createRuntime = () =>
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     BackgroundReplyRuntime: mockBackgroundReply,
     KeepAliveCoordinator: mockKeepAlive,
+    ResourceScopeCoordinator: mockResourceScopes,
     BackgroundActivityManager: {} as never,
     IosBackgroundExecutionSource: {} as never,
     AndroidBackgroundActivityRuntime: {} as never,
     CacheService: mockCache,
     DbService: mockDb,
     BackupRuntime: mockBackup,
+    TrashRuntime: mockTrash,
     DesktopConnectionRuntime: mockDesktopConnections,
     DesktopConnectionManager: mockDesktopConnectionManager,
     RemoteAgentRuntime: mockRemoteAgent,
@@ -155,6 +161,41 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
+  test('includes pending MCP authorization writes in backup admission', async () => {
+    const runtime = createRuntime();
+    try {
+      const hasActiveWork = mockBackup.configure.mock.calls.at(-1)![0] as () => boolean;
+      expect(hasActiveWork()).toBe(false);
+      mockMcpRuntime.hasPendingStorageWork.mockReturnValue(true);
+      expect(hasActiveWork()).toBe(true);
+    } finally {
+      mockMcpRuntime.hasPendingStorageWork.mockReturnValue(false);
+      await runtime.dispose();
+    }
+  });
+
+  test('drains admitted Skill publication before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockDisposeSkills.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
+    }
+  });
   test('commits a restore only after candidate validation and required initialization finish', async () => {
     mockStorageBoot.mockReturnValue({ restoring: true, resetCaches: true });
     let initialized!: () => void;
@@ -240,6 +281,7 @@ describe('createAppBootstrapRuntime', () => {
       translate: expect.any(Function),
     });
     expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, {
+      resourceScopes: mockResourceScopes,
       backgroundExecution: mockKeepAlive,
       remoteBackground: {
         replies: mockBackgroundReply,
@@ -256,6 +298,7 @@ describe('createAppBootstrapRuntime', () => {
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,
+      trash: mockTrash,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);

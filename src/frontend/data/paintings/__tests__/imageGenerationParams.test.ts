@@ -8,7 +8,7 @@ import {
 import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import {
   imageParamsAspectRatio,
-  imageParamsResolutionLabel,
+  parseImageRatio,
   isImageParamDraftValid,
   prepareImageParamValues,
   reconcileImageParamDraft,
@@ -234,21 +234,14 @@ function model(overrides: Partial<Model> = {}): Model {
 describe('placeholder tile sizing', () => {
   it('prefers an explicit ratio, then a pixel size, and squares off when neither is set', () => {
     expect(imageParamsAspectRatio({ aspectRatio: '16:9' })).toBeCloseTo(16 / 9);
+    expect(imageParamsAspectRatio({ aspectRatio: 'ASPECT_16_9' })).toBeCloseTo(16 / 9);
+    expect(parseImageRatio('ASPECT_3_4')).toEqual({ width: 3, height: 4 });
     expect(imageParamsAspectRatio({ size: '1024x768' })).toBeCloseTo(4 / 3);
     expect(imageParamsAspectRatio({ imageResolution: '512X1024' })).toBeCloseTo(0.5);
     // Ratio wins: `size` may be the provider's own pixel spelling of it.
     expect(imageParamsAspectRatio({ aspectRatio: '1:2', size: '1024x1024' })).toBeCloseTo(0.5);
     expect(imageParamsAspectRatio(undefined)).toBe(1);
     expect(imageParamsAspectRatio({})).toBe(1);
-  });
-
-  it('formats the best available resolution for loading copy', () => {
-    expect(imageParamsResolutionLabel({ size: '1024x768' })).toBe('1024 \u00d7 768');
-    expect(imageParamsResolutionLabel({ imageResolution: '2K' })).toBe('2K');
-    expect(imageParamsResolutionLabel({ resolution: '512X1024' })).toBe('512 \u00d7 1024');
-    expect(imageParamsResolutionLabel({ imageResolution: '2K', size: 'auto' })).toBe('2K');
-    expect(imageParamsResolutionLabel({ size: 'auto' })).toBeUndefined();
-    expect(imageParamsResolutionLabel(undefined)).toBeUndefined();
   });
 
   it('falls back to square rather than trusting junk from the ledger', () => {

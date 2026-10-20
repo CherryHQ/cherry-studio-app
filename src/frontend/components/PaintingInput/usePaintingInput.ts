@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import {
   useComposerActions,
@@ -25,24 +25,25 @@ import {
   PaintingGenerationError,
 } from '@/shared/utils/paintingGenerationStrategy';
 
-import type { PaintingInputSubmission } from './PaintingInput';
+import type { PaintingInputSubmission, PaintingPromptPreparation } from './PaintingInput';
 import { usePaintingInputSession } from './PaintingInputProvider';
 
 export function usePaintingInput({
   model,
   initialParamValues,
   onGenerate,
+  preparePrompt,
 }: {
   model: Model | undefined;
   initialParamValues?: ImageParamDraft;
   onGenerate(input: PaintingInputSubmission): Promise<unknown>;
+  preparePrompt?: PaintingPromptPreparation;
 }) {
   const file = useBackendModule('file');
-  const { attachments, draft } = useComposerState();
+  const { attachments, draft, isSubmitting } = useComposerState();
   const { removeAttachment } = useComposerActions();
   const session = usePaintingInputSession();
   const { reference } = session;
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const strategy = createPaintingGenerationStrategy(model);
   const selection = reference.selection;
   const resolvedReference = useResolvedFile(selection?.image.fileEntryId);
@@ -132,6 +133,17 @@ export function usePaintingInput({
       removeAttachment(id);
     },
     async send({ attachments: manualAttachments, text }: ComposerSendPayload) {
+      const images = referenceAttachment
+        ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
+            isComposerAttachmentReady,
+          )
+        : [...manualAttachments];
+      // Image-local editing instructions must be frozen before validation and file preparation.
+      const preparedPrompt = preparePrompt?.(text, images) ?? text;
+      const promptSnapshot =
+        typeof preparedPrompt === 'string' ? preparedPrompt : preparedPrompt.prompt;
+      const displayPrompt =
+        typeof preparedPrompt === 'string' ? undefined : preparedPrompt.displayPrompt;
       if (!model) throw new PaintingGenerationError({ code: 'model-unavailable' });
       if (isReferenceUnavailable || isCheckingReference)
         throw new FileAttachmentError({
@@ -140,11 +152,6 @@ export function usePaintingInput({
         });
       if (!isImageParamDraftValid(paramValues, resolvedMode))
         throw new PaintingGenerationError({ code: 'invalid-parameters' });
-      const images = referenceAttachment
-        ? appendComposerAttachments(manualAttachments, [referenceAttachment]).filter(
-            isComposerAttachmentReady,
-          )
-        : [...manualAttachments];
       const paramValuesSnapshot = prepareImageParamValues(
         paramValues,
         model.imageGeneration,
@@ -153,11 +160,10 @@ export function usePaintingInput({
       // Pure preflight happens before any asynchronous work and never repairs input.
       strategy.prepare({
         images: images.map(toFileFact),
-        prompt: text,
+        prompt: promptSnapshot,
         paramValues: paramValuesSnapshot,
       });
       reference.beginSubmission(images);
-      setIsSubmitting(true);
       try {
         const prepared = await file.prepareAttachments({
           fileEntryIds: images.map((image) => image.fileEntryId),
@@ -175,11 +181,12 @@ export function usePaintingInput({
         }));
         const request = strategy.prepare({
           images: actualImages.map(toFileFact),
-          prompt: text,
+          prompt: promptSnapshot,
           paramValues: paramValuesSnapshot,
         });
         await onGenerate({
           ...request,
+          displayPrompt,
           attachments: actualImages,
           modelId: model.id,
           modelName: model.name,
@@ -187,8 +194,6 @@ export function usePaintingInput({
       } catch (error) {
         reference.rejectSubmission();
         throw error;
-      } finally {
-        setIsSubmitting(false);
       }
     },
   };

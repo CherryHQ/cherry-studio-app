@@ -82,21 +82,32 @@ export default function NotificationSettingsScreen() {
     });
   };
   const setCompletionNotificationPreference = (isEnabled: boolean) => {
-    void setIsCompletionNotificationEnabled(isEnabled)
-      .then(async () => {
+    void setIsCompletionNotificationEnabled(isEnabled).then(
+      () => {
         if (!isEnabled) return;
-        const permission = await requestPermissionsAsync();
-        setIsNotificationPermissionBlocked(isNotificationBlocked(permission));
-        if (isNotificationBlocked(permission)) {
-          toast.show({
-            label: t('settings.notifications.completion.permissionDenied'),
-            variant: 'warning',
-          });
-        }
-      })
-      .catch(() => {
+        // The preference is already saved; a request failure is not a save failure.
+        void requestPermissionsAsync().then(
+          (permission) => {
+            setIsNotificationPermissionBlocked(isNotificationBlocked(permission));
+            if (isNotificationBlocked(permission)) {
+              toast.show({
+                label: t('settings.notifications.completion.permissionDenied'),
+                variant: 'warning',
+              });
+            }
+          },
+          () => {
+            toast.show({
+              label: t('settings.notifications.completion.permissionFailed'),
+              variant: 'danger',
+            });
+          },
+        );
+      },
+      () => {
         toast.show({ label: t('settings.notifications.completion.saveFailed'), variant: 'danger' });
-      });
+      },
+    );
   };
   const openNotificationSettings = () => {
     void startActivityAsync(ActivityAction.APP_NOTIFICATION_SETTINGS, {

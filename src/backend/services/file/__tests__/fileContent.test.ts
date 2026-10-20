@@ -1,3 +1,4 @@
+import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import { FileEntrySchema } from '@/shared/data/types/file';
 import { MAX_IMAGE_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
@@ -6,9 +7,10 @@ import { createInternalEntryWithPreview } from '../filePreviewStorage';
 import { readFileUriBytes, resolveFileEntry } from '../fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from '../importedImageNormalization';
 
-const mockFileHash = jest.fn();
-jest.mock('@preeternal/react-native-file-hash', () => ({
-  fileHash: (...args: unknown[]) => mockFileHash(...args),
+const mockHashLocalFile = jest.fn();
+jest.mock('../fileHash', () => ({
+  ...jest.requireActual('../fileHash'),
+  hashLocalFile: (...args: unknown[]) => mockHashLocalFile(...args),
 }));
 
 const FILE_ID = '00000000-0000-7000-8000-000000000001';
@@ -56,6 +58,51 @@ beforeEach(() => {
 });
 
 describe('fileContent attachment boundary', () => {
+  test('places new imports in the bound workspace', async () => {
+    const folderId = '00000000-0000-7000-8000-000000000009';
+    jest.spyOn(fileLibraryService, 'workspace').mockResolvedValue({ id: folderId } as never);
+    jest.mocked(createInternalEntryWithPreview).mockResolvedValue(resolvedFile().entry);
+    await fileContent.createInternalEntry({
+      uri: 'file:///picker/file',
+      name: 'notes.txt',
+      workspaceSessionId: 'session',
+    });
+    expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ folderId, provenance: 'imported' }),
+    );
+    jest.restoreAllMocks();
+  });
+
+  test.each(['session', 'draft'] as const)(
+    'copies outside attachments and reuses workspace entries for a %s',
+    async (target) => {
+      const folderId = '00000000-0000-7000-8000-000000000009';
+      jest.spyOn(fileLibraryService, 'workspace').mockResolvedValue({ id: folderId } as never);
+      jest
+        .spyOn(fileLibraryService, 'resolveDirectory')
+        .mockResolvedValue({ id: folderId } as never);
+      const address = target === 'session' ? { sessionId: 'session' } : { folderId };
+      const contains = jest.spyOn(fileLibraryService, 'contains').mockResolvedValue(false);
+      jest
+        .spyOn(fileLibraryService, 'fileForEntry')
+        .mockResolvedValue({ name: 'Renamed.txt' } as never);
+      jest.mocked(createInternalEntryWithPreview).mockResolvedValue(resolvedFile().entry);
+      await fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address });
+      expect(createInternalEntryWithPreview).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ folderId, name: 'Renamed.txt', uri: resolvedFile().uri }),
+      );
+      jest.mocked(createInternalEntryWithPreview).mockClear();
+      contains.mockResolvedValue(true);
+      await expect(
+        fileContent.prepareWorkspaceAttachment({ fileEntryId: FILE_ID, ...address }),
+      ).resolves.toEqual(resolvedFile());
+      expect(createInternalEntryWithPreview).not.toHaveBeenCalled();
+      jest.restoreAllMocks();
+    },
+  );
+
   test('stores the normalized image instead of the picked original, then discards it', async () => {
     const normalized = {
       mediaType: 'image/jpeg',
@@ -140,32 +187,15 @@ describe('fileContent attachment boundary', () => {
   });
 });
 
-describe('native managed-file hashing', () => {
-  test('hashes the resolved source with SHA-256 and rejects malformed or failed native results', async () => {
+describe('managed-file hashing', () => {
+  test('hashes the resolved managed URI and reports an unresolvable entry', async () => {
     const signal = new AbortController().signal;
-    mockFileHash.mockImplementation(async (uri, options) => {
-      expect(uri).toBe('file:///managed/notes.txt');
-      expect(options).toEqual({ algorithm: 'SHA-256', signal });
-      return 'a'.repeat(64);
-    });
+    mockHashLocalFile.mockResolvedValue('a'.repeat(64));
     expect(await fileContent.hashFile(FILE_ID, signal)).toBe('a'.repeat(64));
-    mockFileHash.mockResolvedValueOnce('invalid');
+    expect(mockHashLocalFile).toHaveBeenCalledWith('file:///managed/notes.txt', signal);
+    jest.mocked(resolveFileEntry).mockResolvedValueOnce(null);
     await expect(fileContent.hashFile(FILE_ID, signal)).rejects.toMatchObject({
-      code: 'VERIFICATION_FAILED',
+      code: 'RESOURCE_UNAVAILABLE',
     });
-    mockFileHash.mockRejectedValueOnce(new Error('private-path'));
-    await expect(fileContent.hashFile(FILE_ID, signal)).rejects.toMatchObject({
-      code: 'VERIFICATION_FAILED',
-      message: 'VERIFICATION_FAILED',
-    });
-  });
-
-  test('preserves cancellation even when native code resolves late', async () => {
-    const controller = new AbortController();
-    mockFileHash.mockImplementationOnce(async () => {
-      controller.abort(new Error('cancelled'));
-      return 'a'.repeat(64);
-    });
-    await expect(fileContent.hashFile(FILE_ID, controller.signal)).rejects.toThrow('cancelled');
   });
 });

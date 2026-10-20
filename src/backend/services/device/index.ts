@@ -26,5 +26,16 @@ export type {
   UpdateReminderDetails,
 } from './calendar';
 export { getCurrentLocation } from './location';
+export { getHealthSummary, healthMetricNames, listHealthWorkouts } from './health';
+export type { HealthKitLoader, HealthMetricName } from './health';
 export { isDeviceRegionMainlandChina } from './region';
 export { MAX_QUERY_RANGE_DAYS, NATIVE_TOOL_TIMEOUT_MS } from './utils';
+
+export {
+  getHealthRecord,
+  listHealthDataTypes,
+  queryHealthData,
+  resolveHealthDataType,
+  shareVerifiableHealthRecords,
+} from './healthData';
+export type { HealthDataReaderLoader } from './healthData';

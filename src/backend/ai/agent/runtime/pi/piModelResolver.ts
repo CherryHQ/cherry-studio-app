@@ -113,7 +113,7 @@ export function createPiModelResolver(accounts?: {
       const selectedApiKey = oauth
         ? { value: oauth.auth.apiKey ?? '', apiKeySelection: { attribution: 'unknown' as const } }
         : await providerService.resolveApiKey(provider.id, apiKeyOverride);
-      if (!oauth && !selectedApiKey.value.trim()) {
+      if (!oauth && !provider.authOptional && !selectedApiKey.value.trim()) {
         throw new PiModelResolutionError(
           'invalid_api_key',
           'Pi Runtime requires an API key from the selected provider.',
@@ -132,7 +132,7 @@ export function createPiModelResolver(accounts?: {
       const isOpenRouter =
         provider.id === 'openrouter' ||
         provider.presetProviderId === 'openrouter' ||
-        isOpenRouterUrl(connection.baseUrl);
+        isProviderHost(connection.baseUrl, 'openrouter.ai');
       const headers = { ...connection.headers };
       if (oauth) {
         for (const name of Object.keys(headers)) {
@@ -176,6 +176,9 @@ export function createPiModelResolver(accounts?: {
           ? {
               compat: {
                 supportsDeveloperRole: false,
+                ...(isProviderHost(connection.baseUrl, 'api.deepseek.com')
+                  ? { supportsMidConvoSystemMessages: true }
+                  : {}),
                 ...(adapter.api === 'openai-completions'
                   ? {
                       ...(isOpenRouter
@@ -227,7 +230,7 @@ export function createPiModelResolver(accounts?: {
           }
         : configuredPiModel;
       const streamBinding: Parameters<typeof bindPiStream>[1] = {
-        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value,
+        apiKey: oauth ? oauth.auth.apiKey : selectedApiKey.value.trim() ? selectedApiKey.value : '',
         cacheRetention: provider.settings.cacheControl?.enabled === false ? 'none' : 'short',
         sessionId,
         fetch: expoFetch as unknown as FetchFunction,
@@ -503,9 +506,9 @@ function collectRedactionValues(apiKey: string, headers: Record<string, string>)
   ];
 }
 
-function isOpenRouterUrl(baseUrl: string): boolean {
+function isProviderHost(baseUrl: string, hostname: string): boolean {
   try {
-    return new URL(baseUrl).hostname === 'openrouter.ai';
+    return new URL(baseUrl).hostname === hostname;
   } catch {
     return false;
   }

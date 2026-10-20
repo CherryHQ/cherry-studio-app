@@ -19,8 +19,6 @@ import {
   ListSkillsQuerySchema,
   ReplaceAgentSkillsSchema,
   type ReplaceAgentSkillsInput,
-  type UpdateSkillDto,
-  UpdateSkillSchema,
 } from '@/shared/data/api/schemas/skills';
 import {
   type AgentSkillBinding,
@@ -246,30 +244,6 @@ export class AgentGlobalSkillService {
     return new Map(rows.map((row) => [row.skillId, rowToBinding(row)]));
   }
 
-  async update(skillId: string, input: UpdateSkillDto): Promise<Skill> {
-    const dto = UpdateSkillSchema.parse(input);
-    const row = await this.dbService.withWriteTx(async (tx) => {
-      const [updated] = await tx
-        .update(agentGlobalSkillTable)
-        .set({
-          isEnabled: dto.isEnabled,
-          updatedAt: monotonicUpdateTimestamp(agentGlobalSkillTable.updatedAt),
-        })
-        .where(
-          and(
-            eq(agentGlobalSkillTable.id, skillId),
-            eq(agentGlobalSkillTable.source, 'marketplace'),
-          ),
-        )
-        .returning();
-      if (!updated) {
-        throw DataApiErrorFactory.notFound('Skill', skillId);
-      }
-      return updated;
-    });
-    return rowToSkill(row);
-  }
-
   async listBindings(agentId: string): Promise<{ items: AgentSkillBinding[] }> {
     await this.assertAgentWritable(this.db, agentId);
     const rows = await this.db
@@ -455,6 +429,20 @@ export class AgentGlobalSkillService {
     if (!row) {
       throw DataApiErrorFactory.notFound('Skill', skillId);
     }
+  }
+
+  /** Installed members belonging to one marketplace package, including disabled entries. */
+  async listBySourcePrefix(prefix: string): Promise<Skill[]> {
+    const rows = await this.db
+      .select()
+      .from(agentGlobalSkillTable)
+      .where(
+        and(
+          eq(agentGlobalSkillTable.source, 'marketplace'),
+          sql`substr(${agentGlobalSkillTable.sourceUrl}, 1, ${prefix.length}) = ${prefix}`,
+        ),
+      );
+    return rows.map(rowToSkill);
   }
 
   /** Folders and hashes in use, for storage reconciliation. */

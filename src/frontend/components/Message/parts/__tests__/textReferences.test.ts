@@ -19,6 +19,23 @@ describe('message inline references', () => {
     ]);
   });
 
+  test('decorates an Office selection chip with its label instead of the selection JSON', () => {
+    const chip = {
+      type: 'selection',
+      selection: {
+        file_entry_id: '00000000-0000-7000-8000-000000000001',
+        anchor: { format: 'xlsx', sheet: '假设', range: 'B4' },
+        excerpt: '0.12',
+      },
+      label: 'a.xlsx · 假设!B4',
+      offset: 0,
+    };
+    expect(splitTextReferences('a.xlsx · 假设!B4 调到 15%', [chip])).toEqual([
+      { text: 'a.xlsx · 假设!B4', reference: chip },
+      { text: ' 调到 15%' },
+    ]);
+  });
+
   test('ignores foreign, overlapping, out-of-range, and stale metadata', () => {
     expect(
       splitTextReferences('📄 用 飞书', [

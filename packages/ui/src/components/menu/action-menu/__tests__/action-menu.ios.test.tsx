@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ActionMenu } from '../action-menu.ios';
@@ -162,5 +162,38 @@ describe('ActionMenu', () => {
 
     expect(renderer!.root.findByProps({ testID: 'trigger' })).toBeDefined();
     expect(renderer!.root.findAllByProps({ mockComponent: 'native-menu' })).toHaveLength(0);
+  });
+
+  it.each([
+    { name: 'disabled prop', props: { disabled: true } },
+    { name: 'accessibility state', props: { accessibilityState: { disabled: true } } },
+    { name: 'pointer events', props: { pointerEvents: 'none' as const } },
+  ])('removes the native menu while the trigger is disabled via $name', ({ props }) => {
+    const onPress = jest.fn();
+    const items = [{ id: 'translate', label: 'Translate', onPress }];
+    const renderMenu = (isDisabled: boolean) => (
+      <ActionMenu items={items}>
+        <Pressable {...(isDisabled ? props : {})} testID="trigger" />
+      </ActionMenu>
+    );
+
+    act(() => {
+      renderer = create(renderMenu(false));
+    });
+    act(() =>
+      renderer!.root.findByProps({ mockComponent: 'native-menu' }).props.onAction('translate'),
+    );
+    expect(onPress).toHaveBeenCalledTimes(1);
+
+    act(() => renderer!.update(renderMenu(true)));
+    expect(renderer!.root.findByProps({ testID: 'trigger' })).toBeDefined();
+    expect(renderer!.root.findAllByProps({ mockComponent: 'native-menu' })).toHaveLength(0);
+    expect(onPress).toHaveBeenCalledTimes(1);
+
+    act(() => renderer!.update(renderMenu(false)));
+    act(() =>
+      renderer!.root.findByProps({ mockComponent: 'native-menu' }).props.onAction('translate'),
+    );
+    expect(onPress).toHaveBeenCalledTimes(2);
   });
 });

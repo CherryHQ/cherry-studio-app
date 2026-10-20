@@ -12,6 +12,8 @@ import * as z from 'zod';
 export const AGENT_CAPABILITIES = [
   'agents',
   'calendar',
+  'health',
+  'fileLibrary',
   'image',
   'location',
   'reminders',
@@ -30,6 +32,7 @@ export type AgentCapability = z.infer<typeof AgentCapabilitySchema>;
 export const DEFAULT_DISABLED_AGENT_CAPABILITIES: readonly AgentCapability[] = [
   'agents',
   'calendar',
+  'health',
   'location',
   'reminders',
 ];

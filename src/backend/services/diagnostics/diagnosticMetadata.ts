@@ -3,12 +3,13 @@ import { traceErrorAttributes } from '@/backend/utils/diagnosticTrace';
 import { TraceSpanRecordSchema } from '@/shared/data/types/trace';
 
 const LOG_MESSAGES = new Set([
+  'Startup stage',
+  'Service promoted to startup gate',
+  'Initial content did not report readiness before the startup timeout',
+  'Skill storage reconciliation failed',
   'Uncaught JavaScript exception',
   'Unhandled promise rejection',
   'Promise rejection handled',
-  'Agent turn reached a failed terminal state',
-  'Agent turn failed outside the runtime event stream',
-  'Agent streaming message write failed; recovery fidelity reduced',
   'HTTP request failed.',
   'HTTP transport failed unexpectedly.',
   'MCP tools() failed, reconnecting once',
@@ -30,8 +31,6 @@ const LOG_MESSAGES = new Set([
 const LOG_STRING_FIELDS = new Set([
   'code',
   'reasonCode',
-  'sourceCode',
-  'sourceLayer',
   'operation',
   'capabilityId',
   'modelId',
@@ -43,6 +42,12 @@ const LOG_STRING_FIELDS = new Set([
   'requestId',
   'toolCallId',
   'taskKind',
+  'serviceName',
+  'requiredBy',
+  'phase',
+  'fromPhase',
+  'toPhase',
+  'outcome',
 ]);
 const LOG_NUMBER_FIELDS = new Set([
   'status',
@@ -53,6 +58,12 @@ const LOG_NUMBER_FIELDS = new Set([
   'droppedRecords',
   'taskId',
   'retryAttempt',
+  'startupStartedAt',
+  'jsEntryStartMs',
+  'elapsedMs',
+  'rnStartupStartMs',
+  'rnRuntimeStartMs',
+  'rnBundleEntryStartMs',
 ]);
 const TRACE_FIELDS = new Set([
   'error.type',
@@ -79,7 +90,6 @@ const TRACE_FIELDS = new Set([
   'tool.name',
   'tool.call.id',
   'tool.result.status',
-  'host.error.code',
   'trace.dropped_spans',
   'trace.attributes_truncated',
   'runtime.name',
@@ -124,7 +134,13 @@ function projectRepetition(value: unknown, timestamp: string) {
 
 /** Drop arbitrary log messages and nested payloads before any persistent write. */
 export function projectDiagnosticLog(record: Record<string, unknown>) {
-  if (record.level !== 'warn' && record.level !== 'error') return undefined;
+  const isStartup = record.module === 'Startup' && record.message === 'Startup stage';
+  if (
+    record.level !== 'warn' &&
+    record.level !== 'error' &&
+    !(record.level === 'info' && isStartup)
+  )
+    return undefined;
   if (typeof record.timestamp !== 'string' || !Number.isFinite(Date.parse(record.timestamp)))
     return undefined;
   const facts: Record<string, string | number | boolean> = {};

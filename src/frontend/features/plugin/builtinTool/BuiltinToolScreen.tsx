@@ -13,7 +13,10 @@ import { WebSearchApiManagementSection } from './components/WebSearchApiManageme
 import { WebSearchProviderIcon } from './components/WebSearchProviderIcon';
 import { WebSearchSourceSection } from './components/WebSearchSourceSection';
 import { useWebSearchProviderPreferences } from './hooks/useWebSearchProviderPreferences';
-import { getWebSearchProviderPreset } from './utils/providerSettings';
+import {
+  getWebSearchProviderDisplayName,
+  getWebSearchProviderPreset,
+} from './utils/providerSettings';
 
 export function WebSearchToolScreen() {
   return <BuiltinToolScreen toolId="webSearch" />;
@@ -58,11 +61,7 @@ function BuiltinToolScreen({ toolId }: { toolId: BuiltinToolId }) {
           <Section.SelectItem
             label={t(tool.providerLabelKey)}
             onPress={() => setIsProviderPickerOpen(true)}
-            value={
-              provider.id === 'fetch'
-                ? t('settings.websearch.provider.localExtraction')
-                : provider.name
-            }
+            value={getWebSearchProviderDisplayName(t, provider.id)}
             valueLeading={<WebSearchProviderIcon providerId={provider.id} />}
           />
         </WebSearchApiManagementSection>

@@ -20,6 +20,7 @@ import {
   AgentRespondApprovalInputSchema,
   AgentRespondQuestionSchema,
   AgentRetryMessageInputSchema,
+  AgentSelectMessageInputSchema,
   AgentSessionSnapshotSchema,
   AgentStartSessionInputSchema,
   AgentSubmitMessageInputSchema,
@@ -30,6 +31,7 @@ import {
   type AgentMessageView,
   type AgentPendingQuestion,
   type AgentProtocol,
+  type AgentQueuedInput,
   type AgentSessionObservation,
   type AgentSessionStatus,
   type AgentSessionView,
@@ -43,10 +45,16 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { TraceContext } from '@/shared/data/types/trace';
 
+import type { ManagedFileResolver } from '../resources/managedFileResolver';
 import {
+  LANES_PER_SESSION,
+  laneKey,
   raceAbort,
+  runtimeLane,
+  sameLane,
   type AgentRuntime,
   type DurableAgentRuntime,
+  type RuntimeLane,
   type RuntimeConversationEvent,
   type RuntimeConversationSeed,
   type RuntimeDurableTurn,
@@ -75,14 +83,21 @@ import {
   prepareInitialTurn,
   prepareTurn,
   type TurnPlan,
+  type TurnScope,
   type TurnPreparationDependencies,
 } from './turnPreparation';
-import { toRuntimeHistory, toRuntimeInputParts } from './turnRuntimeInput';
+import {
+  toRuntimeHistory,
+  toRuntimeInputParts,
+  type RuntimeAttachmentContents,
+} from './turnRuntimeInput';
 import { TurnUserQuestions } from './TurnUserQuestions';
 
 const logger = loggerService.withContext('DurableAgentHost');
 type Admission = { controller: AbortController; promise: Promise<unknown> };
+/** Presentation state of one observed working copy. */
 type LiveSession = {
+  lane: RuntimeLane;
   waiters: Set<{ requestId: string; resolve: () => void }>;
   users: Set<string>;
   assistant: AgentMessageView | null;
@@ -92,6 +107,12 @@ type LiveSession = {
   unsubscribe: () => Promise<void>;
   background: BackgroundReplyTurn | null;
   backgroundRequestId: string | null;
+  /** Another answer of the question completed while this copy held the background reply. */
+  backgroundCompleted: boolean;
+  /** The running turn as last published for this copy. */
+  turn: AgentTurnView | null;
+  /** The newest answer this Host submitted to the copy: a hint, never the engine's tail. */
+  lastAnswerId: string | null;
   question: AgentPendingQuestion | null;
   questions: TurnUserQuestions;
   approvals: Map<
@@ -100,6 +121,24 @@ type LiveSession = {
   >;
 };
 type PreparedInput = { turnId: string; plan: TurnPlan };
+/**
+ * How one answer reaches a working copy: continue a lane whose newest answer is
+ * the question's parent, natively fork the lane that executed that parent, or
+ * rebuild a new lane from the Cherry history.
+ */
+type LaneChoice =
+  | { lane: RuntimeLane; mode: 'native' | 'rebuild' }
+  | {
+      lane: RuntimeLane;
+      mode: 'fork';
+      from: { lane: RuntimeLane; boundary: string };
+    };
+/** The newest answer submitted to a copy, and when the copy was last used. */
+type LaneTail = { answerId: string | undefined; usedAt: number };
+type ReplyTarget = LaneChoice & {
+  plan: TurnPlan;
+  input: Pick<AgentSubmitMessageInput, 'assistantMessageId'>;
+};
 
 /** Runtime options use Pi's `off`; a resubmitted input uses the protocol's `none`. */
 function submittedEffort(value: string | undefined) {
@@ -111,6 +150,7 @@ function submittedEffort(value: string | undefined) {
 
 /** Business operations and disposable presentation over the persistent engine; no model loop. */
 export class DurableAgentHost implements AgentProtocol {
+  /** Keyed by {@link laneKey}. */
   private readonly live = new Map<string, LiveSession>();
   private readonly attachments = new Map<string, Promise<LiveSession>>();
   private readonly admissions = new Map<string, Admission>();
@@ -169,8 +209,28 @@ export class DurableAgentHost implements AgentProtocol {
     await this.captureCheckpoints();
     await this.naming.drain();
   }
+  getWorkingStorageSize() {
+    return Promise.resolve(this.ports.durableStorage?.size() ?? 0);
+  }
+  /**
+   * Pi keeps retired and superseded copies until its file is removed. Cherry transcripts and
+   * checkpoints stay authoritative, so each Session rebuilds a copy when it next continues.
+   */
+  async clearWorkingStorage() {
+    await this.quiesce();
+    // Suspension closes admission synchronously; input admitted during the drain stays busy.
+    if (this.admissions.size) throw new BackupError('busy');
+    this.suspension = this.suspend(new Error('Clearing the Agent working storage.')).then(() =>
+      this.ports.durableStorage!.discard(),
+    );
+    try {
+      await this.suspension;
+    } finally {
+      await this.resumeSuspended();
+    }
+  }
   pendingTurns(sessionId: string) {
-    return this.live.get(sessionId)?.queue ?? [];
+    return this.liveStates(sessionId).flatMap((state) => state.queue);
   }
 
   constructor(
@@ -190,8 +250,11 @@ export class DurableAgentHost implements AgentProtocol {
       scriptSandbox: this.ports.scriptSandbox?.(),
       writeToolOutput: this.ports.writeToolOutput
         ? async (identity, output, signal) => {
-            await this.prepareExecution(identity, signal);
-            return this.ports.writeToolOutput!(output, signal);
+            const { plan } = await this.prepareExecution(identity, signal);
+            return this.ports.writeToolOutput!(
+              { ...output, folderId: plan.workspaceFolderId ?? null },
+              signal,
+            );
           }
         : undefined,
       onFailure: (error) => {
@@ -205,7 +268,7 @@ export class DurableAgentHost implements AgentProtocol {
       traceModel: async (identity) => {
         const session = await this.store.getSession(identity.sessionId);
         const prepared = identity.requestId
-          ? this.prepared.get(executionKey(identity.sessionId, identity.requestId))
+          ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
         return this.ports.traces?.startTrace(
           'pi.generate_content',
@@ -224,15 +287,15 @@ export class DurableAgentHost implements AgentProtocol {
         if (this.deleting.has(identity.sessionId))
           fail('SESSION_NOT_FOUND', 'This session is being deleted.');
         const session = await this.store.getSession(identity.sessionId);
-        if (!session || !(await this.isCurrentConversation(identity.sessionId)))
+        if (!session || !(await this.isCurrentConversation(identity)))
           fail('SESSION_NOT_FOUND', 'The execution no longer has a current Cherry owner.');
         if (session && !(await this.ports.agents.getAgent(session.agentId)))
           fail('AGENT_NOT_FOUND', `Agent does not exist: ${session.agentId}`);
         if (identity.requestId) {
-          await this.waitForOwner(identity.sessionId, identity.requestId, signal);
-          const prepared = this.prepared.get(executionKey(identity.sessionId, identity.requestId));
+          await this.waitForOwner(identity, identity.requestId, signal);
+          const prepared = this.prepared.get(executionKey(identity, identity.requestId));
           if (prepared)
-            for (const id of await this.conversations.resourceFileEntryIds(identity.sessionId))
+            for (const id of await this.conversations.resourceFileEntryIds(identity))
               prepared.plan.resources.inheritFile(FileEntryIdSchema.parse(id));
         }
         signal.throwIfAborted();
@@ -253,7 +316,7 @@ export class DurableAgentHost implements AgentProtocol {
       },
       recordUsage: async (identity, report) => {
         const prepared = identity.requestId
-          ? this.prepared.get(executionKey(identity.sessionId, identity.requestId))
+          ? this.prepared.get(executionKey(identity, identity.requestId))
           : undefined;
         const session = await this.store.getSession(identity.sessionId);
         const agentId = prepared?.plan.agent.id ?? session?.agentId;
@@ -261,7 +324,7 @@ export class DurableAgentHost implements AgentProtocol {
         if (!agentId) return;
         const selected = identity.requestId
           ? (
-              await this.conversations.history(identity.sessionId, {
+              await this.conversations.history(identity, {
                 limit: 1,
                 requestIds: [identity.requestId],
               })
@@ -280,16 +343,17 @@ export class DurableAgentHost implements AgentProtocol {
       await this.conversations.initialize(await this.ports.durableStorage.open(), execution);
       const copies = await this.conversations.sessions();
       // Upstream abort enables scheduling too. Attach current owners before retiring stale copies.
-      const unfinished = await this.conversations.unfinishedSessions();
+      // Every unfinished copy is observed from here on, so later reads need no engine-wide scan.
+      const unfinished = await this.conversations.unfinishedLanes();
       recovery?.setAttributes({
         'agent.recovery.session_count': copies.length,
         'agent.recovery.unfinished_count': unfinished.length,
       });
-      for (const sessionId of unfinished)
-        if (await this.isCurrentConversation(sessionId)) await this.attach(sessionId);
-      for (const { sessionId } of copies)
-        if (!(await this.isCurrentConversation(sessionId)))
-          await this.conversations.discardConversation(sessionId);
+      for (const lane of unfinished)
+        if (await this.isCurrentConversation(lane)) await this.attach(lane);
+      for (const { lane } of copies)
+        if (!(await this.isCurrentConversation(lane)))
+          await this.conversations.discardConversation(lane);
       // Working copies outlive the process: continuing a conversation reuses its native context.
       await this.reconcileUnsettled();
       await this.conversations.drainUsage();
@@ -416,8 +480,26 @@ export class DurableAgentHost implements AgentProtocol {
     return this.admit(parsed.sessionId, async (signal) => {
       if (await this.store.getSession(parsed.sessionId))
         fail('SESSION_BUSY', 'This session already exists.');
-      const plan = await prepareInitialTurn(this.preparation, parsed, signal);
-      await this.submitPrepared(parsed, plan, signal);
+      const answers = replyTargets(parsed);
+      const targets = await eachAnswer(
+        answers,
+        signal,
+        async (answer, index, signal): Promise<ReplyTarget> => {
+          const input = { ...parsed, ...answer };
+          return {
+            lane: runtimeLane(parsed.sessionId, index),
+            mode: 'rebuild',
+            plan: await prepareInitialTurn(this.preparation, input, signal, {
+              readOnlyTools: answers.length > 1,
+            }),
+            input,
+          };
+        },
+      );
+      await this.submitTargets(parsed, null, targets, signal, {
+        agentId: parsed.agentId,
+        workspaceFolderId: parsed.workspaceFolderId,
+      });
       return this.requireSession(parsed.sessionId);
     });
   }
@@ -428,50 +510,350 @@ export class DurableAgentHost implements AgentProtocol {
 
   private submitNative(parsed: AgentSubmitMessageInput) {
     return this.admit(parsed.sessionId, async (signal) => {
-      await this.requireSession(parsed.sessionId);
-      await this.syncSession(parsed.sessionId);
-      const native = await this.isCurrentConversation(parsed.sessionId);
-      const plan = native
-        ? await prepareDurableTurn(
-            this.preparation,
-            parsed,
-            await this.conversations.resourceFileEntryIds(parsed.sessionId),
-            signal,
-          )
-        : await prepareTurn(this.preparation, parsed, signal);
-      return this.submitPrepared(parsed, plan, signal);
+      const session = await this.requireSession(parsed.sessionId);
+      const current = await this.syncSession(parsed.sessionId);
+      const parent = session.activeNodeId ?? null;
+      const answers = replyTargets(parsed);
+      const busy = this.busyLanes(parsed.sessionId);
+      if (busy.length && answers.length > 1)
+        fail('SESSION_BUSY', 'Wait for the current answers before asking several models.');
+      const choices = await this.chooseLanes(parsed.sessionId, parent, answers.length, current);
+      // Only a follow-up to the busy lane's newest answer can wait in its queue.
+      const [first] = choices;
+      if (
+        busy.length &&
+        (first.mode !== 'native' || busy.length > 1 || !sameLane(busy[0], first.lane))
+      )
+        fail('SESSION_BUSY', 'Wait for the current answer before continuing another branch.');
+      const scope = { through: parent, readOnlyTools: answers.length > 1 };
+      const targets = await eachAnswer(
+        answers,
+        signal,
+        async (answer, index, signal): Promise<ReplyTarget> => {
+          const input = { ...parsed, ...answer };
+          const choice = choices[index]!;
+          return { ...choice, plan: await this.planAnswer(choice, input, signal, scope), input };
+        },
+      );
+      return this.submitTargets(parsed, parent, targets, signal);
     });
   }
 
-  private async submitPrepared(
+  /** Rebuilt copies read their history from Cherry; native and forked ones keep the engine's. */
+  private async planAnswer(
+    choice: LaneChoice,
     input: AgentSubmitMessageInput,
-    plan: TurnPlan,
     signal: AbortSignal,
-    retryReservation?: ReserveSubmissionResult,
+    scope: TurnScope,
   ) {
-    if (!plan.imageGeneration && !plan.modelPreflight)
-      throw new Error('A text input requires model preflight.');
-    const attachments = plan.imageGeneration
-      ? new Map()
-      : await materializeRuntimeAttachments({
-          files: this.ports.files,
-          history: plan.history,
-          inputParts: plan.inputParts,
-          modelPreflight: plan.modelPreflight!,
-          resources: plan.resources,
+    return choice.mode === 'rebuild'
+      ? prepareTurn(this.preparation, input, signal, undefined, scope)
+      : prepareDurableTurn(
+          this.preparation,
+          input,
+          choice.mode === 'fork'
+            ? await this.store.listReferencedFileEntryIds(input.sessionId, scope.through)
+            : await this.conversations.resourceFileEntryIds(choice.lane),
           signal,
-          contentAttachments: plan.runtimeContentAttachments,
+          scope,
+        );
+  }
+
+  /**
+   * Picks a working copy for each of `count` answers below `parent`. The first
+   * answer continues the copy whose newest answer is `parent`; the others
+   * natively fork the copy that executed `parent`, or rebuild from Cherry
+   * history when no current copy holds it. New copies take a free slot, else
+   * replace the least recently used idle copy: every copy is rebuildable.
+   * Engine tails are read only as far as the choice needs them.
+   */
+  private async chooseLanes(
+    sessionId: string,
+    parent: string | null,
+    count: number,
+    current: readonly RuntimeLane[],
+  ): Promise<LaneChoice[]> {
+    const tails = new Map<string, LaneTail>();
+    const tail = async (lane: RuntimeLane) => {
+      const key = laneKey(lane);
+      const known = tails.get(key);
+      if (known) return known;
+      const read = await this.laneTail(lane);
+      tails.set(key, read);
+      return read;
+    };
+    // The copy this Host last gave `parent` is checked first; the engine's tail decides.
+    const hinted = (lane: RuntimeLane) =>
+      Number(this.live.get(laneKey(lane))?.lastAnswerId === parent);
+    const ordered = [...current].sort((a, b) => hinted(b) - hinted(a));
+    let native: RuntimeLane | undefined;
+    if (parent)
+      for (const lane of ordered)
+        if ((await tail(lane)).answerId === parent) {
+          native = lane;
+          break;
+        }
+    const choices: LaneChoice[] = native ? [{ lane: native, mode: 'native' }] : [];
+    const source =
+      parent && choices.length < count
+        ? await this.answerBoundary(
+            native ? [native, ...ordered.filter((lane) => lane !== native)] : ordered,
+            parent,
+          )
+        : undefined;
+    // Free slots first, then idle copies from the least recently used; the copy continued or
+    // forked from stays.
+    const bound = new Set(current.map(laneKey));
+    const free = Array.from({ length: LANES_PER_SESSION }, (_, slot) =>
+      runtimeLane(sessionId, slot),
+    ).filter((lane) => !bound.has(laneKey(lane)));
+    const needed = count - choices.length;
+    const reusable: { lane: RuntimeLane; usedAt: number }[] = [];
+    if (free.length < needed)
+      for (const lane of current)
+        if (lane !== native && lane !== source?.lane && !this.isBusy(lane))
+          reusable.push({ lane, usedAt: (await tail(lane)).usedAt });
+    reusable.sort((a, b) => a.usedAt - b.usedAt);
+    for (const lane of [...free, ...reusable.map((entry) => entry.lane)].slice(0, needed))
+      choices.push(source ? { lane, mode: 'fork', from: source } : { lane, mode: 'rebuild' });
+    if (choices.length < count) fail('SESSION_BUSY', 'Every working copy of this session is busy.');
+    return choices;
+  }
+
+  /** The current copy that executed a settled answer, and that answer's history boundary. */
+  private async answerBoundary(current: readonly RuntimeLane[], answerId: string) {
+    for (const lane of current) {
+      const turn = (await this.conversations.message(lane, answerId))?.turn;
+      if (turn?.assistantMessageId === answerId && turn.answerBoundary)
+        return { lane, boundary: turn.answerBoundary };
+    }
+    return undefined;
+  }
+
+  private async laneTail(lane: RuntimeLane): Promise<LaneTail> {
+    const state = this.live.get(laneKey(lane));
+    const pending = state?.queue.at(-1) ?? state?.active;
+    if (pending) return { answerId: pending.assistantMessageId, usedAt: Date.now() };
+    const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
+    return { answerId: latest?.assistantMessageId, usedAt: latest?.updatedAt ?? 0 };
+  }
+
+  private isBusy(lane: RuntimeLane) {
+    const state = this.live.get(laneKey(lane));
+    return Boolean(state?.active || state?.queue.length);
+  }
+
+  private liveStates(sessionId: string) {
+    return [...this.live.values()].filter((state) => state.lane.sessionId === sessionId);
+  }
+
+  /** Copies of a Session with an active or queued input. */
+  private busyLanes(sessionId: string) {
+    return this.liveStates(sessionId)
+      .filter((state) => state.active || state.queue.length)
+      .map((state) => state.lane);
+  }
+
+  /** Every bound or observed copy of a Session. */
+  private async sessionLanes(sessionId: string) {
+    const lanes = [
+      ...(await this.conversations.lanes(sessionId)).map(({ lane }) => lane),
+      ...this.liveStates(sessionId).map((state) => state.lane),
+    ];
+    return [...new Map(lanes.map((lane) => [laneKey(lane), lane])).values()];
+  }
+
+  /**
+   * Prepares each answer's working copy, reserves the question and every answer
+   * in one Cherry transaction, then admits each answer to its own lane.
+   */
+  private async submitTargets(
+    input: AgentSubmitMessageInput | AgentStartSessionInput,
+    parent: string | null,
+    targets: readonly ReplyTarget[],
+    signal: AbortSignal,
+    initial?: { agentId: string; workspaceFolderId?: string },
+    /** Replaces the new-question reservation: a sibling answer or an in-place retry. */
+    reserve?: () => Promise<ReserveSubmissionResult>,
+  ) {
+    const { sessionId } = input;
+    for (const { plan } of targets)
+      if (!plan.imageGeneration && !plan.modelPreflight)
+        throw new Error('A text input requires model preflight.');
+    const files = sharedImageReads(this.ports.files);
+    const attachments = await eachAnswer(
+      targets,
+      signal,
+      async ({ plan }, _index, signal): Promise<RuntimeAttachmentContents> =>
+        plan.imageGeneration
+          ? new Map()
+          : materializeRuntimeAttachments({
+              files,
+              history: plan.history,
+              inputParts: plan.inputParts,
+              modelPreflight: plan.modelPreflight!,
+              resources: plan.resources,
+              signal,
+              contentAttachments: plan.runtimeContentAttachments,
+            }),
+    );
+    await this.prepareLanes(sessionId, targets, attachments, signal);
+    signal.throwIfAborted();
+    const [primary, ...others] = targets;
+    const reservation = {
+      sessionId,
+      userMessageId: input.userMessageId,
+      assistantMessageId: primary.input.assistantMessageId,
+      userParts: primary.plan.userParts,
+      modelId: primary.plan.inferenceSnapshot.model.uniqueModelId,
+      inferenceSnapshot: primary.plan.inferenceSnapshot,
+      ...(others.length
+        ? {
+            additionalReplies: others.map(({ input: answer, plan }) => ({
+              assistantMessageId: answer.assistantMessageId,
+              modelId: plan.inferenceSnapshot.model.uniqueModelId,
+              inferenceSnapshot: plan.inferenceSnapshot,
+            })),
+          }
+        : {}),
+    };
+    const reserved = reserve
+      ? await reserve()
+      : initial
+        ? await this.store.reserveInitialSubmission({
+            ...reservation,
+            agentId: initial.agentId,
+            ...(initial.workspaceFolderId ? { workspaceFolderId: initial.workspaceFolderId } : {}),
+          })
+        : await this.store.reserveSubmission({ ...reservation, parentMessageId: parent });
+    const { turnId } = reserved;
+    const assistants = [reserved.assistantMessage, ...reserved.additionalAssistantMessages];
+    // The reservation selected the new answer. Observers learn the branch before its rows arrive.
+    const selected = await this.store.getSession(sessionId);
+    if (selected) this.publish(sessionId, { type: 'session.updated', session: selected });
+    // Cherry owns the identities before the engine can execute. Recovery reconciles each answer.
+    try {
+      for (const [index, target] of targets.entries()) {
+        const { plan } = target;
+        const assistant = assistants[index];
+        if (!assistant) throw new Error('A reserved answer is missing.');
+        // Each answer is its own engine request; a question's answers share its turn id.
+        const requestId = assistant.id;
+        const state = await this.attach(target.lane);
+        signal.throwIfAborted();
+        plan.usageAttribution.bindMessage({ id: assistant.id, kind: 'agent-session' });
+        this.prepared.set(executionKey(target.lane, requestId), { turnId, plan });
+        await this.conversations.submit(target.lane, {
+          requestId,
+          turnId,
+          userMessageId: input.userMessageId,
+          assistantMessageId: assistant.id,
+          createdAt: Date.parse(assistant.updatedAt),
+          input: plan.imageGeneration
+            ? plan.inputParts.map((part) => ({
+                type: 'text' as const,
+                text:
+                  part.type === 'text'
+                    ? part.text
+                    : `[Image input: ${part.filename ?? part.fileEntryId}]`,
+              }))
+            : toRuntimeInputParts(plan.inputParts, plan.resources, attachments[index]!),
+          ...(plan.retry?.resumeParts.length
+            ? {
+                resume: toRuntimeHistory([{ ...assistant, parts: plan.retry.resumeParts }]).flatMap(
+                  (turn) => turn.messages.flatMap((message) => message.parts),
+                ),
+              }
+            : {}),
+          metadata: {
+            ...(plan.retry?.resumeParts.length
+              ? { retainedParts: assistant.parts as unknown as RuntimeJsonValue[] }
+              : {}),
+            // Schema-validated parts are plain JSON; their interface types lack index signatures.
+            userParts: plan.userParts as unknown as RuntimeJsonValue[],
+            inferenceSnapshot: plan.inferenceSnapshot,
+            workspaceFolderId: plan.workspaceFolderId ?? null,
+            referencedFileEntryIds: [...plan.resources.inputFiles.keys()],
+            hasHistoryBeforeActiveTurn: plan.hasMessages,
+            parentMessageId: reserved.userMessage.parentId ?? null,
+            ...(targets.length > 1 ? { readOnlyTools: true } : {}),
+          },
         });
-    const session = await this.store.getSession(input.sessionId);
+        state.lastAnswerId = assistant.id;
+      }
+    } catch (error) {
+      // Admission can fail after its native commit. Re-read before marking a reservation interrupted.
+      await this.reconcileUnsettled(sessionId);
+      throw error;
+    }
+    if (!primary.plan.hasMessages)
+      this.renameFrom(
+        this.naming.maybeRenameFromFirstUserMessage(sessionId, primary.plan.inputParts),
+      );
+    return {
+      turnId,
+      userMessageId: input.userMessageId,
+      assistantMessageId: reserved.assistantMessage.id,
+    };
+  }
+
+  /**
+   * Prepares every answer's working copy together. Answers that must rebuild from
+   * Cherry history share one rebuild: the copy of the model that keeps the most of
+   * that history (images, then context size) is rebuilt and the others fork it, as
+   * they fork a copy that ran the question's parent. Pi adapts the forked history
+   * to each model.
+   */
+  private async prepareLanes(
+    sessionId: string,
+    targets: readonly ReplyTarget[],
+    attachments: readonly RuntimeAttachmentContents[],
+    signal: AbortSignal,
+  ) {
+    // A new copy may take over the slot of a least recently used one. Retiring a copy drains
+    // its usage, so it stays serial.
+    for (const target of targets)
+      if (target.mode !== 'native' && (await this.conversations.hasConversation(target.lane)))
+        await this.detachLane(target.lane);
+    const rebuilds = targets.filter((target) => target.mode === 'rebuild');
+    const source =
+      rebuilds.length > 1
+        ? rebuilds.reduce((best, target) => (keepsMoreHistory(target, best) ? target : best))
+        : undefined;
+    const boundary =
+      source &&
+      (await this.prepareLane(sessionId, source, attachments[targets.indexOf(source)]!, signal));
+    await eachAnswer(targets, signal, async (target, index, signal) => {
+      if (target === source) return;
+      await this.prepareLane(
+        sessionId,
+        source && boundary && target.mode === 'rebuild'
+          ? { ...target, mode: 'fork', from: { lane: source.lane, boundary } }
+          : target,
+        attachments[index]!,
+        signal,
+      );
+    });
+  }
+
+  /**
+   * Creates, forks or reconfigures the answer's working copy before anything is reserved.
+   * A rebuild returns its history boundary.
+   */
+  private async prepareLane(
+    sessionId: string,
+    target: ReplyTarget,
+    attachments: RuntimeAttachmentContents,
+    signal: AbortSignal,
+  ): Promise<string | undefined> {
+    const { plan } = target;
     const configuration = this.configuration(plan);
-    const native = await this.isCurrentConversation(input.sessionId);
-    if (!native) {
-      if (await this.conversations.hasConversation(input.sessionId))
-        await this.detachConversation(input.sessionId);
-      await this.conversations.ensureConversation(
+    const revision = (await this.store.getRuntimeRevision(sessionId)) ?? 0;
+    if (target.mode === 'rebuild') {
+      return this.conversations.ensureConversation(
         {
-          sessionId: input.sessionId,
-          revision: (await this.store.getRuntimeRevision(input.sessionId)) ?? 0,
+          lane: target.lane,
+          revision,
           configuration,
           ...(plan.history.length > 0 || plan.runtimeContextCheckpoint
             ? {
@@ -489,86 +871,24 @@ export class DurableAgentHost implements AgentProtocol {
         },
         signal,
       );
+    } else if (target.mode === 'fork') {
+      await this.conversations.forkConversation(
+        {
+          lane: target.lane,
+          revision,
+          configuration,
+          from: target.from,
+          referencedFileEntryIds: [...plan.resources.fileEntryIds],
+        },
+        signal,
+      );
     } else {
-      const state = this.live.get(input.sessionId);
-      if (state?.active || state?.queue.length) {
-        const current = await this.conversations.configuration(input.sessionId);
+      if (this.isBusy(target.lane)) {
+        const current = await this.conversations.configuration(target.lane);
         if (configurationKey(current) !== configurationKey(configuration))
           fail('SESSION_BUSY', 'Wait for the current turn before changing its configuration.');
-      } else await this.conversations.configure(input.sessionId, configuration);
+      } else await this.conversations.configure(target.lane, configuration);
     }
-    signal.throwIfAborted();
-    const reservation = {
-      sessionId: input.sessionId,
-      userMessageId: input.userMessageId,
-      assistantMessageId: input.assistantMessageId,
-      userParts: plan.userParts,
-      modelId: plan.inferenceSnapshot.model.uniqueModelId,
-      inferenceSnapshot: plan.inferenceSnapshot,
-    };
-    const reserved =
-      retryReservation ??
-      (session
-        ? await this.store.reserveSubmission(reservation)
-        : await this.store.reserveInitialSubmission({
-            ...reservation,
-            agentId: plan.agent.id,
-          }));
-    const { turnId } = reserved;
-    const requestId = turnId;
-    // Cherry owns the identities before the engine can execute. Recovery reconciles this pair.
-    try {
-      await this.attach(input.sessionId);
-      signal.throwIfAborted();
-      plan.usageAttribution.bindMessage({ id: input.assistantMessageId, kind: 'agent-session' });
-      this.prepared.set(executionKey(input.sessionId, requestId), { turnId, plan });
-      await this.conversations.submit(input.sessionId, {
-        requestId,
-        turnId,
-        userMessageId: input.userMessageId,
-        assistantMessageId: input.assistantMessageId,
-        createdAt: Date.parse(reserved.assistantMessage.updatedAt),
-        input: plan.imageGeneration
-          ? plan.inputParts.map((part) => ({
-              type: 'text' as const,
-              text:
-                part.type === 'text'
-                  ? part.text
-                  : `[Image input: ${part.filename ?? part.fileEntryId}]`,
-            }))
-          : toRuntimeInputParts(plan.inputParts, plan.resources, attachments),
-        ...(plan.retry?.resumeParts.length
-          ? {
-              resume: toRuntimeHistory([
-                { ...reserved.assistantMessage, parts: plan.retry.resumeParts },
-              ]).flatMap((turn) => turn.messages.flatMap((message) => message.parts)),
-            }
-          : {}),
-        metadata: {
-          ...(plan.retry?.resumeParts.length
-            ? { retainedParts: reserved.assistantMessage.parts as unknown as RuntimeJsonValue[] }
-            : {}),
-          // Schema-validated parts are plain JSON; their interface types lack index signatures.
-          userParts: plan.userParts as unknown as RuntimeJsonValue[],
-          inferenceSnapshot: plan.inferenceSnapshot,
-          referencedFileEntryIds: [...plan.resources.inputFiles.keys()],
-          hasHistoryBeforeActiveTurn: plan.hasMessages,
-        },
-      });
-    } catch (error) {
-      // Admission can fail after its native commit. Re-read before marking a reservation interrupted.
-      await this.reconcileUnsettled(input.sessionId);
-      throw error;
-    }
-    if (!plan.hasMessages)
-      this.renameFrom(
-        this.naming.maybeRenameFromFirstUserMessage(input.sessionId, plan.inputParts),
-      );
-    return {
-      turnId,
-      userMessageId: input.userMessageId,
-      assistantMessageId: input.assistantMessageId,
-    };
   }
 
   private configuration(plan: TurnPlan): RuntimeConversationSeed['configuration'] {
@@ -579,7 +899,9 @@ export class DurableAgentHost implements AgentProtocol {
       tools: plan.imageGeneration ? [this.imageTool(plan)] : plan.tools,
       ...(plan.webTools && !plan.imageGeneration ? { webTools: plan.webTools } : {}),
       initialInstructions:
-        plan.agent.mode === 'standard' ? buildInitialSkillInstructions(plan.skills) : [],
+        plan.agent.mode === 'standard'
+          ? [...buildInitialSkillInstructions(plan.skills), ...plan.workflowInstructions]
+          : [],
       instructions: buildAgentSystemPrompt({
         agentInstructions: plan.agent.instructions,
         mode: plan.agent.mode,
@@ -618,15 +940,18 @@ export class DurableAgentHost implements AgentProtocol {
     const parsed = AgentRetryMessageInputSchema.parse(input);
     this.assertIdle(parsed.sessionId);
     return this.admit(parsed.sessionId, async (signal) => {
-      await this.syncSession(parsed.sessionId, true);
+      const current = await this.syncSession(parsed.sessionId, true);
       const source = await this.requireSession(parsed.sessionId);
-      const messages = await this.store.listMessages(source.id);
-      const index = messages.findIndex(
-        (message) => message.id === parsed.messageId && message.role === 'assistant',
-      );
-      const assistant = messages[index];
-      const user = messages[index - 1];
-      if (!assistant || user?.role !== 'user' || user.turnId !== assistant.turnId)
+      const assistant = await this.store.getMessage(source.id, parsed.messageId);
+      const user = assistant?.parentId
+        ? await this.store.getMessage(source.id, assistant.parentId)
+        : null;
+      if (
+        !assistant ||
+        assistant.role !== 'assistant' ||
+        user?.role !== 'user' ||
+        user.turnId !== assistant.turnId
+      )
         fail('MESSAGE_NOT_FOUND', 'The original question is unavailable.');
       if (assistant.status === 'pending' || assistant.status === 'streaming')
         fail('SESSION_BUSY', 'The answer has not settled.');
@@ -634,48 +959,63 @@ export class DurableAgentHost implements AgentProtocol {
         assistant.inferenceSnapshot?.status === 'supported'
           ? assistant.inferenceSnapshot.snapshot
           : undefined;
+      // Another model keeps only the question: effort and image settings belong to the original.
+      const switched = parsed.modelId !== undefined && parsed.modelId !== assistant.modelId;
+      const modelId = parsed.modelId ?? assistant.modelId;
       const choices = {
         parts: userInput(user.parts),
         ...submittedSkills(user.parts),
-        ...(assistant.modelId ? { modelId: assistant.modelId } : {}),
-        ...submittedEffort(snapshot?.reasoningEffort),
-        ...(snapshot?.imageGeneration ? { imageGeneration: snapshot.imageGeneration } : {}),
+        ...(modelId ? { modelId } : {}),
+        ...(switched ? {} : submittedEffort(snapshot?.reasoningEffort)),
+        ...(!switched && snapshot?.imageGeneration
+          ? { imageGeneration: snapshot.imageGeneration }
+          : {}),
       };
-      // A successful answer stays in its source; regeneration uses an independent Cherry copy.
-      if (assistant.status === 'success' || index !== messages.length - 1) {
-        const before = messages[index - 2];
-        if (!before)
-          return this.startSession({
-            ...choices,
-            sessionId: uuidv7(),
-            userMessageId: uuidv7(),
-            assistantMessageId: uuidv7(),
-            agentId: source.agentId,
-          });
-        const fork = await this.copySession({ sessionId: source.id, fromMessageId: before.id });
-        await this.submitMessage({
+      const parent = user.parentId ?? null;
+      // A successful or continued answer stays, and answering with a chosen model always adds
+      // one: these add a sibling answer and select it.
+      if (
+        parsed.modelId !== undefined ||
+        assistant.status === 'success' ||
+        (await this.store.hasChildren(source.id, assistant.id))
+      ) {
+        const answer = { assistantMessageId: uuidv7() };
+        const regenerate = {
           ...choices,
-          sessionId: fork.id,
-          userMessageId: uuidv7(),
-          assistantMessageId: uuidv7(),
-        });
-        return this.requireSession(fork.id);
+          sessionId: source.id,
+          userMessageId: user.id,
+          ...answer,
+        };
+        const [choice] = await this.chooseLanes(source.id, parent, 1, current);
+        const plan = await this.planAnswer(choice, regenerate, signal, { through: parent });
+        await this.submitTargets(
+          regenerate,
+          parent,
+          [{ ...choice, plan, input: answer }],
+          signal,
+          undefined,
+          () =>
+            this.store.reserveAnswer({
+              sessionId: source.id,
+              userMessageId: user.id,
+              assistantMessageId: answer.assistantMessageId,
+              modelId: plan.inferenceSnapshot.model.uniqueModelId,
+              inferenceSnapshot: plan.inferenceSnapshot,
+            }),
+        );
+        return;
       }
       // Failed latest answers keep their message identities. Rebuild before retrying so the old
       // execution can never write into the replacement reservation.
-      const input = {
+      const retry = {
         ...choices,
         sessionId: source.id,
         userMessageId: user.id,
         assistantMessageId: assistant.id,
       };
-      const plan = await prepareTurn(this.preparation, input, signal, assistant.id);
-      plan.history = plan.history.filter((message) => message.turnId !== assistant.turnId);
-      if (plan.runtimeContextCheckpoint?.anchorTurnId === assistant.turnId) {
-        plan.runtimeContextCheckpoint = null;
-        plan.history = messages.filter((message) => message.turnId !== assistant.turnId);
-      }
-      plan.hasMessages = plan.history.length > 0 || plan.runtimeContextCheckpoint !== null;
+      const plan = await prepareTurn(this.preparation, retry, signal, assistant.id, {
+        through: parent,
+      });
       const lastTool = assistant.parts.findLastIndex(
         (part) =>
           part.type === 'dynamic-tool' && part.input !== undefined && part.output !== undefined,
@@ -696,20 +1036,39 @@ export class DurableAgentHost implements AgentProtocol {
         plan.retry = { resumeParts: retained };
       }
       const reserved = await this.store.reserveRetry({
-        ...input,
+        ...retry,
         userParts: plan.userParts,
         assistantParts: retained,
         modelId: plan.inferenceSnapshot.model.uniqueModelId,
         inferenceSnapshot: plan.inferenceSnapshot,
       });
       try {
+        // The same Cherry transaction invalidated every lane of this Session.
         await this.detachConversation(source.id);
-        await this.submitPrepared(input, plan, signal, reserved);
+        await this.submitTargets(
+          retry,
+          parent,
+          [{ lane: runtimeLane(source.id), mode: 'rebuild', plan, input: retry }],
+          signal,
+          undefined,
+          async () => reserved,
+        );
       } catch (error) {
         await this.reconcileUnsettled(source.id);
         throw error;
       }
     });
+  }
+
+  async selectMessage(input: Parameters<AgentProtocol['selectMessage']>[0]) {
+    const parsed = AgentSelectMessageInputSchema.parse(input);
+    storageMutationGate.assertWritable();
+    await this.requireSession(parsed.sessionId);
+    const session = await this.store.selectMessage(parsed.sessionId, parsed.messageId);
+    if (!session) fail('MESSAGE_NOT_FOUND', 'The message no longer exists.');
+    this.publish(session.id, { type: 'session.updated', session });
+    this.ports.durableStorage?.notifyTranscript(session.id);
+    return session;
   }
 
   async deleteTurn(input: Parameters<AgentProtocol['deleteTurn']>[0]) {
@@ -734,6 +1093,9 @@ export class DurableAgentHost implements AgentProtocol {
         turnId: parsed.turnId,
         messageIds: result.deletedMessageIds,
       });
+      // Deleting the selected branch moves the Session's active node.
+      const session = await this.store.getSession(parsed.sessionId);
+      if (session) this.publish(parsed.sessionId, { type: 'session.updated', session });
       this.ports.durableStorage?.notifyTranscript(parsed.sessionId);
     });
   }
@@ -759,9 +1121,10 @@ export class DurableAgentHost implements AgentProtocol {
       const admission = this.admissions.get(sessionId);
       admission?.controller.abort(new Error('The session is being deleted.'));
       await admission?.promise.catch(() => undefined);
-      if (await this.conversations.hasConversation(sessionId))
-        await this.conversations.abort(sessionId);
-      await this.live.get(sessionId)?.unsubscribe();
+      const lanes = await this.sessionLanes(sessionId);
+      for (const lane of lanes)
+        if (await this.conversations.hasConversation(lane)) await this.conversations.abort(lane);
+      for (const lane of lanes) await this.live.get(laneKey(lane))?.unsubscribe();
       await this.settlements.get(sessionId);
       await this.conversations.drainUsage();
       if (!(await this.store.deleteSession(sessionId)))
@@ -779,29 +1142,73 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  /** Retires every working copy of a Session; Cherry history stays the source of truth. */
   private async detachConversation(sessionId: string) {
-    const state = this.live.get(sessionId);
+    for (const lane of await this.sessionLanes(sessionId)) await this.detachLane(lane);
+  }
+
+  private async detachLane(lane: RuntimeLane) {
+    const state = this.live.get(laneKey(lane));
     await state?.unsubscribe();
     state?.background?.retire();
-    this.live.delete(sessionId);
-    if (await this.conversations.hasConversation(sessionId))
-      await this.conversations.discardConversation(sessionId);
+    this.live.delete(laneKey(lane));
+    if (await this.conversations.hasConversation(lane))
+      await this.conversations.discardConversation(lane);
+  }
+
+  /**
+   * Observed copies of a Session. Every copy with native work is observed: recovery attaches
+   * unfinished copies and admission attaches each copy it submits to. The first copy is also
+   * observed while current, as before branching.
+   */
+  private async attachedLanes(sessionId: string) {
+    const first = runtimeLane(sessionId);
+    if (!this.live.has(laneKey(first)) && (await this.isCurrentConversation(first)))
+      await this.attach(first);
+    return this.liveStates(sessionId);
   }
 
   async cancelTurn(input: Parameters<AgentProtocol['cancelTurn']>[0]) {
     const parsed = AgentCancelTurnInputSchema.parse(input);
-    if (!(await this.isCurrentConversation(parsed.sessionId))) return;
-    const state = await this.attach(parsed.sessionId);
-    if (state.active?.identity.turnId !== parsed.turnId) {
-      const queued = state.queue.find((turn) => turn.identity.turnId === parsed.turnId);
-      if (queued) await this.conversations.withdraw(parsed.sessionId, queued.identity.requestId);
-      return;
+    for (const state of await this.attachedLanes(parsed.sessionId)) {
+      if (state.active?.identity.turnId !== parsed.turnId) {
+        if (parsed.messageId) continue;
+        const queued = state.queue.find((turn) => turn.identity.turnId === parsed.turnId);
+        if (queued) await this.conversations.withdraw(state.lane, queued.identity.requestId);
+        continue;
+      }
+      // A multi-model answer can be stopped alone; without a message the whole question stops.
+      if (parsed.messageId && state.active.assistantMessageId !== parsed.messageId) continue;
+      this.publish(parsed.sessionId, {
+        type: 'turn.updated',
+        turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
+      });
+      await this.conversations.abort(state.lane);
     }
-    this.publish(parsed.sessionId, {
-      type: 'turn.updated',
-      turn: { ...projectDurableHostTurn(state.active).turn, status: 'cancelling' },
-    });
-    await this.conversations.abort(parsed.sessionId);
+  }
+
+  async cancelQueuedInput(
+    input: Parameters<AgentProtocol['cancelQueuedInput']>[0],
+  ): ReturnType<AgentProtocol['cancelQueuedInput']> {
+    const { sessionId, turnId } = AgentCancelTurnInputSchema.parse(input);
+    storageMutationGate.assertWritable();
+    const states = await this.attachedLanes(sessionId);
+    const owner = states.find((state) =>
+      state.queue.some((turn) => turn.identity.turnId === turnId),
+    );
+    if (!owner)
+      return states.some((state) => state.active?.identity.turnId === turnId)
+        ? 'already-started'
+        : 'not-found';
+    const queued = owner.queue.find((turn) => turn.identity.turnId === turnId)!;
+    const result = await this.conversations.withdraw(owner.lane, queued.identity.requestId);
+    // The Runtime checks placement and withdrawal in one transaction. Never turn a lost race
+    // into abort(sessionId), which would stop the active input and every remaining follow-up.
+    if (result === 'already-placed') return 'already-started';
+    // Another admission may have reserved its rows without reaching Pi yet. Only reconcile the
+    // input whose withdrawal was confirmed; a session-wide recovery would interrupt that receipt.
+    if (result === 'aborted') await this.persistTurn({ ...queued, status: 'cancelled' });
+    return result === 'aborted' ? 'withdrawn' : 'not-found';
   }
 
   async cancelSubmission(input: Parameters<AgentProtocol['cancelSubmission']>[0]) {
@@ -817,21 +1224,24 @@ export class DurableAgentHost implements AgentProtocol {
 
   async respondApproval(input: Parameters<AgentProtocol['respondApproval']>[0]) {
     const parsed = AgentRespondApprovalInputSchema.parse(input);
-    const state = this.live.get(parsed.sessionId);
+    const state = this.liveStates(parsed.sessionId).find(
+      (candidate) =>
+        candidate.active?.identity.turnId === parsed.turnId &&
+        candidate.approvals.get(parsed.approvalId)?.view.status === 'pending',
+    );
     const pending = state?.approvals.get(parsed.approvalId);
-    if (state?.active?.identity.turnId !== parsed.turnId || pending?.view.status !== 'pending')
-      fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
+    if (!pending) fail('APPROVAL_NOT_FOUND', 'The approval is no longer pending.');
     pending.resolve(parsed.decision);
   }
 
   async respondQuestion(input: Parameters<AgentProtocol['respondQuestion']>[0]) {
     const parsed = AgentRespondQuestionSchema.parse(input);
-    const state = this.live.get(parsed.sessionId);
-    if (
-      state?.active?.identity.turnId !== parsed.turnId ||
-      state.question?.toolCallId !== parsed.toolCallId
-    )
-      fail('QUESTION_NOT_FOUND', 'The question is no longer pending.');
+    const state = this.liveStates(parsed.sessionId).find(
+      (candidate) =>
+        candidate.active?.identity.turnId === parsed.turnId &&
+        candidate.question?.toolCallId === parsed.toolCallId,
+    );
+    if (!state) fail('QUESTION_NOT_FOUND', 'The question is no longer pending.');
     state.questions.respond(parsed.toolCallId, parsed.answer);
   }
 
@@ -843,36 +1253,63 @@ export class DurableAgentHost implements AgentProtocol {
     const session = await this.requireSession(sessionId);
     const agent = await this.ports.agents.getAgent(session.agentId);
     if (!agent) fail('AGENT_NOT_FOUND', 'The agent no longer exists.');
-    const state =
-      this.accepting && (await this.isCurrentConversation(sessionId))
-        ? await this.attach(sessionId)
-        : undefined;
+    const states = this.accepting ? await this.attachedLanes(sessionId) : [];
     await this.requireSession(sessionId);
+    // Several lanes run when one question has several answers; the first active one leads.
+    const running = states.filter((state) => state.active);
+    const state = running[0] ?? states[0];
     const view = state?.active ? projectDurableHostTurn(state.active) : undefined;
     const snapshot = AgentSessionSnapshotSchema.parse({
       agent: { id: agent.id, name: agent.name },
       session,
       capabilities: this.conversations.descriptor.capabilities,
       activeTurn: view ? this.turnStatus(view.turn, state!) : null,
+      queuedInputs: this.queuedInputs(states.flatMap((candidate) => candidate.queue)),
       activeUserMessage: view?.user ?? null,
       streamingMessage: view?.assistant ?? null,
+      additionalMessages: running
+        .slice(1)
+        .flatMap((candidate) => projectDurableHostTurn(candidate.active!).assistant ?? []),
       hasHistoryBeforeActiveTurn: state?.active
         ? DurableTurnMetadataSchema.parse(state.active.metadata).hasHistoryBeforeActiveTurn
         : null,
-      pendingQuestion: state?.question ?? null,
+      pendingQuestion: states.find((candidate) => candidate.question)?.question ?? null,
       contextStatus: state?.contextStatus ?? null,
-      pendingApprovals: [...(state?.approvals.values() ?? [])].map((entry) => entry.view),
+      pendingApprovals: states.flatMap((candidate) =>
+        [...candidate.approvals.values()].map((entry) => entry.view),
+      ),
     });
     const listeners = this.listeners.get(sessionId) ?? new Set();
     this.listeners.set(sessionId, listeners);
     listeners.add(listener);
-    return {
-      snapshot,
-      unsubscribe: () => {
-        listeners.delete(listener);
-        if (!listeners.size) this.listeners.delete(sessionId);
-      },
+    const unsubscribe = () => {
+      listeners.delete(listener);
+      if (!listeners.size) this.listeners.delete(sessionId);
     };
+    try {
+      // Settled history omits an entire turn while any answer runs. Restore its completed
+      // siblings too. Subscribe before the read so terminal events during it cannot be lost.
+      const turnIds = new Set(running.map((candidate) => candidate.active!.identity.turnId));
+      const rows = await Promise.all(
+        [...turnIds].map((turnId) => this.store.listTurnMessages(sessionId, turnId)),
+      );
+      const messages = new Map(rows.flat().map((message) => [message.id, message]));
+      for (const message of snapshot.additionalMessages ?? [])
+        messages.set(message.id, { ...messages.get(message.id), ...message });
+      if (snapshot.activeUserMessage) messages.delete(snapshot.activeUserMessage.id);
+      if (snapshot.streamingMessage) {
+        snapshot.streamingMessage = {
+          ...messages.get(snapshot.streamingMessage.id),
+          ...snapshot.streamingMessage,
+        };
+        messages.delete(snapshot.streamingMessage.id);
+      }
+      snapshot.additionalMessages = [...messages.values()];
+      return { snapshot, unsubscribe };
+    } catch (error) {
+      unsubscribe();
+      throw error;
+    }
   }
 
   private get preparation(): TurnPreparationDependencies {
@@ -898,7 +1335,7 @@ export class DurableAgentHost implements AgentProtocol {
     identity: RuntimeExecutionIdentity,
     signal: AbortSignal,
   ): Promise<PreparedInput> {
-    const key = executionKey(identity.sessionId, identity.requestId);
+    const key = executionKey(identity, identity.requestId);
     const cached = this.prepared.get(key);
     if (cached) return cached;
     const existing = this.preparing.get(key);
@@ -907,12 +1344,12 @@ export class DurableAgentHost implements AgentProtocol {
       'ai.prepare',
       identity,
       async () => {
-        const state = await this.attach(identity.sessionId);
+        const state = await this.attach(identity);
         const turn =
           state.active?.identity.requestId === identity.requestId
             ? state.active
             : (
-                await this.conversations.history(identity.sessionId, {
+                await this.conversations.history(identity, {
                   limit: 1,
                   requestIds: [identity.requestId],
                 })
@@ -920,11 +1357,13 @@ export class DurableAgentHost implements AgentProtocol {
         if (!turn || turn.identity.turnId !== identity.turnId)
           throw new Error('The durable tool has no current owning input.');
         const facts = DurableTurnMetadataSchema.parse(turn.metadata);
-        const configuration = await this.conversations.configuration(identity.sessionId);
+        const configuration = await this.conversations.configuration(identity);
+        const { sessionId } = identity;
+        const question = await this.store.getMessage(sessionId, turn.userMessageId);
         const plan = await prepareDurableTurn(
           this.preparation,
           {
-            sessionId: identity.sessionId,
+            sessionId,
             userMessageId: turn.userMessageId,
             assistantMessageId: turn.assistantMessageId,
             parts: userInput(facts.userParts),
@@ -935,8 +1374,10 @@ export class DurableAgentHost implements AgentProtocol {
               ? { imageGeneration: facts.inferenceSnapshot.imageGeneration }
               : {}),
           },
-          await this.conversations.resourceFileEntryIds(identity.sessionId),
+          await this.conversations.resourceFileEntryIds(identity),
           signal,
+          { through: question?.parentId ?? null, readOnlyTools: facts.readOnlyTools === true },
+          facts.workspaceFolderId,
         );
         plan.usageAttribution.bindMessage({ id: turn.assistantMessageId, kind: 'agent-session' });
         for (const part of turn.parts)
@@ -1018,7 +1459,7 @@ export class DurableAgentHost implements AgentProtocol {
     approval: Parameters<RuntimeExecutionPorts['requestApproval']>[1],
     signal: AbortSignal,
   ) {
-    const state = await this.attach(identity.sessionId);
+    const state = await this.attach(identity);
     signal.throwIfAborted();
     if (state.active?.identity.turnId !== identity.turnId)
       throw new Error('The approval has no active owning input.');
@@ -1032,7 +1473,7 @@ export class DurableAgentHost implements AgentProtocol {
     const abort = () => reject(signal.reason);
     signal.addEventListener('abort', abort, { once: true });
     state.approvals.set(approval.id, { view, resolve });
-    const key = executionKey(identity.sessionId, identity.requestId);
+    const key = executionKey(identity, identity.requestId);
     const wait: NonNullable<RuntimeTurnTiming['approvals']>[number] = {
       approvalId: approval.id,
       toolCallId: approval.toolCallId,
@@ -1089,11 +1530,11 @@ export class DurableAgentHost implements AgentProtocol {
     question: Parameters<TurnPreparationDependencies['askUser']>[0],
     call: RuntimeToolCall,
   ) {
-    const entry = [...this.live.entries()].find(
-      ([, state]) => state.active?.identity.turnId === call.turnId,
+    const state = [...this.live.values()].find(
+      (candidate) => candidate.active?.identity.turnId === call.turnId,
     );
-    if (!entry) throw new Error('The question has no active owning input.');
-    const [sessionId, state] = entry;
+    if (!state) throw new Error('The question has no active owning input.');
+    const { sessionId } = state.lane;
     const response = state.questions.ask(question, call);
     state.question = { turnId: call.turnId, toolCallId: call.toolCallId, question };
     this.publish(sessionId, { type: 'question.updated', question: state.question });
@@ -1109,18 +1550,20 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
-  private async isCurrentConversation(sessionId: string) {
-    const revision = await this.store.getRuntimeRevision(sessionId);
-    return revision !== null && revision === (await this.conversations.revision(sessionId));
+  /** A copy is current while its revision matches its Cherry Session's history revision. */
+  private async isCurrentConversation(lane: RuntimeLane) {
+    const revision = await this.store.getRuntimeRevision(lane.sessionId);
+    return revision !== null && revision === (await this.conversations.revision(lane));
   }
 
+  /** Retires obsolete copies and settles reservations; returns the Session's current copies. */
   private async syncSession(sessionId: string, requireIdle = false) {
     await this.settlements.get(sessionId);
-    if (
-      (await this.conversations.hasConversation(sessionId)) &&
-      !(await this.isCurrentConversation(sessionId))
-    )
-      await this.detachConversation(sessionId);
+    const revision = await this.store.getRuntimeRevision(sessionId);
+    const current: RuntimeLane[] = [];
+    for (const copy of await this.conversations.lanes(sessionId))
+      if (copy.revision === revision) current.push(copy.lane);
+      else await this.detachLane(copy.lane);
     await this.reconcileUnsettled(sessionId);
     // Observation may lag native admission. Durable reservations also guard history mutations.
     if (
@@ -1128,30 +1571,40 @@ export class DurableAgentHost implements AgentProtocol {
       (await this.store.listUnsettledAssistantMessages()).some((row) => row.sessionId === sessionId)
     )
       fail('SESSION_BUSY', 'The session has unfinished work.');
+    return current;
   }
 
   /** Each unsettled Cherry row is a durable receipt awaiting its full Pi result, with no cursor gaps. */
   private async reconcileUnsettled(onlySessionId?: string) {
     const rows = await this.store.listUnsettledAssistantMessages();
+    const sessionCopies = new Map<string, RuntimeLane[]>();
     for (const row of rows) {
       if (onlySessionId && row.sessionId !== onlySessionId) continue;
-      const selected = (await this.isCurrentConversation(row.sessionId))
-        ? await this.conversations.message(row.sessionId, row.assistantMessageId)
-        : undefined;
+      let copies = sessionCopies.get(row.sessionId);
+      if (!copies) {
+        const revision = await this.store.getRuntimeRevision(row.sessionId);
+        copies = (await this.conversations.lanes(row.sessionId))
+          .filter((copy) => copy.revision === revision)
+          .map((copy) => copy.lane);
+        sessionCopies.set(row.sessionId, copies);
+      }
+      // The answer ran on whichever current copy still holds it.
+      let selected: Awaited<ReturnType<DurableAgentRuntime['message']>>;
+      for (const lane of copies)
+        if ((selected = await this.conversations.message(lane, row.assistantMessageId))) break;
       if (selected?.turn.identity.turnId === row.turnId) {
         if (selected.turn.status !== 'running' && selected.turn.status !== 'queued') {
           const turn = this.timed(selected.turn);
           await this.persistTurn(turn);
-          if (this.live.has(row.sessionId)) this.presentSettled(turn);
+          if (this.live.has(laneKey(turn.identity))) this.presentSettled(turn);
         }
         continue;
       }
       // Reservation committed, but admission did not. Preserve any recorded output as interrupted.
-      const message = (await this.store.listMessages(row.sessionId)).find(
-        (item) => item.id === row.assistantMessageId,
-      );
+      const message = await this.store.getMessage(row.sessionId, row.assistantMessageId);
       if (!message) continue;
-      const completedAt = Date.now();
+      // Administrative recovery is not conversation activity: settle at the reservation time.
+      const reservedAt = Date.parse(message.createdAt);
       const error: AgentErrorView = {
         code: 'INTERRUPTED',
         message: 'The app stopped before this input was admitted.',
@@ -1170,7 +1623,7 @@ export class DurableAgentHost implements AgentProtocol {
         error,
         contextCheckpoint: null,
         runtimeStats: {
-          runtimeTiming: { startedAt: Date.parse(message.createdAt), completedAt, spans: [] },
+          runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
         },
       });
       this.ports.durableStorage?.notifyTranscript(row.sessionId);
@@ -1186,13 +1639,13 @@ export class DurableAgentHost implements AgentProtocol {
 
   /** Called with admission blocked and no native work, including background compaction. */
   private async captureCheckpoints() {
-    for (const { sessionId } of await this.conversations.sessions()) {
-      if (!(await this.isCurrentConversation(sessionId))) continue;
-      const latest = (await this.conversations.history(sessionId, { limit: 1 })).turns[0];
+    for (const { lane } of await this.conversations.sessions()) {
+      if (!(await this.isCurrentConversation(lane))) continue;
+      const latest = (await this.conversations.history(lane, { limit: 1 })).turns[0];
       if (latest?.status !== 'completed') continue;
       await this.traceOperation('ai.checkpoint', latest.identity, async () => {
         const { contextCheckpoint } = await this.conversations.exportTurn(
-          sessionId,
+          lane,
           latest.identity.requestId,
           { currentContext: true },
         );
@@ -1207,6 +1660,23 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private async persistTurn(turn: RuntimeDurableTurn) {
+    if (turn.status === 'cancelled' && turn.inputBoundary === null) {
+      // A withdrawn inbox item never entered model context. Remove its reservation without
+      // invalidating the working copy; reconciliation retries this after a process interruption.
+      const { sessionId } = turn.identity;
+      const messageIds = await this.store.discardQueuedTurn({
+        sessionId,
+        turnId: turn.identity.turnId,
+      });
+      if (messageIds.length) {
+        this.publish(sessionId, { type: 'turn.deleted', turnId: turn.identity.turnId, messageIds });
+        this.ports.durableStorage?.notifyTranscript(sessionId);
+        const session = await this.store.getSession(sessionId);
+        if (session) this.publish(sessionId, { type: 'session.updated', session });
+      }
+      this.prepared.delete(executionKey(turn.identity, turn.identity.requestId));
+      return;
+    }
     const { assistant, turn: view } = projectDurableHostTurn(turn);
     const status = turn.status;
     if (!assistant || status === 'running' || status === 'queued') return;
@@ -1215,7 +1685,7 @@ export class DurableAgentHost implements AgentProtocol {
       { ...turn.identity, messageId: assistant.id },
       async () => {
         const artifacts = await this.conversations.exportTurn(
-          turn.identity.sessionId,
+          turn.identity,
           turn.identity.requestId,
         );
         const timing = durableRuntimeTiming(turn) ?? { startedAt: turn.createdAt, spans: [] };
@@ -1243,7 +1713,8 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private settle(turn: RuntimeDurableTurn) {
-    const sessionId = turn.identity.sessionId;
+    // Settlement is serialized per Cherry Session across all of its copies.
+    const { sessionId } = turn.identity;
     const operation = (this.settlements.get(sessionId) ?? Promise.resolve())
       .then(async () => {
         await this.persistTurn(turn);
@@ -1268,13 +1739,16 @@ export class DurableAgentHost implements AgentProtocol {
     });
   }
 
-  private async attach(sessionId: string): Promise<LiveSession> {
-    const existing = this.live.get(sessionId);
+  private async attach(copy: RuntimeLane): Promise<LiveSession> {
+    const lane = runtimeLane(copy.sessionId, copy.slot);
+    const key = laneKey(lane);
+    const existing = this.live.get(key);
     if (existing) return existing;
-    const pending = this.attachments.get(sessionId);
+    const pending = this.attachments.get(key);
     if (pending) return pending;
-    const operation = this.traceOperation('ai.observe', { sessionId }, async () => {
+    const operation = this.traceOperation('ai.observe', { sessionId: lane.sessionId }, async () => {
       const state: LiveSession = {
+        lane,
         waiters: new Set(),
         users: new Set(),
         assistant: null,
@@ -1284,6 +1758,9 @@ export class DurableAgentHost implements AgentProtocol {
         unsubscribe: async () => {},
         background: null,
         backgroundRequestId: null,
+        backgroundCompleted: false,
+        turn: null,
+        lastAnswerId: null,
         question: null,
         questions: new TurnUserQuestions(),
         approvals: new Map(),
@@ -1291,34 +1768,33 @@ export class DurableAgentHost implements AgentProtocol {
       // The engine's exact watch is acquired before scheduling. App route listeners are independent.
       let installed = false;
       const pending: RuntimeConversationEvent[] = [];
-      const observed = await this.conversations.observe(sessionId, (event) => {
-        if (installed) this.consume(sessionId, state, event);
+      const observed = await this.conversations.observe(lane, (event) => {
+        if (installed) this.consume(state, event);
         else pending.push(event);
       });
       state.active = observed.snapshot.activeTurn && this.timed(observed.snapshot.activeTurn);
-      state.queue = observed.snapshot.queue;
       state.contextStatus = observed.snapshot.contextStatus ?? null;
-      this.recordQueue(sessionId, state.queue, []);
       state.unsubscribe = observed.unsubscribe;
-      this.live.set(sessionId, state);
+      this.live.set(key, state);
+      this.updateQueue(state, observed.snapshot.queue);
       if (state.active) this.present(state.active);
       installed = true;
-      for (const event of pending) this.consume(sessionId, state, event);
+      for (const event of pending) this.consume(state, event);
       return state;
     });
-    this.attachments.set(sessionId, operation);
+    this.attachments.set(key, operation);
     try {
       return await operation;
     } finally {
-      this.attachments.delete(sessionId);
+      this.attachments.delete(key);
     }
   }
 
-  private consume(sessionId: string, state: LiveSession, event: RuntimeConversationEvent) {
+  private consume(state: LiveSession, event: RuntimeConversationEvent) {
+    const { sessionId } = state.lane;
     if (event.type === 'snapshot') {
       state.active = event.snapshot.activeTurn && this.timed(event.snapshot.activeTurn);
-      this.recordQueue(sessionId, event.snapshot.queue, state.queue);
-      state.queue = event.snapshot.queue;
+      this.updateQueue(state, event.snapshot.queue);
       state.contextStatus = event.snapshot.contextStatus ?? null;
       this.publish(sessionId, { type: 'context.updated', status: state.contextStatus });
       if (state.active) this.present(state.active);
@@ -1326,11 +1802,17 @@ export class DurableAgentHost implements AgentProtocol {
       state.contextStatus = event.status;
       this.publish(sessionId, event);
     } else if (event.type === 'queue.updated') {
-      this.recordQueue(sessionId, event.queue, state.queue);
-      state.queue = event.queue;
-      for (const turn of event.queue) this.publishRows(turn);
+      this.updateQueue(state, event.queue);
     } else {
       const turn = this.timed(event.turn);
+      if (
+        turn.status !== 'queued' &&
+        state.queue.some((item) => item.identity.turnId === turn.identity.turnId)
+      )
+        this.updateQueue(
+          state,
+          state.queue.filter((item) => item.identity.turnId !== turn.identity.turnId),
+        );
       if (turn.status === 'running') state.active = turn;
       this.present(turn);
       if (
@@ -1345,9 +1827,7 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private timed(turn: RuntimeDurableTurn): RuntimeDurableTurn {
-    const approvals = this.approvalWaits.get(
-      executionKey(turn.identity.sessionId, turn.identity.requestId),
-    );
+    const approvals = this.approvalWaits.get(executionKey(turn.identity, turn.identity.requestId));
     if (!approvals?.length || !turn.timing) return turn;
     return {
       ...turn,
@@ -1364,39 +1844,49 @@ export class DurableAgentHost implements AgentProtocol {
   }
 
   private presentSettled(turn: RuntimeDurableTurn) {
-    const sessionId = turn.identity.sessionId;
-    const state = this.live.get(sessionId);
+    if (turn.status === 'queued' || (turn.status === 'cancelled' && turn.inputBoundary === null))
+      return;
+    const lane = turn.identity;
+    const { sessionId } = lane;
+    const state = this.live.get(laneKey(lane));
     this.publishRows(turn);
-    if (turn.status === 'queued') return;
     const view = projectDurableHostTurn(turn);
     const projected = state ? this.turnStatus(view.turn, state) : view.turn;
     const terminal = turn.status !== 'running';
+    // Another answer of the same Session still runs: it keeps the Session busy.
+    const sibling = terminal
+      ? this.liveStates(sessionId).find((candidate) => candidate !== state && candidate.active)
+      : undefined;
+    if (sibling) this.publishCurrentStatus(sessionId, sibling);
     // Cherry settlement can finish after Pi has already started the next queued input.
-    if (
+    else if (
       !terminal ||
       !state?.active ||
       state.active.identity.requestId === turn.identity.requestId
-    ) {
-      this.publish(sessionId, { type: 'turn.updated', turn: projected });
-      this.setStatus(sessionId, { turnId: projected.id, status: projected.status });
-    }
+    )
+      this.publishTurn(sessionId, state, projected, !terminal);
     if (!terminal) {
       if (state?.background && state.backgroundRequestId !== turn.identity.requestId) {
         state.background.retire();
         state.background = null;
         state.backgroundRequestId = null;
       }
-      if (state && !state.background)
+      // One background reply per Session, even while several answers run.
+      if (
+        state &&
+        !state.background &&
+        !this.liveStates(sessionId).some((candidate) => candidate.background)
+      )
         this.track(
           (async () => {
             const session = await this.store.getSession(sessionId);
-            const prepared = this.prepared.get(executionKey(sessionId, turn.identity.requestId));
+            const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
             const agent =
               prepared?.plan.agent ??
               (session ? await this.ports.agents.getAgent(session.agentId) : null);
             if (
               !agent ||
-              state.background ||
+              this.liveStates(sessionId).some((candidate) => candidate.background) ||
               state.active?.identity.requestId !== turn.identity.requestId
             )
               return;
@@ -1408,26 +1898,30 @@ export class DurableAgentHost implements AgentProtocol {
               onInterrupt: () => this.suspend(),
             });
             state.backgroundRequestId = turn.identity.requestId;
+            state.backgroundCompleted = false;
             if (view.assistant) state.background.update(view.assistant);
           })(),
         );
       if (view.assistant) state?.background?.update(view.assistant);
     } else {
-      if (state?.backgroundRequestId === turn.identity.requestId) {
-        state.background?.finish(
-          turn.status === 'completed'
-            ? 'completed'
-            : turn.status === 'cancelled'
-              ? 'cancelled'
-              : 'failed',
+      if (state?.backgroundRequestId === turn.identity.requestId) this.passBackground(state, turn);
+      else if (turn.status === 'completed') {
+        const holder = this.liveStates(sessionId).find(
+          (candidate) => candidate !== state && candidate.background,
         );
-        state.background = null;
-        state.backgroundRequestId = null;
+        if (holder) holder.backgroundCompleted = true;
       }
-      const prepared = this.prepared.get(executionKey(sessionId, turn.identity.requestId));
-      this.prepared.delete(executionKey(sessionId, turn.identity.requestId));
-      this.approvalWaits.delete(executionKey(sessionId, turn.identity.requestId));
-      if (turn.status === 'completed' && prepared && !prepared.plan.hasMessages && view.assistant)
+      const prepared = this.prepared.get(executionKey(lane, turn.identity.requestId));
+      this.prepared.delete(executionKey(lane, turn.identity.requestId));
+      this.approvalWaits.delete(executionKey(lane, turn.identity.requestId));
+      // Only the first question's leading answer names the Session.
+      if (
+        turn.status === 'completed' &&
+        lane.slot === 0 &&
+        prepared &&
+        !prepared.plan.hasMessages &&
+        view.assistant
+      )
         this.renameFrom(
           this.naming.maybeRenameFromConversationSummary({
             sessionId,
@@ -1439,13 +1933,46 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  /**
+   * The background reply of a Session outlives the answer it started with: iOS and
+   * Android 12+ cannot start it again from the background. A still-running answer of
+   * the question takes it over; the last one to end finishes it, completed when any
+   * answer completed and otherwise with its own outcome.
+   */
+  private passBackground(state: LiveSession, turn: RuntimeDurableTurn) {
+    const { background } = state;
+    const completed = state.backgroundCompleted || turn.status === 'completed';
+    state.background = null;
+    state.backgroundRequestId = null;
+    state.backgroundCompleted = false;
+    if (!background) return;
+    const heir = this.liveStates(state.lane.sessionId).find(
+      (candidate) => candidate !== state && candidate.active && !candidate.background,
+    );
+    if (heir?.active) {
+      heir.background = background;
+      heir.backgroundRequestId = heir.active.identity.requestId;
+      heir.backgroundCompleted = completed;
+      background.setInteraction(undefined);
+      const assistant = projectDurableHostTurn(heir.active).assistant ?? undefined;
+      if (assistant) background.update(assistant);
+      this.updateBackgroundInteraction(state.lane.sessionId, heir);
+      return;
+    }
+    background.finish(
+      completed ? 'completed' : turn.status === 'cancelled' ? 'cancelled' : 'failed',
+    );
+  }
+
   private publishRows(turn: RuntimeDurableTurn) {
     const { user, assistant } = projectDurableHostTurn(turn);
-    const sessionId = turn.identity.sessionId;
-    const state = this.live.get(sessionId);
+    const { sessionId } = turn.identity;
+    const state = this.live.get(laneKey(turn.identity));
     if (!state?.users.has(user.id)) {
+      // The answers of one question share it: the Session shows it once.
+      const shown = this.liveStates(sessionId).some((candidate) => candidate.users.has(user.id));
       state?.users.add(user.id);
-      this.publish(sessionId, { type: 'message.created', message: user });
+      if (!shown) this.publish(sessionId, { type: 'message.created', message: user });
     }
     if (!assistant) return;
     const terminal = turn.status !== 'running' && turn.status !== 'queued';
@@ -1507,13 +2034,38 @@ export class DurableAgentHost implements AgentProtocol {
   }
   private publishCurrentStatus(sessionId: string, state: LiveSession) {
     if (!state.active) return;
-    const turn = this.turnStatus(projectDurableHostTurn(state.active).turn, state);
+    this.publishTurn(
+      sessionId,
+      state,
+      this.turnStatus(projectDurableHostTurn(state.active).turn, state),
+    );
+  }
+  /**
+   * Publishes a copy's turn. Streamed updates republish only a changed view: answers
+   * of one question run on several copies, and alternating their unchanged views
+   * would refresh every observer on each delta.
+   */
+  private publishTurn(
+    sessionId: string,
+    state: LiveSession | undefined,
+    turn: AgentTurnView,
+    changedOnly = false,
+  ) {
+    const previous = state?.turn;
+    if (
+      changedOnly &&
+      previous &&
+      Object.keys(previous).length === Object.keys(turn).length &&
+      (Object.keys(turn) as (keyof AgentTurnView)[]).every((key) => previous[key] === turn[key])
+    )
+      return;
+    if (state) state.turn = turn.endedAt === null ? turn : null;
     this.publish(sessionId, { type: 'turn.updated', turn });
     this.setStatus(sessionId, { turnId: turn.id, status: turn.status });
   }
 
-  private async waitForOwner(sessionId: string, requestId: string, signal: AbortSignal) {
-    const state = await this.attach(sessionId);
+  private async waitForOwner(lane: RuntimeLane, requestId: string, signal: AbortSignal) {
+    const state = await this.attach(lane);
     signal.throwIfAborted();
     if (state.active?.identity.requestId === requestId) return;
     let resolve!: () => void;
@@ -1607,8 +2159,7 @@ export class DurableAgentHost implements AgentProtocol {
     if (
       this.deleting.has(sessionId) ||
       this.admissions.has(sessionId) ||
-      this.live.get(sessionId)?.active ||
-      this.live.get(sessionId)?.queue.length ||
+      this.busyLanes(sessionId).length ||
       this.settlements.has(sessionId)
     )
       fail('SESSION_BUSY', 'The session has unfinished work.');
@@ -1676,6 +2227,31 @@ export class DurableAgentHost implements AgentProtocol {
     }
   }
 
+  private queuedInputs(queue: readonly RuntimeDurableTurn[]): AgentQueuedInput[] {
+    return queue.map((turn) => ({
+      turnId: turn.identity.turnId,
+      userMessage: projectDurableHostTurn(turn).user,
+      assistantMessageId: turn.assistantMessageId,
+    }));
+  }
+
+  private updateQueue(state: LiveSession, queue: readonly RuntimeDurableTurn[]) {
+    if (
+      state.queue.length === queue.length &&
+      state.queue.every(
+        (turn, index) => turn.identity.requestId === queue[index].identity.requestId,
+      )
+    )
+      return;
+    const { sessionId } = state.lane;
+    this.recordQueue(sessionId, queue, state.queue);
+    state.queue = queue;
+    this.publish(sessionId, {
+      type: 'queue.updated',
+      inputs: this.queuedInputs(this.liveStates(sessionId).flatMap((candidate) => candidate.queue)),
+    });
+  }
+
   private async traceOperation<Value>(
     name:
       | 'ai.admission'
@@ -1717,8 +2293,79 @@ function fail(
     retryable: code === 'SESSION_BUSY' || code === 'EXECUTION_UNAVAILABLE',
   });
 }
-function executionKey(sessionId: string, requestId: string) {
-  return `${sessionId}:${requestId}`;
+/** Keyed by copy: answers of one question share a turn but never a copy and request. */
+function executionKey(lane: RuntimeLane, requestId: string) {
+  return `${laneKey(lane)}:${requestId}`;
+}
+
+/**
+ * Runs one step of every answer together. The first failure stops the others and
+ * is rethrown once all have settled, so no step outlives the admission.
+ */
+async function eachAnswer<Item, Result>(
+  items: readonly Item[],
+  signal: AbortSignal,
+  run: (item: Item, index: number, signal: AbortSignal) => Promise<Result>,
+): Promise<Result[]> {
+  const controller = new AbortController();
+  const stop = () => controller.abort(signal.reason);
+  if (signal.aborted) stop();
+  else signal.addEventListener('abort', stop, { once: true });
+  let failure: { error: unknown } | undefined;
+  const results = await Promise.all(
+    items.map((item, index) =>
+      run(item, index, controller.signal).catch((error: unknown) => {
+        failure ??= { error };
+        controller.abort(error);
+        return undefined;
+      }),
+    ),
+  ).finally(() => signal.removeEventListener('abort', stop));
+  if (failure) throw failure.error;
+  return results as Result[];
+}
+
+/** Answers of one question read each managed image once and share its bytes. */
+function sharedImageReads(
+  files: Pick<ManagedFileResolver, 'readAsDataUrl'>,
+): Pick<ManagedFileResolver, 'readAsDataUrl'> {
+  const reads = new Map<string, Promise<string | undefined>>();
+  return {
+    readAsDataUrl: (file, signal) => {
+      let read = reads.get(file.fileEntryId);
+      if (!read) reads.set(file.fileEntryId, (read = files.readAsDataUrl(file, signal)));
+      return read;
+    },
+  };
+}
+
+/** Whether `a`'s model keeps more of a rebuilt history than `b`'s: images, then context. */
+function keepsMoreHistory(a: ReplyTarget, b: ReplyTarget) {
+  const images = (target: ReplyTarget) =>
+    target.plan.modelPreflight?.inputModalities.includes('image') === true;
+  if (images(a) !== images(b)) return images(a);
+  return (
+    (a.plan.modelPreflight?.maxInputTokens ?? 0) > (b.plan.modelPreflight?.maxInputTokens ?? 0)
+  );
+}
+
+/** The question's answers in requested order; the first uses the composer's model. */
+function replyTargets(input: AgentSubmitMessageInput | AgentStartSessionInput) {
+  const answers = [
+    {
+      assistantMessageId: input.assistantMessageId,
+      ...(input.modelId ? { modelId: input.modelId } : {}),
+    },
+    ...(input.additionalReplies ?? []),
+  ];
+  if (answers.length > 1) {
+    const models = answers.map((answer) => answer.modelId);
+    if (models.some((model) => !model) || new Set(models).size !== models.length)
+      fail('CAPABILITY_UNSUPPORTED', 'Each parallel answer needs a different model.');
+    if (new Set(answers.map((answer) => answer.assistantMessageId)).size !== answers.length)
+      fail('MESSAGE_NOT_FOUND', 'Each parallel answer needs its own message id.');
+  }
+  return answers;
 }
 
 function configurationKey(configuration: RuntimeConversationSeed['configuration']) {
@@ -1734,10 +2381,12 @@ function configurationKey(configuration: RuntimeConversationSeed['configuration'
       displayName: tool.displayName,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
       inputPreview: tool.inputPreview,
       approval: tool.approval,
       failureGroup: tool.failureGroup,
       autoApprovalEligible: tool.autoApprovalEligible,
+      deferred: tool.deferred,
     })),
     webTools: configuration.webTools,
   };
@@ -1758,7 +2407,7 @@ function sameRef(left: RuntimeToolRef, right: RuntimeToolRef) {
         left.rawToolName === right.rawToolName)
   );
 }
-/** Explicit Skill selections and the find-and-install action recorded on a submitted message. */
+/** Explicit Skill selections and app-owned Skill actions recorded on a submitted message. */
 function submittedSkills(parts: AgentMessageView['parts']) {
   const text = parts.flatMap((part) => (part.type === 'text' ? [part] : []));
   const skillIds = text.flatMap((part) =>
@@ -1782,6 +2431,7 @@ function userInput(parts: AgentMessageView['parts']): AgentInputPart[] {
           text: part.text,
           ...(part.pluginReferences ? { pluginReferences: part.pluginReferences } : {}),
           ...(part.skillReferences ? { skillReferences: part.skillReferences } : {}),
+          ...(part.selectionReferences ? { selectionReferences: part.selectionReferences } : {}),
         }),
       ];
     if (part.type === 'file')

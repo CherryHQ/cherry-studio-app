@@ -1,6 +1,6 @@
 import { FallbackPreview } from '../components/fallback-preview';
 import { ImagePreview } from '../components/image-preview';
-import { QuickLookPreview } from '../components/quick-look-preview.ios';
+import { QuickLookPreview } from '../components/quick-look-preview/quick-look-preview.ios';
 import * as android from '../default-plugins/default-plugins.android';
 import * as ios from '../default-plugins/default-plugins.ios';
 
@@ -9,7 +9,9 @@ jest.mock('../components/fallback-preview', () => ({
   FilePreviewUnavailable: () => null,
 }));
 jest.mock('../components/image-preview', () => ({ ImagePreview: () => null }));
-jest.mock('../components/quick-look-preview.ios', () => ({ QuickLookPreview: () => null }));
+jest.mock('../components/quick-look-preview/quick-look-preview.ios', () => ({
+  QuickLookPreview: () => null,
+}));
 
 describe('default file preview plugins', () => {
   it('renders images the same way on both platforms', () => {

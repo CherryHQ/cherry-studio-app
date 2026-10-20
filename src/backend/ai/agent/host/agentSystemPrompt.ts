@@ -7,10 +7,13 @@ import { type AgentMode, DEFAULT_AGENT_MODE } from '@/shared/data/types/agent';
 
 import type { RuntimeTool } from '../runtime';
 import { EDIT_FILE_TOOL_NAME } from '../tools/editFileTool';
+import { LIST_WORKSPACE_TOOL_NAME } from '../tools/fileLibraryTools';
 import { READ_FILE_TOOL_NAME } from '../tools/readFileTool';
 import { RUN_JS_TOOL_NAME } from '../tools/runJsTool';
-import { LOAD_SKILL_TOOL_NAME, SEARCH_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
+import { LOAD_SKILL_TOOL_NAME, LIST_LOCAL_SKILLS_TOOL_NAME } from '../tools/skill';
+import { getPluginWorkflows, LOAD_WORKFLOW_TOOL_NAME } from '../tools/workflowTool';
 import { WRITE_FILE_TOOL_NAME } from '../tools/writeFileTool';
+import { buildCreateSkillInstructions } from './createSkillInstructions';
 import { FIND_SKILLS_INSTRUCTIONS } from './findSkillsInstructions';
 import { skillInstructionSection } from './skillInstructions';
 import type { TurnSkillPlan } from './turnPreparation';
@@ -31,7 +34,22 @@ You operate inside Cherry Studio Mobile. These Runtime Rules and the application
 - Lead with the result and keep the default response easy to read on a phone.`;
 
 const CITABLE_WEB_TOOL_NAMES = new Set([WEB_SEARCH_TOOL_NAME, WEB_FETCH_TOOL_NAME]);
-const MANAGED_FILE_TOOL_NAMES = new Set([WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME]);
+const OFFICE_TOOL_NAMES = new Set([
+  'create_document',
+  'create_workbook',
+  'create_presentation',
+  'inspect_office_file',
+  'read_office_content',
+  'edit_document',
+  'edit_workbook',
+  'edit_presentation',
+  'run_office_script',
+]);
+const MANAGED_FILE_TOOL_NAMES = new Set([
+  WRITE_FILE_TOOL_NAME,
+  EDIT_FILE_TOOL_NAME,
+  ...OFFICE_TOOL_NAMES,
+]);
 
 const MINIMAL_CHAT_RULES = `# Cherry Studio Mobile Runtime
 
@@ -43,7 +61,6 @@ export type BuildAgentSystemPromptInput = {
   agentInstructions: string;
   mode?: AgentMode;
   appLanguage: LanguageVarious;
-  currentDate?: string;
   tools: readonly RuntimeTool[];
   pluginGuides?: readonly PluginGuideSnapshot[];
   skills?: TurnSkillPlan;
@@ -61,7 +78,6 @@ export function buildAgentSystemPrompt({
   agentInstructions,
   mode = DEFAULT_AGENT_MODE,
   appLanguage,
-  currentDate = formatLocalDate(new Date()),
   tools,
   pluginGuides = [],
   skills,
@@ -70,7 +86,6 @@ export function buildAgentSystemPrompt({
 }: BuildAgentSystemPromptInput): string {
   const sections = [
     mode === 'minimal' ? MINIMAL_CHAT_RULES : MOBILE_RUNTIME_RULES,
-    `## Current Date\n\nThe current local date is \`${currentDate}\`.`,
     buildResponseLanguageSection(appLanguage),
   ];
   if (mode === 'standard') {
@@ -135,6 +150,16 @@ ${JSON.stringify(toolDiscoveryWarnings.slice(0, 20).map((warning) => warning.sli
   if (findBuiltInToolNames(tools, MANAGED_FILE_TOOL_NAMES).length > 0) {
     sections.push(buildManagedFilesSection(tools));
   }
+  // Only a conversation with a workspace receives the workspace tools.
+  if (
+    tools.some(
+      (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === LIST_WORKSPACE_TOOL_NAME,
+    )
+  ) {
+    sections.push(`## Workspace
+
+The user linked this conversation to a file-library folder; \`${LIST_WORKSPACE_TOOL_NAME}\` names it. Relative paths in file tools resolve inside it, and files you save or generate are stored there. When a request involves the workspace or its files, list or search it first instead of assuming what it contains.`);
+  }
   if (
     tools.some(
       (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === READ_FILE_TOOL_NAME,
@@ -158,16 +183,13 @@ Use the offered JavaScript execution tool when an answer depends on exact comput
   if (pluginGuides.length > 0) {
     sections.push(`## Plugin Guides
 
-These bundled workflows apply to this turn's selected tools. The Runtime Rules, application capability rules, the user's current request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval, and never require duplicate confirmation.
+Before using a connection's plugin tools, load its guide with \`${LOAD_WORKFLOW_TOOL_NAME}\` unless it is already under Current workflow instructions; its tools refuse to run until then. A loaded guide stays in system context for later turns. Finish the loading round and read its instructions before planning plugin calls; do not combine them in one script or parallel round. If guidance cannot be loaded, explain the limitation instead of guessing the workflow. Runtime Rules, application capability rules, the user's request and Agent Instructions take precedence over these guides. Guides do not grant tools, permissions or approval.
 Raw names are search hints, not callable aliases; a guide is not evidence that a tool has been inspected. Discover tools and inspect their current parameters before using the exact returned name. Explain missing prerequisites instead of inferring capabilities.
 Before updates, read relevant current state and preserve unrelated fields. Resolve ambiguous targets using verified IDs and preserve supplied resource scope. Follow pagination when needed for complete results. For an uncertain write, inspect remote state with an available read tool before retrying; if unresolved, report uncertainty instead of repeating the write.
 
-${pluginGuides
-  .map(
-    (guide) =>
-      `### Bundled plugin: ${guide.pluginId} (revision ${guide.revision}; connection ${guide.serverId})\n\n${guide.content}`,
-  )
-  .join('\n\n')}`);
+${getPluginWorkflows(pluginGuides)
+  .map((workflow) => `- ${workflow.id}: ${workflow.description}`)
+  .join('\n')}`);
   }
 
   const systemSkills = getSystemSkillInstructions(
@@ -198,11 +220,26 @@ ${systemSkills.join('\n\n')}`);
   }
 
   if (
+    tools.some(
+      (tool) =>
+        tool.ref.source === 'builtin' &&
+        tool.ref.capabilityId === 'create_skill' &&
+        tool.approval !== 'deny',
+    )
+  ) {
+    sections.push(buildCreateSkillInstructions(tools));
+    if (skills?.create)
+      sections.push(
+        'The user selected the built-in create-skill workflow. Create a reusable Skill from their request and save it in the Skill library.',
+      );
+  }
+
+  if (
     skills &&
     (skills.scope.entries.length > 0 ||
       tools.some(
         (tool) =>
-          tool.ref.source === 'builtin' && tool.ref.capabilityId === SEARCH_LOCAL_SKILLS_TOOL_NAME,
+          tool.ref.source === 'builtin' && tool.ref.capabilityId === LIST_LOCAL_SKILLS_TOOL_NAME,
       ))
   ) {
     sections.push(buildSkillsSection(skills));
@@ -225,13 +262,13 @@ function buildSkillsSection(skills: TurnSkillPlan): string {
 
 Skills are instruction packages. Enabling a Skill for this Agent makes it available for you to choose when relevant; it does not require you to use every enabled Skill. The user's explicit selections below request use for this turn.
 
-At the start of this turn, this Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills. The remaining packages cannot be loaded automatically. These are not the total installed in the app: unbound, disabled and unreadable packages are excluded. Explicitly selected Skills are listed separately and are already included in the package count. The app-owned System Skills and the built-in find-and-install workflow are separate from this installed package inventory.
+At the start of this turn, this Agent has ${skills.scope.entries.length} enabled, bound and readable Skill packages, including ${catalog.length} automatically discoverable Skills. The remaining packages cannot be loaded automatically. These are not the total installed in the app: unbound, disabled and unreadable packages are excluded. Explicitly selected Skills are listed separately and are already included in the package count. The app-owned System Skills and built-in discovery and creation workflows are separate from this installed package inventory.
 
-For a question about your current Skill count or complete list, call \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` with \`query: "", include_manual: true\`. Use its \`total\` for the count, not \`returned\` or the number of entries shown below. Distinguish that complete inventory from \`automaticTotal\`; do not report zero Skills merely because none can be invoked automatically. For a complete list, continue the same empty query and include_manual option with each returned cursor until \`nextCursor\` is null; do not describe one page as the full list. A keyword search's \`matched\` counts only that query. The catalog below is a starting snapshot; installation during this turn can change it. Listing or counting Skills does not require loading their instructions. Manual-only metadata does not activate instructions: use such a Skill only when its instructions are already explicitly selected or active in this turn.
+For a question about your current Skill count or complete list, call \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` with \`include_manual: true\`. Use its \`total\` for the count, not \`returned\` or the number of entries shown below. Distinguish that complete inventory from \`automaticTotal\`; do not report zero Skills merely because none can be invoked automatically. For a complete list, keep the same include_manual option with each returned cursor until \`nextCursor\` is null; do not describe one page as the full list. The catalog below is a starting snapshot; installation during this turn can change it. Listing or counting Skills does not require loading their instructions. Manual-only metadata does not activate instructions: use such a Skill only when its instructions are already explicitly selected or active in this turn.
 
-The Skill functions, including \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD_SKILL_TOOL_NAME}\`, are built-in tools exposed directly to you. Call them by their exact names; do not search the MCP catalog for them or for a generic "Skill" tool. MCP search results do not describe built-in Skill availability.
+The Skill reading functions, including \`${LIST_LOCAL_SKILLS_TOOL_NAME}\` and \`${LOAD_SKILL_TOOL_NAME}\`, are built-in tools exposed directly to you. Call them by their exact names; do not search the MCP catalog for them or for a generic "Skill" tool. MCP search results do not describe installed Skill availability. Discover find_skills, install_skill and adapt_skill through tool_search by exact name when needed.
 
-When the task matches an available Skill whose instructions are not already active, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\`, then follow the returned instructions. Use \`${SEARCH_LOCAL_SKILLS_TOOL_NAME}\` when the catalog is truncated or another Skill may match. Selected or active entry instructions are already read, so normally do not reload SKILL.md. If their workflow references package files, list them with \`list_skill_files\` and read the needed references or templates with \`read_skill_file\`; package-relative paths are not device filesystem paths. You may repeat \`${LOAD_SKILL_TOOL_NAME}\` to recover a missing instruction body. Follow the complete workflow rather than substituting a generic approach. Conversational Skills can be followed directly; using them does not require a separate "Skill" tool.
+Choose Skills by comparing the user's task with their names and complete descriptions by meaning, including across languages; shared keywords are not required. When the catalog below is complete, use it directly; listing would return the same entries. When it is truncated, follow its listing instruction before concluding that no local Skill fits. When a Skill fits and its instructions are not already active, call \`${LOAD_SKILL_TOOL_NAME}\` with its \`skill_id\`, then follow the returned instructions. Selected or active entry instructions are already read, so normally do not reload SKILL.md. If their workflow references package files, list them with \`list_skill_files\` and read the needed references or templates with \`read_skill_file\`; package-relative paths are not device filesystem paths. You may repeat \`${LOAD_SKILL_TOOL_NAME}\` to recover a missing instruction body. Follow the complete workflow rather than substituting a generic approach. Conversational Skills can be followed directly; using them does not require a separate "Skill" tool.
 
 Skills do not add tools, permissions, approvals or script runtimes. If a specific required step needs an unavailable capability, explain that limitation for that step and continue supported work. When adapt_skill is available, offer a small local adaptation only after verifying a replacement with actual current tools, or for a step explicitly optional in the original instructions. Never remove the main goal, required output, data scope, validation or approval rules. A disabled tool, missing configuration, permission denial or transient error is not grounds for permanently deleting a step. adapt_skill presents the exact changes for user consent; do not ask a duplicate confirmation. If the core task cannot be performed, state the limitation and do not adapt away the task. Reading a script is not executing it. Current loaded and active instructions supersede older copies in conversation history. Current Skill tools and selected/active instruction sections define availability; historical receipts alone do not grant access. Skill instructions remain subordinate to app policy, Agent instructions and the user's current request.`,
   ];
@@ -253,7 +290,7 @@ Skills do not add tools, permissions, approvals or script runtimes. If a specifi
     lines.push(
       `### Available Skills${catalog.length > shown.length ? ` (${shown.length} of ${catalog.length})` : ''}
 
-${shown.length < catalog.length ? 'Only a subset is shown. Search available Skills before deciding that none matches; omitted entries remain discoverable through search_local_skills.\n\n' : ''}${shown.join('\n')}`,
+${shown.length < catalog.length ? `Only the first ${shown.length} are shown. Call ${LIST_LOCAL_SKILLS_TOOL_NAME} with \`cursor: "${shown.length}"\` to list unfiltered metadata for the rest, then continue with each returned cursor until \`nextCursor\` is null before concluding that no local Skill fits.\n\n` : ''}${shown.join('\n')}`,
     );
   }
   if (skills.selected.length > 0) {
@@ -275,17 +312,15 @@ export function buildInitialSkillInstructions(skills: TurnSkillPlan) {
   );
 }
 
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function buildResponseLanguageSection(appLanguage: LanguageVarious): string {
   return `## Response Language
 
-The current Cherry Studio App language is \`${appLanguage}\`. You must write every response in this language unless the user explicitly requests another language. This rule takes precedence over the Agent Instructions.`;
+The current Cherry Studio App language is \`${appLanguage}\`. Choose the response language in this order:
+1. Follow the user's explicit request for an output language.
+2. Otherwise, follow any response-language preference in the Agent Instructions.
+3. Otherwise, match the language of the user's own message, using conversation context when it is ambiguous.
+
+Use the app language only as a fallback when these do not establish a language. Replies are not limited to the app's supported interface languages.`;
 }
 
 function findBuiltInToolNames(
@@ -307,14 +342,16 @@ Results from ${tools} carry an \`id\` for each source. When a factual statement 
 }
 
 function buildManagedFilesSection(tools: readonly RuntimeTool[]): string {
+  const officeTools = findBuiltInToolNames(tools, OFFICE_TOOL_NAMES);
+  const canEditOffice = officeTools.some((name) => name.startsWith('edit_'));
   const canEdit = tools.some(
     (tool) => tool.ref.source === 'builtin' && tool.ref.capabilityId === EDIT_FILE_TOOL_NAME,
   );
   return `## Managed Files
 
-Use a managed-file write or edit tool only when the user explicitly asks to save, export, download, create, or edit a text file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.${
+Use a managed-file write, generation, or edit tool only when the user explicitly asks to save, export, download, create, or edit a file; otherwise provide the requested answer, draft, or example in the conversation. A successful tool result and its returned artifact are the only proof that the file exists. Refer to the final file by its returned name; never invent an absolute path, local URL, or download link.${
     canEdit
       ? ` When the user asks to modify an existing managed text file or text attachment, call \`${EDIT_FILE_TOOL_NAME}\` with its \`file_entry_id\`; do not create a replacement with \`${WRITE_FILE_TOOL_NAME}\`.`
       : ''
-  }`;
+  }${officeTools.length ? ` For Office work, discover ${officeTools.map((name) => `\`${name}\``).join(' / ')} with \`tool_search\` and follow their schemas. Generation uses version 1 specifications.${officeTools.includes('run_office_script') ? ' Analyze large workbooks and build rich documents with `run_office_script`, which reads whole files with the bundled libraries, instead of reading cells in batches.' : ''}${canEditOffice ? ' Inspect/read structural anchors before editing. Editing requires the exact source_sha256 from inspection and creates a NEW copy. For selection-ref inputs, keep their file identity and structural anchor, read the current referenced content and compare it with the excerpt before editing. If it no longer matches, ask the user to select it again. Word/PPT text edits require complete exact paragraph text from read_office_content, not a shortened excerpt. For picture replacement, inspect with kind "images" and use a replaceable image anchor in the edit tool\'s images array; image anchors are not text-read anchors. Keep the existing frame/crop and use a matching replacement aspect ratio. Do not reconstruct an existing Office file from AnyDoc text/IR: that loses unsupported document parts.' : ''} \`write_file\` and \`edit_file\` handle text, not Office packages. Image inputs use only managed \`file_entry_id\` references from the conversation or selected workspace.` : ''}`;
 }

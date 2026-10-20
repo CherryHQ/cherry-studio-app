@@ -20,7 +20,16 @@ export const entityId = z.string().min(1).max(512);
 export const optionalEntityId = z.string().max(512);
 
 export const isoDate = z.iso.datetime({ offset: true });
-export const optionalIsoDate = z.union([z.literal(''), isoDate]);
+// A union's empty-string literal can become an empty enum in sub2api, which
+// Gemini rejects. Keep the provider schema a string and validate dates locally.
+export const optionalIsoDate = z
+  .string()
+  .refine((value) => value === '' || isoDate.safeParse(value).success, {
+    message: 'Must be an ISO 8601 date-time with a timezone, or an empty string.',
+  })
+  .describe(
+    'ISO 8601 date-time with a timezone (Z or an offset), or an empty string if not provided.',
+  );
 
 export function limit(max: number) {
   return z

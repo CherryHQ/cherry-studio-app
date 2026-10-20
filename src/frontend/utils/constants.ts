@@ -55,14 +55,6 @@ export const aiUsageCalendar = {
   enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },
 } as const;
 
-// Painting viewer (fullscreen image viewer) tuning knobs.
-export const paintingViewer = {
-  // Resize menu options; each seeds the composer with a "change aspect ratio"
-  // prompt. Ratios are limited to those with a matching `rectangle.ratio.*.to.*`
-  // SF Symbol so the iOS menu can show a native aspect-ratio glyph per item.
-  aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
-} as const;
-
 export const appSidebar = {
   maxWidth: 400,
   sceneRevealWidth: 64, // chat strip left visible beside the open drawer (as in ChatGPT); tap to close

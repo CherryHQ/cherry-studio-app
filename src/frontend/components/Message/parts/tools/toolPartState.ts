@@ -1,3 +1,5 @@
+import { GENERATE_IMAGE_TOOL_NAME } from '@cherrystudio/universal/ai/builtinTools';
+
 import type { AgentToolInputPreview, AgentToolProgress } from '@/shared/contracts/agent';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
@@ -6,6 +8,9 @@ export type ToolMessagePart = Extract<
   { type: 'dynamic-tool' | `tool-${string}` }
 > & {
   inputPreview?: AgentToolInputPreview;
+  /** Host-issued Apps linkage from the canonical tool result, never remote result JSON. */
+  mcpApp?: import('@/shared/contracts/mcpApp').McpAppReference;
+  mcpSource?: import('@/shared/contracts/mcpContent').McpResultSource;
   progress?: AgentToolProgress;
   /** Original failure code retained by the chat's presentation projection. */
   errorCode?: string;
@@ -62,6 +67,18 @@ export function isUserQuestionToolPart(part: ToolMessagePart) {
 /** Local edits must be visible even when the completed process disclosure is closed. */
 export function isSkillAdaptationToolPart(part: ToolMessagePart) {
   return getToolName(part) === 'adapt_skill';
+}
+
+/**
+ * An approved `generate_image` call still running: the image it will produce is
+ * the outcome, so its placeholder belongs where that image will land.
+ */
+export function isGeneratingImageToolPart(part: ToolMessagePart) {
+  return (
+    getToolName(part) === GENERATE_IMAGE_TOOL_NAME &&
+    (part.state === 'input-available' ||
+      (part.state === 'approval-responded' && part.approval.approved))
+  );
 }
 
 /** A built-in Agent write whose saved definition is a result worth showing inline. */

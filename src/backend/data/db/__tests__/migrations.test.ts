@@ -6,6 +6,234 @@ type MigrationJournal = {
 };
 
 describe('bundled SQLite migrations', () => {
+  test('turns each linear transcript into one branch selected at its newest message', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0012_message_tree',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, runtime_revision, last_activity_at, created_at, updated_at)
+        VALUES ('linear', 'agent', 3, 4, 1, 4), ('empty', 'agent', 0, 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES
+          ('b-answer', 'linear', 't1', 'assistant', '{"parts":[]}', 'success', 2, 2),
+          ('a-question', 'linear', 't1', 'user', '{"parts":[]}', 'success', 2, 2),
+          ('c-question', 'linear', 't2', 'user', '{"parts":[]}', 'success', 3, 3),
+          ('d-answer', 'linear', 't2', 'assistant', '{"parts":[]}', 'success', 4, 4);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare(
+            'SELECT id, parent_id, siblings_group_id FROM agent_session_message ORDER BY created_at, id',
+          )
+          .all(),
+      ).toEqual([
+        { id: 'a-question', parent_id: null, siblings_group_id: 0 },
+        { id: 'b-answer', parent_id: 'a-question', siblings_group_id: 0 },
+        { id: 'c-question', parent_id: 'b-answer', siblings_group_id: 0 },
+        { id: 'd-answer', parent_id: 'c-question', siblings_group_id: 0 },
+      ]);
+      expect(
+        database
+          .prepare('SELECT id, active_node_id, runtime_revision FROM agent_session ORDER BY id')
+          .all(),
+      ).toEqual([
+        { id: 'empty', active_node_id: null, runtime_revision: 0 },
+        { id: 'linear', active_node_id: 'd-answer', runtime_revision: 3 },
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('adds logical identities without renaming legacy duplicates or dropping trash history', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0011_file_library',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('one', 'Report.md', 'text/markdown', 5, 1, 1, NULL), ('two', 'Report.md', 'text/markdown', 5, 2, 2, 123);`);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(
+        database
+          .prepare('SELECT id, filename, library_file_id, trashed_with FROM file_entry ORDER BY id')
+          .all(),
+      ).toEqual([
+        { id: 'one', filename: 'Report.md', library_file_id: 'one', trashed_with: null },
+        { id: 'two', filename: 'Report.md', library_file_id: 'two', trashed_with: 'two' },
+      ]);
+      expect(
+        database
+          .prepare(
+            'SELECT id, folder_id, current_entry_id, deleted_at FROM library_file ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        { id: 'one', folder_id: null, current_entry_id: 'one', deleted_at: null },
+        { id: 'two', folder_id: null, current_entry_id: 'two', deleted_at: 123 },
+      ]);
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('indexes file trash without changing existing history or file deletion marks', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0010_fearless_jubilee',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`
+        INSERT INTO agent (id, name, order_key, created_at, updated_at) VALUES ('agent', 'Chat', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, name, last_activity_at, created_at, updated_at)
+        VALUES ('session', 'agent', 'Keep history', 2, 1, 2);
+        INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at)
+        VALUES ('message', 'session', 'user', '{"parts":[]}', 'success', 1, 1);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('file', 'notes.txt', 'text/plain', 5, 1, 1, 123);
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT name, last_activity_at FROM agent_session').get()).toEqual({
+        name: 'Keep history',
+        last_activity_at: 2,
+      });
+      expect(database.prepare('SELECT data FROM agent_session_message').get()).toEqual({
+        data: '{"parts":[]}',
+      });
+      expect(database.prepare('SELECT deleted_at FROM file_entry').get()).toEqual({
+        deleted_at: 123,
+      });
+      expect(columnNames(database, 'agent_session')).not.toContain('deleted_at');
+      expect(indexNames(database, 'file_entry')).toContain('fe_deleted_at_idx');
+      expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  test('places every existing painting on its own board and cascades board deletion', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0009_painting_boards',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      const paintingFiles = '{"input":["file-in"],"output":["file-out"]}';
+      database.exec(`
+        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
+        VALUES
+          ('first', 'cherryin', 'cherryin::gpt-image-2', '  A cat wearing sunglasses at golden hour on the beach  ', 'a0', 10, 20, '${paintingFiles}'),
+          ('second', 'cherryin', NULL, 'Snow', 'a1', 30, 40, '{"input":[],"output":[]}');
+      `);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+
+      expect(
+        database
+          .prepare(
+            'SELECT id, board_id, prompt, brief, order_key, created_at, updated_at, files FROM painting ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          board_id: 'first',
+          brief: null,
+          created_at: 10,
+          files: paintingFiles,
+          id: 'first',
+          order_key: 'a0',
+          prompt: '  A cat wearing sunglasses at golden hour on the beach  ',
+          updated_at: 20,
+        },
+        {
+          board_id: 'second',
+          brief: null,
+          created_at: 30,
+          files: '{"input":[],"output":[]}',
+          id: 'second',
+          order_key: 'a1',
+          prompt: 'Snow',
+          updated_at: 40,
+        },
+      ]);
+      expect(database.prepare('SELECT * FROM painting_board ORDER BY id').all()).toEqual([
+        {
+          created_at: 10,
+          focus_painting_id: 'first',
+          id: 'first',
+          title: 'A cat wearing sunglasses at golden hour',
+          updated_at: 20,
+        },
+        {
+          created_at: 30,
+          focus_painting_id: 'second',
+          id: 'second',
+          title: 'Snow',
+          updated_at: 40,
+        },
+      ]);
+
+      database.exec(`DELETE FROM painting_board WHERE id = 'first'`);
+      expect(database.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'second' }]);
+      expect(() =>
+        database.exec(`
+          INSERT INTO painting (id, board_id, provider_id, prompt, order_key, created_at, updated_at)
+          VALUES ('orphan', 'missing', 'cherryin', 'Orphan', 'a2', 1, 1)
+        `),
+      ).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
+  test('adds an optional native OAuth reference without replacing existing MCP header connections', () => {
+    const database = new DatabaseSync(':memory:');
+    try {
+      const files = readMigrationSqlFiles();
+      const index = readMigrationJournal().entries.findIndex(
+        ({ tag }) => tag === '0008_mcp_remote_oauth',
+      );
+      expect(index).toBeGreaterThan(0);
+      for (const sql of files.slice(0, index)) applyMigrationSql(database, sql);
+      database.exec(`INSERT INTO mcp_server (id, name, base_url, headers, is_active, disabled_tools, created_at, updated_at)
+        VALUES ('server', 'Existing', 'https://example.com/mcp', '{"Authorization":"Bearer existing"}', 1, '[]', 1, 1)`);
+      for (const sql of files.slice(index)) applyMigrationSql(database, sql);
+      expect(database.prepare('SELECT headers, oauth, is_active FROM mcp_server').get()).toEqual({
+        headers: '{"Authorization":"Bearer existing"}',
+        oauth: null,
+        is_active: 1,
+      });
+      const oauth = JSON.stringify({
+        authorizationId: 'opaque-native-reference',
+        clientId: 'public-client',
+      });
+      database.prepare('UPDATE mcp_server SET oauth = ?').run(oauth);
+      expect(database.prepare('SELECT oauth FROM mcp_server').get()).toEqual({ oauth });
+    } finally {
+      database.close();
+    }
+  });
+
   test('defaults existing and new Agents to standard mode without changing configuration or sessions', () => {
     const database = new DatabaseSync(':memory:');
     try {
@@ -511,9 +739,12 @@ describe('bundled SQLite migrations', () => {
         'app_state',
         'desktop_connection',
         'file_entry',
+        'file_folder',
         'job',
+        'library_file',
         'mcp_server',
         'painting',
+        'painting_board',
         'plugin_authorization',
         'preference',
         'user_model',
@@ -532,6 +763,7 @@ describe('bundled SQLite migrations', () => {
         'disabled_tools',
         'created_at',
         'updated_at',
+        'oauth',
       ]);
       expect(columnNames(database, 'plugin_authorization')).toEqual([
         'id',
@@ -571,16 +803,27 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
         'deleted_at',
         'provenance',
+        'library_file_id',
+        'trashed_with',
       ]);
       expect(columnNames(database, 'painting')).toEqual([
         'id',
+        'board_id',
         'provider_id',
         'model_id',
         'prompt',
+        'brief',
         'order_key',
         'created_at',
         'updated_at',
         'files',
+      ]);
+      expect(columnNames(database, 'painting_board')).toEqual([
+        'id',
+        'title',
+        'focus_painting_id',
+        'created_at',
+        'updated_at',
       ]);
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
       expect(
@@ -591,7 +834,7 @@ describe('bundled SQLite migrations', () => {
       ).toEqual(['created_at', 'id']);
 
       // Agent persistence (docs/references/agent/agent-persistence.md): four
-      // tables, no turn or pending-approval table, no workspace or runtime id.
+      // tables, no turn or pending-approval table, and an optional library folder reference.
       expect(columnNames(database, 'agent')).toEqual([
         'id',
         'name',
@@ -617,6 +860,8 @@ describe('bundled SQLite migrations', () => {
         'forked_from_session_id',
         'fork_boundary_message_id',
         'runtime_revision',
+        'workspace_folder_id',
+        'active_node_id',
       ]);
       expect(columnNames(database, 'agent_session_message')).toEqual([
         'id',
@@ -634,6 +879,8 @@ describe('bundled SQLite migrations', () => {
         'fts_rowid',
         'created_at',
         'updated_at',
+        'parent_id',
+        'siblings_group_id',
       ]);
       expect(columnNames(database, 'agent_tool_binding')).toEqual([
         'id',
@@ -662,7 +909,11 @@ describe('bundled SQLite migrations', () => {
           'user_model_provider_model_unique',
         ]),
       );
-      expect(indexNames(database, 'file_entry')).toEqual(['fe_created_at_idx']);
+      expect(indexNames(database, 'file_entry').sort()).toEqual([
+        'fe_created_at_idx',
+        'fe_deleted_at_idx',
+        'fe_library_file_idx',
+      ]);
       expect(indexNames(database, 'painting')).toContain('painting_order_key_idx');
       expect(indexNames(database, 'agent_tool_binding')).toEqual(
         expect.arrayContaining([
@@ -679,8 +930,16 @@ describe('bundled SQLite migrations', () => {
       // left to constrain.
       expect(fileEntryTableSql).not.toContain('CHECK');
       // No association table remains: a painting owns its file ids in `files`,
-      // so deleting a file cannot rewrite the receipt that points at it.
-      expect(getForeignKeys(database, 'painting')).toEqual([]);
+      // so deleting a file cannot rewrite the receipt that points at it. Its only
+      // reference is the board that owns it, and deleting the board removes it.
+      expect(
+        getForeignKeys(database, 'painting').map(({ from, on_delete, table, to }) => ({
+          from,
+          on_delete,
+          table,
+          to,
+        })),
+      ).toEqual([{ from: 'board_id', on_delete: 'CASCADE', table: 'painting_board', to: 'id' }]);
 
       // Agent delete semantics: agents soft-delete first (RESTRICT guards hard
       // cleanup); sessions hard-delete and cascade their messages. Fork lineage
@@ -695,7 +954,14 @@ describe('bundled SQLite migrations', () => {
           }),
         ]),
       );
-      expect(getForeignKeys(database, 'agent_session')).toHaveLength(2);
+      expect(getForeignKeys(database, 'agent_session')).toHaveLength(3);
+      expect(getForeignKeys(database, 'agent_session')).toContainEqual(
+        expect.objectContaining({
+          from: 'workspace_folder_id',
+          table: 'file_folder',
+          on_delete: 'SET NULL',
+        }),
+      );
       expect(getForeignKeys(database, 'agent_session_message')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -853,8 +1119,10 @@ describe('bundled SQLite migrations', () => {
       });
 
       database.exec(`
-        INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
-        VALUES ('painting-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
+        INSERT INTO painting_board (id, title, created_at, updated_at)
+        VALUES ('board-1', 'Board', 1, 1);
+        INSERT INTO painting (id, board_id, provider_id, model_id, prompt, order_key, created_at, updated_at)
+        VALUES ('painting-1', 'board-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
         INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
         VALUES ('file-1', 'input.png', 'image/png', 4, 1, 1, NULL);
       `);
@@ -947,6 +1215,7 @@ function getForeignKeys(database: DatabaseSync, table: string) {
     from: string;
     on_delete: string;
     table: string;
+    to: string;
   }[];
 }
 

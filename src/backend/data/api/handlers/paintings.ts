@@ -22,5 +22,22 @@ export function createPaintingHandlers(service: PaintingService): HandlersFor<Pa
     '/paintings/:id': {
       GET: ({ params }) => service.getById(params.id),
     },
+    '/paintings/by-output/:fileEntryId': {
+      GET: ({ params }) => service.findByOutputFile(params.fileEntryId),
+    },
+    '/painting-boards/:id': {
+      // Fence the parent before waiting; new children cannot escape a stale snapshot.
+      DELETE: ({ params }) =>
+        application
+          .get('ResourceScopeCoordinator')
+          .delete([{ id: params.id, kind: 'painting-board' }], () =>
+            service.deleteBoard(params.id),
+          ),
+      GET: ({ params }) => service.getBoard(params.id),
+      PATCH: ({ body, params }) => service.updateBoard(params.id, body),
+    },
+    '/painting-boards/:id/paintings': {
+      GET: ({ params }) => service.listByBoard(params.id),
+    },
   };
 }

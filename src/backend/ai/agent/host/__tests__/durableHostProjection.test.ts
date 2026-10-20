@@ -1,9 +1,9 @@
 import type { RuntimeDurableTurn } from '../../runtime';
-import { projectDurableHostTurn } from '../durableHostProjection';
+import { DurableTurnMetadataSchema, projectDurableHostTurn } from '../durableHostProjection';
 
 function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
   return {
-    identity: { sessionId: 'session', turnId: 'turn', requestId: 'turn' },
+    identity: { sessionId: 'session', slot: 0, turnId: 'turn', requestId: 'turn' },
     userMessageId: 'user',
     assistantMessageId: 'assistant',
     inputBoundary: 'pi:1',
@@ -36,6 +36,63 @@ function turn(overrides: Partial<RuntimeDurableTurn>): RuntimeDurableTurn {
 }
 
 describe('durable message timing', () => {
+  test('pre-workspace metadata remains unbound instead of inheriting a later Session binding', () => {
+    expect(DurableTurnMetadataSchema.parse(turn({}).metadata).workspaceFolderId).toBeNull();
+  });
+
+  test.each(['queued', 'running', 'completed'] as const)(
+    'a %s answer does not display a provider attempt as a terminal failure',
+    (status) => {
+      const projected = projectDurableHostTurn(
+        turn({
+          status,
+          error: {
+            code: 'provider_error',
+            message: 'Request timed out',
+            retryable: true,
+            origin: 'provider',
+          },
+        }),
+      );
+      expect(projected.turn.error).toBeNull();
+      expect(projected.assistant?.parts).toEqual([
+        expect.objectContaining({ type: 'text', text: 'Done' }),
+      ]);
+      expect(projected.assistant?.status).toBe(
+        status === 'running' ? 'streaming' : status === 'queued' ? 'pending' : 'success',
+      );
+    },
+  );
+
+  test.each(['failed', 'interrupted'] as const)(
+    'a %s answer displays the final provider failure',
+    (status) => {
+      const projected = projectDurableHostTurn(
+        turn({
+          status,
+          error: {
+            code: 'provider_error',
+            message: 'Request timed out',
+            retryable: true,
+            origin: 'provider',
+          },
+        }),
+      );
+      expect(projected.turn.error).toMatchObject({ code: 'EXECUTION_FAILED', retryable: true });
+      expect(projected.assistant?.parts.at(-1)).toMatchObject({
+        type: 'data-error',
+        data: { code: 'EXECUTION_FAILED', retryable: true },
+      });
+    },
+  );
+
+  test('a turn always states whether it is retrying', () => {
+    expect(
+      projectDurableHostTurn(turn({ status: 'running', isRetrying: true })).turn,
+    ).toMatchObject({ status: 'running', isRetrying: true });
+    expect(projectDurableHostTurn(turn({ status: 'running' })).turn.isRetrying).toBe(false);
+  });
+
   test('a stopped answer retains its output and retryable status without an execution error', () => {
     const projected = projectDurableHostTurn(
       turn({

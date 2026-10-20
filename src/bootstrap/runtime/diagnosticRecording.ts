@@ -1,12 +1,14 @@
 import { AppState } from 'react-native';
 
-import { removeLegacyDiagnosticData } from '@/backend/services/diagnostics/diagnosticFiles';
+// Leaf import: the module root would evaluate the bundle service and its database schemas here,
+// at the app's first import.
 import { createDiagnosticLogWriter } from '@/backend/services/diagnostics/diagnosticRecording';
 import {
   flushLogWriter,
   installLogWriter,
   loggerService,
 } from '@/shared/core/logger/LoggerService';
+import { recordStartupEvent } from '@/shared/core/logger/startupDiagnostics';
 
 type RejectionOptions = {
   allRejections: boolean;
@@ -23,11 +25,6 @@ type RuntimeGlobals = {
 // A process-level log sink must also survive a failed/replaced ApplicationHost.
 const logger = loggerService.withContext('CrashTelemetry');
 try {
-  removeLegacyDiagnosticData();
-} catch {
-  // Old source paths are never read by the metadata collector. Retry cleanup next launch.
-}
-try {
   installLogWriter(createDiagnosticLogWriter());
   // This observer has the same app-entry process lifetime as the installed writer.
   AppState.addEventListener('change', (state) => {
@@ -37,6 +34,29 @@ try {
   // Unavailable file storage must not turn diagnostic setup into a boot failure.
   logger.warn('Diagnostic file logging unavailable', { error });
 }
+
+try {
+  // React Native's optional native milestones use performance.timeOrigin, not wall time.
+  const timing = (
+    performance as typeof performance & {
+      rnStartupTiming?: {
+        startTime?: number | null;
+        initializeRuntimeStart?: number | null;
+        executeJavaScriptBundleEntryPointStart?: number | null;
+      };
+    }
+  ).rnStartupTiming;
+  if (timing) {
+    recordStartupEvent('startup.react_native.milestones', 'completed', {
+      rnStartupStartMs: timing.startTime,
+      rnRuntimeStartMs: timing.initializeRuntimeStart,
+      rnBundleEntryStartMs: timing.executeJavaScriptBundleEntryPointStart,
+    });
+  }
+} catch {
+  // Native timing support must not become a startup dependency.
+}
+
 const runtime = globalThis as typeof globalThis & RuntimeGlobals;
 const previousHandler = runtime.ErrorUtils?.getGlobalHandler();
 if (previousHandler) {

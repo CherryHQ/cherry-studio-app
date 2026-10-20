@@ -8,16 +8,14 @@ import { AssistantMessage } from '../AssistantMessage';
 const mockMessageParts = jest.fn((props: { message: MessageListItem }) =>
   createElement('MessageParts', props),
 );
-const mockMessagePartPending = jest.fn((_props: { accessibilityLabel: string }) => null);
 
 jest.mock('../../parts/MessageParts', () => ({
   MessageParts: (props: { message: MessageListItem }) => mockMessageParts(props),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  MessagePart: {
-    Pending: (props: { accessibilityLabel: string }) => mockMessagePartPending(props),
-  },
+  ImageGenerationLoader: (props: object) =>
+    jest.requireActual('react').createElement('ImageGenerationLoader', props),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -47,26 +45,32 @@ describe('AssistantMessage', () => {
     act(() => renderer?.unmount());
   });
 
-  test('shows the pending placeholder for an empty pending assistant message', () => {
-    act(() => {
-      renderer = create(<AssistantMessage message={createAssistantMessage('pending')} />);
-    });
-
-    expect(mockMessagePartPending).toHaveBeenCalledWith({
-      accessibilityLabel: 'chat.message.waitingForResponse',
-    });
-    expect(mockMessageParts).not.toHaveBeenCalled();
-  });
-
-  test('renders structured parts once assistant content is available', () => {
-    const message = createAssistantMessage('pending', [{ text: 'Thinking', type: 'text' }]);
-
+  test('uses the image placeholder until assistant content arrives', () => {
+    const message = {
+      ...createAssistantMessage('pending'),
+      imageGeneration: { paramValues: { aspectRatio: '16:9' } },
+    };
     act(() => {
       renderer = create(<AssistantMessage message={message} />);
     });
+    expect(renderer!.root.findAllByType('MessageParts')).toHaveLength(0);
 
-    expect(mockMessageParts).toHaveBeenCalledWith({ message });
-    expect(mockMessagePartPending).not.toHaveBeenCalled();
+    act(() => {
+      renderer!.root.findByProps({ className: 'w-full' }).props.onLayout({
+        nativeEvent: { layout: { width: 320 } },
+      });
+    });
+    expect(renderer!.root.findByType('ImageGenerationLoader').props.height).toBe(180);
+
+    act(() => {
+      renderer!.update(
+        <AssistantMessage
+          message={{ ...message, data: { parts: [{ type: 'text', text: 'Result' }] } }}
+        />,
+      );
+    });
+    expect(renderer!.root.findAllByType('ImageGenerationLoader')).toHaveLength(0);
+    expect(renderer!.root.findAllByType('MessageParts')).toHaveLength(1);
   });
 
   test('renders composed children after the message body', () => {
@@ -96,10 +100,10 @@ describe('AssistantMessage', () => {
       );
     });
 
-    expect(mockMessagePartPending).toHaveBeenCalledWith({
-      accessibilityLabel: 'chat.message.waitingForResponse',
-    });
-    expect(renderer?.root.findAllByType(AccessoryProbe)).toHaveLength(1);
+    const rendered = renderer?.root.findAll(
+      (node) => node.type === 'MessageParts' || node.type === AccessoryProbe,
+    );
+    expect(rendered?.map((node) => node.type)).toEqual(['MessageParts', AccessoryProbe]);
   });
 });
 

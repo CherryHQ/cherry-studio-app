@@ -21,11 +21,15 @@ import type {
   ConversationAction,
 } from '@/frontend/appShell/conversation';
 import { conversationHref } from '@/frontend/appShell/navigation/chat';
+import { ModelPickerDrawer, type ModelPickerModelItem } from '@/frontend/components/ModelPicker';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import type { ChatShareTranslations } from '../../../share/chatShareHandoff';
 import { getSendErrorCodeLabelKey } from '../../ChatInput/utils/sendErrorLabel';
+import { useMessageTranslationStore } from '../translation/MessageTranslationProvider';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
+const EMPTY_MESSAGE_IDS: ReadonlySet<string> = new Set();
 /** Matches the Session title column, which the fork input also caps at 255. */
 const SESSION_TITLE_MAX_LENGTH = 255;
 const logger = loggerService.withContext('AssistantMessageActions');
@@ -36,8 +40,8 @@ type AssistantMessageActionsState = {
   /** A running turn owns the transcript; its rows must not disappear underneath it. */
   isDeleteDisabled: boolean;
   isRetryDisabled: boolean;
-  /** The Session's latest answer, the only one retry may replace. */
-  retryableMessageId?: string;
+  /** Answers that can be regenerated, retried, or answered again with another model. */
+  retryableMessageIds: ReadonlySet<string>;
 };
 
 type AssistantMessageActions = {
@@ -47,6 +51,13 @@ type AssistantMessageActions = {
   /** Copies the transcript up to this message into a new chat and opens it. */
   forkFromAssistantMessage?: (input: { messageId: string }) => void;
   deleteMessageTurn?: (input: { turnId: string }) => void;
+  /**
+   * Shows another alternative at a branch point, restoring its own continuation. Resolves whether
+   * the choice was applied.
+   */
+  selectBranch?: (input: { messageId: string; targetId: string }) => Promise<boolean>;
+  /** Chooses a model that adds one more answer to this answer's question. */
+  answerWithModel?: (input: { messageId: string }) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -56,9 +67,8 @@ const AssistantMessageActionsContext = createContext<AssistantMessageActions | n
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
-  retryableMessageId?: string;
   /** Opens the source-owned share selector; absent while no Session exists. */
-  onShare?: (messageId: string) => void;
+  onShare?: (messageId: string, translations?: ChatShareTranslations) => void;
   snapshot: ConversationSnapshot;
   messages: readonly ConversationMessage[];
 }>;
@@ -66,7 +76,6 @@ type AssistantMessageActionsProviderProps = PropsWithChildren<{
 export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
-  retryableMessageId,
   onShare,
   snapshot,
   messages,
@@ -74,9 +83,12 @@ export function AssistantMessageActionsProvider({
   const { t } = useTranslation();
   const { toast } = useToast();
   const { alert } = useAlert();
+  const translationStore = useMessageTranslationStore();
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
   const sharing = useRef(false);
+  // The answer whose question the model picker adds an answer to.
+  const [answeringMessageId, setAnsweringMessageId] = useState<string>();
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -88,7 +100,14 @@ export function AssistantMessageActionsProvider({
       sharing.current = false;
     }, []),
   );
-  const retryMessage = messages.find((message) => message.key === retryableMessageId);
+  // Keyed by content so streamed transcript updates keep the rows' state context stable.
+  const retryableKey = messages
+    .flatMap((message) => (message.actions.retry ? [message.key] : []))
+    .join('\n');
+  const retryableMessageIds = useMemo(
+    () => new Set(retryableKey ? retryableKey.split('\n') : []),
+    [retryableKey],
+  );
   const isBusy = snapshot.executions.some(
     (execution) =>
       execution.state === 'running' ||
@@ -104,13 +123,12 @@ export function AssistantMessageActionsProvider({
     isBusy,
     messages,
     onShare,
-    retryableMessageId,
     snapshot,
     t,
     toast,
   });
   useLayoutEffect(() => {
-    latest.current = { alert, isBusy, messages, onShare, retryableMessageId, snapshot, t, toast };
+    latest.current = { alert, isBusy, messages, onShare, snapshot, t, toast };
   });
 
   const run = useCallback(
@@ -118,18 +136,22 @@ export function AssistantMessageActionsProvider({
       key: string,
       action: ConversationAction<Input, Output> | undefined,
       value: Input,
-      errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed',
+      errorLabel: 'retryFailed' | 'forkFailed' | 'deleteFailed' | 'branchFailed',
       applied?: (result: Output) => void,
     ) => {
-      if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key)) return;
+      if (!action || action.availability.state !== 'enabled' || inFlight.current.has(key))
+        return false;
       inFlight.current.add(key);
       try {
         const outcome = await action.execute(value);
-        if (!mounted.current) return;
+        if (!mounted.current) return false;
         const { t: translate, toast: currentToast } = latest.current;
-        if (outcome.state === 'applied') applied?.(outcome.value);
+        if (outcome.state === 'applied') {
+          applied?.(outcome.value);
+          return true;
+        }
         // A retry the user stopped before its turn was reserved did not fail.
-        else if (
+        if (
           (outcome.state === 'rejected' && outcome.failure.detail?.code !== 'CANCELLED') ||
           outcome.state === 'interrupted'
         )
@@ -141,6 +163,7 @@ export function AssistantMessageActionsProvider({
             ),
             variant: 'danger',
           });
+        return false;
       } catch (error) {
         logger.error('Conversation message action failed', error as Error);
         if (mounted.current)
@@ -148,23 +171,27 @@ export function AssistantMessageActionsProvider({
             label: latest.current.t(`chat.messageActions.${errorLabel}`),
             variant: 'danger',
           });
+        return false;
       } finally {
         inFlight.current.delete(key);
       }
     },
     [],
   );
-  const share = useCallback(({ messageId }: { messageId: string }) => {
-    const { onShare: openShare } = latest.current;
-    if (!openShare || sharing.current) return;
-    sharing.current = true;
-    Keyboard.dismiss();
-    openShare(messageId);
-  }, []);
+  const share = useCallback(
+    ({ messageId }: { messageId: string }) => {
+      const { onShare: openShare } = latest.current;
+      if (!openShare || sharing.current) return;
+      sharing.current = true;
+      Keyboard.dismiss();
+      openShare(messageId, translationStore?.getExpandedTranslations());
+    },
+    [translationStore],
+  );
   const retry = useCallback(
     ({ messageId }: { messageId: string }) => {
       const current = latest.current;
-      if (messageId !== current.retryableMessageId || current.isBusy) return;
+      if (current.isBusy) return;
       const action = current.messages.find((message) => message.key === messageId)?.actions.retry;
       void run(`retry:${messageId}`, action, undefined, 'retryFailed', (ref) => {
         if (ref) router.replace(conversationHref(ref));
@@ -210,18 +237,66 @@ export function AssistantMessageActionsProvider({
     },
     [run],
   );
+  const selectBranch = useCallback(
+    ({ messageId, targetId }: { messageId: string; targetId: string }) => {
+      const action = latest.current.messages.find((message) => message.key === messageId)?.actions
+        .select;
+      // Keyed by target too: a quick second choice is the one the reader wants, not a duplicate.
+      return run(
+        `select:${messageId}:${targetId}`,
+        action,
+        { messageId: targetId },
+        'branchFailed',
+      );
+    },
+    [run],
+  );
+  const answerWithModel = useCallback(({ messageId }: { messageId: string }) => {
+    if (!latest.current.isBusy) setAnsweringMessageId(messageId);
+  }, []);
+  const closeAnswerModelPicker = useCallback(() => setAnsweringMessageId(undefined), []);
+  const answerWith = useCallback(
+    (item: ModelPickerModelItem) => {
+      const messageId = answeringMessageId;
+      setAnsweringMessageId(undefined);
+      const current = latest.current;
+      if (!messageId || current.isBusy) return;
+      const action = current.messages.find((message) => message.key === messageId)?.actions
+        .answerWith;
+      void run(`answer:${messageId}`, action, { modelId: item.modelId }, 'retryFailed');
+    },
+    [answeringMessageId, run],
+  );
+  const answeringMessage = answeringMessageId
+    ? messages.find((message) => message.key === answeringMessageId)
+    : undefined;
   return (
     <ChatMessageActionsProvider
       isAssistantToolbarEnabled={isAssistantToolbarEnabled}
       onShare={share}
       onFork={messages.some((message) => message.actions.fork) ? fork : undefined}
       onDelete={messages.some((message) => message.actions.remove) ? remove : undefined}
-      onRetry={retryMessage?.actions.retry ? retry : undefined}
+      onRetry={retryableMessageIds.size ? retry : undefined}
+      onSelectBranch={messages.some((message) => message.actions.select) ? selectBranch : undefined}
+      onAnswerWithModel={
+        messages.some((message) => message.actions.answerWith) ? answerWithModel : undefined
+      }
       isDeleteDisabled={isBusy}
-      isRetryDisabled={isBusy || retryMessage?.actions.retry?.availability.state !== 'enabled'}
-      retryableMessageId={retryableMessageId}
+      isRetryDisabled={isBusy}
+      retryableMessageIds={retryableMessageIds}
     >
       {children}
+      {answeringMessage ? (
+        <ModelPickerDrawer
+          modelType="text"
+          onClose={closeAnswerModelPicker}
+          onSelect={answerWith}
+          open
+          selectedModelId={answeringMessage.display.model?.id ?? null}
+          title={t('chat.messageActions.answerWith')}
+          variant="chat"
+        />
+      ) : null}
     </ChatMessageActionsProvider>
   );
 }
@@ -234,18 +309,22 @@ export function ChatMessageActionsProvider({
   onFork: forkFromAssistantMessage,
   onDelete: deleteMessageTurn,
   onRetry: retryAssistantMessage,
+  onSelectBranch: selectBranch,
+  onAnswerWithModel: answerWithModel,
   isDeleteDisabled = true,
   isRetryDisabled = true,
-  retryableMessageId,
+  retryableMessageIds = EMPTY_MESSAGE_IDS,
 }: PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
   onShare: AssistantMessageActions['shareAssistantMessage'];
   onFork?: AssistantMessageActions['forkFromAssistantMessage'];
   onDelete?: AssistantMessageActions['deleteMessageTurn'];
   onRetry?: AssistantMessageActions['retryAssistantMessage'];
+  onSelectBranch?: AssistantMessageActions['selectBranch'];
+  onAnswerWithModel?: AssistantMessageActions['answerWithModel'];
   isDeleteDisabled?: boolean;
   isRetryDisabled?: boolean;
-  retryableMessageId?: string;
+  retryableMessageIds?: ReadonlySet<string>;
 }>) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -296,29 +375,33 @@ export function ChatMessageActionsProvider({
       isAssistantToolbarEnabled,
       isDeleteDisabled,
       isRetryDisabled,
-      ...(retryableMessageId ? { retryableMessageId } : {}),
+      retryableMessageIds,
     }),
     [
       copiedMessageId,
       isAssistantToolbarEnabled,
       isDeleteDisabled,
       isRetryDisabled,
-      retryableMessageId,
+      retryableMessageIds,
     ],
   );
   const actionsValue = useMemo(
     () => ({
+      answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,
       forkFromAssistantMessage,
       retryAssistantMessage,
+      selectBranch,
       shareAssistantMessage,
     }),
     [
+      answerWithModel,
       copyAssistantMessage,
       deleteMessageTurn,
       forkFromAssistantMessage,
       retryAssistantMessage,
+      selectBranch,
       shareAssistantMessage,
     ],
   );

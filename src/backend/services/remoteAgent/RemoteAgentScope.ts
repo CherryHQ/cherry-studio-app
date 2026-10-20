@@ -3,7 +3,7 @@ import {
   questionInputSchema,
   interactionResponseSchema,
   type AgentMethod,
-  type AgentMessage,
+  type AgentMessageListItem,
   type ContentRef,
   type AgentPart,
   type AgentProjection,
@@ -135,9 +135,9 @@ export class RemoteAgentScope implements RemoteAgentSource {
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private getUploadTransport: GetUploadTransport = async (signal) => {
     const session = await this.ready(signal);
-    if (session.agentUploadsVersion !== 1 || session.agentUploadChecksum !== 'sha256')
-      throw new RemoteAgentError('UPGRADE_REQUIRED');
+    if (session.agentUploadsVersion !== 1) throw new RemoteAgentError('UPGRADE_REQUIRED');
     return {
+      checksumAlgorithm: session.agentUploadChecksum,
       write: async (input, caller) => {
         try {
           return await session.sendUploadChunk(input, caller);
@@ -472,8 +472,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
     try {
       const session = await this.ready(signal);
       const preupload = session.agentAttachmentSelections === true;
-      const attachments =
-        preupload && session.agentUploadsVersion === 1 && session.agentUploadChecksum === 'sha256';
+      const attachments = preupload && session.agentUploadsVersion === 1;
       if (this.state.attachments !== attachments || this.state.preupload !== preupload) {
         this.state = { ...this.state, attachments, preupload };
         for (const listener of this.stateListeners) listener();
@@ -516,7 +515,8 @@ export class RemoteAgentScope implements RemoteAgentSource {
           await this.connections.revoke(this.lease.connectionId, 'agent', this.lease.grantId);
         throw new RemoteAgentError(
           error.reason,
-          ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
+          error.failure.details?.retryable !== false &&
+            ['RATE_LIMITED', 'TOKEN_EXPIRED', 'RESOURCE_EXHAUSTED'].includes(error.reason),
           error.message,
         );
       }
@@ -614,7 +614,7 @@ export class RemoteAgentScope implements RemoteAgentSource {
       },
     );
   }
-  private messageParts(sessionId: string, message: AgentMessage, signal: AbortSignal) {
+  private messageParts(sessionId: string, message: AgentMessageListItem, signal: AbortSignal) {
     const entry = this.cacheEntry(sessionId);
     const generation = entry.generation;
     const key = this.readCache.partsKey(message);

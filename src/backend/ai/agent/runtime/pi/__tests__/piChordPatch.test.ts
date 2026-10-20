@@ -28,14 +28,14 @@ describe('Pi Chord JSON compatibility', () => {
   });
 
   test('pins the installed compatibility fix to its patch and lockfile', () => {
-    const patchPath = 'patches/@earendil-works__chord@1.2.0.patch';
+    const patchPath = 'patches/@earendil-works__chord@1.3.0.patch';
     const patch = readFileSync(patchPath, 'utf8');
     const hash = createHash('sha256').update(patch).digest('hex');
     expect(readFileSync('pnpm-workspace.yaml', 'utf8')).toContain(
-      `'@earendil-works/chord@1.2.0': ${patchPath}`,
+      `'@earendil-works/chord@1.3.0': ${patchPath}`,
     );
     expect(readFileSync('pnpm-lock.yaml', 'utf8')).toContain(
-      `  '@earendil-works/chord@1.2.0': ${hash}\n`,
+      `  '@earendil-works/chord@1.3.0': ${hash}\n`,
     );
   });
 });

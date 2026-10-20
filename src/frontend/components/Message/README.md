@@ -156,6 +156,12 @@ article body. Earlier prose, reasoning, and tool calls enter the timed process d
 followed by a tool is therefore treated as intermediate narration, not as the result. Provider-
 executed web searches render nothing; sources and non-image files retain their footer rows.
 
+An approved `generate_image` call that is still running leaves the process disclosure for the body,
+where `PendingImagePart` holds the requested shape with the shared `ImageGenerationLoader`. The
+image's own file part replaces it on success; a settled or failed call returns to the process
+disclosure as an ordinary tool row. Direct image-model turns use the same placeholder until their
+first part arrives.
+
 Automatic context compaction uses the Desktop-compatible `data-compaction-anchor` part. Turn-start
 markers stay visible as dashed separators before the process disclosure; in-loop markers remain
 between the corresponding tool steps inside it. Running markers show progress, completed markers
@@ -186,9 +192,15 @@ Compaction Anchor, Source URL/group, and Unknown. Pending is an assistant-row st
 adapter. Video data, source-document, step-start, and provider-owned web-search parts intentionally
 render no separate message-list content.
 
+An unfinished assistant row shows the pending indicator only before any visible reply content.
+`MessageParts` uses the same normalized body/process split it renders: text, reasoning, tools,
+questions, compaction markers, and images replace the initial connection feedback. Finishing a
+part or waiting between steps does not restore it. Empty text does not create a process row;
+an empty streaming reasoning block supplies its own thinking feedback. Reasoning stops animating
+when a later activity arrives or the message settles, even if the part still says streaming.
+
 The tool content adapters are Generic, MCP, Web Search, Write File, Meta Search, Meta Inspect, Meta
-Invoke, and Meta Exec. Painting remains a feature-owned message renderer and is not a tool-detail
-variant. Count renderer families, disclosure layers, and visual states separately; combining them
+Invoke, and Meta Exec. Count renderer families, disclosure layers, and visual states separately; combining them
 into one component total obscures ownership and does not measure duplication.
 
 Use the following Storybook stories as the visual inventory:
@@ -197,8 +209,6 @@ Use the following Storybook stories as the visual inventory:
   states in light and dark themes.
 - `Messages / Playground / Light` and `Messages / Playground / Dark` exercise the production
   message-part dispatch, including Generic, MCP, Web Search, Write File, and all Meta tool adapters.
-- `Messages / Painting` separates generating, single-result, multiple-result, failed, and
-  interrupted painting states.
 
 When adding or changing an interactive renderer, add a production-shaped fixture for each relevant
 state, inspect both themes on a device, open the detail, and confirm that the summary uses the shared
@@ -219,7 +229,7 @@ The screen composes the message history and composer as sibling regions. Within 
 ownership flows from the list toward intrinsic content:
 
 ```text
-ChatScreen or PaintingComposer
+ChatScreen
 ├── message workspace
 │   └── MessageList
 │       └── list-owned row frame
@@ -323,8 +333,10 @@ child's tap, native selection, or scrolling behavior.
 | Fenced code and Markdown tables | Native renderer owns block copy menus and nested scrolling inside the excluded text or process region |
 | Video/source-document/step-start parts | No rendered touch target |
 
-Plugin and Skill references stay inline as an icon and name in the input's link color, using their
-recorded UTF-16 text ranges. User messages do not show a separate Skill selection or revision caption.
+Plugin, Skill and Office selection references stay inline as an icon and name in the input's link
+color, using their recorded UTF-16 text ranges. A selection chip shows only its file and location
+label; its anchor and excerpt reach the model through runtime input. User messages do not show a
+separate Skill selection or revision caption.
 An explicit Skill reference supplies instructions without a synthetic tool activity. Automatic
 loading appears as a dedicated **Read Skill** activity with its icon and name. Its detail sheet shows
 the Skill's name and description. Instruction bodies, revision hashes and library navigation belong

@@ -33,13 +33,18 @@ export type MobileAgentHostNaming = Pick<
 export type MobileAgentHostPorts = {
   scriptSandbox?(): RuntimeScriptSandbox | undefined;
   writeToolOutput?(
-    output: { name: string; data: string | Uint8Array },
+    /** `folderId` is the turn's workspace; outputs land beside the Agent's other writes. */
+    output: { name: string; data: string | Uint8Array; folderId: string | null },
     signal: AbortSignal,
   ): ReturnType<NonNullable<RuntimeExecutionPorts['writeToolOutput']>>;
   executionLease?(onInterrupt: (reason: Error) => void | Promise<void>): { release(): void };
   /** Supplied by data composition; the Host never imports SQLite or Pi storage. */
   durableStorage?: {
     open(): Promise<RuntimeSqlDatabase>;
+    /** Bytes of the closed or open working-copy file, including SQLite sidecars. */
+    size(): number;
+    /** Deletes the working-copy file; called only while the runtime is closed. */
+    discard(): void;
     notifyTranscript(sessionId: string): void;
   };
   /** Throwing, idempotent delivery. Pi retains a receipt until this writer succeeds. */

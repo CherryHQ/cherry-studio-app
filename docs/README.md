@@ -15,6 +15,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | [GitHub Plugin Authorization](./guides/github-plugin-authorization.md) | Publisher OAuth App configuration, in-app browser authorization, token renewal, and acceptance prerequisites |
 | [Local EAS Builds](./guides/local-builds.md) | Local installation packages, Sentry environment variables, and build profiles |
 | [Cloud Releases](./guides/cloud-releases.md) | EAS production builds, GitHub/GitCode APK releases, Google Play AAB builds, TestFlight uploads, and retry procedures |
+| [Application Updates](./guides/app-updates.md) | EAS incremental code/asset updates, distribution channels, staged rollout, and rollback |
 | [Parallel Device Testing](./guides/parallel-device-testing.md) | Agent self-test preparation design, shared resident and temporary devices, development-client reuse, and cleanup |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
@@ -29,7 +30,8 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Architecture Overview](./references/architecture-overview.md) | Runtime model, source ownership, dependency boundaries, and frontend/backend interfaces |
-| [Code Organization](./references/code-organization.md) | Module placement, domain promotion, layer ownership, and public surfaces |
+| [Code Organization](./references/code-organization.md) | Module placement, domain promotion, layer ownership, public surfaces, and retiring superseded code |
+| [Shared Building Blocks](./references/shared-building-blocks.md) | Index of capabilities that already have one owner, to check before writing a helper |
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
@@ -46,6 +48,7 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Agent Architecture](./references/agent/README.md) | Implemented Agent Host, Pi Runtime, persistence, tools, and current boundaries |
+| [Office Tools Design](./references/agent/office-tools-design.md) | DOCX/XLSX/PPTX generation, bounded editing, preview selections and QuickJS/Pi Durable integration; acceptance pending |
 | [Built-In MCP Integrations](./references/agent/built-in-mcp-design.md) | As-built GitHub, Amap and Feishu cloud MCP connectors, GitHub and Feishu browser authorization, the plugin registry and the six-platform scope |
 | [Built-In MCP Roadmap](./references/agent/built-in-mcp-roadmap.md) | Implemented authorization decisions and future multi-account, HTTP reuse, direct-API transport and instruction-resource designs |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Pi Agent provider resolution and non-conversation AI SDK generation |

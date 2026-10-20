@@ -52,10 +52,7 @@ import {
   type ModelscopeProviderSettings,
 } from './custom/modelscope/modelscopeProvider';
 import {
-  createKimiWebSearchToolFor,
   createMoonshotProvider,
-  KIMI_WEB_SEARCH_TOOL_NAME,
-  type KimiFormulaCredentials,
   type MoonshotProvider,
   type MoonshotProviderSettings,
 } from './custom/moonshotProvider';
@@ -78,18 +75,6 @@ export const GoogleVertexExtension = ProviderExtension.create({
   aliases: ['vertexai'] as const,
   supportsImageGeneration: true,
   create: createVertex,
-  toolFactories: {
-    webSearch:
-      (provider: GoogleVertexProvider) =>
-      (config: NonNullable<Parameters<GoogleVertexProvider['tools']['googleSearch']>[0]>) => ({
-        tools: { webSearch: provider.tools.googleSearch(config) },
-      }),
-    urlContext:
-      (provider: GoogleVertexProvider) =>
-      (config: NonNullable<Parameters<GoogleVertexProvider['tools']['urlContext']>[0]>) => ({
-        tools: { urlContext: provider.tools.urlContext(config) },
-      }),
-  },
 } as const satisfies ProviderExtensionConfig<
   GoogleVertexProviderSettings,
   GoogleVertexProvider,
@@ -101,17 +86,6 @@ export const GoogleVertexAnthropicExtension = ProviderExtension.create({
   aliases: ['vertexai-anthropic'] as const,
   supportsImageGeneration: true,
   create: createVertexAnthropic,
-  toolFactories: {
-    webSearch:
-      (provider: GoogleVertexAnthropicProvider) =>
-      (
-        config: NonNullable<
-          Parameters<GoogleVertexAnthropicProvider['tools']['webSearch_20250305']>[0]
-        >,
-      ) => ({
-        tools: { webSearch: provider.tools.webSearch_20250305(config) },
-      }),
-  },
 } as const satisfies ProviderExtensionConfig<
   GoogleVertexProviderSettings,
   GoogleVertexAnthropicProvider,
@@ -154,24 +128,6 @@ export const BedrockExtension = ProviderExtension.create({
   aliases: ['aws-bedrock'] as const,
   supportsImageGeneration: true,
   create: createAmazonBedrock,
-  // Bedrock runs Anthropic models, whose `tools` expose the same server-side
-  // web-search / web-fetch factories as the native `anthropic` extension.
-  toolFactories: {
-    webSearch:
-      (provider: AmazonBedrockProvider) =>
-      (
-        config: NonNullable<Parameters<AmazonBedrockProvider['tools']['webSearch_20260209']>[0]>,
-      ) => ({
-        tools: { webSearch: provider.tools.webSearch_20260209(config) },
-      }),
-    urlContext:
-      (provider: AmazonBedrockProvider) =>
-      (
-        config: NonNullable<Parameters<AmazonBedrockProvider['tools']['webFetch_20260209']>[0]>,
-      ) => ({
-        tools: { urlContext: provider.tools.webFetch_20260209(config) },
-      }),
-  },
 } as const satisfies ProviderExtensionConfig<
   AmazonBedrockProviderSettings,
   AmazonBedrockProvider,
@@ -233,26 +189,11 @@ export const MinimaxExtension = ProviderExtension.create({
   create: createMinimaxProvider,
 } as const satisfies ProviderExtensionConfig<MinimaxProviderSettings, ProviderV3, 'minimax'>);
 
-/**
- * Moonshot (Kimi) — OpenAI-compatible chat. Built-in search rides Kimi's official *formula* channel:
- * a normal function tool whose `execute` POSTs the model's arguments to the formula's fiber endpoint
- * and returns the fiber output (see moonshotProvider.ts). One path for both the K2 and K3 lines.
- */
+/** Moonshot (Kimi) — OpenAI-compatible chat and embedding. */
 export const MoonshotExtension = ProviderExtension.create({
   name: 'moonshot',
   supportsImageGeneration: false,
   create: createMoonshotProvider,
-  toolFactories: {
-    // Unlike the descriptor-only factories, this one EXECUTES, so it needs a credential. It cannot
-    // come from the provider argument: `getToolProvider` re-creates the instance with no settings
-    // whenever one is cached, so that provider has no api key. The serving credential is passed
-    // through the plugin config instead (buildProviderBuiltinWebSearchConfig).
-    webSearch:
-      () =>
-      (credentials: KimiFormulaCredentials = {}) => ({
-        tools: { [KIMI_WEB_SEARCH_TOOL_NAME]: createKimiWebSearchToolFor(credentials) },
-      }),
-  },
 } as const satisfies ProviderExtensionConfig<
   MoonshotProviderSettings,
   MoonshotProvider,

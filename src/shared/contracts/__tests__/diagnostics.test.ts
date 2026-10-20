@@ -1,5 +1,4 @@
 import {
-  DiagnosticBundleInputSchema,
   DiagnosticReportInputSchema,
   diagnosticDescriptionByteLength,
   normalizeDiagnosticDescription,
@@ -7,8 +6,6 @@ import {
   DiagnosticProcessingStatusSchema,
   diagnosticStatusPageUrl,
 } from '../diagnostics';
-
-const input = { range: '24h', includeLogs: true, includeTraces: true };
 
 describe('diagnostic wire inputs', () => {
   test('status links accept only tracking UUIDs and receipt records are JSON-safe', () => {
@@ -29,11 +26,9 @@ describe('diagnostic wire inputs', () => {
       record,
     );
   });
-  test('accepts only PC ranges and explicit source choices', () => {
-    expect(DiagnosticBundleInputSchema.parse(input)).toEqual(input);
-    expect(DiagnosticBundleInputSchema.safeParse({ ...input, range: '30d' }).success).toBe(false);
+  test('rejects unsupported feedback fields', () => {
     expect(
-      DiagnosticBundleInputSchema.safeParse({ ...input, includeChatRecords: true }).success,
+      DiagnosticReportInputSchema.safeParse({ description: 'a', includeChatRecords: true }).success,
     ).toBe(false);
   });
 
@@ -41,18 +36,31 @@ describe('diagnostic wire inputs', () => {
     expect(normalizeDiagnosticDescription('a\nb\rc\r\nd')).toBe('a\r\nb\r\nc\r\nd');
     expect(diagnosticDescriptionByteLength('中\n😀')).toBe(9);
     expect(
-      DiagnosticReportInputSchema.parse({ ...input, description: ` ${'a'.repeat(4096)} ` })
-        .description,
+      DiagnosticReportInputSchema.parse({ description: ` ${'a'.repeat(4096)} ` }).description,
     ).toHaveLength(4096);
-    expect(
-      DiagnosticReportInputSchema.safeParse({ ...input, description: '中'.repeat(1366) }).success,
-    ).toBe(false);
-    expect(DiagnosticReportInputSchema.safeParse({ ...input, description: ' \n ' }).success).toBe(
+    expect(DiagnosticReportInputSchema.safeParse({ description: '中'.repeat(1366) }).success).toBe(
       false,
     );
+    expect(DiagnosticReportInputSchema.safeParse({ description: ' \n ' }).success).toBe(false);
     expect(
-      DiagnosticReportInputSchema.safeParse({ ...input, description: `${'a'.repeat(4094)}\nb` })
-        .success,
+      DiagnosticReportInputSchema.safeParse({ description: `${'a'.repeat(4094)}\nb` }).success,
     ).toBe(false);
   });
+});
+
+test('screenshot attachments accept opaque IDs, never arbitrary paths', () => {
+  const report = { description: 'feedback' };
+  expect(
+    DiagnosticReportInputSchema.parse({
+      ...report,
+      screenshotId: '550e8400-e29b-41d4-a716-446655440000',
+    }).screenshotId,
+  ).toBeDefined();
+  for (const screenshotId of [
+    '../private',
+    'file:///private.png',
+    'https://example.com/image.png',
+    '',
+  ])
+    expect(DiagnosticReportInputSchema.safeParse({ ...report, screenshotId }).success).toBe(false);
 });

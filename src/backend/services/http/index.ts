@@ -23,3 +23,4 @@ export {
   type HttpErrorOptions,
 } from './HttpError';
 export { createHttpClient, type CreateHttpClientOptions } from './createHttpClient';
+export { createFetchBridge, type CreateFetchBridgeOptions } from './createFetchBridge';

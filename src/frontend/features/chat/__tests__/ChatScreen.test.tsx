@@ -22,6 +22,8 @@ jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressArea: ({ children, ...props }: { children?: React.ReactNode }) =>
     jest.requireActual('react').createElement('BackgroundPressArea', props, children),
   composerContentGap: 8,
+  Composer: { Expansion: ({ children }: { children?: React.ReactNode }) => children },
+  useComposerExpansion: () => null,
   ContentState: {
     Error: () => null,
   },
@@ -51,6 +53,10 @@ jest.mock('@/frontend/components/Composer', () => ({
     mockComposerProviderInstance = instance;
     return children;
   },
+}));
+
+jest.mock('@/frontend/components/McpApp', () => ({
+  McpAppConversationProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 
 jest.mock('@/frontend/components/Composer/context/ComposerProvider', () => ({
@@ -125,6 +131,10 @@ jest.mock('../runtime', () => ({
 
 jest.mock('../hooks/useSessionReadReceipt', () => ({ useSessionReadReceipt: jest.fn() }));
 
+jest.mock('@/frontend/hooks/file', () => ({
+  useFileWorkspace: () => ({ folderId: null }),
+}));
+
 jest.mock('../components/LocalRuntimeStatus', () => ({ LocalRuntimeStatus: () => null }));
 
 jest.mock('../components/ChatInput', () => ({
@@ -174,7 +184,7 @@ describe('ChatScreen composer dock wiring', () => {
     renderer = undefined;
   });
 
-  it('keeps the composer in normal flow and shares only keyboard geometry', () => {
+  it('reserves the expandable composer separately from message-list keyboard geometry', () => {
     act(() => {
       renderer = create(<ChatScreen />);
     });
@@ -184,9 +194,15 @@ describe('ChatScreen composer dock wiring', () => {
       keyboardOffset: 26,
     });
     expect(dockProps).toMatchObject({
-      layoutMode: 'flow',
+      layoutMode: 'expandable',
     });
-    expect(dockProps?.onHeightChange).toBeUndefined();
+    const onHeightChange = dockProps?.onHeightChange as (height: number) => void;
+    act(() => onHeightChange(180));
+    expect(chatWorkspaceProps).toMatchObject({
+      contentBottomInset: 8,
+      keyboardOffset: 26,
+      feedbackHintBottomOffset: 180,
+    });
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       controls: mockChatControls,

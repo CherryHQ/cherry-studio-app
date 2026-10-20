@@ -36,6 +36,24 @@ let mockAgentChatSession: {
   status: 'ready';
 };
 
+jest.mock('../hooks/useConversationFeedbackHint', () => ({
+  useConversationFeedbackHint: jest.fn(),
+}));
+
+jest.mock('../translation/MessageTranslationProvider', () => ({
+  MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
+  useMessageTranslation: () => undefined,
+  useMessageTranslationStore: () => null,
+}));
+
+jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => null }));
+
+jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+
+jest.mock('../components/MessageAnswerTabs', () => ({
+  MessageAnswerTabs: () => null,
+}));
+
 jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
   useIsScreenReaderEnabled: () => false,
 }));
@@ -529,6 +547,8 @@ describe('ChatWorkspace message rendering integration', () => {
     const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
     const streaming = (text: string): AgentMessageView => ({
       ...createMessage('assistant-2', 'assistant', 'streaming'),
+      createdAt: '2026-08-09T00:00:01.000Z',
+      turnId: 'turn-2',
       parts: [{ id: 'assistant-2-text', state: 'streaming', text, type: 'text' }],
     });
     mockAgentChatSession = { ...mockAgentChatSession, liveMessages: [streaming('a')] };

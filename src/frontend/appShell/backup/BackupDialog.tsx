@@ -177,7 +177,7 @@ function BackupSummary({ rows }: { rows: readonly (readonly [string, string])[] 
 
 const MEBIBYTE = 1024 * 1024;
 
-function formatSize(bytes: number, t: TFunction, language: string): string {
+export function formatStorageSize(bytes: number, t: TFunction, language: string): string {
   const inMegabytes = bytes >= MEBIBYTE;
   const size = (inMegabytes ? bytes / MEBIBYTE : bytes / 1024).toLocaleString(language, {
     maximumFractionDigits: 1,
@@ -197,7 +197,7 @@ function useCountRows(counts: {
     [t('backup.details.sessions'), format(counts.sessions)],
     [t('backup.details.messages'), format(counts.messages)],
     [t('backup.details.files'), format(counts.files)],
-    [t('backup.details.size'), formatSize(counts.bytes, t, i18n.language)],
+    [t('backup.details.size'), formatStorageSize(counts.bytes, t, i18n.language)],
   ] as const;
 }
 

@@ -1,4 +1,5 @@
 import type { AgentMessageView } from '@/shared/contracts/agent';
+import { createUniqueModelId } from '@/shared/data/types/model';
 
 import type { AgentSessionChatState } from '../AgentSessionChatClient';
 import { createLocalConversationProjector } from '../localConversationView';
@@ -48,6 +49,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     sessionId: 'session',
     status: 'ready',
     activeTurn: null,
+    queuedInputs: [],
     liveMessages: [],
     pendingApprovals: [],
     pendingQuestion: null,
@@ -61,6 +63,7 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     retryMessage: jest.fn(async () => undefined),
     forkSession: jest.fn(async () => ({ id: 'fork' }) as never),
     deleteTurn: jest.fn(async () => undefined),
+    selectMessage: jest.fn(async () => ({ id: 'session' }) as never),
   };
   const sessionChanged = jest.fn();
   const projector = createLocalConversationProjector({
@@ -80,6 +83,18 @@ function fixture(initial: Partial<AgentSessionChatState> = {}) {
     },
   };
 }
+
+test('a queued-only session blocks history edits while leaving its queue outside execution controls', () => {
+  const row = message('answer');
+  const f = fixture({
+    queuedInputs: [
+      { turnId: 'waiting', userMessage: message('waiting', 'user'), assistantMessageId: 'pending' },
+    ],
+  });
+  const projected = f.projector.message(row, f.state);
+  expect(projected.actions.remove?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(f.projector.snapshot(f.state, undefined).executions).toEqual([]);
+});
 
 test('a changed approval payload under the same id rejects the earlier decision', async () => {
   const f = fixture({ pendingApprovals: [approval] });
@@ -102,6 +117,49 @@ test('a changed approval payload under the same id rejects the earlier decision'
     value: undefined,
   });
   expect(f.client.respondApproval).toHaveBeenCalledWith('session', 'approval', 'deny');
+});
+
+test('health sharing identifies the executing turn model and never matches an MCP name collision', () => {
+  const assistant = {
+    ...message('answer'),
+    inferenceSnapshot: {
+      status: 'supported' as const,
+      snapshot: {
+        version: 1 as const,
+        model: {
+          uniqueModelId: 'openai::gpt-test' as never,
+          providerId: 'openai',
+          modelId: 'gpt-test',
+          name: 'Test',
+        },
+        parameters: {},
+        tools: [],
+      },
+    },
+  };
+  const healthApproval = {
+    ...approval,
+    toolRef: { source: 'builtin' as const, capabilityId: 'health_get_summary' },
+  };
+  const f = fixture({ liveMessages: [assistant], pendingApprovals: [healthApproval] });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing).toEqual({
+    providerId: 'openai',
+  });
+  f.set({ liveMessages: [] });
+  expect(f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing).toEqual({
+    providerId: null,
+  });
+  f.set({
+    pendingApprovals: [
+      {
+        ...approval,
+        toolRef: { source: 'mcp', serverId: 'server', rawToolName: 'health_get_summary' },
+      },
+    ],
+  });
+  expect(
+    f.projector.snapshot(f.state, undefined).interactions[0].healthDataSharing,
+  ).toBeUndefined();
 });
 
 test.each(
@@ -185,18 +243,31 @@ test('message actions follow the busy state and reuse projections while it is un
   });
   expect(f.client.forkSession).toHaveBeenCalledWith('session', 'answer', 'Copy');
   expect(f.sessionChanged).toHaveBeenCalledWith('fork');
+  const modelId = createUniqueModelId('provider', 'other');
+  expect(await idle.actions.answerWith!.execute({ modelId })).toEqual({
+    state: 'applied',
+    value: undefined,
+  });
+  expect(f.client.retryMessage).toHaveBeenCalledWith({
+    sessionId: 'session',
+    messageId: 'answer',
+    modelId,
+  });
+  f.client.retryMessage.mockClear();
   f.set({
     activeTurn: { id: 'turn', status: 'running' } as AgentSessionChatState['activeTurn'],
   });
   const busy = f.projector.message(answer, f.state);
   expect(busy).not.toBe(idle);
   expect(busy.actions.retry?.availability).toEqual({ state: 'disabled', reason: 'busy' });
+  expect(busy.actions.answerWith?.availability).toEqual({ state: 'disabled', reason: 'busy' });
   expect(await idle.actions.retry!.execute()).toMatchObject({
     state: 'rejected',
     failure: { code: 'conflict' },
   });
   expect(f.client.retryMessage).not.toHaveBeenCalled();
   expect(f.projector.message(message('user', 'user'), f.state).actions.retry).toBeUndefined();
+  expect(f.projector.message(message('user', 'user'), f.state).actions.answerWith).toBeUndefined();
   expect(f.projector.message(message('system', 'system'), f.state).actions).toEqual({});
 });
 

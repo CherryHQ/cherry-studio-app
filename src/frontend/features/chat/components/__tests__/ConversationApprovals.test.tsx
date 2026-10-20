@@ -27,6 +27,14 @@ jest.mock('../UserQuestionSheet', () => ({
   },
 }));
 const mockToast = jest.fn();
+const mockRecipientQuery = jest.fn((_path?: unknown, _options?: unknown) => ({
+  data: undefined,
+  isPending: false,
+  refetch: jest.fn(),
+}));
+jest.mock('@/frontend/data', () => ({
+  useQuery: (path: unknown, options: unknown) => mockRecipientQuery(path, options),
+}));
 let sheet: {
   canRespond: boolean;
   onRespond(input: ToolApprovalRespondInput): Promise<void>;

@@ -1,16 +1,24 @@
 import { ImageGenerationModeSchema, imageParamsSchema } from '@cherrystudio/provider-registry';
 import * as z from 'zod';
+
+import { McpAppReferenceSchema } from '@/shared/contracts/mcpApp';
+import { McpModelContentSchema, McpResultSourceSchema } from '@/shared/contracts/mcpContent';
 /**
  * Agent Protocol values: views of Agents, Sessions, turns, messages, approvals,
  * and failures. Every shape is JSON-safe and validated at the boundary; see
  * `./index.ts` for the protocol overview.
  */
-
 import { CompactionAnchorDataSchema } from '@/shared/data/types/compaction';
 import { MessageStatsSchema } from '@/shared/data/types/message';
+import { MessageTranslationsSchema } from '@/shared/data/types/messageTranslation';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
-import { SkillActivationSchema, SkillTextReferenceSchema } from '@/shared/data/types/skill';
+import { SelectionTextReferenceSchema } from '@/shared/data/types/selectionReference';
+import {
+  SkillActionSchema,
+  SkillActivationSchema,
+  SkillTextReferenceSchema,
+} from '@/shared/data/types/skill';
 import { TEXT_PREVIEW_MAX_CHARACTERS } from '@/shared/utils/textPreview';
 
 import { AiFailureSnapshotSchema as AgentFailureSnapshotSchema } from '../aiFailure';
@@ -130,6 +138,7 @@ export function readAgentInferenceSnapshot(value: unknown): AgentInferenceSnapsh
 }
 
 export const AgentSessionViewSchema = z.strictObject({
+  workspaceFolderId: z.string().min(1).nullable().optional(),
   id: z.string().min(1),
   agentId: z.string().min(1),
   name: z.string(),
@@ -145,6 +154,11 @@ export const AgentSessionViewSchema = z.strictObject({
    * user can no longer open.
    */
   forkedFromSessionId: z.string().min(1).nullable(),
+  /**
+   * Selected leaf of the message tree. The visible transcript and the next
+   * submission's history are its ancestor chain. Null for an empty Session.
+   */
+  activeNodeId: z.string().min(1).nullable().optional(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
@@ -217,6 +231,8 @@ export const AgentTurnViewSchema = z.strictObject({
   ]),
   assistantMessageId: z.string().min(1),
   error: AgentErrorViewSchema.nullable(),
+  /** A provider attempt failed and is being retried; its error is not final. */
+  isRetrying: z.boolean().optional(),
   startedAt: z.iso.datetime(),
   endedAt: z.iso.datetime().nullable(),
 });
@@ -232,6 +248,9 @@ export const AgentSessionStatusSchema = z
 export type AgentSessionStatus = z.infer<typeof AgentSessionStatusSchema>;
 
 export const AgentToolResultSchema = z.strictObject({
+  mcpSource: McpResultSourceSchema.optional(),
+  mcpApp: McpAppReferenceSchema.optional(),
+  modelContent: McpModelContentSchema.optional(),
   value: JsonValueSchema,
   /** Host-issued compact model value; full value remains available for activity inspection. */
   modelValue: JsonValueSchema.optional(),
@@ -358,8 +377,9 @@ export const AgentMessagePartSchema = z.union([
     text: z.string(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
+    selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
-    skillAction: z.literal('find-and-install').optional(),
+    skillAction: SkillActionSchema.optional(),
     state: z.enum(['streaming', 'done']),
   }),
   z.strictObject({
@@ -380,13 +400,33 @@ export const AgentMessagePartSchema = z.union([
 ]);
 export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
 
+/** One alternative at a message-tree branch point, in creation order. */
+export const AgentMessageSiblingSchema = z.strictObject({
+  id: z.string().min(1),
+  modelId: UniqueModelIdSchema.nullable(),
+  status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
+  siblingsGroupId: z.number().int().nonnegative(),
+});
+export type AgentMessageSibling = z.infer<typeof AgentMessageSiblingSchema>;
+
 export const AgentMessageViewSchema = z.strictObject({
   id: z.string().min(1),
   sessionId: z.string().min(1),
+  /** Previous message in the tree; absent on live projections that do not carry it. */
+  parentId: z.string().min(1).nullable().optional(),
+  /** 0 for an ordinary branch; >0 for answers of one multi-model question. */
+  siblingsGroupId: z.number().int().nonnegative().optional(),
+  /**
+   * Every child of this message's parent, this one included, when there is more
+   * than one. Transcript reads attach it so the client can offer branch switching.
+   */
+  siblings: z.array(AgentMessageSiblingSchema).min(2).optional(),
   turnId: z.string().min(1).nullable(),
   role: z.enum(['user', 'assistant', 'system']),
   status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
   parts: z.array(AgentMessagePartSchema),
+  // Local reading aids; execution and replay consume only parts.
+  translations: MessageTranslationsSchema.optional(),
   stats: MessageStatsSchema.nullable(),
   modelId: UniqueModelIdSchema.nullable(),
   inferenceSnapshot: AgentInferenceSnapshotViewSchema.nullable(),
@@ -402,11 +442,16 @@ export const AgentInputPartSchema = z.union([
       text: z.string(),
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
       skillReferences: z.array(SkillTextReferenceSchema).optional(),
+      selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
     })
     .refine(
-      ({ text, pluginReferences, skillReferences }) => {
+      ({ text, pluginReferences, skillReferences, selectionReferences }) => {
         let end = 0;
-        return [...(pluginReferences ?? []), ...(skillReferences ?? [])]
+        return [
+          ...(pluginReferences ?? []),
+          ...(skillReferences ?? []),
+          ...(selectionReferences ?? []),
+        ]
           .sort((left, right) => left.offset - right.offset)
           .every((reference) => {
             if (

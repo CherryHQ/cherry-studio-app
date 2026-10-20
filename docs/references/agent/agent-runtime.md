@@ -1,12 +1,15 @@
 # Cherry Agent Runtime
 
-> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.2.0.
+> Status: historical per-turn reference. The experimental branch uses Pi Durable 1.3.0.
 
 The experimental branch has replaced this per-turn production contract with upstream-owned durable
 history and recovery. [Pi Durable Migration](./pi-durable-migration.md) describes the active
 persistent contract, storage, tools, presentation, and backup. The baseline below explains the
 legacy history that the one-time reader hands to Pi; it does not govern new conversation execution.
 Model probes retain a short-lived, isolated request interface and use the same native loop in memory.
+Translation and automatic naming use the separate `RuntimeTextGenerator` capability on the bound
+service: one text-only provider invocation sharing model resolution and OAuth, without the native
+loop or storage.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -214,6 +217,10 @@ type RuntimeArtifact = {
 type RuntimeToolResult = {
   value: RuntimeJsonValue
   artifacts: RuntimeArtifact[]
+  modelContent?: McpModelContent // text or managed image references; canonical and model-visible
+  modelImages?: { fileEntryId: string; mimeType: string; data: string }[] // process-local only
+  mcpApp?: McpAppReference // host-issued UI linkage; never model context
+  mcpSource?: McpResultSource // original connection fingerprint for returned resource links
   // Optional compact built-in model value; full value remains available for activity inspection.
   modelValue?: RuntimeJsonValue
   // Trusted built-in callback contribution, consumed by the Runtime outside compactable results.
@@ -512,6 +519,7 @@ type RuntimeTool = {
   displayName: string
   description: string
   inputSchema: RuntimeJsonValue
+  outputSchema?: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
   failureGroup?: string
   execute(call: RuntimeToolCall): Promise<RuntimeToolResult>
@@ -524,6 +532,13 @@ may expose that alias as a direct model function or as the exact target name acc
 model-binding tool; that encoding never changes the tool's `ref`, approval, input, or persisted
 identity. `displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
 provider-native schema object.
+
+`outputSchema` optionally describes a built-in tool's `RuntimeToolResult.value`, including business
+error values. Pi wraps it with the managed artifact schema when declaring and validating Code Mode
+results. Tools without a definition retain an unknown value. MCP uses its bounded content projection
+instead; an upstream MCP output schema must not be applied to that different shape. Output definitions
+participate in the Host's configuration identity, preventing queued turns from changing an active
+tool contract.
 
 The Host supplies an immutable tool snapshot after applying the system catalog, the Agent's
 capability-group deny-list, current Agent MCP configuration, platform availability, system
@@ -582,12 +597,14 @@ A turn has no wall-clock deadline. Long generations, such as writing a large fil
 legitimate progress, and the step and call budgets already bound runaway tool loops. A turn ends only
 by completing, failing, or being cancelled; cancellation aborts the model, approval waiters, and the
 callback signal before terminalizing live tool parts. Bounded waits belong to the operations that can
-stall: each model request shares a 120-second waiting budget across all API-key attempts. Switching
+stall: each model request shares a 30-minute waiting budget across all API-key attempts. Switching
 keys or receiving stream-start or empty text/thinking events does not reset it; content events
 reset the idle timer, so ongoing generation can continue. Expiry fails the request and aborts its active transport. Every
 request settles on cancellation, source failure, or premature stream closure, even when the source
 ignores abort. Tool execution is outside this timer, and the next model request starts a fresh
-budget. Streamable HTTP MCP callbacks add their own 60-second invocation bound.
+budget. Streamable HTTP MCP callbacks add a 60-second active invocation budget. It pauses during
+explicit MCP elicitation, whose native consent queue has a separate ten-minute limit and withdraws a
+question once no call on its server remains.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -612,12 +629,15 @@ prepared instructions; reopening an existing working copy preserves them without
 A non-artifact tool returns `artifacts: []`; an MCP
 adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.
 A file-producing application capability creates and validates each managed entry before returning
-its artifact ref. The Pi adapter gives the model the typed outer envelope, including bounded managed
-refs but never artifact bytes, and also emits the artifacts as Runtime file parts for Host
-projection. This preserves same-turn follow-up access without treating assistant artifact parts as
+its artifact ref. The Pi adapter gives ordinary tools the typed outer envelope, including bounded managed
+refs, and emits artifacts as Runtime file parts for Host projection. MCP has a separate model
+channel: `modelContent` carries bounded text and managed image references; `modelImages` carries
+temporary image bytes for the current provider request. Canonical persistence strips those bytes
+and retains `mcpApp` only as UI linkage. Remote `_meta` is excluded from model content, including
+legacy history. This preserves same-turn follow-up access without treating assistant artifact parts as
 later model attachments. See
 [Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
-Absolute paths and large base64 payloads are never tool results.
+Absolute paths and inline image bytes never enter canonical tool results.
 
 The Host resolves installed and enabled Skills within the Agent's bindings. Their instruction
 context cannot change the tool snapshot, approval policy, OS permission, or turn resource ledger.

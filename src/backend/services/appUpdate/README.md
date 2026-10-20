@@ -13,18 +13,24 @@ Tapping an unmarked row runs a fresh check and reports its result as a toast.
 
 ## Distribution Gate
 
-`app.config.ts` parses `APK_UPDATES_ENABLED=true|false` into the boolean
-`extra.isApkUpdatesEnabled`. Only `true` on Android enables the feature. An absent setting defaults
-to `false`; any other build setting fails configuration. The module requires the runtime boolean
-`true`, hides the UI, skips network requests, and rejects download actions when disabled. GitCode
-is the fixed update source. There is no user or remote toggle.
+Packaged Android builds enable the feature only on the immutable `expo-updates` build channel
+`production-apk`, read through `runningUpdate`. An OTA manifest cannot change the channel, so it
+cannot enable APK checks on Google Play; unconfigured release builds fail closed. Development
+clients have no channel and opt in through `APK_UPDATES_ENABLED=true`, which `app.config.ts` parses
+into `extra.isApkUpdatesEnabled` for the development profile only; packaged configs omit it so it
+stays out of their runtime fingerprints. Disabled builds hide the UI, skip network requests, and
+reject download actions. GitCode is the fixed whole-APK update source; there is no user setting.
+
+`runningUpdate` reads the `ExpoUpdates` native module optionally. Development clients built before
+`expo-updates` was added still start, with no channel.
 
 | EAS profile | APK update behavior |
 | --- | --- |
-| `production` | Enabled on Android |
-| `production-google-play` | Explicitly disabled |
-| `development` / `preview` | Disabled by default |
-| Any iOS build | Disabled regardless of the setting |
+| `production`, Android (`production-apk`) | Enabled |
+| `production-google-play` | Disabled |
+| `preview` | Disabled |
+| `development` | Disabled unless `APK_UPDATES_ENABLED=true` |
+| Any iOS build | Disabled |
 
 The [Android release workflow](../../../../.github/workflows/android-release.yml) builds with
 the existing `production` profile. Its APK is published to GitHub and manually mirrored to GitCode using the
@@ -34,9 +40,10 @@ this public APK. See [Local EAS Builds](../../../../docs/guides/local-builds.md)
 
 ## Version And Download Selection
 
-- Read the installed APK's bundled `expo.version` through `expo-constants`, matching About. This
-  project does not currently ship Expo OTA updates. Future OTA support must preserve the installed
-  binary version and distribution gate.
+- Read the installed APK's `nativeApplicationVersion` through `expo-application`, matching About.
+  A downloaded OTA manifest's `expo.version` does not affect whole-APK upgrade comparisons.
+  [EAS Update](../../../../docs/guides/app-updates.md) separately handles compatible code/assets;
+  this service handles native/public APK upgrades.
 - Request GitCode's public `/api/v5/repos/CherryHQ/cherry-studio-app/releases/latest?type=latest`
   endpoint through the shared HTTP client, with cancellation, a ten-second timeout, and a response
   size limit. No token is embedded or requested.

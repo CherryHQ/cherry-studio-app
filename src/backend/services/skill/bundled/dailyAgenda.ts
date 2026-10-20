@@ -2,9 +2,7 @@ import type { BundledSkillDefinition } from './index';
 
 export const dailyAgendaSkill: BundledSkillDefinition = {
   name: 'daily-agenda',
-  revision: 2,
   requiredTools: ['calendar_list_collections', 'calendar_list_events'],
-  workflowScope: 'Reads device calendars and writes a prioritized agenda for one day.',
   files: {
     'SKILL.md': `---
 name: daily-agenda

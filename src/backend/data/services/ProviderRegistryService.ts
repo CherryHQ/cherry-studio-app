@@ -641,61 +641,6 @@ export class ProviderRegistryService {
     };
   }
 
-  /** Resolve the trusted endpoint declaration used to serialize a service-tier selection. */
-  resolveServiceTierControl(
-    provider: ReasoningProviderContext,
-    model: Model,
-    endpointType?: EndpointType,
-  ): ResolvedServiceTierControl | undefined {
-    const profileProvider = this.findProfileProvider(provider);
-    const effectiveEndpoint =
-      endpointType ??
-      resolveReasoningEndpointType(
-        model.endpointTypes,
-        provider.defaultChatEndpoint ?? profileProvider?.defaultChatEndpoint ?? undefined,
-      );
-    if (!effectiveEndpoint) {
-      return undefined;
-    }
-
-    const endpointControl =
-      profileProvider?.endpointConfigs?.[effectiveEndpoint]?.requestControls?.serviceTier;
-    if (!endpointControl) {
-      return undefined;
-    }
-
-    const providerIds = Array.from(
-      new Set(
-        [provider.id, profileProvider?.id, provider.presetProviderId].filter(
-          (value): value is string => Boolean(value),
-        ),
-      ),
-    );
-    const modelIds = Array.from(
-      new Set(
-        [model.apiModelId, model.presetModelId].filter((value): value is string => Boolean(value)),
-      ),
-    );
-    let override: ProviderModelOverride | null = null;
-
-    for (const providerId of providerIds) {
-      for (const modelId of modelIds) {
-        const candidate = this.loader.findOverride(providerId, modelId);
-        if (candidate?.requestControls?.serviceTier) {
-          override = candidate;
-          break;
-        }
-      }
-      if (override) break;
-    }
-
-    return {
-      default: endpointControl.default,
-      options: override?.requestControls?.serviceTier?.options ?? endpointControl.options,
-      wire: endpointControl.wire,
-    };
-  }
-
   lookupModel(
     providerId: string,
     modelId: string,

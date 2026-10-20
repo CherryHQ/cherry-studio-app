@@ -25,6 +25,7 @@ const mockChatState: AgentSessionChatState = {
   status: 'ready',
   sessionId: 'session-1',
   activeTurn: null,
+  queuedInputs: [],
   liveMessages: [],
   pendingApprovals: [],
   pendingQuestion: null,
@@ -60,6 +61,9 @@ jest.mock('../AgentSessionChatClient', () => ({
   isAgentSessionBusy: jest.requireActual<typeof import('../AgentSessionChatClient')>(
     '../AgentSessionChatClient',
   ).isAgentSessionBusy,
+  isAgentSessionExecuting: jest.requireActual<typeof import('../AgentSessionChatClient')>(
+    '../AgentSessionChatClient',
+  ).isAgentSessionExecuting,
   AgentSessionChatClient: jest.fn().mockImplementation(() => ({
     cancelTurn: mockCancelTurn,
     dispose: mockDispose,
@@ -120,9 +124,22 @@ describe('ChatProvider Draft handoff', () => {
     imageResult = undefined;
     mockChatState.liveMessages = [];
     mockChatState.activeTurn = null;
+    mockChatState.queuedInputs = [];
     mockChatState.isSubmitting = false;
+    mockChatState.snapshot = undefined;
     mockStartSession.mockImplementation(async (input) => ({ id: input.sessionId }));
     mockSubmitMessage.mockResolvedValue({});
+  });
+
+  it('keeps a queued-only composer sendable without showing an active-generation stop state', () => {
+    mockChatState.queuedInputs = [
+      { turnId: 'waiting', assistantMessageId: 'answer', userMessage: {} as AgentMessageView },
+    ];
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
   });
 
   afterEach(() => {
@@ -149,7 +166,130 @@ describe('ChatProvider Draft handoff', () => {
     act(() => {
       void currentControls().cancel();
     });
-    expect(mockCancelTurn).toHaveBeenCalledWith('session-1');
+    expect(mockCancelTurn).toHaveBeenCalledWith('session-1', 'active-answer');
+  });
+
+  it('follows the selected answer instead of another model still running in the background', async () => {
+    const selected: AgentMessageView = {
+      ...imageMessage('selected'),
+      parentId: 'question',
+      status: 'streaming',
+    };
+    const background: AgentMessageView = { ...selected, id: 'background', turnId: 'other-turn' };
+    mockChatState.liveMessages = [selected, background];
+    mockChatState.activeTurn = {
+      id: background.turnId!,
+      sessionId: 'session-1',
+      assistantMessageId: background.id,
+      status: 'running',
+      startedAt: selected.createdAt,
+      endedAt: null,
+      error: null,
+    };
+    mockChatState.snapshot = {
+      agent: { id: 'agent-1', name: 'Agent' },
+      capabilities: { approvals: true, attachments: true, reasoning: true, tools: true },
+      session: {
+        id: 'session-1',
+        agentId: 'agent-1',
+        name: '',
+        isNameManuallyEdited: false,
+        activeNodeId: selected.id,
+        forkBoundaryMessageId: null,
+        forkedFromSessionId: null,
+        createdAt: selected.createdAt,
+        updatedAt: selected.updatedAt,
+      },
+      activeTurn: mockChatState.activeTurn,
+      activeUserMessage: null,
+      streamingMessage: background,
+      queuedInputs: [],
+      pendingApprovals: [],
+      pendingQuestion: null,
+      hasHistoryBeforeActiveTurn: false,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    const cancel = currentControls().cancel;
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'selected');
+
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBe(false);
+    // The most recent turn event may describe A completing while B still runs.
+    mockChatState.activeTurn = { ...mockChatState.activeTurn!, status: 'completed' };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().canSend).toBe(false);
+    mockCancelTurn.mockClear();
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).not.toHaveBeenCalled();
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: background.id },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.liveMessages = mockChatState.liveMessages.map((message) => ({
+      ...message,
+      status: 'success',
+    }));
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    mockChatState.liveMessages = [{ ...selected, status: 'success' }, background];
+
+    const queuedUser = {
+      ...selected,
+      id: 'queued-user',
+      role: 'user' as const,
+      parentId: background.id,
+    };
+    mockChatState.queuedInputs = [
+      { turnId: 'queued-turn', assistantMessageId: 'queued-answer', userMessage: queuedUser },
+    ];
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'queued-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(true);
+    await act(async () => {
+      await cancel();
+    });
+    expect(mockCancelTurn).toHaveBeenLastCalledWith('session-1', 'background');
+
+    mockChatState.snapshot = {
+      ...mockChatState.snapshot,
+      session: { ...mockChatState.snapshot.session, activeNodeId: 'historical-answer' },
+    };
+    act(() => {
+      renderer!.update(<Harness sessionId="session-1" />);
+    });
+    expect(currentControls().isBusy).toBe(false);
   });
 
   it('publishes the admitted Draft to the destination Session for one render', async () => {
@@ -186,7 +326,7 @@ describe('ChatProvider Draft handoff', () => {
   });
 
   it.each([undefined, 'session-1'])(
-    'shows the same row IDs before %s sends complete and retains them until displayed',
+    'retains optimistic row IDs only for a new session after %s admission completes',
     async (sessionId) => {
       const admission = deferred<void>();
       mockStartSession.mockImplementation(async (input) => {
@@ -237,10 +377,12 @@ describe('ChatProvider Draft handoff', () => {
         admission.resolve();
         await sending;
       });
-      expect(currentControls().pendingSend).toMatchObject({
-        isSubmitting: false,
-        messages: pending.messages,
-      });
+      if (sessionId) expect(currentControls().pendingSend).toBeUndefined();
+      else
+        expect(currentControls().pendingSend).toMatchObject({
+          isSubmitting: false,
+          messages: pending.messages,
+        });
       expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();

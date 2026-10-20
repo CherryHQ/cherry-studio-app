@@ -4,7 +4,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { ResolvedFileUris } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { FileEntry } from '@/shared/data/types/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 import { filePreviewDirectory, imageThumbnailCacheKey } from './filePreviewCache';
 import {
@@ -43,6 +43,18 @@ export async function resolveFilePreviewUris(entry: FileEntry): Promise<Resolved
   }
 
   return { previewUri: await generateFilePreviewUri(entry), uri: resolved.uri };
+}
+
+/** Trash thumbnails never make the file available to ordinary previews or attachments. */
+export async function getTrashedImagePreviewUri(
+  entries: Pick<FileEntryService, 'findTrashedById'>,
+  id: FileEntryId,
+  deletedAt: number,
+): Promise<string | undefined> {
+  const entry = await entries.findTrashedById(id, deletedAt);
+  if (!entry?.mediaType.startsWith('image/')) return undefined;
+  const { previewUri, uri } = resolveCachedFilePreviewUris(entry);
+  return previewUri ?? uri;
 }
 
 export function resolveCachedFilePreviewUris(entry: FileEntry): ResolvedFileUris {

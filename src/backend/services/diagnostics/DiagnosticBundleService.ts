@@ -1,5 +1,5 @@
 import { randomUUID } from 'expo-crypto';
-import { Directory, File } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 
 import {
   AppStatePolicy,
@@ -15,15 +15,11 @@ import { diagnosticIdentifier } from '@/backend/utils/diagnosticIdentifier';
 import type { TraceDiagnosticSnapshot } from '@/backend/utils/diagnosticTrace';
 import {
   DiagnosticError,
-  DiagnosticRangeSchema,
   DiagnosticReportInputSchema,
   DIAGNOSTIC_SOURCE_LIMIT_BYTES,
+  DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+  DIAGNOSTIC_SCREENSHOT_MAX_BYTES,
   normalizeDiagnosticDescription,
-  type DiagnosticBundleInput,
-  type DiagnosticExportResult,
-  type DiagnosticInspection,
-  type DiagnosticRange,
-  type DiagnosticSavedBundle,
   type DiagnosticsModule,
   type DiagnosticReportInput,
   type DiagnosticUploadResult,
@@ -42,19 +38,12 @@ import {
 } from './sourceCollector';
 import { selectBundleSources } from './sourceSelection';
 import { collectDiagnosticSystemInfo } from './systemInfo';
-import type {
-  DiagnosticTimeRange,
-  DiagnosticWarning,
-  SourceCandidate,
-  StagedSource,
-} from './types';
+import type { DiagnosticTimeRange, DiagnosticWarning, StagedSource } from './types';
 import { writeBundleZip } from './writeBundleZip';
 
 const logger = loggerService.withContext('DiagnosticBundleService');
-const RANGE_DURATION_MS = { '24h': 86400000, '3d': 3 * 86400000, '7d': 7 * 86400000 };
-function toTimeRange(range: DiagnosticRange, now: number): DiagnosticTimeRange {
-  return { fromMs: now - RANGE_DURATION_MS[range], toMs: now };
-}
+// Feedback always submits the last 24 hours of logs and traces; there is no range selector.
+const RANGE_DURATION_MS = 86400000;
 function disposeSnapshot(snapshot: TraceDiagnosticSnapshot | undefined) {
   try {
     snapshot?.dispose();
@@ -76,7 +65,6 @@ function cleanup(directory: Directory): void {
 @AppStatePolicy('continue')
 export class DiagnosticBundleService extends BaseService implements DiagnosticsModule {
   private inFlightOperation: Promise<unknown> | null = null;
-  private inspectionTail: Promise<unknown> = Promise.resolve();
   private readonly uploader = new CherryDiagnosticUploadClient();
   private disposed = false;
   private readonly abort = new AbortController();
@@ -101,36 +89,7 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     } catch {
       /* Native module may be absent in an old dev client. */
     }
-    await Promise.allSettled([this.inspectionTail, this.inFlightOperation]);
-  }
-
-  inspect(rangeName: DiagnosticRange): Promise<DiagnosticInspection> {
-    const operation = this.inspectionTail.then(async () => {
-      if (this.disposed) throw new DiagnosticError('INSPECT_FAILED');
-      const range = toTimeRange(DiagnosticRangeSchema.parse(rangeName), Date.now());
-      let snapshot: TraceDiagnosticSnapshot | undefined;
-      try {
-        const collected = await this.collect(range, { includeLogs: true, includeTraces: true });
-        snapshot = collected.snapshot;
-        const { collection } = collected;
-        const info = (sources: SourceCandidate[]) => ({
-          available: sources.length > 0,
-          estimatedBytes: sourceStats(sources).bytes,
-          fileCount: sources.length,
-        });
-        return {
-          hasWarnings: collection.warnings.size > 0,
-          sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
-          sources: { logs: info(collection.logs), traces: info(collection.traces) },
-        };
-      } catch (cause) {
-        throw new DiagnosticError('INSPECT_FAILED', { cause });
-      } finally {
-        disposeSnapshot(snapshot);
-      }
-    });
-    this.inspectionTail = operation.catch(() => undefined);
-    return operation;
+    await this.inFlightOperation?.catch(() => undefined);
   }
 
   private async exclusive<T>(action: () => Promise<T>): Promise<T | { status: 'busy' }> {
@@ -147,33 +106,13 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     }
   }
 
-  exportBundle(input: DiagnosticReportInput): Promise<DiagnosticExportResult> {
-    return this.exclusive(async (): Promise<DiagnosticExportResult> => {
-      const native = this.native();
-      const { bundle, tempRoot } = await this.prepare(
-        DiagnosticReportInputSchema.parse(input),
-        false,
-      );
-      try {
-        this.abort.signal.throwIfAborted();
-        const destination = await native.saveFile(bundle.filePath, bundle.fileName);
-        return destination ? { ...bundle, filePath: destination } : { status: 'canceled' };
-      } catch (cause) {
-        throw new DiagnosticError('SAVE_FAILED', { cause });
-      } finally {
-        cleanup(tempRoot);
-      }
-    });
-  }
-
   uploadBundle(input: DiagnosticReportInput): Promise<DiagnosticUploadResult> {
     return this.exclusive(async (): Promise<DiagnosticUploadResult> => {
       const parsed = DiagnosticReportInputSchema.parse(input);
       // Missing native transport or signing credentials must not trigger collection.
       if (!this.uploader.isAvailable)
         return { status: 'submission_failed', reason: 'not_configured' };
-      this.native();
-      const { bundle, tempRoot } = await this.prepare(parsed, true);
+      const { bundle, tempRoot } = await this.prepare(parsed);
       try {
         this.abort.signal.throwIfAborted();
         const result = await this.uploader.upload({
@@ -193,30 +132,17 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     });
   }
 
-  private native() {
-    try {
-      return getNativeDiagnostics();
-    } catch (cause) {
-      throw new DiagnosticError('NATIVE_UNAVAILABLE', { cause });
-    }
-  }
-
-  private async collect(
-    range: DiagnosticTimeRange,
-    input: Pick<DiagnosticBundleInput, 'includeLogs' | 'includeTraces'>,
-  ) {
-    if (input.includeLogs) flushLogWriter();
+  private async collect(range: DiagnosticTimeRange) {
+    flushLogWriter();
     let snapshot: TraceDiagnosticSnapshot | undefined;
     const warnings = new Set<DiagnosticWarning>();
-    if (input.includeTraces) {
-      try {
-        snapshot = await this.traces.createDiagnosticSnapshot();
-      } catch {
-        warnings.add('trace_snapshot_failed');
-      }
+    try {
+      snapshot = await this.traces.createDiagnosticSnapshot();
+    } catch {
+      warnings.add('trace_snapshot_failed');
     }
     try {
-      const collection = await collectDiagnosticSources(range, input, this.abort.signal, snapshot);
+      const collection = await collectDiagnosticSources(range, this.abort.signal, snapshot);
       for (const warning of warnings) collection.warnings.add(warning);
       if (
         snapshot &&
@@ -231,17 +157,32 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
     }
   }
 
-  private async prepare(input: DiagnosticReportInput, uploadedAutomatically: boolean) {
+  private async prepare(input: DiagnosticReportInput) {
     const bundleId = randomUUID();
     let tempRoot: Directory | undefined;
     let snapshot: TraceDiagnosticSnapshot | undefined;
     try {
       this.abort.signal.throwIfAborted();
       tempRoot = createDiagnosticTemporaryDirectory(bundleId);
+      // Adopt the selected screenshot before asynchronous collection. Only opaque IDs
+      // from our capture directory are accepted, never arbitrary file paths.
+      let screenshot: File | undefined;
+      if (input.screenshotId) {
+        const source = new File(
+          Paths.cache,
+          DIAGNOSTIC_SCREENSHOT_DIRECTORY,
+          `${input.screenshotId}.png`,
+        );
+        if (!source.exists || source.size <= 0 || source.size > DIAGNOSTIC_SCREENSHOT_MAX_BYTES)
+          throw new Error('Invalid feedback screenshot');
+        screenshot = new File(tempRoot, 'screenshot.png');
+        await source.copy(screenshot);
+      }
       const fileName = `cherry-studio-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}-${bundleId}.zip`;
       const destination = new File(tempRoot, fileName);
-      const range = toTimeRange(input.range, Date.now());
-      const collected = await this.collect(range, input);
+      const now = Date.now();
+      const range: DiagnosticTimeRange = { fromMs: now - RANGE_DURATION_MS, toMs: now };
+      const collected = await this.collect(range);
       snapshot = collected.snapshot;
       const { collection } = collected;
       const { selectedFiles, omittedFiles } = selectBundleSources([
@@ -314,17 +255,20 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           capture: 'metadata',
           containsUnredactedData: true,
           publiclyShareable: false,
-          uploadedAutomatically,
+          uploadedAutomatically: true,
         },
         selection: {
           includeChatRecords: false,
-          includeLogs: input.includeLogs,
+          includeLogs: true,
           includeSystemInformation: true,
-          includeTraces: input.includeTraces,
+          includeTraces: true,
           persistedTracesOnly: true,
         },
         sourceLimitBytes: DIAGNOSTIC_SOURCE_LIMIT_BYTES,
         feedback: { file: 'feedback.txt', source: 'user' },
+        ...(screenshot
+          ? { screenshot: { file: 'screenshot.png', source: 'user', bytes: screenshot.size } }
+          : {}),
         system,
         plugins,
         // Retain empty Desktop schema-v2 fields; no crash or conversation sources are read.
@@ -347,21 +291,14 @@ export class DiagnosticBundleService extends BaseService implements DiagnosticsM
           { name: 'diagnostics.json', content: `${JSON.stringify(manifest, null, 2)}\n` },
           { name: 'feedback.txt', content: normalizeDiagnosticDescription(input.description) },
         ],
-        staged,
+        [
+          ...staged,
+          ...(screenshot ? [{ archiveName: 'screenshot.png', path: screenshot.uri }] : []),
+        ],
         this.abort.signal,
       );
-      const bundle: DiagnosticSavedBundle = {
-        status: 'saved',
-        bundleId,
-        fileName,
-        filePath: destination.uri,
-        archiveBytes: destination.size,
-        includedFileCount: staged.length,
-        omittedFileCount: omitted.length,
-        hasWarnings: collection.warnings.size > 0,
-      };
       for (const entry of tempRoot.list()) if (entry.uri !== destination.uri) entry.delete();
-      return { bundle, tempRoot };
+      return { bundle: { fileName, filePath: destination.uri }, tempRoot };
     } catch (cause) {
       if (tempRoot) cleanup(tempRoot);
       throw new DiagnosticError('BUNDLE_BUILD_FAILED', { cause });

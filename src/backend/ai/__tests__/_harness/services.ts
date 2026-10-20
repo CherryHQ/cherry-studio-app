@@ -12,8 +12,6 @@ type ContractFixtureOptions = {
   providerOverrides?: Partial<Provider>;
 };
 
-export type ContractFixture = ReturnType<typeof createContractFixture>;
-
 export function createContractFixture(options: ContractFixtureOptions = {}) {
   installProviderRegistryTestSnapshot();
   const provider = createProvider(options.providerOverrides);

@@ -57,6 +57,7 @@ export async function downloadWebPage(input: string, signal: AbortSignal) {
       method: 'GET',
       // Preserve signed/duplicate query parameters exactly as normalized by URL.
       path: target.pathname + target.search,
+      logPath: target.pathname,
       headers: { Accept: 'text/html, application/xhtml+xml, text/plain, text/markdown' },
       credentials: 'omit',
       redirect: 'manual',

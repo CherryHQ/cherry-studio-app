@@ -1,38 +1,30 @@
-import type { WebSearchProvider } from '@/shared/data/types/webSearch';
+import type { WebSearchProviderModule } from '@cherrystudio/web-search';
+import { bocha } from '@cherrystudio/web-search/providers/bocha';
+import { crawl4ai } from '@cherrystudio/web-search/providers/crawl4ai';
+import { exa } from '@cherrystudio/web-search/providers/exa';
+import { exaMcp } from '@cherrystudio/web-search/providers/exa-mcp';
+import { firecrawl } from '@cherrystudio/web-search/providers/firecrawl';
+import { jina } from '@cherrystudio/web-search/providers/jina';
+import { parallel } from '@cherrystudio/web-search/providers/parallel';
+import { querit } from '@cherrystudio/web-search/providers/querit';
+import { searxng } from '@cherrystudio/web-search/providers/searxng';
+import { serply } from '@cherrystudio/web-search/providers/serply';
+import { tavily } from '@cherrystudio/web-search/providers/tavily';
+import { zhipu } from '@cherrystudio/web-search/providers/zhipu';
 
-import type { ApiKeyRotationState } from '../utils/provider';
-import { BochaProvider } from './api/BochaProvider';
-import { Crawl4AIProvider } from './api/Crawl4AIProvider';
-import { ExaProvider } from './api/ExaProvider';
-import { FetchProvider } from './api/FetchProvider';
-import { FirecrawlProvider } from './api/FirecrawlProvider';
-import { JinaProvider } from './api/JinaProvider';
-import { ParallelProvider } from './api/ParallelProvider';
-import { QueritProvider } from './api/QueritProvider';
-import { SearxngProvider } from './api/SearxngProvider';
-import { SerplyProvider } from './api/SerplyProvider';
-import { TavilyProvider } from './api/TavilyProvider';
-import { ZhipuProvider } from './api/ZhipuProvider';
-import type { WebSearchProviderDriver } from './factory';
-import { ExaMcpProvider } from './mcp/ExaMcpProvider';
+import type { WebSearchProviderId } from '@/shared/data/types/webSearch';
 
-type WebSearchProviderConstructor = new (
-  provider: WebSearchProvider,
-  apiKeyRotationState: ApiKeyRotationState,
-) => WebSearchProviderDriver;
-
-export const WEB_SEARCH_PROVIDER_REGISTRY = {
-  zhipu: ZhipuProvider,
-  tavily: TavilyProvider,
-  searxng: SearxngProvider,
-  exa: ExaProvider,
-  'exa-mcp': ExaMcpProvider,
-  bocha: BochaProvider,
-  querit: QueritProvider,
-  fetch: FetchProvider,
-  jina: JinaProvider,
-  firecrawl: FirecrawlProvider,
-  crawl4ai: Crawl4AIProvider,
-  parallel: ParallelProvider,
-  serply: SerplyProvider,
-} as const satisfies Record<WebSearchProvider['id'], WebSearchProviderConstructor>;
+export const REMOTE_WEB_SEARCH_PROVIDERS = {
+  zhipu,
+  tavily,
+  searxng,
+  exa,
+  'exa-mcp': exaMcp,
+  bocha,
+  querit,
+  jina,
+  firecrawl,
+  crawl4ai,
+  parallel,
+  serply,
+} satisfies Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderModule>;

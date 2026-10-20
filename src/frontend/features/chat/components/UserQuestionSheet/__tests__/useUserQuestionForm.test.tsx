@@ -168,6 +168,58 @@ test('requires every answer when the request does not accept skips', async () =>
   expect(respond).toHaveBeenCalledTimes(1);
 });
 
+test('skips optional fields while requiring every required parameter before submission', async () => {
+  const value: QuestionFormQuestion[] = [
+    { ...questions[2], id: 'optional-first', required: false },
+    { ...questions[2], id: 'required', required: true },
+    { ...questions[2], id: 'optional-last', required: false },
+  ];
+  act(() => renderer.update(<Harness key="parameters" value={value} allowSkip={false} />));
+  expect(form.action).toBe('skip');
+  act(() => form.advance());
+  expect(form.index).toBe(1);
+  expect(form.canAct).toBe(false);
+  act(() => form.skip());
+  expect(form.index).toBe(1);
+  act(() => form.navigate(2));
+  expect(form.canAct).toBe(false);
+  await act(async () => form.submit());
+  expect(respond).not.toHaveBeenCalled();
+  act(() => form.navigate(1));
+  act(() => form.setText('Topic'));
+  act(() => form.advance());
+  expect(form.canAct).toBe(true);
+  await act(async () => form.submit());
+  expect(respond).toHaveBeenCalledWith([
+    { questionId: 'optional-first', selectedOptionIds: [], text: '', skipped: true },
+    { questionId: 'required', selectedOptionIds: [], text: 'Topic', skipped: false },
+    { questionId: 'optional-last', selectedOptionIds: [], text: '', skipped: true },
+  ]);
+});
+
+test('honors an explicit required field even when other questions may be skipped', async () => {
+  act(() =>
+    renderer.update(
+      <Harness key="explicit-required" value={[{ ...questions[2], required: true }]} />,
+    ),
+  );
+  expect(form.canAct).toBe(false);
+  act(() => form.skip());
+  expect(form.answer.skipped).toBe(false);
+  await act(async () => form.submit());
+  expect(respond).not.toHaveBeenCalled();
+});
+
+test('preserves protocol parameter whitespace when the field requests it', async () => {
+  const value: QuestionFormQuestion[] = [
+    { ...questions[2], input: { label: 'Code', preserveWhitespace: true } },
+  ];
+  act(() => renderer.update(<Harness key="literal-parameter" value={value} />));
+  act(() => form.setText('  indented code\n'));
+  await act(async () => form.submit());
+  expect(respond.mock.calls[0][0][0].text).toBe('  indented code\n');
+});
+
 test('locks a pending submission, preserves answers on failure, and allows exactly one retry', async () => {
   act(() => form.navigate(2));
   let reject!: (error: Error) => void;

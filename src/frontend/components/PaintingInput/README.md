@@ -1,22 +1,50 @@
 # Painting Input
 
-Shared image composer controls for standalone painting and Agent chat. This module owns image
+Shared image composer controls for the painting board and Agent chat. This module owns image
 attachment selection, model selection, and registry-derived generation parameters. It submits a
 `PaintingInputSubmission` through `onGenerate`; the caller owns execution, history, and cancellation.
 Callers mount `PaintingInputProvider` inside their `ComposerSessionProvider`, around both text and
-image controls. They supply successful outputs and an execution callback; the provider retains
-reference intent and per-model/per-mode parameter drafts across control switches.
+image controls. The provider retains reference intent and per-model/per-mode parameter drafts across
+control switches, and holds the local model selection so switching presentations does not reset it.
 
-Standalone painting supplies an optional painting and uses a local image model selection. Agent
-chat supplies a controlled `modelSelection`, which permits switching between text and image models.
-The shared controls do not create painting jobs, navigate, or persist conversation messages.
+`PaintingInput` is the Agent-chat presentation: attachments above the field, then a toolbar with the
++ menu, the settings action, and the model pill. Agent chat supplies a controlled `modelSelection`,
+which permits switching between text and image models.
+
+`PaintingWorkspaceInput` uses the shared compact-to-editing composer. At rest it keeps one row:
+the + menu, a reference thumbnail without a remove badge, the field, and send. The thumbnail focuses
+the field; reference attachments alone never expand it. Editing or draft text opens the full-width
+field above the toolbar, with reference images in the ordinary attachment area for preview and
+removal. The upper-right expand action opens the same mounted field in the large editor; its
+collapse action shares the top attachment row, matching chat. Short localized placeholders keep
+the resting field compact. The + menu offers photos, camera, and generation settings.
+While references are attached, `PaintingRatioShortcuts` adds a single scrolling row above the
+composer: a shape and short ratio label per supported choice, with the selected ratio emphasized.
+The row follows the active model and parameter draft, preserves keyboard focus, and hides through
+the large editor's close transition. Choosing a ratio updates parameters and reports
+`onRatioChange`; the board owns whole-image prompt preparation and still requires an explicit send.
+Exact pixel sizes stay in settings rather than the visible shortcut labels.
+
+The settings sheet is the full parameter surface, one continuous page: the model row
+first, then shape, count, quality, and background, then the remaining registry parameters. Choices
+of up to four options are segmented controls; longer lists open their own page. Ratio cells show the
+ratio and the header adds the selected size's pixels. An unset parameter shows the value the model
+will use.
+
+A caller that attaches its own reference image passes `adoptSubmittedReference={false}` so a sent
+image is not adopted as the next turn's reference; Agent chat keeps the default and continues from
+its single submitted image.
+
+An optional `preparePrompt` freezes image-local instructions before prompt validation and asynchronous
+file preparation. It does not bypass the generation strategy or change parameter admission. The
+`displayPrompt` on a submission is the human brief; backend requests use `prompt`, and the painting
+board persists the brief beside it.
 
 `createPaintingGenerationStrategy` in shared utilities resolves the callable mode, image limits,
 prompt requirements and strict parameter admission from model capabilities. Both backend execution
 owners use the same strategy before persisting work, with authoritative managed-file metadata.
-`usePaintingInput` applies this policy to the session; `PaintingInput` retains the existing controls
-and layout. Readiness checks govern submission without adding persistent inline status copy, new
-action rows, or model capability subtitles. Rejected submissions use the existing feedback flow.
+`usePaintingInput` applies this policy to every presentation. Readiness checks and rejected submissions
+use the existing feedback flow.
 
 A valid single output becomes an automatic reference only for compatible models and untouched
 next-turn input. Multiple outputs remain optional candidates. Generate-only models pause automatic

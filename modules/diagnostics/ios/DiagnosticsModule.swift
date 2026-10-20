@@ -1,35 +1,28 @@
 import CryptoKit
+import CoreMotion
 import ExpoModulesCore
+import Foundation
 import UIKit
 
 private let secretSuffix = "GvI6I5ZrEHcGOWjO5AKhJKGmnwwGfM62XKpWqkjhvzRU2NZIinM77aTGIqhqys0g"
 
-private final class SaveDelegate: NSObject, UIDocumentPickerDelegate,
-  UIAdaptivePresentationControllerDelegate
-{
-  private var completion: ((String?) -> Void)?
-  init(_ completion: @escaping (String?) -> Void) { self.completion = completion }
-  private func finish(_ uri: String?) {
-    let callback = completion
-    completion = nil
-    callback?(uri)
-  }
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL])
-  {
-    finish(urls.first?.absoluteString)
-  }
-  func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finish(nil) }
-  func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-    finish(nil)
-  }
-  func cancel() { finish(nil) }
-}
-
 public class DiagnosticsModule: Module {
-  private var saveDelegate: SaveDelegate?
-  private weak var savePicker: UIDocumentPickerViewController?
   private let uploadLock = NSLock()
   private var upload: DiagnosticUpload?
+  private let motion = CMMotionManager()
+  private var observingMotion = false
+
+  private func startMotion() {
+    guard observingMotion, motion.isAccelerometerAvailable, !motion.isAccelerometerActive else { return }
+    motion.accelerometerUpdateInterval = 0.05
+    motion.startAccelerometerUpdates(to: .main) { [weak self] data, _ in
+      guard let self, let data, UIApplication.shared.applicationState == .active else { return }
+      self.sendEvent("onAcceleration", [
+        "x": data.acceleration.x, "y": data.acceleration.y, "z": data.acceleration.z,
+        "timestamp": data.timestamp * 1000,
+      ])
+    }
+  }
 
   private func cancelUpload() {
     uploadLock.lock()
@@ -40,6 +33,22 @@ public class DiagnosticsModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("CherryDiagnostics")
+    Constants(["supportsShakeFeedback": true])
+    Events("onAcceleration")
+    OnStartObserving("onAcceleration") {
+      DispatchQueue.main.async {
+        self.observingMotion = true
+        if UIApplication.shared.applicationState == .active { self.startMotion() }
+      }
+    }
+    OnStopObserving("onAcceleration") {
+      DispatchQueue.main.async {
+        self.observingMotion = false
+        self.motion.stopAccelerometerUpdates()
+      }
+    }
+    OnAppBecomesActive { self.startMotion() }
+    OnAppEntersBackground { self.motion.stopAccelerometerUpdates() }
 
     Function("identifyFile") { (uri: URL) -> [String: Any] in
       let attributes = try FileManager.default.attributesOfItem(atPath: uri.path)
@@ -57,15 +66,12 @@ public class DiagnosticsModule: Module {
       ]
     }
 
-    Function("cancelOperations") {
-      self.cancelUpload()
-      DispatchQueue.main.async {
-        self.savePicker?.dismiss(animated: false)
-        self.saveDelegate?.cancel()
-      }
-    }
+    Function("cancelOperations") { self.cancelUpload() }
 
-    OnDestroy { self.cancelUpload() }
+    OnDestroy {
+      self.cancelUpload()
+      self.motion.stopAccelerometerUpdates()
+    }
 
     Function("isUploadConfigured") {
       let secret = Bundle.main.object(forInfoDictionaryKey: "CherryAIClientSecret") as? String
@@ -83,16 +89,6 @@ public class DiagnosticsModule: Module {
       } catch { promise.reject("ERR_UPLOAD_PREPARATION", "Unable to prepare diagnostic upload") }
     }
 
-    AsyncFunction("sha256") { (uri: URL) -> String in
-      let file = try FileHandle(forReadingFrom: uri)
-      defer { try? file.close() }
-      var hash = SHA256()
-      while let bytes = try file.read(upToCount: 64 * 1024), !bytes.isEmpty {
-        hash.update(data: bytes)
-      }
-      return hash.finalize().map { String(format: "%02x", $0) }.joined()
-    }
-
     AsyncFunction("sign") { (value: String) -> String in
       guard
         let secret = Bundle.main.object(forInfoDictionaryKey: "CherryAIClientSecret") as? String,
@@ -106,28 +102,5 @@ public class DiagnosticsModule: Module {
       return HMAC<SHA256>.authenticationCode(for: Data(value.utf8), using: key)
         .map { String(format: "%02x", $0) }.joined()
     }
-
-    AsyncFunction("saveFile") { (uri: URL, name: String, promise: Promise) in
-      guard self.saveDelegate == nil else {
-        promise.reject("ERR_BUSY", "A document export is already open")
-        return
-      }
-      guard let presenter = self.appContext?.utilities?.currentViewController() else {
-        promise.reject("ERR_NO_ACTIVITY", "No active screen for document export")
-        return
-      }
-      let delegate = SaveDelegate { [weak self] destination in
-        self?.saveDelegate = nil
-        promise.resolve(destination)
-      }
-      self.saveDelegate = delegate
-      // The staging file already has the suggested name. The picker copies it
-      // to the user's Files location and reports completion through its delegate.
-      let picker = UIDocumentPickerViewController(forExporting: [uri], asCopy: true)
-      self.savePicker = picker
-      picker.delegate = delegate
-      picker.presentationController?.delegate = delegate
-      presenter.present(picker, animated: true)
-    }.runOnQueue(.main)
   }
 }

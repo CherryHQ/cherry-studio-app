@@ -39,7 +39,12 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
     });
   }
   if (part.type === 'tool') {
-    const runtimeOutput = part.output;
+    const runtimeOutput = part.output
+      ? (() => {
+          const { modelImages: _images, ...persistent } = part.output;
+          return persistent;
+        })()
+      : undefined;
     const output = runtimeOutput?.failure
       ? {
           value: {
@@ -59,6 +64,15 @@ export function toAgentMessagePart(part: RuntimeOutputPart): AgentMessagePart {
             artifacts: runtimeOutput.artifacts,
             ...(part.toolRef.source === 'builtin' && runtimeOutput.modelValue !== undefined
               ? { modelValue: runtimeOutput.modelValue }
+              : {}),
+            ...(part.toolRef.source === 'mcp'
+              ? {
+                  ...(runtimeOutput.modelContent
+                    ? { modelContent: runtimeOutput.modelContent }
+                    : {}),
+                  ...(runtimeOutput.mcpApp ? { mcpApp: runtimeOutput.mcpApp } : {}),
+                  ...(runtimeOutput.mcpSource ? { mcpSource: runtimeOutput.mcpSource } : {}),
+                }
               : {}),
           }
         : undefined;

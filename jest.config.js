@@ -1,3 +1,4 @@
+/* global __dirname */
 const { realpathSync } = require('node:fs');
 const { join } = require('node:path');
 
@@ -59,6 +60,7 @@ module.exports = {
     '^@earendil-works/chord$': '<rootDir>/node_modules/@earendil-works/chord/dist/index.js',
     '^@earendil-works/chord/(context|delta)$':
       '<rootDir>/node_modules/@earendil-works/chord/dist/$1/index.js',
+    '^@earendil-works/chord/output$': '<rootDir>/node_modules/@earendil-works/chord/dist/output.js',
     '^@earendil-works/pi-durable$':
       '<rootDir>/node_modules/@earendil-works/pi-durable/dist/index.js',
     '^@earendil-works/pi-durable/storage/(.*)$':
@@ -80,7 +82,10 @@ module.exports = {
       '<rootDir>/packages/ui/src/background-activity/background-activity.ios.tsx',
     '^@cherrystudio/ui/icons/models$': '<rootDir>/packages/ui/src/icons-webp/models/index.ts',
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
+    '^@cherrystudio/file-preview/core$':
+      '<rootDir>/packages/file-preview-webview/node_modules/@cherrystudio/file-preview/dist/core.js',
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',
+    '^@cherrystudio/mcp-app-webview$': '<rootDir>/packages/mcp-app-webview/src/index.ts',
     '^@cherrystudio/ai-runtime/(.*)$': '<rootDir>/packages/ai-runtime/src/$1/index.ts',
     '^@shared/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@/assets/(.*)$': '<rootDir>/assets/$1',
@@ -100,7 +105,7 @@ module.exports = {
     // `typebox` is Pi's ESM-only tool argument validator, exercised by real-loop tests.
     // `uuid` arrives transitively: the service registry names `DbService`, which
     // pulls in the drizzle schemas, which generate ids.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@cherrystudio/provider-registry|@cherrystudio/remote-protocol|@cherrystudio/remote-transport)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|standard-navigation|@sentry/react-native|native-base|tokenx|typebox|fractional-indexing|remend|uuid|voyage-ai-provider|@opeoginni|@earendil-works|@modelcontextprotocol/ext-apps|@cherrystudio/file-preview|@cherrystudio/provider-registry|@cherrystudio/remote-protocol|@cherrystudio/remote-transport|@cherrystudio/web-search)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

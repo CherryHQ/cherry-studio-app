@@ -1,9 +1,9 @@
-import type { AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { LanguageVarious } from '@/shared/data/preference';
 
+import type { RuntimeTextGenerator, RuntimeUsageReport } from '../../runtime';
 import { InMemoryAgentSessionStore } from '../../sessionStore/InMemoryAgentSessionStore';
 import { AgentSessionNaming } from '../AgentSessionNaming';
 
@@ -20,13 +20,18 @@ function deferred<TValue>() {
 function createNaming(input: {
   appLanguage?: LanguageVarious;
   defaultModelId?: string | null;
-  generateText?: AiService['generateText'];
+  generateText?: RuntimeTextGenerator['generateText'];
   namingModelId?: string | null;
   namingEnabled?: boolean;
+  onUsage?: (report: RuntimeUsageReport) => Promise<void>;
+  providerAuthMethods?: string[];
   signal?: AbortSignal;
 }) {
   const store = new InMemoryAgentSessionStore();
-  const generateText = jest.fn(input.generateText ?? (async () => ({ text: 'Generated summary' })));
+  const generateText = jest.fn<
+    ReturnType<RuntimeTextGenerator['generateText']>,
+    Parameters<RuntimeTextGenerator['generateText']>
+  >(input.generateText ?? (async () => ({ finishReason: 'stop', text: 'Generated summary' })));
   const defaultModelId =
     input.defaultModelId === undefined ? DEFAULT_NAMING_MODEL_ID : input.defaultModelId;
   const preference = {
@@ -39,12 +44,13 @@ function createNaming(input: {
     }),
   } as unknown as PreferenceService;
   const naming = new AgentSessionNaming({
-    ai: { generateText } as Pick<AiService, 'generateText'>,
+    ai: { generateText },
     appLanguage: () => input.appLanguage ?? 'en-US',
     model: { getById: jest.fn(async () => ({})) } as unknown as Pick<ModelService, 'getById'>,
     preference,
+    onUsage: input.onUsage,
     provider: {
-      getByProviderId: jest.fn(async () => ({ authMethods: [] })),
+      getByProviderId: jest.fn(async () => ({ authMethods: input.providerAuthMethods ?? [] })),
     } as unknown as Pick<ProviderService, 'getByProviderId'>,
     ...(input.signal ? { signal: input.signal } : {}),
     store,
@@ -86,10 +92,11 @@ describe('AgentSessionNaming', () => {
     expect(renamed).toMatchObject({ name: 'Generated summary', isNameManuallyEdited: false });
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        uniqueModelId: DEFAULT_NAMING_MODEL_ID,
+        model: { providerId: 'openai', modelId: 'gpt-4o' },
+        options: { reasoningEffort: 'none' },
       }),
+      expect.any(Object),
     );
-    expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty('reasoningEffort');
   });
 
   test('uses the effective App language in the summary naming prompt', async () => {
@@ -108,9 +115,75 @@ describe('AgentSessionNaming', () => {
 
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: expect.stringContaining('title in zh-CN'),
+        instructions: expect.stringContaining('title in zh-CN'),
       }),
+      expect.any(Object),
     );
+  });
+
+  test('uses the OAuth naming model and forwards its invocation usage', async () => {
+    const report: RuntimeUsageReport = {
+      requestId: 'naming-request',
+      completedAt: 1,
+      usage: { inputTokens: 10, outputTokens: 2, totalTokens: 12 },
+      context: {
+        providerId: 'openai-codex',
+        providerName: 'OpenAI Codex',
+        modelId: 'naming-model',
+        modelName: 'Naming model',
+        pricingSnapshot: null,
+        trustProviderReportedCost: false,
+        reportedCostCurrency: null,
+        credentialReceipt: { attribution: 'unknown' },
+      },
+    };
+    const onUsage = jest.fn(async (_report: RuntimeUsageReport) => {});
+    const { generateText, naming, store } = createNaming({
+      namingModelId: 'openai-codex::naming-model',
+      providerAuthMethods: ['oauth'],
+      onUsage,
+      generateText: async (_request, options) => {
+        await options?.onUsage?.(report);
+        return { finishReason: 'stop', text: 'Lunar eclipses' };
+      },
+    });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'Explain lunar eclipses' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+    await expect(
+      naming.maybeRenameFromConversationSummary({
+        assistantParts: [{ id: 'text-1', state: 'done', text: 'First answer', type: 'text' }],
+        sessionId: session.id,
+        userParts,
+      }),
+    ).resolves.toMatchObject({ name: 'Lunar eclipses', isNameManuallyEdited: false });
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { providerId: 'openai-codex', modelId: 'naming-model' },
+      }),
+      expect.any(Object),
+    );
+    expect(onUsage).toHaveBeenCalledWith(report);
+  });
+
+  test.each([
+    { finishReason: 'length', text: 'Truncated title' },
+    { finishReason: 'toolUse', text: 'Unexpected tool title' },
+    { finishReason: 'error', text: 'Partial title' },
+    { finishReason: 'stop', text: '   ' },
+  ])('keeps the temporary title after unusable summary output: %p', async (result) => {
+    const { naming, store } = createNaming({ generateText: async () => result });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'First question' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+    await expect(
+      naming.maybeRenameFromConversationSummary({
+        assistantParts: [{ id: 'text-1', state: 'done', text: 'First answer', type: 'text' }],
+        sessionId: session.id,
+        userParts,
+      }),
+    ).resolves.toBeNull();
+    await expect(store.getSession(session.id)).resolves.toMatchObject({ name: 'First question' });
   });
 
   test('keeps the first-message title when no usable naming model is configured', async () => {
@@ -150,13 +223,14 @@ describe('AgentSessionNaming', () => {
     });
 
     expect(generateText).toHaveBeenCalledWith(
-      expect.objectContaining({ requestOptions: { signal: controller.signal } }),
+      expect.any(Object),
+      expect.objectContaining({ signal: controller.signal }),
     );
   });
 
   test('does not overwrite a manual rename that wins the generation race', async () => {
     const generationStarted = deferred<void>();
-    const generated = deferred<{ text: string }>();
+    const generated = deferred<Awaited<ReturnType<RuntimeTextGenerator['generateText']>>>();
     const { naming, store } = createNaming({
       generateText: async () => {
         generationStarted.resolve();
@@ -174,13 +248,39 @@ describe('AgentSessionNaming', () => {
     });
     await generationStarted.promise;
     await store.renameSession(session.id, 'My title');
-    generated.resolve({ text: 'Too late' });
+    generated.resolve({ finishReason: 'stop', text: 'Too late' });
 
     await expect(summary).resolves.toBeNull();
     await expect(store.getSession(session.id)).resolves.toMatchObject({
       name: 'My title',
       isNameManuallyEdited: true,
     });
+  });
+
+  test('ignores a summary that finishes after Host cancellation', async () => {
+    const controller = new AbortController();
+    const generationStarted = deferred<void>();
+    const generated = deferred<Awaited<ReturnType<RuntimeTextGenerator['generateText']>>>();
+    const { naming, store } = createNaming({
+      signal: controller.signal,
+      generateText: async () => {
+        generationStarted.resolve();
+        return generated.promise;
+      },
+    });
+    const session = await store.createEmptySession({ agentId: 'agent-1' });
+    const userParts = [{ type: 'text' as const, text: 'First question' }];
+    await naming.maybeRenameFromFirstUserMessage(session.id, userParts);
+    const summary = naming.maybeRenameFromConversationSummary({
+      assistantParts: [{ id: 'text-1', state: 'done', text: 'First answer', type: 'text' }],
+      sessionId: session.id,
+      userParts,
+    });
+    await generationStarted.promise;
+    controller.abort();
+    generated.resolve({ finishReason: 'stop', text: 'Too late' });
+    await expect(summary).resolves.toBeNull();
+    await expect(store.getSession(session.id)).resolves.toMatchObject({ name: 'First question' });
   });
 
   test('keeps the first-message title when summary naming is disabled', async () => {

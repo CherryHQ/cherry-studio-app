@@ -21,6 +21,9 @@ const mockDeleteTurn = jest.fn(async (_input: unknown): Promise<void> => undefin
 const mockAlertConfirm = jest.fn<void, [{ onConfirm: () => void }]>();
 const mockToastShow = jest.fn();
 const mockShare = jest.fn();
+jest.mock('../../translation/MessageTranslationProvider', () => ({
+  useMessageTranslationStore: () => null,
+}));
 let mockFocusEffect: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   router: { push: jest.fn(), replace: jest.fn() },
@@ -51,6 +54,8 @@ const mockAlert = {
   alert: { confirm: (input: { onConfirm: () => void }) => mockAlertConfirm(input) },
 };
 const mockToast = { toast: { show: (input: unknown) => mockToastShow(input) } };
+jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
+
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => mockAlert,
   useToast: () => mockToast,
@@ -90,7 +95,6 @@ function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
     <AssistantMessageActionsProvider
       isAssistantToolbarEnabled
-      retryableMessageId="assistant-1"
       onShare={mockShare}
       snapshot={{
         title: mockSourceTitle ?? '',
@@ -254,7 +258,7 @@ describe('AssistantMessageActionsProvider', () => {
   test('opens selection at the clicked answer without changing the transcript', () => {
     renderProvider();
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer' }));
-    expect(mockShare).toHaveBeenCalledWith('answer');
+    expect(mockShare).toHaveBeenCalledWith('answer', undefined);
     expect(mockRetryMessage).not.toHaveBeenCalled();
   });
 
@@ -266,7 +270,7 @@ describe('AssistantMessageActionsProvider', () => {
     });
 
     expect(mockShare).toHaveBeenCalledTimes(1);
-    expect(mockShare).toHaveBeenCalledWith('answer-1');
+    expect(mockShare).toHaveBeenCalledWith('answer-1', undefined);
 
     act(() => mockFocusEffect?.());
     act(() => probeRef.current?.actions.shareAssistantMessage({ messageId: 'answer-3' }));

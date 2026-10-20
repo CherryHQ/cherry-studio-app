@@ -78,7 +78,7 @@ it('projects detached method metadata while retaining all executable factories o
       guide: {
         revision: 1,
         sections: [
-          { requiredTools: [], content: 'Intro.' },
+          { requiredTools: [], alwaysInclude: true, content: 'Intro.' },
           { requiredTools: ['write'], content: 'Write carefully.' },
         ],
       },
@@ -140,7 +140,9 @@ it('requires explicit discovery admission and assigns new tools write approval w
     acceptsDiscoveredTool: (name: string) => name.startsWith('official__'),
     guide: {
       revision: 1,
-      sections: [{ requiredTools: [], content: 'Use the current tool schema.' }],
+      sections: [
+        { requiredTools: [], alwaysInclude: true, content: 'Use the current tool schema.' },
+      ],
     },
   };
   const registry = createPluginRegistry([fixed, dynamic]);
@@ -158,6 +160,7 @@ it('requires explicit discovery admission and assigns new tools write approval w
       serverId: 'connection',
       revision: 1,
       content: 'Use the current tool schema.',
+      overview: 'Use the current tool schema.',
     },
   ]);
   expect(registry.listCatalog()[1]).not.toHaveProperty('acceptsDiscoveredTool');
@@ -188,7 +191,7 @@ it('selects guides by registered identity and requires the complete workflow on 
       guide: {
         revision: 3,
         sections: [
-          { requiredTools: [], content: '# Future\nRead or edit.' },
+          { requiredTools: [], alwaysInclude: true, content: '# Future\nRead or edit.' },
           { requiredTools: ['read'], content: 'Read workflow.' },
           { requiredTools: ['read', 'write'], content: 'Edit workflow.' },
         ],
@@ -213,14 +216,22 @@ it('selects guides by registered identity and requires the complete workflow on 
       serverId: 'complete',
       revision: 3,
       content: '# Future\nRead or edit.\n\nRead workflow.\n\nEdit workflow.',
+      overview: '# Future\nRead or edit.',
     },
     {
       pluginId: 'future',
       serverId: 'read-only',
       revision: 3,
       content: '# Future\nRead or edit.\n\nRead workflow.',
+      overview: '# Future\nRead or edit.',
     },
-    { pluginId: 'future', serverId: 'write-only', revision: 3, content: '# Future\nRead or edit.' },
+    {
+      pluginId: 'future',
+      serverId: 'write-only',
+      revision: 3,
+      content: '# Future\nRead or edit.',
+      overview: '# Future\nRead or edit.',
+    },
   ]);
   expect(Object.isFrozen(snapshots)).toBe(true);
   expect(snapshots.every(Object.isFrozen)).toBe(true);
@@ -233,13 +244,19 @@ it('attributes an updated bundle without changing instructions already prepared 
   const previous = createPluginRegistry([
     {
       ...plugin,
-      guide: { revision: 1, sections: [{ requiredTools: [], content: 'Original guide.' }] },
+      guide: {
+        revision: 1,
+        sections: [{ requiredTools: [], alwaysInclude: true, content: 'Original guide.' }],
+      },
     },
   ]).resolveGuides(tools);
   const updated = createPluginRegistry([
     {
       ...plugin,
-      guide: { revision: 2, sections: [{ requiredTools: [], content: 'Updated guide.' }] },
+      guide: {
+        revision: 2,
+        sections: [{ requiredTools: [], alwaysInclude: true, content: 'Updated guide.' }],
+      },
     },
   ]).resolveGuides(tools);
   expect(previous[0]).toMatchObject({ revision: 1, content: 'Original guide.' });
@@ -251,7 +268,10 @@ it('rejects unadmitted guide prerequisites during registration', () => {
     createPluginRegistry([
       {
         ...definition('future'),
-        guide: { revision: 1, sections: [{ requiredTools: ['missing'], content: 'Wrong tool.' }] },
+        guide: {
+          revision: 1,
+          sections: [{ requiredTools: ['missing'], alwaysInclude: true, content: 'Wrong tool.' }],
+        },
       },
     ]),
   ).toThrow('unadmitted');
@@ -289,13 +309,38 @@ it('omits a guide when none of its workflows have their required tools', () => {
       ...definition('future'),
       guide: {
         revision: 1,
-        sections: [{ requiredTools: ['read', 'write'], content: 'Edit workflow.' }],
+        sections: [
+          { requiredTools: ['read', 'write'], alwaysInclude: true, content: 'Edit workflow.' },
+        ],
       },
     },
   ]);
   expect(
     registry.resolveGuides([{ pluginId: 'future', serverId: 'connection', rawToolName: 'read' }]),
   ).toEqual([]);
+});
+
+it('gates always-included constraints by the same connection prerequisites as full workflows', () => {
+  const registry = createPluginRegistry([
+    {
+      ...definition('future'),
+      guide: {
+        revision: 1,
+        sections: [
+          { requiredTools: [], alwaysInclude: true, content: 'Common capability routing.' },
+          { requiredTools: ['read'], alwaysInclude: true, content: 'Read-specific constraints.' },
+          { requiredTools: ['write'], alwaysInclude: true, content: 'Write-specific constraints.' },
+          { requiredTools: ['read', 'write'], content: 'Complete edit workflow.' },
+        ],
+      },
+    },
+  ]);
+  const [readOnly] = registry.resolveGuides([
+    { pluginId: 'future', serverId: 'read-only', rawToolName: 'read' },
+  ]);
+  expect(readOnly!.overview).toBe('Common capability routing.\n\nRead-specific constraints.');
+  expect(readOnly!.content).not.toContain('Write-specific');
+  expect(readOnly!.content).not.toContain('Complete edit workflow.');
 });
 
 it('covers the expanded Feishu catalog while keeping write workflows out of a read-only selection', () => {
@@ -310,7 +355,7 @@ it('covers the expanded Feishu catalog while keeping write workflows out of a re
     selections.filter(({ effect }) => effect === 'read'),
   );
   const [complete] = resolveBuiltInPluginGuides(selections);
-  expect(complete.revision).toBe(4);
+  expect(complete.revision).toBe(5);
   for (const heading of [
     'Read a document',
     'Resolve a wiki link',

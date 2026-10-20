@@ -5,6 +5,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Composer } from '../components/composer';
 import type { ComposerInputHandle, ComposerProps } from '../composer.types';
 
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: jest.fn() }));
+
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = require('tailwind-merge');
 
@@ -66,6 +68,7 @@ jest.mock('react-native-reanimated', () => {
     // `bezier` and the interpolation helpers are `Composer.Menu`'s, which the
     // root pulls in even when nothing renders a menu.
     Easing: { bezier: () => 'bezier', ease: 'ease', inOut: (easing: unknown) => easing },
+    ReduceMotion: { System: 'system' },
     interpolate: (value: number, _input: number[], output: number[]) =>
       output[0]! + (output[1]! - output[0]!) * value,
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,

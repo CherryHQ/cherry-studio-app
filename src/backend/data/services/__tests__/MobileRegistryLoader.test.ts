@@ -87,7 +87,7 @@ describe('MobileRegistryLoader', () => {
     const loader = new MobileRegistryLoader();
     expect(loader.loadProviders().length).toBeGreaterThan(0);
     expect(loader.isReady()).toBe(false);
-    expect(() => loader.loadModels()).toThrow('not been downloaded');
+    expect(() => loader.findModel('gpt-4o')).toThrow('not been downloaded');
     expect(() => loader.loadProviderModels()).toThrow('not been downloaded');
     loader.installRemoteSnapshot(loader.parseRemoteSnapshot({ models, providerModels }));
     expect(loader.isReady()).toBe(true);
@@ -168,7 +168,8 @@ describe('MobileRegistryLoader', () => {
         },
       }),
     );
-    expect(loader.loadModels()).toHaveLength(1);
+    expect(loader.findModel('incompatible')).toBeNull();
+    expect(loader.findModel('unsupported-dialect')).toBeNull();
     expect(loader.findModel('gpt-6.1-sol')).toMatchObject({
       capabilities: ['reasoning'],
       reasoning: {
@@ -209,7 +210,8 @@ describe('MobileRegistryLoader', () => {
           providerModels: { version: 'v3', overrides: [] },
         }),
       );
-      expect(loader.loadModels().map(({ id }) => id)).toEqual(['valid']);
+      expect(loader.findModel('valid')?.id).toBe('valid');
+      expect(loader.findModel('invalid-pricing')).toBeNull();
     }
   });
 
@@ -217,7 +219,8 @@ describe('MobileRegistryLoader', () => {
     const loader = downloadedLoader();
 
     expect(loader.loadProviders().length).toBeGreaterThan(0);
-    expect(loader.loadModels().length).toBeGreaterThan(0);
+    expect(loader.isReady()).toBe(true);
+    expect(loader.findModel('gpt-4o')?.id).toBe('gpt-4o');
     expect(loader.loadProviderModels().length).toBeGreaterThan(0);
     expect(loader.getProviderModelsVersion()).toMatch(/^[a-f0-9]{16}$/);
   });
@@ -297,6 +300,19 @@ describe('MobileRegistryLoader', () => {
       expect(loader.isProviderExcluded(providerId)).toBe(false);
       expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
     }
+  });
+
+  it('defaults Kimi Code to the protocol and endpoint used by its Pi OAuth models', () => {
+    expect(new MobileRegistryLoader().findProvider('kimi-coding')).toMatchObject({
+      authMethods: ['oauth'],
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'openai-chat-completions': {
+          adapterFamily: 'openai-compatible',
+          baseUrl: 'https://api.kimi.com/coding/v1',
+        },
+      },
+    });
   });
 
   it('keeps mixed api-key/OAuth providers selectable with their catalog metadata untouched', () => {

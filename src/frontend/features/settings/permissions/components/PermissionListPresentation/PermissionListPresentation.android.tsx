@@ -18,6 +18,7 @@ const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | u
   calendar: CalendarIcon,
   camera: CameraIcon,
   photos: ImageIcon,
+  health: undefined,
   location: MapPinIcon,
   reminders: undefined,
 };

@@ -14,8 +14,10 @@ import type { PluginConnectionSchemas } from './pluginConnections';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
 import type { SkillSchemas } from './skills';
+import type { TrashSchemas } from './trash';
 
-export type ApiSchemas = AgentSchemas &
+export type ApiSchemas = TrashSchemas &
+  AgentSchemas &
   AgentToolBindingSchemas &
   AgentSessionMessageSchemas &
   AgentSessionSchemas &

@@ -1,5 +1,4 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
@@ -13,13 +12,10 @@ const SURFACE_OPACITY = 0.72;
 type ChatInputEffortBackdropFocusProps = Pick<
   ChatInputEffortBackdropProps,
   'focusFrame' | 'progress'
-> & {
-  children?: ReactNode;
-};
+>;
 
 /** A local focus field whose surface dissolves above and below the effort panel. */
 export function ChatInputEffortBackdropFocus({
-  children,
   focusFrame,
   progress,
 }: ChatInputEffortBackdropFocusProps) {
@@ -38,7 +34,6 @@ export function ChatInputEffortBackdropFocus({
       style={[styles.container, focusFrame]}
       testID="chat-input-effort-focus-backdrop"
     >
-      {children}
       <Animated.View style={[StyleSheet.absoluteFill, surfaceStyle]}>
         <LinearGradient
           colors={['transparent', surfaceColor, surfaceColor, 'transparent']}

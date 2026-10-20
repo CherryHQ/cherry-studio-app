@@ -4,8 +4,8 @@ import * as z from 'zod';
  * Mobile-native file model.
  *
  * Intentionally diverges from Cherry Desktop's file types: mobile has no
- * external-path entries, no content hashing, no cleanup policies, and no
- * trash lifecycle on the entry itself. Every entry is a Cherry-owned blob that
+ * external-path entries, no content hashing, and no per-file cleanup policies.
+ * The file trash retains deleted entries for 30 days. Every entry is a Cherry-owned blob that
  * is immutable once the Agent turn producing it ends; that turn may rewrite its
  * own draft, and any other "edit" creates a new version entry.
  */
@@ -90,32 +90,12 @@ export function filenameExtension(filename: string): string | null {
 // Readable names for files Cherry produces
 //
 // A produced file is named for what it is, never for its id: an imported file
-// keeps the name it arrived with, a version carries its number, and a generated
+// keeps the name it arrived with, versions share a logical name, and a generated
 // image is named after its prompt.
 // ============================================================================
 
 const FILENAME_MAX_CHARACTERS = 255;
-const VERSION_SUFFIX_PATTERN = /^(.*) v(\d+)$/;
 const READABLE_NAME_MAX_CHARACTERS = 40;
-
-/**
- * `report.html` → `report v2.html` → `report v3.html`. `taken` are names already
- * in use, so a second edit of the same source does not produce a twin of an
- * existing version; the number, not the id, is what tells the two apart.
- */
-export function nextVersionFilename(filename: string, taken?: ReadonlySet<string>): string {
-  const extension = filenameExtension(filename);
-  const stem = extension ? filename.slice(0, -(extension.length + 1)) : filename;
-  const versioned = VERSION_SUFFIX_PATTERN.exec(stem);
-  const base = versioned?.[1] ?? stem;
-  let version = versioned ? Number(versioned[2]) + 1 : 2;
-  let candidate = withFilenameTail(base, ` v${version}`, extension);
-  while (taken?.has(candidate)) {
-    version += 1;
-    candidate = withFilenameTail(base, ` v${version}`, extension);
-  }
-  return candidate;
-}
 
 /**
  * A display name derived from free text such as a prompt: whitespace collapsed,

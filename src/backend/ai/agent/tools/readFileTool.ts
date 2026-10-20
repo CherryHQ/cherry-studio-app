@@ -2,9 +2,9 @@
  * `read_file`: the model reads a managed text, document, or image file it already holds a
  * reference to.
  *
- * Reads expose content, so unlike `edit_file` this tool is ledger-scoped: only
- * an entry attached to the Session, produced by an earlier turn, or created in
- * this turn can be read. Output is a bounded line or code-point window so a large file is
+ * Reads allow conversation references and the selected workspace. Outside
+ * library access goes through the library_read_file tool.
+ * Output is a bounded line or code-point window so a large file is
  * paged rather than dumped into the context.
  */
 
@@ -37,6 +37,7 @@ import type {
 } from '../resources/managedFileResolver';
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
+import type { WorkspaceFileAccess } from './workspaceFileAccess';
 
 export const READ_FILE_TOOL_NAME = 'read_file';
 export const READ_FILE_MAX_SOURCE_BYTES = MAX_TEXT_ATTACHMENT_BYTES;
@@ -49,7 +50,16 @@ export const readFileInputSchema = z.strictObject({
   file_entry_id: z
     .string()
     .refine((value) => FileEntryIdSchema.safeParse(value).success, 'Must be a managed file UUID.')
-    .describe('Managed file id from an attachment or an earlier file tool result.'),
+    .describe('Managed file id from an attachment or an earlier file tool result.')
+    .optional(),
+  path: z
+    .string()
+    .min(1)
+    .max(4096)
+    .optional()
+    .describe(
+      'Relative workspace path; use instead of file_entry_id. Returns the current version id.',
+    ),
   start_line: z.int().min(1).optional().describe('One-based line to start from. Defaults to 1.'),
   limit: z
     .int()
@@ -89,6 +99,7 @@ export function createReadFileTool(
   files: ReadFileFiles,
   scope: TurnFileScope,
   documentParserMode: DocumentParserMode = DEFAULT_DOCUMENT_PARSER_MODE,
+  access?: WorkspaceFileAccess,
 ): RuntimeTool {
   /**
    * The last document this turn parsed, so paging a large document parses it
@@ -148,8 +159,12 @@ export function createReadFileTool(
         parsed.data.offset !== undefined || parsed.data.max_characters !== undefined;
       if (hasLineParameters && hasJsonParameters)
         return invalid('Line parameters and offset parameters cannot be combined.');
-      const fileEntryId = FileEntryIdSchema.parse(file_entry_id);
-      if (!scope.fileEntryIds.has(fileEntryId)) {
+      if (!access && (!file_entry_id || parsed.data.path))
+        return invalid('Provide a managed file_entry_id.');
+      const fileEntryId = access
+        ? await access.resolveRead(parsed.data)
+        : FileEntryIdSchema.parse(file_entry_id);
+      if (!access && !scope.fileEntryIds.has(fileEntryId)) {
         return invalid('The file is not part of this conversation.');
       }
 
@@ -171,6 +186,7 @@ export function createReadFileTool(
             value: {
               status: 'ok',
               fileEntryId,
+              ...(source.revision !== undefined ? { revision: source.revision } : {}),
               filename: source.name,
               mediaType: image.mediaType,
               delivery:
@@ -198,6 +214,7 @@ export function createReadFileTool(
             value: {
               status: 'ok',
               fileEntryId,
+              ...(source.revision !== undefined ? { revision: source.revision } : {}),
               filename: source.name,
               size: source.size,
               parser: document.parser,
@@ -245,6 +262,7 @@ export function createReadFileTool(
       const header = {
         status: 'ok',
         fileEntryId,
+        ...(source.revision !== undefined ? { revision: source.revision } : {}),
         filename: source.name,
         size: source.size,
         ...(parser ? { parser } : {}),

@@ -26,7 +26,6 @@ import { sha256Hex } from '@/shared/utils/sha256';
 export const SKILL_PACKAGE_MAX_FILES = 200;
 export const SKILL_PACKAGE_MAX_BYTES = 8 * 1024 * 1024;
 export const SKILL_FILE_MAX_BYTES = 2 * 1024 * 1024;
-export const SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS = 1_200;
 
 /** Package-relative POSIX path to file bytes. */
 export type SkillPackageFiles = ReadonlyMap<string, Uint8Array>;
@@ -64,7 +63,25 @@ export type SkillPackageValidation =
   | { ok: false; issues: SkillPackageIssue[] };
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/;
-const SHELL_INTERPOLATION = /!`[^`]+`/;
+/**
+ * Claude Code runs `!`command`` spans before loading a Skill. Only a `!` right before a code span's
+ * opening backtick on the same line is that syntax; a span that ends in `!` (`#DIV/0!`) is text.
+ */
+function hasShellInterpolation(body: string): boolean {
+  return body.split('\n').some((line) => {
+    let open = false;
+    for (const match of line.matchAll(/`+/g)) {
+      if (
+        !open &&
+        line[match.index - 1] === '!' &&
+        line.includes(match[0], match.index + match[0].length)
+      )
+        return true;
+      open = !open;
+    }
+    return false;
+  });
+}
 
 export function validateSkillPackage(
   files: SkillPackageFiles,
@@ -158,7 +175,7 @@ export function validateSkillPackage(
     if (frontmatter[key] !== undefined)
       issues.push({ code: 'unsupported-semantics', subject: key });
   }
-  if (SHELL_INTERPOLATION.test(body)) {
+  if (hasShellInterpolation(body)) {
     issues.push({ code: 'unsupported-semantics', subject: 'shell-interpolation' });
   }
   if (issues.length > 0) {
@@ -239,14 +256,6 @@ export function computeContentHash(files: SkillPackageFiles): string {
     offset += chunk.byteLength;
   }
   return `${SKILL_CONTENT_HASH_PREFIX}${sha256Hex(data)}`;
-}
-
-/** Bounded head of the instruction body for detail views. */
-export function previewInstructions(instructions: string): string {
-  const characters = [...instructions];
-  return characters.length <= SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS
-    ? instructions
-    : `${characters.slice(0, SKILL_INSTRUCTIONS_PREVIEW_CHARACTERS).join('')}…`;
 }
 
 /**

@@ -54,7 +54,12 @@ describe('MarkdownText adapter', () => {
     );
   });
 
-  it('opens a prefixed citation link as its original external URL', () => {
+  it.each([
+    ['cite:https%3A%2F%2Fgoldprice.org%2Fgold-price.html', 'https://goldprice.org/gold-price.html'],
+    ['cite:https%3A%2F%2Fexample.com%2Fa%29b', 'https://example.com/a)b'],
+    ['cite:https%3A%2F%2Fexample.com%2Fa%28b', 'https://example.com/a(b'],
+    ['cite:https%3A%2F%2Fexample.com%2Fa%2528b%2529', 'https://example.com/a%28b%29'],
+  ])('opens a prefixed citation link as its original external URL: %s', (link, url) => {
     act(() => {
       create(<MarkdownText markdown="Citation" />);
     });
@@ -62,8 +67,8 @@ describe('MarkdownText adapter', () => {
     const onLinkPress = mockCherryMarkdownText.mock.calls[0]?.[0].onLinkPress as
       | ((url: string) => void)
       | undefined;
-    act(() => onLinkPress?.('cite:https%3A%2F%2Fgoldprice.org%2Fgold-price.html'));
+    act(() => onLinkPress?.(link));
 
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith('https://goldprice.org/gold-price.html');
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(url);
   });
 });

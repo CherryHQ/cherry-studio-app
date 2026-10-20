@@ -2,19 +2,22 @@
 
 > Status: as-built. Mobile Agent execution is device-local only.
 
-The system catalog ships device calendar and reminders, location, web search and fetch, image
-generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`, and
+The system catalog ships device calendar and reminders, iOS HealthKit reads, location, web search and fetch, image
+generation, Agent management, `ask_user_question`, `write_file`, `edit_file`, `read_file`,
+`create_document`, `create_workbook`, `create_presentation`, and
 the JavaScript capability `run_js`, all using the settled `ToolRef` and `{ value, artifacts }`
 contracts. For each turn the
 Host resolves that catalog against model tool support, platform, OS permission, app
 configuration, and the Agent's capability-group deny-list, then combines it with
 globally connected plugins and the Agent's persisted executable remote MCP bindings. Capability groups (web, image, calendar, reminders,
-location, agents) are enabled per Agent in the editor; the three file tools and `run_js`
+health, location, agents) are enabled per Agent in the editor; the file tools, Office tools and `run_js`
 belong to every turn on a client that can execute them, and `ask_user_question` to every turn unless the Agent uses automatic approval. An
 enabled tool is offered automatically when its remaining gates pass — the model decides from the
 request whether to call it.
-Office generation, inspection, and editing are not implemented. Sections that a shipped tool still
-diverges from carry an **As-built** note.
+Office generation, structural reads and bounded editing use the native QuickJS compute sandbox.
+Focused tests pass; native/Office acceptance remains pending. See [Office Tools Design](./office-tools-design.md)
+and the [Office service](../../../src/backend/services/office/README.md). Sections that a shipped
+tool still diverges from carry an **As-built** note.
 
 This document defines how Cherry Mobile exposes application capabilities to Pi. Pi remains the
 sole conversation engine and owns the model → tool → result loop. Application services own every
@@ -74,7 +77,9 @@ own platform, permission, application-configuration, base approval, capability-g
 and auto-approval eligibility. The Agent editor enables or disables capability groups
 (`agent.disabled_capabilities`); it cannot change the base policies, and its approval preference
 only changes whether effective `ask` calls show an interactive prompt. `generate_image` is never
-auto-approval eligible: enabling the image group is not consent to spend provider quota.
+auto-approval eligible: enabling the image group is not consent to spend provider quota. Personal-health
+reads are also ineligible: each call requires explicit consent to share health data with AI.
+Public HealthKit type discovery contains no personal data and can run automatically.
 
 `web_search` and `web_fetch` additionally require a selected default web search provider. Fresh
 installations select hosted Exa MCP for search and Jina Reader for page reading; neither default
@@ -162,10 +167,17 @@ discovery. A send arriving during that local cache handoff waits for it through 
 preparation path. The temporary validation client is closed; actual tool calls still use a
 grant-bound client and its live routing checks.
 
-There is no timed refresh: the catalog is reconciled where the network is already in
-use, when a fresh connection lists tools before its first call and whenever the settings screens
-read live. A catalog with partial-discovery warnings is served immediately and never written to
-disk. Both partial and failed discoveries back off before a send can trigger another attempt;
+There is no timed refresh: a catalog is only worth refreshing when a turn is about to use it. A
+remote catalog carries a freshness window, the server's `ttlMs` bounded to between five minutes and
+one hour, or five minutes when the server supplies none. A turn that finds the window elapsed still
+receives the cached catalog at once and, while the app is in the foreground, starts a background
+refresh for the next turn.
+A tools-list notification and a call the server rejects as unknown or invalid refresh the same way.
+Bundled plugin catalogs do not age; their grant changes invalidate them. Nothing refreshes on a
+timer or on return to the foreground, and an elapsed window never delays a call. Modern
+subscriptions close in the background and reopen in the foreground. A fresh connection lists tools
+before its first call, and settings screens read live. A catalog with partial-discovery warnings
+is served immediately and never written to disk. Both partial and failed discoveries back off before a send can trigger another attempt;
 partial catalogs refresh in the background after that delay. Consecutive failures start at 30
 seconds and double to a five-minute ceiling, resetting only after complete discovery. Settings
 screens may still probe the server. The file stores a
@@ -177,8 +189,9 @@ live listing fails closed.
 The snapshot contains the real executable callbacks. Pi cannot execute arbitrary application
 functions: every target must still exist in the current authorized catalog.
 
-MCP capabilities register as upstream `deferred` tools. Upstream `tool_search` ranks names,
-descriptions and parameter metadata with BM25, then loads matching real tools for the next model
+MCP capabilities and built-in tools marked `deferred` (Skill installation/adaptation, library
+management and Office operations) register as upstream `deferred` tools. Upstream `tool_search`
+ranks names, descriptions and parameter metadata with BM25, then loads matching real tools for the next model
 request through `control.addTools`. The default result limit is eight; the query must be nonempty.
 Loaded tools remain available in that Pi conversation, including after compaction. Cherry retains
 only a small Unicode tokenization patch so Chinese service and capability names can be searched.
@@ -194,6 +207,17 @@ verified artifacts, and participates in the turn's budget and failure-group poli
 `describeNamespace` against the callable catalog. Tool visibility does not grant execution: upstream
 `callers` independently controls model and script access. Application callbacks provide structured
 `{ value, artifacts }` to scripts while retaining their model output and display details separately.
+For MCP calls, `value.content` contains the bounded model-visible content, including serialized
+structured output and managed image references. UI-only metadata never enters this script channel.
+Cherry sets Code Mode's declaration `inlineBudget` to 600 estimated tokens. Direct tools already
+carry their complete schemas, so the section keeps a small set of signatures and scripts inspect the
+rest through the discovery helpers.
+The initial prompt retains plugin capability overviews, critical constraints, and shared operation
+rules. Complete plugin guides enter trusted system context through read-only `load_workflow`, and a
+connection's tools are refused before approval until its guide is present. Loading ends its tool
+round; dependent actions are planned only after the next request supplies the complete instructions.
+Loaded guides remain for later turns of the Session. Skill readers remain directly exposed and
+their full routing descriptions retain the existing catalog budget.
 
 Before every continuation of the model loop, Pi recalculates the complete live context including
 the assistant tool request and every tool result. If the next request cannot retain the output and
@@ -205,27 +229,52 @@ records that real catalog, not Pi's meta catalog tools. Deferred tool discovery 
 tool schema and provider tool-count pressure, but does not make MCP discovery or transport lazy.
 Configuration changes therefore still affect the next turn only.
 
-Mobile exposes no shell, working directory, dynamic extension loader, or unrestricted filesystem.
+Mobile exposes no shell, device working directory, dynamic extension loader, or unrestricted filesystem.
 Code Mode can call only the authorized application tools; scripts have no direct network, device,
 or filesystem access.
 
 ## Controlled File Ledger
 
-Mobile has no desktop-style working directory. Every file first enters Cherry managed storage and
-receives a [`file_entry`](../data/file-model.md) id. Protocol operations and file tools accept only
-that managed id; raw `file://`, `content://`, sandbox, provider, and user-entered paths are transient
-import sources, never authority.
+Mobile uses logical workspace paths over managed storage. Every version has a
+[`file_entry`](../data/file-model.md) id; paths resolve through the Session's selected library folder
+to its current version. Raw `file://`, `content://`, sandbox, and provider URIs are import sources,
+never authority. Absolute paths, backslashes, URI schemes, and traversal above the workspace fail.
 
-The Host creates `TurnResourceLedger` before freezing the built-in catalog. Read tools receive only
-its membership view; `generate_image` rejects an `image_id` outside that view and `read_file`
-rejects a `file_entry_id` outside it, both before touching the global managed-file service. A
-Host-owned catalog wrapper validates and grants every built-in artifact before returning the tool
-result to Pi, and Host event projection repeats the grant idempotently. `write_file` needs no read
-grant because it only creates entries. `edit_file` is the deliberate exception to ledger-scoped
-reads: knowing an active managed `fileEntryId` is sufficient for it to resolve that source anywhere
-in the application file library. It never lists or searches the library, accepts no path, and
-never returns the source's content, so the exception widens what the model can change but not what
-it can see.
+The Host creates `TurnResourceLedger` and captures `workspaceFolderId` before freezing the catalog.
+`read_file` and `edit_file` may use conversation references or live workspace membership. Listing,
+name search, and subfolder creation use `list_workspace`, `find_workspace_files`, and
+`create_workspace_folder`. Writes remain in the captured workspace; the commit transaction checks
+live destination ancestry. Without a workspace, new outputs use the library root.
+
+The `fileLibrary` capability adds library search/read and management tools, enabled by default
+through the Agent's deny-list model. They follow the shared approval rule: reads
+(`library_search_files`, `library_read_file`, `library_list_folders`, `library_list_trash`) are
+`auto`, while move, rename, trash, and restore are `ask`. Each tool is auto-approval eligible, so the
+Agent's approval mode decides whether a mutation waits for the user. A successful library read
+permits editing that source into a workspace copy during this turn and leaves the source unchanged.
+It does not grant `read_file` future outside-library access.
+
+The six management tools are deferred; `library_search_files` names them for `tool_search`.
+`library_list_folders` searches active folder names or lists direct children, returning stable ids
+and parent ids with bounded pagination. `library_search_files` returns both the logical `fileId`
+and its `folderId`, alongside the current version's `fileEntryId`. Names may be ambiguous: move,
+rename, and trash tools accept exact logical file or folder ids, never arbitrary paths or version ids.
+`library_move_item` moves a file with its versions or a folder subtree, and `library_rename_item`
+changes only its display name. The existing library service owns cycle prevention, active
+destinations, collision rules, transactions, and cache invalidation. Move results report any
+collision suffix selected by that service.
+
+`library_trash_item` moves a file with all versions or an active folder subtree into the existing
+30-day trash. `library_list_trash` pages recoverable files and folders; `library_restore_item`
+restores one group by its exact `kind` and `id`. Both use the host-owned `TrashRuntime`, the same
+owner as the library screen, which notifies file subscribers after commit. These tools work without
+a selected workspace. Mutations recheck turn cancellation when their write transaction starts and
+before it commits; cancellation rolls back the whole change. The Agent cannot permanently purge
+items or empty the trash.
+
+`generate_image` still scopes input images to conversation references; outputs use the
+workspace, as do direct image generation and managed MCP result files. Code Mode calls these same
+authorized tools and has no filesystem of its own.
 
 The ledger also records which entries this turn produced: its **drafts**. Every grant that arrives
 during the turn is a draft, because only tool artifacts are granted after the ledger is frozen.
@@ -238,6 +287,10 @@ For Version 1, the Host derives the initial ledger grants from:
 - valid managed-file refs already visible in the Session transcript (the read callback still
   revalidates that the entry remains available); and
 - files created by earlier tools in the same active turn.
+
+History grants follow the selected branch. A native history fork replaces the source copy's
+resource grants with the selected prefix and current input's grants, just as a rebuild from Cherry
+does. Files introduced after the fork point do not carry over; workspace access remains independent.
 
 The Host creates a `TurnResourceLedger` containing explicit readable and derivable `fileEntryId`
 sets. Its initial grants are frozen from input and transcript facts. During the turn it may grow only
@@ -260,13 +313,22 @@ artifacts, and it does so after creating and validating each entry and granting 
 ledger.
 
 Cherry-persisted tool details never contain absolute device paths or image base64 payloads.
-Explicit image reads carry pixels only in Pi’s model output, not in those details. The Pi adapter projects
-the typed outer envelope as the model's tool result, so an application artifact's bounded managed
-ref remains available for a follow-up tool call while an MCP payload with similar keys stays nested
-under `value`. Each artifact is also projected into a Runtime file part; the Host persists it as an
+Explicit image reads carry pixels only in Pi’s model output, not in those details. Ordinary tools
+project their typed outer envelope to the model, so an application artifact's bounded managed ref
+remains available for a follow-up tool call. MCP results instead carry an explicit bounded
+`modelContent` projection: text excludes `_meta` recursively and user-only content; supported images
+reference managed files. Structured content that a text block already serializes is sent once. Text
+over the 64K-character budget is cut with both sizes stated, and the whole text is retained as a
+managed text artifact the model can page through with `read_file`. The MCP importer alone can
+create artifacts from bounded image, audio, and embedded binary content; their managed refs follow
+the model content so a follow-up call can read them. Remote JSON never becomes an artifact merely
+by resembling one. Temporary `modelImages` bytes reach image-capable models but
+are removed from canonical results. Older MCP history uses the same metadata-stripping projection.
+Each artifact is also projected into a Runtime file part; the Host persists it as an
 Agent Protocol file part with `purpose: 'artifact'` so the transcript retains its reference and
-display metadata. Its content is not automatically projected as a model attachment in later
-history. If the managed entry still exists, a user may explicitly attach it again or the model may
+display metadata. Artifact file parts are not implicit later model attachments. An MCP result
+may explicitly retain an image in `modelContent`; the Host re-resolves that managed artifact for
+image-capable models, with a text fallback if it is missing or unsupported. If the managed entry still exists, a user may explicitly attach it again or the model may
 read it through a controlled tool; otherwise the reference remains visible as unavailable.
 
 `write_file` returns its status and new `fileEntryId` under `value`, plus the created managed entry
@@ -307,13 +369,25 @@ retry; cancellation still propagates without becoming a cached failure.
 
 ### Streamable HTTP MCP
 
-- Persistence retains desktop-compatible `stdio`, `sse`, `streamableHttp`, `inMemory`, and unknown
-  transport data unchanged; only `streamableHttp` projects into the mobile Runtime.
+- Custom remote servers use Streamable HTTP. The official TypeScript client negotiates modern
+  `2026-07-28` or legacy protocols automatically; bundled direct-API plugins keep their existing
+  adapters. Direct stdio and the separate deprecated HTTP+SSE transport are not exposed.
 - `McpRuntimeService` owns clients, live discovery state, connection disposal, credentials, and wire
   errors. Pi receives sanitized tool definitions and callbacks, never MCP configuration secrets.
 - Discovery retains every paginated raw tool name and plain JSON Schema. Selected descriptors are
   adapted with deterministic ref-derived aliases, schema revalidation, a 60-second call bound, and
-  a 256 KiB JSON result projection; remote payloads stay under `value` with `artifacts: []`.
+  a 256 KiB JSON result projection. Remote payloads stay under `value`; a separate bounded native
+  importer may retain binary results as managed artifacts.
+- Tool calls share the server's pooled connection. A failure is classified by what it proves. A
+  call that never left the device, an authorization failure, an HTTP client error, and a JSON-RPC
+  rejection of the tool or its arguments all mean the tool did not run. After transmission, a
+  timeout or transport failure is retryable for a bundled read or a remote tool annotated read-only
+  or idempotent, an unconfirmed write for a bundled write, and an unknown outcome otherwise: the
+  model retries only when repeating the call is harmless. A wrong remote annotation costs one
+  repeated call and never widens approval. No failure replays a tool call.
+- A redirect is followed only within the endpoint's origin, or to its HTTPS form, and only when it
+  keeps the method, which covers path canonicalization. A redirect to another origin fails with the
+  target address so the user can update the connection; headers and tokens never follow it.
 - The Host freezes the discovered tools for the turn, including the endpoint URL and the catalog
   generation that produced them. An endpoint edit or invalidation makes an old callback
   unavailable; rediscovery may populate the next snapshot but never silently retargets the active
@@ -322,6 +396,74 @@ retry; cancellation still propagates without becoming a cached failure.
 - Third-party MCP bindings project to a base per-call `ask` policy. An explicit `deny` remains
   denied, while any legacy binding-level `auto` row is downgraded to `ask`. The Agent's automatic
   approval mode may then promote that effective turn policy to `auto` without rewriting the row.
+
+### Remote Authorization, Content, And Apps
+
+Custom remote connections support headers or browser-based public-client OAuth. The native owner
+uses protected-resource and authorization-server discovery, PKCE S256, resource indicators, state
+and issuer validation, and endpoint-bound grants. Access and refresh tokens stay in native secure
+storage; SQLite keeps only the grant reference and public client ID. Refresh is shared, revocation
+wins over a pending refresh, and a rejected token requires authorization again without replaying
+an operation. Servers may use a pre-registered public client ID or hosted Client ID Metadata
+Document URL; dynamic registration is used only when the server offers it. The app does not publish
+a Client ID Metadata Document for every server or replace provider-specific plugin authorization.
+
+The grant reference is validated before persistence and rejects extra fields. OAuth connections
+cannot store a manual `Authorization` header. Disabling a connection retains its grant; removing
+OAuth authorization clears both the grant reference and client ID and disables the connection.
+
+OAuth metadata, registration, token exchange, and refresh use origin-scoped `HttpClient` routes
+through `mcpOAuthFetch`. The shared transport owns query serialization, response bounds, HTTP
+timeouts, redirect rejection, and safe transport errors. The native authorization owner retains
+the overall operation deadline and grant policy. The initial MCP challenge probe reads only
+response headers through streaming fetch, because that endpoint can return a long-lived event
+stream; it cancels the body immediately.
+
+Each custom-server catalog discovery lists prompt metadata alongside tools and stores both in the
+connection-fingerprinted catalog file, so prompts share the tool catalog's expiry, list-change, and
+rejection refreshes. A prompt-listing failure never blocks tools and keeps the last known prompts. A
+stored catalog written before prompt discovery refreshes on the next turn. The composer's MCP entry
+appears only when the current Agent has an enabled server-level binding to an enabled custom server
+with cached prompts. Both the entry and its compact menu read local metadata without connecting or
+listing remotely. Selecting a prompt fetches its messages through `prompts/get` on the server's
+shared connection, collecting arguments through the existing question bottom sheet when needed,
+then inserts the result into the draft. A prompt without arguments shows progress in its menu row;
+dismissing the menu abandons it. Required arguments must be answered; optional arguments may be
+skipped. The sheet retains answers across navigation and failed submissions, and cancellation
+leaves the draft unchanged. There is no separate preview step. The native owner rechecks the Agent
+binding and server configuration before resolving a cached prompt. Prompt roles remain quoted user
+content.
+
+Tool-returned resource links keep their preview and add content to the user draft only after Add.
+Bounded binary content becomes managed attachments; neither discovery nor preview starts an Agent
+turn. A link's host-issued `mcpSource` pins the original connection fingerprint, and `resources/read`
+sends the URI to that server even when the URI uses HTTPS or is absent from its resource list.
+An edited connection cannot reinterpret an old link. Form and URL elicitation need an operation in
+flight. A question asked during tool calls belongs to its server, the scope the consent dialog
+names: every call in flight on that server pauses its network budget until the user answers, and the
+question is withdrawn when none remains. Content reads keep a connection of their own. Both legacy
+server requests and modern input-required rounds use the same native consent queue. Discovery cannot
+prompt. Cancellation or the ten-minute consent deadline removes the request. Passwords and credentials belong in the
+service's browser flow, not in a form.
+
+MCP Apps uses the official `io.modelcontextprotocol/ui` extension and `AppBridge`. Tool visibility
+filters the model catalog; a tool's `ui://` resource produces a lazy interactive-view action in its
+result card. Opening revalidates the original endpoint/grant fingerprint and Agent binding, reads
+`text/html;profile=mcp-app`, and starts a fresh live view. History never executes a tool or restores
+an old bridge automatically. Apps can list/call allowed tools and list/read resources on their
+originating server. Every App tool call gets explicit consent and repeats availability, binding,
+visibility, and schema checks. Duplicate request IDs cannot execute a second write.
+
+The native WebView shell isolates server HTML in an opaque-origin sandbox and restricts network
+and resource origins using declared CSP domains. It denies nested frames, custom origins, browser
+device permissions, forms, popups, and direct navigation. External HTTPS links and messages require
+native confirmation. Messages are staged in the composer; text/structured model-context updates
+remain visible and removable until the user's next submission, which carries each as a JSON
+envelope labeled untrusted third-party app data. Theme, locale, dimensions, and
+teardown use the Apps protocol. Closing, backgrounding, revocation, or route disposal ends the view.
+The inline native shell enforces CSP through meta directives; this is a mobile implementation
+constraint, not evidence of complete CSP-header or Apps conformance. iOS/Android WebView behavior,
+real OAuth providers, protocol negotiation, and third-party Apps still require acceptance.
 
 ### System Calendar
 
@@ -354,14 +496,84 @@ retry; cancellation still propagates without becoming a cached failure.
   batch. The tool stops waiting immediately, while an already-open system sheet retains the queue
   until its native callback settles.
 
-### Retired Health Capability
+### Health And Fitness
 
-The first App Store release omits health access. The executable catalog, Agent capability groups,
-permission settings, native dependencies, entitlements, and usage descriptions contain no health
-capability. Persisted Agent deny-lists drop the retired `health` id on read using the existing
-unknown-capability guard. Existing conversations retain health tool result labels and icons for
-historical display; those entries do not register executable tools or request permissions.
-Restoring health access requires a separate native feature and App Store submission.
+Health is an iOS-only built-in tool group, not a separate page. The `health` Agent capability
+contains these tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `health_get_summary` | Existing seven-metric overview and sleep-stage hours |
+| `health_list_workouts` | Newest-first workout overview with truncation information |
+| `health_list_data_types` | Search the public catalog and current iOS availability; no personal data |
+| `health_query_data` | Any supported type's original records, quantity statistics, characteristics, activity rings or medication list |
+| `health_get_record` | Record details, waveform/route/quantity points, clinical/CDA content and attachments |
+| `health_share_verifiable_records` | One-time selected SMART Health Cards / EU Digital COVID Certificates; requires Apple’s restricted entitlement |
+
+All personal-data tools require application approval even in automatic approval mode. Only public
+catalog discovery can run automatically. The approval sheet names the receiving model service and
+explains sharing and conversation retention; it blocks approval when that service cannot be
+resolved. The first-run Agent enables health; manually created Agents start with it disabled.
+Existing Agents retain their stored preference. Android has no Health Connect bridge or health entry.
+
+The [native module](../../../modules/health-access/README.md) and shared catalog cover the current
+public HealthKit types in the iOS 27.1 SDK, including quantities, symptoms, reproductive health,
+nutrition, hearing, vision, ECG, clinical records and medications. Minimum iOS versions are checked
+per type. Neither a supported type nor a completed authorization request proves that read access
+was granted. Empty data cannot distinguish denied access from missing records and must not be
+reported as measured zero. No writing, background delivery or extended-history access is requested.
+
+The existing overview retains these units: steps (count), active energy (kcal), walking/running
+distance (meters), heart rate and resting heart rate (average bpm), HRV SDNN (average milliseconds),
+and asleep time (hours). Other metrics use `health_query_data`; quantity statistics follow
+HealthKit's aggregation style, with cumulative sums or discrete averages/minima/maxima and most
+recent measurements. Units come from HealthKit. Percent values are fractions: `0.97` means `97%`.
+
+Sleep intervals are clipped to the range, merged and split at local midnight. The total includes
+unspecified, core, deep and REM sleep. `stages` separately returns in-bed, awake, unspecified, core,
+deep and REM hours; absent stages are null. Days with only in-bed or awake records can have stage
+details while asleep duration remains null and `metricStates.sleep` is `no-data`. Each stage merges
+its own overlaps, so conflicting sources can make stage totals overlap; never sum them to recreate
+total sleep. This does not reproduce Apple Health's source-priority algorithm. First/last sleep
+times are the clipped boundaries of the entire requested range. Raw stages are available through
+`health_query_data`. Apple exposes no public sleep-score type in this SDK.
+
+Generic samples use anchored pagination and retain their original times, values, UUID, source and
+device. They are not chronological or prorated. Continue the cursor with the exact returned dates,
+type and workout filter until `hasMore` is false; a full last page may require an empty continuation.
+Deleted IDs must be removed when combining pages. Use native statistics for quantity totals rather
+than summing overlapping source samples. Quantity series and workout-associated samples support
+heart-rate curves and pace/speed analysis. Record details expose workout events, activities and
+statistics; route records are queried with the workout UUID, then paged through record details.
+
+`health_list_workouts` retains `{ data, hasMore, limit, startDate, endDate }`, defaulting to 20 and
+allowing 50 records. Each row includes a UUID. For a complete list, use the generic `workouts`
+type and its cursor. The local native module reads one extra record to detect truncation and
+preserves missing distance/energy as null without adding a dependency patch.
+Workout quantities and durations describe whole workouts. SDK activity names replace incomplete
+library names while unknown future numeric activity types remain available.
+
+Queries default to seven days and allow at most 90 days per request; system history access may
+further restrict results. Characteristics and the current/archived medication list ignore dates.
+Activity rings cover complete local calendar days. Blood-pressure and food authorization follows
+the contained quantities. Vision prescriptions and medications use per-object selection;
+medication doses inherit the medication selection's authorization. `reselectRecords` reopens the
+selection for `visionPrescription`, `userAnnotatedMedication` or `medicationDoseEvent`. These
+selections, CDA content prompts and verifiable credential prompts share the application permission
+queue. Queued reads respect cancellation; an open selection retains the queue until native
+completion or timeout. Clinical reads require the extra Health Records entitlement and usage
+description.
+
+Verifiable credentials use a separate one-time selection query and explicit application approval,
+with no persistent type-level grant. Each call, including pagination, opens Apple's selection sheet;
+continuations require selecting the same records. Original payload bytes are returned without
+verifying the signature or issuer. This API also requires a restricted entitlement approved by Apple,
+which this change does not obtain or enable; an ordinary clinical capability does not suffice.
+
+A new native binary is required, including a signing profile with the clinical capability. The
+initial store release removed HealthKit after a Guideline 2.5.1 finding; code changes do not establish
+App Review acceptance. Submission metadata and privacy disclosures must describe the expanded
+categories and selected AI service. See [Health Review](../../guides/health-review.md).
 
 ### Image Generation
 
@@ -376,25 +588,101 @@ Restoring health access requires a separate native feature and App Store submiss
   model is configured. Its input schema is built from that model's capability block so the model is
   never offered a parameter its provider rejects.
 
+### Office Files
+
+`create_document`, `create_workbook`, and `create_presentation` create new DOCX, XLSX and PPTX entries
+from strict version 1 specs. They are core file capabilities with `auto` approval, absent when the
+native compute sandbox is unavailable, and discovered through Pi's deferred `tool_search` catalog.
+They remain callable from Code Mode and retain the ordinary unsafe replay and child-artifact
+receipt rules. Generation uses the separate compute pool, not the waiting Code Mode bridge.
+
+The [Office service](../../../src/backend/services/office/README.md) defines the supported elements,
+libraries and limits. Inputs contain only structured data and authorized managed image references.
+Results contain managed file metadata and a created artifact, never package bytes or device paths.
+Sources and images use `WorkspaceFileAccess.resolveRead`, admitting conversation grants or live
+membership in the selected workspace. Outputs are separate logical files in that workspace, or at
+the library root when none is selected; storage validates workspace placement at commit.
+`inspect_office_file` pages through body paragraphs, sheets or slide shapes. `read_office_content`
+returns exact paragraphs or bounded cell ranges, including saved formula values. Both return a
+source SHA-256. `edit_document`, `edit_workbook` and `edit_presentation` require version 1 and that
+hash, patch only supported targets, and publish a new managed copy with a `derived` artifact. The
+original and unrelated package parts remain unchanged. All five use the same catalog, compute,
+file grants and durable receipt boundaries as generation. Workbook cell edits request recalculation;
+they do not calculate formulas themselves.
+
+`inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
+frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
+optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
+PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
+2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
+is the caller's responsibility. Shared original media stays unchanged for other occurrences.
+Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
+request recalculation. See the service contract for exact format-specific coverage.
+
+Office tools declare success and business-error return schemas for Code Mode. The Runtime wraps
+each result as `{ value, artifacts }`. Creation and editing return `value.status: "created"` and
+`value.fileEntryId`; inspection and reads return `value.status: "read"`, `file_entry_id` and
+`source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
+exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
+use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
+A business error returns `{ status: "error", message }`.
+`library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
+`fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
+creation script after storing file ids, then run dependent work in a separate script:
+
+```javascript
+const { value } = await tools.create_document({
+  filename: "notes.docx",
+  spec: { version: 1, blocks: [{ type: "paragraph", text: "Hello" }] },
+});
+if (value.status === "error") throw new Error(value.message);
+store("documentId", value.fileEntryId);
+text({ fileEntryId: value.fileEntryId });
+```
+
+```javascript
+text(await tools.inspect_office_file({ file_entry_id: load("documentId") }));
+```
+
+The existing preview page hands selections and their original attachments to a new editable chat
+draft. The composer and the sent message show each selection as a chip labelled like desktop's
+(`file · ¶4`, `file · Sheet!B2`, `file · Slide 2`); the message stores it as a text reference with
+the managed file id, structural anchor and excerpt. Runtime input expands each chip into the same
+fenced `selection-ref` block desktop sends, placed after its label, so the model contract is
+unchanged. Remote desktop conversations refuse selection chips instead of dropping them. The Agent
+reads the current referenced content and compares it with the excerpt before editing, following
+Desktop's workflow. Selection references do not widen file grants.
+
+`run_office_script` runs model-written JavaScript with the pinned Office libraries in the same
+compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact. It covers what the
+spec tools cannot express, including template filling, formulas, free layouts and package-level edits
+of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
+job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
+and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
+not parse are refused before publication. Script errors and console output return as
+`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
+pending. Executed tests cover package contents and supported patch preservation in a Node VM;
+they do not establish native QuickJS compatibility or Office visual fidelity.
+
 ### Managed File Write And Edit
 
-`write_file` accepts a display name rather than a path, writes
-bounded UTF-8 text (1 MB) as a new entry, and can neither address nor overwrite an existing one. It
-refuses content holding NUL, the one character `read_file` treats as binary, so nothing it writes is
-unreadable later. The
-model receives `{ status, fileEntryId, filename, size }`; a name it can correct returns
-`{ status: 'error', message }` rather than throwing, since a thrown error reaches it only as an
-opaque failure.
+`write_file` accepts a relative workspace path in `filename`, or a plain name without a workspace,
+and stores bounded UTF-8 text (1 MiB). Creating an occupied path without its current
+`base_file_entry_id` and `base_revision` fails. Read results expose both values. An existing path
+advances to a new version across turns; a draft created by this turn is rewritten in place. Invalid
+names, NUL content, and stale writes return actionable errors. Outputs include
+`{ status, fileEntryId, revision, filename, size }`.
 
-`edit_file` takes `file_entry_id`, non-empty `old_string`, `new_string`, and optional `replace_all`.
+`edit_file` takes `file_entry_id` or a relative `path`, non-empty `old_string`, `new_string`, and optional `replace_all`.
 It accepts only active, strictly decoded UTF-8 sources no larger than 1 MiB and produces a result no
 larger than 1 MiB; a `replace_all` result is bounded before it is built, so a short match with a long
 replacement cannot allocate far past the limit. Like `write_file`, it refuses a `new_string` holding
 NUL. Matching is exact and case-sensitive: a single edit requires exactly one
 non-overlapping match, while `replace_all` changes every non-overlapping match. It preserves a UTF-8
 BOM and all untouched bytes represented by the decoded text. It never uses the desktop filesystem
-tool's fuzzy matching, empty-search overwrite, or path semantics. The model receives
-`{ status, sourceFileEntryId, fileEntryId, filename, size, replacements, snippet, snippetStartLine }`,
+tool's fuzzy matching, empty-search overwrite, or device path semantics. Path edits require the last read's `base_file_entry_id` and `base_revision`. The model receives
+`{ status, sourceFileEntryId, fileEntryId, revision, filename, size, replacements, snippet, snippetStartLine }`,
 where the snippet is the edited region with two lines of context on each side, capped at 1,200
 characters, so the model can confirm the change without reading the file back. When those context
 lines are longer than the cap — minified HTML, one paragraph per line — the cut keeps the change and
@@ -408,25 +696,20 @@ file however many edits it took, and across turns a file keeps its history as ve
 - **Draft rewrite.** When the source is one of this turn's drafts, the edit rewrites that entry in
   place. The id, name, and media type are unchanged, `fileEntryId` equals `sourceFileEntryId`, and
   no artifact is returned. This is the only content write in the file model and it is legal only
-  because nothing outside the active turn can yet reference the draft.
-- **New version.** When the source is anything else — an attachment, or an artifact of an earlier
-  turn — the source is never changed and the edit is saved as a new `generated` entry with a
-  version in its name: `report.html` becomes `report v2.html`, and editing `report v2.html` in a
-  later turn produces `report v3.html`. A number already taken by a file the Session can see is
-  skipped, so two versions of one source never share a name. The version is carried in the name
-  because the name is what both the file library and the model see; there is no lineage column. The
-  new entry is a `derived` artifact and immediately becomes a draft of the current turn, so further
-  edits in the same turn rewrite it — including edits that name the original source again, which
-  continue that version rather than forking a second one.
+  while the entry remains the current version and its revision still matches.
+- **New version.** Editing an existing workspace file creates a `generated` entry, preserves the
+  source, and atomically advances the logical file's current pointer. Its path keeps the same name;
+  history joins versions by file id. Editing an authorized outside source creates a new workspace
+  file instead. Without a workspace, edits to root files retain their lineage, and outside copies
+  land at the root. A derived version becomes this turn's draft, so subsequent edits continue it.
 
-Both rules assume one writer at a time, and a message's tool calls run in parallel, so `edit_file`
-serializes calls that name the same file: each edit reads what the previous one wrote, in the order
-the model listed them. Without it two edits of one draft would both read the pre-edit bytes and the
-second write would drop the first — harmless while every edit created its own entry, silent data
-loss once a draft is rewritten in place. Edits of different files stay concurrent.
+`edit_file` serializes calls naming the same source within a turn. The database transaction also
+compares the current entry id and content revision before committing; a competing Session cannot
+silently fork or overwrite a shared file. It rejects stale drafts and destinations moved outside
+the captured workspace. The Agent must re-read after a conflict.
 
-`read_file` is ledger-scoped: only attachments, earlier artifacts of the Session, and this turn's
-drafts can be read. It shares `readAttachmentContent` with attachment preparation and captures the
+`read_file` accepts the conversation ledger and the selected workspace. Outside-library reads
+require the separately approved library tool. It shares `readAttachmentContent` with attachment preparation and captures the
 same per-turn `file.document_parser.mode`; changing the preference affects the next turn, not a
 later tool call in this turn. No parser failure silently switches engines.
 
@@ -488,6 +771,8 @@ response. The Code Mode prompt section states this limit. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
+Confirmed MCP child results have separate display receipts, preserving their App launchers, resource
+authority and media in the transcript even when the parent is cancelled or its task documents retire.
 
 Each script has a fresh native VM, a 64 MiB heap and a dedicated 8 MiB thread stack with a 7 MiB
 QuickJS stack limit. Across turns the service runs at most two scripts and, in a separate pool, two
@@ -518,7 +803,7 @@ it. Lasting results belong in managed files. No parallel long-term store is main
 A client without the native module, or whose native module predates the interactive bridge, offers
 no JavaScript capability. Stored `run_js` results from earlier releases remain readable.
 
-`read_file` can explicitly read PNG, JPEG, WebP and GIF within the same conversation file ledger.
+`read_file` can explicitly read PNG, JPEG, WebP and GIF within its conversation or workspace access scope.
 It reuses native image normalization and the existing attachment byte limit. Vision-capable model
 calls receive bounded pixels; scripts receive metadata. Visible Cherry transcript parts and tool
 details omit pixels, but a valid context checkpoint within the 256 KiB limit can retain them.
@@ -584,7 +869,7 @@ desktop event labels or persistence shapes.
 - MCP exposes only configured Streamable HTTP tools without losing other persisted transport data.
 - Calendar access requires both OS permission and tool policy.
 - Managed-file tools accept no arbitrary paths; only validated application-created outputs can
-  extend the turn resource ledger, and file writes and edits never overwrite an existing entry.
+  extend the turn resource ledger, and only same-turn drafts may be rewritten after conflict checks.
 - Mobile Skills cannot add tools, approvals, credentials, or resource-ledger grants.
 - Cancellation, denial, unavailable tools, and process interruption all fail closed without late
   side effects entering the transcript or non-terminal tool calls entering later model history.
@@ -646,11 +931,16 @@ but cannot start chatting. The model derives instructions from the conversation 
 `ask_user_question` for material missing requirements.
 
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
-and omits instructions. `agent_get` returns the editable definition and `updatedAt`; both get and
+and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
+bindings (`skillId` and `isEnabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
 writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
-latest definition. Changes to the active Agent apply to future turns only.
+latest definition. `changes.skills` applies only the listed bindings: `isEnabled: true` binds and
+enables, `false` binds and disables, and `null` removes a binding. Unlisted bindings are preserved;
+this does not change the Skill library's global enablement. Definition edits and requested binding
+changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
+apply to future turns only.
 
 Create/update publish committed Data API cache invalidations, including when a turn has no visible
 chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is

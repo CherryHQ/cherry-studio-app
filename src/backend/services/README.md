@@ -21,16 +21,17 @@ suffix.
 - `webSearch` retains the desktop-aligned `WebSearchService`. Device permissions are adapted by
   `DevicePermissions`, which directly implements the shared `PermissionsModule` contract;
   avatar storage remains a set of domain functions.
-- `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
-  file maintenance orchestration. File-entry and reference persistence remain in
-  `src/backend/data/services`.
+- `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it,
+  native local-file hashing (`fileHash`), and file maintenance orchestration. File-entry and
+  reference persistence remain in `src/backend/data/services`.
 - `jobs` owns durable job orchestration. `JobHandlerRegistry` is the composition assembly service:
   it imports domain handlers and their dependencies, then exposes one frozen registry to the
   feature-agnostic `JobRuntime`. The runtime itself depends only on the database, that registry,
   and the `KeepAliveSource` capability; it must not import paintings or background activity
   implementations directly.
-- `keepAlive` owns the reference-counted silent-audio `KeepAliveCoordinator` (no preference gate —
-  each consumer decides when to acquire). `backgroundActivity` owns the feature-agnostic
+- `keepAlive` owns the reference-counted `KeepAliveCoordinator`: a finite UIKit background
+  execution window on iOS and a foreground service on Android. Each consumer decides when to
+  acquire and how to handle expiry. `backgroundActivity` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state
   machine, content and icon derivation), and the painting job handler drives its own session.

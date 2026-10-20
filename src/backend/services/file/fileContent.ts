@@ -2,13 +2,13 @@ import { File } from 'expo-file-system';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import type {
   PrepareFileAttachmentsInput,
   PreparedFile,
   ResolvedFile,
 } from '@/shared/contracts/file';
 import { FileAttachmentError, type FileAttachmentFact } from '@/shared/contracts/fileAttachment';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type FileEntry,
   type FileEntryId,
@@ -17,13 +17,17 @@ import {
   FileEntryProvenanceSchema,
   MediaTypeSchema,
   SafeNameSchema,
+  TimestampSchema,
 } from '@/shared/data/types/file';
+import type { FilePlacement } from '@/shared/data/types/fileLibrary';
 
 import { readDocumentUriText } from './documentText';
 import { editFileImage } from './editFileImage';
+import { FileHashError, hashLocalFile } from './fileHash';
 import {
   createInternalEntryWithPreview,
   generateFilePreviewUri,
+  getTrashedImagePreviewUri,
   resolveCachedFilePreviewUris,
 } from './filePreviewStorage';
 import {
@@ -34,32 +38,33 @@ import {
   readFileUriBytes,
   resolveFileEntry,
   rewriteInternalTextEntry,
-  subscribeFileChanges,
 } from './fileStorage';
 import { discardNormalizedImage, normalizeImportedImage } from './importedImageNormalization';
 import { prepareFileAttachments } from './prepareFileAttachments';
 
-export class FileHashError extends Error {
-  constructor(
-    readonly code: 'NATIVE_HASH_UNAVAILABLE' | 'VERIFICATION_FAILED' | 'RESOURCE_UNAVAILABLE',
-  ) {
-    super(code);
-    this.name = 'FileHashError';
-  }
-}
-const hashLogger = loggerService.withContext('FileHash');
-
 const createInternalEntryInputSchema = z.strictObject({
+  workspaceSessionId: z.string().min(1).optional(),
+  folderId: z.uuid().nullable().optional(),
   mediaType: MediaTypeSchema.optional(),
   name: SafeNameSchema.optional(),
   uri: z.string().min(1),
 });
 
 const createTextEntryInputSchema = z.strictObject({
+  folderId: z.uuid().nullable().optional(),
+  baseFileEntryId: z.uuid().optional(),
+  conflictIfExists: z.boolean().optional(),
+  workspaceFolderId: z.uuid().nullable().optional(),
+  baseUpdatedAt: z.int().nonnegative().optional(),
+  expectedName: SafeNameSchema.optional(),
   data: z.string(),
   mediaType: MediaTypeSchema,
   name: SafeNameSchema,
   provenance: FileEntryProvenanceSchema,
+});
+
+const createBytesEntryInputSchema = createTextEntryInputSchema.extend({
+  data: z.instanceof(Uint8Array),
 });
 
 /**
@@ -70,32 +75,33 @@ const createTextEntryInputSchema = z.strictObject({
  * factory to inject.
  */
 export const fileContent = {
-  subscribeChanges: subscribeFileChanges,
   editImage: editFileImage,
+  async prepareWorkspaceAttachment(
+    input: {
+      fileEntryId: FileEntryId;
+    } & ({ sessionId: string; folderId?: never } | { folderId: string; sessionId?: never }),
+  ): Promise<ResolvedFile> {
+    const id = FileEntryIdSchema.parse(input.fileEntryId);
+    const source = await resolveFileEntry(fileEntryService, id);
+    if (!source) throw new Error('The attached file is unavailable.');
+    const folder =
+      input.sessionId !== undefined
+        ? await fileLibraryService.workspace(input.sessionId)
+        : await fileLibraryService.resolveDirectory(z.uuid().parse(input.folderId), '.');
+    if (!folder || (await fileLibraryService.contains(folder.id, id))) return source;
+    const logical = await fileLibraryService.fileForEntry(id);
+    return fileContent.createInternalEntry({
+      uri: source.uri,
+      name: logical?.name ?? source.entry.filename,
+      mediaType: source.entry.mediaType,
+      folderId: folder.id,
+    });
+  },
   async hashFile(id: FileEntryId, signal: AbortSignal): Promise<string> {
     signal.throwIfAborted();
     const source = await resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id));
     if (!source) throw new FileHashError('RESOURCE_UNAVAILABLE');
-    let native: typeof import('@preeternal/react-native-file-hash');
-    try {
-      native =
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- old clients lack this native module
-        require('@preeternal/react-native-file-hash') as typeof import('@preeternal/react-native-file-hash');
-    } catch (error) {
-      hashLogger.warn('Native file hashing is unavailable', { error });
-      signal.throwIfAborted();
-      throw new FileHashError('NATIVE_HASH_UNAVAILABLE');
-    }
-    try {
-      const digest = await native.fileHash(source.uri, { algorithm: 'SHA-256', signal });
-      signal.throwIfAborted();
-      if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error('Invalid native SHA-256 result');
-      return digest;
-    } catch (error) {
-      signal.throwIfAborted();
-      hashLogger.warn('Native file hashing failed', { error });
-      throw new FileHashError('VERIFICATION_FAILED');
-    }
+    return hashLocalFile(source.uri, signal);
   },
   /**
    * Copies a transient picker, camera, or share URI into managed storage. This
@@ -107,8 +113,20 @@ export const fileContent = {
    * An oversized still image is re-encoded here, once, so the managed file is
    * already what a model request can carry; nothing downstream resizes it again.
    */
-  createInternalEntry: async (input: { mediaType?: string; name?: string; uri: string }) => {
-    const validated = createInternalEntryInputSchema.parse(input);
+  createInternalEntry: async (input: {
+    mediaType?: string;
+    name?: string;
+    uri: string;
+    folderId?: string | null;
+    workspaceSessionId?: string;
+  }) => {
+    const { workspaceSessionId, ...parsed } = createInternalEntryInputSchema.parse(input);
+    const validated = workspaceSessionId
+      ? {
+          ...parsed,
+          folderId: (await fileLibraryService.workspace(workspaceSessionId))?.id ?? null,
+        }
+      : parsed;
     const normalized = await normalizeImportedImage(validated);
     let entry: FileEntry;
     try {
@@ -137,7 +155,7 @@ export const fileContent = {
    * text would land here too — so the caller states the origin.
    */
   createTextEntry: async (
-    input: {
+    input: FilePlacement & {
       data: string;
       mediaType: string;
       name: string;
@@ -147,6 +165,19 @@ export const fileContent = {
   ) => {
     const validated = createTextEntryInputSchema.parse(input);
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' }, signal);
+  },
+  /** Generated binary artifacts use the same write/commit/rollback boundary as text files. */
+  createBytesEntry: async (
+    input: FilePlacement & {
+      data: Uint8Array;
+      mediaType: string;
+      name: string;
+      provenance: FileEntryProvenance;
+    },
+    signal?: AbortSignal,
+  ) => {
+    const validated = createBytesEntryInputSchema.parse(input);
+    return createInternalEntry(fileEntryService, { ...validated, source: 'bytes' }, signal);
   },
   prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
     const signal = input.signal ?? new AbortController().signal;
@@ -218,14 +249,40 @@ export const fileContent = {
    * Replace a draft text entry's bytes in place. Only a turn's own artifact is
    * a draft; the caller (the edit tool) proves that through its turn ledger.
    */
-  rewriteTextEntry: (input: { data: string; id: FileEntryId }, signal?: AbortSignal) =>
+  rewriteTextEntry: (
+    input: {
+      data: string;
+      id: FileEntryId;
+      workspaceFolderId?: string | null;
+      baseUpdatedAt?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
     rewriteInternalTextEntry(
       fileEntryService,
-      { data: input.data, id: FileEntryIdSchema.parse(input.id) },
+      { ...input, id: FileEntryIdSchema.parse(input.id) },
       signal,
     ),
-  generatePreviewUri: generateFilePreviewUri,
+  generatePreviewUri: async (entry: FileEntry) =>
+    (await fileEntryService.findById(entry.id)) ? generateFilePreviewUri(entry) : undefined,
+  getTrashThumbnailUri: (id: FileEntryId, deletedAt: number) =>
+    getTrashedImagePreviewUri(
+      fileEntryService,
+      FileEntryIdSchema.parse(id),
+      TimestampSchema.parse(deletedAt),
+    ),
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
-  resolveUris: async (entries: readonly FileEntry[]) => entries.map(resolveCachedFilePreviewUris),
+  resolveUris: async (entries: readonly FileEntry[]) => {
+    const available = new Set(
+      (await fileEntryService.findAvailableByIds(entries.map((entry) => entry.id))).map(
+        (entry) => entry.id,
+      ),
+    );
+    return entries.map((entry) =>
+      available.has(entry.id)
+        ? resolveCachedFilePreviewUris(entry)
+        : { previewUri: undefined, uri: undefined },
+    );
+  },
   resolve: (id: FileEntryId) => resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id)),
 };

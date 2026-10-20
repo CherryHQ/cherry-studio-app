@@ -14,7 +14,7 @@ import {
 import type { CSSProperties } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { PageBridge, post } from './page-bridge';
+import { PageBridge, post } from './PageBridge';
 import {
   FILE_PREVIEW_PAGE_GLOBAL,
   type FilePreviewRenderOptions,
@@ -108,6 +108,9 @@ function render(options: FilePreviewRenderOptions): void {
         post({ type: 'error', code: error.code, message: error.message.slice(0, 4096) })
       }
       onRequestOpen={(reason) => post({ type: 'requestOpen', reason })}
+      onSelection={
+        options.captureSelection ? (selection) => post({ type: 'selection', selection }) : undefined
+      }
       options={currentLayoutOptions()}
       resources={resources}
       source={sourceFor(options.source)}

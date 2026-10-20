@@ -7,13 +7,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
 
-import {
-  ComposerProvider,
-  useComposerMeta,
-  useComposerState,
-} from '../../context/ComposerProvider';
+import { useComposerMeta, useComposerState } from '../../context/ComposerProvider';
 import { ComposerDock } from '../ComposerDock';
 import { ComposerMenu } from '../ComposerMenu';
+import { ComposerTestProvider } from './_composerTestProvider';
 
 type MockMenuItemProps = {
   label: string;
@@ -283,11 +280,11 @@ describe('ComposerMenu', () => {
     act(() => {
       renderer = create(
         <BackendProvider backend={backend}>
-          <ComposerProvider>
+          <ComposerTestProvider>
             <ComposerDock onHeightChange={jest.fn()} />
             <FieldProbe />
             <ComposerMenu media={media}>{children}</ComposerMenu>
-          </ComposerProvider>
+          </ComposerTestProvider>
         </BackendProvider>,
       );
     });

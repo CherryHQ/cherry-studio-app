@@ -23,9 +23,9 @@ implementation is heading and why.
   exists only to mirror desktop structure is removable on sight.
 - **Drivers, ranked:** comprehension cost, then Runtime replaceability, then desktop-legacy
   removal. When two moves conflict, the higher driver wins.
-- **Pi is the sole conversation trunk.** The AI SDK path serves non-conversation generation only:
-  `AiService` (generate text, generate image, SDK-only probe, model listing) and the tools that call
-  back into it.
+- **Pi is the sole conversation trunk.** The AI SDK path serves image generation and model listing
+  only: `AiService` and the tools that call back into it. Translation and session naming use the bound `RuntimeTextGenerator`, an independent
+  single-call capability sharing Pi's provider and OAuth adapters without conversation storage or a tool loop.
 - **The Runtime seam stays at `agent/runtime/types.ts`.** It is an in-process execution boundary for
   the local Mobile Agent. Its replacement candidate is a different local loop, not a remote Agent
   service.
@@ -77,7 +77,7 @@ src/backend/ai/
 │   └── resources/       Unchanged.
 ├── provider/            Runtime-agnostic connection facts: resolved endpoints, transport
 │                        policies, model listing support. No Pi-named exports.
-├── AiService.ts         Single non-conversation facade; generation/ becomes its private
+├── AiService.ts         AI SDK non-conversation facade; generation/ becomes its private
 │                        implementation.
 └── mcp/                 Unchanged.
 ```

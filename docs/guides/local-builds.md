@@ -69,21 +69,70 @@ matching Apple app identifiers, widget identifiers, App Groups, and provisioning
 project ID stays unchanged. Before production submission, check that `submit.production.ios.ascAppId`
 in `eas.json` points to an App Store Connect app matching the new production bundle identifier.
 
+## App Icons
+
+`app.json` uses `assets/icon-light.png` as the default iOS icon. It is copied directly from Cherry Desktop's
+`build/logo.png`: opaque 1024 × 1024 artwork with the original red background and gradients,
+without pre-rounded corners. `assets/icon-dark.png` keeps the original foreground gradients on a
+transparent background so iOS can provide its dark background. iOS 18 and newer select the variant
+from the user's Home Screen appearance, including automatic switching. Tinted appearances use
+the system-generated treatment. See Apple's [icon asset guidance](https://developer.apple.com/documentation/xcode/configuring-your-app-icon).
+
+Regenerate the dark icon with `pnpm exec tsx scripts/generateDarkAppIcon.ts`. The script clips the
+original PNG with the desktop vector outline in `assets/icon-mark.svg`; it does not redraw or
+replace the gradients. The mask is inset by three source pixels to remove edge antialiasing that
+was blended into the original red background.
+
+Android's `assets/adaptive-icon-monochrome.png` is a 1024 × 1024 white mark on transparency,
+exported from `assets/icon-mark.svg`. The SVG contains the three mark paths from Cherry Desktop's
+`src/renderer/assets/images/cherry-text-logo.svg`. The mark is centered by its visible bounds and
+439.2 pixels tall to match the existing adaptive foreground's scale and stay inside the launcher
+mask's safe area. On Android 13 and newer, supported launchers color this layer using the user's
+wallpaper and light/dark theme when themed icons are enabled. Without that setting or launcher
+support, Android displays the regular color icon; this is not an unconditional dark-icon switch.
+See Android's [adaptive icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive).
+Launcher icon appearance is independent of the splash screen and the in-app theme setting.
+
+Icon changes require a new native installation package; an EAS Update cannot replace launcher
+icons. See the [Expo app icon guide](https://docs.expo.dev/develop/user-interface/splash-screen-and-app-icon/#app-icon).
+
+## iOS HTTP Connections
+
+Cherry accepts user-configured AI provider and MCP server addresses, including self-hosted HTTP
+endpoints whose hosts are unknown at build time. `app.json` sets
+`NSAppTransportSecurity.NSAllowsArbitraryLoads` to `true` so these connections can reach the server.
+Prefer HTTPS with a valid certificate when configuring a public service.
+
+Do not add `NSAllowsLocalNetworking`, `NSAllowsArbitraryLoadsForMedia`, or
+`NSAllowsArbitraryLoadsInWebContent` alongside this setting: their presence makes iOS ignore
+`NSAllowsArbitraryLoads`, which can block public HTTP endpoints with `NSURLErrorDomain -1022`.
+See Apple's [ATS configuration rules](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowsarbitraryloads).
+The separate local-network permission description and Bonjour service declarations remain required.
+App Store review requires justification for this exception: users connect to their own servers,
+including servers that do not support HTTPS.
+
+ATS policy is embedded in the native installation package. Changing it requires a new iOS package;
+an OTA update cannot change the policy in an existing installation.
+
 ## APK Update Distribution
 
-Only Android builds with `APK_UPDATES_ENABLED=true` show Check for updates in Settings and About.
-The app checks in the background after startup. The row reads that result and shows `NEW` for a newer
-APK, with no description; tapping it asks for confirmation before opening the browser download.
-`production` sets this flag, while `production-google-play` explicitly overrides
-it with `false`. Development and preview default to disabled. iOS always
-hides the feature, regardless of the flag. Disabled builds also reject detection and download calls.
+Preview and production packages also include the EAS Update client for compatible code and asset
+changes. Public Android APKs use `production-apk`, Google Play uses `production-google-play`, and
+iOS production uses `production-ios`; preview uses `preview`. Existing installations need one new
+native package first. Development and Storybook do not automatically fetch OTA updates. See
+[Application Updates](./app-updates.md) for publication and runtime compatibility.
 
-The value is parsed into the boolean `extra.isApkUpdatesEnabled` by `app.config.ts`; it is not a user
-preference or remote toggle. Only `true` and `false` are accepted; an unset value defaults to `false`.
-GitCode is the fixed update source. Keep store profiles disabled and never upload the public APK as
-a store artifact. Future Android store profiles must explicitly set `APK_UPDATES_ENABLED=false`, as
-`production-google-play` does. For an explicitly authorized Android development session exercising
-this feature, supply `APK_UPDATES_ENABLED=true` to Metro.
+Only packaged Android builds on the native update channel `production-apk` (the `production`
+profile) show Check for updates in Settings and About. The app checks in the background after
+startup. The row reads that result and shows `NEW` for a newer APK, with no description; tapping it
+asks for confirmation before opening the browser download. Google Play, preview, and iOS builds use
+other channels and stay disabled; a downloaded manifest cannot change the channel. Disabled builds
+also reject detection and download calls.
+
+GitCode is the fixed update source. Never give a store profile the `production-apk` channel or
+upload the public APK as a store artifact. For an explicitly authorized Android development session
+exercising this feature, supply `APK_UPDATES_ENABLED=true` to Metro; `app.config.ts` reads it into
+`extra.isApkUpdatesEnabled` only for the development profile, and accepts only `true` or `false`.
 The local build wrapper's default remains development.
 
 ## Sentry Environment Variables
@@ -187,8 +236,8 @@ alone does not force those uploads to retry.
 
 Keep the original sources, dependencies, and generated artifacts in the retained working directory.
 Restore the original build environment, including local credentials and the selected profile's
-`eas.json` environment overrides (`APK_UPDATES_ENABLED=true` for the APK;
-`APK_UPDATES_ENABLED=false` and `ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). From
+`eas.json` environment overrides (`ANDROID_COMPRESS_NATIVE_LIBS=false` for Google Play). The APK's
+update checks follow its native `production-apk` channel, not an environment variable. From
 `<workdir>/build/android`, force the upload tasks to run with task-specific `--rerun` options:
 
 ```bash

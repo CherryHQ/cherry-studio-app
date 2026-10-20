@@ -23,15 +23,38 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   submission. The empty composer returns to one row; local-send scrolling does not dismiss again.
 - Image attachments are imported into managed storage before send. The Host revalidates their
   authoritative metadata, model capability, provider endpoint, and request limits before admission.
-- While a submission or turn is active, the send control becomes stop. Before the Host reserves
-  the turn it calls `cancelSubmission` and the draft returns to the composer; afterwards it calls
-  `cancelTurn` for that Session.
+- While a submission or the selected branch's answer is active, the send control becomes stop.
+  Before the Host reserves the turn it calls `cancelSubmission` and the draft returns to the
+  composer; afterwards it stops the selected answer by its message and turn IDs. Switching to
+  a completed answer restores the send control; it stays disabled until the other answers finish.
+  A queued follow-up keeps its running ancestor as the stop target.
 - When empty and outside an editing interaction, the composer is one row with the ＋ menu and send
   action always reachable. Editing, draft text, or attachments keep it expanded into two rows: the field takes the
   full width, the action row moves below it, and
   the model pill and reasoning-effort gauge slide and scale in without animating their glass
   opacity. The field grows with its content up to the shared composer's cap and the toolbar follows
   it down.
+- Editing or a nonempty draft exposes a diagonal expand action. It opens a large opaque editing
+  surface below the top safe area, with a collapse action and no heading. Its background fills
+  both screen edges and extends through the footer and bottom safe area. Local and
+  remote conversations share the same field and toolbar; large-editor layout never remounts the
+  native input or clears its buffer. The collapse control shares the top accessory row with
+  attachments; only that row reserves its width. The expanded field below uses the full content
+  width and scrolls natively. The compact height cap remains unchanged.
+- Expansion preserves spatial continuity: the top edge grows upward while toolbar actions stay
+  at the dock's bottom anchor. The isolated composer frame uses the shared 250ms settle curve;
+  backdrop and opaque surface follow that progress, with no opacity on glass-control ancestors.
+  Repeated actions reverse the current animation; stale close completions cannot hide a reopened
+  editor. System Reduce Motion lands directly on the target layout. Keyboard motion uses live
+  controller coordinates and does not receive another timing curve.
+- Collapse and its backdrop preserve the draft and current keyboard state. Android Back first
+  hides a visible keyboard, then collapses the large editor. The main header and transcript
+  accessibility are isolated through the close transition. Send collapses through the existing
+  send boundary; rejected sends retain its existing text/attachment recovery. Leaving the text
+  composer, including switching to an image-generation model, also collapses the large editor.
+  Native input,
+  selection, keyboard continuity, both-theme appearance and performance still require device
+  acceptance; source and unit coverage do not establish native conformance.
 - Editing belongs to the whole composer. Focusing the field starts it; opening or closing the ＋
   menu, model picker, file picker, or effort slider preserves it, including with an empty draft.
   Native field blur and keyboard-hide notifications do not end editing. A completed background
@@ -60,6 +83,14 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   when none are connected and offers a connection entry. Selecting a plugin inserts an inline
   reference that expresses the user's intent for that message. Connected plugins remain available
   to every Agent without a mention or Agent binding; remote MCP tools follow Agent configuration.
+- A short MCP row appears only when the current Agent enables a custom MCP server that has
+  cached prompt templates. Per-tool overrides do not enable that server's prompts. The same
+  keyboard-preserving compact menu used by Plugins lists the cached templates and their sources;
+  opening it performs no remote discovery. Selecting a template resolves its messages and adds
+  them to the draft without preview or sending; a template without parameters shows progress in
+  its row and dismissing the menu abandons it. Parameters reuse `UserQuestionSheet`, including
+  its previous/next navigation and retained answers. Required fields gate submission; optional
+  fields can be skipped. Cancelling preserves the draft; Agent changes cancel pending selection.
 - Sidebar → Skills → More → Add in Chat opens a fresh draft with a built-in `find-skills` inline
   reference, using the same rich editor presentation as plugin references. Deleting it cancels the
   installation intent. The shared chat composer handoff seeds the draft. The user supplies a task or
@@ -68,6 +99,9 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   intent to the conversation workflow. Rejected sends retain it, successful sends clear the
   submitted selection, and switching Agents clears it. The Host owns discovery,
   admission, installation and enabling for the current Agent.
+- **Create Skill** in the same library menu seeds a removable `create-skill` reference. Its `create`
+  action shares the discovery handoff, send, retry and history contract. The Host owns full-content
+  review and explicit save/binding choices. Trial opens a fresh unsent installed-Skill draft.
 - The plus menu does not add or discover Skills; it only selects installed Skills for use.
 - The menu's Skills row opens the same anchored small-menu presentation as Plugins, listing eligible
   installed bindings for the current Agent. A row inserts an inline Skill reference and closes the
@@ -82,10 +116,16 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   them and records name/revision receipts on the user message. Rejected sends retain selections,
   successful sends clear the submitted selection, and Agent switches clear it. Manual-only Skills
   remain selectable when user invocation is allowed. Selection never creates an Agent binding.
-- The menu's File row opens the full-height library picker. Its Recent list shares cursor pages
-  and batched previews with the library screen. Selection stays local until Add is pressed; the
-  action appears only for newly selected, available attachments. Already attached files are marked
-  and cannot be added twice. Close discards the selection. Search is not offered.
+- The menu's File row opens the full-height library picker with only a centered title in its header.
+  Like the library, each level lists its folders first, then its files newest first. A folder's
+  own timestamp does not change when files are added inside it, so folders are not ordered among
+  files. Folder rows only expand/collapse; their children remain under the folder and reuse the
+  library's cursor pages and batched previews. Expanded directories use the workspace tree's inline
+  paging pattern. File dates are content modification dates, as in the library.
+  Selection belongs to the sheet and survives collapsing or recycling a directory. A fixed footer
+  appears for newly selected, available attachments and confirms their count. Already attached files
+  are marked and cannot be added twice. Dismissing by drag, scrim, back, or accessibility escape
+  discards the pending selection. Search is not offered.
   The app-wide file-change subscription keeps these shared pages current; opening the picker
   reuses fresh pages without forcing another fetch.
 - Upload files closes the library picker and presents the system document picker from chat. Each
@@ -95,4 +135,11 @@ exported through `index.ts` and receives the current Agent/Session and the conte
   under Recent next time. Removing the tile while it is still uploading cancels that upload.
 - Library selections are ready attachments borrowed by entry ID, so removing one from the composer
   leaves the library file intact. Camera, photos, and painting keep their existing flows.
-- Follow-up queues and steering are not part of the Version 1 Agent Session composer.
+- Accepted follow-ups appear in a bounded queue above the composer until Pi starts them. Each
+  row shows the original text/attachment summary and can withdraw that one waiting input. The
+  queue comes from the Session observation snapshot and `queue.updated` events, so route changes
+  and process restarts preserve it. Streaming message updates do not invalidate queue subscribers.
+  Queue removal never falls back to stopping an active turn when placement wins the race.
+  Pending reservations remain outside the transcript until execution starts; confirmed withdrawal
+  deletes their unexecuted message pair without invalidating the current model context. Steering
+  remains outside this composer.

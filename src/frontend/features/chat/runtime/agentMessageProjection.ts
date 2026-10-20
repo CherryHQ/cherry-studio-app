@@ -79,7 +79,21 @@ function toErrorPart(error: AgentErrorView): CherryMessagePart {
 }
 
 function toToolPart(part: Extract<AgentMessagePart, { type: 'dynamic-tool' }>): CherryMessagePart {
+  const result = AgentToolResultSchema.safeParse(part.output);
   const base = {
+    ...(part.toolRef.source === 'mcp'
+      ? {
+          toolMetadata: {
+            cherry: { tool: { type: 'mcp' as const, serverId: part.toolRef.serverId } },
+          },
+        }
+      : {}),
+    ...(part.toolRef.source === 'mcp' && result.success && result.data.mcpSource
+      ? { mcpSource: result.data.mcpSource }
+      : {}),
+    ...(part.toolRef.source === 'mcp' && result.success && result.data.mcpApp
+      ? { mcpApp: result.data.mcpApp }
+      : {}),
     input: part.input,
     ...(part.inputPreview ? { inputPreview: part.inputPreview } : {}),
     ...(part.progress ? { progress: part.progress } : {}),
@@ -156,6 +170,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'text':
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
+        part.selectionReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction
         ? withCherryMeta(
@@ -164,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
+                ...(part.selectionReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',
@@ -275,7 +291,7 @@ function toDisplayParts(
           text: sourcePart.text.trim() ? `${previous.text}\n\n${sourcePart.text}` : previous.text,
           state: sourcePart.state,
         };
-      } else if (sourcePart.text.trim()) {
+      } else if (sourcePart.text.trim() || sourcePart.state === 'streaming') {
         displayParts.push(projectAgentPart(sourcePart, cache).part);
         partKeys.push(sourcePart.id);
       }
@@ -339,22 +355,38 @@ export function toAgentMessageListItem(
   const model = resolveMessageModel(message);
   const item = {
     createdAt: message.createdAt,
-    data: toDisplayParts(
-      message.status === 'cancelled'
-        ? message.parts.filter(
-            (part) =>
-              part.type !== 'data-error' ||
-              (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
-          )
-        : message.parts,
-      cache,
-    ),
+    data: {
+      ...toDisplayParts(
+        message.status === 'cancelled'
+          ? message.parts.filter(
+              (part) =>
+                part.type !== 'data-error' ||
+                (part.data.code !== 'CANCELLED' && part.data.failure?.source.code !== 'aborted'),
+            )
+          : message.parts,
+        cache,
+      ),
+      ...(message.translations ? { translations: message.translations } : {}),
+    },
     id: message.id,
     ...(message.inferenceSnapshot?.status === 'supported' &&
     message.inferenceSnapshot.snapshot.imageGeneration
       ? { imageGeneration: message.inferenceSnapshot.snapshot.imageGeneration }
       : {}),
     ...(model ? { model } : {}),
+    // Only answers are switched in the transcript; a question has one answer path to follow.
+    ...(message.siblings && message.role === 'assistant'
+      ? {
+          branch: {
+            key: `answers:${message.parentId}`,
+            siblings: message.siblings.map((sibling) => ({
+              id: sibling.id,
+              status: toDisplayStatus(sibling.status),
+              modelId: sibling.modelId,
+            })),
+          },
+        }
+      : {}),
     role: message.role,
     ...(message.stats ? { stats: message.stats } : {}),
     status: toDisplayStatus(message.status),
@@ -404,17 +436,38 @@ export function mergeAgentMessageViews(
   if (live.length === 0) {
     return persisted;
   }
-
-  const liveById = new Map(live.map((message) => [message.id, message]));
-  const merged = persisted.map((message) => liveById.get(message.id) ?? message);
-  const persistedIds = new Set(persisted.map((message) => message.id));
-
-  for (const message of live) {
-    if (!persistedIds.has(message.id)) {
-      merged.push(message);
-    }
+  if (persisted.length === 0) {
+    return live;
   }
 
+  const liveById = new Map(live.map((message) => [message.id, message]));
+  const persistedIds = new Set(persisted.map((message) => message.id));
+  const compareMessages = (left: AgentMessageView, right: AgentMessageView) =>
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+    // Match the store's binary (createdAt, id) order, not locale collation.
+    (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+  // filter() already returns a fresh array, so sorting it in place is safe.
+  const newLive = live.filter((message) => !persistedIds.has(message.id)).sort(compareMessages);
+  const merged: AgentMessageView[] = [];
+  let liveIndex = 0;
+
+  // A bounded history window can omit older live rows. Insert them in transcript
+  // order instead of moving old questions after the latest saved answers.
+  for (const message of persisted) {
+    while (liveIndex < newLive.length && compareMessages(newLive[liveIndex], message) < 0) {
+      merged.push(newLive[liveIndex++]);
+    }
+    const active = liveById.get(message.id);
+    merged.push(
+      active &&
+        message.translations &&
+        active.translations !== message.translations &&
+        (!active.translations || message.updatedAt >= active.updatedAt)
+        ? { ...active, translations: message.translations }
+        : (active ?? message),
+    );
+  }
+  merged.push(...newLive.slice(liveIndex));
   return merged;
 }
 

@@ -7,8 +7,10 @@ import type {
   RuntimeTool,
   RuntimeToolCall,
   RuntimeToolRef,
+  RuntimeToolResult,
 } from '@/backend/ai/agent';
 import { raceAbort } from '@/backend/ai/agent/runtime/raceAbort';
+import { projectMcpModelContent } from '@/shared/contracts/mcpContent';
 import type { PluginErrorReason } from '@/shared/contracts/plugins';
 
 import type { TraceRecorder } from '../observability';
@@ -25,6 +27,8 @@ const MCP_RESULT_PREVIEW_MAX_STRING_BYTES = 512;
 const UTF8_ENCODER = new TextEncoder();
 
 export type McpExecutableToolDescriptor = {
+  connectionKey?: string;
+  app?: import('@/shared/contracts/mcpApp').McpAppReference;
   serverId: string;
   /** Bundled identity from the server record, never inferred from remote descriptions or names. */
   pluginId?: string;
@@ -32,7 +36,11 @@ export type McpExecutableToolDescriptor = {
   displayName: string;
   description: string;
   inputSchema: RuntimeJsonValue;
-  /** Trusted bundled policy; remote annotations do not decide retry safety. */
+  /**
+   * What a failure after transmission means. `read`: repeating the call is harmless, from
+   * bundled policy or a remote read-only or idempotent annotation. `write`: a bundled write.
+   * Absent: the remote server declared nothing, so the outcome is unknown.
+   */
   effect?: 'read' | 'write';
   /**
    * The endpoint this catalog was discovered against. Execution is pinned to
@@ -49,18 +57,42 @@ export type McpExecutableToolDescriptor = {
 };
 
 export type McpRuntimeToolSelection = {
+  workspaceFolderId?: string | null;
   descriptor: McpExecutableToolDescriptor;
   approval: 'ask' | 'deny';
 };
 
+/** An image the importer saved as a managed file, with the bytes for the current request. */
+export type McpRetainedImage = { data: string; mediaType: string; fileEntryId: string };
+
+/** What an invocation reports back while it runs. */
+export type McpInvocationProgress = {
+  /** The request is about to leave the device; a later failure no longer proves it did not run. */
+  sent(): void;
+  /** Human consent is in progress, which pauses the active network budget. */
+  waiting(active: boolean): void;
+};
+
 export type McpToolInvocationCapability = {
   traces?: TraceRecorder;
+  storeResult?(
+    result: unknown,
+    signal: AbortSignal,
+    workspaceFolderId?: string | null,
+  ): Promise<{
+    value: unknown;
+    artifacts: import('../agent/runtime/types').RuntimeArtifact[];
+    images?: McpRetainedImage[];
+    /** Managed file holding model text that exceeded the model budget. */
+    fullTextFileEntryId?: string;
+  }>;
   invoke(
     ref: Extract<RuntimeToolRef, { source: 'mcp' }>,
     input: RuntimeJsonValue,
     signal: AbortSignal,
     discoveredEndpointUrl: string | null,
     discoveredGeneration: number,
+    progress: McpInvocationProgress,
   ): Promise<unknown>;
 };
 
@@ -68,6 +100,7 @@ type McpRuntimeToolErrorCode =
   | 'mcp_tool_cancelled'
   | 'mcp_tool_call_failed'
   | 'mcp_tool_input_invalid'
+  | 'mcp_tool_outcome_unknown'
   | 'mcp_tool_result_invalid'
   | 'mcp_tool_timeout'
   | 'mcp_tool_write_outcome_unknown'
@@ -147,7 +180,7 @@ export function createMcpRuntimeTools(
   const providerNames = new Set<string>();
   const invoke = capability.invoke.bind(capability);
 
-  return selections.map(({ approval, descriptor }) => {
+  return selections.map(({ approval, descriptor, workspaceFolderId }) => {
     if (
       !descriptor.serverId ||
       !descriptor.rawToolName ||
@@ -198,30 +231,40 @@ export function createMcpRuntimeTools(
       execute: (call) =>
         executeMcpRuntimeTool({
           call,
+          workspaceFolderId,
+          app: descriptor.app,
+          connectionKey: descriptor.connectionKey,
           pluginId: descriptor.pluginId,
           effect,
           endpointUrl,
           generation,
           inputValidator,
           invoke,
+          storeResult: capability.storeResult,
           ref,
           traces: capability.traces,
         }),
       inputSchema,
       providerName,
       ref,
+      // Only a bundled plugin's own policy is trusted to declare a read.
+      ...(descriptor.pluginId && effect ? { effect } : {}),
     };
   });
 }
 
 async function executeMcpRuntimeTool(input: {
+  workspaceFolderId?: string | null;
+  connectionKey?: string;
   call: RuntimeToolCall;
+  app?: McpExecutableToolDescriptor['app'];
   pluginId?: string;
   effect: McpExecutableToolDescriptor['effect'];
   endpointUrl: string | null;
   generation: number;
   inputValidator: z.ZodType;
   invoke: McpToolInvocationCapability['invoke'];
+  storeResult?: McpToolInvocationCapability['storeResult'];
   ref: Extract<RuntimeToolRef, { source: 'mcp' }>;
   traces?: TraceRecorder;
 }) {
@@ -234,6 +277,14 @@ async function executeMcpRuntimeTool(input: {
     'tool.call.id': call.toolCallId,
   });
   let bound: BoundedSignal | undefined;
+  let sent = false;
+  const incomplete = () =>
+    incompleteCallError({
+      cancelled: call.signal.aborted,
+      effect: input.effect,
+      sent,
+      timedOut: bound?.didTimeout() ?? false,
+    });
   try {
     if (call.signal.aborted) throw cancelledError();
     if (!input.inputValidator.safeParse(call.input).success) {
@@ -245,17 +296,26 @@ async function executeMcpRuntimeTool(input: {
     }
     bound = createBoundedSignal(MCP_TOOL_CALL_TIMEOUT_MS, call.signal);
     const remoteResult = await raceAbort(
-      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation),
+      input.invoke(input.ref, call.input, bound.signal, input.endpointUrl, input.generation, {
+        sent: () => {
+          sent = true;
+        },
+        waiting: (active) => bound?.setPaused(active),
+      }),
       bound.signal,
     );
-    if (bound.didTimeout()) {
-      throw input.effect === 'write' ? unknownWriteError() : timeoutError();
-    }
-    if (call.signal.aborted) {
-      throw input.effect === 'write' ? unknownWriteError() : cancelledError();
-    }
+    if (bound.didTimeout() || call.signal.aborted) throw incomplete();
 
-    const value = projectMcpResult(remoteResult);
+    const stored: {
+      value: unknown;
+      artifacts: RuntimeToolResult['artifacts'];
+      images?: McpRetainedImage[];
+      fullTextFileEntryId?: string;
+    } = (await input.storeResult?.(remoteResult, call.signal, input.workspaceFolderId)) ?? {
+      value: remoteResult,
+      artifacts: [],
+    };
+    const value = projectMcpResult(stored.value);
     const isToolError =
       remoteResult !== null &&
       typeof remoteResult === 'object' &&
@@ -265,25 +325,36 @@ async function executeMcpRuntimeTool(input: {
       isToolError ? 'error' : 'ok',
       isToolError ? { 'error.category': 'tool_result' } : undefined,
     );
-    return { artifacts: [], value };
+    return {
+      artifacts: stored.artifacts,
+      value,
+      modelContent: projectMcpModelContent(
+        remoteResult,
+        stored.fullTextFileEntryId
+          ? `Full text: read_file with file_entry_id ${stored.fullTextFileEntryId}, paging with start_line and limit.`
+          : undefined,
+      ).flatMap((block): NonNullable<RuntimeToolResult['modelContent']> => {
+        if (block.type === 'text') return [block];
+        const image = stored.images?.find(
+          (item) => item.data === block.data && item.mediaType === block.mimeType,
+        );
+        return image
+          ? [{ type: 'image', fileEntryId: image.fileEntryId, mimeType: block.mimeType }]
+          : [{ type: 'text', text: '[MCP image could not be retained as a managed attachment]' }];
+      }),
+      ...(stored.images?.length ? { modelImages: stored.images } : {}),
+      ...(input.app ? { mcpApp: input.app } : {}),
+      ...(input.connectionKey
+        ? { mcpSource: { serverId: input.ref.serverId, connectionKey: input.connectionKey } }
+        : {}),
+    };
   } catch (error) {
     endMcpTrace(trace, error, call.signal, bound?.didTimeout());
     // Preserve classified failures, including rejections before transmission.
     if (error instanceof McpRuntimeToolError) {
       throw error;
     }
-    // The SDK may fail while reading the body, or this boundary may time out
-    // before invoke() settles. Neither proves a remote write was rolled back.
-    if (input.effect === 'write') {
-      throw unknownWriteError();
-    }
-    if (bound?.didTimeout()) {
-      throw timeoutError();
-    }
-    if (call.signal.aborted) {
-      throw cancelledError();
-    }
-    throw new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
+    throw incomplete();
   } finally {
     bound?.done();
   }
@@ -418,6 +489,32 @@ function timeoutError(): McpRuntimeToolError {
   return new McpRuntimeToolError('mcp_tool_timeout', 'The MCP tool call timed out.', true);
 }
 
+/**
+ * A call that ended without a classified result. Before transmission, or for a call that is
+ * harmless to repeat, the failure is exact. After transmission the SDK may still fail while
+ * reading the body, or this boundary may time out before invoke() settles; neither proves
+ * the service did nothing.
+ */
+export function incompleteCallError(call: {
+  cancelled: boolean;
+  effect: McpExecutableToolDescriptor['effect'];
+  sent: boolean;
+  timedOut: boolean;
+}): McpRuntimeToolError {
+  if (!call.sent || call.effect === 'read') {
+    if (call.timedOut) return timeoutError();
+    if (call.cancelled) return cancelledError();
+    return new McpRuntimeToolError('mcp_tool_call_failed', 'The MCP tool call failed.', true);
+  }
+  if (call.effect === 'write') return unknownWriteError();
+  // Cancellation stops local waiting; an undeclared remote effect may already have happened.
+  return new McpRuntimeToolError(
+    'mcp_tool_outcome_unknown',
+    'The MCP tool call did not complete, so its outcome is unknown. Retry only if repeating it is harmless; otherwise check the service first.',
+    false,
+  );
+}
+
 function unknownWriteError(): McpRuntimeToolError {
   return new McpRuntimeToolError(
     'mcp_tool_write_outcome_unknown',
@@ -427,6 +524,7 @@ function unknownWriteError(): McpRuntimeToolError {
 }
 
 export type BoundedSignal = {
+  setPaused: (active: boolean) => void;
   didTimeout: () => boolean;
   done: () => void;
   signal: AbortSignal;
@@ -439,14 +537,36 @@ export function createBoundedSignal(
 ): BoundedSignal {
   const timeoutController = new AbortController();
   let timedOut = false;
-  const handle = setTimeout(() => {
-    timedOut = true;
-    timeoutController.abort();
-  }, timeoutMs);
+  let remaining = timeoutMs;
+  let started = Date.now();
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  let finished = false;
+  let pauseDepth = 0;
+  const start = () => {
+    started = Date.now();
+    handle = setTimeout(() => {
+      timedOut = true;
+      timeoutController.abort();
+    }, remaining);
+  };
+  start();
 
   return {
     didTimeout: () => timedOut,
-    done: () => clearTimeout(handle),
+    setPaused(active) {
+      if (finished || timedOut) return;
+      // A modern input-required round can ask several questions concurrently.
+      pauseDepth = active ? pauseDepth + 1 : Math.max(0, pauseDepth - 1);
+      if (pauseDepth > 0 && handle !== undefined) {
+        clearTimeout(handle);
+        handle = undefined;
+        remaining = Math.max(0, remaining - (Date.now() - started));
+      } else if (pauseDepth === 0 && handle === undefined) start();
+    },
+    done: () => {
+      finished = true;
+      clearTimeout(handle);
+    },
     signal:
       upstream.length === 0
         ? timeoutController.signal

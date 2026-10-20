@@ -5,10 +5,14 @@ import type { HeaderToolbarAction } from '../components/HeaderAction';
 import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
 
 /** Resolves the platform-independent MainHeader action lists for both adapters. */
-export function useMainHeaderActions(openNewSession: () => void) {
+export function useMainHeaderActions(
+  openNewSession: () => void,
+  actions: readonly HeaderToolbarAction[] = [],
+) {
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
   const rightActions: HeaderToolbarAction[] = [
+    ...actions,
     {
       accessibilityLabel: t('navigation.newChat'),
       icon: NewConversationIcon,

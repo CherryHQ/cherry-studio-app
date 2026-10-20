@@ -13,12 +13,15 @@ import { AgentAvatar, ModelAvatar } from '@/frontend/components/Avatar';
 import { AssistantMessage, type MessageListItem, UserMessage } from '@/frontend/components/Message';
 
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
+import { MessageTranslationContent } from '../translation/MessageTranslation';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
+import { MessageAnswerTabs } from './MessageAnswerTabs';
 
 export type AssistantMessagePresentation = Readonly<{
   avatar?: null | string;
   avatarUri?: null | string;
+  emoji?: string;
   name: string;
 }>;
 
@@ -47,6 +50,7 @@ function renderChatAssistantMessage(
         <AgentAvatar
           accessibilityLabel={presentation.name}
           avatar={presentation.avatar}
+          emoji={presentation.emoji}
           name={presentation.name}
           size={24}
           uri={presentation.avatarUri}
@@ -55,7 +59,8 @@ function renderChatAssistantMessage(
           <Text className="shrink font-semibold text-foreground text-sm" numberOfLines={1}>
             {presentation.name}
           </Text>
-          {message.model ? (
+          {/* Several answers name their models in the tabs below instead. */}
+          {message.model && !message.branch ? (
             <View className="min-w-0 shrink flex-row items-center gap-1">
               <ModelAvatar model={message.model} size={16} />
               <Text className="min-w-0 shrink text-foreground-tertiary text-sm" numberOfLines={1}>
@@ -65,6 +70,8 @@ function renderChatAssistantMessage(
           ) : null}
         </View>
       </View>
+      {/* Above the answer so parallel answers can be compared while they still stream. */}
+      {message.branch ? <MessageAnswerTabs message={message} /> : null}
       <AssistantMessage message={message}>
         {attachments ? <View className="w-full gap-2">{attachments}</View> : null}
         {accessories}
@@ -76,6 +83,7 @@ function renderChatAssistantMessage(
             </ContextMenuExclusion>
           </BackgroundPressExclusion>
         ) : null}
+        <MessageTranslationContent message={message} />
       </AssistantMessage>
     </View>
   );

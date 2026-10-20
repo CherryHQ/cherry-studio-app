@@ -15,8 +15,9 @@ import type {
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
 import { createBackgroundTaskUrl } from '@/shared/backgroundActivity/taskLink';
-import type { PaintingGenerationResult } from '@/shared/contracts';
+import type { PaintingGenerationResult, ResolvedFile } from '@/shared/contracts';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { FileAttachmentError } from '@/shared/contracts/fileAttachment';
 import { JOB_ERROR_CODES } from '@/shared/data/api/schemas/jobs';
 import { type FileEntry, type FileEntryId, readableFilename } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -30,20 +31,13 @@ const logger = loggerService.withContext('PaintingGenerateJobHandler');
 export const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
 export const PAINTING_JOB_QUEUE = 'painting';
 
-/**
- * Input images always carry a fileEntryId: `startGeneration` validates library
- * references before the job is enqueued, and the receipt's `files.input`
- * records them for the job's lifetime. The uri is
- * a same-process convenience for readDataUrl — an abandoned job never re-runs
- * (recovery `'abandon'`, maxAttempts 1), so it is never read across restarts.
- */
+/** Persist identity only; execution resolves the file's current availability. */
 export type PaintingGenerateJobImage = {
   fileEntryId: FileEntryId;
-  mediaType: string;
-  uri: string;
 };
 
 export type PaintingGenerateJobInput = {
+  boardId: string;
   images: readonly PaintingGenerateJobImage[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
@@ -73,7 +67,8 @@ export type PaintingAi = {
 export type PaintingFileStorage = {
   createInternalEntry(input: CreateInternalEntryInput): Promise<FileEntry>;
   discard(entries: readonly FileEntry[]): Promise<void>;
-  readDataUrl(uri: string, mediaType: string): Promise<string>;
+  resolve(id: FileEntryId): Promise<ResolvedFile | null>;
+  readDataUrl(uri: string, mediaType: string, signal?: AbortSignal): Promise<string>;
   getUri(entry: FileEntry): string | undefined;
 };
 
@@ -88,6 +83,7 @@ export type PaintingGenerateJobDependencies = {
   activities?: PaintingActivityDriver;
   ai: PaintingAi;
   paintings: {
+    getById(id: string): Promise<Painting>;
     replaceOutputs(
       id: string,
       outputFileIds: readonly FileEntryId[],
@@ -120,7 +116,10 @@ export function createPaintingGenerateJobHandler(
     // Deleting the receipt this job writes through must cancel it first. The
     // input already carries the id, so no `paintingId -> jobId` index is needed:
     // the registration is that index, for as long as the execution lives.
-    scopes: (input) => [{ id: input.paintingId, kind: 'painting' }],
+    scopes: (input) => [
+      { id: input.paintingId, kind: 'painting' },
+      { id: input.boardId, kind: 'painting-board' },
+    ],
     async execute(ctx): Promise<PaintingGenerationResult> {
       const { images, mode, modelId, modelName, paintingId, paramValues, prompt } = ctx.input;
       const { ai, paintings, storage } = dependencies;
@@ -135,8 +134,19 @@ export function createPaintingGenerateJobHandler(
       });
 
       try {
+        // The in-memory fence does not survive restart. Recheck ownership before file/provider I/O.
+        throwIfAborted(ctx.signal);
+        const receipt = await paintings.getById(paintingId);
+        if (receipt.boardId !== ctx.input.boardId) throw new Error('Painting board is unavailable');
+        throwIfAborted(ctx.signal);
         const inputImages = await Promise.all(
-          images.map((image) => storage.readDataUrl(image.uri, image.mediaType)),
+          images.map(async ({ fileEntryId }) => {
+            throwIfAborted(ctx.signal);
+            const file = await storage.resolve(fileEntryId);
+            throwIfAborted(ctx.signal);
+            if (!file) throw new FileAttachmentError({ code: 'unavailable', fileEntryId });
+            return storage.readDataUrl(file.uri, file.entry.mediaType, ctx.signal);
+          }),
         );
         throwIfAborted(ctx.signal);
         const result = await ai.generateImage({

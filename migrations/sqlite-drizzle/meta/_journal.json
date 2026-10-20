@@ -57,6 +57,41 @@
       "when": 1791630575230,
       "tag": "0007_agent_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791796001226,
+      "tag": "0008_mcp_remote_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792064823964,
+      "tag": "0009_painting_boards",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792071479861,
+      "tag": "0010_fearless_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792074154479,
+      "tag": "0011_file_library",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792209852632,
+      "tag": "0012_message_tree",
+      "breakpoints": true
     }
   ]
 }

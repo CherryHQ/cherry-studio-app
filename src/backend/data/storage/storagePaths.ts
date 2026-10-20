@@ -174,7 +174,7 @@ export function cleanupStorageAfterBoot(): void {
       'pi-agent.db-wal',
       'pi-agent.db-shm',
     ]) {
-      const file = new File(defaultDatabaseDirectory, name);
+      const file = new File(Paths.document, 'SQLite', name);
       if (file.exists) file.delete();
     }
     for (const parts of [

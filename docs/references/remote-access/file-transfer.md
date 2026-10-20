@@ -12,14 +12,18 @@ Implemented in the paired working trees; native-device checksum acceptance remai
 The canonical cross-repository implementation contract is
 `CherryHQ/cherry-studio: docs/references/file/upload-integrity.md` (title: Upload Integrity).
 It defines the shared schemas, receiver checkpoint/recovery rules, compatibility matrix and
-acceptance cases. Mobile consumes published `@cherrystudio/remote-protocol@0.5.0` and
-`@cherrystudio/remote-transport@0.2.1`. Installation and validation use npm artifacts; no local
+acceptance cases. Mobile consumes published `@cherrystudio/remote-protocol@0.6.0` and
+`@cherrystudio/remote-transport@0.2.3`. Installation and validation use npm artifacts; no local
 protocol link or dependency override is required.
 
 Use `@preeternal/react-native-file-hash@3.0.1`, default native engine and SHA-256. Its
 [published-source API](https://github.com/Preeternal/react-native-file-hash/blob/c0f799a456b80850d9d355842fb13003ac5c5f57/README.md)
-supports streamed native hashing and cancellation. The Expo plugin is configured; rebuild Android/iOS
-development clients. JS hot reload alone is insufficient. No custom Expo module is planned.
+supports streamed native hashing and cancellation. A local patch makes the iOS SHA-256 loop honor
+cancellation per chunk and fail on read errors instead of hashing a prefix; upstream checks
+cancellation only after the last read and treats a read error as end of file. The Expo plugin is
+configured; rebuild Android/iOS
+development clients. JS hot reload alone is insufficient. No custom Expo module is planned; backup
+and diagnostics share the same `hashLocalFile` port.
 
 ```text
 Check desktop checksum capability
@@ -30,9 +34,17 @@ Check desktop checksum capability
   → desktop compares actual bytes before managed publication
   → validate ready + checksum mode + returned digest
   → enable Send for the current attachment generation
+
+Without desktop checksum capability
+  → retain stable source; persist upload/source identity
+  → existing 1 MiB binary upload, no native hashing
+  → complete(uploadId, writerEpoch)
+  → validate ready + upload identity + byte length
+  → enable Send for the current attachment generation
 ```
 
-- The file module exposes `fileContent.hashFile(fileEntryId, signal)`. Extend the existing
+- The file module exposes `fileContent.hashFile(fileEntryId, signal)`, which resolves the managed
+  entry and delegates to `hashLocalFile(uri, signal)`. Extend the existing
   injected `RemoteUploadFiles` dependency. Both hash and upload use the same retained source ID;
   no extra copy for hashing, no file bytes in React state. Existing mutable-source snapshots stay.
 - `remoteUploads.ts` persists `expectedSha256` and mode, observes both task failures immediately,
@@ -43,10 +55,14 @@ Check desktop checksum capability
   resumed writes; same-size mutation is `UPLOAD_SOURCE_CHANGED`. If no digest survived, resume
   only with a guaranteed unchanged retained immutable source. A missing source must fail rather
   than substitute another file. Hashing restarts at zero; transfer resumes at the desktop ACK offset.
-- `DesktopSession.ts` retains the negotiated capability; `RemoteAgentScope` requires `agentUploadChecksum: 'sha256'` alongside upload capability 1 for
-  new attachments. Prepare includes `checksumAlgorithm: 'sha256'`; complete includes the digest.
-  Old desktops keep text chat, with upgrade-required attachment UI. Never silently downgrade.
-- `RemoteAttachmentDrafts.ts` clears legacy unsent readiness and starts a fresh verified upload,
+- `DesktopSession.ts` retains the negotiated capability. Upload capability 1 plus attachment
+  selections enables the composer attachment menu. When the desktop advertises
+  `agentUploadChecksum: 'sha256'`, prepare includes `checksumAlgorithm: 'sha256'`, complete includes
+  the native source digest, and readiness requires an exact digest match. Desktops without that
+  capability use the original binary upload protocol: no native hashing or checksum-only request
+  fields, with readiness validated by upload identity and byte length. This fallback preserves file
+  sending without an independent source-to-desktop checksum comparison.
+- `RemoteAttachmentDrafts.ts` starts a fresh upload when an unsent draft's checksum mode changes,
   retaining the source and cleaning old staging. `RemoteAgentActions.ts` preserves already frozen
   or uncertain command bodies and receipts exactly; upgrading must not repeat Agent execution.
 - Project verification phase through existing draft snapshots and common attachment cards.

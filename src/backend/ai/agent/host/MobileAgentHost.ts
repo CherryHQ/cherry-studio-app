@@ -68,6 +68,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.host.quiesce();
   }
 
+  getWorkingStorageSize = () => this.host.getWorkingStorageSize();
+  clearWorkingStorage = () => this.host.clearWorkingStorage();
   getSessionStatus = (sessionId: string) => this.host.getSessionStatus(sessionId);
   subscribeSessionStatus = (sessionId: string, listener: () => void) =>
     this.host.subscribeSessionStatus(sessionId, listener);
@@ -75,10 +77,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   submitMessage: AgentProtocol['submitMessage'] = (input) => this.host.submitMessage(input);
   forkSession: AgentProtocol['forkSession'] = (input) => this.host.forkSession(input);
   retryMessage: AgentProtocol['retryMessage'] = (input) => this.host.retryMessage(input);
+  selectMessage: AgentProtocol['selectMessage'] = (input) => this.host.selectMessage(input);
   deleteTurn: AgentProtocol['deleteTurn'] = (input) => this.host.deleteTurn(input);
   deleteSession: AgentProtocol['deleteSession'] = (input) => this.host.deleteSession(input);
   renameSession: AgentProtocol['renameSession'] = (input) => this.host.renameSession(input);
   cancelTurn: AgentProtocol['cancelTurn'] = (input) => this.host.cancelTurn(input);
+  cancelQueuedInput: AgentProtocol['cancelQueuedInput'] = (input) =>
+    this.host.cancelQueuedInput(input);
   cancelSubmission: AgentProtocol['cancelSubmission'] = (input) =>
     this.host.cancelSubmission(input);
   respondApproval: AgentProtocol['respondApproval'] = (input) => this.host.respondApproval(input);

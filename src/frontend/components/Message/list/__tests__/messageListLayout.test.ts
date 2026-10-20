@@ -1,4 +1,5 @@
-import { isMessageListLiveTailInView } from '../messageListLayout';
+import type { MessageListItem } from '../../types';
+import { isMessageListLiveTailInView, messageKeyExtractor } from '../messageListLayout';
 
 describe('isMessageListLiveTailInView', () => {
   const viewport = 800;
@@ -21,4 +22,16 @@ describe('isMessageListLiveTailInView', () => {
     expect(isMessageListLiveTailInView(between, content, viewport, bottomInset, false)).toBe(false);
     expect(isMessageListLiveTailInView(between, content, viewport, bottomInset, true)).toBe(true);
   });
+});
+
+test('keeps one row for the answers to a question, so switching updates it in place', () => {
+  const answer = (id: string): MessageListItem => ({
+    branch: { key: 'answers:q1', siblings: [] },
+    data: {},
+    id,
+    role: 'assistant',
+    status: 'success',
+  });
+  expect(messageKeyExtractor(answer('a1'))).toBe(messageKeyExtractor(answer('a2')));
+  expect(messageKeyExtractor({ data: {}, id: 'q1', role: 'user', status: 'success' })).toBe('q1');
 });

@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { sha256HexOfText } from '@/shared/utils/sha256';
 
 import { agentSessionMessageService } from '../AgentSessionMessageService';
 import { createTestDb, type TestDb } from './_testDb';
@@ -25,6 +26,152 @@ describe('AgentSessionMessageService persistence', () => {
   afterEach(async () => {
     await uninstallTestHost();
     sqlite.close();
+  });
+
+  test('reads only the selected branch and lists the alternatives at each branch point', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'q1', text: 'Q1', role: 'user', turnId: 't1' });
+    insertMessage(sqlite, { createdAt: 110, id: 'a1', text: 'A1', turnId: 't1' });
+    insertMessage(sqlite, { createdAt: 120, id: 'q2', text: 'Q2', role: 'user', turnId: 't2' });
+    insertMessage(sqlite, { createdAt: 130, id: 'a2', text: 'A2', turnId: 't2' });
+    // A second model answered Q1 in parallel; its sibling group is shared with A1.
+    sqlite.exec(`
+      INSERT INTO agent_session_message (
+        id, session_id, parent_id, siblings_group_id, turn_id, role, data, status, created_at, updated_at
+      ) VALUES ('b1', 'session-1', 'q1', 1, 't1', 'assistant', '{"parts":[]}', 'success', 115, 115);
+      UPDATE agent_session_message SET siblings_group_id = 1 WHERE id = 'a1';
+      UPDATE agent_session SET active_node_id = 'a2' WHERE id = 'session-1';
+    `);
+
+    const selected = await agentSessionMessageService.listByCursor('session-1');
+    expect(selected.items.map((message) => message.id)).toEqual(['a2', 'q2', 'a1', 'q1']);
+    expect(selected.items.find((message) => message.id === 'a1')?.siblings).toEqual([
+      { id: 'a1', modelId: null, status: 'success', siblingsGroupId: 1 },
+      { id: 'b1', modelId: null, status: 'success', siblingsGroupId: 1 },
+    ]);
+    expect(selected.items.find((message) => message.id === 'q2')?.siblings).toBeUndefined();
+
+    sqlite.exec(`UPDATE agent_session SET active_node_id = 'b1' WHERE id = 'session-1'`);
+    const other = await agentSessionMessageService.listByCursor('session-1');
+    expect(other.items.map((message) => message.id)).toEqual(['b1', 'q1']);
+    // A2 left the transcript with its branch: read around Q1, where the branches part.
+    const around = await agentSessionMessageService.listByCursor('session-1', {
+      aroundMessageId: 'a2',
+    });
+    expect(around.items.map((message) => message.id)).toEqual(['b1', 'q1']);
+  });
+
+  test('merges concurrent languages into message data and returns them with history and selection', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const original = sqlite
+      .prepare('SELECT data, stats, status, created_at FROM agent_session_message')
+      .get();
+    const session = sqlite.prepare('SELECT * FROM agent_session').all();
+    const sourceHash = sha256HexOfText('Original');
+    await Promise.all([
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        sourceHash,
+        language: 'zh-CN',
+        content: '中文译文',
+      }),
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        sourceHash,
+        language: 'fr-FR',
+        content: 'Traduction',
+      }),
+    ]);
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    const translations = page.items[0].translations;
+    expect(translations).toEqual({
+      sourceHash,
+      results: {
+        'zh-CN': { content: '中文译文', createdAt: expect.any(Number) },
+        'fr-FR': { content: 'Traduction', createdAt: expect.any(Number) },
+      },
+    });
+    expect(page.items[0].parts).toEqual(JSON.parse(original!.data as string).parts);
+    const selection = await agentSessionMessageService.readSelection('session-1', ['answer']);
+    expect(selection.messages[0].translations).toEqual(translations);
+    expect(sqlite.prepare('SELECT * FROM agent_session').all()).toEqual(session);
+    const stored = sqlite
+      .prepare('SELECT data, stats, status, created_at FROM agent_session_message')
+      .get();
+    expect(stored).toMatchObject({
+      stats: original!.stats,
+      status: original!.status,
+      created_at: original!.created_at,
+    });
+    expect(JSON.parse(stored!.data as string)).toEqual({
+      ...JSON.parse(original!.data as string),
+      translations,
+    });
+  });
+
+  test('rejects translations for missing, foreign, unsettled, changed or non-assistant messages', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const input = {
+      sourceHash: sha256HexOfText('Original'),
+      language: 'zh-CN' as const,
+      content: '译文',
+    };
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'missing', input),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      agentSessionMessageService.saveTranslation('other', 'answer', input),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        ...input,
+        sourceHash: sha256HexOfText('Old'),
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    sqlite.exec("UPDATE agent_session_message SET status = 'streaming' WHERE id = 'answer'");
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', input),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    sqlite.exec(
+      "UPDATE agent_session_message SET role = 'user', status = 'success' WHERE id = 'answer'",
+    );
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', input),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(
+      JSON.parse(sqlite.prepare('SELECT data FROM agent_session_message').get()!.data as string)
+        .translations,
+    ).toBeUndefined();
+  });
+
+  test('rolls back failed translation writes without losing previously saved languages', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    const input = {
+      sourceHash: sha256HexOfText('Original'),
+      language: 'zh-CN' as const,
+      content: '译文',
+    };
+    const saved = await agentSessionMessageService.saveTranslation('session-1', 'answer', input);
+    testDb.failWriteTxCommit(new Error('disk full'));
+    await expect(
+      agentSessionMessageService.saveTranslation('session-1', 'answer', {
+        ...input,
+        language: 'fr-FR',
+        content: 'Traduction',
+      }),
+    ).rejects.toThrow('disk full');
+    expect(
+      (await agentSessionMessageService.listByCursor('session-1')).items[0].translations,
+    ).toEqual(saved);
+  });
+
+  test('reads original messages even when their translation metadata is unreadable', async () => {
+    insertMessage(sqlite, { createdAt: 100, id: 'answer', text: 'Original' });
+    sqlite.exec(
+      `UPDATE agent_session_message SET data = json_set(data, '$.translations', json('{"future":true}'))`,
+    );
+    const page = await agentSessionMessageService.listByCursor('session-1');
+    expect(page.items[0].parts).toEqual([
+      { id: 'part-answer', type: 'text', text: 'Original', state: 'done' },
+    ]);
+    expect(page.items[0].translations).toBeUndefined();
   });
 
   test('reads a complete ordered selection and its title together, rejecting missing or foreign messages', async () => {
@@ -86,6 +233,111 @@ describe('AgentSessionMessageService persistence', () => {
     await expect(agentSessionMessageService.listByCursor('missing')).rejects.toMatchObject({
       details: { id: 'missing', resource: 'AgentSession' },
     });
+  });
+
+  test.each(['pending', 'streaming'] as const)(
+    'fills settled history pages past a whole page of %s reservations',
+    async (status) => {
+      const settledIds = Array.from({ length: 16 }, (_, index) => `settled-${index}`);
+      settledIds.forEach((id, index) =>
+        insertMessage(sqlite, { id, text: id, createdAt: index + 1 }),
+      );
+      for (let index = 0; index < 6; index++) {
+        const turnId = `waiting-${index}`;
+        insertMessage(sqlite, {
+          id: `${turnId}-user`,
+          text: 'Waiting',
+          createdAt: 100 + index * 2,
+          role: 'user',
+          turnId,
+        });
+        insertMessage(sqlite, {
+          id: `${turnId}-assistant`,
+          text: '',
+          createdAt: 101 + index * 2,
+          status,
+          turnId,
+        });
+      }
+      // The receipt reader still has every row; the chat window must fill from settled turns.
+      const receipts = await agentSessionMessageService.listByCursor('session-1', { limit: 12 });
+      expect(receipts.items).toHaveLength(12);
+      expect(receipts.items.every((row) => row.turnId?.startsWith('waiting-'))).toBe(true);
+      const latest = await agentSessionMessageService.listByCursor('session-1', {
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(latest.items.map((row) => row.id)).toEqual(settledIds.slice(4).toReversed());
+      const older = await agentSessionMessageService.listByCursor('session-1', {
+        cursor: latest.nextCursor,
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(older.items.map((row) => row.id)).toEqual(settledIds.slice(0, 4).toReversed());
+      expect(older.nextCursor).toBeUndefined();
+      const newer = await agentSessionMessageService.listByCursor('session-1', {
+        cursor: older.previousCursor,
+        direction: 'newer',
+        limit: 12,
+        settledOnly: true,
+      });
+      expect(newer.items).toEqual(latest.items);
+      expect(newer.previousCursor).toBeUndefined();
+      const around = await agentSessionMessageService.listByCursor('session-1', {
+        aroundMessageId: 'settled-14',
+        limit: 3,
+        settledOnly: true,
+      });
+      expect(around.items.map((row) => row.id)).toEqual(['settled-15', 'settled-14', 'settled-13']);
+      expect(around.previousCursor).toBeUndefined();
+      await expect(
+        agentSessionMessageService.listByCursor('session-1', {
+          aroundMessageId: 'waiting-0-user',
+          settledOnly: true,
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      // Settlement makes both halves visible together, without changing their cursor order.
+      sqlite
+        .prepare("UPDATE agent_session_message SET status = 'success' WHERE turn_id = ?")
+        .run('waiting-0');
+      const settled = await agentSessionMessageService.listByCursor('session-1', {
+        limit: 2,
+        settledOnly: true,
+      });
+      expect(settled.items.map((row) => row.id)).toEqual(['waiting-0-assistant', 'waiting-0-user']);
+    },
+  );
+
+  test('settled windows preserve uncorrelated history and scope turn matching to its session', async () => {
+    insertMessage(sqlite, { id: 'legacy', text: 'Legacy', createdAt: 1, turnId: null });
+    insertMessage(sqlite, {
+      id: 'user',
+      text: 'Visible',
+      createdAt: 2,
+      role: 'user',
+      turnId: 'shared',
+    });
+    insertMessage(sqlite, {
+      id: 'foreign',
+      text: '',
+      createdAt: 3,
+      status: 'pending',
+      turnId: 'shared',
+    });
+    insertMessage(sqlite, {
+      id: 'legacy-pending',
+      text: '',
+      createdAt: 4,
+      status: 'pending',
+      turnId: null,
+    });
+    insertSession(sqlite, 'session-2');
+    sqlite
+      .prepare('UPDATE agent_session_message SET session_id = ? WHERE id = ?')
+      .run('session-2', 'foreign');
+    const page = await agentSessionMessageService.listByCursor('session-1', { settledOnly: true });
+    expect(page.items.map((row) => row.id)).toEqual(['user', 'legacy']);
   });
 
   test('resolves only selected IDs in timeline order within the requested session', async () => {
@@ -336,20 +588,29 @@ function insertSession(database: DatabaseSync, id: string): void {
 
 function insertMessage(
   database: DatabaseSync,
-  values: { createdAt: number; id: string; text: string },
+  values: {
+    createdAt: number;
+    id: string;
+    text: string;
+    role?: 'user' | 'assistant';
+    status?: 'success' | 'pending' | 'streaming';
+    turnId?: string | null;
+  },
 ): void {
   database
     .prepare(
       `INSERT INTO agent_session_message (
         id, session_id, turn_id, role, data, status, stats, created_at, updated_at
-      ) VALUES (?, 'session-1', ?, 'assistant', ?, 'success', ?, ?, ?)`,
+      ) VALUES (?, 'session-1', ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       values.id,
-      `turn-${values.id}`,
+      values.turnId === undefined ? `turn-${values.id}` : values.turnId,
+      values.role ?? 'assistant',
       JSON.stringify({
         parts: [{ id: `part-${values.id}`, type: 'text', text: values.text, state: 'done' }],
       }),
+      values.status ?? 'success',
       JSON.stringify({
         runtimeTiming: {
           startedAt: values.createdAt,
@@ -360,4 +621,24 @@ function insertMessage(
       values.createdAt,
       values.createdAt,
     );
+  linkLinearTranscript(database);
+}
+
+/** Fixtures describe linear transcripts: chain each row to its predecessor, as 0012 does. */
+function linkLinearTranscript(database: DatabaseSync): void {
+  database.exec(`
+    UPDATE agent_session_message SET parent_id = (
+      SELECT previous.id FROM agent_session_message AS previous
+      WHERE previous.session_id = agent_session_message.session_id
+        AND (previous.created_at < agent_session_message.created_at
+          OR (previous.created_at = agent_session_message.created_at
+            AND previous.id < agent_session_message.id))
+      ORDER BY previous.created_at DESC, previous.id DESC
+      LIMIT 1
+    );
+    UPDATE agent_session SET active_node_id = (
+      SELECT id FROM agent_session_message WHERE session_id = agent_session.id
+      ORDER BY created_at DESC, id DESC LIMIT 1
+    );
+  `);
 }

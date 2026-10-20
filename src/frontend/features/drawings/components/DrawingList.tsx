@@ -1,5 +1,5 @@
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
+import ImageOffIcon from '@cherrystudio/app-icons/icons/image-off';
 import {
   Button,
   ContentState,
@@ -14,7 +14,7 @@ import {
 import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -446,6 +446,7 @@ function DrawingGridItem({
   width,
 }: DrawingGridItemProps) {
   const { t } = useTranslation();
+  const isScreenFocused = useIsFocused();
   const router = useRouter();
   const statusLabel =
     item.kind === 'generating'
@@ -461,7 +462,13 @@ function DrawingGridItem({
             : 'painting.status.interruptedHint',
         )
       : undefined;
-  const content = renderTileContent({ height, item, statusHint, statusLabel, width });
+  const content = renderTileContent({
+    active: isScreenFocused && !isEditing,
+    height,
+    item,
+    statusLabel,
+    width,
+  });
   const accessibilityLabel =
     item.kind === 'output'
       ? paintingOutputAccessibilityLabel(t, {
@@ -478,7 +485,9 @@ function DrawingGridItem({
   const surfaceClassName =
     item.kind === 'generating'
       ? 'active:opacity-75'
-      : 'overflow-hidden rounded-md bg-secondary active:opacity-75';
+      : item.kind === 'interrupted'
+        ? 'overflow-hidden rounded-xl border border-dashed border-border-strong bg-secondary active:opacity-75'
+        : 'overflow-hidden rounded-md bg-secondary active:opacity-75';
 
   // Keep one press target across the mode change. Pressable cancels its tap
   // after a long press and yields to the list when scrolling takes over.
@@ -501,14 +510,16 @@ function DrawingGridItem({
       onPress={() => {
         if (isEditing) {
           onToggle(item.painting.id);
-        } else if (item.kind === 'output') {
-          router.push({
-            pathname: '/paintings/[paintingId]',
-            params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
-          });
         } else {
-          // Receipts without images reopen the composer for progress or retry.
-          router.push({ pathname: '/paintings', params: { paintingId: item.painting.id } });
+          // Every tile opens its painting's board, focused on that image (or on
+          // the receipt's progress or failure when it has none yet).
+          router.push({
+            pathname: '/paintings',
+            params:
+              item.kind === 'output'
+                ? { fileEntryId: item.fileEntryId, paintingId: item.painting.id }
+                : { paintingId: item.painting.id },
+          });
         }
       }}
       style={{ height }}
@@ -529,15 +540,15 @@ function DrawingGridItem({
 }
 
 function renderTileContent({
+  active,
   height,
   item,
-  statusHint,
   statusLabel,
   width,
 }: {
+  active: boolean;
   height: number;
   item: PaintingGalleryItem;
-  statusHint: string | undefined;
   statusLabel: string;
   width: number;
 }) {
@@ -556,15 +567,14 @@ function renderTileContent({
 
   if (item.kind === 'generating') {
     // The tile is already sized to the ratio the request asked for, so the
-    // loader fills it outright: the dot field previews the shape of the image
+    // loader fills it outright: the foil surface previews the shape of the image
     // being generated instead of a square standing in for it. The tile speaks
     // for the whole item, so the loader is not a second target for it.
     return (
       <ImageGenerationLoader
         accessible={false}
+        active={active}
         height={height}
-        label={statusLabel}
-        resolution={item.resolution}
         testID={`painting-history-loader-${item.painting.id}`}
         width={width}
       />
@@ -572,14 +582,16 @@ function renderTileContent({
   }
 
   return (
-    <View className="flex-1 items-center justify-center gap-1 px-2">
-      <RotateCcwIcon className="size-5 text-foreground-tertiary" />
-      <Text className="text-center font-medium text-muted-foreground text-xs">{statusLabel}</Text>
-      {statusHint ? (
-        <Text className="text-center text-foreground-tertiary text-xs" numberOfLines={2}>
-          {statusHint}
+    <View className="flex-1 gap-3 p-3">
+      <View className="flex-1 items-center justify-center">
+        <ImageOffIcon className="size-7 text-foreground-tertiary" strokeWidth={1} />
+      </View>
+      <View className="gap-1">
+        <Text className="font-medium text-foreground text-xs">{statusLabel}</Text>
+        <Text className="text-muted-foreground text-xs" numberOfLines={2}>
+          {item.painting.brief ?? item.painting.prompt}
         </Text>
-      ) : null}
+      </View>
     </View>
   );
 }

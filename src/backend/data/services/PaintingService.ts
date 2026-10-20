@@ -1,23 +1,33 @@
-import { and, asc, eq, gt, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
-import { fileEntryTable, type PaintingRow, paintingTable } from '@/backend/data/db/schemas';
+import {
+  fileEntryTable,
+  type PaintingBoardRow,
+  paintingBoardTable,
+  type PaintingRow,
+  paintingTable,
+} from '@/backend/data/db/schemas';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { createUniqueModelId, isUniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
+import type { Painting, PaintingBoard, UpdatePaintingBoardDto } from '@/shared/data/types/painting';
 
 import { computeNewOrderKey, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
 const defaultLimit = 20;
 const maxLimit = 100;
+const boardTitleLength = 40;
 
 type PaintingCursor = { id: string; orderKey: string };
 
 export interface CreatePaintingInput {
+  /** Grows this board; a new board titled after the request is created when omitted. */
+  boardId?: string;
+  brief?: string | null;
   inputFileIds?: readonly FileEntryId[];
   modelId?: string | null;
   prompt: string;
@@ -98,13 +108,20 @@ export class PaintingService {
     return this.dbService.withWriteTx((tx) => this.createTx(tx, input));
   }
 
-  /** Rides the caller's write transaction (`withWriteTx` is not reentrant). */
+  /**
+   * Writes the receipt onto its board (creating the board for a first
+   * generation) and makes it the board's focus, since the screen follows the
+   * new node. Rides the caller's write transaction (`withWriteTx` is not reentrant).
+   */
   async createTx(tx: Database, input: CreatePaintingInput): Promise<Painting> {
     const inputFileIds = await assertFileEntriesExistTx(tx, input.inputFileIds ?? []);
+    const boardId = input.boardId ?? (await createBoardTx(tx, input.brief || input.prompt)).id;
     const inserted = (await insertWithOrderKey(
       tx,
       paintingTable,
       {
+        boardId,
+        brief: normalizeBrief(input.brief, input.prompt),
         files: { input: inputFileIds, output: [] },
         modelId: normalizeModelId(input.providerId, input.modelId),
         prompt: input.prompt,
@@ -112,6 +129,14 @@ export class PaintingService {
       },
       { pkColumn: paintingTable.id, position: 'first' },
     )) as PaintingRow;
+    const [board] = await tx
+      .update(paintingBoardTable)
+      .set({ focusPaintingId: inserted.id, updatedAt: Date.now() })
+      .where(eq(paintingBoardTable.id, boardId))
+      .returning({ id: paintingBoardTable.id });
+    if (!board) {
+      throw DataApiErrorFactory.notFound('PaintingBoard', boardId);
+    }
 
     return rowToPainting(inserted);
   }
@@ -154,6 +179,7 @@ export class PaintingService {
     const [updated] = await tx
       .update(paintingTable)
       .set({
+        brief: normalizeBrief(input.brief, input.prompt),
         files: { input: inputFileIds, output: [] },
         modelId: normalizeModelId(input.providerId, input.modelId),
         orderKey,
@@ -210,15 +236,115 @@ export class PaintingService {
       const deleted = await tx
         .delete(paintingTable)
         .where(inArray(paintingTable.id, uniqueIds))
-        .returning({ id: paintingTable.id });
+        .returning({ boardId: paintingTable.boardId, id: paintingTable.id });
       if (deleted.length !== uniqueIds.length) {
         throw DataApiErrorFactory.notFound(
           'Painting',
           uniqueIds.length === 1 ? uniqueIds[0] : 'one or more selected paintings',
         );
       }
+      // A board exists to hold paintings; one left without any is unreachable.
+      await tx
+        .delete(paintingBoardTable)
+        .where(
+          and(
+            inArray(paintingBoardTable.id, [...new Set(deleted.map((row) => row.boardId))]),
+            sql`NOT EXISTS (SELECT 1 FROM ${paintingTable} WHERE ${paintingTable.boardId} = ${paintingBoardTable.id})`,
+          ),
+        );
     });
   }
+
+  /** The painting whose outputs include this file; null when no painting produced it. */
+  async findByOutputFile(fileEntryId: string): Promise<Painting | null> {
+    const [row] = await this.db
+      .select()
+      .from(paintingTable)
+      .where(
+        sql`EXISTS (SELECT 1 FROM json_each(${paintingTable.files}, '$.output') WHERE value = ${fileEntryId})`,
+      )
+      .limit(1);
+    return row ? rowToPainting(row) : null;
+  }
+
+  async getBoard(id: string): Promise<PaintingBoard> {
+    const [row] = await this.db
+      .select()
+      .from(paintingBoardTable)
+      .where(eq(paintingBoardTable.id, id))
+      .limit(1);
+    if (!row) {
+      throw DataApiErrorFactory.notFound('PaintingBoard', id);
+    }
+    return rowToBoard(row);
+  }
+
+  /** Oldest first: generation order is the board's reading order. */
+  async listByBoard(boardId: string): Promise<Painting[]> {
+    const rows = await this.db
+      .select()
+      .from(paintingTable)
+      .where(eq(paintingTable.boardId, boardId))
+      .orderBy(asc(paintingTable.createdAt), asc(paintingTable.id));
+    return rows.map(rowToPainting);
+  }
+
+  async updateBoard(id: string, update: UpdatePaintingBoardDto): Promise<PaintingBoard> {
+    const title = update.title?.trim();
+    if (update.title !== undefined && !title) {
+      throw DataApiErrorFactory.validation({ title: ['Board title is required'] });
+    }
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(paintingBoardTable)
+        .set({
+          ...(title ? { title } : {}),
+          ...(update.focusPaintingId !== undefined
+            ? { focusPaintingId: update.focusPaintingId }
+            : {}),
+          updatedAt: Date.now(),
+        })
+        .where(eq(paintingBoardTable.id, id))
+        .returning();
+      if (!row) {
+        throw DataApiErrorFactory.notFound('PaintingBoard', id);
+      }
+      return rowToBoard(row);
+    });
+  }
+
+  /** Deleting the board cascades to its paintings; their image files stay in the library. */
+  async deleteBoard(id: string): Promise<void> {
+    await this.dbService.withWriteTx(async (tx) => {
+      const deleted = await tx
+        .delete(paintingBoardTable)
+        .where(eq(paintingBoardTable.id, id))
+        .returning({ id: paintingBoardTable.id });
+      if (deleted.length === 0) {
+        throw DataApiErrorFactory.notFound('PaintingBoard', id);
+      }
+    });
+  }
+}
+
+async function createBoardTx(tx: Database, request: string): Promise<PaintingBoardRow> {
+  const [board] = await tx
+    .insert(paintingBoardTable)
+    .values({ title: boardTitle(request) })
+    .returning();
+  return board as PaintingBoardRow;
+}
+
+/** First line of the request, shortened; the user can rename the board later. */
+function boardTitle(request: string): string {
+  const firstLine = request.trim().split('\n')[0] ?? '';
+  return [...firstLine].slice(0, boardTitleLength).join('').trim();
+}
+
+/** Stored only when it says something the model prompt does not. */
+function normalizeBrief(brief: string | null | undefined, prompt: string): string | null {
+  const trimmed = brief?.trim();
+  return trimmed && trimmed !== prompt.trim() ? trimmed : null;
 }
 
 /** Deduplicates the ids and fails the write if any of them has no `file_entry` row. */
@@ -249,8 +375,20 @@ function normalizeModelId(providerId: string, modelId: string | null | undefined
   return isUniqueModelId(modelId) ? modelId : createUniqueModelId(providerId, modelId);
 }
 
+function rowToBoard(row: PaintingBoardRow): PaintingBoard {
+  return {
+    createdAt: timestampToISO(row.createdAt),
+    focusPaintingId: row.focusPaintingId,
+    id: row.id,
+    title: row.title,
+    updatedAt: timestampToISO(row.updatedAt),
+  };
+}
+
 function rowToPainting(row: PaintingRow): Painting {
   return {
+    boardId: row.boardId,
+    brief: row.brief,
     createdAt: timestampToISO(row.createdAt),
     files: row.files,
     id: row.id,

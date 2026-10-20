@@ -19,7 +19,10 @@ export function OnboardingDeviceConnectionsScreen() {
 
   return (
     <>
-      <RouteHeader title={t('onboarding.device.title')} />
+      <RouteHeader
+        onBack={() => router.replace('/onboarding')}
+        title={t('onboarding.device.title')}
+      />
       <ScrollView
         alwaysBounceVertical={false}
         contentContainerClassName="flex-grow gap-8 px-6 py-6"
@@ -47,42 +50,49 @@ export function OnboardingDeviceConnectionsScreen() {
           />
         ) : (
           <Section title={t('onboarding.device.saved')}>
-            {connections.map((connection) => (
-              <Section.Item
-                description={t(
-                  connection.status === 'paired'
-                    ? 'onboarding.device.continueSync'
-                    : 'settings.deviceConnections.status.needs-repair',
-                )}
-                key={connection.id}
-                label={connection.name}
-                onPress={() =>
-                  router.push(
-                    connection.status === 'paired'
-                      ? {
-                          params: { connectionId: connection.id },
-                          pathname: '/onboarding/provider-sync',
-                        }
-                      : {
-                          params: { connectionId: connection.id },
-                          pathname: '/onboarding/device-connections/scan',
-                        },
-                  )
-                }
-              />
-            ))}
+            {connections.map((connection) => {
+              const canSync =
+                connection.status === 'paired' && connection.capabilities.includes('configuration');
+              return (
+                <Section.Item
+                  description={t(
+                    canSync
+                      ? 'onboarding.device.continueSync'
+                      : connection.status === 'needs-repair'
+                        ? 'settings.deviceConnections.status.needs-repair'
+                        : 'settings.provider.desktopSync.deviceUnavailable',
+                  )}
+                  disabled={connection.status === 'paired' && !canSync}
+                  key={connection.id}
+                  label={connection.name}
+                  onPress={() =>
+                    router.replace(
+                      canSync
+                        ? {
+                            params: { connectionId: connection.id },
+                            pathname: '/onboarding/provider-sync',
+                          }
+                        : {
+                            params: { connectionId: connection.id },
+                            pathname: '/onboarding/device-connections/scan',
+                          },
+                    )
+                  }
+                />
+              );
+            })}
           </Section>
         )}
 
         <View className="flex-grow justify-end gap-3">
           <Button
-            onPress={() => router.push('/onboarding/device-connections/scan')}
+            onPress={() => router.replace('/onboarding/device-connections/scan')}
             size="lg"
             testID="onboarding-device-scan"
           >
             {t('onboarding.device.scan')}
           </Button>
-          <Button onPress={() => router.dismissTo('/onboarding')} variant="ghost">
+          <Button onPress={() => router.replace('/onboarding')} variant="ghost">
             {t('onboarding.device.chooseAnotherWay')}
           </Button>
         </View>

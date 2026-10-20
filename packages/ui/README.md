@@ -5,6 +5,14 @@ components and the mobile WebP runtime for the desktop UI icon set.
 
 ## Components
 
+`OverlayNavigationProvider` wraps the app's overlay hosts. `useOverlayNavigation()` exposes a
+read-only `canNavigate()` admission check and an abortable `prepareForNavigation(signal)` handoff:
+dismissible sheets and Cherry-rendered menus close
+through their existing owners, and navigation waits until they are gone. Alerts, decision dialogs,
+non-dismissible sheets, newly appearing overlays, and cancellation return false without approving
+or discarding a user decision. The caller owns navigation and any temporary resources; the provider
+does not know about feedback or screenshots. Component previews may omit this coordination provider.
+
 Runtime imports use the component-only entry point so Metro does not traverse the icon registries:
 
 ```tsx
@@ -543,6 +551,12 @@ compatible `Input` props. Its `style` prop targets the composed field container.
 also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
 continues to target the native field.
 
+`InfoPopover` presents caller-owned text next to a tap trigger, with bounded scrolling. Its
+`children` are presentation-only; the component owns the tap and exposes the caller's
+`accessibilityLabel`, which names the action rather than repeating `text`. Callers supply `text`; the panel displays only that content.
+It shares menu placement, surface, motion, focus restoration, and the system-modal overlay. Outside
+taps, system back, and viewport changes dismiss it without changing the underlying layout.
+
 `ActionMenu` and `ContextMenu` are the shared action menus. Each accepts one trigger element
 and a flat, stable `items` array; the package owns presentation, action dispatch, and the
 menu's recognition ownership. Call sites express which interaction they mean by choosing the
@@ -719,6 +733,28 @@ const dock = useComposerDockLayout();
   <ComposerSurface />
 </Composer.Dock>;
 ```
+
+For a screen that supports manual large-editor presentation, wrap its content and header in
+`Composer.Expansion` and use `Composer.Dock layoutMode="expandable"`. Its flow placeholder reserves
+only compact input space; expansion stays in the same native subtree above the transcript.
+`useComposerExpansion()` exposes separate state/actions/meta for the header and feature controls,
+returning `null` outside that screen-local boundary. The dock follows live keyboard geometry only
+while `keyboardTrackingEnabled` is true. Pass the translated `collapseLabel` for its backdrop.
+The expanded dock removes its horizontal gutter and fills through the bottom safe area, keeping
+the footer and controls inside one opaque surface with only the top corners rounded.
+`Composer.Editor` owns the shared compact-to-editing frame, keeping primary actions in one resting
+row and moving the caller-composed toolbar below the full-width field during editing. Its `active`
+state is caller-owned; an optional action-sized `compactAccessory` previews an attachment without
+activating editing. The `field` stays mounted, and `Composer.Input` automatically adapts its
+native layout and action inset to the editor frame, including through app-specific field wrappers.
+`Composer.EditorSecondary` reveals secondary toolbar tools, and
+`Composer.EditorAccessories` places translated collapse controls beside caller-owned attachments.
+The isolated frame retains the existing 250ms settle motion, interruptibility and system Reduce
+Motion behavior, without fading ancestors of native glass controls.
+
+For custom arrangements, compose `Composer.ExpansionMeasure` around accessories that change height
+during expansion, and use `Composer.Input layout="fill"` inside the bounded large editing region.
+Its native ref and buffer remain mounted. Feature owners supply translated control labels.
 
 `getComposerActionCenterOffset(bottomInset)` exposes the toolbar action center's distance from the
 screen bottom with the keyboard closed, so adjacent controls can align without duplicating composer
@@ -968,3 +1004,9 @@ pnpm install --lockfile-only
 
 `MenuItem.group` groups contiguous actions into sections. Android draws the shared panel separator;
 iOS maps sections to inline native menus. Omitted groups preserve the existing flat menu.
+
+Toast options accept translated `actions` and an optional `dismissLabel`. Selecting an action
+hides that toast before invoking its callback; callers own persistence and outcome feedback.
+`show` returns an ID for scoped `hide`, so a workflow can remove its own hint on route or lifecycle
+changes without clearing unrelated notices. Bottom placement follows the keyboard and accepts a
+screen-measured `bottomOffset` for dock clearance. Default text-only toasts retain top placement.

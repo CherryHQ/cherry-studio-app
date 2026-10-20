@@ -13,8 +13,8 @@ import {
   type ComposerAttachmentDraft,
   type ComposerAttachmentSource,
   type ComposerInitialAttachment,
+  createReadyAttachmentDraft,
   isComposerAttachmentReady,
-  isComposerImageMediaType,
   isDropStagedFile,
   removeComposerAttachment,
   replaceComposerAttachment,
@@ -28,6 +28,8 @@ type ImportResult = 'failed' | 'ignored' | 'ready';
 /** Imports belong to My Files; this session owns only their draft references. */
 export function useManagedComposerAttachments(
   initialAttachments: readonly ComposerInitialAttachment[] = emptyInitialAttachments,
+  workspaceSessionId?: string,
+  workspaceFolderId?: string | null,
 ): ComposerAttachmentStore {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -65,13 +67,28 @@ export function useManagedComposerAttachments(
   }, []);
 
   const importAttachment = useCallback(
-    async (source: ComposerAttachmentSource, token: symbol): Promise<ImportResult> => {
+    async (
+      source: ComposerAttachmentSource | ComposerAttachmentReady,
+      token: symbol,
+    ): Promise<ImportResult> => {
       try {
-        const resolved = await file.createInternalEntry({
-          mediaType: source.mediaType,
-          name: source.name,
-          uri: source.uri,
-        });
+        const resolved =
+          isComposerAttachmentReady(source) && (workspaceSessionId || workspaceFolderId)
+            ? await file.prepareWorkspaceAttachment({
+                fileEntryId: source.fileEntryId,
+                ...(workspaceSessionId
+                  ? { sessionId: workspaceSessionId }
+                  : { folderId: workspaceFolderId! }),
+              })
+            : await file.createInternalEntry({
+                ...(workspaceSessionId ? { workspaceSessionId } : {}),
+                ...(!workspaceSessionId && workspaceFolderId
+                  ? { folderId: workspaceFolderId }
+                  : {}),
+                mediaType: source.mediaType,
+                name: source.name,
+                uri: source.uri,
+              });
         // The managed entry owns the bytes now; a drop's staged cache copy
         // would otherwise linger until the OS evicts Caches.
         if (isDropStagedFile(source.uri)) void cleanupDropStagedFile(source.uri);
@@ -83,16 +100,7 @@ export function useManagedComposerAttachments(
         commitAttachments(
           attachmentsRef.current.map((attachment) =>
             attachment.id === source.id
-              ? {
-                  id: source.id,
-                  fileEntryId: resolved.entry.id,
-                  kind: isComposerImageMediaType(resolved.entry.mediaType) ? 'image' : 'file',
-                  mediaType: resolved.entry.mediaType,
-                  name: resolved.entry.filename,
-                  size: resolved.entry.size,
-                  status: 'ready',
-                  uri: resolved.uri,
-                }
+              ? createReadyAttachmentDraft(resolved, source.id)
               : attachment,
           ),
         );
@@ -112,11 +120,11 @@ export function useManagedComposerAttachments(
         return 'failed';
       }
     },
-    [commitAttachments, file],
+    [commitAttachments, file, workspaceSessionId, workspaceFolderId],
   );
 
   const importAttachments = useCallback(
-    async (sources: readonly ComposerAttachmentSource[]) => {
+    async (sources: readonly (ComposerAttachmentSource | ComposerAttachmentReady)[]) => {
       const results = await Promise.all(
         sources.map((source) => {
           const token = Symbol(source.id);
@@ -149,19 +157,23 @@ export function useManagedComposerAttachments(
       }
       if (accepted.length === 0) return;
       const sources = accepted.filter(
-        (attachment): attachment is ComposerAttachmentSource => attachment.status === undefined,
+        (attachment): attachment is ComposerAttachmentSource | ComposerAttachmentReady =>
+          attachment.status === undefined ||
+          (Boolean(workspaceSessionId || workspaceFolderId) &&
+            isComposerAttachmentReady(attachment)),
       );
       commitAttachments([
         ...current,
-        ...accepted.map((attachment) =>
-          isComposerAttachmentReady(attachment)
-            ? attachment
-            : { ...attachment, status: 'importing' as const },
-        ),
+        ...accepted.map((attachment) => {
+          if (isComposerAttachmentReady(attachment) && !workspaceSessionId && !workspaceFolderId)
+            return attachment;
+          const { fileEntryId: _fileEntryId, status: _status, ...source } = attachment;
+          return { ...source, status: 'importing' as const };
+        }),
       ]);
       if (sources.length > 0) void importAttachments(sources);
     },
-    [commitAttachments, importAttachments],
+    [commitAttachments, importAttachments, workspaceSessionId, workspaceFolderId],
   );
 
   const removeAttachment = useCallback(

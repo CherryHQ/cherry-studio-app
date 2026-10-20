@@ -1,19 +1,10 @@
-import { ContentState, SelectionIndicator, Tabs } from '@cherrystudio/ui/components';
-import {
-  LegendList,
-  type LegendListRef,
-  type LegendListRenderItemProps,
-} from '@legendapp/list/react-native';
-import { memo, useCallback, useMemo, useRef } from 'react';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import { ActionMenu, Button, ContentState, type MenuItem } from '@cherrystudio/ui/components';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import {
-  fileEntryPreviewKind,
-  FileEntrySkeleton,
-  LoadedFileEntryPreview,
-  useOpenFileEntry,
-} from '@/frontend/components/FileEntryPreview';
 import {
   type SelectionSource,
   useListBottomInset,
@@ -23,70 +14,67 @@ import {
   useSelectionState,
 } from '@/frontend/components/Selection';
 import { useBackendModule } from '@/frontend/data';
-import { useLayoutWidth } from '@/frontend/hooks/useLayoutWidth';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { FileFolder } from '@/shared/data/types/fileLibrary';
 
 import {
   type FileLibraryEntry,
   type FileLibraryFilter,
   useFileEntries,
 } from '../hooks/useFileEntries';
-import {
-  fileLibraryGrid,
-  fileLibrarySelectionScope,
-  type FileLibraryViewMode,
-} from '../utils/constants';
+import type { LibrarySelection } from '../hooks/useFileLibraryItemActions';
+import { useOpenLibraryFile } from '../hooks/useOpenLibraryFile';
+import { fileLibraryLayout, fileLibrarySelectionScope } from '../utils/constants';
+import { FileLibraryFolderItem } from './FileLibraryFolderItem';
 import { FILE_LIBRARY_ROW_ESTIMATED_SIZE, FileLibraryRow } from './FileLibraryRow';
 import { FileLibrarySkeleton } from './FileLibrarySkeleton';
 
 type FileLibraryListProps = {
+  folderId?: string | null;
+  directory?: {
+    folders: readonly FileFolder[];
+    onOpen: (folderId: string) => void;
+  };
+  folderPaths?: ReadonlyMap<string, string>;
+  getMenuItems: (selection: LibrarySelection) => MenuItem[];
   filter: FileLibraryFilter;
-  isDataLoadEnabled: boolean;
-  onFilterChange: (filter: FileLibraryFilter) => void;
-  viewMode: FileLibraryViewMode;
 };
 
+type FileLibraryListItem =
+  | { kind: 'folder'; folder: FileFolder }
+  | { kind: 'file'; file: FileLibraryEntry };
+
 type FileLibraryListExtraData = {
+  directory: FileLibraryListProps['directory'];
+  folderPaths: FileLibraryListProps['folderPaths'];
+  getMenuItems: (selection: LibrarySelection) => MenuItem[];
+  getManageLabel: (name: string) => string;
   dateFormatter: Intl.DateTimeFormat;
   isEditing: boolean;
   onOpen: (file: ResolvedFile) => void;
-  onStartSelection: (fileEntryId: string) => void;
   onToggle: (fileEntryId: string) => void;
   selectedIds: ReadonlySet<string>;
-  tileSize: number;
-  viewMode: FileLibraryViewMode;
 };
 
-const filterOrder: readonly FileLibraryFilter[] = ['all', 'image', 'document', 'sharing'];
-const filterLabelKeys: Record<FileLibraryFilter, string> = {
-  all: 'library.filter.all',
-  sharing: 'library.filter.sharing',
-  document: 'library.filter.documents',
-  image: 'library.filter.images',
-};
-
-/**
- * The library's grid or list. The filter row rides in the list header rather than above
- * the list, so on iOS it scrolls under the transparent native header with the
- * tiles instead of hiding behind it.
- */
+/** Folders and files share one result list below the common browser controls. */
 export function FileLibraryList({
+  folderId,
+  directory,
+  folderPaths,
+  getMenuItems,
   filter,
-  isDataLoadEnabled,
-  onFilterChange,
-  viewMode,
 }: FileLibraryListProps) {
   const { t, i18n } = useTranslation();
   const file = useBackendModule('file');
   // Keep the edit request above recycled rows so refreshing the library cannot cancel it.
-  const { openFileEntry } = useOpenFileEntry();
+  const openLibraryFile = useOpenLibraryFile();
   const bottomInset = useListBottomInset();
   const pendingDeletionIds = usePendingDeletionIds(fileLibrarySelectionScope);
-  const { enterEditing, toggleId } = useSelectionActions();
-  const { isDeletionPending, isEditing, selectedIds } = useSelectionState();
-  const { onLayout, width: listWidth } = useLayoutWidth();
+  const { toggleId } = useSelectionActions();
+  const { isEditing, selectedIds } = useSelectionState();
   const { entries, error, isLoading, isLoadingMore, loadMore, refresh } = useFileEntries(filter, {
-    enabled: isDataLoadEnabled,
+    enabled: true,
+    folderId,
   });
   const visibleEntries = useMemo(
     () =>
@@ -94,6 +82,16 @@ export function FileLibraryList({
         ? entries
         : entries.filter((item) => !pendingDeletionIds.has(item.entry.id)),
     [entries, pendingDeletionIds],
+  );
+  const listItems = useMemo<FileLibraryListItem[]>(
+    () => [
+      ...(isEditing ? [] : (directory?.folders ?? [])).map((folder) => ({
+        kind: 'folder' as const,
+        folder,
+      })),
+      ...(isLoading ? [] : visibleEntries).map((file) => ({ kind: 'file' as const, file })),
+    ],
+    [directory?.folders, isEditing, isLoading, visibleEntries],
   );
   const selectionSource = useMemo<SelectionSource>(
     () => ({
@@ -103,7 +101,7 @@ export function FileLibraryList({
         deleteTitle: 'library.selection.deleteTitle',
       },
       deleteSelected: async (ids) => {
-        const results = await Promise.allSettled(ids.map((id) => file.delete(id)));
+        const results = await Promise.allSettled(ids.map((id) => file.moveToTrash(id)));
         // Keep optimistic hides until the list reflects every committed deletion,
         // including the successful files in a partially failed batch.
         await refresh();
@@ -119,24 +117,6 @@ export function FileLibraryList({
     [file, refresh, visibleEntries],
   );
   useRegisterSelectionSource(fileLibrarySelectionScope, selectionSource);
-  const listRef = useRef<LegendListRef>(null);
-  const columns = Math.max(
-    2,
-    Math.floor(
-      (listWidth - fileLibraryGrid.pageEdge * 2 + fileLibraryGrid.tileGap) /
-        (fileLibraryGrid.minTileSize + fileLibraryGrid.tileGap),
-    ),
-  );
-  const tileSize =
-    listWidth > 0
-      ? Math.max(
-          1,
-          (listWidth - fileLibraryGrid.pageEdge * 2 - fileLibraryGrid.tileGap * (columns - 1)) /
-            columns,
-        )
-      : fileLibraryGrid.minTileSize;
-  const estimatedItemSize =
-    viewMode === 'grid' ? tileSize + fileLibraryGrid.tileGap : FILE_LIBRARY_ROW_ESTIMATED_SIZE;
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const dateFormatter = useMemo(
     () =>
@@ -147,63 +127,37 @@ export function FileLibraryList({
       }),
     [locale],
   );
-  const handleStartSelection = useCallback(
-    (fileEntryId: string) => {
-      if (isEditing || isDeletionPending) {
-        return;
-      }
-      enterEditing();
-      toggleId(fileEntryId);
-    },
-    [enterEditing, isDeletionPending, isEditing, toggleId],
-  );
   const listExtraData = useMemo<FileLibraryListExtraData>(
     () => ({
+      directory,
+      folderPaths,
       dateFormatter,
+      getMenuItems,
+      getManageLabel: (name: string) => t('library.manage', { name }),
       isEditing,
-      // Each edit is already a new library entry; accepting it only advances the viewer.
-      onOpen: (resolvedFile) => openFileEntry(resolvedFile, () => true),
-      onStartSelection: handleStartSelection,
+      onOpen: (resolvedFile) => void openLibraryFile(resolvedFile),
       onToggle: toggleId,
       selectedIds,
-      tileSize,
-      viewMode,
     }),
     [
+      directory,
+      folderPaths,
       dateFormatter,
-      handleStartSelection,
+      getMenuItems,
+      t,
       isEditing,
-      openFileEntry,
+      openLibraryFile,
       selectedIds,
-      tileSize,
       toggleId,
-      viewMode,
     ],
   );
 
   const contentContainerStyle = useMemo(
     () => ({
       paddingBottom: bottomInset,
-      // Keep the viewport and header gutters unchanged when columns switch.
-      // Both item layouts supply the remaining half-gap in their row frame.
-      paddingHorizontal: fileLibraryGrid.pageEdge - fileLibraryGrid.tileGap / 2,
+      paddingHorizontal: fileLibraryLayout.pageEdge,
     }),
     [bottomInset],
-  );
-  const listHeader = useMemo(
-    () =>
-      isEditing ? null : (
-        <View className="pt-2 pb-4">
-          <Tabs
-            accessibilityLabel={t('library.filter.label')}
-            items={filterOrder.map((value) => ({ label: t(filterLabelKeys[value]), value }))}
-            layout="hug"
-            onValueChange={onFilterChange}
-            value={filter}
-          />
-        </View>
-      ),
-    [filter, isEditing, onFilterChange, t],
   );
   // A kind tab with nothing in it yet is still filling itself, so it shows the
   // same placeholders as the first load rather than claiming the library is
@@ -219,11 +173,7 @@ export function FileLibraryList({
             />
           </View>
         ) : isLoading || isLoadingMore ? (
-          <FileLibrarySkeleton
-            count={viewMode === 'grid' ? columns * 3 : fileLibraryGrid.skeletonTiles}
-            tileSize={tileSize}
-            viewMode={viewMode}
-          />
+          <FileLibrarySkeleton count={fileLibraryLayout.skeletonRows} />
         ) : (
           <View className="min-h-48 flex-1 justify-center px-6 pb-24">
             <ContentState.Empty testID="file-library-empty" title={t('library.empty')} />
@@ -231,7 +181,7 @@ export function FileLibraryList({
         )}
       </View>
     ),
-    [columns, error, isLoading, isLoadingMore, refresh, t, tileSize, viewMode],
+    [error, isLoading, isLoadingMore, refresh, t],
   );
   const listFooter = useMemo(
     () =>
@@ -243,180 +193,108 @@ export function FileLibraryList({
           />
         </View>
       ) : isLoadingMore ? (
-        <FileLibrarySkeleton
-          count={viewMode === 'grid' ? columns : 2}
-          tileSize={tileSize}
-          viewMode={viewMode}
-        />
+        <FileLibrarySkeleton count={2} />
       ) : null,
-    [columns, error, isLoadingMore, refresh, t, tileSize, viewMode, visibleEntries.length],
+    [error, isLoadingMore, refresh, t, visibleEntries.length],
   );
 
   return (
     <LegendList
       contentContainerStyle={contentContainerStyle}
-      contentInsetAdjustmentBehavior="automatic"
-      ref={listRef}
-      // Kept mounted through loading: a list that mounts late on iOS measures a
-      // zero top inset and starts scrolled under the header.
-      data={isLoading ? [] : visibleEntries}
-      estimatedItemSize={estimatedItemSize}
+      contentInsetAdjustmentBehavior="never"
+      data={listItems}
+      estimatedItemSize={FILE_LIBRARY_ROW_ESTIMATED_SIZE}
       extraData={listExtraData}
-      keyExtractor={fileEntryKeyExtractor}
+      keyExtractor={libraryItemKeyExtractor}
+      getItemType={libraryItemType}
       ListEmptyComponent={listEmpty}
-      ListFooterComponent={listFooter}
-      ListHeaderComponent={listHeader}
-      ListHeaderComponentStyle={styles.header}
-      // Reflowing every file is a new layout, not a size change to compensate
-      // by shifting the scroll container and its header.
+      ListFooterComponent={
+        directory?.folders.length && !isEditing && visibleEntries.length === 0
+          ? error || isLoading || isLoadingMore
+            ? listEmpty
+            : null
+          : listFooter
+      }
       maintainVisibleContentPosition={false}
-      numColumns={viewMode === 'grid' ? columns : 1}
-      onLayout={onLayout}
       onEndReached={loadMore}
       onEndReachedThreshold={0.7}
+      ItemSeparatorComponent={FileLibraryItemSeparator}
       recycleItems
-      renderItem={renderFileItem}
+      renderItem={renderLibraryItem}
       showsVerticalScrollIndicator={false}
-      style={viewMode === 'list' ? styles.boundedList : styles.list}
-      testID={viewMode === 'grid' ? 'file-library-grid' : 'file-library-list'}
+      style={styles.list}
+      testID="file-library-list"
     />
   );
 }
 
-function fileEntryKeyExtractor(item: FileLibraryEntry) {
-  return item.entry.id;
+function libraryItemKeyExtractor(item: FileLibraryListItem) {
+  return item.kind === 'folder' ? `folder:${item.folder.id}` : `file:${item.file.entry.id}`;
 }
 
-function renderFileItem({ extraData, item }: LegendListRenderItemProps<FileLibraryEntry>) {
-  const {
-    dateFormatter,
-    isEditing,
-    onOpen,
-    onStartSelection,
-    onToggle,
-    selectedIds,
-    tileSize,
-    viewMode,
-  } = extraData as FileLibraryListExtraData;
-  const isSelected = selectedIds.has(item.entry.id);
+function libraryItemType(item: FileLibraryListItem) {
+  return item.kind;
+}
 
-  return viewMode === 'grid' ? (
-    <FileTile
-      isEditing={isEditing}
-      isSelected={isSelected}
-      item={item}
-      onOpen={onOpen}
-      onStartSelection={onStartSelection}
-      onToggle={onToggle}
-      size={tileSize}
-    />
-  ) : (
-    <View style={styles.row}>
-      <FileLibraryRow
-        isEditing={isEditing}
-        isSelected={isSelected}
-        item={item}
-        modifiedDate={dateFormatter.format(item.entry.updatedAt)}
-        onOpen={onOpen}
-        onStartSelection={onStartSelection}
-        onToggle={onToggle}
+function renderLibraryItem({ extraData, item }: LegendListRenderItemProps<FileLibraryListItem>) {
+  const data = extraData as FileLibraryListExtraData;
+  if (item.kind === 'folder') {
+    return data.directory ? (
+      <FileLibraryFolderItem
+        folder={item.folder}
+        menuItems={data.getMenuItems({ kind: 'folder', folder: item.folder })}
+        modifiedDate={data.dateFormatter.format(item.folder.updatedAt)}
+        onOpen={data.directory.onOpen}
       />
+    ) : null;
+  }
+  return <FileItem item={item.file} data={data} />;
+}
+
+function FileItem({ item, data }: { item: FileLibraryEntry; data: FileLibraryListExtraData }) {
+  // Files at the top level are simply in the library and need no location.
+  const location = item.libraryFile?.folderId
+    ? data.folderPaths?.get(item.libraryFile.folderId)
+    : undefined;
+  const menuItems =
+    !data.isEditing && item.libraryFile
+      ? data.getMenuItems({ kind: 'file', file: item.libraryFile })
+      : [];
+  return (
+    <View className="flex-row items-center gap-2">
+      <View className="min-w-0 flex-1">
+        <FileLibraryRow
+          isEditing={data.isEditing}
+          isSelected={data.selectedIds.has(item.entry.id)}
+          item={item}
+          location={location}
+          menuItems={menuItems}
+          modifiedDate={data.dateFormatter.format(item.entry.updatedAt)}
+          onOpen={data.onOpen}
+          onToggle={data.onToggle}
+        />
+      </View>
+      {menuItems.length > 0 && item.libraryFile ? (
+        <ActionMenu items={menuItems}>
+          <Button
+            accessibilityLabel={data.getManageLabel(item.libraryFile.name)}
+            hitSlop={6}
+            icon={<EllipsisIcon />}
+            size="sm"
+            testID={`file-library-manage-${item.libraryFile.id}`}
+            variant="ghost"
+          />
+        </ActionMenu>
+      ) : null}
     </View>
   );
 }
 
-// URI pages retain prior item identities when a new page appends, so mounted
-// tiles stay on the memoized path while the next page resolves.
-const FileTile = memo(function FileTile({
-  isEditing,
-  isSelected,
-  item,
-  onOpen,
-  onStartSelection,
-  onToggle,
-  size,
-}: {
-  isEditing: boolean;
-  isSelected: boolean;
-  item: FileLibraryEntry;
-  onOpen: (file: ResolvedFile) => void;
-  onStartSelection: (fileEntryId: string) => void;
-  onToggle: (fileEntryId: string) => void;
-  size: number;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Pressable
-      accessibilityActions={
-        isEditing ? undefined : [{ name: 'longpress', label: t('library.selection.start') }]
-      }
-      accessibilityLabel={item.entry.filename}
-      accessibilityRole={isEditing ? 'checkbox' : 'button'}
-      accessibilityState={isEditing ? { checked: isSelected } : undefined}
-      className="relative active:opacity-70"
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'longpress') {
-          onStartSelection(item.entry.id);
-        }
-      }}
-      onLongPress={() => onStartSelection(item.entry.id)}
-      onPress={() => {
-        if (isEditing) {
-          onToggle(item.entry.id);
-        } else if (item.uri) {
-          onOpen({ entry: item.entry, uri: item.uri });
-        }
-      }}
-      style={{
-        paddingBottom: fileLibraryGrid.tileGap,
-        paddingHorizontal: fileLibraryGrid.tileGap / 2,
-      }}
-      testID={`file-library-entry-${item.entry.id}`}
-    >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        pointerEvents="none"
-      >
-        {fileEntryPreviewKind(item.entry) === 'image' && !item.previewUri ? (
-          <FileEntrySkeleton size={size} variant="card" />
-        ) : (
-          <LoadedFileEntryPreview
-            entry={item.entry}
-            previewUri={item.previewUri}
-            size={size}
-            uri={item.uri}
-            variant="card"
-          />
-        )}
-      </View>
-      {isEditing ? (
-        <SelectionIndicator
-          className="absolute top-2 right-2"
-          selected={isSelected}
-          variant="overlay"
-        />
-      ) : null}
-    </Pressable>
-  );
-});
+function FileLibraryItemSeparator() {
+  return <View className="h-px bg-border" />;
+}
 
 const styles = StyleSheet.create({
-  boundedList: {
-    alignSelf: 'center',
-    flex: 1,
-    maxWidth: 800,
-    width: '100%',
-  },
-  list: { flex: 1 },
-  empty: {
-    flexGrow: 1,
-  },
-  header: {
-    marginHorizontal: fileLibraryGrid.tileGap / 2,
-  },
-  row: {
-    paddingHorizontal: fileLibraryGrid.tileGap / 2,
-  },
+  list: { alignSelf: 'center', flex: 1, maxWidth: 800, width: '100%' },
+  empty: { flexGrow: 1 },
 });

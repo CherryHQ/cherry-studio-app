@@ -33,7 +33,7 @@ import {
 } from '@/frontend/components/Composer';
 import { useBackendModule } from '@/frontend/data';
 
-import { ChatInputSurface } from '../components/ChatInput';
+import { ChatInputAccessories, ChatInputSurface } from '../components/ChatInput';
 import { toAgentInputParts } from '../components/ChatInput/utils/agentInputParts';
 import { ConversationActionError, conversationFailureKey } from '../runtime/conversationFailure';
 import { restoreRemoteInput } from './restoreRemoteInput';
@@ -221,55 +221,57 @@ export function RemoteComposer({
         }}
         testID="chat-composer"
       >
-        <ComposerAttachments
-          transfer={(file) => {
-            if (!preparation) return undefined;
-            const item = preparation.draft?.items.find(
-              (item) => item.fileEntryId === file.fileEntryId,
-            );
-            if (item?.state === 'ready') return undefined;
-            const progress = item ? item.sent / Math.max(1, item.total) : undefined;
-            return {
-              progress,
-              state: item?.state === 'failed' ? 'failed' : 'uploading',
-              label:
-                item?.state === 'failed'
-                  ? t(
-                      item.error === 'UPLOAD_SOURCE_CHANGED'
-                        ? 'remoteAgent.uploadSourceChanged'
-                        : item.error === 'CHECKSUM_MISMATCH'
-                          ? 'remoteAgent.uploadChecksumMismatch'
-                          : item.error === 'VERIFICATION_FAILED'
-                            ? 'remoteAgent.uploadVerificationFailed'
-                            : item.error === 'NATIVE_HASH_UNAVAILABLE'
-                              ? 'remoteAgent.uploadNativeUnavailable'
-                              : 'remoteAgent.loadFailed',
-                    )
-                  : item?.state === 'verifying'
-                    ? t('remoteAgent.uploadVerifying')
-                    : t('remoteAgent.uploadProgress', {
-                        percent: Math.floor((progress ?? 0) * 100),
-                      }),
-            };
-          }}
-        />
-        {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
-          <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
-            {t('common.retry')}
-          </Button>
-        ) : null}
-        {upload ? (
-          <View className="flex-row items-center gap-2 px-4">
-            <Text className="flex-1 text-sm text-muted-foreground">
-              {t('remoteAgent.uploadProgress', {
-                percent: Math.floor((upload.sent / Math.max(1, upload.total)) * 100),
-              })}
-            </Text>
-            <Button size="xs" variant="ghost" onPress={upload.cancel}>
-              {t('common.cancel')}
+        <ChatInputAccessories>
+          <ComposerAttachments
+            transfer={(file) => {
+              if (!preparation) return undefined;
+              const item = preparation.draft?.items.find(
+                (item) => item.fileEntryId === file.fileEntryId,
+              );
+              if (item?.state === 'ready') return undefined;
+              const progress = item ? item.sent / Math.max(1, item.total) : undefined;
+              return {
+                progress,
+                state: item?.state === 'failed' ? 'failed' : 'uploading',
+                label:
+                  item?.state === 'failed'
+                    ? t(
+                        item.error === 'UPLOAD_SOURCE_CHANGED'
+                          ? 'remoteAgent.uploadSourceChanged'
+                          : item.error === 'CHECKSUM_MISMATCH'
+                            ? 'remoteAgent.uploadChecksumMismatch'
+                            : item.error === 'VERIFICATION_FAILED'
+                              ? 'remoteAgent.uploadVerificationFailed'
+                              : item.error === 'NATIVE_HASH_UNAVAILABLE'
+                                ? 'remoteAgent.uploadNativeUnavailable'
+                                : 'remoteAgent.loadFailed',
+                      )
+                    : item?.state === 'verifying'
+                      ? t('remoteAgent.uploadVerifying')
+                      : t('remoteAgent.uploadProgress', {
+                          percent: Math.floor((progress ?? 0) * 100),
+                        }),
+              };
+            }}
+          />
+          {preparation?.draft?.items.some((item) => item.state === 'failed') ? (
+            <Button size="xs" variant="ghost" onPress={() => stageAttachments(attachments)}>
+              {t('common.retry')}
             </Button>
-          </View>
-        ) : null}
+          ) : null}
+          {upload ? (
+            <View className="flex-row items-center gap-2 px-4">
+              <Text className="flex-1 text-sm text-muted-foreground">
+                {t('remoteAgent.uploadProgress', {
+                  percent: Math.floor((upload.sent / Math.max(1, upload.total)) * 100),
+                })}
+              </Text>
+              <Button size="xs" variant="ghost" onPress={upload.cancel}>
+                {t('common.cancel')}
+              </Button>
+            </View>
+          ) : null}
+        </ChatInputAccessories>
         <ChatInputSurface
           attachmentMode={supportsAttachments ? 'images' : 'text-only'}
           streaming={canStop}

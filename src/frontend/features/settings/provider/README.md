@@ -57,10 +57,11 @@ returns to the requesting surface, or to the provider list when settings opened 
 ## Desktop Provider Synchronization
 
 The provider list's overflow menu owns the collection-level entry for synchronizing from a paired
-PC. Device details and the post-pairing guide open the same sync page with a connection ID, skipping
+PC. Device details open the same sync page with a connection ID, skipping
 source selection. Dedicated onboarding routes also reuse this page with a route-owned
 `setupIntent="chat"`; successful import then opens onboarding's chat-model selection without marking
-setup complete. Settings synchronization still returns to the provider list.
+setup complete. Entering synchronization and completing import use `replace`; settings import
+finishes at the provider list without preserving the import page in back history.
 
 Device discovery, pairing, repair, and removal stay in `DeviceConnectionsScreen`; this module
 only selects a paired source, fetches the providers enabled on that PC, lets the user choose which
@@ -70,8 +71,14 @@ presets with no missing models. Only enabled PC models are compared by provider 
 missing models are added and existing model rows remain unchanged. Mobile-only providers and models
 are retained. Custom providers also retain endpoint entries absent from the PC so existing mobile
 models can keep using them; matching endpoint entries use the PC configuration.
-Preview and import both exclude CherryAI and local providers (Ollama, LM Studio, GPUStack, and
-OpenVINO Model Server), including copies identified by their preset provider ID or legacy type.
+Preview and import exclude CherryAI and desktop-local embeddings, including copies identified by
+their preset provider ID or legacy type. HTTP providers such as LM Studio, GPUStack, OpenVINO Model
+Server, and Ollama retain their exported addresses and protocol declarations. The conversation
+Runtime admits compatible endpoints; native Ollama endpoints remain unsupported. Users own address
+reachability. Optional API-key authentication is persisted through `authConfig.required`, so
+keyless gateways can serve conversations and run connection checks without adding a dummy key.
+Before returning a preview with selectable providers, the workflow prepares the shared model
+catalog so its first download cannot become a new dependency failure only after confirmation.
 
 ## Provider Configuration
 

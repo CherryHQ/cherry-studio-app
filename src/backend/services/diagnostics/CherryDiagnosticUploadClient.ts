@@ -1,9 +1,11 @@
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import { z } from 'zod';
 
+import { hashLocalFile } from '@/backend/services/file/fileHash';
 import {
   diagnosticDescriptionByteLength,
   DIAGNOSTIC_DESCRIPTION_MAX_BYTES,
+  DiagnosticReportIdSchema,
   normalizeDiagnosticDescription,
   type DiagnosticUploadFailureReason,
 } from '@/shared/contracts/diagnostics';
@@ -13,7 +15,7 @@ import { getNativeDiagnostics } from '../../../../modules/diagnostics';
 const ARCHIVE_LIMIT_BYTES = 100 * 1024 * 1024;
 const CLIENT_ID = 'cherry-studio';
 const UploadResponseSchema = z.object({
-  id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+  id: DiagnosticReportIdSchema,
   status: z.literal('pending'),
 });
 const ErrorResponseSchema = z.object({ error: z.object({ code: z.string() }) });
@@ -73,7 +75,10 @@ export class CherryDiagnosticUploadClient {
         return { status: 'rejected', reason: 'invalid_archive' };
       if (fileSize > ARCHIVE_LIMIT_BYTES)
         return { status: 'rejected', reason: 'archive_too_large' };
-      fileSha256 = await native.sha256(input.filePath);
+      fileSha256 = await hashLocalFile(
+        input.filePath,
+        input.signal ?? new AbortController().signal,
+      );
       input.signal?.throwIfAborted();
       descriptionSha256 = await digestStringAsync(CryptoDigestAlgorithm.SHA256, description);
       input.signal?.throwIfAborted();

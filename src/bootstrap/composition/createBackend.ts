@@ -1,11 +1,12 @@
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
-import type { AgentRuntime } from '@/backend/ai/agent/runtime';
+import type { AgentRuntime, RuntimeTextGenerator } from '@/backend/ai/agent/runtime';
 import {
   createSystemModelSupport,
   type LanguageServingSupport,
 } from '@/backend/ai/provider/systemModelSupport';
+import type { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
 import {
   createMcpServerMutations,
@@ -63,25 +64,30 @@ import type { ProviderRegistryUpdaterService } from '@/backend/services/provider
 import { providerRegistryUpdates } from '@/backend/services/providers/providerRegistryUpdates';
 import type { RemoteAgentRuntime, RemoteBackgroundExecution } from '@/backend/services/remoteAgent';
 import {
-  createBundledSkillSource,
   createSkillMarketplace,
   createGithubSkillClients,
   createGithubSkillSource,
+  createCherryinSkillClient,
+  createCherryinSkillSource,
   createSkillsModule,
   skillStorage,
 } from '@/backend/services/skill';
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
+import { createTranslationModule } from '@/backend/services/translation';
+import type { TrashRuntime } from '@/backend/services/trash';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
   initializeSkills(): Promise<void>;
   hasPendingSkillStorageWork(): boolean;
+  disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
@@ -99,6 +105,7 @@ export function createBackend(
     backgroundExecution: BackgroundExecutionModule;
     remoteBackground: RemoteBackgroundExecution;
     dbService: DbService;
+    resourceScopes: ResourceScopeCoordinator;
     providerAccounts: ProviderAccountRuntime;
     backup: BackupRuntime;
     documentExport: DocumentExportRuntime;
@@ -106,8 +113,9 @@ export function createBackend(
     desktopConnectionManager: DesktopConnectionManager;
     remoteAgent: RemoteAgentRuntime;
     diagnostics: DiagnosticsModule;
-    languageServing: LanguageServingSupport & AgentRuntime;
+    languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
+    trash: Pick<TrashRuntime, 'trashFile'>;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -202,6 +210,7 @@ export function createBackend(
     },
   });
   const paintings = createPaintingsModule({
+    scopes: infrastructure.resourceScopes,
     db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },
     files: services.fileContent,
     jobs: {
@@ -274,25 +283,37 @@ export function createBackend(
     importFiles: createSystemShareImporter(exportFiles),
   });
   const githubSkills = createGithubSkillSource(createGithubSkillClients());
-  let skillStorageWrites = 0;
+  const cherryinClient = createCherryinSkillClient();
+  const cherryinSkills = createCherryinSkillSource(cherryinClient);
+  const skillStorageWrites = new Set<Promise<unknown>>();
+  let skillsStopped = false;
   const skills = createSkillsModule({
-    marketplace: createSkillMarketplace(githubSkills),
+    marketplace: createSkillMarketplace(githubSkills, {
+      client: cherryinClient,
+      source: cherryinSkills,
+    }),
     db: {
       async withWriteTx(fn) {
         storageMutationGate.assertWritable();
-        skillStorageWrites += 1;
+        if (skillsStopped) throw new Error('Skill storage has stopped');
+        const pending = dbService.withWriteTx(async (tx) => {
+          if (skillsStopped) throw new Error('Skill storage has stopped');
+          return fn(tx);
+        });
+        skillStorageWrites.add(pending);
         try {
-          return await dbService.withWriteTx(fn);
+          return await pending;
         } finally {
-          skillStorageWrites -= 1;
+          skillStorageWrites.delete(pending);
         }
       },
     },
     skills: services.agentGlobalSkill,
+    readAuthor: () => services.preference.get('app.user.name'),
     storage: skillStorage,
     sources: {
-      bundled: createBundledSkillSource(),
       github: githubSkills,
+      cherryin: cherryinSkills,
     },
     agentExists: (agentId) =>
       services.agentData.getById(agentId).then(
@@ -305,7 +326,11 @@ export function createBackend(
 
   return {
     disposeSystemEntry: systemEntry.dispose,
-    hasPendingSkillStorageWork: () => skillStorageWrites > 0,
+    hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
+    disposeSkills: async () => {
+      skillsStopped = true;
+      await Promise.allSettled([...skillStorageWrites]);
+    },
     initializeSkills: async () => {
       try {
         await skills.reconcileStorage();
@@ -327,13 +352,15 @@ export function createBackend(
       documentExport: infrastructure.documentExport,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
+        prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,
         editImage: services.fileContent.editImage,
         delete: services.fileContent.delete,
+        moveToTrash: (id) => infrastructure.trash.trashFile(FileEntryIdSchema.parse(id)),
         prepareAttachments: services.fileContent.prepareAttachments,
         generatePreviewUri: services.fileContent.generatePreviewUri,
+        getTrashThumbnailUri: services.fileContent.getTrashThumbnailUri,
         getUri: services.fileContent.getUri,
         resolveUris: services.fileContent.resolveUris,
-        subscribeChanges: services.fileContent.subscribeChanges,
       },
       mcp: services.mcpRuntime,
       models,
@@ -343,6 +370,29 @@ export function createBackend(
       profile,
       providers,
       skills,
+      translation: createTranslationModule({
+        ai: {
+          generateText: (request, options) =>
+            infrastructure.languageServing.generateText(request, {
+              ...options,
+              onUsage: async (report) => {
+                try {
+                  await services.aiUsageRecord.recordInvocation({
+                    ...report,
+                    context: { ...report.context, messageRef: null, source: null },
+                    modality: 'language',
+                  });
+                } catch {
+                  loggerService
+                    .withContext('TranslationModule')
+                    .warn('Failed to record translation usage');
+                }
+              },
+            }),
+        },
+        preference: services.preference,
+        models: services.model,
+      }),
       webSearch: services.webSearch,
     },
     dataApiDependencies: {

@@ -240,6 +240,11 @@ describe('ProcessGroupPart', () => {
       );
     });
     expect(renderer!.root.findByType('MessagePartToolGroup').props.state).toBe('complete');
+    act(() => renderer!.root.findByType('MessagePartToolGroup').props.onExpandedChange(true));
+    const reasoning = renderer!.root
+      .findAllByType('MessagePartRenderer')
+      .find((node) => node.props.part.type === 'reasoning');
+    expect(reasoning!.props.isStreaming).toBe(false);
   });
 
   test('does not invent a duration for remote messages without timing metadata', () => {

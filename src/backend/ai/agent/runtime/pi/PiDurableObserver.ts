@@ -14,10 +14,16 @@ import type {
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { RuntimeConversationEvent, RuntimeConversationSnapshot } from '../durableTypes';
+import {
+  laneKey,
+  type RuntimeConversationEvent,
+  type RuntimeConversationSnapshot,
+  type RuntimeLane,
+} from '../durableTypes';
 import type { RuntimeToolProgress } from '../types';
 import { projectPiTurn } from './piDurableProjection';
 import type { PiDurableRuntime } from './PiDurableRuntime';
+import { hasResponseContent } from './piStreamEvents';
 
 type InputView = { record: SubmissionRecord; metadata: JsonObject | undefined };
 const logger = loggerService.withContext('PiDurableObserver');
@@ -35,18 +41,20 @@ export class PiDurableObserver {
   private run: readonly SubmissionId[] = [];
   private partial: AssistantMessage | undefined;
   private generationAttempt = 0;
-  private readonly compactions = new Set<number>();
+  /** A provider attempt failed and Pi retries it; cleared once the next attempt produces output. */
+  private retrying = false;
+  private readonly compactions = new Map<number, boolean>();
   private compactionFailed = false;
 
   constructor(
     private readonly runtime: PiDurableRuntime,
-    private readonly sessionId: string,
+    private readonly lane: RuntimeLane,
     private readonly listener: (event: RuntimeConversationEvent) => void,
   ) {}
 
   async start(): Promise<RuntimeConversationSnapshot> {
     if (this.stream) throw new Error('The Pi observer is already attached.');
-    const stream = await this.runtime.watch(this.sessionId);
+    const stream = await this.runtime.watch(laneKey(this.lane));
     this.stream = stream;
     try {
       await this.loadSnapshot(stream.snapshot);
@@ -69,6 +77,7 @@ export class PiDurableObserver {
     this.nestedTools.clear();
     this.run = [];
     this.partial = undefined;
+    this.retrying = false;
     this.compactions.clear();
     this.compactionFailed = false;
   }
@@ -81,8 +90,10 @@ export class PiDurableObserver {
     this.run = snapshot.run?.inputs ?? [];
     this.partial = snapshot.generation?.message;
     this.generationAttempt = snapshot.generation?.attempt ?? 0;
+    this.retrying = snapshot.generation?.retry !== undefined;
     this.compactions.clear();
-    for (const compaction of snapshot.compactions) this.compactions.add(compaction.taskId);
+    for (const compaction of snapshot.compactions)
+      this.compactions.set(compaction.taskId, compaction.blocking);
     this.compactionFailed = snapshot.compactionFailure !== undefined;
     const queued = new Set(snapshot.inbox.map((item) => item.id));
     const through = snapshot.entries.at(-1)?.id;
@@ -110,7 +121,7 @@ export class PiDurableObserver {
       this.inputs.set(record.id, { ...input, record });
       if (!queued.has(record.id))
         for (const entry of await this.runtime.turnEntries(
-          this.sessionId,
+          laneKey(this.lane),
           record,
           BACKGROUND_CONTEXT,
           through,
@@ -166,6 +177,7 @@ export class PiDurableObserver {
         case 'run_start':
           this.run = event.inputs;
           this.partial = undefined;
+          this.retrying = false;
           this.toolStates.clear();
           this.nestedTools.clear();
           event.inputs.forEach((id) => touched.add(id));
@@ -174,24 +186,40 @@ export class PiDurableObserver {
           event.inputs.forEach((id) => touched.add(id));
           this.run = [];
           this.partial = undefined;
+          this.retrying = false;
           break;
         case 'message_start':
-          if (event.message.role === 'assistant') this.partial = event.message;
+          if (event.message.role === 'assistant') {
+            this.partial = event.message;
+            // The failed attempt's own message follows its retry event in the same batch.
+            if (event.message.stopReason !== 'error' && hasResponseContent(event.message))
+              this.retrying = false;
+          }
           break;
         case 'message_update':
-          if (this.partial) this.partial = updatedMessage(this.partial, event.changes, event.usage);
+          if (this.partial) {
+            this.partial = updatedMessage(this.partial, event.changes, event.usage);
+            if (this.partial.stopReason !== 'error' && hasResponseContent(this.partial))
+              this.retrying = false;
+          }
           break;
         case 'message_end':
           this.entries.set(event.entry.id, event.entry);
-          if (event.entry.model?.some((message) => message.role === 'assistant'))
-            this.partial = undefined;
+          for (const message of event.entry.model ?? []) {
+            if (message.role === 'assistant') {
+              this.partial = undefined;
+              // Throttled partials may leave the first response content in the final entry only.
+              if (message.stopReason !== 'error' && hasResponseContent(message))
+                this.retrying = false;
+            }
+          }
           break;
         case 'entry_appended':
           this.entries.set(event.entry.id, event.entry);
           if (CompactionEntry.is(event.entry)) this.compactionFailed = false;
           break;
         case 'compaction_start':
-          this.compactions.add(event.taskId);
+          this.compactions.set(event.taskId, event.blocking);
           break;
         case 'compaction_end':
           this.compactions.delete(event.taskId);
@@ -205,6 +233,7 @@ export class PiDurableObserver {
           });
           this.partial = undefined;
           this.generationAttempt = event.attempt;
+          this.retrying = true;
           break;
         case 'auto_retry_end':
           this.generationAttempt = event.attempt;
@@ -248,7 +277,7 @@ export class PiDurableObserver {
             // Compaction and extension tasks need not belong to the currently displayed run.
             ...(event.kind === 'pi.generation' || event.kind === 'pi.tool'
               ? this.diagnosticContext()
-              : { sessionId: this.sessionId }),
+              : { sessionId: this.lane.sessionId, slot: this.lane.slot }),
             operation: 'pi.task',
             taskId: Number(event.taskId),
             taskKind: event.kind,
@@ -288,18 +317,18 @@ export class PiDurableObserver {
     };
   }
 
+  /** Only blocking compaction delays a reply; background compaction is not presented. */
   private contextStatus(): 'compacting' | 'compaction-failed' | null {
-    return this.compactions.size
-      ? 'compacting'
-      : this.compactionFailed
-        ? 'compaction-failed'
-        : null;
+    for (const blocking of this.compactions.values()) if (blocking) return 'compacting';
+    // A background compaction in progress supersedes an earlier failure.
+    return this.compactions.size === 0 && this.compactionFailed ? 'compaction-failed' : null;
   }
 
   private diagnosticContext() {
     const active = this.run[0] !== undefined ? this.inputs.get(this.run[0]) : undefined;
     return {
-      sessionId: this.sessionId,
+      sessionId: this.lane.sessionId,
+      slot: this.lane.slot,
       requestId: active?.record.requestId,
       turnId: active?.metadata?.turnId,
       assistantMessageId: active?.metadata?.assistantMessageId,
@@ -319,8 +348,8 @@ export class PiDurableObserver {
     const entries = [...this.entries.values()]
       .filter((entry) => start !== undefined && entry.id >= start && entry.id < next)
       .sort((a, b) => a.id - b.id);
-    return projectPiTurn({
-      sessionId: this.sessionId,
+    const turn = projectPiTurn({
+      lane: this.lane,
       ...input,
       entries,
       active,
@@ -333,6 +362,7 @@ export class PiDurableObserver {
           }
         : {}),
     });
+    return active && this.retrying ? { ...turn, isRetrying: true } : turn;
   }
 }
 

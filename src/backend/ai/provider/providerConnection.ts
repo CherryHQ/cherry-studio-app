@@ -15,7 +15,6 @@ export interface ResolvedProviderConnection {
   baseUrl: string;
   endpointType: EndpointType | undefined;
   headers: Record<string, string>;
-  providerOptionsKey: string | undefined;
   wireModelId: string;
 }
 
@@ -47,7 +46,6 @@ export function resolveProviderConnection(
     baseUrl: resolvedEndpoint.baseUrl,
     endpointType,
     headers: { ...defaultAppHeaders(), ...getExtraHeaders(provider) },
-    providerOptionsKey: resolvedEndpoint.providerOptionsKey,
     wireModelId: resolveWireModelId(model, endpointType),
   };
 }

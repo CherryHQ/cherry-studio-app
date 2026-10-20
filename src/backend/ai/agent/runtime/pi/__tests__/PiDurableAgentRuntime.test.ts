@@ -1,10 +1,23 @@
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { Api, AssistantMessage, Model, TranscriptContext } from '@earendil-works/pi-ai';
 import { streamSimple as streamAnthropic } from '@earendil-works/pi-ai/api/anthropic-messages';
 import { streamSimple as streamGoogle } from '@earendil-works/pi-ai/api/google-generative-ai';
 import { streamSimple as streamCompletions } from '@earendil-works/pi-ai/api/openai-completions';
 import { streamSimple as streamResponses } from '@earendil-works/pi-ai/api/openai-responses';
+import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantMessageEventStream } from '@earendil-works/pi-ai/utils/event-stream';
-import { MemoryStorage } from '@earendil-works/pi-durable';
+import { getCurrentSystemPrompt, getCurrentTools } from '@earendil-works/pi-ai/utils/transcript';
+import {
+  AgentDoc,
+  createRegistry,
+  defineDocFamily,
+  GenerationTask,
+  LiveDoc,
+  MemoryStorage,
+  SystemEntry,
+  UserEntry,
+  type JsonObject,
+} from '@earendil-works/pi-durable';
 
 import {
   buildAgentSystemPrompt,
@@ -12,18 +25,23 @@ import {
 } from '../../../host/agentSystemPrompt';
 import type { SkillTurnEntry, SkillTurnScope } from '../../../host/skillScope';
 import { createSkillTools } from '../../../tools/skill/skillTools';
+import { createLoadWorkflowTool, getPluginWorkflows } from '../../../tools/workflowTool';
 import type {
   RuntimeConversationEvent,
   RuntimeDurableSubmission,
   RuntimeExecutionPorts,
   RuntimeSqlDatabase,
 } from '../../durableTypes';
+import { runtimeLane } from '../../durableTypes';
 import type { RuntimeTool } from '../../types';
 import { bindPiStream, resolvePiApiAdapter } from '../piApiAdapters';
 import { PiDurableAgentRuntime } from '../PiDurableAgentRuntime';
+import { piSubmissionMetadata, piToolBlueprint } from '../piDurableProjection';
+import { PiDurableRuntime } from '../PiDurableRuntime';
 import type { PiRuntimeDependencies, PiStreamFn } from '../piModelTypes';
 import { emptyAssistantMessage, providerErrorEvent } from '../piStreamEvents';
 import { withPiStreamIdleTimeout } from '../piStreamIdleTimeout';
+import { ToolInstructions } from '../piToolInstructions';
 import type { PiNativeWebTools } from '../piWebTools';
 
 class ReopenableMemoryStorage extends MemoryStorage {
@@ -42,8 +60,9 @@ const wire: Model<Api> = {
   reasoning: false,
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
+const lane = runtimeLane('session');
 const seed = {
-  sessionId: 'session',
+  lane,
   revision: 0,
   configuration: { model: reference, instructions: 'Help.', options: {}, tools: [] },
 };
@@ -145,7 +164,7 @@ async function submitAndWait(
   status: 'completed' | 'failed' = 'completed',
 ) {
   const complete = deferred<void>();
-  const observation = await runtime.observe('session', (event) => {
+  const observation = await runtime.observe(lane, (event) => {
     if (
       event.type === 'turn.updated' &&
       event.turn.identity.requestId === submission.requestId &&
@@ -154,7 +173,7 @@ async function submitAndWait(
       complete.resolve();
   });
   try {
-    await runtime.submit('session', submission);
+    await runtime.submit(lane, submission);
     await complete.promise;
   } finally {
     await observation.unsubscribe();
@@ -162,6 +181,360 @@ async function submitAndWait(
 }
 
 describe('Persistent Agent facade', () => {
+  test('migrates an unfinished v1 conversation across midnight without resetting loaded instructions', async () => {
+    const state = fixture();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+    const tools: RuntimeTool[] = [
+      {
+        ref: { source: 'builtin', capabilityId: 'find_skills' },
+        providerName: 'find_skills',
+        displayName: 'Find skills',
+        description: 'Find available skills.',
+        inputSchema: { type: 'object', properties: {} },
+        approval: 'auto',
+        deferred: true,
+        execute: async () => {
+          throw new Error('Recovery must not replay tools.');
+        },
+      },
+    ];
+    const instructions = buildAgentSystemPrompt({
+      agentInstructions: 'Help.',
+      appLanguage: 'en-US',
+      tools,
+    });
+    const legacyInstructions = instructions.replace(
+      '\n\n## Response Language\n',
+      '\n\n## Current Date\n\nThe current local date is `2026-12-31`.\n\n## Response Language\n',
+    );
+    const initial = { key: 'skill:selected', text: 'Selected skill body.' };
+    const loaded = { key: 'plugin:loaded', text: 'Guide loaded during the unfinished turn.' };
+    const legacy = await PiDurableRuntime.open(state.storage, {
+      models: createModels({
+        authContext: { env: async () => undefined, fileExists: async () => false },
+      }),
+      registry: createRegistry(),
+    });
+    const runtime = state.create();
+    try {
+      const conversation = await legacy.ensureConversation({
+        sessionId: 'session',
+        revision: seed.revision,
+        agent: {
+          model: { provider: reference.providerId, modelId: reference.modelId },
+          extensions: [{ name: 'cherry.capabilities:session' }],
+          instructions: legacyInstructions,
+        },
+        configuration: {
+          ...seed.configuration,
+          version: 1,
+          instructions: legacyInstructions,
+          initialInstructions: [initial],
+          tools: tools.map(piToolBlueprint),
+        },
+        initialInstructions: [initial],
+      });
+      // Seed a persisted run without scheduling it, as if the previous process closed before prepare.
+      const submission = input('unfinished');
+      const metadata = piSubmissionMetadata(submission, tools);
+      const submissionMetadata = defineDocFamily<{ value: JsonObject }, JsonObject>({
+        kind: 'cherry.submission',
+        version: 1,
+        scope: 'session',
+        family: true,
+        initial: (value) => ({ value }),
+      });
+      await conversation.commit(async (tx) => {
+        const agent = await tx.doc(AgentDoc, conversation.id);
+        agent.modelTools = { add: ['find_skills'] };
+        const live = await tx.doc(LiveDoc, conversation.id);
+        const retained = await tx.doc(ToolInstructions, conversation.id);
+        retained.sections.push(loaded);
+        await tx.doc(submissionMetadata, `${conversation.id}:${submission.requestId}`, metadata);
+        const entry = await tx.appendEntry(UserEntry, conversation.id, {
+          model: [{ role: 'user', content: 'Question unfinished', timestamp: Date.now() }],
+        });
+        await tx.appendEntry(SystemEntry, conversation.id, {
+          model: [
+            {
+              role: 'system',
+              content: '',
+              sections: { instructions: `<instructions>\n${legacyInstructions}\n</instructions>` },
+              timestamp: Date.now(),
+            },
+          ],
+        });
+        const record = await tx.createSubmission({
+          conversationId: conversation.id,
+          type: 'input',
+          status: 'placed',
+          requestId: submission.requestId,
+          entry: entry.id,
+        });
+        const taskId = await tx.createTask(
+          GenerationTask,
+          {},
+          {
+            ownership: { kind: 'conversation' },
+            conversationId: conversation.id,
+          },
+        );
+        live.run = { taskId, inputs: [record.id] };
+      }, BACKGROUND_CONTEXT);
+      await legacy.close();
+
+      now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+      await runtime.initialize(state.database, state.ports);
+      expect((await runtime.configuration(lane)).instructions).toBe(instructions);
+      expect(await runtime.unfinishedLanes()).toEqual([lane]);
+      expect(state.requests).toHaveLength(0);
+      await runtime.close();
+
+      // The migration is durable; reopening again must retain loaded content and tool selection.
+      const inspection = await PiDurableRuntime.open(state.storage, {
+        models: createModels({
+          authContext: { env: async () => undefined, fileExists: async () => false },
+        }),
+        registry: createRegistry(),
+      });
+      try {
+        expect(await inspection.configuration('session')).toMatchObject({
+          version: 2,
+          instructions,
+        });
+        const restored = (await inspection.conversation('session'))!;
+        await restored.commit(async (tx) => {
+          const agent = await tx.doc(AgentDoc, restored.id);
+          expect(agent.instructions).toBeUndefined();
+          expect(agent.modelTools).toEqual({ add: ['find_skills'] });
+          expect((await tx.doc(ToolInstructions, restored.id)).sections).toEqual([initial, loaded]);
+        }, BACKGROUND_CONTEXT);
+      } finally {
+        await inspection.close();
+      }
+
+      await runtime.initialize(state.database, state.ports);
+      const completed = deferred<void>();
+      const observation = await runtime.observe(lane, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
+      });
+      try {
+        runtime.resume();
+        await completed.promise;
+        expect(state.requests).toHaveLength(1);
+        const prompt = getCurrentSystemPrompt(state.requests[0]!.messages);
+        expect(prompt.match(/# Cherry Studio Mobile Runtime/g)).toHaveLength(1);
+        expect(prompt).toContain('2027-01-01');
+        expect(prompt).not.toContain('2026-12-31');
+        expect(prompt).toContain(initial.text);
+        expect(prompt).toContain(loaded.text);
+        expect(getCurrentTools(state.requests[0]!.messages).map((tool) => tool.name)).toContain(
+          'find_skills',
+        );
+      } finally {
+        await observation.unsubscribe();
+      }
+    } finally {
+      await legacy.close();
+      await runtime.close();
+      now.mockRestore();
+    }
+  });
+
+  test('replays an interrupted prepared request unchanged, then refreshes the date for new input', async () => {
+    const state = fixture();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+    const started = deferred<void>();
+    const resolveModel = state.dependencies.resolveModel;
+    let interrupt = true;
+    state.dependencies.resolveModel = async (...args) => {
+      const resolved = await resolveModel(...args);
+      return {
+        ...resolved,
+        streamFn: withPiStreamIdleTimeout((model, context, options) => {
+          if (!interrupt) return resolved.streamFn(model, context, options);
+          interrupt = false;
+          state.requests.push(context);
+          started.resolve();
+          return new AssistantMessageEventStream();
+        }),
+      };
+    };
+    let runtime = state.create();
+    try {
+      await runtime.initialize(state.database, state.ports);
+      await runtime.ensureConversation(seed);
+      await runtime.submit(lane, input('interrupted'));
+      await started.promise;
+      expect(getCurrentSystemPrompt(state.requests[0]!.messages)).toContain('2026-12-31');
+      await runtime.close();
+
+      now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+      runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      const completed = deferred<void>();
+      const observation = await runtime.observe(lane, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') completed.resolve();
+      });
+      try {
+        runtime.resume();
+        await completed.promise;
+        expect(state.requests).toHaveLength(2);
+        expect(state.requests[1]!.messages).toEqual(state.requests[0]!.messages);
+      } finally {
+        await observation.unsubscribe();
+      }
+
+      await submitAndWait(runtime, input('next'));
+      const prompt = getCurrentSystemPrompt(state.requests[2]!.messages);
+      expect(prompt).toContain('2027-01-01');
+      expect(prompt).not.toContain('2026-12-31');
+    } finally {
+      await runtime.close();
+      now.mockRestore();
+    }
+  });
+
+  test.each(['openai-responses', 'openai-completions'] as const)(
+    'preserves the %s request prefix across midnight and reopen, updating only the date',
+    async (api) => {
+      const state = fixture();
+      const now = jest.spyOn(Date, 'now').mockReturnValue(new Date(2026, 11, 31, 23, 59).getTime());
+      type Payload = { input?: unknown[]; messages?: unknown[] };
+      const payloads: unknown[] = [];
+      const stream = (
+        api === 'openai-responses' ? streamResponses : streamCompletions
+      ) as PiStreamFn;
+      const resolveModel = state.dependencies.resolveModel;
+      state.dependencies.resolveModel = async (...args) => {
+        const resolved = await resolveModel(...args);
+        return {
+          ...resolved,
+          model: {
+            ...wire,
+            api,
+            baseUrl: 'https://provider.example.test/v1',
+            compat: { supportsDeveloperRole: false, supportsMidConvoSystemMessages: true },
+          },
+          streamFn: async (model, context, options) => {
+            const serialized = await stream(model, context, {
+              ...options,
+              apiKey: 'test-key',
+              maxRetries: 0,
+              fetch: async () => {
+                throw new Error('This test must not contact a provider.');
+              },
+              onPayload: (payload) => {
+                payloads.push(payload);
+                throw new Error('Request captured before transport.');
+              },
+            });
+            await serialized.result();
+            return resolved.streamFn(model, context, options);
+          },
+        };
+      };
+      let runtime = state.create();
+      try {
+        await runtime.initialize(state.database, state.ports);
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        const first = payloads[0] as Payload;
+        expect(JSON.stringify(first)).toContain('2026-12-31');
+        expect(JSON.stringify(first).indexOf('Help.')).toBeLessThan(
+          JSON.stringify(first).indexOf('<current-date>'),
+        );
+
+        await runtime.close();
+        now.mockReturnValue(new Date(2027, 0, 1, 0, 1).getTime());
+        runtime = state.create();
+        await runtime.initialize(state.database, state.ports);
+        await runtime.configure(lane, seed.configuration);
+        await submitAndWait(runtime, input('second'));
+        const firstItems = first.input ?? first.messages!;
+        const second = payloads[1] as Payload;
+        expect((second.input ?? second.messages!).slice(0, firstItems.length)).toEqual(firstItems);
+        const updates = state.requests[1]!.messages.filter((message) => message.role === 'system');
+        expect(updates).toHaveLength(2);
+        expect(updates[1]!.sections).toEqual({
+          'current-date':
+            '<current-date>\nThe current local date is `2027-01-01`.\n</current-date>',
+        });
+
+        await submitAndWait(runtime, input('third'));
+        expect(state.requests[2]!.messages.filter((message) => message.role === 'system')).toEqual(
+          updates,
+        );
+      } finally {
+        await runtime.close();
+        now.mockRestore();
+      }
+    },
+  );
+
+  test('starts the next queued input after a terminal provider failure without resubmission', async () => {
+    const state = fixture();
+    const resolveModel = state.dependencies.resolveModel;
+    const firstStream = new AssistantMessageEventStream();
+    const started = deferred<void>();
+    let calls = 0;
+    state.dependencies.resolveModel = async (...args) => ({
+      ...(await resolveModel(...args)),
+      streamFn: () => {
+        calls++;
+        if (calls === 1) {
+          started.resolve();
+          return firstStream;
+        }
+        const stream = new AssistantMessageEventStream();
+        stream.push({
+          type: 'done',
+          reason: 'stop',
+          message: {
+            ...emptyAssistantMessage(wire),
+            stopReason: 'stop',
+            content: [{ type: 'text', text: 'Second answer' }],
+          },
+        });
+        return stream;
+      },
+    });
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    await runtime.ensureConversation(seed);
+    runtime.resume();
+    const completed = deferred<void>();
+    const observed = await runtime.observe(seed.lane, (event) => {
+      if (
+        event.type === 'turn.updated' &&
+        event.turn.identity.requestId === 'second' &&
+        event.turn.status === 'completed'
+      )
+        completed.resolve();
+    });
+    try {
+      await runtime.submit(seed.lane, input('first'));
+      await started.promise;
+      await runtime.submit(seed.lane, input('second'));
+      firstStream.push(
+        providerErrorEvent(emptyAssistantMessage(wire), {
+          message: 'Invalid request',
+          retryable: false,
+        }),
+      );
+      await completed.promise;
+      const history = await runtime.history(seed.lane, { limit: 10 });
+      expect(history.turns.map((turn) => [turn.identity.requestId, turn.status])).toEqual([
+        ['second', 'completed'],
+        ['first', 'failed'],
+      ]);
+      expect(calls).toBe(2);
+    } finally {
+      await observed.unsubscribe();
+      await runtime.close();
+    }
+  });
+
   test.each(['openai-completions', 'openai-responses'] as const)(
     'retains explicit Skill instructions, built-in tools, MCP discovery and user input in the serialized %s request',
     async (api) => {
@@ -218,20 +591,22 @@ describe('Persistent Agent facade', () => {
         scope,
         selected: [{ entry: selectedSkill, instructions: selectedInstructions }],
       };
+      const pluginGuides = [
+        {
+          pluginId: 'github',
+          revision: 3,
+          serverId: 'github',
+          content: '# GitHub\nUse get_me for account context.',
+          overview: 'GitHub repository and PR context; honor the requested branch.',
+        },
+      ];
+      tools.push(createLoadWorkflowTool(getPluginWorkflows(pluginGuides)));
       const instructions = buildAgentSystemPrompt({
         agentInstructions: 'Help me inspect my GitHub repositories.',
         appLanguage: 'zh-CN',
-        currentDate: '2026-10-09',
         tools,
         skills,
-        pluginGuides: [
-          {
-            pluginId: 'github',
-            revision: 3,
-            serverId: 'github',
-            content: '# GitHub\nUse get_me for account context.',
-          },
-        ],
+        pluginGuides,
       });
       const adapter = resolvePiApiAdapter(
         api === 'openai-completions' ? 'openai-chat-completions' : 'openai-responses',
@@ -287,11 +662,13 @@ describe('Persistent Agent facade', () => {
         const serialized = JSON.stringify(payload);
         expect(serialized).toContain(text);
         expect(serialized).toContain('# Cherry Studio Mobile Runtime');
-        expect(serialized).toContain('2026-10-09');
+        expect(serialized).toContain('<current-date>');
         expect(serialized).toContain('zh-CN');
         expect(serialized).toContain('Help me inspect my GitHub repositories.');
         expect(serialized).toContain('## Reading Attachments');
-        expect(serialized).toContain('# GitHub');
+        expect(serialized).toContain('plugin:github: github workflows');
+        expect(serialized).toContain('honor the requested branch');
+        expect(serialized).not.toContain('Use get_me for account context.');
         expect(serialized).toContain('# Tool discovery');
         expect(serialized).toContain('grill-me');
         expect(serialized).toContain(selectedInstructions);
@@ -304,10 +681,11 @@ describe('Persistent Agent facade', () => {
         };
         expect(request.tools.map((tool) => tool.name ?? tool.function?.name)).toEqual([
           'read_file',
-          'search_local_skills',
+          'list_local_skills',
           'load_skill',
           'list_skill_files',
           'read_skill_file',
+          'load_workflow',
           'tool_search',
         ]);
         expect((request.messages ?? request.input)?.map((message) => message.role)).toEqual([
@@ -375,16 +753,16 @@ describe('Persistent Agent facade', () => {
       configuration: { ...seed.configuration, tools: [tool] },
     });
     const terminal = deferred<string>();
-    const observation = await runtime.observe('session', (event) => {
+    const observation = await runtime.observe(lane, (event) => {
       if (event.type === 'turn.updated' && ['completed', 'failed'].includes(event.turn.status))
         terminal.resolve(event.turn.status);
     });
     try {
-      await runtime.submit('session', input('recovery'));
+      await runtime.submit(lane, input('recovery'));
       expect(await terminal.promise).toBe('completed');
       expect(requests).toBe(3);
       expect(execute).toHaveBeenCalledTimes(1);
-      expect((await runtime.message('session', 'answer-recovery'))?.turn.error).toBeNull();
+      expect((await runtime.message(lane, 'answer-recovery'))?.turn.error).toBeNull();
     } finally {
       await observation.unsubscribe();
       await runtime.close();
@@ -414,16 +792,16 @@ describe('Persistent Agent facade', () => {
     await runtime.ensureConversation(seed);
     const partial = deferred<void>();
     const stopped = deferred<void>();
-    const observation = await runtime.observe('session', (event) => {
+    const observation = await runtime.observe(lane, (event) => {
       if (event.type !== 'turn.updated') return;
       if (event.turn.parts.some((part) => part.type === 'text' && part.text === 'Partial answer'))
         partial.resolve();
       if (event.turn.status === 'cancelled') stopped.resolve();
     });
     try {
-      await runtime.submit('session', input('stopped'));
+      await runtime.submit(lane, input('stopped'));
       await partial.promise;
-      await runtime.abort('session');
+      await runtime.abort(lane);
       await stopped.promise;
       expect(signal?.aborted).toBe(true);
       expect(await runtime.hasUnfinishedWork()).toBe(false);
@@ -431,7 +809,7 @@ describe('Persistent Agent facade', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      expect((await runtime.message('session', 'answer-stopped'))?.turn).toMatchObject({
+      expect((await runtime.message(lane, 'answer-stopped'))?.turn).toMatchObject({
         status: 'cancelled',
         parts: [{ type: 'text', text: 'Partial answer', state: 'done' }],
       });
@@ -452,6 +830,7 @@ describe('Persistent Agent facade', () => {
       expect(state.ports.recordUsage).toHaveBeenCalledWith(
         {
           sessionId: 'session',
+          slot: 0,
           turnId: 'turn-owning-request',
           requestId: 'owning-request',
         },
@@ -473,7 +852,7 @@ describe('Persistent Agent facade', () => {
     runtime = state.create();
     await runtime.initialize(state.database, state.ports);
     try {
-      expect((await runtime.history('session', { limit: 1 })).turns).toHaveLength(1);
+      expect((await runtime.history(lane, { limit: 1 })).turns).toHaveLength(1);
       expect(preflight).not.toHaveBeenCalled();
       expect(state.requests).toHaveLength(1);
     } finally {
@@ -487,27 +866,27 @@ describe('Persistent Agent facade', () => {
     await runtime.initialize(fixtureState.database, fixtureState.ports);
     try {
       await runtime.ensureConversation(seed);
-      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
+      expect(await runtime.sessions()).toEqual([{ lane, revision: 0 }]);
       await submitAndWait(runtime, input('first'));
-      expect(await runtime.sessions()).toEqual([{ sessionId: 'session', revision: 0 }]);
+      expect(await runtime.sessions()).toEqual([{ lane, revision: 0 }]);
       await runtime.close();
       runtime = fixtureState.create();
       await runtime.initialize(fixtureState.database, fixtureState.ports);
       expect(fixtureState.requests).toHaveLength(1);
       // The Host reconstructs the current configuration before each idle submission.
-      await runtime.configure('session', seed.configuration);
+      await runtime.configure(lane, seed.configuration);
       await submitAndWait(runtime, input('second'));
       expect(
         fixtureState.requests[1]?.messages
           .filter((message) => message.role === 'user')
           .map((message) => message.content),
       ).toEqual(['Question first', 'Question second']);
-      expect(await runtime.message('session', 'answer-first')).toMatchObject({
+      expect(await runtime.message(lane, 'answer-first')).toMatchObject({
         role: 'assistant',
         turn: { status: 'completed', parts: [{ text: 'Response 1' }] },
       });
       expect(fixtureState.ports.recordUsage).toHaveBeenCalledWith(
-        { sessionId: 'session', turnId: 'turn-first', requestId: 'first' },
+        { sessionId: 'session', slot: 0, turnId: 'turn-first', requestId: 'first' },
         expect.objectContaining({
           usage: {
             inputTokens: 3,
@@ -524,32 +903,85 @@ describe('Persistent Agent facade', () => {
     }
   });
 
-  test('rebuilds independent history from Cherry parts without model requests', async () => {
+  test.each([false, true])(
+    'rebuilds independent history with the system baseline first (compacted: %s)',
+    async (compacted) => {
+      const state = fixture();
+      const runtime = state.create();
+      await runtime.initialize(state.database, state.ports);
+      try {
+        await runtime.ensureConversation(seed);
+        await submitAndWait(runtime, input('first'));
+        expect(await runtime.exportTurn(lane, 'first')).toEqual({ contextCheckpoint: null });
+        await runtime.discardConversation(lane);
+        expect(await runtime.hasConversation(lane)).toBe(false);
+        await runtime.ensureConversation({
+          ...seed,
+          revision: 1,
+          history: {
+            history: [
+              {
+                turnId: 'first',
+                messages: [
+                  { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
+                  {
+                    role: 'assistant',
+                    parts: [
+                      { type: 'reasoning', text: 'Unsigned thought, never resent.' },
+                      { type: 'text', text: 'Response 1' },
+                    ],
+                  },
+                ],
+              },
+            ],
+            contextCheckpoint: compacted
+              ? {
+                  version: 1,
+                  anchorTurnId: 'earlier',
+                  payload: {
+                    kind: 'pi-context-compaction',
+                    summary: 'Earlier user preferences.',
+                    tokensBefore: 8000,
+                  },
+                }
+              : null,
+            referencedFileEntryIds: ['retained-file'],
+          },
+        });
+        expect(state.requests).toHaveLength(1);
+        expect(await runtime.resourceFileEntryIds(lane)).toEqual(['retained-file']);
+        await submitAndWait(runtime, input('next'));
+        expect(state.requests[1]?.messages[0]?.role).toBe('system');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('Help.');
+        expect(JSON.stringify(state.requests[1]?.messages[0])).toContain('<current-date>');
+        expect(state.requests[1]?.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Response 1' }],
+          }),
+        );
+        expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+
+  test('another lane forks a rebuilt history at the boundary the rebuild returns', async () => {
     const state = fixture();
     const runtime = state.create();
     await runtime.initialize(state.database, state.ports);
+    const fork = runtimeLane('session', 1);
     try {
-      await runtime.ensureConversation(seed);
-      await submitAndWait(runtime, input('first'));
-      expect(await runtime.exportTurn('session', 'first')).toEqual({ contextCheckpoint: null });
-      await runtime.discardConversation('session');
-      expect(await runtime.hasConversation('session')).toBe(false);
-      await runtime.ensureConversation({
+      const boundary = await runtime.ensureConversation({
         ...seed,
-        revision: 1,
         history: {
           history: [
             {
-              turnId: 'first',
+              turnId: 'earlier',
               messages: [
-                { role: 'user', parts: [{ type: 'text', text: 'Question first' }] },
-                {
-                  role: 'assistant',
-                  parts: [
-                    { type: 'reasoning', text: 'Unsigned thought, never resent.' },
-                    { type: 'text', text: 'Response 1' },
-                  ],
-                },
+                { role: 'user', parts: [{ type: 'text', text: 'Question earlier' }] },
+                { role: 'assistant', parts: [{ type: 'text', text: 'Imported answer' }] },
               ],
             },
           ],
@@ -557,17 +989,68 @@ describe('Persistent Agent facade', () => {
           referencedFileEntryIds: ['retained-file'],
         },
       });
-      expect(state.requests).toHaveLength(1);
-      expect(await runtime.resourceFileEntryIds('session')).toEqual(['retained-file']);
-      await submitAndWait(runtime, input('next'));
-      expect(state.requests[1]?.messages).toContainEqual(
-        expect.objectContaining({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Response 1' }],
-        }),
+      expect(boundary).toMatch(/^pi:\d+$/);
+      await runtime.forkConversation({
+        ...seed,
+        lane: fork,
+        from: { lane, boundary: boundary! },
+        referencedFileEntryIds: ['retained-file'],
+      });
+      expect(await runtime.resourceFileEntryIds(fork)).toEqual(['retained-file']);
+      const complete = deferred<void>();
+      const observation = await runtime.observe(fork, (event) => {
+        if (event.type === 'turn.updated' && event.turn.status === 'completed') complete.resolve();
+      });
+      await runtime.submit(fork, input('forked'));
+      await complete.promise;
+      await observation.unsubscribe();
+      expect(
+        state.requests[0]?.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => JSON.stringify(message.content)),
+      ).toEqual([
+        expect.stringContaining('Question earlier'),
+        expect.stringContaining('Imported answer'),
+        expect.stringContaining('Question forked'),
+      ]);
+      // A copy without history offers no boundary.
+      expect(await runtime.ensureConversation({ ...seed, lane: runtimeLane('empty') })).toBe(
+        undefined,
       );
-      expect(JSON.stringify(state.requests[1]?.messages)).not.toContain('Unsigned thought');
     } finally {
+      await runtime.close();
+    }
+  });
+
+  test('reads a Session slot bindings once until a binding changes', async () => {
+    const state = fixture();
+    const runtime = state.create();
+    await runtime.initialize(state.database, state.ports);
+    const binding = jest.spyOn(PiDurableRuntime.prototype, 'binding');
+    try {
+      await runtime.ensureConversation(seed);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane, revision: 0 }]);
+      expect(binding).not.toHaveBeenCalled();
+      const second = runtimeLane('session', 2);
+      await runtime.ensureConversation({ ...seed, lane: second });
+      expect(await runtime.lanes('session')).toEqual([
+        { lane, revision: 0 },
+        { lane: second, revision: 0 },
+      ]);
+      await runtime.discardConversation(lane);
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      // A reopened file is read again.
+      await runtime.close();
+      await runtime.initialize(state.database, state.ports);
+      binding.mockClear();
+      expect(await runtime.lanes('session')).toEqual([{ lane: second, revision: 0 }]);
+      expect(binding).toHaveBeenCalledTimes(8);
+    } finally {
+      binding.mockRestore();
       await runtime.close();
     }
   });
@@ -579,11 +1062,11 @@ describe('Persistent Agent facade', () => {
     try {
       await runtime.ensureConversation(seed);
       const events: RuntimeConversationEvent[] = [];
-      const observation = await runtime.observe('session', (event) => events.push(event));
+      const observation = await runtime.observe(lane, (event) => events.push(event));
       await observation.unsubscribe();
       await submitAndWait(runtime, input('first'));
       expect(events).toEqual([]);
-      expect(await runtime.message('session', 'answer-first')).toMatchObject({
+      expect(await runtime.message(lane, 'answer-first')).toMatchObject({
         turn: { status: 'completed' },
       });
     } finally {
@@ -765,7 +1248,7 @@ describe('Native web tools', () => {
       expect(state.payloads).toHaveLength(2);
       expect(state.payloads[1]!.messages.at(-1)).toEqual({ role: 'assistant', content: paused });
       expect(state.payloads[1]!.tools).toEqual(state.payloads[0]!.tools);
-      const result = (await runtime.message('session', 'answer-first'))!;
+      const result = (await runtime.message(lane, 'answer-first'))!;
       expect(result.turn.status).toBe('completed');
       expect(result.turn.contextTokens).toBe(10);
       expect(result.turn.usage).toMatchObject({
@@ -839,11 +1322,11 @@ describe('Native web tools', () => {
         role: 'user',
         content: [expect.objectContaining({ type: 'tool_result', tool_use_id: 'toolu_js' })],
       });
-      expect((await runtime.message('session', 'answer-first'))!.turn.status).toBe('completed');
+      expect((await runtime.message(lane, 'answer-first'))!.turn.status).toBe('completed');
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = state.payloads[2]!.messages;
       expect(
@@ -876,7 +1359,7 @@ describe('Native web tools', () => {
       await runtime.ensureConversation({ ...seed, configuration });
       await submitAndWait(runtime, input('first'), 'failed');
       expect(state.payloads).toHaveLength(6);
-      const result = (await runtime.message('session', 'answer-first'))!;
+      const result = (await runtime.message(lane, 'answer-first'))!;
       expect(result.turn.status).toBe('failed');
       expect(result.turn.parts.filter((part) => part.type === 'text')).toEqual([
         expect.objectContaining({ text: 'Searching. '.repeat(6) }),
@@ -906,7 +1389,7 @@ describe('Native web tools', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       const source = parts.find((part) => part.type === 'source-url');
       expect(source).toMatchObject({ url: 'https://example.com/cherry', title: 'Cherry' });
       // The appended source facts are model context, never a second visible answer.
@@ -916,7 +1399,7 @@ describe('Native web tools', () => {
         }),
       ]);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const replayed = state.payloads[1]!.input;
       const reasoning = replayed.findIndex((entry) => entry.id === 'rs_1');
@@ -958,7 +1441,7 @@ describe('Native web tools', () => {
       expect(state.payloads).toHaveLength(2);
       expect(toolNames(state.payloads[1]!)).toEqual(['web_fetch', 'read_file']);
       expect(tools[1]!.execute).not.toHaveBeenCalled();
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       expect(parts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1059,14 +1542,14 @@ describe('Native web tools', () => {
         'web_search_20250305',
         'web_fetch_20250910',
       ]);
-      const parts = (await runtime.message('session', 'answer-first'))!.turn.parts;
+      const parts = (await runtime.message(lane, 'answer-first'))!.turn.parts;
       const source = parts.find((part) => part.type === 'source-url');
       const sourceId = source?.type === 'source-url' ? source.sourceId : '';
       expect(parts.filter((part) => part.type === 'text')).toEqual([
         expect.objectContaining({ text: `Searching. Cherries are red[cite:${sourceId}].` }),
       ]);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = JSON.stringify(state.payloads[1]!.messages);
       expect(history).not.toContain('Web sources from this response');
@@ -1122,10 +1605,10 @@ describe('Native web tools', () => {
       expect(request.tools.at(-1)).toEqual({ googleSearch: {} });
       expect(request.toolConfig.includeServerSideToolInvocations).toBe(true);
       expect(
-        (await runtime.message('session', 'answer-first'))!.turn.parts.map((part) => part.type),
+        (await runtime.message(lane, 'answer-first'))!.turn.parts.map((part) => part.type),
       ).toEqual(['text', 'source-url']);
 
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const model = state.payloads[1]!.contents.find((content) => content.role === 'model')!;
       expect(model.parts.slice(0, 3)).toEqual([
@@ -1184,7 +1667,7 @@ describe('Native web tools', () => {
       await runtime.close();
       runtime = state.create();
       await runtime.initialize(state.database, state.ports);
-      await runtime.configure('session', configuration);
+      await runtime.configure(lane, configuration);
       await submitAndWait(runtime, input('second'));
       const history = state.payloads[1]!.contents.find((content) => content.role === 'model')!;
       expect(history.parts.slice(0, 7)).toEqual([
@@ -1237,7 +1720,7 @@ describe('Native web tools', () => {
       expect(
         state.payloads[0]!.tools.map((tool) => (tool.function as { name?: string })?.name),
       ).not.toContain('web_search');
-      expect((await runtime.message('session', 'answer-first'))!.turn.parts).toEqual([
+      expect((await runtime.message(lane, 'answer-first'))!.turn.parts).toEqual([
         expect.objectContaining({ type: 'text', text: 'Cherries are red.' }),
         expect.objectContaining({ type: 'source-url', url: 'https://example.com/cherry' }),
       ]);

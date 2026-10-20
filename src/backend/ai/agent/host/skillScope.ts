@@ -11,6 +11,7 @@
 import type { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import {
   decodeUtf8,
+  deriveSkillProfile,
   evaluateSkillLimitations,
   parseSkillEntry,
   type SkillStorage,
@@ -101,10 +102,14 @@ export function createSkillScopeSource(deps: SkillScopeSourceDependencies): Skil
           const parsed = parseSkillEntry(text);
           if (!parsed || !('body' in parsed)) return null;
           const compatibility = parsed.frontmatter.compatibility;
+          const { declaredTools } = deriveSkillProfile(parsed);
           const { scripts, unavailableTools } = byId.get(skillId)!.limitations;
           return [
             typeof compatibility === 'string' && compatibility.trim()
               ? `Package environment requirements (not verified): ${compatibility.trim()}`
+              : '',
+            declaredTools.length
+              ? `Tools declared by this Skill: ${declaredTools.join(', ')}. Use their currently offered definitions; discover plugin tools when needed. This declaration does not enable tools or bypass approval.`
               : '',
             // A count, not the paths: this text shares the instruction budget with the body.
             scripts.length

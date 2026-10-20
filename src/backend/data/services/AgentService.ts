@@ -17,6 +17,7 @@ import {
   type UpdateAgentDto,
 } from '@/shared/data/api/schemas/agents';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
+import { type AgentSkillUpdate, ReplaceAgentSkillsSchema } from '@/shared/data/api/schemas/skills';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import {
   type Agent,
@@ -26,6 +27,7 @@ import {
 import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
+import { agentGlobalSkillService } from './AgentGlobalSkillService';
 import { modelService } from './ModelService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -173,11 +175,19 @@ export class AgentService {
     return rowToAgent(row, await this.getModelName(row.model));
   }
 
+  listSkillBindings(id: string) {
+    return agentGlobalSkillService.listBindings(id);
+  }
+
   async update(
     id: string,
     dto: UpdateAgentDto,
-    options: { expectedUpdatedAt?: string } = {},
+    options: { expectedUpdatedAt?: string; skillUpdates?: readonly AgentSkillUpdate[] } = {},
   ): Promise<Agent> {
+    const skillUpdates =
+      options.skillUpdates === undefined
+        ? undefined
+        : ReplaceAgentSkillsSchema.parse({ updates: options.skillUpdates }).updates;
     const current = await this.getById(id);
     const expectedTimestamp =
       options.expectedUpdatedAt === undefined ? undefined : Date.parse(options.expectedUpdatedAt);
@@ -201,7 +211,7 @@ export class AgentService {
       Object.entries(dto).filter(([, value]) => value !== undefined),
     ) as Partial<typeof agentTable.$inferInsert>;
 
-    if (Object.keys(updates).length === 0) {
+    if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
       return current;
     }
 
@@ -237,10 +247,17 @@ export class AgentService {
         }
         throw DataApiErrorFactory.notFound('Agent', id);
       }
+      if (skillUpdates?.length) {
+        await agentGlobalSkillService.applyBindingUpdatesTx(tx, id, skillUpdates);
+      }
       return updated as AgentRow;
     });
 
-    publishDataApiChanges(['/agents', `/agents/${id}`]);
+    publishDataApiChanges([
+      '/agents',
+      `/agents/${id}`,
+      ...(skillUpdates?.length ? ['/skills', `/agents/${id}/skills`] : []),
+    ]);
     const modelName =
       dto.model !== undefined && dto.model !== current.model
         ? await this.getModelName(dto.model)

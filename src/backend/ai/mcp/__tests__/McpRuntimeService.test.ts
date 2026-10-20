@@ -1,14 +1,22 @@
-import type { ListToolsResult } from '@ai-sdk/mcp';
+import type { ListToolsResult } from '@modelcontextprotocol/client';
+import { ProtocolError, SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
+import { AppState } from 'react-native';
 
+import { storageMutationGate } from '@/backend/core/storage/StorageMutationGate';
+import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
+import { McpOAuthRuntime } from '@/backend/services/mcp';
+import type { McpPromptEntry, McpProtocolInfo } from '@/shared/contracts/mcp';
 import { PluginError } from '@/shared/contracts/plugins';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
 import type { McpServer, RemoteMcpServer } from '@/shared/data/types/mcpServer';
 
 import type { TraceRecorder } from '../../observability';
 import { createTraceRecorder } from '../../observability/__tests__/_traceRecorder';
 import type { McpExecutableToolDescriptor } from '../mcpRuntimeAdapter';
 import { McpRuntimeService } from '../McpRuntimeService';
+import { createMcpConnectionKey } from '../mcpToolCatalogStore';
 
 jest.mock('@/backend/services/builtInMcp', () => ({
   PluginAuthorizationManager: jest.requireActual(
@@ -24,11 +32,38 @@ jest.mock('@/backend/services/builtInMcp', () => ({
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
+jest.mock('../mcpProtocolClient', () => ({
+  classifyMcpCallRejection: jest.requireActual('../mcpProtocolClient').classifyMcpCallRejection,
+  createRemoteMcpClient: ({
+    config,
+    elicit,
+    signal,
+  }: {
+    config: { endpointUrl: string; headers?: Record<string, string> };
+    elicit?: MockElicit;
+    signal: AbortSignal;
+  }) => {
+    mockElicit = elicit;
+    return mockSdkInitContract({
+      initializationOptions: { signal },
+      transport: { type: 'http', url: config.endpointUrl, headers: config.headers },
+    });
+  },
+}));
+
+type MockElicit = (params: unknown, signal: AbortSignal) => Promise<{ action: string }>;
+/** The question handler the service gave its most recent remote client. */
+let mockElicit: MockElicit | undefined;
+
 jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  randomUUID: () => '00000000-0000-4000-8000-00000000000a',
   // Deterministic and, like a real digest, free of the input text.
   digestStringAsync: async (_algorithm: string, data: string) =>
-    [...data].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7).toString(16),
+    [...data]
+      .reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7)
+      .toString(16)
+      .padStart(64, '0'),
 }));
 
 jest.mock('expo-file-system', () => {
@@ -89,9 +124,6 @@ const { testFiles: storedFiles } = jest.requireMock<{ testFiles: Map<string, str
 const catalogPath = (serverId: string) => `/cache/mcp-tool-catalog/${serverId}.json`;
 
 const mockCreateMCPClient = jest.fn();
-jest.mock('@ai-sdk/mcp', () => ({
-  createMCPClient: (...args: unknown[]) => mockSdkInitContract(...args),
-}));
 
 function abortable<T>(
   promise: Promise<T>,
@@ -142,6 +174,10 @@ type FakeClient = {
   callTool: jest.Mock;
   close: jest.Mock;
   listTools: jest.Mock;
+  listPrompts?: jest.Mock;
+  getPrompt?: jest.Mock;
+  readResource?: jest.Mock;
+  protocolInfo?: McpProtocolInfo;
   serverInfo: { name: string; title?: string; version: string };
 };
 
@@ -208,6 +244,7 @@ function makeService(servers: McpServer[], traces?: TraceRecorder) {
 }
 
 beforeEach(() => {
+  Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
   mockCreateMCPClient.mockReset();
   storedFiles.clear();
 });
@@ -217,6 +254,81 @@ afterEach(() => {
 });
 
 describe('getServerInfo', () => {
+  it('cancels temporary inspection and rejects new work after service stop', async () => {
+    mockCreateMCPClient.mockReturnValue(new Promise(() => {}));
+    const { service } = makeService([]);
+    const inspection = expect(
+      service.getServerInfo({ endpointUrl: 'https://example.com/mcp' }),
+    ).rejects.toThrow('aborted');
+    await service._doStop();
+    await inspection;
+    await expect(
+      service.getServerInfo({ endpointUrl: 'https://example.com/mcp' }),
+    ).rejects.toBeDefined();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the server connection for repeated result-resource reads', async () => {
+    const server = makeServer();
+    const client = makeClient([]);
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    client.readResource = jest.fn(async () => ({
+      contents: [{ uri: 'data://result', mimeType: 'text/plain', text: 'Result' }],
+    }));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    const reference = {
+      source: { serverId: server.id, connectionKey: await createMcpConnectionKey(server) },
+      uri: 'data://result',
+    };
+    try {
+      await service.readResultResource(reference);
+      await service.readResultResource(reference);
+      expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+      expect(client.readResource).toHaveBeenCalledTimes(2);
+      expect(client.close).not.toHaveBeenCalled();
+    } finally {
+      await service._doStop();
+    }
+    expect(client.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('accounts for OAuth completion through inspection and joins cleanup on stop', async () => {
+    jest.spyOn(McpOAuthRuntime.prototype, 'complete').mockResolvedValue({
+      input: { name: 'OAuth', endpointUrl: 'https://example.com/mcp' },
+      authorizationId: 'new-grant',
+      clientId: 'client',
+      previous: undefined,
+    });
+    const remove = jest.spyOn(McpOAuthRuntime.prototype, 'remove').mockResolvedValue();
+    const save = jest.spyOn(mcpServerService, 'saveOAuthConnection');
+    mockCreateMCPClient.mockReturnValue(new Promise(() => {}));
+    const { service } = makeService([]);
+    expect(service.hasPendingStorageWork()).toBe(false);
+    const completion = service.completeOAuth('attempt', 'callback');
+    const rejected = expect(completion).rejects.toBeDefined();
+    expect(service.hasPendingStorageWork()).toBe(true);
+    expect(service.completeOAuth('attempt', 'callback')).toBe(completion);
+    await flush();
+    await service._doStop();
+    await rejected;
+    expect(save).not.toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith('new-grant');
+    expect(service.hasPendingStorageWork()).toBe(false);
+  });
+
+  it('rejects OAuth completion before token exchange while backup owns storage', () => {
+    const complete = jest.spyOn(McpOAuthRuntime.prototype, 'complete');
+    const { service } = makeService([]);
+    const release = storageMutationGate.freeze();
+    try {
+      expect(() => service.completeOAuth('attempt', 'callback')).toThrow();
+      expect(complete).not.toHaveBeenCalled();
+      expect(service.hasPendingStorageWork()).toBe(false);
+    } finally {
+      release();
+    }
+  });
   it('returns initialization metadata and closes the temporary client', async () => {
     const client = makeClient(makeRawTools(['a']));
     mockCreateMCPClient.mockResolvedValue(client);
@@ -500,6 +612,7 @@ describe('Runtime tool adapter', () => {
     const descriptors = await service.listExecutableToolDescriptors(server.id);
     expect(descriptors).toEqual([
       {
+        connectionKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
         description: 'ServerOne: Search issues',
         displayName: 'Issue Search',
         endpointUrl: server.endpointUrl,
@@ -555,8 +668,16 @@ describe('Runtime tool adapter', () => {
         toolCallId: 'call-1',
         turnId: 'turn-1',
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       artifacts: [],
+      modelContent: [
+        { type: 'text', text: 'result' },
+        { type: 'text', text: '{"count":1}' },
+      ],
+      mcpSource: {
+        serverId: server.id,
+        connectionKey: expect.stringMatching(/^remote:[a-f0-9]{64}$/),
+      },
       value: {
         content: [{ text: 'result', type: 'text' }],
         structuredContent: { count: 1 },
@@ -763,14 +884,20 @@ describe('built-in plugin identities', () => {
   ] as const)(
     'classifies %s/%s when the HTTP SDK cannot read a successful response body',
     async (builtinId, toolName, code, retryable) => {
-      const sdk = jest.requireActual<typeof import('@ai-sdk/mcp')>('@ai-sdk/mcp');
+      const { Client, StreamableHTTPClientTransport } = jest.requireActual<
+        typeof import('@modelcontextprotocol/client')
+      >('@modelcontextprotocol/client');
       let calls = 0;
-      mockCreateMCPClient.mockImplementation(() =>
-        sdk.createMCPClient({
-          maxRetries: 0,
-          transport: {
-            type: 'http',
-            url: 'https://official.example/mcp',
+      mockCreateMCPClient.mockImplementation(async () => {
+        const client = new Client({ name: 'test', version: '1' });
+        await client.connect(
+          new StreamableHTTPClientTransport(new URL('https://official.example/mcp'), {
+            reconnectionOptions: {
+              maxRetries: 0,
+              initialReconnectionDelay: 1000,
+              maxReconnectionDelay: 1000,
+              reconnectionDelayGrowFactor: 1,
+            },
             fetch: async (_url, init) => {
               if (init?.method === 'GET') return new Response(null, { status: 405 });
               if (init?.method === 'DELETE') return new Response(null, { status: 204 });
@@ -805,9 +932,16 @@ describe('built-in plugin identities', () => {
                 headers: { 'content-type': 'application/json' },
               });
             },
-          },
-        }),
-      );
+          }),
+        );
+        return {
+          serverInfo: client.getServerVersion(),
+          listTools: () => client.listTools(),
+          callTool: ({ name, args }: { name: string; args: Record<string, unknown> }) =>
+            client.callTool({ name, arguments: args }),
+          close: () => client.close(),
+        };
+      });
       const server: McpServer = {
         ...makeServer(),
         origin: 'builtin',
@@ -931,7 +1065,7 @@ describe('catalog reuse', () => {
     expect(JSON.parse(storedFiles.get(catalogPath(server.id))!)).toMatchObject({
       serverId: server.id,
       tools: [expect.objectContaining({ name: 'search' })],
-      version: 1,
+      version: 2,
     });
   });
 
@@ -1022,6 +1156,228 @@ describe('catalog reuse', () => {
     });
     expect(fresh.listTools).toHaveBeenCalledTimes(1);
     expect(fresh.callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls tools on the pooled connection without reconnecting or listing again', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+
+    await executeFrozenTool(service, descriptor!);
+    await executeFrozenTool(service, descriptor!);
+
+    expect(client.callTool).toHaveBeenCalledTimes(2);
+    expect(client.listTools).toHaveBeenCalledTimes(1);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves a catalog past its freshness window and refreshes it only when a turn asks', async () => {
+    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
+    try {
+      const client = { ...makeClient(makeRawTools(['search'])), catalogExpiresAt: 0 };
+      mockCreateMCPClient.mockResolvedValue(client);
+      const server = makeServer();
+      const { service } = makeService([server]);
+      await service.listExecutableToolDescriptors(server.id);
+
+      jest.advanceTimersByTime(60 * 60 * 1000);
+      await flush();
+      expect(client.listTools).toHaveBeenCalledTimes(1);
+
+      client.listTools.mockResolvedValue({ tools: makeRawTools(['search', 'open']) });
+      const served = await service.listExecutableToolDescriptors(server.id);
+      expect(served.map((tool) => tool.rawToolName)).toEqual(['search']);
+      await flush();
+      expect(client.listTools).toHaveBeenCalledTimes(2);
+      const next = await service.listExecutableToolDescriptors(server.id);
+      expect(next.map((tool) => tool.rawToolName)).toEqual(['search', 'open']);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('refreshes the catalog after the server rejects a call it no longer describes', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.callTool.mockRejectedValue(new ProtocolError(-32602, 'Unknown tool: search'));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+      code: 'mcp_tool_call_failed',
+      message: 'The MCP server rejected the call: Unknown tool: search',
+      retryable: false,
+    });
+    await flush();
+    expect(client.listTools).toHaveBeenCalledTimes(2);
+    expect(client.close).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an undeclared tool', {}, { code: 'mcp_tool_outcome_unknown', retryable: false }],
+    [
+      'a read-only tool',
+      { annotations: { readOnlyHint: true } },
+      { code: 'mcp_tool_call_failed', retryable: true },
+    ],
+    [
+      'an idempotent tool',
+      { annotations: { idempotentHint: true } },
+      { code: 'mcp_tool_call_failed', retryable: true },
+    ],
+  ])('classifies a transport failure after sending %s', async (_label, annotations, expected) => {
+    const client = makeClient([{ ...makeRawTools(['search'])[0]!, ...annotations }]);
+    client.callTool.mockRejectedValue(new Error('socket closed'));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject(expected);
+  });
+
+  it('reports a call that never left the device as a plain retryable failure', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service: previousLaunch } = makeService([server]);
+    await previousLaunch.listExecutableToolDescriptors(server.id);
+
+    mockCreateMCPClient.mockReset();
+    mockCreateMCPClient.mockRejectedValue(new Error('network down'));
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+      code: 'mcp_tool_call_failed',
+      retryable: true,
+    });
+  });
+
+  it('treats an HTTP refusal as a call that did not run and reconnects for the retry', async () => {
+    const expired = makeClient(makeRawTools(['search']));
+    expired.callTool.mockRejectedValue(
+      new SdkHttpError(SdkErrorCode.ClientHttpNotImplemented, 'Session not found', {
+        status: 404,
+        statusText: 'Not Found',
+      }),
+    );
+    const fresh = makeClient(makeRawTools(['search']));
+    mockCreateMCPClient.mockResolvedValueOnce(expired).mockResolvedValue(fresh);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toMatchObject({
+      code: 'mcp_tool_call_failed',
+      retryable: true,
+    });
+    await expect(executeFrozenTool(service, descriptor!)).resolves.toBeDefined();
+    expect(fresh.callTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a server question for the call in flight and withdraws it when that call ends', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    const answer = deferred<unknown>();
+    client.callTool.mockImplementation(({ options }: { options: { abortSignal: AbortSignal } }) =>
+      abortable(answer.promise, options.abortSignal, 'Request was aborted'),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const [tool] = service.createRuntimeTools([{ approval: 'ask', descriptor: descriptor! }]);
+    const turn = new AbortController();
+    const execution = tool!
+      .execute({
+        input: { query: 'cherry' },
+        signal: turn.signal,
+        toolCallId: 'call-1',
+        turnId: 'turn-1',
+      })
+      .catch((error: unknown) => error);
+    await flush();
+
+    const question = mockElicit!(
+      { message: 'Which workspace?', requestedSchema: { type: 'object', properties: {} } },
+      new AbortController().signal,
+    );
+    await flush();
+    expect(service.getElicitations()).toEqual([
+      expect.objectContaining({ serverId: server.id, serverName: server.name }),
+    ]);
+
+    turn.abort();
+    await expect(question).resolves.toEqual({ action: 'cancel' });
+    // The call was transmitted, so cancelling locally cannot prove that it did not run.
+    await expect(execution).resolves.toMatchObject({ code: 'mcp_tool_outcome_unknown' });
+    expect(service.getElicitations()).toEqual([]);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Agent calls on the shared connection when the server refuses a resource read', async () => {
+    const client = makeClient(makeRawTools(['search']));
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    client.readResource = jest.fn(async () => {
+      throw new ProtocolError(-32002, 'Resource not found');
+    });
+    const answer = deferred<unknown>();
+    client.callTool.mockImplementation(({ options }: { options: { abortSignal: AbortSignal } }) =>
+      abortable(answer.promise, options.abortSignal, 'Request was aborted'),
+    );
+    mockCreateMCPClient.mockResolvedValue(client);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    const execution = executeFrozenTool(service, descriptor!);
+    await flush();
+
+    await expect(
+      service.readResultResource({
+        source: { serverId: server.id, connectionKey: await createMcpConnectionKey(server) },
+        uri: 'data://missing',
+      }),
+    ).rejects.toBeInstanceOf(ProtocolError);
+    answer.resolve({ content: [] });
+    await expect(execution).resolves.toBeDefined();
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+  });
+
+  it('keeps a shared connection setup for an Agent call when another caller stops waiting', async () => {
+    const stale = makeClient(makeRawTools(['search']));
+    stale.callTool.mockRejectedValue(new Error('socket closed'));
+    const fresh = makeClient(makeRawTools(['search']));
+    fresh.protocolInfo = { version: '2026-07-28', tools: true, resources: true, prompts: false };
+    fresh.readResource = jest.fn(async () => ({ contents: [] }));
+    const connecting = deferred<FakeClient>();
+    mockCreateMCPClient.mockResolvedValueOnce(stale).mockReturnValueOnce(connecting.promise);
+    const server = makeServer();
+    const { service } = makeService([server]);
+    const [descriptor] = await service.listExecutableToolDescriptors(server.id);
+    await expect(executeFrozenTool(service, descriptor!)).rejects.toBeDefined();
+
+    const view = new AbortController();
+    const read = service.readResultResource(
+      {
+        source: { serverId: server.id, connectionKey: await createMcpConnectionKey(server) },
+        uri: 'data://result',
+      },
+      view.signal,
+    );
+    await flush();
+    const execution = executeFrozenTool(service, descriptor!);
+    await flush();
+    view.abort();
+    await expect(read).rejects.toBeDefined();
+    connecting.resolve(fresh);
+
+    await expect(execution).resolves.toBeDefined();
+    expect(fresh.callTool).toHaveBeenCalledTimes(1);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
   });
 
   it('does not reconnect after a discovery timeout and backs the server off on the send path', async () => {
@@ -1283,5 +1639,158 @@ describe('catalog reuse', () => {
       'builtin:github:grant-2',
     );
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+});
+
+describe('cached MCP prompts', () => {
+  const prompt: McpPromptEntry = {
+    kind: 'prompt',
+    key: 'review',
+    title: 'Review changes',
+    arguments: [{ name: 'topic', required: true }],
+  };
+
+  function promptClient() {
+    const client = makeClient(makeRawTools(['search']));
+    client.protocolInfo = { version: '2026-07-28', tools: true, resources: false, prompts: true };
+    client.listPrompts = jest.fn(async () => ({
+      prompts: [{ name: prompt.key, title: prompt.title, arguments: prompt.arguments }],
+    }));
+    client.getPrompt = jest.fn(async () => ({
+      messages: [{ role: 'user', content: { type: 'text', text: 'Review this topic.' } }],
+    }));
+    return client;
+  }
+
+  it('discovers on connection and restores prompt menus from disk without a connection', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    const changed = jest.fn();
+    const unsubscribe = service.subscribePromptCatalogs(changed);
+
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    expect(changed).toHaveBeenCalled();
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).prompts).toEqual([prompt]);
+    mockCreateMCPClient.mockClear();
+    client.listPrompts!.mockClear();
+
+    const restarted = new McpRuntimeService();
+    await expect(restarted.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    await expect(restarted.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+    expect(client.listPrompts).not.toHaveBeenCalled();
+    unsubscribe();
+  });
+
+  it('never discovers a missing catalog from a menu read', async () => {
+    const server = makeServer();
+    const { service } = makeService([server]);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
+  it('does not reuse a prompt catalog after credentials change, disable, or invalidation', async () => {
+    const server = makeServer({ headers: { Authorization: 'Bearer old' } });
+    mockCreateMCPClient.mockResolvedValue(promptClient());
+    const { service } = makeService([server]);
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    server.isEnabled = false;
+    await expect(service.getCachedPrompts()).resolves.toEqual({});
+    server.isEnabled = true;
+    server.headers = { Authorization: 'Bearer changed' };
+    await expect(new McpRuntimeService().getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    const changed = jest.fn();
+    service.subscribePromptCatalogs(changed);
+    service.invalidateServer(server.id);
+    expect(changed).toHaveBeenCalledTimes(1);
+    expect(storedFiles.has(catalogPath(server.id))).toBe(false);
+  });
+
+  it('keeps tools and the stored prompt menu when optional prompt discovery fails', async () => {
+    const server = makeServer();
+    mockCreateMCPClient.mockResolvedValue(promptClient());
+    await makeService([server]).service.getRuntimeSummaries([server]);
+    await flush();
+    const failing = promptClient();
+    failing.listPrompts!.mockRejectedValue(new Error('Prompt catalog offline'));
+    mockCreateMCPClient.mockResolvedValue(failing);
+    const { service } = makeService([server]);
+    // A settings read discovers live before anything restores the stored file.
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    await expect(service.listExecutableToolDescriptors(server.id)).resolves.toHaveLength(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+    expect(JSON.parse(storedFiles.get(catalogPath(server.id))!).prompts).toEqual([prompt]);
+  });
+
+  it('refreshes a stored catalog written before prompt discovery on the next turn', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    await makeService([server]).service.getRuntimeSummaries([server]);
+    await flush();
+    const stored = JSON.parse(storedFiles.get(catalogPath(server.id))!);
+    delete stored.prompts;
+    storedFiles.set(catalogPath(server.id), JSON.stringify(stored));
+    client.listPrompts!.mockClear();
+
+    const { service } = makeService([server]);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [] });
+    await service.listExecutableToolDescriptors(server.id);
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    await expect(service.getCachedPrompts()).resolves.toEqual({ [server.id]: [prompt] });
+  });
+
+  it('resolves a prompt on the shared connection and rejects an inactive Agent binding', async () => {
+    const server = makeServer();
+    const client = promptClient();
+    mockCreateMCPClient.mockResolvedValue(client);
+    const { service } = makeService([server]);
+    await service.getRuntimeSummaries([server]);
+    await flush();
+    const binding: AgentToolBinding = {
+      id: 'binding-1',
+      agentId: 'agent-1',
+      serverId: server.id,
+      source: 'mcp',
+      enabled: true,
+      approval: 'ask',
+      displayNameSnapshot: server.name,
+      createdAt: server.createdAt,
+      updatedAt: server.updatedAt,
+    };
+    jest.spyOn(agentToolBindingService, 'list').mockResolvedValue({ items: [binding] });
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).resolves.toMatchObject({
+      title: prompt.title,
+      text: expect.stringContaining('Review this topic.'),
+    });
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
+    expect(client.getPrompt).toHaveBeenCalledWith(
+      { name: prompt.key, arguments: { topic: 'Changes' } },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+
+    // A server that no longer knows the prompt refreshes the catalog on its connection.
+    client.getPrompt!.mockRejectedValueOnce(new ProtocolError(-32602, 'Unknown prompt: review'));
+    client.listPrompts!.mockClear();
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_call_failed' });
+    await flush();
+    expect(client.listPrompts).toHaveBeenCalledTimes(1);
+    expect(client.close).not.toHaveBeenCalled();
+
+    binding.enabled = false;
+    await expect(
+      service.readPrompt(binding.agentId, server.id, prompt.key, { topic: 'Changes' }),
+    ).rejects.toMatchObject({ code: 'mcp_tool_unavailable' });
+    expect(client.getPrompt).toHaveBeenCalledTimes(2);
   });
 });

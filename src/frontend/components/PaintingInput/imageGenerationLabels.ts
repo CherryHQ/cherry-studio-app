@@ -1,7 +1,11 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import type { TFunction } from 'i18next';
 
-import type { ImageParamDraft, ImageParamField } from '@/shared/utils/imageGenerationParams';
+import {
+  parseImageRatio,
+  type ImageParamDraft,
+  type ImageParamField,
+} from '@/shared/utils/imageGenerationParams';
 
 const PARAM_LABEL_KEYS = {
   addWatermark: 'painting.settings.param.addWatermark',
@@ -126,9 +130,32 @@ export function imageParamLabel(t: TFunction, key: CanonicalParamKey): string {
   return t(PARAM_LABEL_KEYS[key]);
 }
 
+/** Pixel sizes such as `1536x1024` read as `3:2 · 1536×1024`; ratios read as `3:2`. */
 export function imageParamOptionLabel(t: TFunction, key: CanonicalParamKey, value: string): string {
+  const ratio = parseImageRatio(value);
+  if (ratio && key === 'aspectRatio') return `${ratio.width}:${ratio.height}`;
+  if (ratio && PIXEL_SIZE_KEYS.has(key) && /^\s*\d+\s*[x×]\s*\d+\s*$/i.test(value)) {
+    const pixels = `${ratio.width}×${ratio.height}`;
+    const simplified = simplifiedRatio(ratio.width, ratio.height);
+    return simplified ? `${simplified} · ${pixels}` : pixels;
+  }
   const translationKey = OPTION_LABEL_KEYS[key]?.[value];
   return translationKey ? t(translationKey) : value;
+}
+
+const PIXEL_SIZE_KEYS = new Set<CanonicalParamKey>(['size', 'imageResolution']);
+
+/** `1536x1024` → `3:2`; undefined when the sides do not reduce to a short ratio. */
+export function simplifiedRatio(width: number, height: number): string | undefined {
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return undefined;
+  const divisor = greatestCommonDivisor(width, height);
+  const w = width / divisor;
+  const h = height / divisor;
+  return w <= 32 && h <= 32 ? `${w}:${h}` : undefined;
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+  return b === 0 ? a : greatestCommonDivisor(b, a % b);
 }
 
 export function imageParamSummary(

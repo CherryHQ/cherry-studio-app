@@ -19,6 +19,7 @@ import {
   type AgentSessionEntity,
   AgentSessionEntitySchema,
 } from '@/shared/data/api/schemas/agentSessions';
+import { readMessageTranslations } from '@/shared/data/types/messageTranslation';
 
 import { timestampToISO } from './rowMappers';
 
@@ -30,8 +31,10 @@ export function toAgentSessionView(row: AgentSessionRow): AgentSessionView {
     agentId: row.agentId,
     name: row.name,
     isNameManuallyEdited: row.isNameManuallyEdited,
+    workspaceFolderId: row.workspaceFolderId,
     forkBoundaryMessageId: row.forkBoundaryMessageId,
     forkedFromSessionId: row.forkedFromSessionId,
+    activeNodeId: row.activeNodeId,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
@@ -52,6 +55,8 @@ export function toAgentSessionEntity(row: AgentSessionRow): AgentSessionEntity {
 export const agentMessageViewColumns = {
   id: agentSessionMessageTable.id,
   sessionId: agentSessionMessageTable.sessionId,
+  parentId: agentSessionMessageTable.parentId,
+  siblingsGroupId: agentSessionMessageTable.siblingsGroupId,
   turnId: agentSessionMessageTable.turnId,
   role: agentSessionMessageTable.role,
   status: agentSessionMessageTable.status,
@@ -76,6 +81,7 @@ type AgentMessageViewSqlRow = Omit<AgentMessageViewRow, 'data' | 'inferenceSnaps
 
 /** {@link agentMessageViewColumns} for raw SQL over `agent_session_message AS message`. */
 export const agentMessageViewSqlColumns = sql`message.id, message.session_id AS "sessionId",
+  message.parent_id AS "parentId", message.siblings_group_id AS "siblingsGroupId",
   message.turn_id AS "turnId", message.role, message.status, message.data,
   message.stats, message.model_id AS "modelId", message.inference_snapshot AS "inferenceSnapshot",
   message.created_at AS "createdAt", message.updated_at AS "updatedAt"`;
@@ -95,13 +101,17 @@ function parseNullableJson<TValue>(value: string | null): TValue | null {
 }
 
 export function toAgentMessageView(row: AgentMessageViewRow): AgentMessageView {
+  const translations = readMessageTranslations(row.data.translations);
   return AgentMessageViewSchema.parse({
     id: row.id,
     sessionId: row.sessionId,
+    parentId: row.parentId,
+    siblingsGroupId: row.siblingsGroupId,
     turnId: row.turnId,
     role: row.role,
     status: row.status,
     parts: row.data.parts,
+    ...(translations ? { translations } : {}),
     stats: row.stats ?? null,
     modelId: row.modelId,
     inferenceSnapshot: readAgentInferenceSnapshot(row.inferenceSnapshot),
@@ -146,7 +156,7 @@ export function toReadableAgentMessageViews(
           },
         };
       });
-      return [toAgentMessageView({ ...row, data: { parts: readableParts } })];
+      return [toAgentMessageView({ ...row, data: { ...row.data, parts: readableParts } })];
     } catch (error) {
       logger.warn('Skipping unreadable agent message', error as Error, {
         messageId: row.id,

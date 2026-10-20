@@ -6,14 +6,20 @@ import { Linking, Platform } from 'react-native';
 
 import {
   canRequestDevicePermission,
+  canUseDevicePermission,
   type DevicePermission,
   type DevicePermissionScope,
   type DevicePermissionStatus,
+  HEALTH_DATA_TYPES,
+  type HealthDataType,
+  healthPermissionScope,
   type PermissionStatuses,
   type PermissionsModule,
 } from '@/shared/contracts';
+import { healthRecordSelectionType } from '@/shared/contracts/health';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { getHealthAccess, type HealthAccessModule } from '../../../../modules/health-access';
 import { getLocalNetworkAccess } from '../../../../modules/local-network-access';
 
 const logger = loggerService.withContext('DevicePermissions');
@@ -23,6 +29,9 @@ const unsupported: DevicePermissionStatus = {
   reason: 'unsupported',
 };
 const failed: DevicePermissionStatus = { state: 'error', canAskAgain: false };
+const HEALTH_RECORD_SELECTION_SCOPES = new Set<DevicePermissionScope>(
+  HEALTH_DATA_TYPES.filter(healthRecordSelectionType).map(healthPermissionScope),
+);
 
 type ExpoPermission = {
   granted: boolean;
@@ -34,39 +43,42 @@ type ExpoPermission = {
 export class DevicePermissions implements PermissionsModule {
   private requestQueue = Promise.resolve();
 
+  constructor(
+    private readonly loadHealthAccess: () => HealthAccessModule | null = getHealthAccess,
+  ) {}
+
   async getStatuses(scopes: readonly DevicePermissionScope[]): Promise<PermissionStatuses> {
     const unique = [...new Set(scopes)];
-    const entries = await Promise.all(
-      unique.map(async (scope) => {
-        try {
-          return [scope, await this.getStatus(scope)] as const;
-        } catch (error) {
-          logger.warn('Permission lookup failed', { scope, error });
-          return [scope, failed] as const;
-        }
-      }),
-    );
-    return Object.fromEntries(entries);
+    const healthTypes = healthTypesForScopes(unique);
+    const [healthStatuses, entries] = await Promise.all([
+      healthTypes.length ? this.getHealthStatuses(healthTypes) : {},
+      Promise.all(
+        unique
+          .filter((scope) => !scope.startsWith('health.'))
+          .map(async (scope) => {
+            try {
+              return [scope, await this.getStatus(scope)] as const;
+            } catch (error) {
+              logger.warn('Permission lookup failed', { scope, error });
+              return [scope, failed] as const;
+            }
+          }),
+      ),
+    ]);
+    return { ...Object.fromEntries(entries), ...healthStatuses };
   }
 
   request(
     scopes: readonly DevicePermissionScope[],
     signal?: AbortSignal,
+    options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses> {
-    // Only one system authorization sheet at a time, including requests from an Agent.
-    // Keep the queue locked until an already-open native sheet settles, even after cancellation.
     const unique = [...new Set(scopes)];
-    const result = this.requestQueue.then(() => this.requestPermissions(unique, signal));
-    this.requestQueue = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    return this.runWithSystemPrompt(() => this.requestPermissions(unique, signal, options), signal);
   }
 
   requestLocalNetworkAccess(signal?: AbortSignal): Promise<void> {
-    const result = this.requestQueue.then(async () => {
-      signal?.throwIfAborted();
+    return this.runWithSystemPrompt(async () => {
       // The app targets Android SDK 36, where INTERNET already grants local access.
       if (Platform.OS !== 'ios') return;
       try {
@@ -75,9 +87,21 @@ export class DevicePermissions implements PermissionsModule {
         // Preparation is best-effort; the actual pairing request owns connectivity errors.
         logger.warn('Local network prompt preparation failed', { error });
       }
+    }, signal);
+  }
+
+  /** Backend-only: serialize native operations that may present a system authorization sheet. */
+  runWithSystemPrompt<TResult>(
+    operation: () => Promise<TResult>,
+    signal?: AbortSignal,
+  ): Promise<TResult> {
+    const result = this.requestQueue.then(async () => {
       signal?.throwIfAborted();
+      // Await native settlement even after cancellation; an open sheet still owns the queue.
+      const value = await operation();
+      signal?.throwIfAborted();
+      return value;
     });
-    // Allow the network sheet to finish before requesting camera/Agent permissions.
     this.requestQueue = result.then(
       () => undefined,
       () => undefined,
@@ -145,12 +169,25 @@ export class DevicePermissions implements PermissionsModule {
   private async requestPermissions(
     scopes: readonly DevicePermissionScope[],
     signal?: AbortSignal,
+    options?: { reselectHealthRecords?: boolean },
   ): Promise<PermissionStatuses> {
     signal?.throwIfAborted();
     const before = await this.getStatuses(scopes);
     signal?.throwIfAborted();
-    const requestable = scopes.filter((scope) => canRequestDevicePermission(before[scope]));
-    for (const scope of requestable) {
+    const requestable = scopes.filter(
+      (scope) =>
+        canRequestDevicePermission(before[scope]) ||
+        (options?.reselectHealthRecords === true &&
+          HEALTH_RECORD_SELECTION_SCOPES.has(scope) &&
+          canUseDevicePermission(scope, before[scope])),
+    );
+    const healthTypes = healthTypesForScopes(requestable);
+    if (healthTypes.length) {
+      const health = this.loadHealthAccess();
+      if (!health) throw new Error('Health access native module is missing');
+      await health.request(healthTypes);
+    }
+    for (const scope of requestable.filter((scope) => !scope.startsWith('health.'))) {
       signal?.throwIfAborted();
       // An earlier request may have already granted both scopes (calendar/reminders).
       if (!canRequestDevicePermission(await this.getStatus(scope))) continue;
@@ -185,9 +222,34 @@ export class DevicePermissions implements PermissionsModule {
     signal?.throwIfAborted();
     return statuses;
   }
+
+  private async getHealthStatuses(types: readonly HealthDataType[]): Promise<PermissionStatuses> {
+    const fill = (status: DevicePermissionStatus): PermissionStatuses =>
+      Object.fromEntries(types.map((type) => [healthPermissionScope(type), status]));
+    if (Platform.OS !== 'ios') return fill(unsupported);
+    try {
+      const health = this.loadHealthAccess();
+      if (!health) throw new Error('Health access native module is missing');
+      const availability = await health.getAvailability();
+      if (availability !== 'available') {
+        return fill({ state: 'unavailable', canAskAgain: false, reason: availability });
+      }
+      const statuses = await health.getStatuses(types);
+      return Object.fromEntries(
+        types.map((type) => [healthPermissionScope(type), statuses[type] ?? failed]),
+      );
+    } catch (error) {
+      logger.warn('Health permission lookup failed', { error });
+      return fill(failed);
+    }
+  }
 }
 
 export const devicePermissions = new DevicePermissions();
+
+function healthTypesForScopes(scopes: readonly DevicePermissionScope[]): HealthDataType[] {
+  return HEALTH_DATA_TYPES.filter((type) => scopes.includes(healthPermissionScope(type)));
+}
 
 function toPermissionStatus(response: ExpoPermission): DevicePermissionStatus {
   return {

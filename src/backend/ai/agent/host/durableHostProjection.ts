@@ -19,8 +19,14 @@ export const DurableTurnMetadataSchema = z.object({
   userParts: z.array(AgentMessagePartSchema),
   retainedParts: z.array(AgentMessagePartSchema).optional(),
   inferenceSnapshot: AgentInferenceSnapshotV1Schema,
+  // Released turns predating workspace support remain unbound on recovery.
+  workspaceFolderId: z.string().min(1).nullable().default(null),
   referencedFileEntryIds: z.array(z.string()),
   hasHistoryBeforeActiveTurn: z.boolean(),
+  /** One answer of a multi-model question: its tools are limited to automatic reads. */
+  readOnlyTools: z.boolean().optional(),
+  /** The question's parent in the message tree, so live rows can be placed on a branch. */
+  parentMessageId: z.string().nullable().optional(),
 });
 
 /** The desktop-aligned message timing: wall clock, tool execution, and approval waits. */
@@ -62,8 +68,11 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
 } {
   const metadata = DurableTurnMetadataSchema.parse(turn.metadata);
   const terminal = turn.status !== 'running' && turn.status !== 'queued';
-  // A user stop is a settled, paused answer; it is not an execution failure.
-  const error = turn.error && turn.status !== 'cancelled' ? toAgentErrorView(turn.error) : null;
+  // A failed provider attempt may still be retrying. Only a terminal failure belongs in the reply.
+  const error =
+    turn.error && (turn.status === 'failed' || turn.status === 'interrupted')
+      ? toAgentErrorView(turn.error)
+      : null;
   const common = {
     sessionId: turn.identity.sessionId,
     turnId: turn.identity.turnId,
@@ -75,6 +84,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
   };
   const user = AgentMessageViewSchema.parse({
     ...common,
+    ...(metadata.parentMessageId !== undefined ? { parentId: metadata.parentMessageId } : {}),
     id: turn.userMessageId,
     role: 'user',
     status: 'success',
@@ -92,6 +102,7 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     ? AgentMessageViewSchema.parse({
         ...common,
         id: turn.assistantMessageId,
+        parentId: turn.userMessageId,
         stats: assistantStats(turn),
         role: 'assistant',
         status:
@@ -113,6 +124,8 @@ export function projectDurableHostTurn(turn: RuntimeDurableTurn): {
     status: turn.status === 'queued' ? 'running' : turn.status,
     assistantMessageId: turn.assistantMessageId,
     error,
+    // Always present: clients skip turn updates whose fields are unchanged.
+    isRetrying: turn.isRetrying === true,
     startedAt: common.createdAt,
     endedAt: terminal ? common.updatedAt : null,
   });

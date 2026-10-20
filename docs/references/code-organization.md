@@ -1,6 +1,7 @@
 # Code Organization
 
-This reference defines module placement, domain promotion, layer ownership, and public surfaces.
+This reference defines module placement, domain promotion, layer ownership, public surfaces, and
+retiring superseded code.
 Use [Naming Conventions](./naming-conventions.md) after choosing the owner and location.
 
 ## Choose The Narrowest Owner
@@ -74,9 +75,10 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 
 ## Expose Deliberate Public Surfaces
 
-- Add `index.ts` or `index.tsx` only at a boundary consumed by routes, parent pages, sibling modules,
+- Add `index.ts` only at a boundary consumed by routes, parent pages, sibling modules,
   or package users.
 - A barrel contains named re-exports only and exposes the smallest interface callers need.
+- A barrel has no JSX and uses `.ts`; Expo's reserved `index.tsx` route files remain route adapters.
 - External callers import the module root. Module internals import their leaf files directly and do
   not route dependencies back through their own barrel.
 - Private `components`, `hooks`, and `utils` buckets do not need barrels.
@@ -84,6 +86,17 @@ and [Runtime Ownership](./runtime-ownership.md) for long-lived resources.
 
 When choosing between `Module`, `Runtime`, `Session`, `Client`, `Adapter`, or `Manager`, use
 [Runtime Ownership](./runtime-ownership.md#role-names).
+
+## Reuse And Retire
+
+- Check [Shared Building Blocks](./shared-building-blocks.md) before adding a helper, parser,
+  transport adapter, store, or component. Extend the listed owner instead of adding a second copy.
+- A change that replaces an implementation removes the superseded one in the same change, including
+  exports, branches, native functions, tests, documentation, and translation keys that only served
+  it.
+- Compatibility code is for data and formats that shipped in a release. Run
+  `git tag --contains <commit>` on the commit that introduced the old shape; shapes that never
+  reached a release tag are replaced without compatibility paths.
 
 ## Import Paths
 

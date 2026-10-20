@@ -48,6 +48,8 @@ export type ChatScrollAnchor = Readonly<{
  * Frontend memory cache schema (TTL-capable, lost on app restart).
  */
 export type UseCacheSchema = {
+  // Optional selection for one unsent chat; a new draft starts without a token.
+  'chat.draft_workspace.${workspaceDraftId}': string | null;
   // Completion acknowledged by opening the Session, scoped to this app process.
   'chat.last_seen_turn.${sessionId}': string | null;
   // Per-Session reading anchor. `null` means follow the current live edge.
@@ -60,6 +62,7 @@ export type UseCacheSchema = {
 // DefaultPreferences in the preference domain) so schema entries port with
 // zero rewrites — deliberate exception to the UPPER_SNAKE_CASE constant rule.
 export const DefaultUseCache: UseCacheSchema = {
+  'chat.draft_workspace.${workspaceDraftId}': null,
   'chat.last_seen_turn.${sessionId}': null,
   'chat.scroll_anchor.${sessionId}': null,
   'internal.memory_probe.${instanceId}': '',
@@ -84,6 +87,8 @@ export type BackendCacheSchema = {
  * `undefined` — the backing store round-trips every value through JSON.
  */
 export type PersistCacheSchema = {
+  /** Skill document translations indexed by content hash and target language. */
+  'skills.translations': Record<string, string>;
   'diagnostics.feedback_history': DiagnosticFeedbackRecord[];
   'remote_agent.drafts': Record<string, string>;
   // Last composer effort per Agent; clearing the cache restores model defaults.
@@ -94,6 +99,7 @@ export type PersistCacheSchema = {
 };
 
 export const DefaultPersistCache: PersistCacheSchema = {
+  'skills.translations': {},
   'diagnostics.feedback_history': [],
   'remote_agent.drafts': {},
   'chat.reasoning_efforts': {},

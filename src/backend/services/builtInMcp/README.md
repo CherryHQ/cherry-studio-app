@@ -34,14 +34,16 @@ observation, browser actions and form state; backend observers own polling and c
 Bundled providers each own a plain TypeScript guide module at `plugins/<id>/guide.ts` beside
 their plugin definition. `PluginDefinition.guide` references its exported
 data directly. Each guide contains a positive integer `revision` and ordered `sections`; each section
-has a `content` string and a `requiredTools` array of raw MCP names. Template strings can retain
+has a `content` string and a `requiredTools` array of raw MCP names. `alwaysInclude: true` marks
+capability routing and critical constraints needed before loading a detailed workflow. Every guide
+must include at least one such section. Template strings can retain
 Markdown formatting in the Agent instructions. For example:
 
 ```ts
 export const feishuGuide = {
   revision: 1,
   sections: [
-    { requiredTools: [], content: `Use this plugin for Feishu documents.` },
+    { requiredTools: [], alwaysInclude: true, content: `Use this plugin for Feishu documents.` },
     {
       requiredTools: ['fetch-doc', 'update-doc'],
       content: `Read the current document before making a targeted update.`,
@@ -53,6 +55,8 @@ export const feishuGuide = {
 An empty `requiredTools` array supplies common context; other sections require **all** named tools on
 the same connection. Registration validates the revision, 1–32 nonempty sections, admitted and unique
 prerequisites, and an 8,192-byte UTF-8 limit for the combined trimmed text including section separators.
+Always-included sections share a separate 2,048-byte UTF-8 budget per plugin. This budget bounds
+first-request context, not the detail body: preserve required guidance in the complete guide.
 A missing guide is optional and does not disable tools; invalid guide data is rejected with the other
 registration errors. A connection with no eligible sections contributes no guide.
 
@@ -65,7 +69,8 @@ resolver selects guides from each connected plugin's executable descriptors afte
 filtering. Plugin tools and guides are available across Agents without bindings or composer mentions.
 Remote names and descriptions cannot identify a plugin.
 Each connection produces at most one frozen guide snapshot with `pluginId`, `serverId`, `revision`
-and selected text. Connections are ordered by plugin id and server id; sections retain authored order.
+and selected text, plus the eligible always-included `overview`. Connections are ordered by plugin
+id and server id; sections retain authored order.
 Tools from different connections cannot collectively satisfy a workflow's prerequisites.
 
 Keep guides focused on cross-tool workflows and provider-specific pitfalls, not one section per tool.
@@ -77,12 +82,25 @@ Sections retain their own prerequisites so partial grants keep usable workflows.
 fails or one schema is unsupported, surviving tools still select their guides; the Host also retains
 the existing discovery warnings for the same turn.
 
-The Host keeps these snapshots in `TurnPlan` beside the executable tools and includes them once in
-the application prompt. Pi receives prepared text only. Guides do not change saved Agent instructions,
-chat history, persisted inference metadata, permissions, approval or resource grants. Their text is
-counted in the existing live context budget; it is not silently truncated. Runtime rules and the user's
-request and Agent instructions take precedence over guide workflows. Raw names are discovery hints;
-the model must still inspect each tool's current signature before calling its exact catalog alias.
+The Host keeps these snapshots in `TurnPlan` beside the executable tools. The initial application
+prompt lists each connection's workflow id, capability overview and critical constraints, plus shared
+operation rules. This contract applies to every bundled plugin, including future registrations.
+Before using a plugin, the model calls the read-only built-in `load_workflow` with `plugin:<serverId>`
+in a separate tool round, then reads the supplied instructions before planning dependent calls.
+Its callback supplies the complete selected guide as a trusted instruction contribution; Pi retains
+it in its native conversation document and renders it before subsequent requests, including after
+compaction or reopening the working copy. The tool result is a receipt, so it does not duplicate the
+body. The complete guide preserves its overview when loaded; only short routing context is always
+present in the first request.
+Until that section is present, every tool on the connection is refused before approval with an
+instruction to load the guide, so a skipped load costs one round instead of an unguided call.
+Each later turn restores the guides loaded earlier in the Session from successful `load_workflow`
+receipts, using the current revision and only while the connection still contributes a guide, so the
+model does not mistake an old receipt for loaded instructions and the system prefix stays stable.
+Guides do not change saved Agent instructions, permissions, approval or resource grants. Loaded text
+counts in the live context budget and is not truncated. Runtime rules, the user's request and Agent
+instructions take precedence. Raw names remain discovery hints; inspect the current tool signature
+before calling its exact catalog alias.
 
 Changes to grants, disabled tools, connection availability or bundled revisions affect the next
 prepared turn; existing execution-time revocation checks remain immediate. The plugin catalog also
@@ -115,9 +133,11 @@ own this user-facing copy independently of Agent guide content.
   `PluginSecretReference` belongs to the database authorization schema. The database service accepts
   `credentialReference`; the native store accepts `credential`. The SQL column remains `credential`.
 - `createBuiltInMcpClient` binds the selected method to one grant. `createOfficialMcpClient` uses
-  `@ai-sdk/mcp` Streamable HTTP and `expo/fetch`, checks authorization before and after credential
-  resolution, enforces fixed endpoints and admitted tools, rejects redirects and never replays
-  writes. A rotating credential retains its grant ID; reconnecting replaces that ID.
+  the official MCP SDK's Streamable HTTP transport, the same client as custom servers, over
+  `expo/fetch`. It checks authorization before and after credential resolution, enforces fixed
+  endpoints and admitted tools, rejects redirects and never replays writes. A write that was
+  submitted before cancellation, closing or a lost response reports an unknown outcome. A rotating
+  credential retains its grant ID; reconnecting replaces that ID.
 - GitHub injects a Bearer token and `X-MCP-Tools`; Amap injects a key only into the outgoing URL.
   Their setup checks use `get_me` and Beijing `maps_weather`. Feishu injects `X-Lark-MCP-UAT`
   plus `X-Lark-MCP-Allowed-Tools`; its setup checks account/scope facts and

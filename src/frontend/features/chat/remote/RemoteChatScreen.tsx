@@ -86,7 +86,7 @@ function RemoteChatUnavailable({ state }: { state: 'loading' | 'error' | 'unpair
             description={t('settings.deviceConnections.emptyDescription')}
             primaryAction={{
               children: t('settings.deviceConnections.scan.action'),
-              onPress: () => router.push('/settings/device-connections/scan'),
+              onPress: () => router.replace('/settings/device-connections/scan'),
             }}
           />
         )}
@@ -103,7 +103,13 @@ const HeaderContext = createContext<{
   selectAgent(agentId: string): void;
   startNewChat(agentId?: string): void;
 } | null>(null);
-function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
+function RemoteHeader({
+  blurTarget,
+  hidden,
+}: {
+  blurTarget: RefObject<View | null>;
+  hidden?: boolean;
+}) {
   const header = use(HeaderContext)!;
   const catalog = useConversationAgents();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -112,6 +118,7 @@ function RemoteHeader({ blurTarget }: { blurTarget: RefObject<View | null> }) {
       <MainHeaderView
         agent={header.agent}
         blurTarget={blurTarget}
+        hidden={hidden}
         onNewChat={() => header.startNewChat(header.agent?.id)}
         onAgentPress={() => {
           Keyboard.dismiss();
@@ -138,6 +145,7 @@ function RemoteChatSession() {
   const target = parseRemoteChatRoute(useLocalSearchParams<RemoteChatRouteParams>());
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const [composerHeight, setComposerHeight] = useState(0);
   const { draftId, identity, selectAgent, startNewChat, onSessionCreated } =
     useRemoteChatNavigation(target, source);
   const opened = useConversation(
@@ -203,12 +211,14 @@ function RemoteChatSession() {
               />
             ) : (
               <ChatWorkspace
+                feedbackHintBottomOffset={composerHeight}
                 renderUsage={renderRemoteUsage}
                 messages={messages}
                 onShare={opened.session ? shareMessage : undefined}
                 snapshot={snapshot}
                 messageWindow={history}
                 sessionId={target.sessionId}
+                assistantEmoji={agent?.emoji}
                 assistantName={agent?.name}
                 isAssistantToolbarEnabled
                 contentBottomInset={composerContentGap}
@@ -217,7 +227,7 @@ function RemoteChatSession() {
               />
             )}
           </ComposerDismissArea>
-          <ComposerDock layoutMode="flow">
+          <ComposerDock layoutMode="expandable" onHeightChange={setComposerHeight}>
             <View>
               <ConversationStatus
                 availability={availability}

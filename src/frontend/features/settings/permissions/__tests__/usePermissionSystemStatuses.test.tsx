@@ -3,7 +3,11 @@ import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
-import type { Backend, PermissionStatuses } from '@/shared/contracts';
+import {
+  type Backend,
+  HEALTH_PERMISSION_SCOPES,
+  type PermissionStatuses,
+} from '@/shared/contracts';
 
 import { usePermissionSystemStatuses } from '../hooks/usePermissionSystemStatuses';
 
@@ -74,6 +78,7 @@ describe('usePermissionSystemStatuses', () => {
       'calendar.write',
       'reminders.read',
       'reminders.write',
+      ...HEALTH_PERMISSION_SCOPES,
       'camera.read',
       'photos.read',
       'photos.write',

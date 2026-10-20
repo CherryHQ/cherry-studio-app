@@ -1,3 +1,4 @@
+import type { PluginGuideSnapshot } from '@/backend/services/builtInMcp';
 import { parseAnydocDocument } from '@/backend/services/file/anydocParser';
 import type {
   AgentMessageView,
@@ -55,7 +56,7 @@ const AGENT: AgentDefinition = {
   model: BASE_MODEL,
   options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
   toolApprovalMode: 'auto',
-  disabledCapabilities: ['location'],
+  disabledCapabilities: ['health'],
 };
 
 const EMPTY_CONTEXT: StoredRuntimeTurnContext = {
@@ -88,11 +89,15 @@ describe('turn preparation', () => {
       harness.dependencies.skills = { resolve: jest.fn(unavailable) };
       harness.dependencies.skillWorkflow = {
         search: unavailable,
+        searchSkillsSh: unavailable,
+        listCherryin: unavailable,
+        getCherryin: unavailable,
         popular: unavailable,
         resolve: unavailable,
         inspect: unavailable,
         install: unavailable,
         update: unavailable,
+        create: unavailable,
         previewAdaptation: unavailable,
         adapt: unavailable,
         uninstall: unavailable,
@@ -177,6 +182,7 @@ describe('turn preparation', () => {
   test.each([
     { skillIds: ['00000000-0000-4000-8000-000000000124'] },
     { skillAction: 'find-and-install' as const },
+    { skillAction: 'create' as const },
   ])('minimal mode rejects explicit Skill input %j', async (selection) => {
     const harness = createHarness();
     harness.getAgent.mockResolvedValue({ ...AGENT, mode: 'minimal' });
@@ -273,6 +279,20 @@ describe('turn preparation', () => {
     };
     await expect(
       prepareTurn(harness.dependencies, textInput(), new AbortController().signal),
+    ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  test('parallel replies reject an implicit image plan before executing it', async () => {
+    const harness = createHarness();
+    const execute = jest.fn(async () => []);
+    harness.dependencies.imageGeneration = {
+      prepare: async () => ({ settings: { mode: 'generate', paramValues: {} }, execute }),
+    };
+    await expect(
+      prepareDurableTurn(harness.dependencies, textInput(), [], new AbortController().signal, {
+        readOnlyTools: true,
+      }),
     ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
     expect(execute).not.toHaveBeenCalled();
   });
@@ -445,6 +465,7 @@ describe('turn preparation', () => {
     const plan = await prepareTurn(harness.dependencies, input, new AbortController().signal);
 
     expect(harness.getSystemTools).toHaveBeenCalledWith({
+      workspaceFolderId: null,
       agentId: AGENT.id,
       askUser: harness.askUser,
       disabledCapabilities: AGENT.disabledCapabilities,
@@ -480,6 +501,7 @@ describe('turn preparation', () => {
       AGENT_ID,
       expect.any(Function),
       expect.any(AbortSignal),
+      null,
     );
     expect(harness.resolveInferenceModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
     expect(harness.preflightModel).toHaveBeenCalledWith(OVERRIDE_MODEL);
@@ -616,6 +638,33 @@ describe('turn preparation', () => {
     },
   );
 
+  test('gates plugin tools behind their guide and restores guides loaded in earlier turns', async () => {
+    const harness = createHarness();
+    const pluginTool: RuntimeTool = {
+      ...harness.configuredTool,
+      ref: { source: 'mcp', serverId: 'feishu-1', rawToolName: 'fetch-doc' },
+      providerName: 'mcp_feishu_fetch_doc',
+    };
+    harness.resolveRuntimeTools.mockResolvedValue({
+      tools: [pluginTool],
+      pluginGuides: [
+        { pluginId: 'feishu', serverId: 'feishu-1', revision: 5, content: 'Read before edits.' },
+      ],
+    });
+    harness.loadWorkflowLoads.mockResolvedValue(['plugin:feishu-1', 'plugin:removed']);
+    const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
+
+    expect(plan.tools.map((tool) => [tool.providerName, tool.requiredInstructions?.key])).toEqual([
+      ['system_tool', undefined],
+      ['mcp_feishu_fetch_doc', 'workflow:plugin:feishu-1'],
+      ['load_workflow', undefined],
+    ]);
+    expect(plan.workflowInstructions).toEqual([
+      { key: 'workflow:plugin:feishu-1', text: expect.stringContaining('Read before edits.') },
+    ]);
+    expect(harness.loadWorkflowLoads).toHaveBeenCalledWith(SESSION_ID, undefined);
+  });
+
   test('freezes the web policy only for an Agent that may use the web', async () => {
     const harness = createHarness();
     const policy = {
@@ -699,7 +748,11 @@ describe('turn preparation', () => {
 
     const plan = await prepareTurn(harness.dependencies, textInput(), new AbortController().signal);
 
-    expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(SESSION_ID, 'turn-anchor');
+    expect(harness.loadRuntimeTurnContext).toHaveBeenCalledWith(
+      SESSION_ID,
+      'turn-anchor',
+      undefined,
+    );
     expect(plan.runtimeContextCheckpoint).toBeNull();
     expect(plan.history).toEqual(history);
     expect(plan.hasMessages).toBe(true);
@@ -885,6 +938,7 @@ function createHarness() {
   const loadSkillActivations = jest.fn(
     async (_sessionId: string): Promise<StoredSkillActivation[]> => [],
   );
+  const loadWorkflowLoads = jest.fn(async (_sessionId: string): Promise<string[]> => []);
   const resolveAvailable = jest.fn(async (fileEntryIds: readonly FileEntryId[]) =>
     fileEntryIds.includes(FILE_ENTRY_ID) ? new Map([[FILE_ENTRY_ID, textFact]]) : new Map(),
   );
@@ -903,7 +957,7 @@ function createHarness() {
   const resolveRuntimeTools = jest.fn(
     async (_agentId: string, _onUnavailable?: (warning: string) => void) => ({
       tools: [configuredTool],
-      pluginGuides: [],
+      pluginGuides: [] as PluginGuideSnapshot[],
     }),
   );
   const resolveInferenceModel = jest.fn(
@@ -936,7 +990,13 @@ function createHarness() {
     inferenceModel: resolveInferenceModel,
     runtime,
     runtimeTools: { resolve: resolveRuntimeTools },
-    store: { getLatestContextCheckpoint, getSession, loadRuntimeTurnContext, loadSkillActivations },
+    store: {
+      getLatestContextCheckpoint,
+      getSession,
+      loadRuntimeTurnContext,
+      loadSkillActivations,
+      loadWorkflowLoads,
+    },
     systemCapabilities: { getTools: getSystemTools },
   };
 
@@ -951,6 +1011,7 @@ function createHarness() {
     getSystemTools,
     loadRuntimeTurnContext,
     loadSkillActivations,
+    loadWorkflowLoads,
     preflightModel,
     resolveInferenceModel,
     resolveRuntimeTools,

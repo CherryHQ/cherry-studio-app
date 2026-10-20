@@ -41,6 +41,8 @@ message list keeps its geometry and selection does not subscribe into the chat r
   longer current closes the sheet without unmounting it, so drafts survive while navigation and
   connection recovery remain reachable. Opening the sheet ends the ordinary composer's editing
   session; its text and attachments stay intact.
+  The composer also reuses this sheet for MCP prompt parameters, with per-field requirements and a
+  cancel action. Conversation questions keep their existing skip policy and non-dismissible behavior.
 - `components/ChatWorkspace/` presents the shared Conversation read model: a snapshot, the
   already-reconciled message rows and a history window. It preserves the shared `MessageList`,
   initial-render gating and pending first-send rows. Message actions and approvals use the bound

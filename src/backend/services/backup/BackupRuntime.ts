@@ -1,4 +1,4 @@
-import Constants from 'expo-constants';
+import * as Application from 'expo-application';
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Platform } from 'react-native';
@@ -21,6 +21,7 @@ import {
   storageDirectory,
   takeStorageOutcome,
 } from '@/backend/data/storage/storagePaths';
+import { hashLocalFile } from '@/backend/services/file/fileHash';
 import {
   BackupError,
   type BackupModule,
@@ -112,7 +113,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           entries.push({
             path,
             size: file.size,
-            sha256: await backupStorageNative().hashFile(file.uri),
+            sha256: await hashLocalFile(file.uri, signal),
           });
           this.publish({ phase: 'packing', completed: index, total: resources.paths.length * 2 });
         }
@@ -123,7 +124,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
           formatVersion: 1,
           id: randomUUID(),
           createdAt: new Date().toISOString(),
-          appVersion: Constants.expoConfig?.version ?? 'unknown',
+          appVersion: Application.nativeApplicationVersion ?? 'unknown',
           platform: Platform.OS,
           ...version,
           entries,
@@ -239,7 +240,7 @@ export class BackupRuntime extends BaseService implements BackupModule {
         );
         signal.throwIfAborted();
         // Moved payloads keep their verified hashes; startup re-verifies every entry.
-        const databaseHash = await backupStorageNative().hashFile(database.uri);
+        const databaseHash = await hashLocalFile(database.uri, signal);
         const restoredManifest: BackupManifest = {
           ...manifest,
           ...(await bundledBackupVersion()),

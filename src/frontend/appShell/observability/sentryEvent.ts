@@ -15,6 +15,20 @@ const ERROR_CODES = new Set([
   'NOT_FOUND',
   'VALIDATION_ERROR',
 ]);
+const UPDATE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const CONTEXT_FIELDS: Record<string, string[]> = {
+  os: ['name', 'version', 'build', 'kernel_version'],
+  device: ['family', 'model', 'model_id', 'arch', 'simulator', 'memory_size'],
+  // Set by expoContextIntegration. `emergency_launch_reason` is a free-form native error message.
+  ota_updates: [
+    'is_enabled',
+    'is_embedded_launch',
+    'is_emergency_launch',
+    'update_id',
+    'channel',
+    'runtime_version',
+  ],
+};
 type DebugImage = NonNullable<NonNullable<ErrorEvent['debug_meta']>['images']>[number];
 
 export function isExpectedSentryError(error: unknown): boolean {
@@ -30,7 +44,7 @@ export function sentryIdentifier(value: unknown): string | undefined {
 function sourceFile(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const name = value.split(/[?#]/, 1)[0]?.split(/[/\\]/).pop();
-  return name && /^[a-zA-Z0-9_.-]+\.(?:bundle|js|jsx|ts|tsx|hbc|wasm)$/.test(name)
+  return name && /^[a-zA-Z0-9_.-]+\.(?:bundle|jsbundle|js|jsx|ts|tsx|hbc|wasm)$/.test(name)
     ? `app:///${name}`
     : undefined;
 }
@@ -116,16 +130,24 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
   if (typeof code === 'string' && ERROR_CODES.has(code)) tags['error.code'] = code;
 
   const contexts: ErrorEvent['contexts'] = {};
-  for (const [key, fields] of Object.entries({
-    os: ['name', 'version', 'build', 'kernel_version'],
-    device: ['family', 'model', 'model_id', 'arch', 'simulator', 'memory_size'],
-  })) {
+  for (const [key, fields] of Object.entries(CONTEXT_FIELDS)) {
     const context = event.contexts?.[key];
     if (context)
       contexts[key] = Object.fromEntries(
         Object.entries(context).filter(([field]) => fields.includes(field)),
       );
   }
+  // Tags make OTA groups searchable; release/dist stay those of the native binary.
+  const updates = contexts.ota_updates;
+  if (updates) {
+    if (typeof updates.update_id === 'string' && UPDATE_ID.test(updates.update_id))
+      tags['ota.update_id'] = updates.update_id;
+    const channel = sentryIdentifier(updates.channel);
+    if (channel) tags['ota.channel'] = channel;
+    if (typeof updates.is_embedded_launch === 'boolean')
+      tags['ota.embedded'] = String(updates.is_embedded_launch);
+  }
+  const debugImages = event.debug_meta?.images?.flatMap(sanitizeDebugImage);
 
   return {
     type: undefined,
@@ -161,10 +183,6 @@ export function sanitizeSentryEvent(event: Event, originalException?: unknown): 
           : undefined,
       })),
     },
-    debug_meta: event.debug_meta
-      ? {
-          images: event.debug_meta.images?.flatMap(sanitizeDebugImage),
-        }
-      : undefined,
+    debug_meta: debugImages ? { images: debugImages } : undefined,
   };
 }

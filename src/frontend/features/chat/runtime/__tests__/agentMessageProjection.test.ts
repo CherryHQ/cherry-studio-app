@@ -28,6 +28,75 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('a stale history page cannot replace newer message-owned translations', () => {
+    const older = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '旧译文', createdAt: 1 } },
+    };
+    const newer = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '新译文', createdAt: 2 } },
+    };
+    const persisted = message('answer', { status: 'success', translations: older });
+    const live = message('answer', {
+      status: 'success',
+      translations: newer,
+      updatedAt: '2026-08-25T00:00:01.000Z',
+    });
+    expect(mergeAgentMessageViews([persisted], [live])[0]).toBe(live);
+  });
+  test('keeps newly persisted translations when an older live snapshot covers the same message', () => {
+    const translations = {
+      sourceHash: 'a'.repeat(64),
+      results: { 'zh-CN': { content: '译文', createdAt: 1 } },
+    };
+    const persisted = message('answer', { status: 'success', translations });
+    const live = message('answer', { status: 'success' });
+    const merged = mergeAgentMessageViews([persisted], [live]);
+    expect(toAgentMessageListItem(merged[0])?.data.translations).toEqual(translations);
+    expect(merged[0].parts).toBe(live.parts);
+    expect(live.translations).toBeUndefined();
+  });
+  test.each(['output-available', 'denied'] as const)(
+    'preserves canonical MCP identity for %s tools with opaque runtime names',
+    (state) => {
+      const source = { serverId: 'server-1', connectionKey: `remote:${'a'.repeat(64)}` };
+      const app = {
+        ...source,
+        agentId: 'agent-1',
+        toolName: 'show_dashboard',
+        resourceUri: 'ui://acceptance/dashboard',
+      };
+      const value = { content: [{ type: 'text', text: 'Dashboard ready' }] };
+      const item = toAgentMessageListItem(
+        message('assistant-mcp', {
+          status: 'success',
+          parts: [
+            {
+              id: 'tool-1',
+              type: 'dynamic-tool',
+              toolCallId: 'call-1',
+              toolName: 'mcp_show_dashboard_0z77llj',
+              toolRef: { source: 'mcp', serverId: 'server-1', rawToolName: 'show_dashboard' },
+              title: 'show_dashboard',
+              input: {},
+              state,
+              ...(state === 'output-available'
+                ? { output: { value, artifacts: [], mcpSource: source, mcpApp: app } }
+                : {}),
+            },
+          ],
+        }),
+      );
+
+      expect(item?.data.parts?.[0]).toMatchObject({
+        toolMetadata: { cherry: { tool: { type: 'mcp', serverId: 'server-1' } } },
+        state: state === 'denied' ? 'output-denied' : state,
+        ...(state === 'output-available' ? { output: value, mcpSource: source, mcpApp: app } : {}),
+      });
+    },
+  );
+
   test('running tool rows retain live child progress for rendering', () => {
     const progress = {
       calls: [{ id: 'call/c1', name: 'read_file', args: '{}', status: 'running' as const }],
@@ -135,14 +204,54 @@ describe('agentMessageProjection', () => {
     expect(settled?.data.parts).toEqual([
       { type: 'reasoning', text: 'Received summary.', state: 'done' },
     ]);
-    expect(
-      toAgentMessageListItem(
-        message('empty', {
-          parts: [{ id: 'opaque', type: 'reasoning', text: '', state: 'streaming' }],
-        }),
-      )?.data.parts,
-    ).toEqual([]);
   });
+
+  test.each([false, true])(
+    'keeps empty reasoning visible only while streaming, after a completed tool=%s',
+    (afterTool) => {
+      const cache = createAgentMessageListProjectionCache();
+      const precedingParts: AgentMessageView['parts'] = afterTool
+        ? [
+            {
+              id: 'tool',
+              type: 'dynamic-tool',
+              title: 'Run JavaScript',
+              toolCallId: 'js-call',
+              toolName: 'run_js',
+              toolRef: { source: 'builtin', capabilityId: 'run_js' },
+              input: { code: '1 + 1' },
+              output: { value: 2, artifacts: [] },
+              state: 'output-available',
+            },
+          ]
+        : [];
+      const reasoning = { id: 'reasoning', type: 'reasoning' as const, text: '' };
+      const growing = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'streaming' }],
+        }),
+        cache,
+      );
+      const settled = toAgentMessageListItem(
+        message('assistant', {
+          parts: [...precedingParts, { ...reasoning, state: 'done' }],
+        }),
+        cache,
+      );
+
+      expect(growing?.data.partKeys).toEqual([
+        ...precedingParts.map((part) => part.id),
+        'reasoning',
+      ]);
+      expect(growing?.data.parts?.at(-1)).toEqual({
+        type: 'reasoning',
+        text: '',
+        state: 'streaming',
+      });
+      expect(settled?.data.partKeys).toEqual(precedingParts.map((part) => part.id));
+      expect(settled?.data.parts).toEqual(growing?.data.parts?.slice(0, -1));
+    },
+  );
 
   test('reopened cancelled answers hide the legacy abort error while retaining unrelated failures', () => {
     const parts: AgentMessageView['parts'] = [
@@ -734,6 +843,73 @@ describe('agentMessageProjection', () => {
     expect(
       mergeAgentMessageViews([persistedUser, persistedAssistant], [finalizedAssistant, nextUser]),
     ).toEqual([persistedUser, finalizedAssistant, nextUser]);
+  });
+
+  test('keeps older live questions before the saved replies when the history window advances', () => {
+    const olderUser = message('user-1', { role: 'user', status: 'success' });
+    const latestUser = message('user-2', {
+      createdAt: '2026-08-25T00:00:01.000Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'turn-2',
+    });
+    const latestAssistant = message('assistant-2', {
+      createdAt: '2026-08-25T00:00:01.001Z',
+      status: 'success',
+      turnId: 'turn-2',
+    });
+    const nextUser = message('user-3', {
+      createdAt: '2026-08-25T00:00:02.000Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'turn-3',
+    });
+    const history = [latestUser, latestAssistant];
+    const live = [olderUser, latestUser, nextUser];
+
+    expect(mergeAgentMessageViews(history, live)).toEqual([
+      olderUser,
+      latestUser,
+      latestAssistant,
+      nextUser,
+    ]);
+    expect(history).toEqual([latestUser, latestAssistant]);
+    expect(live).toEqual([olderUser, latestUser, nextUser]);
+  });
+
+  test('uses ordered IDs to insert a missing user before its same-millisecond answer', () => {
+    const user = message('019ec992-a000-7000-8000-000000000001', {
+      role: 'user',
+      status: 'success',
+    });
+    const assistant = message('019ec992-a000-7000-8000-000000000002', { status: 'success' });
+
+    expect(mergeAgentMessageViews([assistant], [user])).toEqual([user, assistant]);
+  });
+
+  test('keeps the saved position of a retried answer when its live creation time differs', () => {
+    const user = message('user', { role: 'user', status: 'success' });
+    const assistant = message('assistant', {
+      createdAt: '2026-08-25T00:00:00.001Z',
+      status: 'pending',
+    });
+    const liveAssistant = {
+      ...assistant,
+      createdAt: '2026-08-25T00:00:01.000Z',
+      status: 'streaming' as const,
+    };
+    const nextUser = message('next-user', {
+      createdAt: '2026-08-25T00:00:00.002Z',
+      role: 'user',
+      status: 'success',
+      turnId: 'next-turn',
+    });
+
+    expect(mergeAgentMessageViews([user, assistant], [liveAssistant, nextUser])).toEqual([
+      user,
+      liveAssistant,
+      nextUser,
+    ]);
   });
 
   test('structurally shares unchanged rows and parts across stream updates', () => {

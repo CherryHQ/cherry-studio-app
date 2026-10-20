@@ -19,7 +19,11 @@ import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { TraceRecorder } from '@/backend/ai/observability';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import { publishDataApiChanges } from '@/backend/data/dataApiChanges';
-import { AgentSqlDatabase } from '@/backend/data/db/AgentSqlDatabase';
+import {
+  AgentSqlDatabase,
+  agentDatabaseSize,
+  discardAgentDatabase,
+} from '@/backend/data/db/AgentSqlDatabase';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { agentToolBindingService } from '@/backend/data/services/AgentToolBindingService';
@@ -35,17 +39,19 @@ import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoor
 import { skillStorage } from '@/backend/services/skill';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { LanguageVarious } from '@/shared/data/preference';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import { managedFileResolver } from '../resources/managedFileResolver';
-import type { RuntimeWebTools } from '../runtime';
+import type { RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
   createSystemCapabilitySource,
   type SystemCapabilitySource,
 } from '../tools/builtInToolSource';
+import type { FileLibraryTrashAccess } from '../tools/fileLibraryManagementTools';
 import { createAgentRuntimeToolResolver } from '../tools/runtimeTools';
 import { type AgentDefinitionSource, createAgentTableDefinitionSource } from './agentDefinitions';
 import { createAgentImageGeneration } from './agentImageGeneration';
@@ -56,6 +62,7 @@ import type { MobileAgentHostNaming, MobileAgentHostPorts } from './MobileAgentH
 import { createSkillScopeSource } from './skillScope';
 
 const LEGACY_REPLAY_CACHE_ID = 'cherry-agent-replay-cache';
+const logger = loggerService.withContext('AgentHostDependencies');
 
 @Injectable('AgentHostDependencies')
 @ServicePhase(Phase.PostReady)
@@ -66,6 +73,8 @@ const LEGACY_REPLAY_CACHE_ID = 'cherry-agent-replay-cache';
   'McpRuntimeService',
   'WebSearchService',
   'TraceStorageService',
+  'AgentRuntime',
+  'TrashRuntime',
   'KeepAliveCoordinator',
 ])
 export class AgentHostDependencies extends BaseService implements MobileAgentHostPorts {
@@ -79,7 +88,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       : undefined;
   }
   readonly writeToolOutput: NonNullable<MobileAgentHostPorts['writeToolOutput']> = async (
-    { name, data },
+    { name, data, folderId },
     signal,
   ) => {
     const entry = await createInternalEntry(
@@ -93,6 +102,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
             ? 'text/plain'
             : imageMediaTypeFromExtension(name.split('.').at(-1)),
         provenance: 'generated',
+        folderId,
       },
       signal,
     );
@@ -113,6 +123,8 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     this.keepAlive.acquire('agent.durable', onInterrupt);
   readonly durableStorage = {
     open: () => AgentSqlDatabase.open(),
+    size: () => agentDatabaseSize(),
+    discard: () => discardAgentDatabase(),
     notifyTranscript: (sessionId: string) =>
       publishDataApiChanges([
         '/agent-sessions',
@@ -147,6 +159,8 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     mcpRuntime: McpRuntimeService,
     private readonly webSearchService: WebSearchService,
     readonly traces: TraceRecorder,
+    private readonly textGenerator: RuntimeTextGenerator,
+    private readonly trash: FileLibraryTrashAccess,
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
   ) {
     super();
@@ -190,6 +204,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       model: modelService,
       preference: this.preferenceService,
       webSearch: this.webSearchService,
+      trash: this.trash,
     }));
   }
 
@@ -220,9 +235,20 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
 
   naming(signal: AbortSignal): MobileAgentHostNaming {
     return new AgentSessionNaming({
-      ai: this.aiService,
+      ai: this.textGenerator,
       appLanguage: () => this.appLanguage(),
       model: modelService,
+      onUsage: async (report) => {
+        try {
+          await aiUsageRecordService.recordInvocation({
+            ...report,
+            context: { ...report.context, source: null, messageRef: null },
+            modality: 'language',
+          });
+        } catch {
+          logger.warn('Failed to record session naming usage');
+        }
+      },
       preference: this.preferenceService,
       provider: providerService,
       signal,

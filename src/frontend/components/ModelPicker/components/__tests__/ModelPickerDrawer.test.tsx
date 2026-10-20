@@ -6,29 +6,59 @@ import type { ModelPickerListItem } from '../../utils/modelPickerListItems';
 import { ModelPickerDrawer } from '../ModelPickerDrawer';
 
 let mockGroups: ModelPickerGroup[] = [];
-let mockListProps: { emptyText?: string; listItems: readonly ModelPickerListItem[] } | undefined;
+let mockListProps:
+  | {
+      emptyText?: string;
+      listItems: readonly ModelPickerListItem[];
+      maxSelectedCount?: number;
+      selectedModelIds?: readonly string[];
+    }
+  | undefined;
+const chosenModelId = 'provider::chosen';
 
 jest.mock('@/frontend/components/ModelRegistry', () => ({
   ModelRegistryGate: ({ children }: { children: ReactNode }) => children,
 }));
 
 jest.mock('@cherrystudio/ui/components', () => {
-  const { TextInput: MockTextInput, View: MockView } = jest.requireActual('react-native');
+  const {
+    Text: MockText,
+    TextInput: MockTextInput,
+    View: MockView,
+  } = jest.requireActual('react-native');
+  const { createElement } = jest.requireActual('react');
+  const Button = (props: object) => createElement('Button', props);
+  Button.Label = function ButtonLabel({ children }: { children: ReactNode }) {
+    return <MockText>{children}</MockText>;
+  };
 
   return {
     BottomSheet: ({
       children,
+      footer,
+      headerAction,
       size,
       testID,
+      title,
     }: {
       children: ReactNode;
+      footer?: ReactNode;
+      headerAction?: ReactNode;
       size: string;
       testID: string;
+      title: string;
     }) => (
-      <MockView accessibilityValue={{ text: size }} testID={`${testID}-surface`}>
+      <MockView
+        accessibilityLabel={title}
+        accessibilityValue={{ text: size }}
+        testID={`${testID}-surface`}
+      >
+        {headerAction}
         {children}
+        {footer}
       </MockView>
     ),
+    Button,
     SearchField: (props: Record<string, unknown>) => <MockTextInput {...props} />,
   };
 });
@@ -38,14 +68,17 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('../../hooks/useModelPickerData', () => ({
-  useModelPickerData: () => ({ groups: mockGroups, isLoading: false }),
+  useModelPickerData: () => ({
+    groups: mockGroups,
+    isLoading: false,
+  }),
 }));
 
 jest.mock('../ModelPickerList', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
-    ModelPickerList: (props: { emptyText?: string; listItems: readonly ModelPickerListItem[] }) => {
+    ModelPickerList: (props: NonNullable<typeof mockListProps>) => {
       mockListProps = props;
       return <MockView />;
     },
@@ -126,5 +159,41 @@ describe('ModelPickerDrawer', () => {
         .map((item) => item.item.modelId),
     ).toEqual(['provider::compatible']);
     expect(mockListProps?.emptyText).toBe('No compatible models');
+  });
+
+  test('offers a multi-select mode entered and left from the header', () => {
+    const multiSelect = {
+      enabled: false,
+      maxCount: 8,
+      onEnabledChange: jest.fn(),
+      selectedModelIds: [chosenModelId],
+    };
+    const render = (enabled: boolean) =>
+      act(() => {
+        renderer.update(
+          <ModelPickerDrawer
+            modelType="text"
+            multiSelect={{ ...multiSelect, enabled }}
+            onClose={jest.fn()}
+            onSelect={jest.fn()}
+            open
+            selectedModelId={null}
+          />,
+        );
+      });
+    const sheet = () => renderer.root.findByProps({ testID: 'model-picker-surface' });
+    const toggle = () => renderer.root.findByProps({ testID: 'model-picker-multi-select' });
+
+    render(false);
+    expect(sheet().props.accessibilityLabel).toBe('modelPicker.title');
+    expect(mockListProps?.selectedModelIds).toBeUndefined();
+    act(() => toggle().props.onPress());
+    expect(multiSelect.onEnabledChange).toHaveBeenLastCalledWith(true);
+
+    render(true);
+    expect(sheet().props.accessibilityLabel).toBe('modelPicker.multiSelect.title');
+    expect(mockListProps).toMatchObject({ maxSelectedCount: 8, selectedModelIds: [chosenModelId] });
+    act(() => toggle().props.onPress());
+    expect(multiSelect.onEnabledChange).toHaveBeenLastCalledWith(false);
   });
 });

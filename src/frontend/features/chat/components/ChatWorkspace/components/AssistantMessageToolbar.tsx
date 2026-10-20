@@ -1,44 +1,52 @@
+import AtSignIcon from '@cherrystudio/app-icons/icons/at-sign';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
-import ShareIcon from '@cherrystudio/app-icons/icons/share';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
-import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
-import { Button } from '@cherrystudio/ui/components';
+import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
 } from '../context/AssistantMessageActionsProvider';
+import { useMessageTranslation } from '../translation/MessageTranslationProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
   message: MessageListItem;
 };
 
+/**
+ * Frequent actions stay one tap away; translation, sharing and deletion share
+ * one short menu.
+ */
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const {
     copiedMessageId,
     isAssistantToolbarEnabled,
     isDeleteDisabled,
     isRetryDisabled,
-    retryableMessageId,
+    retryableMessageIds,
   } = useAssistantMessageActionsState();
   const {
+    answerWithModel,
     copyAssistantMessage,
     deleteMessageTurn,
     forkFromAssistantMessage,
     retryAssistantMessage,
     shareAssistantMessage,
   } = useAssistantMessageActions();
+  const translation = useMessageTranslation(message);
   const isSettled = isAssistantToolbarEnabled && message.status !== 'pending';
   const copyText = useMemo(
     () => (isSettled ? copyAssistantMessageText(message.data.parts ?? []) : ''),
@@ -48,26 +56,57 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   // Turn-scoped, so a row with no turn — synthetic, or not yet reserved — has
   // nothing to delete.
   const turnId = message.turnId;
+  // Answering with another model is offered wherever the answer can be regenerated.
+  const isRegenerable = retryableMessageIds.has(message.id);
 
   if (!isSettled) {
     return null;
   }
 
+  const hasTranslation = translation ? translation.state.status !== 'idle' : false;
+  const menuItems: MenuItem[] = [
+    ...(translation
+      ? [
+          {
+            id: 'translate',
+            label: t(
+              hasTranslation
+                ? translation.state.visible
+                  ? 'chat.translation.hide'
+                  : 'chat.translation.show'
+                : 'chat.translation.translate',
+            ),
+            // The translation panel offers other target languages once it is open.
+            onPress: () =>
+              hasTranslation
+                ? translation.store.toggle(translation.source)
+                : void translation.store.start(
+                    translation.source,
+                    resolveAppLanguage(i18n.resolvedLanguage ?? i18n.language),
+                  ),
+          },
+        ]
+      : []),
+    {
+      id: 'share',
+      label: t('chat.messageActions.share'),
+      onPress: () => shareAssistantMessage({ messageId: message.id }),
+    },
+    ...(deleteMessageTurn && turnId
+      ? [
+          {
+            destructive: true,
+            disabled: isDeleteDisabled,
+            id: 'delete',
+            label: t('common.delete'),
+            onPress: () => deleteMessageTurn({ turnId }),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {retryAssistantMessage && retryableMessageId === message.id ? (
-        <Button
-          accessibilityLabel={t(
-            message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
-          )}
-          disabled={isRetryDisabled}
-          icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
-          onPress={() => retryAssistantMessage({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-retry"
-          variant="ghost"
-        />
-      ) : null}
       {copyText ? (
         <Button
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
@@ -84,6 +123,30 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
+      {retryAssistantMessage && isRegenerable ? (
+        <Button
+          accessibilityLabel={t(
+            message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
+          )}
+          disabled={isRetryDisabled}
+          icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
+          onPress={() => retryAssistantMessage({ messageId: message.id })}
+          size="xs"
+          testID="assistant-message-retry"
+          variant="ghost"
+        />
+      ) : null}
+      {answerWithModel && isRegenerable ? (
+        <Button
+          accessibilityLabel={t('chat.messageActions.answerWith')}
+          disabled={isRetryDisabled}
+          icon={<AtSignIcon className="text-muted-foreground" size={15} />}
+          onPress={() => answerWithModel({ messageId: message.id })}
+          size="xs"
+          testID="assistant-message-answer-with"
+          variant="ghost"
+        />
+      ) : null}
       {forkFromAssistantMessage ? (
         <Button
           accessibilityLabel={t('chat.messageActions.fork')}
@@ -94,25 +157,15 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      <Button
-        accessibilityLabel={t('chat.share.title')}
-        icon={<ShareIcon className="text-muted-foreground" size={15} />}
-        onPress={() => shareAssistantMessage({ messageId: message.id })}
-        size="xs"
-        testID="assistant-message-share"
-        variant="ghost"
-      />
-      {deleteMessageTurn && turnId ? (
+      <ActionMenu items={menuItems}>
         <Button
-          accessibilityLabel={t('chat.messageActions.delete')}
-          disabled={isDeleteDisabled}
-          icon={<Trash2Icon className="text-muted-foreground" size={15} />}
-          onPress={() => deleteMessageTurn({ turnId })}
+          accessibilityLabel={t('common.more')}
+          icon={<EllipsisIcon className="text-muted-foreground" size={15} />}
           size="xs"
-          testID="assistant-message-delete"
+          testID="assistant-message-more"
           variant="ghost"
         />
-      ) : null}
+      </ActionMenu>
     </View>
   );
 });
