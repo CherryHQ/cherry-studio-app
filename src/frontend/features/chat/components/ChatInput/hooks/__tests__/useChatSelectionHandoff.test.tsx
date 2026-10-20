@@ -1,3 +1,5 @@
+import type { ComposerInputHandle } from '@cherrystudio/ui/components';
+import { useEffect, useLayoutEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -6,19 +8,28 @@ import {
   getChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
 import {
-  appendComposerAttachments,
-  type ComposerAttachmentDraft,
+  ComposerProvider,
+  useComposerMeta,
+} from '@/frontend/components/Composer/context/ComposerProvider';
+import { useManagedComposerAttachments } from '@/frontend/components/Composer/hooks/useManagedComposerAttachments';
+import {
+  type ComposerInitialAttachment,
   createReadyAttachmentDraft,
 } from '@/frontend/components/Composer/utils/composerAttachments';
+import type { ResolvedFile } from '@/shared/contracts/file';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { readSelectionMentions } from '../../utils/selectionMentions';
 import { useChatSelectionHandoff } from '../useChatSelectionHandoff';
 
-let mockFocus: (() => void) | undefined;
+let mockFocused = false;
+let mockReplayFocus = false;
 let mockDraft = '';
 let mockCaret = 0;
-let mockAttachments: ComposerAttachmentDraft[] = [];
+let mockAttachmentStore: ReturnType<typeof useManagedComposerAttachments>;
+const mockPrepareWorkspaceAttachment = jest.fn();
+const mockToastShow = jest.fn();
+const mockFileModule = { prepareWorkspaceAttachment: mockPrepareWorkspaceAttachment };
 const mockInput = {
   insertText(text: string) {
     mockDraft = mockDraft.slice(0, mockCaret) + text + mockDraft.slice(mockCaret);
@@ -29,18 +40,34 @@ const mockInput = {
   },
 };
 const mockInputRef: { current: typeof mockInput | null } = { current: mockInput };
-const mockAddAttachments = (next: ComposerAttachmentDraft[]) => {
-  mockAttachments = appendComposerAttachments(mockAttachments, next);
-};
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => {
-    mockFocus = callback;
+    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const focused = mockFocused;
+    const replay = mockReplayFocus;
+    useEffect(() => {
+      if (focused) {
+        callback();
+        if (replay) callback();
+      }
+    }, [callback, focused, replay]);
   },
 }));
-jest.mock('@/frontend/components/Composer', () => ({
-  useComposerMeta: () => ({ inputRef: mockInputRef }),
-  useComposerActions: () => ({ addAttachments: mockAddAttachments }),
+jest.mock('@/frontend/components/Composer', () =>
+  jest.requireActual('@/frontend/components/Composer/context/ComposerProvider'),
+);
+jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => mockFileModule,
+}));
+jest.mock('@cherrystudio/ui/components', () => ({
+  useToast: () => ({ toast: { show: mockToastShow } }),
+}));
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+jest.mock('@/shared/core/logger/LoggerService', () => ({
+  loggerService: { withContext: () => ({ warn: jest.fn() }) },
 }));
 
 const file = {
@@ -66,16 +93,63 @@ const selection = {
 };
 let renderer: ReactTestRenderer | undefined;
 
-function Probe({ token }: { token: string }) {
+type ProbeProps = {
+  token?: string;
+  initialAttachments?: readonly ComposerInitialAttachment[];
+  workspaceSessionId?: string;
+  workspaceFolderId?: string;
+};
+let props: ProbeProps;
+
+function Probe({ token, initialAttachments, workspaceSessionId, workspaceFolderId }: ProbeProps) {
+  const store = useManagedComposerAttachments(
+    initialAttachments,
+    workspaceSessionId,
+    workspaceFolderId,
+  );
+  useEffect(() => {
+    mockAttachmentStore = store;
+  }, [store]);
+  return (
+    <ComposerProvider attachmentStore={store}>
+      <SelectionProbe token={token} />
+    </ComposerProvider>
+  );
+}
+
+function SelectionProbe({ token }: Pick<ProbeProps, 'token'>) {
+  const { inputRef } = useComposerMeta();
+  useLayoutEffect(() => {
+    inputRef.current = mockInputRef.current as unknown as ComposerInputHandle | null;
+    return () => {
+      inputRef.current = null;
+    };
+  });
   useChatSelectionHandoff(token);
   return null;
 }
 
+function render(next: ProbeProps) {
+  props = next;
+  act(() => {
+    if (renderer) renderer.update(<Probe {...props} />);
+    else renderer = create(<Probe {...props} />);
+  });
+}
+
+function focus(focused = true) {
+  mockFocused = focused;
+  render(props);
+}
+
 beforeEach(() => {
+  jest.clearAllMocks();
+  mockFocused = false;
+  mockReplayFocus = false;
   mockDraft = 'Keep before and after';
   mockCaret = 'Keep before '.length;
-  mockAttachments = [];
   mockInputRef.current = mockInput;
+  mockPrepareWorkspaceAttachment.mockResolvedValue(file);
 });
 afterEach(() => {
   act(() => renderer?.unmount());
@@ -88,57 +162,168 @@ it('inserts once at the retained caret without replacing draft text, attachments
     { ...file, entry: { ...file.entry, id: '00000000-0000-7000-8000-000000000002' } },
     'existing',
   );
-  mockAttachments = [existing];
   const token = createChatSelectionHandoff({ attachment, selection });
-  act(() => {
-    renderer = create(<Probe token={token} />);
-  });
+  render({ token, initialAttachments: [existing] });
   expect(mockDraft).toBe('Keep before and after');
 
-  act(() => mockFocus?.());
+  focus();
   expect(readSelectionMentions(mockDraft)).toMatchObject({
     text: 'Keep before report.docx · ¶1 and after',
     selectionReferences: [{ ...selection, type: 'selection', offset: 'Keep before '.length }],
   });
-  expect(mockAttachments).toEqual([existing, attachment]);
+  expect(mockAttachmentStore.attachments).toEqual([existing, attachment]);
   expect(getChatComposerHandoff(seed)?.draft).toBe('Original seed');
 
   const inserted = mockDraft;
-  act(() => mockFocus?.());
-  act(() => {
-    renderer?.unmount();
-    renderer = create(<Probe token={token} />);
-  });
-  act(() => mockFocus?.());
+  focus(false);
+  focus();
+  act(() => renderer?.unmount());
+  renderer = undefined;
+  render({ token, initialAttachments: [existing, attachment] });
   expect(mockDraft).toBe(inserted);
-  expect(mockAttachments).toEqual([existing, attachment]);
+  expect(mockAttachmentStore.attachments).toEqual([existing, attachment]);
 });
 
 it('keeps the pending reference until the input is available and deduplicates its attachment', () => {
   const token = createChatSelectionHandoff({ attachment, selection });
-  mockAttachments = [attachment];
+  const existing = { ...attachment, id: 'from-picker' };
   mockInputRef.current = null;
-  act(() => {
-    renderer = create(<Probe token={token} />);
-  });
-  act(() => mockFocus?.());
+  render({ token, initialAttachments: [existing] });
+  focus();
   expect(mockDraft).toBe('Keep before and after');
   mockInputRef.current = mockInput;
-  act(() => mockFocus?.());
+  focus(false);
+  focus();
   expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
-  expect(mockAttachments).toEqual([attachment]);
+  expect(mockAttachmentStore.attachments).toEqual([existing]);
+  expect(mockPrepareWorkspaceAttachment).not.toHaveBeenCalled();
 });
 
 it('does not deliver a superseded selection to an older route', () => {
   const stale = createChatSelectionHandoff({ attachment, selection });
   const latest = createChatSelectionHandoff({ attachment, selection });
-  act(() => {
-    renderer = create(<Probe token={stale} />);
-  });
-  act(() => mockFocus?.());
+  render({ token: stale });
+  focus();
   expect(mockDraft).toBe('Keep before and after');
-  expect(mockAttachments).toEqual([]);
-  act(() => renderer?.update(<Probe token={latest} />));
-  act(() => mockFocus?.());
+  expect(mockAttachmentStore.attachments).toEqual([]);
+  render({ token: latest });
   expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
+});
+
+it.each([
+  { workspaceSessionId: 'session-1' },
+  { workspaceFolderId: '00000000-0000-7000-8000-000000000003' },
+])('references the prepared workspace copy for %j', async (workspace) => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  const token = createChatSelectionHandoff({ attachment, selection });
+  render({ token, ...workspace });
+  focus();
+
+  expect(mockDraft).toBe('Keep before and after');
+  expect(mockAttachmentStore.attachments[0].status).toBe('importing');
+  expect(mockPrepareWorkspaceAttachment).toHaveBeenCalledWith({
+    fileEntryId: file.entry.id,
+    ...('workspaceSessionId' in workspace
+      ? { sessionId: workspace.workspaceSessionId }
+      : { folderId: workspace.workspaceFolderId }),
+  });
+
+  const copy = {
+    ...file,
+    entry: { ...file.entry, id: '00000000-0000-7000-8000-000000000004' },
+    uri: 'file:///workspace/report.docx',
+  };
+  await act(async () => prepared.resolve(copy));
+  expect(readSelectionMentions(mockDraft)).toMatchObject({
+    text: 'Keep before report.docx · ¶1 and after',
+    selectionReferences: [
+      { ...selection, selection: { ...selection.selection, file_entry_id: copy.entry.id } },
+    ],
+  });
+  expect(mockAttachmentStore.attachments).toEqual([
+    createReadyAttachmentDraft(copy, attachment.id),
+  ]);
+  focus(false);
+  focus();
+  expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
+});
+
+it('waits for the chat to regain focus when workspace preparation finishes in the background', async () => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  render({
+    token: createChatSelectionHandoff({ attachment, selection }),
+    workspaceSessionId: 'session-1',
+  });
+  focus();
+  focus(false);
+  await act(async () => prepared.resolve(file));
+  expect(mockDraft).toBe('Keep before and after');
+  focus();
+  expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
+});
+
+it('retains the pending selection when the focus effect replays before attachments commit', async () => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  mockReplayFocus = true;
+  render({
+    token: createChatSelectionHandoff({ attachment, selection }),
+    workspaceSessionId: 'session-1',
+  });
+  focus();
+  await act(async () => prepared.resolve(file));
+  expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
+  expect(mockPrepareWorkspaceAttachment).toHaveBeenCalledTimes(1);
+});
+
+it('does not insert a reference when workspace preparation fails', async () => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  render({
+    token: createChatSelectionHandoff({ attachment, selection }),
+    workspaceSessionId: 'session-1',
+  });
+  focus();
+  await act(async () => {
+    prepared.reject(new Error('Workspace copy failed'));
+  });
+  expect(mockDraft).toBe('Keep before and after');
+  expect(mockAttachmentStore.attachments).toEqual([]);
+  expect(mockToastShow).toHaveBeenCalledWith({
+    label: 'chat.attachments.importFailed',
+    variant: 'danger',
+  });
+  focus(false);
+  focus();
+  expect(mockPrepareWorkspaceAttachment).toHaveBeenCalledTimes(1);
+});
+
+it('discards the waiting reference when its attachment is removed', async () => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  render({
+    token: createChatSelectionHandoff({ attachment, selection }),
+    workspaceSessionId: 'session-1',
+  });
+  focus();
+  act(() => mockAttachmentStore.removeAttachment(attachment.id));
+  await act(async () => prepared.resolve(file));
+  // Re-adding the same source later must not resurrect the cancelled selection.
+  act(() => mockAttachmentStore.setAttachments([attachment]));
+  expect(mockDraft).toBe('Keep before and after');
+});
+
+it('discards the waiting reference when its route token changes', async () => {
+  const prepared = Promise.withResolvers<ResolvedFile>();
+  mockPrepareWorkspaceAttachment.mockReturnValue(prepared.promise);
+  render({
+    token: createChatSelectionHandoff({ attachment, selection }),
+    workspaceSessionId: 'session-1',
+  });
+  focus();
+  render({ workspaceSessionId: 'session-1' });
+  await act(async () => prepared.resolve(file));
+  expect(mockDraft).toBe('Keep before and after');
 });
