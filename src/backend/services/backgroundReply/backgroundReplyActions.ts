@@ -19,7 +19,7 @@ export function createBackgroundReplyActions(
       token: uuidv7(),
       prompt: interaction.title,
       buttons: [
-        { id: 'approve', label: t('chat.tool.approval.allow') },
+        { id: 'approve', label: t('chat.tool.approval.allow'), role: 'primary' },
         { id: 'deny', label: t('chat.tool.approval.deny') },
       ],
     };

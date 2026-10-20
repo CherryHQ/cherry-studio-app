@@ -47,21 +47,23 @@ export interface SystemIntegrationNativeModule {
     ongoing: boolean,
     alert: boolean,
     channelName: string,
-    actions?: {
-      /** Connection notices remain ordinary ongoing notifications, separate from task Live Updates. */
-      promoted?: boolean;
-      /** The persistent PC connection is the summary of its device's notifications. */
-      groupSummary?: boolean;
-      token: string;
-      prompt: string;
-      buttons: { id: string; label: string }[];
-      reply?: { label: string; placeholder: string; choices: string[] };
-    } | null,
+    options: {
+      /** Header-line label: the notice's device, or a connection's state. */
+      subText?: string;
+      /** A standing PC connection notice; it shows no post time. */
+      connection?: boolean;
+      actions?: {
+        /** Connection notices remain ordinary ongoing notifications, separate from task Live Updates. */
+        promoted?: boolean;
+        token: string;
+        prompt: string;
+        buttons: { id: string; label: string }[];
+        reply?: { label: string; placeholder: string; choices: string[] };
+      };
+    },
   ): Promise<void>;
   drainBackgroundTaskActions?(): Promise<{ token: string; actionId: string; text?: string }[]>;
   dismissBackgroundTaskNotification?(id: number): Promise<void>;
-  /** Ungroups children before removal of a service summary, retaining delivered results. */
-  detachBackgroundTaskNotificationGroup?(id: number): Promise<void>;
   dismissCompletedBackgroundTaskNotification?(key: string): Promise<void>;
   clearBackgroundTaskNotifications?(): Promise<void>;
 }

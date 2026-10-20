@@ -27,12 +27,11 @@ class SystemIntegrationModule : Module() {
     AsyncFunction("getBackgroundRunSettings") { BackgroundExecution.settings(context) }
     AsyncFunction("openBackgroundRunSettings") { BackgroundExecution.openSettings(context) }
     Function("getBackgroundTaskNotificationId") { key: String -> BackgroundExecution.notificationId(context, key) }
-    AsyncFunction("showBackgroundTaskNotification") { id: Int, title: String, body: String, url: String?, ongoing: Boolean, alert: Boolean, channelName: String, actions: Map<String, Any?>? ->
-      BackgroundExecution.show(context, id, title, body, url, ongoing, alert, channelName, actions)
+    AsyncFunction("showBackgroundTaskNotification") { id: Int, title: String, body: String, url: String?, ongoing: Boolean, alert: Boolean, channelName: String, options: Map<String, Any?>? ->
+      BackgroundExecution.show(context, id, title, body, url, ongoing, alert, channelName, options)
     }
     AsyncFunction("drainBackgroundTaskActions") { BackgroundTaskActions.drain(context) }
     AsyncFunction("dismissBackgroundTaskNotification") { id: Int -> BackgroundExecution.dismiss(context, id) }
-    AsyncFunction("detachBackgroundTaskNotificationGroup") { id: Int -> BackgroundExecution.detachGroup(context, id) }
     AsyncFunction("dismissCompletedBackgroundTaskNotification") { key: String -> BackgroundExecution.dismissCompleted(context, key) }
     AsyncFunction("clearBackgroundTaskNotifications") { BackgroundExecution.clearOrphans(context) }
   }

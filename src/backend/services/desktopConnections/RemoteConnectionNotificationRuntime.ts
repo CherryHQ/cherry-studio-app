@@ -67,15 +67,12 @@ export class RemoteConnectionNotificationRuntime extends BaseService {
     const notifications = connections.map((connection) => ({
       connectionId: connection.id,
       key: `remote-connection:${connection.id}`,
-      title: this.environment.translate('notifications.remote.title'),
-      body: [
-        connection.name,
-        this.environment.translate(
-          connection.status === 'connected'
-            ? 'notifications.remote.connected'
-            : 'remoteAgent.connecting',
-        ),
-      ].join('\n'),
+      title: connection.name,
+      body: this.environment.translate(
+        connection.status === 'connected'
+          ? 'notifications.remote.connected'
+          : 'remoteAgent.connecting',
+      ),
       url: `${resolveScheme({})}://remote?connectionId=${encodeURIComponent(connection.id)}`,
       token: connection.token,
       disconnectLabel: this.environment.translate('notifications.remote.disconnect'),

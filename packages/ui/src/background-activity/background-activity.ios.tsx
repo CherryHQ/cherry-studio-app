@@ -1,6 +1,8 @@
 import { Button, HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
+  buttonBorderShape,
+  buttonStyle,
   fixedSize,
   font,
   foregroundStyle,
@@ -14,6 +16,7 @@ import {
   padding,
   privacySensitive,
   resizable,
+  tint,
   truncationMode,
   widgetAccentedRenderingMode,
 } from '@expo/ui/swift-ui/modifiers';
@@ -34,6 +37,39 @@ export const renderBackgroundActivity: LiveActivityComponent<
     props.actions?.prompt ?? (props.preview && !isSimplified ? props.preview : props.title);
   const expandedContent =
     props.actions?.prompt ?? (props.preview && !isSimplified ? props.preview : props.detail);
+  // Neutral-first actions; only a `primary` decision uses the mode-aware `primary` green
+  // (green-900) with its `primary-foreground`. The Dynamic Island is always dark.
+  const actionButtons = (dark: boolean) =>
+    props.actions?.buttons.map((action) => (
+      <Button
+        key={action.id}
+        modifiers={[
+          buttonStyle(action.role === 'primary' ? 'borderedProminent' : 'bordered'),
+          buttonBorderShape('roundedRectangle', 11.2),
+          tint(
+            action.role === 'primary'
+              ? dark
+                ? '#00CA50'
+                : '#107D32'
+              : { type: 'hierarchical', style: 'primary' },
+          ),
+        ]}
+        target={JSON.stringify({ token: props.actions!.token, actionId: action.id })}
+      >
+        <Text
+          modifiers={[
+            font({ size: 14, weight: 'semibold' }),
+            privacySensitive(),
+            ...(action.role === 'primary' ? [foregroundStyle(dark ? '#000000' : '#FFFFFF')] : []),
+            lineLimit(1),
+            truncationMode('tail'),
+            frame({ maxWidth: Infinity }),
+          ]}
+        >
+          {action.label}
+        </Text>
+      </Button>
+    ));
   const timerInterval = {
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
@@ -133,15 +169,8 @@ export const renderBackgroundActivity: LiveActivityComponent<
           </VStack>
         </HStack>
         {props.actions?.buttons.length ? (
-          <HStack spacing={12} modifiers={[padding({ horizontal: 14, bottom: 10 })]}>
-            {props.actions.buttons.map((action) => (
-              <Button
-                key={action.id}
-                label={action.label}
-                modifiers={[privacySensitive()]}
-                target={JSON.stringify({ token: props.actions!.token, actionId: action.id })}
-              />
-            ))}
+          <HStack spacing={8} modifiers={[padding({ horizontal: 14, bottom: 12 })]}>
+            {actionButtons(environment.colorScheme === 'dark')}
           </HStack>
         ) : null}
       </VStack>
@@ -351,18 +380,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
         >
           {expandedContent}
         </Text>
-        {props.actions?.buttons.length ? (
-          <HStack spacing={12}>
-            {props.actions.buttons.map((action) => (
-              <Button
-                key={action.id}
-                label={action.label}
-                modifiers={[privacySensitive()]}
-                target={JSON.stringify({ token: props.actions!.token, actionId: action.id })}
-              />
-            ))}
-          </HStack>
-        ) : null}
+        {props.actions?.buttons.length ? <HStack spacing={8}>{actionButtons(true)}</HStack> : null}
       </VStack>
     ),
   };
