@@ -221,6 +221,32 @@ describe('buildAgentSystemPrompt', () => {
     expect(withoutFile).not.toContain('## Managed Files');
   });
 
+  test('describes only available Office tools and conditions editing guidance on the catalog', () => {
+    const prompt = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('create_document')],
+    });
+    expect(prompt).toContain('discover `create_document` with `tool_search`');
+    expect(prompt).not.toContain('`create_workbook`');
+    expect(prompt).not.toContain('Editing requires');
+    expect(prompt).not.toContain('run_office_script');
+    const scripted = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('create_workbook'), tool('run_office_script')],
+    });
+    expect(scripted).toContain('instead of reading cells in batches');
+    const editing = buildAgentSystemPrompt({
+      agentInstructions: '',
+      appLanguage: 'en-US',
+      tools: [tool('edit_document'), tool('inspect_office_file'), tool('read_office_content')],
+    });
+    expect(editing).toContain('source_sha256');
+    expect(editing).toContain('NEW copy');
+    expect(editing).toContain('compare it with the excerpt before editing');
+  });
+
   test('leaves MCP catalog guidance to the Runtime binding', () => {
     const withMcp = buildAgentSystemPrompt({
       agentInstructions: '',

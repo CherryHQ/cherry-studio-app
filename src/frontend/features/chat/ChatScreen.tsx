@@ -35,6 +35,7 @@ import { type FileWorkspaceAddress, useFileWorkspace } from '@/frontend/hooks/fi
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { ChatInput } from './components/ChatInput';
+import { createSelectionMention } from './components/ChatInput/utils/selectionMentions';
 import { createSkillActionMention } from './components/ChatInput/utils/skillMentions';
 import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
@@ -176,7 +177,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
   const composerHandoff = getChatComposerHandoff(composerSession.seedHandoff);
   const initialDraft = composerHandoff?.skillAction
     ? `${createSkillActionMention(composerHandoff.skillAction, t(composerHandoff.skillAction === 'create' ? 'skills.create.name' : 'skills.find.name'))} ${composerHandoff.draft}`
-    : composerHandoff?.draft;
+    : composerHandoff?.selection
+      ? `${createSelectionMention(composerHandoff.selection.label, composerHandoff.selection.selection)} ${composerHandoff.draft}`
+      : composerHandoff?.draft;
   const { bottom: bottomInset } = useSafeAreaInsets();
   const [composerHeight, setComposerHeight] = useState(0);
   const contentBottomInset = hasComposer ? composerContentGap : PREVIEW_CONTENT_BOTTOM_INSET;

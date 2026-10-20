@@ -32,6 +32,7 @@ it already exists.
 | Message translation source text | `messageTranslationText` in `src/shared/utils/messageTranslation.ts` |
 | Safe Markdown code fences | `createCodeBlockMarkdown` in `src/shared/utils/createCodeBlockMarkdown.ts` |
 | Isolated JavaScript execution | `createJsSandbox` in `src/backend/services/jsSandbox` |
+| Generating, inspecting and patching bounded DOCX/XLSX/PPTX files | `src/backend/services/office`; the Agent tools own source/image authorization, source hashes and file publication |
 | Long-lived service lifecycle | `BaseService` in `src/backend/core/lifecycle/BaseService.ts` |
 | Recoverable library file deletion, retention, and permanent removal | [File Trash](./data/trash.md), owned by `TrashRuntime` and `TrashService` |
 | Durable background jobs | [Job Runtime](./job-runtime.md) |

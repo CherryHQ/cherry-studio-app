@@ -170,6 +170,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
     case 'text':
       return part.pluginReferences?.length ||
         part.skillReferences?.length ||
+        part.selectionReferences?.length ||
         part.skillSelections?.length ||
         part.skillAction
         ? withCherryMeta(
@@ -178,6 +179,7 @@ function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
               references: [
                 ...(part.pluginReferences ?? []),
                 ...(part.skillReferences ?? []),
+                ...(part.selectionReferences ?? []),
                 ...(part.skillAction ? [{ type: 'skill-action', action: part.skillAction }] : []),
                 ...(part.skillSelections ?? []).map((activation) => ({
                   type: 'skill',

@@ -13,6 +13,7 @@ import { MessageStatsSchema } from '@/shared/data/types/message';
 import { MessageTranslationsSchema } from '@/shared/data/types/messageTranslation';
 import { UniqueModelIdSchema } from '@/shared/data/types/model';
 import { PluginTextReferenceSchema } from '@/shared/data/types/plugin';
+import { SelectionTextReferenceSchema } from '@/shared/data/types/selectionReference';
 import {
   SkillActionSchema,
   SkillActivationSchema,
@@ -376,6 +377,7 @@ export const AgentMessagePartSchema = z.union([
     text: z.string(),
     pluginReferences: z.array(PluginTextReferenceSchema).optional(),
     skillReferences: z.array(SkillTextReferenceSchema).optional(),
+    selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
     skillSelections: z.array(SkillActivationSchema).max(8).optional(),
     skillAction: SkillActionSchema.optional(),
     state: z.enum(['streaming', 'done']),
@@ -440,11 +442,16 @@ export const AgentInputPartSchema = z.union([
       text: z.string(),
       pluginReferences: z.array(PluginTextReferenceSchema).optional(),
       skillReferences: z.array(SkillTextReferenceSchema).optional(),
+      selectionReferences: z.array(SelectionTextReferenceSchema).optional(),
     })
     .refine(
-      ({ text, pluginReferences, skillReferences }) => {
+      ({ text, pluginReferences, skillReferences, selectionReferences }) => {
         let end = 0;
-        return [...(pluginReferences ?? []), ...(skillReferences ?? [])]
+        return [
+          ...(pluginReferences ?? []),
+          ...(skillReferences ?? []),
+          ...(selectionReferences ?? []),
+        ]
           .sort((left, right) => left.offset - right.offset)
           .every((reference) => {
             if (

@@ -12,6 +12,8 @@ import {
   type AgentMessageView,
 } from '@/shared/contracts/agent';
 import type { PluginTextReference } from '@/shared/data/types/plugin';
+import type { SelectionTextReference } from '@/shared/data/types/selectionReference';
+import { createCodeBlockMarkdown } from '@/shared/utils/createCodeBlockMarkdown';
 
 import type { TurnResourceLedger } from '../resources/managedFileResolver';
 import type {
@@ -179,9 +181,22 @@ function contextAnchor(
   return { message: newest, contextTokens };
 }
 
-/** Preserve message-scoped plugin intent as user content, without changing the stored text. */
-function runtimeUserText(part: { text: string; pluginReferences?: PluginTextReference[] }): string {
-  if (!part.pluginReferences?.length) return part.text;
+/** Preserve message-scoped composer intent as user content, without changing the stored text. */
+function runtimeUserText(part: {
+  text: string;
+  pluginReferences?: PluginTextReference[];
+  selectionReferences?: SelectionTextReference[];
+}): string {
+  let text = part.text;
+  // A selection chip reaches the model as the fenced block desktop sends, right after its label.
+  for (const reference of [...(part.selectionReferences ?? [])].sort(
+    (left, right) => right.offset - left.offset,
+  )) {
+    const end = reference.offset + reference.label.length;
+    const block = createCodeBlockMarkdown(JSON.stringify(reference.selection), 'selection-ref');
+    text = `${text.slice(0, end)}\n${block}\n${text.slice(end)}`;
+  }
+  if (!part.pluginReferences?.length) return text;
   const pluginIds = [...new Set(part.pluginReferences.map((reference) => reference.pluginId))];
-  return `${part.text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
+  return `${text}\n\nFor this message, use the plugins explicitly selected in the composer: ${JSON.stringify(pluginIds)}. Other connected plugins remain available if needed.`;
 }

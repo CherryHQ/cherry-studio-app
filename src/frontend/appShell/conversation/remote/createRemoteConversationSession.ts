@@ -57,7 +57,8 @@ export function remoteInput(input: ConversationInput): {
     input.parts.some(
       (part) =>
         (part.type !== 'text' && part.type !== 'file') ||
-        (part.type === 'text' && part.pluginReferences?.length),
+        (part.type === 'text' &&
+          (part.pluginReferences?.length || part.selectionReferences?.length)),
     )
   )
     throw new ConversationReadError({ code: 'unsupported', retry: 'revise-input' });
