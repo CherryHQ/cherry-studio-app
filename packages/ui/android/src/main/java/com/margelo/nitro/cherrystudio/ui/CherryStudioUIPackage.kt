@@ -14,11 +14,7 @@ class CherryStudioUIPackage : BaseReactPackage() {
 
     override fun createViewManagers(
         reactContext: ReactApplicationContext,
-    ): List<ViewManager<*, *>> = listOf(
-        CherryMenuViewManager(),
-        CherryBackgroundPressViewManager(),
-        CherryMenuEscapeViewManager(),
-    )
+    ): List<ViewManager<*, *>> = listOf(CherryMenuViewManager(), CherryBackgroundPressViewManager())
 
     companion object {
         init {

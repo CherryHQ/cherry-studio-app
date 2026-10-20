@@ -634,13 +634,12 @@ bounded scrolling, and safe-area positioning. They open above or below their anc
 available space. All Cherry-rendered menus, including `Composer.Menu`, use the same private
 overlay root, `MenuRow`, `MenuPanel`, and lifecycle hooks. Android menus and `Composer.Menu`
 use a focus-preserving overlay so opening or closing does not synthesize keyboard transitions
-and move an underlying chat list. The overlay isolates background accessibility, preserves the
-caller's theme/context, and owns Back/Escape. Android Escape is intercepted by a private native
-listener on the activity window while the overlay is attached, including its closing animation.
-It consumes the key without moving editor focus and releases the listener when the overlay is
-removed; this native change requires an updated development client. Opening
+and move an underlying chat list. The overlay preserves the caller's theme/context and handles
+Android Back. Opening
 focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
-change dismisses the measured presentation instead of retaining a stale anchor.
+change dismisses the measured presentation instead of retaining a stale anchor. Android action
+and context menus also dismiss when the keyboard starts showing or hiding, since that can move
+their trigger without changing the window dimensions.
 
 Outside taps and system back close them; closing immediately disables item interaction and retains
 the overlay until its animation and removal finish. Reduced motion skips the animation.

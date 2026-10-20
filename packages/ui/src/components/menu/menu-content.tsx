@@ -1,7 +1,8 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import GitForkIcon from '@cherrystudio/app-icons/icons/git-fork';
-import { Fragment, useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
+import { Fragment, useEffect, useState } from 'react';
+import { Platform, useWindowDimensions, View } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
 import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,6 +33,15 @@ export function MenuContent({
   const { height, width } = useWindowDimensions();
   const [panelHeight, setPanelHeight] = useState(0);
   const { progress, isVisible } = useMenuMotion(isOpen, panelHeight > 0);
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isOpen) return;
+    // The keyboard can move the trigger without changing the window dimensions.
+    // This panel retains a measured anchor; composer menus track theirs live.
+    const subscriptions = (['keyboardWillShow', 'keyboardWillHide'] as const).map((event) =>
+      KeyboardEvents.addListener(event, () => onClose()),
+    );
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, [isOpen, onClose]);
   const {
     left,
     maxHeight,
