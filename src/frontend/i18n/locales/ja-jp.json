@@ -845,6 +845,8 @@
   "notifications.android.systemSettings": "システム通知設定",
   "notifications.remote.connected": "接続済み",
   "notifications.remote.disconnect": "接続を切断",
+  "notifications.source.desktop": "パソコン",
+  "notifications.source.phone": "スマホ",
   "onboarding.check.authentication": "API キーが受け入れられませんでした。接続を編集し、キーがこのプロバイダーに属していることを確認します。",
   "onboarding.check.checking": "接続を確認しています…",
   "onboarding.check.failed": "接続できませんでした",

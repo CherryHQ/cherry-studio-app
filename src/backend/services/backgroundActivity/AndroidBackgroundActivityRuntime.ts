@@ -149,9 +149,7 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       const removed = previous.filter(
         (record) => !this.connections.some((next) => next.id === record.id),
       );
-      for (const record of removed)
-        await this.native?.detachBackgroundTaskNotificationGroup?.(record.id);
-      // Switch/detach the service anchor before retiring its previous connection identity.
+      // Switch the service anchor before retiring its previous connection identity.
       await this.reconcile();
       for (const record of removed)
         await this.native?.dismissBackgroundTaskNotification?.(record.id);
@@ -337,8 +335,6 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
     this.leases.clear();
     this.publishStatus();
     await this.enqueue(async () => {
-      for (const record of this.connections)
-        await this.native?.detachBackgroundTaskNotificationGroup?.(record.id);
       await this.stopService();
       await Promise.all(
         [...this.activities].map(({ id }) => this.native?.dismissBackgroundTaskNotification?.(id)),
@@ -380,6 +376,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             // Native execution stays foreground until the last task releases it.
             taskName: 'CherryBackgroundGeneration',
             taskIcon: { name: 'notification_icon', type: 'drawable' },
+            // Same icon badge as the native notification bridge (DESIGN.md `primary`).
+            color: '#107D32',
             // The notification bridge names the same channel; task content never does.
             channelName: this.environment.translate('notifications.android.runningTitle'),
             foregroundServiceType: ['dataSync'],
@@ -493,17 +491,20 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
         await this.native?.showBackgroundTaskNotification?.(
           connection.id,
           connection.title,
-          body,
+          '',
           connection.url,
           true,
           false,
           this.environment.translate('notifications.android.runningTitle'),
           {
-            promoted: false,
-            groupSummary: true,
-            token: connection.token,
-            prompt: '',
-            buttons: [{ id: 'disconnect', label: connection.disconnectLabel }],
+            subText: body,
+            connection: true,
+            actions: {
+              promoted: false,
+              token: connection.token,
+              prompt: '',
+              buttons: [{ id: 'disconnect', label: connection.disconnectLabel }],
+            },
           },
         );
         connection.delivered = content;
@@ -584,7 +585,16 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
           ? 'notifications.android.attentionChannel'
           : 'notifications.android.runningTitle',
       ),
-      'actions' in props ? props.actions : null,
+      {
+        // The title names the task; the header marks whether it runs on the PC or this phone.
+        subText: this.environment.translate(
+          parseBackgroundTaskUrl(record.deepLinkUrl, record.deepLinkUrl?.split('://')[0] ?? '')
+            ?.kind === 'remote-chat'
+            ? 'notifications.source.desktop'
+            : 'notifications.source.phone',
+        ),
+        ...('actions' in props && props.actions ? { actions: props.actions } : {}),
+      },
     );
   }
 

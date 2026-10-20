@@ -170,10 +170,11 @@ multilingual payloads. Native acceptance must also confirm retirement of an ende
 including completion-notice handoff. Native delivery and OS behavior require a rebuilt client; lint
 and source guards are insufficient.
 
-The following examples show an Android connection notice from an Android 16 emulator and an iOS
-single-question Live Activity on the simulator Lock Screen, both from a local presentation fixture.
-The fixtures validate native layout and action delivery, not a live desktop transport or
-suspended-app remote push.
+The following examples show an Android connection notice and a notice list (expanded from
+Android's own app bundle) from an Android 16 emulator, and an iOS single-question Live Activity on
+the simulator Lock Screen, all from a local presentation fixture. The fixtures validate native layout
+and action delivery, not a live desktop transport or suspended-app remote push.
 
-![Android connection notice with Disconnect](../../.github/images/background-activity/android-connection-group.png)
+![Android connection notice with Disconnect](../../.github/images/background-activity/android-connection-notice.png)
+![Android notice list marking phone and computer tasks](../../.github/images/background-activity/android-notice-list.png)
 ![iOS single-question card with neutral option buttons](../../.github/images/background-activity/ios-question-card.png)

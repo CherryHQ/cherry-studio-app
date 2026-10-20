@@ -19,6 +19,8 @@ internal object BackgroundExecution {
   private const val OWNER = "cherry-background-activity"
   private const val RUNNING_CHANNEL = "RN_BACKGROUND_ACTIONS_CHANNEL"
   private const val ATTENTION_CHANNEL = "generation-updates"
+  /** DESIGN.md `primary` (light green-900); tints the small-icon badge, not actions. */
+  private const val ACCENT_COLOR = 0xFF107D32.toInt()
 
   @Synchronized
   fun notificationId(context: Context, key: String): Int {
@@ -50,7 +52,9 @@ internal object BackgroundExecution {
     }
   }
 
-  fun show(context: Context, id: Int, title: String, body: String, url: String?, ongoing: Boolean, alert: Boolean, channelName: String, actions: Map<String, Any?>?) {
+  fun show(context: Context, id: Int, title: String, body: String, url: String?, ongoing: Boolean, alert: Boolean, channelName: String, options: Map<String, Any?>?) {
+    @Suppress("UNCHECKED_CAST")
+    val actions = options?.get("actions") as? Map<String, Any?>
     val manager = context.getSystemService(NotificationManager::class.java)
     val channelId = if (alert) ATTENTION_CHANNEL else RUNNING_CHANNEL
     manager.createNotificationChannel(NotificationChannel(channelId, channelName,
@@ -61,19 +65,14 @@ internal object BackgroundExecution {
     intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     val contentIntent = PendingIntent.getActivity(context, id, intent,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    val group = remoteGroup(context, url)
-    val isGroupSummary = group != null && actions?.get("groupSummary") == true
-    // Android can omit a summary with only one child; validate actions against the visible card.
-    val actionNotificationId = if (isGroupSummary) notificationId(context, connectionKey(id)) else id
     val extras = Bundle().apply {
       putString("owner", OWNER)
       putBoolean("terminal", !ongoing)
-      if (group != null) putString("deviceGroup", group)
       if (ongoing && actions != null) putString("actionToken", actions["token"] as? String)
       if (Build.VERSION.SDK_INT >= 36) {
         // Android 16 QPR1's promotion request also works on compatible OEM surfaces.
         // API 36's initial SDK lacks the builder APIs; use the documented extras.
-        val promoted = ongoing && actions?.get("promoted") != false && !isGroupSummary
+        val promoted = ongoing && actions?.get("promoted") != false
         putBoolean("android.requestPromotedOngoing", promoted)
         if (promoted) putString("android.shortCriticalText", body.substringBefore('\n'))
       }
@@ -81,21 +80,22 @@ internal object BackgroundExecution {
     val icon = context.resources.getIdentifier("notification_icon", "drawable", context.packageName)
     val content = if (ongoing && actions != null && actions["promoted"] != false) listOf(body.substringBefore('\n'), actions["prompt"] as? String).filterNotNull().joinToString("\n") else body
     val builder = NotificationCompat.Builder(context, channelId)
-      .setSmallIcon(icon).setContentTitle(title).setContentText(content)
-      .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+      .setSmallIcon(icon).setColor(ACCENT_COLOR).setContentTitle(title)
       .setContentIntent(contentIntent).setOngoing(ongoing).setAutoCancel(!ongoing)
       .setSilent(!alert).setOnlyAlertOnce(!alert)
       .setVisibility(NotificationCompat.VISIBILITY_PRIVATE).addExtras(extras)
-    if (group != null) builder.setGroup(group).setGroupSummary(isGroupSummary)
-      .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-    if (group != null && !isGroupSummary) builder.setSortKey("1_task")
+    // Notices stay a flat list; the header line marks each notice's device or connection state.
+    (options?.get("subText") as? String)?.let { builder.setSubText(it) }
+    if (content.isNotEmpty()) builder.setContentText(content).setStyle(NotificationCompat.BigTextStyle().bigText(content))
+    // A connection is a standing state, so its post time carries no information.
+    if (options?.get("connection") == true) builder.setShowWhen(false)
     var replyAction: NotificationCompat.Action? = null
     if (ongoing && actions != null) {
       val token = actions["token"] as? String ?: ""
       @Suppress("UNCHECKED_CAST")
       val buttons = actions["buttons"] as? List<Map<String, String>> ?: emptyList()
       for (button in buttons.take(2)) {
-        builder.addAction(NotificationCompat.Action.Builder(0, button["label"], actionIntent(context, actionNotificationId, token, button["id"] ?: "", false))
+        builder.addAction(NotificationCompat.Action.Builder(0, button["label"], actionIntent(context, id, token, button["id"] ?: "", false))
           .setAuthenticationRequired(true).build())
       }
       @Suppress("UNCHECKED_CAST")
@@ -108,18 +108,7 @@ internal object BackgroundExecution {
         if (Build.VERSION.SDK_INT < 36) builder.addAction(replyAction)
       }
     }
-    val built = builder.build()
-    // The group header aggregates content; expose disconnect only on the connection control card.
-    val notification = built.apply { if (isGroupSummary) this.actions = null }
-    if (isGroupSummary) regroupNotifications(context, group!!)
-    manager.notify(id, notification)
-    if (isGroupSummary) {
-      // Android can hide summary content/actions when it renders nested children.
-      // Keep the connection control first inside the group; the service owns the summary.
-      manager.notify(notificationId(context, connectionKey(id)), builder
-        .setGroupSummary(false).setSortKey("0_connection")
-        .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY).build())
-    }
+    manager.notify(id, builder.build())
     // Android 16 CDD 3.8.3.1/H-0-5 hides RemoteInput on promoted Live Updates.
     // Keep the status chip and offer text entry in a separate ordinary notice.
     if (Build.VERSION.SDK_INT >= 36 && replyAction != null) {
@@ -134,46 +123,6 @@ internal object BackgroundExecution {
   }
 
   private fun replyKey(id: Int) = "$OWNER:reply:$id"
-  private fun connectionKey(id: Int) = "$OWNER:connection:$id"
-
-  /** The backend's remote deep link supplies identity; local tasks never join a PC group. */
-  private fun remoteGroup(context: Context, url: String?): String? {
-    val uri = url?.let { Uri.parse(it) } ?: return null
-    if (uri.host != "remote") return null
-    val connectionId = uri.getQueryParameter("connectionId")?.takeIf { it.isNotBlank() } ?: return null
-    return "${context.packageName}:remote:$connectionId"
-  }
-
-  private fun regroupNotifications(context: Context, group: String) {
-    val manager = context.getSystemService(NotificationManager::class.java)
-    for (entry in manager.activeNotifications) {
-      val notification = entry.notification
-      if (notification.extras.getString("owner") != OWNER ||
-          notification.extras.getString("deviceGroup") != group ||
-          notification.group == group || notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) continue
-      manager.notify(entry.id, Notification.Builder.recoverBuilder(context, notification)
-        .setGroup(group).setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
-        .setOnlyAlertOnce(true).build())
-    }
-  }
-
-  /** Removing a summary can cancel its children; detach results before service teardown/handoff. */
-  fun detachGroup(context: Context, id: Int) {
-    val manager = context.getSystemService(NotificationManager::class.java)
-    val summary = manager.activeNotifications.firstOrNull { it.id == id }?.notification
-    if (summary != null && summary.flags and Notification.FLAG_GROUP_SUMMARY == 0) return
-    val store = context.getSharedPreferences("background-task-notifications", Context.MODE_PRIVATE)
-    val connectionId = store.getInt(connectionKey(id), -1)
-    val control = manager.activeNotifications.firstOrNull { it.id == connectionId }?.notification
-    val group = summary?.group ?: control?.group ?: return
-    if (connectionId != -1) manager.cancel(connectionId)
-    for (entry in manager.activeNotifications) {
-      if (entry.id == id || entry.id == connectionId || entry.notification.group != group ||
-          entry.notification.extras.getString("owner") != OWNER) continue
-      manager.notify(entry.id, Notification.Builder.recoverBuilder(context, entry.notification)
-        .setGroup(null).setOnlyAlertOnce(true).build())
-    }
-  }
 
   private fun dismissReply(context: Context, id: Int) {
     val store = context.getSharedPreferences("background-task-notifications", Context.MODE_PRIVATE)
@@ -182,7 +131,6 @@ internal object BackgroundExecution {
   }
 
   private fun cancelNotification(context: Context, id: Int) {
-    detachGroup(context, id)
     val manager = context.getSystemService(NotificationManager::class.java)
     val current = manager.activeNotifications.firstOrNull { it.id == id }?.notification
     if (current?.actions?.any { !it.remoteInputs.isNullOrEmpty() } == true) {

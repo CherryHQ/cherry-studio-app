@@ -865,6 +865,8 @@
   "notifications.android.systemSettings": "Setări de notificare de sistem",
   "notifications.remote.connected": "Conectat",
   "notifications.remote.disconnect": "Deconectare",
+  "notifications.source.desktop": "Computer",
+  "notifications.source.phone": "Telefon",
   "onboarding.check.authentication": "Cheia API nu a fost acceptată. Editați conexiunea și verificați dacă cheia aparține acestui furnizor.",
   "onboarding.check.checking": "Se verifică conexiunea...",
   "onboarding.check.failed": "Nu s-a putut conecta",

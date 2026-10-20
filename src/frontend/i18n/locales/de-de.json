@@ -855,6 +855,8 @@
   "notifications.android.systemSettings": "Systembenachrichtigungseinstellungen",
   "notifications.remote.connected": "Verbunden",
   "notifications.remote.disconnect": "Verbindung trennen",
+  "notifications.source.desktop": "Computer",
+  "notifications.source.phone": "Handy",
   "onboarding.check.authentication": "Der API-Schlüssel wurde nicht akzeptiert. Bearbeiten Sie die Verbindung und prüfen Sie, ob der Schlüssel zu diesem Anbieter gehört.",
   "onboarding.check.checking": "Verbindung wird überprüft…",
   "onboarding.check.failed": "Es konnte keine Verbindung hergestellt werden",

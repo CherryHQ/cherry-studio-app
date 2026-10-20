@@ -845,6 +845,8 @@
   "notifications.android.systemSettings": "Cài đặt thông báo hệ thống",
   "notifications.remote.connected": "Đã kết nối",
   "notifications.remote.disconnect": "Ngắt kết nối",
+  "notifications.source.desktop": "Máy tính",
+  "notifications.source.phone": "Điện thoại",
   "onboarding.check.authentication": "Khóa API không được chấp nhận. Chỉnh sửa kết nối và kiểm tra xem khóa có thuộc về nhà cung cấp này không.",
   "onboarding.check.checking": "Đang kiểm tra kết nối…",
   "onboarding.check.failed": "Không thể kết nối",

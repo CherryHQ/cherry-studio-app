@@ -845,6 +845,8 @@
   "notifications.android.systemSettings": "系統通知設定",
   "notifications.remote.connected": "已連線",
   "notifications.remote.disconnect": "中斷連線",
+  "notifications.source.desktop": "電腦",
+  "notifications.source.phone": "手機",
   "onboarding.check.authentication": "密鑰未通過認證。請修改連接，確認密鑰填寫完整，並且屬於當前供應商。",
   "onboarding.check.checking": "正在檢查連接…",
   "onboarding.check.failed": "暫時無法連接",

@@ -865,6 +865,8 @@
   "notifications.android.systemSettings": "Definições de notificação do sistema",
   "notifications.remote.connected": "Ligado",
   "notifications.remote.disconnect": "Desligar",
+  "notifications.source.desktop": "Computador",
+  "notifications.source.phone": "Telemóvel",
   "onboarding.check.authentication": "A chave API não foi aceite. Edite a ligação e verifique se a chave pertence a este fornecedor.",
   "onboarding.check.checking": "A verificar ligação…",
   "onboarding.check.failed": "Não foi possível ligar",

@@ -875,6 +875,8 @@
   "notifications.android.systemSettings": "Настройки системных уведомлений",
   "notifications.remote.connected": "Подключено",
   "notifications.remote.disconnect": "Отключиться",
+  "notifications.source.desktop": "Компьютер",
+  "notifications.source.phone": "Телефон",
   "onboarding.check.authentication": "Ключ API не был принят. Отредактируйте соединение и проверьте, что ключ принадлежит этому провайдеру.",
   "onboarding.check.checking": "Проверка соединения…",
   "onboarding.check.failed": "Не удалось подключиться",

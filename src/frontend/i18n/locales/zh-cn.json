@@ -845,6 +845,8 @@
   "notifications.android.systemSettings": "系统通知设置",
   "notifications.remote.connected": "已连接",
   "notifications.remote.disconnect": "断开连接",
+  "notifications.source.desktop": "电脑",
+  "notifications.source.phone": "手机",
   "onboarding.check.authentication": "密钥未通过认证。请修改连接，确认密钥填写完整，并且属于当前服务商。",
   "onboarding.check.checking": "正在检查连接…",
   "onboarding.check.failed": "暂时无法连接",

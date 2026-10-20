@@ -865,6 +865,8 @@
   "notifications.android.systemSettings": "Paramètres de notification du système",
   "notifications.remote.connected": "Connecté",
   "notifications.remote.disconnect": "Déconnecter",
+  "notifications.source.desktop": "Ordinateur",
+  "notifications.source.phone": "Téléphone",
   "onboarding.check.authentication": "La clé API n'a pas été acceptée. Modifiez la connexion et vérifiez que la clé appartient à ce fournisseur.",
   "onboarding.check.checking": "Vérification de la connexion…",
   "onboarding.check.failed": "Impossible de se connecter",

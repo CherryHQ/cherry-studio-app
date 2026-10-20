@@ -855,6 +855,8 @@
   "notifications.android.systemSettings": "System notification settings",
   "notifications.remote.connected": "Connected",
   "notifications.remote.disconnect": "Disconnect",
+  "notifications.source.desktop": "Computer",
+  "notifications.source.phone": "Phone",
   "onboarding.check.authentication": "The API key was not accepted. Edit the connection and check that the key belongs to this provider.",
   "onboarding.check.checking": "Checking connection…",
   "onboarding.check.failed": "Could not connect",

@@ -24,12 +24,9 @@ permission do not govern execution demand.
 Android remote Agent connections additionally hold user-started connection demand through
 `RemoteConnectionNotificationRuntime`. Each PC has an ordinary, silent ongoing connection notice
 with a **Disconnect** action; the first connection anchors the same foreground service, while
-session cards remain separate Live Updates. The connection notice is its PC's notification-group
-summary. That PC's progress, approvals, questions (including the ordinary text-reply notice), and
-completed results share the group, while local tasks and other PCs remain separate. Only child
-notices alert; the summary stays silent and never requests Live Update promotion. Before removing
-the summary, the bridge detaches its children so delivered results survive disconnect/service
-teardown; reconnect silently regroups retained results. Leaving the page or finishing a task does not release
+session cards remain separate Live Updates. Connection and task notices form one flat list without
+notification groups. Each task notice's header line marks where it runs, **Computer** for a PC
+session or **Phone** for local work; its title already names the task. Leaving the page or finishing a task does not release
 the connection. Configuration import, pairing checks, and endpoint checks do not create this demand.
 
 Disconnect closes only the phone's transport, cancels its redials and withdraws its live task
@@ -41,13 +38,9 @@ system actions share one native inbox subscription before being dispatched to th
 Platform service expiry also disconnects remote transports. The connection notice does not extend
 the documented `dataSync` time limit and does not enable indefinite background execution on iOS.
 
-Android's nested-group renderer can hide the summary's content and actions. A silent connection
-control card is therefore kept first inside the group, ahead of task cards, using the same current
-disconnect token. It is removed with the connection summary, while delivered task results survive.
-Android can omit a summary with only one child. Disconnect validates against the visible control
-card, and group cleanup can recover the group from that card when the summary is absent.
-The PC name is the connection notice's only identity anchor: it is the title, and the body carries
-only the connection status. The card shows **Running** while that PC has an observed unfinished session, including
+The PC name is the connection notice's only identity anchor: it is the title, and the connection
+status sits in the header line with no timestamp. Cherry notifications tint the small-icon badge with
+`primary` green. The card shows **Running** while that PC has an observed unfinished session, including
 one awaiting a decision. Once its last session settles or retires, the card returns to the current
 connection state. Idle history, local tasks, and another PC's sessions do not affect it. These
 aggregate status transitions are silent and retain the connection's existing disconnect token.

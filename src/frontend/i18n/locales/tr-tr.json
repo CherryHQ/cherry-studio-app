@@ -855,6 +855,8 @@
   "notifications.android.systemSettings": "Sistem bildirim ayarları",
   "notifications.remote.connected": "Bağlandı",
   "notifications.remote.disconnect": "Bağlantıyı kes",
+  "notifications.source.desktop": "Bilgisayar",
+  "notifications.source.phone": "Telefon",
   "onboarding.check.authentication": "API anahtarı kabul edilmedi. Bağlantıyı düzenleyin ve anahtarın bu sağlayıcıya ait olup olmadığını kontrol edin.",
   "onboarding.check.checking": "Bağlantı kontrol ediliyor…",
   "onboarding.check.failed": "Bağlantı kurulamadı",

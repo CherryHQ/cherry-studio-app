@@ -855,6 +855,8 @@
   "notifications.android.systemSettings": "Ρυθμίσεις ειδοποιήσεων συστήματος",
   "notifications.remote.connected": "Συνδεδεμένο",
   "notifications.remote.disconnect": "Αποσύνδεση",
+  "notifications.source.desktop": "Υπολογιστής",
+  "notifications.source.phone": "Κινητό",
   "onboarding.check.authentication": "Το κλειδί API δεν έγινε αποδεκτό. Επεξεργαστείτε τη σύνδεση και ελέγξτε ότι το κλειδί ανήκει σε αυτόν τον πάροχο.",
   "onboarding.check.checking": "Έλεγχος σύνδεσης…",
   "onboarding.check.failed": "Δεν ήταν δυνατή η σύνδεση",
