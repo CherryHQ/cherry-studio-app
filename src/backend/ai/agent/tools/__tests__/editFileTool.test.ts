@@ -1,3 +1,5 @@
+import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 
 import type { ManagedFileFact } from '../../resources/managedFileResolver';
@@ -9,6 +11,7 @@ import {
   type EditFileFiles,
   type TurnEditScope,
 } from '../editFileTool';
+import { WorkspaceFileAccess } from '../workspaceFileAccess';
 
 const SOURCE_ID = '00000000-0000-7000-8000-000000000001' as FileEntryId;
 const EDITED_ID = '00000000-0000-7000-8000-000000000002' as FileEntryId;
@@ -214,6 +217,137 @@ describe('editFileTool', () => {
     expect(second.value).toMatchObject({ fileEntryId: EDITED_ID, filename: 'notes.md' });
   });
 
+  describe('path edits batched on the base of one read', () => {
+    const base = { path: 'notes.md', base_file_entry_id: SOURCE_ID, base_revision: 1 };
+
+    test.each([
+      ['a historical file', false],
+      ['a draft', true],
+    ])('apply in order to %s when they run together', async (_case, draft) => {
+      const workspace = createWorkspace('alpha\nbeta\ngamma\n', draft);
+
+      const outputs = await Promise.all([
+        execute(workspace.tool, { ...base, old_string: 'alpha', new_string: 'ALPHA' }),
+        execute(workspace.tool, { ...base, old_string: 'beta', new_string: 'BETA' }),
+        execute(workspace.tool, { ...base, old_string: 'gamma', new_string: 'GAMMA' }),
+      ]);
+
+      expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
+        'edited',
+        'edited',
+        'edited',
+      ]);
+      expect(workspace.text()).toBe('ALPHA\nBETA\nGAMMA\n');
+    });
+
+    test('apply when the second starts after the first has landed', async () => {
+      const workspace = createWorkspace('alpha\nbeta\n', false);
+
+      await execute(workspace.tool, { ...base, old_string: 'alpha', new_string: 'ALPHA' });
+      const second = await execute(workspace.tool, {
+        ...base,
+        old_string: 'beta',
+        new_string: 'BETA',
+      });
+
+      expect(second.value).toMatchObject({ status: 'edited' });
+      expect(workspace.text()).toBe('ALPHA\nBETA\n');
+    });
+
+    test('refreshes the base when an earlier edit lands before the path lookup finishes', async () => {
+      const workspace = createWorkspace('alpha\nbeta\n', false);
+      const writing = deferred();
+      const finishWrite = deferred();
+      const create = workspace.storage.createTextEntry.getMockImplementation()!;
+      workspace.storage.createTextEntry.mockImplementationOnce(async (input) => {
+        writing.resolve();
+        await finishWrite.promise;
+        return create(input);
+      });
+      const first = execute(workspace.tool, { ...base, old_string: 'alpha', new_string: 'ALPHA' });
+      await writing.promise;
+
+      const resolvePath = workspace.library.resolvePath.getMockImplementation()!;
+      workspace.library.resolvePath.mockImplementationOnce(async () => {
+        await first;
+        return resolvePath();
+      });
+      const second = execute(workspace.tool, { ...base, old_string: 'beta', new_string: 'BETA' });
+      const completed = Promise.all([first, second]);
+      finishWrite.resolve();
+
+      const outputs = await completed;
+      expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
+        'edited',
+        'edited',
+      ]);
+      expect(workspace.text()).toBe('ALPHA\nBETA\n');
+    });
+
+    test.each([
+      ['the original path base', base],
+      ['the derived draft id', { file_entry_id: EDITED_ID }],
+    ])(
+      'keeps a late edit using %s behind edits already queued on the source',
+      async (_case, ref) => {
+        const workspace = createWorkspace('alpha\nbeta\ngamma\n', false);
+        const reading = deferred();
+        const finishRead = deferred();
+        const read = workspace.files.readAsBytes;
+        let paused = false;
+        jest.spyOn(workspace.files, 'readAsBytes').mockImplementation(async (file, signal) => {
+          const bytes = await read(file, signal);
+          if (file.fileEntryId === EDITED_ID && !paused) {
+            paused = true;
+            reading.resolve();
+            await finishRead.promise;
+          }
+          return bytes;
+        });
+        const first = execute(workspace.tool, {
+          ...base,
+          old_string: 'alpha',
+          new_string: 'ALPHA',
+        });
+        const second = execute(workspace.tool, { ...base, old_string: 'beta', new_string: 'BETA' });
+        await first;
+        await reading.promise;
+
+        const third = execute(workspace.tool, { ...ref, old_string: 'gamma', new_string: 'GAMMA' });
+        const completed = Promise.all([first, second, third]);
+        // Let unblocked lookups and writes settle while the second edit still holds its bytes.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const whileReading = workspace.text();
+        finishRead.resolve();
+
+        const outputs = await completed;
+        expect(whileReading).toBe('ALPHA\nbeta\ngamma\n');
+        expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
+          'edited',
+          'edited',
+          'edited',
+        ]);
+        expect(workspace.text()).toBe('ALPHA\nBETA\nGAMMA\n');
+        expect(outputs.flatMap((output) => output.artifacts)).toHaveLength(1);
+      },
+    );
+
+    test('still conflict when something else changed the file', async () => {
+      const workspace = createWorkspace('alpha\nbeta\n', true);
+
+      await execute(workspace.tool, { ...base, old_string: 'alpha', new_string: 'ALPHA' });
+      workspace.changeElsewhere('ALPHA\nbeta\ngamma\n');
+      const output = await execute(workspace.tool, {
+        ...base,
+        old_string: 'beta',
+        new_string: 'BETA',
+      });
+
+      expectError(output, 'stale_revision', 'changed after it was read');
+      expect(workspace.text()).toBe('ALPHA\nbeta\ngamma\n');
+    });
+  });
+
   test('preserves the source name even when another session file shares it', async () => {
     const files = createFiles('Hello world\n');
     const scope: TurnEditScope = {
@@ -301,7 +435,7 @@ describe('editFileTool', () => {
       new_string: 'Berry',
     });
 
-    expectError(output, 'not found');
+    expectError(output, 'old_string_not_found', 'not found');
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -313,7 +447,7 @@ describe('editFileTool', () => {
       new_string: 'new',
     });
 
-    expectError(output, 'multiple');
+    expectError(output, 'old_string_ambiguous', 'multiple');
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -332,7 +466,7 @@ describe('editFileTool', () => {
       ...overrides,
     });
 
-    expectError(output, message);
+    expectError(output, 'invalid_tool_input', message);
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -345,7 +479,7 @@ describe('editFileTool', () => {
       new_string: 'y',
     });
 
-    expectError(output, 'unavailable');
+    expectError(output, 'file_unavailable', 'unavailable');
     expect(files.readAsBytes).not.toHaveBeenCalled();
   });
 
@@ -360,7 +494,7 @@ describe('editFileTool', () => {
       new_string: 'B',
     });
 
-    expectError(output, message);
+    expectError(output, 'not_text', message);
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -372,6 +506,7 @@ describe('editFileTool', () => {
         old_string: 'x',
         new_string: 'y',
       }),
+      'file_too_large',
       'limit',
     );
     expect(declared.readAsBytes).not.toHaveBeenCalled();
@@ -383,6 +518,7 @@ describe('editFileTool', () => {
         old_string: 'x',
         new_string: 'y',
       }),
+      'file_too_large',
       'limit',
     );
   });
@@ -396,7 +532,7 @@ describe('editFileTool', () => {
       replace_all: true,
     });
 
-    expectError(output, 'edited file exceeds');
+    expectError(output, 'file_too_large', 'edited file exceeds');
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -411,7 +547,7 @@ describe('editFileTool', () => {
       replace_all: true,
     });
 
-    expectError(output, 'edited file exceeds');
+    expectError(output, 'file_too_large', 'edited file exceeds');
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -425,7 +561,7 @@ describe('editFileTool', () => {
       replace_all: true,
     });
 
-    expectError(output, 'edited file exceeds');
+    expectError(output, 'file_too_large', 'edited file exceeds');
     expect(files.createTextEntry).not.toHaveBeenCalled();
   });
 
@@ -437,7 +573,7 @@ describe('editFileTool', () => {
       new_string: 'he\u0000llo',
     });
 
-    expectError(output, 'NUL');
+    expectError(output, 'invalid_tool_input', 'NUL');
     expect(files.readAsBytes).not.toHaveBeenCalled();
   });
 
@@ -590,6 +726,109 @@ function createFiles(content: string | Uint8Array, declaredSize?: number) {
   };
 }
 
+/** One workspace file whose current version and revision advance with every write. */
+function createWorkspace(initial: string, draft: boolean) {
+  const blobs = new Map<string, string>([[SOURCE_ID, initial]]);
+  const revisions = new Map<string, number>([[SOURCE_ID, 1]]);
+  let current: FileEntryId = SOURCE_ID;
+  let nextId = 2;
+  let clock = 1;
+  const entry = (id: FileEntryId) =>
+    FileEntrySchema.parse({
+      createdAt: 1,
+      filename: 'notes.md',
+      id,
+      mediaType: 'text/markdown',
+      provenance: 'generated',
+      size: new TextEncoder().encode(blobs.get(id)).byteLength,
+      updatedAt: revisions.get(id),
+    });
+  const store = (id: FileEntryId, data: string) => {
+    blobs.set(id, data);
+    revisions.set(id, ++clock);
+    return entry(id);
+  };
+  const files: EditFileFiles = {
+    createTextEntry: jest.fn(),
+    rewriteTextEntry: jest.fn(),
+    readAsBytes: async (file) => new TextEncoder().encode(blobs.get(file.fileEntryId)),
+    resolveAvailable: async (ids) =>
+      new Map(
+        ids
+          .filter((id) => blobs.has(id))
+          .map((id) => [
+            id,
+            {
+              fileEntryId: id,
+              mediaType: 'text/markdown',
+              name: 'notes.md',
+              size: new TextEncoder().encode(blobs.get(id)).byteLength,
+              revision: revisions.get(id),
+            },
+          ]),
+      ),
+  };
+  const library = {
+    contains: async () => true,
+    fileForEntry: async () => ({ id: 'file-1', name: 'notes.md', folderId: 'folder-1' }),
+    resolvePath: jest.fn(async () => ({ file: { currentEntryId: current, name: 'notes.md' } })),
+  };
+  const storage = {
+    createTextEntry: jest.fn(async (input: { data: string }) => {
+      current = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
+      return store(current, input.data);
+    }),
+    rewriteTextEntry: jest.fn(
+      async (input: { data: string; id: FileEntryId; baseUpdatedAt?: number }) => {
+        if (input.id !== current || input.baseUpdatedAt !== revisions.get(input.id))
+          throw DataApiErrorFactory.conflict('The draft changed after it was read.');
+        return store(input.id, input.data);
+      },
+    ),
+  };
+  const fileEntryIds = new Set<string>();
+  const draftFileEntryIds = new Set<string>(draft ? [SOURCE_ID] : []);
+  const scope: TurnEditScope = {
+    availableFiles: new Map(),
+    fileEntryIds,
+    draftFileEntryIds,
+  };
+  const grantFile = (id: FileEntryId) => {
+    fileEntryIds.add(id);
+    draftFileEntryIds.add(id);
+  };
+  const access = new WorkspaceFileAccess(
+    'folder-1',
+    { ...scope, grantFile },
+    library as unknown as FileLibraryService,
+    storage as unknown as ConstructorParameters<typeof WorkspaceFileAccess>[3],
+  );
+  const tool = createTool(files, scope, access);
+  return {
+    tool: {
+      ...tool,
+      async execute(call: Parameters<typeof tool.execute>[0]) {
+        const output = await tool.execute(call);
+        for (const artifact of output.artifacts) grantFile(artifact.ref.fileEntryId);
+        return output;
+      },
+    },
+    files,
+    library,
+    storage,
+    text: () => blobs.get(current),
+    changeElsewhere: (data: string) => store(current, data),
+  };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 function execute(
   tool: ReturnType<typeof createEditFileTool>,
   input: RuntimeJsonValue,
@@ -602,9 +841,9 @@ function execute(
   });
 }
 
-function expectError(output: RuntimeToolResult, message: string) {
+function expectError(output: RuntimeToolResult, code: string, message: string) {
   expect(output).toEqual({
-    value: { status: 'error', message: expect.stringContaining(message) },
+    value: { status: 'error', code, message: expect.stringContaining(message) },
     artifacts: [],
   });
 }

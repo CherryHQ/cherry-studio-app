@@ -23,6 +23,7 @@ import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { piCodemodeFailureCode } from './piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
 import {
@@ -65,7 +66,7 @@ type PiDurableToolOptions = {
 const codemodeRulesSection = section(
   'cherry-codemode',
   () =>
-    'Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.',
+    "Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>. To give a tool a file's content, read it in the script with read_file offset and max_characters, join value.text until value.complete, and pass that string; never retype file content into tool arguments.",
   { tag: false },
 );
 
@@ -265,7 +266,7 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
             run: async () => {
               result = await tool.execute(args, api, context);
               const value: RuntimeJsonValue = result.isError
-                ? { status: 'error', code: 'script_failed' }
+                ? { status: 'error', code: piCodemodeFailureCode(result) }
                 : { status: 'ok' };
               return { value, artifacts: [] };
             },
