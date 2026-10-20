@@ -280,6 +280,12 @@ test('validates serialized edit preconditions and input limits', () => {
     false,
   );
   expect(officeEditSchemas.docx.safeParse({ ...edit, overwrite: true }).success).toBe(false);
+  for (const text of ['a\tb', 'a\nb', 'a\rb', 'a\u0001b', 'a\ufffeb'])
+    for (const field of ['find', 'replace'])
+      expect(
+        officeEditSchemas.docx.safeParse({ ...edit, edits: [{ ...edit.edits[0], [field]: text }] })
+          .success,
+      ).toBe(false);
 });
 
 test.each([fflate, xmldom])('retains source hashes and licenses for $name', (vendor) => {

@@ -3,11 +3,15 @@ import * as z from 'zod';
 import { FileEntryIdSchema, SafeNameSchema } from '@/shared/data/types/file';
 
 // XML 1.0 cannot represent these code points, including unpaired UTF-16 surrogates.
-export const officeText = (max: number) =>
+// `excluded` joins the same character class: a second regex exports allOf, which
+// provider tool schemas may reject.
+export const officeText = (max: number, excluded = '') =>
   z
     .string()
     .max(max)
-    .regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]*$/)
+    .regex(
+      new RegExp(String.raw`^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff${excluded}]*$`),
+    )
     // Keep this out of JSON Schema: regex flags are lost during conversion.
     .refine(
       (value) => !/[\ud800-\udfff]/u.test(value),
@@ -67,10 +71,8 @@ export const workbookSpecSchema = z.strictObject({
   sheets: z
     .array(
       z.strictObject({
-        name: officeText(31)
+        name: officeText(31, String.raw`\[\]:*?/\\`)
           .min(1)
-          // A second regex exports allOf, which provider tool schemas may reject.
-          .refine((name) => /^[^[\]:*?/\\]+$/.test(name))
           .refine(
             (name) =>
               !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',

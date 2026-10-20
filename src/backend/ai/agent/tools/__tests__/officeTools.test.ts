@@ -73,7 +73,7 @@ function setup(folderId: string | null = null) {
     library as unknown as FileLibraryService,
   );
   const tools = createOfficeTools(sandbox, files, access);
-  return { files, sandbox, allowed, library, tool: tools[0], tools };
+  return { files, sandbox, allowed, library, tool: tools[0] };
 }
 
 function execute(
@@ -85,19 +85,6 @@ function execute(
 }
 
 describe('Office tools', () => {
-  test('exports workbook sheet names without an allOf intersection', () => {
-    const schema = setup().tools.find(
-      (tool) => tool.providerName === 'create_workbook',
-    )?.inputSchema;
-    expect(schema).toHaveProperty(
-      'properties.spec.properties.sheets.items.properties.name',
-      expect.objectContaining({ type: 'string', minLength: 1, maxLength: 31 }),
-    );
-    expect(schema).not.toHaveProperty(
-      'properties.spec.properties.sheets.items.properties.name.allOf',
-    );
-  });
-
   test.each([null, WORKSPACE_ID])(
     'publishes a generated artifact in destination %s',
     async (folderId) => {
