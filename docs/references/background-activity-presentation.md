@@ -90,6 +90,7 @@ card retains its buttons. Promoted Live Updates must hide RemoteInput actions un
 The reply notice is silent and retires when the request resolves, changes, or its task is dismissed.
 iOS notifications offer a text reply action. iOS Live Activities expose the option or approval
 buttons on their expanded and Lock Screen layouts; text entry remains a notification interaction.
+Live Activity buttons share equal width and stay neutral; only Allow uses the `primary` green.
 Multi-question, multiple-selection, and text-change review forms retain the in-app interaction.
 
 The live reply owns an opaque token for the exact request and generation. Native controls carry

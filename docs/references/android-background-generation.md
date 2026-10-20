@@ -46,7 +46,8 @@ control card is therefore kept first inside the group, ahead of task cards, usin
 disconnect token. It is removed with the connection summary, while delivered task results survive.
 Android can omit a summary with only one child. Disconnect validates against the visible control
 card, and group cleanup can recover the group from that card when the summary is absent.
-The connection card shows **Running** while that PC has an observed unfinished session, including
+The PC name is the connection notice's only identity anchor: it is the title, and the body carries
+only the connection status. The card shows **Running** while that PC has an observed unfinished session, including
 one awaiting a decision. Once its last session settles or retires, the card returns to the current
 connection state. Idle history, local tasks, and another PC's sessions do not affect it. These
 aggregate status transitions are silent and retain the connection's existing disconnect token.

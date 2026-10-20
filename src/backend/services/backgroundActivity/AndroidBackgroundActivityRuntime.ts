@@ -527,9 +527,9 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
       const task = parseBackgroundTaskUrl(record.deepLinkUrl, scheme);
       return task?.kind === 'remote-chat' && task.connectionId === connection.connectionId;
     });
-    if (!hasRunningSession) return connection.body;
-    const name = connection.body.slice(0, connection.body.lastIndexOf('\n') + 1);
-    return name + this.environment.translate('session.status.running');
+    return hasRunningSession
+      ? this.environment.translate('session.status.running')
+      : connection.body;
   }
 
   private async publishNotification(record: ActivityRecord): Promise<void> {

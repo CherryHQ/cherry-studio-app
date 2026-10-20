@@ -625,8 +625,8 @@ async function flush(): Promise<void> {
 const connectionNotification = {
   connectionId: 'pc',
   key: 'remote-connection:pc',
-  title: 'Remote connection',
-  body: 'PC\nConnected',
+  title: 'PC',
+  body: 'Connected',
   url: 'cherrystudio-dev://remote?connectionId=pc',
   token: 'connection-generation',
   disconnectLabel: 'Disconnect',
@@ -651,7 +651,7 @@ test('a connection stays foreground after a remote task completes and keeps its 
     taskOngoing: true,
   });
   expect(mockTaskNotifications.get(connectionId)).toEqual({
-    title: 'Remote connection',
+    title: 'PC',
     ongoing: true,
   });
   expect(mockTaskNative.showBackgroundTaskNotification).toHaveBeenCalledWith(
@@ -721,7 +721,7 @@ test('connection state updates reuse their notification identity and identical u
   const count = mockTaskNative.showBackgroundTaskNotification.mock.calls.length;
   await runtime.setRemoteConnections([{ ...connectionNotification }]);
   expect(mockTaskNative.showBackgroundTaskNotification.mock.calls.length).toBe(count);
-  const next = { ...connectionNotification, body: 'PC\nConnecting' };
+  const next = { ...connectionNotification, body: 'Connecting' };
   await runtime.setRemoteConnections([next]);
   expect(mockTaskIds.size).toBe(1);
   expect(mockTaskNative.showBackgroundTaskNotification.mock.calls.length).toBe(count + 1);
@@ -742,10 +742,10 @@ test('PC connection status follows its unfinished sessions and returns to connec
     mockTaskNative.showBackgroundTaskNotification.mock.calls
       .filter((call) => call[0] === id)
       .map((call) => call[2]);
-  expect(bodies().at(-1)).toBe('PC\nsession.status.running');
+  expect(bodies().at(-1)).toBe('session.status.running');
   expect(native.updateNotification).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      taskDesc: 'PC\nsession.status.running',
+      taskDesc: 'session.status.running',
     }),
   );
   const second = presenter.start(
@@ -789,7 +789,7 @@ test('local and other PC sessions do not change a connection status; cancellatio
     'cherrystudio-dev://remote?connectionId=pc&sessionId=own',
   );
   await flush();
-  expect(body()).toBe('PC\nsession.status.running');
+  expect(body()).toBe('session.status.running');
   await own.end('immediate', props('cancelled'));
   expect(body()).toBe(connectionNotification.body);
 });

@@ -89,7 +89,6 @@ internal object BackgroundExecution {
     if (group != null) builder.setGroup(group).setGroupSummary(isGroupSummary)
       .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
     if (group != null && !isGroupSummary) builder.setSortKey("1_task")
-    if (isGroupSummary) builder.setSubText(body.substringBefore('\n'))
     var replyAction: NotificationCompat.Action? = null
     if (ongoing && actions != null) {
       val token = actions["token"] as? String ?: ""

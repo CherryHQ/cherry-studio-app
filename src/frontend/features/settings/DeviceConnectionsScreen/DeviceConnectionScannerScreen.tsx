@@ -1,9 +1,10 @@
-import { ContentState, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
 import { CameraView } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
@@ -13,7 +14,6 @@ import { getSingleRouteParam } from '@/frontend/utils/routeParams';
 import { canRequestDevicePermission } from '@/shared/contracts';
 import type { DesktopPairingQr } from '@/shared/data/api/schemas/desktopConnections';
 
-import { DesktopPairingCodeForm } from './DesktopPairingCodeForm';
 import { useDesktopPairingInput } from './DesktopPairingProvider';
 import { pairingCancelDestination } from './pairingCancelDestination';
 import { parseDesktopPairingCode } from './parseDesktopPairingCode';
@@ -39,11 +39,7 @@ export function DeviceConnectionScannerScreen({
 
   const cancel = () => router.replace(pairingCancelDestination(setupIntent, connectionId));
 
-  const retryScan = () => {
-    scanInFlight.current = false;
-    setScanError(undefined);
-    setHasScanned(false);
-  };
+  const retryScan = () => setScanError(undefined);
 
   const openSystemSettings = () => {
     void permissions.openSystemSettings().catch(() => {
@@ -70,20 +66,23 @@ export function DeviceConnectionScannerScreen({
     [canSubmit, connectionId, router, setInput, setupIntent],
   );
 
-  const parseAndSubmit = useCallback(
-    (value: string) => {
-      if (!canSubmit() || scanInFlight.current) return;
-      const invitation = parseDesktopPairingCode(value);
-      if (invitation) {
-        submit(invitation);
-      } else {
-        scanInFlight.current = true;
-        setHasScanned(true);
-        setScanError(t('settings.deviceConnections.scan.invalidQr'));
-      }
-    },
-    [canSubmit, submit, t],
-  );
+  // An invalid scan only pauses the camera; pasting an invitation stays available.
+  const scanCode = (value: string) => {
+    if (!canSubmit() || scanInFlight.current) return;
+    const invitation = parseDesktopPairingCode(value);
+    if (invitation) submit(invitation);
+    else setScanError(t('settings.deviceConnections.scan.invalidQr'));
+  };
+
+  const pasteInvitation = async () => {
+    const invitation = parseDesktopPairingCode(await Clipboard.getStringAsync().catch(() => ''));
+    if (invitation) submit(invitation);
+    else
+      toast.show({
+        label: t('settings.deviceConnections.scan.invalidInvitation'),
+        variant: 'danger',
+      });
+  };
 
   return (
     <View className="flex-1 bg-grouped-background">
@@ -95,12 +94,7 @@ export function DeviceConnectionScannerScreen({
             : 'settings.deviceConnections.scan.title',
         )}
       />
-      <ScrollView
-        automaticallyAdjustKeyboardInsets
-        contentContainerClassName="gap-5 px-4 pt-3"
-        contentContainerStyle={{ paddingBottom: insets.bottom + 8 }}
-        keyboardShouldPersistTaps="handled"
-      >
+      <View className="flex-1 gap-5 px-4 pt-3" style={{ paddingBottom: insets.bottom + 8 }}>
         <View
           className={
             showCamera
@@ -125,7 +119,7 @@ export function DeviceConnectionScannerScreen({
                   !isReady || hasScanned
                     ? undefined
                     : ({ data }) => {
-                        parseAndSubmit(data);
+                        scanCode(data);
                       }
                 }
                 style={StyleSheet.absoluteFill}
@@ -166,8 +160,15 @@ export function DeviceConnectionScannerScreen({
               : 'settings.deviceConnections.scan.guidance',
           )}
         </Text>
-        <DesktopPairingCodeForm disabled={!isReady || hasScanned} onSubmit={submit} />
-      </ScrollView>
+        <Button
+          disabled={!isReady || hasScanned}
+          onPress={() => void pasteInvitation()}
+          testID="desktop-pairing-paste"
+          variant="secondary"
+        >
+          {t('settings.deviceConnections.scan.pasteInvitation')}
+        </Button>
+      </View>
     </View>
   );
 }
