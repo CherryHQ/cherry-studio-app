@@ -1,9 +1,10 @@
-import type { ImageModelV3CallOptions } from '@ai-sdk/provider';
+import { APICallError, type ImageModelV3CallOptions } from '@ai-sdk/provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { MockImageModelV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
+import type { RecordAiInvocationInput } from '@/backend/data/services/AiUsageRecordService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
 
 import { projectContractValue, projectImageCall } from '../_harness/contracts';
@@ -92,6 +93,149 @@ describe('AiService.generateImage AI SDK contract', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
     expect(jest.requireMock('expo/fetch').fetch).not.toHaveBeenCalled();
   });
+
+  test('captures a separate immutable context for each image batch and preserves the serving key', async () => {
+    const fixture = imageFixture();
+    const records: RecordAiInvocationInput[] = [];
+    fixture.services.aiUsageRecord.recordInvocation = jest.fn(async (record) => {
+      records.push(record);
+    });
+    let nextId = 0;
+    jest
+      .spyOn(Crypto, 'randomUUID')
+      .mockImplementation(() => `aaaaaaaa-aaaa-4aaa-8aaa-${String(++nextId).padStart(12, '0')}`);
+    const source = { type: 'assistant' as const, id: 'assistant-1', name: 'First', icon: null };
+    let releaseFirst!: () => void;
+    const firstBatch = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let calls = 0;
+    restoreProvider = installMockProvider({
+      image: new MockImageModelV3({
+        modelId: fixture.model.modelId,
+        provider: 'contract-provider',
+        maxImagesPerCall: 1,
+        doGenerate: async () => {
+          if (++calls === 1) {
+            source.name = 'Second';
+            await firstBatch;
+          } else {
+            releaseFirst();
+          }
+          return imageResult(1);
+        },
+      }),
+    });
+
+    const result = await new AiService(fixture.services).generateImage({
+      mode: 'generate',
+      paramValues: { numImages: 2 },
+      prompt: 'Two batches.',
+      uniqueModelId: fixture.model.id,
+      usageAttribution: { source, messageRef: null },
+    });
+
+    expect(result.images).toHaveLength(2);
+    expect(records).toHaveLength(2);
+    expect(new Set(records.map((record) => record.requestId)).size).toBe(2);
+    expect(records.map((record) => record.context.source?.name).sort()).toEqual([
+      'First',
+      'Second',
+    ]);
+    expect(records[0].context).not.toBe(records[1].context);
+    for (const record of records) {
+      expect(record).toMatchObject({
+        imageCount: 1,
+        usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+        context: {
+          providerId: fixture.provider.id,
+          modelId: fixture.model.modelId,
+          credentialReceipt: expect.objectContaining({ attribution: 'explicit' }),
+        },
+      });
+      expect(Object.isFrozen(record.context)).toBe(true);
+      expect(record.context.credentialReceipt).toEqual(records[0].context.credentialReceipt);
+    }
+    expect(fixture.spies.resolveApiKey).toHaveBeenCalledTimes(1);
+  });
+
+  test('recaptures attribution on retry and records only the successful invocation', async () => {
+    const fixture = imageFixture();
+    const source = { type: 'assistant' as const, id: 'assistant-1', name: 'Initial', icon: null };
+    const records: RecordAiInvocationInput[] = [];
+    fixture.services.aiUsageRecord.recordInvocation = jest.fn(async (record) => {
+      records.push(record);
+    });
+    let calls = 0;
+    restoreProvider = installMockProvider({
+      image: new MockImageModelV3({
+        modelId: fixture.model.modelId,
+        provider: 'contract-provider',
+        doGenerate: async () => {
+          if (++calls === 1) {
+            source.name = 'Retried';
+            throw new APICallError({
+              message: 'Try again',
+              url: 'https://contract.invalid/images',
+              requestBodyValues: {},
+              statusCode: 503,
+              isRetryable: true,
+            });
+          }
+          return imageResult(1);
+        },
+      }),
+    });
+
+    const result = await new AiService(fixture.services).generateImage({
+      mode: 'generate',
+      paramValues: {},
+      prompt: 'Retry once.',
+      requestOptions: { maxRetries: 1 },
+      uniqueModelId: fixture.model.id,
+      usageAttribution: { source, messageRef: null },
+    });
+
+    expect(result.images).toHaveLength(1);
+    expect(calls).toBe(2);
+    expect(records).toHaveLength(1);
+    expect(records[0].context.source?.name).toBe('Retried');
+    expect(fixture.spies.resolveApiKey).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['capture', 'completion'] as const)(
+    'keeps a successful image when the %s observer throws',
+    async (phase) => {
+      const fixture = imageFixture();
+      if (phase === 'capture') {
+        Object.defineProperty(fixture.model, 'pricing', {
+          get() {
+            throw new Error('Cannot capture usage');
+          },
+        });
+      } else {
+        fixture.spies.recordInvocation.mockImplementationOnce(() => {
+          throw new Error('Cannot record usage');
+        });
+      }
+      restoreProvider = installMockProvider({
+        image: new MockImageModelV3({
+          modelId: fixture.model.modelId,
+          provider: 'contract-provider',
+          doGenerate: async () => imageResult(1),
+        }),
+      });
+
+      await expect(
+        new AiService(fixture.services).generateImage({
+          mode: 'generate',
+          paramValues: {},
+          prompt: 'Still return the image.',
+          uniqueModelId: fixture.model.id,
+        }),
+      ).resolves.toMatchObject({ images: [{ base64: PNG_BASE64, mediaType: 'image/png' }] });
+    },
+  );
 
   test('projects registry transport routing into the portable image request', async () => {
     const fixture = imageFixture();
