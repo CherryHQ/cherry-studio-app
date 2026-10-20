@@ -31,3 +31,27 @@ test.each(['getStatuses', 'request'] as const)(
     ]);
   },
 );
+
+test.each([
+  ['workoutRoute', 'HKWorkoutTypeIdentifier', 'HKWorkoutRouteTypeIdentifier'],
+  [
+    'heartbeatSeries',
+    'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
+    'HKDataTypeIdentifierHeartbeatSeries',
+  ],
+] as const)('checks %s together with its parent type', async (name, parent, child) => {
+  const native = { getStatuses: jest.fn().mockResolvedValue({}) };
+  jest.mocked(requireOptionalNativeModule).mockReturnValue(native as never);
+
+  await getHealthAccess()!.getStatuses([name]);
+
+  expect(native.getStatuses).toHaveBeenCalledWith([
+    expect.objectContaining({
+      name,
+      authorization: [
+        expect.objectContaining({ identifier: parent }),
+        expect.objectContaining({ identifier: child }),
+      ],
+    }),
+  ]);
+});

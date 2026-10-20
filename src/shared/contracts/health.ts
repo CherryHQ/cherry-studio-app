@@ -1172,6 +1172,9 @@ export function healthAuthorizationTypes(type: HealthDataType): HealthDataType[]
   if (type === 'audioExposureEvent') return ['environmentalAudioExposureEvent'];
   if (type === 'bloodPressure') return ['bloodPressureSystolic', 'bloodPressureDiastolic'];
   if (type === 'food') return HEALTH_DATA_TYPES.filter((name) => name.startsWith('dietary'));
+  // HealthKit raises an uncatchable exception when a series is checked without its parent type.
+  if (type === 'workoutRoute') return ['workouts', type];
+  if (type === 'heartbeatSeries') return ['hrv', type];
   return [type];
 }
 
