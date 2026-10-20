@@ -383,7 +383,6 @@ describe('ChatWorkspace message rendering integration', () => {
       const pendingSend: PendingChatSend = {
         sessionId: 'session-1',
         isNewSession: false,
-        isSubmitting: true,
         messages: createPendingChatMessages({
           userMessageId: 'user-2',
           assistantMessageId: 'assistant-2',
@@ -394,8 +393,12 @@ describe('ChatWorkspace message rendering integration', () => {
       renderer = renderWorkspace(false, history);
       act(() => mockMessageListProps?.onReady?.());
       act(() => readyFrame?.(0));
-      const send = (pending = pendingSend) => (
-        <ChatWorkspace {...workspace.props} enteringUserMessageId="user-2" pendingSend={pending} />
+      const send = () => (
+        <ChatWorkspace
+          {...workspace.props}
+          enteringUserMessageId="user-2"
+          pendingSend={pendingSend}
+        />
       );
 
       act(() => renderer?.update(send()));
@@ -404,12 +407,6 @@ describe('ChatWorkspace message rendering integration', () => {
       expect(mockMessageListProps?.messages.slice(-2)).toEqual(pendingSend.messages);
       expect(mockMessageListProps?.enteringMessageId).toBe('user-2');
       expect(mockCoverVisible).toBe(false);
-      expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
-
-      // Admission may finish before either row reaches the transcript.
-      const admitted = { ...pendingSend, isSubmitting: false };
-      act(() => renderer?.update(send(admitted)));
-      expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
       expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
 
       const user = {
@@ -421,12 +418,12 @@ describe('ChatWorkspace message rendering integration', () => {
         createdAt: '2026-08-09T00:00:02.000Z',
       };
       mockAgentChatSession.liveMessages = [firstRole === 'user' ? user : assistant];
-      act(() => renderer?.update(send(admitted)));
+      act(() => renderer?.update(send()));
       expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
       expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
 
       mockAgentChatSession.liveMessages = [user, assistant];
-      act(() => renderer?.update(send(admitted)));
+      act(() => renderer?.update(send()));
       expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
       expect(mockMessageListProps?.messages.at(-1)?.data.parts).toEqual([
         { type: 'text', text: 'assistant-2', state: 'done' },
@@ -442,7 +439,6 @@ describe('ChatWorkspace message rendering integration', () => {
     const pendingSend: PendingChatSend = {
       sessionId: 'session-1',
       isNewSession: true,
-      isSubmitting: true,
       messages: [
         {
           id: 'user-1',
@@ -537,7 +533,6 @@ describe('ChatWorkspace message rendering integration', () => {
     const pendingSend: PendingChatSend = {
       sessionId: 'session-1',
       isNewSession: true,
-      isSubmitting: true,
       messages: [
         {
           id: 'user-1',

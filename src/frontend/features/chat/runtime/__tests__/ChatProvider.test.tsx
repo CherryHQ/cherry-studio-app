@@ -30,7 +30,13 @@ const mockChatState: AgentSessionChatState = {
   pendingApprovals: [],
   pendingQuestion: null,
 };
-const mockSubscribe = jest.fn(() => () => undefined);
+const mockChatListeners = new Set<() => void>();
+const mockSubscribe = jest.fn((_sessionId: string, listener: () => void) => {
+  mockChatListeners.add(listener);
+  return () => {
+    mockChatListeners.delete(listener);
+  };
+});
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
@@ -122,6 +128,8 @@ describe('ChatProvider Draft handoff', () => {
     chatControls = undefined;
     draftHandoff = undefined;
     imageResult = undefined;
+    mockChatListeners.clear();
+    mockChatState.status = 'ready';
     mockChatState.liveMessages = [];
     mockChatState.activeTurn = null;
     mockChatState.queuedInputs = [];
@@ -353,7 +361,6 @@ describe('ChatProvider Draft handoff', () => {
       });
       const pending = currentControls().pendingSend!;
       const request = (sessionId ? mockSubmitMessage : mockStartSession).mock.calls[0][0];
-      expect(pending.isSubmitting).toBe(true);
       expect(currentControls().isBusy).toBe(true);
       expect(currentControls().canSend).toBe(false);
       expect(pending.sessionId).toBe(request.sessionId);
@@ -371,16 +378,11 @@ describe('ChatProvider Draft handoff', () => {
           }),
         ]),
       );
-      act(() => currentControls().completePendingSend(request.userMessageId));
-      expect(currentControls().pendingSend).toBe(pending);
       await act(async () => {
         admission.resolve();
         await sending;
       });
-      expect(currentControls().pendingSend).toMatchObject({
-        isSubmitting: false,
-        messages: pending.messages,
-      });
+      expect(currentControls().pendingSend).toBe(pending);
       expect(currentControls().isBusy).toBe(false);
       act(() => currentControls().completePendingSend(request.userMessageId));
       expect(currentControls().pendingSend).toBeUndefined();
@@ -388,7 +390,147 @@ describe('ChatProvider Draft handoff', () => {
     },
   );
 
-  it('hands an admitted queued send to the queue without retaining transcript placeholders', async () => {
+  it.each(['before', 'after'] as const)(
+    'retires a queued placeholder when the queue arrives %s admission, including after withdrawal',
+    async (arrival) => {
+      const admission = deferred<void>();
+      mockSubmitMessage.mockImplementation(() => admission.promise);
+      act(() => {
+        renderer = create(<Harness sessionId="session-1" />);
+      });
+      let sending!: Promise<void>;
+      act(() => {
+        sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+      });
+      const pending = currentControls().pendingSend!;
+      if (arrival === 'after') {
+        await act(async () => {
+          admission.resolve();
+          await sending;
+        });
+        expect(currentControls().pendingSend).toBe(pending);
+      }
+
+      act(() => {
+        mockChatState.queuedInputs = [
+          {
+            turnId: 'queued-turn',
+            assistantMessageId: pending.messages[1].id,
+            userMessage: { id: pending.messages[0].id } as AgentMessageView,
+          },
+        ];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      if (arrival === 'before') {
+        expect(currentControls().isBusy).toBe(true);
+        expect(currentControls().canSend).toBe(false);
+        await act(async () => {
+          admission.resolve();
+          await sending;
+        });
+      }
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().canSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(false);
+
+      // Withdrawal emits no transcript rows; removing the queue must not revive the placeholders.
+      act(() => {
+        mockChatState.queuedInputs = [];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+    },
+  );
+
+  it.each(['user', 'assistant'] as const)(
+    'retires the observed pair with %s arriving first before admission finishes',
+    async (firstRole) => {
+      const admission = deferred<void>();
+      mockSubmitMessage.mockImplementation(() => admission.promise);
+      act(() => {
+        renderer = create(<Harness sessionId="session-1" />);
+      });
+      let sending!: Promise<void>;
+      act(() => {
+        sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+      });
+      const pending = currentControls().pendingSend!;
+      const user = {
+        ...imageMessage(pending.messages[0].id),
+        role: 'user' as const,
+        parts: [],
+      };
+      const assistant = { ...imageMessage(pending.messages[1].id), parentId: user.id };
+      act(() => {
+        mockChatState.liveMessages = [firstRole === 'user' ? user : assistant];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBe(pending);
+      act(() => {
+        mockChatState.liveMessages = [user, assistant];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(true);
+      expect(currentControls().canSend).toBe(false);
+
+      // The source can later discard these rows when history takes over or another branch is read.
+      act(() => {
+        mockChatState.liveMessages = [];
+        for (const listener of mockChatListeners) listener();
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      await act(async () => {
+        admission.resolve();
+        await sending;
+      });
+      expect(currentControls().pendingSend).toBeUndefined();
+      expect(currentControls().isBusy).toBe(false);
+      expect(currentControls().canSend).toBeUndefined();
+    },
+  );
+
+  it('withdraws placeholders on a branch switch before the source rows arrive', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockImplementation(() => admission.promise);
+    mockChatState.snapshot = {
+      session: { activeNodeId: 'previous-answer' },
+    } as AgentSessionChatState['snapshot'];
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+    });
+    const pending = currentControls().pendingSend!;
+    const select = (activeNodeId: string) => {
+      mockChatState.snapshot = {
+        ...mockChatState.snapshot!,
+        session: { ...mockChatState.snapshot!.session, activeNodeId },
+      };
+      for (const listener of mockChatListeners) listener();
+    };
+    // Reservation selects our new answer before publishing either row.
+    act(() => select(pending.messages[1].id));
+    expect(currentControls().pendingSend).toBe(pending);
+    act(() => select('other-branch'));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
+    expect(currentControls().canSend).toBeUndefined();
+    act(() => select(pending.messages[1].id));
+    expect(currentControls().pendingSend).toBeUndefined();
+  });
+
+  it('keeps admission busy after the transcript has already displayed the pending pair', async () => {
     const admission = deferred<void>();
     mockSubmitMessage.mockImplementation(() => admission.promise);
     act(() => {
@@ -398,20 +540,17 @@ describe('ChatProvider Draft handoff', () => {
     act(() => {
       sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
     });
-    const pending = currentControls().pendingSend!;
-    expect(pending.isSubmitting).toBe(true);
-    mockChatState.queuedInputs = [
-      {
-        turnId: 'queued-turn',
-        assistantMessageId: pending.messages[1].id,
-        userMessage: { id: pending.messages[0].id } as AgentMessageView,
-      },
-    ];
+    const userMessageId = currentControls().pendingSend!.messages[0].id;
+    act(() => currentControls().completePendingSend(userMessageId));
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
     await act(async () => {
       admission.resolve();
       await sending;
     });
     expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(false);
     expect(currentControls().canSend).toBeUndefined();
   });
 
