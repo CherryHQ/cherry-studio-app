@@ -6,6 +6,10 @@ import { AssistantMessageActionsProvider } from '../../context/AssistantMessageA
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
+jest.mock('../../../../voice/SpeechSheet', () => ({
+  SpeechSheet: (props: object) => jest.requireActual('react').createElement('SpeechSheet', props),
+}));
+
 jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslation: () => undefined,
   useMessageTranslationStore: () => null,
@@ -134,6 +138,13 @@ describe('AssistantMessageToolbar', () => {
       expect(Boolean(toolbarNodes?.length)).toBe(isVisible);
     },
   );
+
+  test('opens speech only on explicit action with the settled message text', () => {
+    renderToolbar(createMessage('success', ' Read this '));
+    expect(renderer?.root.findAllByType('SpeechSheet' as never)).toHaveLength(0);
+    act(() => renderer!.root.findByProps({ testID: 'assistant-message-speech' }).props.onPress());
+    expect(renderer!.root.findByType('SpeechSheet' as never).props.text).toBe('Read this');
+  });
 
   test('copies projected text and exposes copied feedback for only this message', async () => {
     renderToolbar(createMessage('success', ' Answer '));

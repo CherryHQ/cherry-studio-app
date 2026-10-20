@@ -1,17 +1,19 @@
 import AtSignIcon from '@cherrystudio/app-icons/icons/at-sign';
+import AudioLinesIcon from '@cherrystudio/app-icons/icons/audio-lines';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import SplitIcon from '@cherrystudio/app-icons/icons/split';
 import { ActionMenu, Button, type MenuItem } from '@cherrystudio/ui/components';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
+import { SpeechSheet } from '../../../voice/SpeechSheet';
 import {
   useAssistantMessageActions,
   useAssistantMessageActionsState,
@@ -31,6 +33,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { i18n, t } = useTranslation();
+  const [isSpeechOpen, setIsSpeechOpen] = useState(false);
   const {
     copiedMessageId,
     isAssistantToolbarEnabled,
@@ -106,66 +109,79 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   ];
 
   return (
-    <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
-      {copyText ? (
-        <Button
-          accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
-          icon={
-            isCopied ? (
-              <CheckIcon className="text-success" size={15} />
-            ) : (
-              <CopyIcon className="text-muted-foreground" size={15} />
-            )
-          }
-          onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
-          size="xs"
-          testID="assistant-message-copy"
-          variant="ghost"
-        />
-      ) : null}
-      {retryAssistantMessage && isRegenerable ? (
-        <Button
-          accessibilityLabel={t(
-            message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
-          )}
-          disabled={isRetryDisabled}
-          icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
-          onPress={() => retryAssistantMessage({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-retry"
-          variant="ghost"
-        />
-      ) : null}
-      {answerWithModel && isRegenerable ? (
-        <Button
-          accessibilityLabel={t('chat.messageActions.answerWith')}
-          disabled={isRetryDisabled}
-          icon={<AtSignIcon className="text-muted-foreground" size={15} />}
-          onPress={() => answerWithModel({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-answer-with"
-          variant="ghost"
-        />
-      ) : null}
-      {forkFromAssistantMessage ? (
-        <Button
-          accessibilityLabel={t('chat.messageActions.fork')}
-          icon={<SplitIcon className="text-muted-foreground" size={15} />}
-          onPress={() => forkFromAssistantMessage({ messageId: message.id })}
-          size="xs"
-          testID="assistant-message-fork"
-          variant="ghost"
-        />
-      ) : null}
-      <ActionMenu items={menuItems}>
-        <Button
-          accessibilityLabel={t('common.more')}
-          icon={<EllipsisIcon className="text-muted-foreground" size={15} />}
-          size="xs"
-          testID="assistant-message-more"
-          variant="ghost"
-        />
-      </ActionMenu>
-    </View>
+    <>
+      <View className="min-h-7 flex-row items-center gap-1" testID="assistant-message-toolbar">
+        {copyText ? (
+          <Button
+            accessibilityLabel={t('voice.speech')}
+            icon={<AudioLinesIcon className="text-muted-foreground" size={15} />}
+            onPress={() => setIsSpeechOpen(true)}
+            size="xs"
+            testID="assistant-message-speech"
+            variant="ghost"
+          />
+        ) : null}
+        {copyText ? (
+          <Button
+            accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
+            icon={
+              isCopied ? (
+                <CheckIcon className="text-success" size={15} />
+              ) : (
+                <CopyIcon className="text-muted-foreground" size={15} />
+              )
+            }
+            onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
+            size="xs"
+            testID="assistant-message-copy"
+            variant="ghost"
+          />
+        ) : null}
+        {retryAssistantMessage && isRegenerable ? (
+          <Button
+            accessibilityLabel={t(
+              message.status === 'success' ? 'chat.messageActions.regenerate' : 'common.retry',
+            )}
+            disabled={isRetryDisabled}
+            icon={<RotateCcwIcon className="text-muted-foreground" size={15} />}
+            onPress={() => retryAssistantMessage({ messageId: message.id })}
+            size="xs"
+            testID="assistant-message-retry"
+            variant="ghost"
+          />
+        ) : null}
+        {answerWithModel && isRegenerable ? (
+          <Button
+            accessibilityLabel={t('chat.messageActions.answerWith')}
+            disabled={isRetryDisabled}
+            icon={<AtSignIcon className="text-muted-foreground" size={15} />}
+            onPress={() => answerWithModel({ messageId: message.id })}
+            size="xs"
+            testID="assistant-message-answer-with"
+            variant="ghost"
+          />
+        ) : null}
+        {forkFromAssistantMessage ? (
+          <Button
+            accessibilityLabel={t('chat.messageActions.fork')}
+            icon={<SplitIcon className="text-muted-foreground" size={15} />}
+            onPress={() => forkFromAssistantMessage({ messageId: message.id })}
+            size="xs"
+            testID="assistant-message-fork"
+            variant="ghost"
+          />
+        ) : null}
+        <ActionMenu items={menuItems}>
+          <Button
+            accessibilityLabel={t('common.more')}
+            icon={<EllipsisIcon className="text-muted-foreground" size={15} />}
+            size="xs"
+            testID="assistant-message-more"
+            variant="ghost"
+          />
+        </ActionMenu>
+      </View>
+      {isSpeechOpen ? <SpeechSheet text={copyText} onClose={() => setIsSpeechOpen(false)} /> : null}
+    </>
   );
 });

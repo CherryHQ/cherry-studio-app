@@ -66,6 +66,21 @@ describe('useFileUploadPicker', () => {
     ]);
   });
 
+  it('restricts voice selection to one audio cache copy', async () => {
+    mockGetDocument.mockResolvedValue({ canceled: true });
+    act(() => {
+      renderer = create(<Probe options={{ multiple: false, type: 'audio/*' }} />);
+    });
+    await act(async () => {
+      await getPicker()();
+    });
+    expect(mockGetDocument).toHaveBeenCalledWith({
+      copyToCacheDirectory: true,
+      multiple: false,
+      type: 'audio/*',
+    });
+  });
+
   it('returns no selections when the system picker is cancelled', async () => {
     mockGetDocument.mockResolvedValue({ canceled: true });
     renderHook();
@@ -79,8 +94,8 @@ describe('useFileUploadPicker', () => {
   });
 });
 
-function Probe() {
-  const picker = useFileUploadPicker();
+function Probe({ options }: { options?: Parameters<typeof useFileUploadPicker>[0] }) {
+  const picker = useFileUploadPicker(options);
 
   useEffect(() => {
     pickFiles = picker;

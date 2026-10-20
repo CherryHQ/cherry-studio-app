@@ -75,6 +75,7 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
+import { createVoiceModule, createVoicePlatform } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -89,6 +90,7 @@ export type BackendComposition = {
   hasPendingSkillStorageWork(): boolean;
   disposeSkills(): Promise<void>;
   disposeSystemEntry(): Promise<void>;
+  disposeVoice(): Promise<void>;
   dataApiDependencies: {
     agentAvatars: AgentAvatars;
     mcpServerMutations: McpServerMutations;
@@ -316,8 +318,14 @@ export function createBackend(
   });
 
   services.agent.configureSkills(skills);
+  const voice = createVoiceModule({
+    ai: services.ai,
+    providers: services.provider,
+    ...createVoicePlatform(services.devicePermissions),
+  });
 
   return {
+    disposeVoice: voice.dispose,
     disposeSystemEntry: systemEntry.dispose,
     hasPendingSkillStorageWork: () => skillStorageWrites.size > 0,
     disposeSkills: async () => {
@@ -387,6 +395,7 @@ export function createBackend(
         models: services.model,
       }),
       webSearch: services.webSearch,
+      voice: voice.module,
     },
     dataApiDependencies: {
       agentAvatars,

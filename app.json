@@ -112,10 +112,7 @@
       },
       "package": "com.cherryai.cherrystudio_app",
       "predictiveBackGestureEnabled": false,
-      "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
-      ],
+      "blockedPermissions": ["android.permission.RECEIVE_BOOT_COMPLETED"],
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -224,6 +221,15 @@
           "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
           "cameraPermission": "Allow Cherry Studio to scan desktop pairing QR codes and take photos for chat messages and drawings.",
           "microphonePermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Cherry Studio to record your voice and send it to your selected AI provider for transcription.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ],
       [

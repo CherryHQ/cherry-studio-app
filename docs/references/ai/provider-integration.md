@@ -51,7 +51,8 @@ cancellation, output import, and cleanup. See
 `AiService` remains a private, desktop-aligned backend adapter for non-conversation operations:
 
 - `listModels()` for provider discovery;
-- `generateImage()` for painting jobs and the Agent image tool.
+- `generateImage()` for painting jobs and the Agent image tool;
+- `generateSpeech()` and `transcribe()` behind the host-owned `Backend.voice` module.
 
 It has no text-generation path; every language request goes through Pi.
 
@@ -59,7 +60,7 @@ Settings and onboarding chat checks use the bound AgentRuntime through `Backend.
 Translation and automatic session naming use its separate `RuntimeTextGenerator` capability,
 sharing chat's OAuth and protocol adapters without creating conversation history or tools.
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
-`uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
+`uniqueModelId` or, for voice, a dedicated provider/model selection; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 
 ## Provider And Model Records
 
@@ -232,3 +233,10 @@ semantics.
 - Pi provider coverage expands.
 - A new model-capability tool needs provider configuration, usage, or artifact semantics not covered
   by the application capability boundary.
+
+## Explicit Voice Operations
+
+[Voice Input And Speech](../voice.md) describes the separate audio model settings, OpenAI-compatible
+protocol boundary, credential reuse, cancellation, temporary file ownership, and native acceptance
+requirements. Voice uses the local account explicitly selected in the dialog, including when the
+message being read or edited belongs to a remote conversation.

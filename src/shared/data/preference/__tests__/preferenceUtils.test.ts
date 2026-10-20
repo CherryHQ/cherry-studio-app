@@ -39,3 +39,11 @@ test('shake feedback requires a device-local opt-in', () => {
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_hint_decision');
   expect(DEVICE_LOCAL_PREFERENCE_KEYS).toContain('app.feedback.shake_enabled');
 });
+
+test('voice settings require independent account selection', () => {
+  expect(getDefaultValue('feature.voice.speech_model')).toBeNull();
+  expect(getDefaultValue('feature.voice.transcription_model')).toBeNull();
+  expect(getDefaultValue('feature.voice.voice_id')).toBe('alloy');
+  expect(isPreferenceKey('feature.voice.transcription_model')).toBe(true);
+  expect(isPreferenceKey('feature.voice.speech_model')).toBe(true);
+});

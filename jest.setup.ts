@@ -76,6 +76,21 @@ jest.mock('expo-media-library', () => {
   };
 });
 
+// expo-audio patches native player prototypes at import time. Voice lifecycle suites
+// replace these ports with explicit recorder/player fakes; unrelated suites only import them.
+jest.mock('expo-audio', () => ({
+  AudioModule: {
+    getRecordingPermissionsAsync: jest.fn(),
+    requestRecordingPermissionsAsync: jest.fn(),
+  },
+  RecordingPresets: { HIGH_QUALITY: {} },
+  setAudioModeAsync: jest.fn(),
+  useAudioRecorder: jest.fn(),
+  useAudioRecorderState: jest.fn(),
+  useAudioPlayer: jest.fn(),
+  useAudioPlayerStatus: jest.fn(),
+}));
+
 // The library resolves its native module at import time. Its own jest entry is
 // the sanctioned stand-in and keeps the hooks/event emitters callable, which the
 // chat list needs the moment it imports KeyboardEvents.

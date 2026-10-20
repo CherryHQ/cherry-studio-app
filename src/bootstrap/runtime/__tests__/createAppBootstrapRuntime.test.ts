@@ -51,6 +51,7 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockDisposeSystemEntry = jest.fn(async () => {});
 const mockDisposeSkills = jest.fn(async () => {});
+const mockDisposeVoice = jest.fn(async () => {});
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -59,6 +60,7 @@ const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) =
   dataApiDependencies: mockDataApiDependencies,
   disposeSystemEntry: mockDisposeSystemEntry,
   disposeSkills: mockDisposeSkills,
+  disposeVoice: mockDisposeVoice,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -177,6 +179,28 @@ describe('createAppBootstrapRuntime', () => {
   test('drains admitted Skill publication before uninstalling its host', async () => {
     let finish!: () => void;
     mockDisposeSkills.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const runtime = createRuntime();
+    const uninstall = jest.spyOn(application, 'uninstall');
+    try {
+      const disposing = runtime.dispose();
+      await Promise.resolve();
+      expect(uninstall).not.toHaveBeenCalled();
+      finish();
+      await disposing;
+      expect(uninstall).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      uninstall.mockRestore();
+    }
+  });
+  test('drains voice requests and temporary audio before uninstalling its host', async () => {
+    let finish!: () => void;
+    mockDisposeVoice.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {
           finish = resolve;

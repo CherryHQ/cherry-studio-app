@@ -1,5 +1,7 @@
 import {
   generateImage as aiCoreGenerateImage,
+  generateSpeech as aiCoreGenerateSpeech,
+  transcribe as aiCoreTranscribe,
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
@@ -8,7 +10,11 @@ import {
   isImageTransportDescriptorSupported,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/image';
-import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import {
+  type AppProviderSettingsMap,
+  resolveVoiceEndpoint,
+  resolveVoiceModel,
+} from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import { createAiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
@@ -27,9 +33,10 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
+import { VoiceError, type SpeechInput, type VoiceModelSelection } from '@/shared/contracts/voice';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import { parseUniqueModelId } from '@/shared/data/types/model';
+import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 import { createAiFailure } from '@/shared/utils/createAiFailure';
 
@@ -309,6 +316,93 @@ export class AiService extends BaseService {
       })),
       usage: result.usage,
     };
+  }
+
+  async generateSpeech(input: SpeechInput, signal: AbortSignal) {
+    return this.executeVoice(input, signal, (config) =>
+      aiCoreGenerateSpeech(
+        resolveVoiceModel(config, 'speech'),
+        input.text,
+        { voice: input.voice },
+        signal,
+      ),
+    );
+  }
+
+  async transcribe(input: VoiceModelSelection & { audio: Uint8Array }, signal: AbortSignal) {
+    return this.executeVoice(input, signal, (config) =>
+      aiCoreTranscribe(resolveVoiceModel(config, 'transcription'), input.audio, {}, signal),
+    );
+  }
+
+  private async executeVoice<TResult>(
+    selection: VoiceModelSelection,
+    signal: AbortSignal,
+    invoke: (config: Parameters<typeof resolveVoiceModel>[0]) => Promise<TResult>,
+  ): Promise<TResult> {
+    signal.throwIfAborted();
+    if (!selection.providerId || !selection.modelId.trim() || selection.modelId.length > 256)
+      throw new VoiceError('invalid-input', 'A voice provider and model ID are required.');
+    const provider = await this.services.provider.getByProviderId(selection.providerId);
+    const endpointType = resolveVoiceEndpoint(provider);
+    if (!provider.isEnabled || !endpointType)
+      throw new VoiceError(
+        'provider-unavailable',
+        'This provider cannot serve the audio protocol.',
+      );
+    // Voice IDs are separate from persisted chat/image models and never enter the general picker.
+    const model: Model = {
+      id: createUniqueModelId(provider.id, selection.modelId.trim()),
+      providerId: provider.id,
+      modelId: selection.modelId.trim(),
+      name: selection.modelId.trim(),
+      capabilities: [],
+      endpointTypes: [endpointType],
+      isDeprecated: false,
+      isEnabled: true,
+      isHidden: false,
+      supportsStreaming: false,
+    };
+    const { sdkConfig } = await resolveAiSdkServing({
+      provider,
+      model,
+      providerService: this.services.provider,
+    });
+    signal.throwIfAborted();
+    try {
+      const settings = sdkConfig.providerSettings;
+      const configuredHeaders = settings?.headers;
+      const headers = await (typeof configuredHeaders === 'function'
+        ? configuredHeaders()
+        : configuredHeaders);
+      signal.throwIfAborted();
+      const result = await invoke({
+        modelId: sdkConfig.modelId,
+        settings: {
+          ...settings,
+          headers: stripUndefinedHeaders(headers ?? {}),
+          fetch: expoFetch,
+        },
+      });
+      signal.throwIfAborted();
+      // ai-core's one-shot audio results contain no usage or price facts. Do not manufacture
+      // language-token records or zero-cost receipts in AiUsageRecordService.
+      return result;
+    } catch (error) {
+      signal.throwIfAborted();
+      const apiKey =
+        sdkConfig.providerSettings && 'apiKey' in sdkConfig.providerSettings
+          ? sdkConfig.providerSettings.apiKey
+          : undefined;
+      throw new AiRequestError(
+        createAiFailure(
+          normalizeAiError(error, typeof apiKey === 'string' ? [apiKey] : [], {
+            providerId: provider.id,
+            modelId: model.modelId,
+          }),
+        ),
+      );
+    }
   }
 
   private async getProviderForListModels(request: ListModelsRequest): Promise<Provider> {

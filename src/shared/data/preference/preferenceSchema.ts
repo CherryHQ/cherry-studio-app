@@ -15,6 +15,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
 } from '@/shared/contracts/fileAttachment';
+import type { VoiceModelSelection } from '@/shared/contracts/voice';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -67,6 +68,9 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  'feature.voice.speech_model': VoiceModelSelection | null;
+  'feature.voice.transcription_model': VoiceModelSelection | null;
+  'feature.voice.voice_id': string;
 
   'file.document_parser.mode': DocumentParserMode;
   'file.export.watermark_enabled': boolean;
@@ -111,6 +115,9 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.voice.speech_model': null,
+  'feature.voice.transcription_model': null,
+  'feature.voice.voice_id': 'alloy',
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
   'file.export.watermark_enabled': true,
