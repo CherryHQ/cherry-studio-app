@@ -17,6 +17,7 @@ import { OverKeyboardView } from 'react-native-keyboard-controller';
 import { useNavigationOverlay } from '../portal/overlay-navigation';
 import { focusMenuTarget } from './menu-focus';
 import { MenuInteraction, type MenuInteractionValue } from './menu-interaction';
+import NativeMenuEscapeView from './specs/MenuEscapeNativeComponent';
 
 type MenuOverlayProps = {
   children: ReactNode;
@@ -194,7 +195,24 @@ function KeyboardMenuOverlayHost({
     return () => subscription.remove();
   }, [onRequestClose, visible]);
 
-  return <OverKeyboardView visible={visible}>{children}</OverKeyboardView>;
+  return (
+    <OverKeyboardView visible={visible}>
+      {Platform.OS === 'android' && visible ? (
+        <NativeMenuEscapeView
+          accessible={false}
+          collapsable={false}
+          importantForAccessibility="no-hide-descendants"
+          onEscape={onRequestClose}
+          pointerEvents="none"
+          style={styles.escapeListener}
+        />
+      ) : null}
+      {children}
+    </OverKeyboardView>
+  );
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 } });
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  escapeListener: { position: 'absolute', width: 0, height: 0 },
+});

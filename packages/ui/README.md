@@ -635,7 +635,10 @@ available space. All Cherry-rendered menus, including `Composer.Menu`, use the s
 overlay root, `MenuRow`, `MenuPanel`, and lifecycle hooks. Android menus and `Composer.Menu`
 use a focus-preserving overlay so opening or closing does not synthesize keyboard transitions
 and move an underlying chat list. The overlay isolates background accessibility, preserves the
-caller's theme/context, and owns Back/Escape. Opening
+caller's theme/context, and owns Back/Escape. Android Escape is intercepted by a private native
+listener on the activity window while the overlay is attached, including its closing animation.
+It consumes the key without moving editor focus and releases the listener when the overlay is
+removed; this native change requires an updated development client. Opening
 focuses the first item; dismissing without a selection restores the trigger's focus. A viewport
 change dismisses the measured presentation instead of retaining a stale anchor.
 

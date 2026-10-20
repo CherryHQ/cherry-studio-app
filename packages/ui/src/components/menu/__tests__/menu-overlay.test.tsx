@@ -7,8 +7,10 @@ import { OverlayNavigationProvider, useOverlayNavigation } from '../../portal/ov
 import { focusMenuTarget } from '../menu-focus';
 import { useMenuInteraction } from '../menu-interaction';
 import { KeyboardMenuOverlay, MenuOverlay } from '../menu-overlay';
+import NativeMenuEscapeView from '../specs/MenuEscapeNativeComponent';
 
 jest.mock('../menu-focus', () => ({ focusMenuTarget: jest.fn() }));
+jest.mock('../specs/MenuEscapeNativeComponent', () => 'NativeMenuEscapeView');
 jest.mock('react-native-gesture-handler', () => {
   const { Pressable, View } = jest.requireActual('react-native');
   return { GestureHandlerRootView: View, Pressable };
@@ -216,6 +218,31 @@ describe.each([
     flushFrame();
     expect(closed).toHaveBeenCalledTimes(1);
   });
+
+  if (platform === 'android') {
+    it('routes Escape through close, retains its listener during closing, and releases it on removal', () => {
+      const escape = () =>
+        renderer.root.findByType(NativeMenuEscapeView).props.onEscape({
+          nativeEvent: { key: 'Escape' },
+        });
+      act(escape);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(closed).not.toHaveBeenCalled();
+      expect(Keyboard.dismiss).not.toHaveBeenCalled();
+      expect(KeyboardController.setFocusTo).not.toHaveBeenCalled();
+
+      act(() => renderer.update(render(false, true)));
+      act(escape);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(closed).not.toHaveBeenCalled();
+
+      act(() => renderer.update(render(false, false)));
+      expect(renderer.root.findAllByType(NativeMenuEscapeView)).toHaveLength(0);
+      expect(closed).not.toHaveBeenCalled();
+      flushFrame();
+      expect(closed).toHaveBeenCalledTimes(1);
+    });
+  }
 
   it('cancels a queued dismissal when the menu reopens or unmounts', () => {
     act(() => renderer.update(render(false, false)));

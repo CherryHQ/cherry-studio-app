@@ -14,13 +14,14 @@ Their existing iOS native adapters remain supported. Pickers, forms, and system 
 interfaces keep their own interaction contracts.
 
 Cherry-rendered menus share their row, bounded panel, and lifecycle owners. Their private
-`MenuOverlay` uses a transparent system modal for background accessibility isolation and native
-Back/Escape, while CherryUI owns content, focus, motion, and action dispatch after dismissal.
-The composer's trigger morph uses the private `KeyboardMenuOverlay` variant, backed by
-`OverKeyboardView`, to preserve editor focus and the current keyboard state. Both variants share
-rows, accessibility focus, and action dispatch; the keyboard variant handles Back and waits for
-overlay removal before dispatch. Its placement follows the live trigger on the UI thread through
-opening and closing, including ongoing keyboard motion.
+`MenuOverlay` uses `KeyboardMenuOverlay` on Android and a transparent system modal on iOS.
+CherryUI owns content, focus, motion, and action dispatch after dismissal. Android menus and the
+composer's trigger morph use `OverKeyboardView` to preserve editor focus and the current keyboard
+state. Android Back uses `BackHandler`; a private native listener intercepts Escape on the activity
+window without taking focus, stays attached through the closing animation, and releases on overlay
+removal. Both variants share rows, accessibility focus, and action dispatch after dismissal.
+The composer's placement follows the live trigger on the UI thread through opening and closing,
+including ongoing keyboard motion.
 
 On Android, the over-keyboard variant uses Gesture Handler pressables for its rows and backdrop.
 These recognize presses in native view coordinates rather than comparing the overlay's touch
