@@ -62,24 +62,26 @@ const MOBILE_REMOTE_CAPABILITIES: Record<
 };
 
 const remotePresets = Object.fromEntries(
-  WEB_SEARCH_PROVIDER_IDS.filter((id) => id !== 'fetch').map((id) => {
-    const metadata = WEB_SEARCH_PROVIDER_CATALOG[id];
-    return [
-      id,
-      {
-        name: metadata.name,
-        type: metadata.type,
-        capabilities: metadata.capabilities
-          .filter((item) => MOBILE_REMOTE_CAPABILITIES[id].includes(item.capability))
-          .map((item) => ({
-            feature: item.capability,
-            requiresApiHost: item.requiresApiHost,
-            requiresApiKey: item.apiKey === 'required',
-            apiHost: item.defaultApiHost ?? '',
-          })),
-      },
-    ] as const;
-  }),
+  WEB_SEARCH_PROVIDER_IDS.filter((id) => id !== 'fetch').map(
+    (id): [Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderPresetConfig] => {
+      const metadata = WEB_SEARCH_PROVIDER_CATALOG[id];
+      return [
+        id,
+        {
+          name: metadata.name,
+          type: metadata.type,
+          capabilities: metadata.capabilities
+            .filter((item) => MOBILE_REMOTE_CAPABILITIES[id].includes(item.capability))
+            .map((item) => ({
+              feature: item.capability,
+              requiresApiHost: item.requiresApiHost,
+              requiresApiKey: item.apiKey === 'required',
+              apiHost: item.defaultApiHost ?? '',
+            })),
+        },
+      ];
+    },
+  ),
 ) as Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderPresetConfig>;
 
 export const WEB_SEARCH_PROVIDER_PRESET_MAP: Record<
