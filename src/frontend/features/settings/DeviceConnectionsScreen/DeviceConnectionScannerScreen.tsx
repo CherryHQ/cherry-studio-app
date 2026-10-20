@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { RouteHeader } from '@/frontend/appShell/header';
@@ -76,8 +76,18 @@ export function DeviceConnectionScannerScreen({
 
   const pasteInvitation = async () => {
     const invitation = parseDesktopPairingCode(await Clipboard.getStringAsync().catch(() => ''));
-    if (invitation) submit(invitation);
-    else
+    if (invitation) {
+      // iOS's paste consent alert leaves the app inactive when the read resolves.
+      if (AppState.currentState !== 'active')
+        await new Promise<void>((resolve) => {
+          const subscription = AppState.addEventListener('change', (state) => {
+            if (state !== 'active') return;
+            subscription.remove();
+            resolve();
+          });
+        });
+      submit(invitation);
+    } else
       toast.show({
         label: t('settings.deviceConnections.scan.invalidInvitation'),
         variant: 'danger',
