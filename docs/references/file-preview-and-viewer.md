@@ -116,8 +116,10 @@ Selection mode is explicit; browsing does not capture references. The package ow
 scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
 footer action to reference the selection with the original attachment. A preview opened from a chat
 returns to that chat and inserts the reference at the retained caret, preserving draft text,
-attachments, Agent and workspace. A preview opened from the file library opens a new editable chat
-draft. Assistant deliverables whose files are unavailable are hidden from the message.
+attachments, Agent and workspace; the workspace sheet the preview came from stays closed. A preview
+opened from the file library, or from a chat whose Agent is minimal, offers an `AgentMenu` of
+standard Agents and opens a new editable draft with the chosen one. Assistant deliverables whose
+files are unavailable are hidden from the message without leaving a gap.
 The reference carries the managed file id, structural anchor and excerpt. The Agent reads the
 current referenced content and compares it with the excerpt before editing, following Desktop's
 workflow.

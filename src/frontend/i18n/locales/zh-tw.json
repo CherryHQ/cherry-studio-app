@@ -690,7 +690,6 @@
   "fileViewer.selection.hint": "點按文件內容以選取。",
   "fileViewer.selection.openChat": "在新對話中引用",
   "fileViewer.selection.referenceInChat": "引用至目前對話",
-  "fileViewer.selection.requiresAgent": "請先建立標準模式 Agent，再處理此選取範圍。",
   "fileViewer.selection.select": "選擇引用內容",
   "fileViewer.selection.slide": "第 {{slide}} 頁",
   "fileViewer.share": "分享",

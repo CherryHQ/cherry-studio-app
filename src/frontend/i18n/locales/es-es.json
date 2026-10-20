@@ -710,7 +710,6 @@
   "fileViewer.selection.hint": "Toca el contenido del documento para seleccionarlo.",
   "fileViewer.selection.openChat": "Citar en un chat nuevo",
   "fileViewer.selection.referenceInChat": "Citar en el chat actual",
-  "fileViewer.selection.requiresAgent": "Crea un Agent en modo estándar para trabajar con esta selección.",
   "fileViewer.selection.select": "Seleccionar contenido para citar",
   "fileViewer.selection.slide": "Diapositiva {{slide}}",
   "fileViewer.share": "Compartir",

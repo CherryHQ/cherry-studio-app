@@ -700,7 +700,6 @@
   "fileViewer.selection.hint": "Seçmek için belge içeriğine dokunun.",
   "fileViewer.selection.openChat": "Yeni sohbette alıntıla",
   "fileViewer.selection.referenceInChat": "Geçerli sohbette alıntıla",
-  "fileViewer.selection.requiresAgent": "Bu seçimle çalışmak için standart modda bir Agent oluşturun.",
   "fileViewer.selection.select": "Alıntılanacak içeriği seç",
   "fileViewer.selection.slide": "Slayt {{slide}}",
   "fileViewer.share": "Paylaş",

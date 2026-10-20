@@ -700,7 +700,6 @@
   "fileViewer.selection.hint": "Πατήστε στο περιεχόμενο του εγγράφου για να το επιλέξετε.",
   "fileViewer.selection.openChat": "Αναφορά σε νέα συνομιλία",
   "fileViewer.selection.referenceInChat": "Αναφορά στην τρέχουσα συνομιλία",
-  "fileViewer.selection.requiresAgent": "Δημιουργήστε έναν Agent σε τυπική λειτουργία για να επεξεργαστείτε αυτήν την επιλογή.",
   "fileViewer.selection.select": "Επιλογή περιεχομένου για αναφορά",
   "fileViewer.selection.slide": "Διαφάνεια {{slide}}",
   "fileViewer.share": "Κοινή χρήση",

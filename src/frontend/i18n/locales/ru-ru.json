@@ -720,7 +720,6 @@
   "fileViewer.selection.hint": "Нажмите на содержимое документа, чтобы выбрать его.",
   "fileViewer.selection.openChat": "Сослаться в новом чате",
   "fileViewer.selection.referenceInChat": "Сослаться в текущем чате",
-  "fileViewer.selection.requiresAgent": "Создайте Agent в стандартном режиме для работы с этим выделением.",
   "fileViewer.selection.select": "Выбрать содержимое для ссылки",
   "fileViewer.selection.slide": "Слайд {{slide}}",
   "fileViewer.share": "Поделиться",
