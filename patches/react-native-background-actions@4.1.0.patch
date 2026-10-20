@@ -156,7 +156,7 @@ index 35d8f8769e5ec7e36d25c3836f646889a64010c5..d77edaf538cba25b1fe10dd0e44261e6
          return extras.getString("taskTitle", "");
      }
 diff --git a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
-index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df31177a83a 100644
+index 963b7889356454d12c150398631a3d493f53b5b2..01df4522521ebdd92f6ba6ad3c68885d30b0d8dd 100644
 --- a/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 +++ b/android/src/main/java/com/asterinet/react/bgactions/RNBackgroundActionsTask.java
 @@ -10,20 +10,74 @@ import android.content.Intent;
@@ -266,7 +266,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
                  .setColor(color);
  
          final Bundle progressBarBundle = bgOptions.getProgressBar();
-@@ -92,28 +152,87 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -92,28 +152,104 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
          if (extras == null) {
              throw new IllegalArgumentException("Extras cannot be null");
          }
@@ -284,13 +284,13 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
 +        super.onStartCommand(intent, flags, startId);
 +        return START_NOT_STICKY;
 +    }
-+
+ 
 +    private void detachFinishedResult() {
 +        if (!foreground || anchorOngoing) return;
 +        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
 +        foreground = false;
 +    }
- 
++
 +    /** Android cancels a foreground notification while stopping the service, before onDestroy. */
 +    static void prepareStop() {
 +        if (instance != null) instance.detachFinishedResult();
@@ -310,7 +310,6 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
 +
 +    private void updateForeground() {
 +        if (currentOptions == null) return;
-+        final Notification notification = buildNotification(this, currentOptions);
          try {
 -            ServiceCompat.startForeground(
 -                this,
@@ -320,7 +319,11 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
 -            );
 +            final int nextId = currentOptions.getNotificationId();
 +            if (foreground && notificationId == nextId) {
-+                getSystemService(NotificationManager.class).notify(nextId, notification);
++                // SystemIntegration owns task content and Live Update extras. Reposting a
++                // plain service notification on each token or visibility change demotes it.
++                if (anchorOngoing != currentOptions.isOngoing()) {
++                    getSystemService(NotificationManager.class).notify(nextId, buildNotification(this, currentOptions));
++                }
 +            } else if (foreground && !anchorOngoing && !isAppVisible()) {
 +                // Detaching leaves foreground, and Android 12+ refuses to re-promote a hidden
 +                // app. The finished result keeps the service until foreground entry or stop;
@@ -330,7 +333,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
 +                // Switching identity would make Android cancel the previous one; a finished
 +                // destination keeps its result, so only its service ownership moves.
 +                detachFinishedResult();
-+                ServiceCompat.startForeground(this, nextId, notification, currentOptions.getForegroundServiceType());
++                ServiceCompat.startForeground(this, nextId, anchorNotification(), currentOptions.getForegroundServiceType());
 +                if (notificationId == SERVICE_NOTIFICATION_ID && nextId != notificationId) {
 +                    getSystemService(NotificationManager.class).cancel(notificationId);
 +                }
@@ -356,6 +359,20 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
 -        return super.onStartCommand(intent, flags, startId);
 +    }
 +
++    private Notification anchorNotification() {
++        // A surviving conversation may already have a promoted card before it becomes
++        // the service anchor. Preserve that card when moving foreground ownership.
++        for (android.service.notification.StatusBarNotification entry :
++                getSystemService(NotificationManager.class).getActiveNotifications()) {
++            final Notification notification = entry.getNotification();
++            if (entry.getId() == currentOptions.getNotificationId()
++                    && ((notification.flags & Notification.FLAG_ONGOING_EVENT) != 0) == currentOptions.isOngoing()) {
++                return notification;
++            }
++        }
++        return buildNotification(this, currentOptions);
++    }
++
 +    private void emitProtection(boolean protectedExecution) {
 +        final ReactContext context = getReactContext();
 +        if (taskName != null && context != null && context.hasActiveReactInstance()) {
@@ -368,7 +385,7 @@ index 963b7889356454d12c150398631a3d493f53b5b2..f929d7a0971df7b39a7a969d50600df3
      }
  
      @Override
-@@ -124,15 +243,16 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
+@@ -124,15 +260,16 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
  
      @Override
      public void onTimeout(int startId, int fgsType) {

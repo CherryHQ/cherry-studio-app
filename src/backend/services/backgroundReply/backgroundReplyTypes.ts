@@ -3,7 +3,25 @@ import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
-import type { AgentMessageView } from '@/shared/contracts/agent';
+import type {
+  AgentMessageView,
+  AgentUserAnswers,
+  AgentUserQuestions,
+} from '@/shared/contracts/agent';
+
+export type BackgroundReplyInteraction =
+  | {
+      kind: 'approval';
+      id: string;
+      title: string;
+      respond(decision: 'approve' | 'deny'): Promise<void>;
+    }
+  | {
+      kind: 'question';
+      id: string;
+      question: AgentUserQuestions;
+      respond(answer: AgentUserAnswers): Promise<void>;
+    };
 
 // The feature contract lives in shared so the service and activity
 // registration agree on props; these re-exports keep the service-local import
@@ -30,8 +48,13 @@ export type BackgroundReplyUpdateOptions = {
  * superseded by a newer generation become no-ops.
  */
 export type BackgroundReplyTurn = {
+  setInteraction(interaction: BackgroundReplyInteraction | undefined): void;
   updateContent(content: BackgroundReplyContent): void;
-  awaitApproval: (message?: BackgroundReplyMessage, reason?: 'question') => void;
+  awaitApproval: (
+    message?: BackgroundReplyMessage,
+    reason?: 'question',
+    requestId?: string,
+  ) => void;
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
   /** Removes the surface without terminal content or a notice; the work continues elsewhere. */

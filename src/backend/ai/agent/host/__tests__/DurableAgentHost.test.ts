@@ -225,6 +225,7 @@ function fixture(overrides: Partial<MobileAgentHostPorts> = {}) {
     ...overrides,
   };
   const reply = {
+    setInteraction: jest.fn(),
     updateContent: jest.fn(),
     awaitApproval: jest.fn(),
     finish: jest.fn(),
@@ -1560,6 +1561,53 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
       expect(state.reply.finish).toHaveBeenCalledTimes(1);
       expect(state.reply.finish).toHaveBeenCalledWith('completed');
     } finally {
+      await state.host.close();
+    }
+  });
+
+  test('background handoff binds the remaining answer approval to its system card', async () => {
+    const state = fixture();
+    const controller = new AbortController();
+    let decision: Promise<unknown> | undefined;
+    await state.reserve('completed');
+    await state.host.initialize();
+    try {
+      await askTwoModels(state);
+      await settle();
+      const running = runningTurns(state);
+      const holder = running.find(
+        (turn) => state.reply.update.mock.calls[0]?.[0]?.id === turn.assistantMessageId,
+      )!;
+      const other = running.find((turn) => turn !== holder)!;
+      const approvalId = uuid();
+      decision = state
+        .execution()!
+        .requestApproval(
+          other.identity,
+          {
+            id: approvalId,
+            turnId: other.identity.turnId,
+            toolCallId: 'pending-tool',
+            toolRef: { source: 'builtin', capabilityId: 'read_file' },
+            displayName: 'Read file',
+            input: {},
+            status: 'pending',
+          },
+          controller.signal,
+        )
+        .catch((error: unknown) => error);
+      await settle();
+      state.emit({ ...holder, status: 'completed', answerBoundary: 'pi:3' });
+      await settle();
+      const interaction = state.reply.setInteraction.mock.calls.at(-1)?.[0];
+      expect(interaction).toMatchObject({ kind: 'approval', id: approvalId });
+      await interaction.respond('deny');
+      await expect(decision).resolves.toBe('deny');
+      expect(state.reply.setInteraction).toHaveBeenLastCalledWith(undefined);
+      expect(state.background.startTurn).toHaveBeenCalledTimes(1);
+    } finally {
+      controller.abort();
+      await decision;
       await state.host.close();
     }
   });

@@ -1,5 +1,10 @@
 import { AppState } from 'react-native';
 
+import {
+  BACKGROUND_REPLY_ACTION,
+  type BackgroundActivityActions,
+} from '@/shared/backgroundActivity/actions';
+import type { ForegroundActivityAttention } from '@/shared/backgroundActivity/attention';
 import { BACKGROUND_NOTIFICATION_OWNER } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isNotificationAllowed } from '@/shared/notifications/notificationPermission';
@@ -31,16 +36,30 @@ export type ReplyCompletionNotifier = {
   notifyTurnFinished(event: ReplyCompletionNotificationEvent): Promise<boolean>;
   /** Retires the delivered notification for a destination. */
   dismissDestination(deepLinkUrl: string): void;
+  notifyAttention(event: ReplyAttentionNotificationEvent): Promise<boolean>;
+  dismissAttention(deepLinkUrl: string): void;
+};
+
+export type ReplyAttentionNotificationEvent = {
+  actions?: BackgroundActivityActions;
+  /** Controls arriving after their remote input loads update the notice silently. */
+  alert?: boolean;
+  deepLinkUrl: string;
+  detail: string;
+  isCurrent(): boolean;
+  phase: 'awaiting-approval' | 'awaiting-answer';
+  title: string;
 };
 
 export type ReplyCompletionNotificationEnvironment = {
   /** Whether finishing chat replies may raise a system notification. */
   isReplyCompletionNotificationEnabled(): boolean;
+  onForegroundAttention?: (attention: ForegroundActivityAttention) => void;
 };
 
 /**
- * iOS attention delivery for chat replies, fed by the reply runtime's logical
- * turn-terminal events. Delivery is independent of any Live Activity surface:
+ * iOS attention delivery for chat replies, fed by logical decision and terminal
+ * events. Delivery is independent of any Live Activity surface:
  * a notice goes out whenever a reply that ran in the background finishes while
  * the app is still hidden, whether or not a Live Activity existed, failed, or
  * was already dismissed. One destination holds at most one delivered notice —
@@ -64,7 +83,7 @@ export function createReplyCompletionNotifier(
 
   const requestPermissionOnce = (): void => {
     if (permissionRequested || AppState.currentState !== 'active') return;
-    if (!environment.isReplyCompletionNotificationEnabled()) return;
+    // Decisions must reach the user even when optional completion alerts are off.
     permissionRequested = true;
     void loadNotifications()
       .requestPermissionsAsync()
@@ -78,7 +97,19 @@ export function createReplyCompletionNotifier(
   const notificationId = (deepLinkUrl: string): string =>
     `cherry-reply-${deepLinkUrl.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
+  const attentionId = (deepLinkUrl: string): string =>
+    `cherry-attention-${encodeURIComponent(deepLinkUrl)}`;
+
+  const dismissAttention = (deepLinkUrl: string): void => {
+    void loadNotifications()
+      .dismissNotificationAsync(attentionId(deepLinkUrl))
+      .catch((error) => {
+        logger.warn('Failed to dismiss attention notification', error as Error);
+      });
+  };
+
   const dismissDestination = (deepLinkUrl: string): void => {
+    dismissAttention(deepLinkUrl);
     // The identifier is deterministic per destination, so dismissal works
     // without prior in-memory knowledge — including a notice delivered
     // before a process restart.
@@ -87,6 +118,68 @@ export function createReplyCompletionNotifier(
       .catch((error: unknown) => {
         logger.warn('Failed to dismiss reply notification', error as Error, { deepLinkUrl });
       });
+  };
+
+  const notifyAttention = async (event: ReplyAttentionNotificationEvent): Promise<boolean> => {
+    if (!event.isCurrent()) return false;
+    if (isForeground()) {
+      environment.onForegroundAttention?.({
+        detail: event.detail,
+        phase: event.phase,
+        title: event.title,
+        url: event.deepLinkUrl,
+      });
+      return false;
+    }
+    if (!isNotificationAllowed(await loadNotifications().getPermissionsAsync())) return false;
+    if (!event.isCurrent() || isForeground()) return false;
+    const identifier = attentionId(event.deepLinkUrl);
+    if (event.actions) {
+      await loadNotifications().setNotificationCategoryAsync(identifier, [
+        ...event.actions.buttons.map((button) => ({
+          identifier: button.id,
+          buttonTitle: button.label,
+          options: { opensAppToForeground: false, isAuthenticationRequired: true },
+        })),
+        ...(event.actions.reply
+          ? [
+              {
+                identifier: BACKGROUND_REPLY_ACTION,
+                buttonTitle: event.actions.reply.label,
+                textInput: {
+                  submitButtonTitle: event.actions.reply.label,
+                  placeholder: event.actions.reply.placeholder,
+                },
+                options: { opensAppToForeground: false, isAuthenticationRequired: true },
+              },
+            ]
+          : []),
+      ]);
+      if (!event.isCurrent() || isForeground()) return false;
+    }
+    await loadNotifications().scheduleNotificationAsync({
+      identifier,
+      trigger: null,
+      content: {
+        title: event.title.slice(0, 120),
+        // Simple question text is necessary to answer from the notification.
+        body: event.actions ? [event.detail, event.actions.prompt].join('\n') : event.detail,
+        ...(event.actions ? { categoryIdentifier: identifier } : {}),
+        ...(event.alert === false ? {} : { sound: 'default' }),
+        data: {
+          owner: BACKGROUND_NOTIFICATION_OWNER,
+          attention: true,
+          url: event.deepLinkUrl,
+          ...(event.actions ? { actionToken: event.actions.token } : {}),
+        },
+      },
+    });
+    // A decision can resolve while native delivery is in flight.
+    if (!event.isCurrent() || isForeground()) {
+      await loadNotifications().dismissNotificationAsync(identifier);
+      return false;
+    }
+    return true;
   };
 
   const notifyTurnFinished = async (event: ReplyCompletionNotificationEvent): Promise<boolean> => {
@@ -118,7 +211,17 @@ export function createReplyCompletionNotifier(
     return true;
   };
 
-  return { requestPermissionOnce, notifyTurnFinished, dismissDestination };
+  return {
+    requestPermissionOnce,
+    notifyTurnFinished,
+    dismissDestination,
+    notifyAttention,
+    dismissAttention,
+  };
+}
+
+function isForeground(): boolean {
+  return AppState.currentState === 'active';
 }
 
 /** Environment without iOS notification delivery (Android, tests, unsupported). */
@@ -127,5 +230,7 @@ export function noopReplyCompletionNotifier(): ReplyCompletionNotifier {
     requestPermissionOnce: () => {},
     notifyTurnFinished: async () => false,
     dismissDestination: () => {},
+    dismissAttention: () => {},
+    notifyAttention: async () => false,
   };
 }

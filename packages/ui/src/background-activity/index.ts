@@ -1,4 +1,5 @@
 export type {
+  BackgroundActivityActions,
   BackgroundActivityBasePresentation,
   BackgroundActivityIcon,
   BackgroundActivityNativePresentation,

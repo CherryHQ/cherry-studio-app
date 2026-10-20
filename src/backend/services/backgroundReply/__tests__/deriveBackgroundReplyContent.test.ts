@@ -96,6 +96,7 @@ describe('deriveBackgroundReplyContent', () => {
     expect(content).toEqual({
       detail: 'Awaiting approval',
       phase: 'awaiting-approval',
+      attentionId: 'approval-1',
       preview: 'Partial answer',
     });
   });
@@ -111,7 +112,19 @@ describe('deriveBackgroundReplyContent', () => {
         { parts: [{ ...tool, approvalId: 'approval-1', state: 'awaiting-approval' }] },
         t,
       ),
-    ).toEqual({ detail: 'Awaiting approval', phase: 'awaiting-approval' });
+    ).toEqual({
+      detail: 'Awaiting approval',
+      phase: 'awaiting-approval',
+      attentionId: 'approval-1',
+    });
+  });
+
+  test('distinguishes a pending question and carries its stable request identity', () => {
+    expect(deriveBackgroundReplyContent({ parts: [toolPart('ask_user_question')] }, t)).toEqual({
+      phase: 'awaiting-answer',
+      detail: 'chat.question.waiting',
+      attentionId: 'call-1',
+    });
   });
 
   test('truncates from the end without splitting unicode characters', () => {

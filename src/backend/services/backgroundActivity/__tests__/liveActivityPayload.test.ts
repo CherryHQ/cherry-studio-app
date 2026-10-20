@@ -11,6 +11,23 @@ function nativeBytes(props: object, url = deepLinkUrl): number {
 }
 
 describe('Live Activity payload budget', () => {
+  test('keeps decision correlation and buttons while omitting notification-only reply choices', () => {
+    const actions = {
+      token: 'current-request',
+      prompt: 'Which?',
+      buttons: [{ id: 'option:rain', label: 'Rain' }],
+      reply: { label: 'Reply', placeholder: 'Other', choices: ['雨'.repeat(1000)] },
+    };
+    const props = { startedAtEpochMs: 100, title: 'Question', actions };
+    const bounded = fitLiveActivityProps(props, deepLinkUrl);
+    expect(bounded.actions).toEqual({
+      token: actions.token,
+      prompt: actions.prompt,
+      buttons: actions.buttons,
+    });
+    expect(nativeBytes(bounded)).toBeLessThanOrEqual(4 * 1024);
+    expect(props.actions.reply.choices).toEqual(actions.reply.choices);
+  });
   test('preserves content that already fits', () => {
     const props = { preview: 'A small painting', startedAtEpochMs: 100, title: 'Painting' };
     expect(fitLiveActivityProps(props, deepLinkUrl)).toEqual(props);
