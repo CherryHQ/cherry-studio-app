@@ -15,7 +15,7 @@ import {
   DEFAULT_DOCUMENT_PARSER_MODE,
   type DocumentParserMode,
 } from '@/shared/contracts/fileAttachment';
-import type { VoiceModelSelection } from '@/shared/contracts/voice';
+import type { VoiceEngineId, VoiceModelSelection } from '@/shared/contracts/voice';
 import type {
   WebSearchCompressionMethod,
   WebSearchProviderId,
@@ -68,9 +68,16 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
+  'feature.voice.ai_voice': string;
+  /** Null uses the first engine this device supports. */
+  'feature.voice.dictation_engine': VoiceEngineId | null;
+  /** Null uses the first engine this device supports. */
+  'feature.voice.speech_engine': VoiceEngineId | null;
   'feature.voice.speech_model': VoiceModelSelection | null;
+  /** Empty uses the system default voice for the app language. */
+  'feature.voice.system_voice': string;
+  /** Serves AI dictation and audio file attachments. */
   'feature.voice.transcription_model': VoiceModelSelection | null;
-  'feature.voice.voice_id': string;
 
   'file.document_parser.mode': DocumentParserMode;
   'file.export.watermark_enabled': boolean;
@@ -115,9 +122,12 @@ export const PreferenceDefaults = {
   'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
+  'feature.voice.ai_voice': 'alloy',
+  'feature.voice.dictation_engine': null,
+  'feature.voice.speech_engine': null,
   'feature.voice.speech_model': null,
+  'feature.voice.system_voice': '',
   'feature.voice.transcription_model': null,
-  'feature.voice.voice_id': 'alloy',
 
   'file.document_parser.mode': DEFAULT_DOCUMENT_PARSER_MODE,
   'file.export.watermark_enabled': true,
@@ -148,4 +158,8 @@ export const DEVICE_LOCAL_PREFERENCE_KEYS = [
   'app.user.id',
   'chat.background_reply.enabled',
   'chat.completion_notifications.enabled',
+  // Engine support and system voices differ per device.
+  'feature.voice.dictation_engine',
+  'feature.voice.speech_engine',
+  'feature.voice.system_voice',
 ] as const satisfies readonly PreferenceKeyType[];

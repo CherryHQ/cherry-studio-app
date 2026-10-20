@@ -1,91 +1,117 @@
 # Voice Input And Speech
 
-> Status: implemented; iOS/Android device acceptance pending.
+> Status: engines, attachment transcription and settings are implemented; the chat and settings
+> controls are interim and await their UI design. iOS/Android device acceptance is pending.
 
-## Product Flow
+## Capabilities
 
-The chat input menu opens **Voice input**. The user selects a locally configured provider and an
-independent transcription model ID, then records up to two minutes or selects one audio file.
-The system picker copies the selected file to cache. Transcription uploads at most 20 MiB and
-inserts the resulting text at the composer's current selection through its existing `insertText`
-contract. It never replaces the whole draft or sends a message automatically. The user reviews
-and edits the result before sending.
+| Capability | Default engine | Optional engine |
+| --- | --- | --- |
+| Dictation into the composer draft | System speech recognition | AI transcription model |
+| Reading an assistant reply aloud | System text-to-speech | AI speech model and voice |
+| Audio file attachments | AI transcription model | — |
 
-A settled assistant message with text exposes **Read aloud**. The dialog lets the user choose a
-speech provider/model, voice ID, and editable source text. Generation is explicit, with a
-4,096-character limit and no silent truncation. Generated WAV audio starts playing, with controls
-to stop or replay from the beginning. Closing the dialog or backgrounding the app stops playback.
-These dialogs use CherryUI and the existing composer input-replacement presentation contract.
+System engines are free, need no setup and spend no tokens. AI engines are optional upgrades that
+the user configures once in **Settings → Voice**; voice actions never ask for a provider or model.
+Users can also dictate with their keyboard's own voice input, which needs no app support.
 
-The provider/model choices are separate preferences for speech and transcription. Neither defaults
-to a chat account. Audio model IDs never enter the normal chat picker. Suggested OpenAI model IDs
-are examples: a compatible gateway must actually expose the selected audio model and endpoints.
-Both local and remote conversations use the locally selected voice account; remote provider IDs
-are not resolved against local accounts.
+## Module Boundaries
 
-## Requests And Ownership
+`Backend.voice` (`VoiceModule` in `src/shared/contracts/voice.ts`) is the only surface callers use.
+Callers never pick an engine: they start dictation, read text, and observe the current activity.
 
-`Backend.voice` is created with each application host. It calls `AiService`, which resolves an
-enabled provider at request time, constructs an ephemeral audio model selection, and uses
-`resolveAiSdkServing` for the configured base URL, custom headers, and selected API key. The
-provider must expose an OpenAI Chat Completions or Responses endpoint with an `openai` or
-`openai-compatible` adapter and API-key authentication. IAM and account-sign-in-only providers
-are outside this initial audio protocol support.
+`src/backend/services/voice` owns the implementation:
 
-`packages/ai-runtime/provider` owns the OpenAI audio model adaptation. The generic compatible chat
-SDK has no speech/transcription adapter, so this path explicitly uses the OpenAI audio adapter
-with the resolved account settings. `ai-core.generateSpeech` and `ai-core.transcribe` receive
-resolved V3 models, bytes/text, and an abort signal. Expo fetch and the existing Expo Blob preboot
-support the binary/multipart transport. Provider errors use the existing normalized AI failure
-contract and credential redaction. Each explicit action makes one attempt; there is no implicit
-retry. The user can correct settings and start another action after the previous one settles.
+- `engines.ts` declares the `DictationEngine` and `SpeechEngine` ports. An engine may serve one
+  capability only; a missing engine is unsupported.
+- `VoiceRuntime.ts` is the only place that chooses an engine. An explicit preference is used as is;
+  with none (`null`), the first engine in `VOICE_ENGINES` the device supports is used. The runtime
+  allows one activity at a time: dictation stops reading, reading replaces reading, and reading
+  cannot start during dictation. Backgrounding the app and host disposal abort the activity. It
+  turns Markdown into prose (`speechText.ts`) before any engine sees it.
+- Each native library appears in exactly one adapter: `systemDictation.ts`
+  (`expo-speech-recognition`), `systemSpeech.ts` (`expo-speech`), `aiDictation.ts` (`expo-audio`
+  recording) and `aiSpeech.ts` (`expo-audio` playback). Adapters own their permissions, native
+  resources and cleanup.
+- `createVoice.ts` assembles the engines for the host. Adding an engine means one adapter, one
+  `VOICE_ENGINES` entry and one registration there; callers and the runtime do not change.
 
-The upstream audio results expose no token counts, billed cost, or provider-call usage events.
-`AiUsageRecordService` remains the usage owner, but receives no fabricated language-token or
-zero-cost record. The dialog explicitly says voice usage/cost are unavailable in statistics.
+The frontend uses `useBackendModule('voice')` only. Chat owns the dictation and read-aloud hooks in
+`src/frontend/features/chat/voice`; settings owns `src/frontend/features/settings/voice`.
 
-## Native Resources And Cancellation
+## Engines
 
-`expo-audio` owns microphone recording and native playback. Microphone permission requests use
-`DevicePermissions.runWithSystemPrompt`, preserving the shared system-prompt queue. Denial prevents
-recording; permanent denial offers the existing explicit system-settings action. Temporary iOS
-`inactive` transitions for system dialogs do not cancel the operation; background transitions do.
+**System dictation** uses Apple's Speech framework on iOS and Android's `SpeechRecognizer`. It runs
+in continuous mode with live partial results; each final utterance is appended with
+`appendUtterance`, which adds no spaces between Chinese or Japanese utterances. On Android the
+engine currently requires a Google recognition service (`GOOGLE_RECOGNITION_SERVICES`); devices
+without one report it as unsupported and settings disables it. Vendor recognizers such as Xiaomi's
+implement the same `RecognitionService` and are a candidate once verified on devices. The config
+plugin declares the Google packages for Android package visibility.
 
-The input dialog owns recording files and picker cache copies. It deletes them on replacement,
-background, or unmount, waiting for an in-flight upload to settle before deleting its input.
-It never deletes the user's original selected document. A preparation result arriving after
-cancellation is stopped and discarded rather than starting a recording.
+**AI dictation** records mono 16 kHz AAC for up to ten minutes, then sends the recording once to
+the transcription model and deletes it. It has no live text: the transcript arrives on stop.
 
-The backend writes speech output into a unique per-host cache directory and returns an opaque
-lease ID and local URI. The dialog pauses and detaches the player before releasing its lease.
-Unknown release IDs cannot address arbitrary files. Cancelled generation that finishes writing a
-file releases it before rejecting. Host disposal aborts and drains outstanding voice work and
-removes its temporary directory before the rest of the host is uninstalled. Files are transient;
-voice operations do not create jobs, attachments, or durable conversation/usage records.
+**System speech** reads through the platform engine, split to Android's input limit, with an
+optional system voice for the app language.
+
+**AI speech** splits prose into requests of at most 4,096 characters at sentence boundaries,
+generates the next part while the current one plays, and deletes each WAV after playback. The voice
+list is OpenAI's; a compatible gateway rejects the voices it lacks.
+
+Dictation and system speech use the resolved app language. AI transcription detects the language
+itself.
+
+## Audio Attachments
+
+Audio is an attachment mode in `fileAttachmentPolicy`, recognized by media type or by extension
+because pickers often label audio generically or as video. The accepted formats and the 25 MB
+limit follow the OpenAI transcription protocol. Painting does not accept audio.
+
+`readAttachmentContent` reads audio through the reader's optional `transcribeAudio` port, so the
+file service never depends on voice or AI. `AgentHostDependencies` supplies the port from
+`createAudioAttachmentTranscriber`, both for turn attachments and for `read_file` and
+`library_read_file`. The transcript reaches the model as a text attachment with an
+`[Audio transcript]` header and timed segments when the model returns them; the attachment report
+mode is `audio-transcript`. Without a transcription model, sending fails with the
+`transcription-unconfigured` attachment issue; a failed request reports `transcription-failed`.
+
+Transcripts are cached in the system cache directory, keyed by file id, revision, size and model,
+so later turns and paged reads do not transcribe again. Losing the cache only costs another
+transcription. Audio is transcribed only when a turn or tool actually reads it; importing never
+transcribes.
+
+## AI Models And Accounts
+
+`feature.voice.transcription_model` serves AI dictation and audio attachments;
+`feature.voice.speech_model` serves AI speech. Each is an account plus a free-form model ID,
+because audio models are not part of the chat model list. `AiService` resolves the account at
+request time and uses the OpenAI audio adapter with its URL, headers and credential
+(`resolveVoiceEndpoint`); only API-key accounts with an OpenAI or OpenAI-compatible endpoint
+qualify. Each action makes one attempt. Remote conversations also use the local voice settings.
+
+The upstream audio APIs report no token counts or prices, so voice requests create no usage
+records; settings states that audio usage is not in the statistics.
+
+Engine choices and the system voice are device-local preferences: engine support and installed
+voices differ per device, so a restored backup keeps the target device's values.
 
 ## Native Configuration And Acceptance
 
-The Expo config plugin enables foreground recording, adds the microphone purpose string, and
-explicitly disables background recording/playback support. Android's previous blocked
-`RECORD_AUDIO` permission is removed. Camera and image-picker plugins share the audio microphone
-purpose string: setting their microphone permission to `false` would remove the iOS purpose or
-block Android recording when Expo composes the native configuration. These native changes require
-new iOS and Android development builds; JavaScript updates alone cannot install the audio module or microphone permissions. Follow
-[Local EAS Builds](../guides/local-builds.md) when packaging is explicitly requested.
+`expo-speech-recognition` adds the speech recognition purpose string, `RECORD_AUDIO`, and package
+visibility for recognition services. `expo-audio` enables foreground recording with background
+recording and playback disabled. Camera and image-picker share the same microphone purpose string,
+because Expo composes these plugins into one native configuration. These changes need new iOS and
+Android development builds; a JavaScript update cannot add the native modules.
 
-Focused tests cover protocol request shapes, byte preservation, credential selection, failures,
-no retries, host draining, file ownership, permission-denial decisions, stale-result suppression,
-and playback cleanup. These use native-port fakes and do not establish microphone or playback
-behavior on a device. No native build or interactive acceptance was run for this change.
+Focused tests cover engine choice, the single-activity rule, backgrounding and disposal, Markdown
+to prose, request splitting, utterance joining, Android recognizer detection, audio classification
+and limits, attachment transcription, caching and failures, transcript paging in `read_file`, and
+the composed native configuration. They use native fakes and do not establish device behavior.
 
-Authorized device acceptance should cover both iOS and Android using a new development client:
+Device acceptance on iOS and on Android with and without Google services:
 
-- Fresh permission grant, denial, permanent denial and return from system settings.
-- Recording, the two-minute cap, interruption, file selection and oversize/unsupported input.
-- Transcription into a nonempty draft and selection, followed by user editing and explicit send.
-- Speech generation, audible WAV playback, stop, replay and text-length validation.
-- Provider authentication/model failures and network interruption without automatic retries.
-- Close, navigate away, background, host replacement and late completions during permission,
-  recording preparation, upload, generation, audio-mode setup and playback.
-
-Follow [Parallel Device Testing](../guides/parallel-device-testing.md) for authorized device work.
+- System dictation: permission grant and denial, live text, Chinese and English, stop, cancel,
+  backgrounding, and the disabled engine on Android devices without Google services.
+- AI dictation and speech with a real OpenAI-compatible account, including long replies.
+- Audio attachments in chat and `read_file`, with and without a transcription model.

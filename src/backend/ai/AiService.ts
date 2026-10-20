@@ -33,7 +33,7 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { AiRequestError } from '@/shared/contracts/aiFailure';
-import { VoiceError, type SpeechInput, type VoiceModelSelection } from '@/shared/contracts/voice';
+import { VoiceError, type VoiceModelSelection } from '@/shared/contracts/voice';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { createUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
@@ -318,7 +318,10 @@ export class AiService extends BaseService {
     };
   }
 
-  async generateSpeech(input: SpeechInput, signal: AbortSignal) {
+  async generateSpeech(
+    input: VoiceModelSelection & { text: string; voice: string },
+    signal: AbortSignal,
+  ) {
     return this.executeVoice(input, signal, (config) =>
       aiCoreGenerateSpeech(
         resolveVoiceModel(config, 'speech'),
@@ -342,14 +345,11 @@ export class AiService extends BaseService {
   ): Promise<TResult> {
     signal.throwIfAborted();
     if (!selection.providerId || !selection.modelId.trim() || selection.modelId.length > 256)
-      throw new VoiceError('invalid-input', 'A voice provider and model ID are required.');
+      throw new VoiceError('not-configured', 'A voice provider and model ID are required.');
     const provider = await this.services.provider.getByProviderId(selection.providerId);
     const endpointType = resolveVoiceEndpoint(provider);
     if (!provider.isEnabled || !endpointType)
-      throw new VoiceError(
-        'provider-unavailable',
-        'This provider cannot serve the audio protocol.',
-      );
+      throw new VoiceError('not-configured', 'This provider cannot serve the audio protocol.');
     // Voice IDs are separate from persisted chat/image models and never enter the general picker.
     const model: Model = {
       id: createUniqueModelId(provider.id, selection.modelId.trim()),

@@ -13,15 +13,12 @@ export type FileUploadSelection = {
  * what happens after selection: the composer stages attachments, while a file
  * library surface can import the same normalized sources directly.
  */
-export function useFileUploadPicker({
-  multiple = true,
-  type = '*/*',
-}: { multiple?: boolean; type?: string } = {}) {
+export function useFileUploadPicker() {
   return useCallback(async (): Promise<FileUploadSelection[]> => {
     const result = await DocumentPicker.getDocumentAsync({
       copyToCacheDirectory: true,
-      multiple,
-      type,
+      multiple: true,
+      type: '*/*',
     });
 
     if (result.canceled) {
@@ -34,5 +31,5 @@ export function useFileUploadPicker({
       ...(asset.size === undefined ? {} : { size: asset.size }),
       uri: asset.uri,
     }));
-  }, [multiple, type]);
+  }, []);
 }

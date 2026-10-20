@@ -37,6 +37,7 @@ import { createInternalEntry, discardInternalEntries } from '@/backend/services/
 import { createJsSandbox } from '@/backend/services/jsSandbox';
 import type { KeepAliveSource } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { skillStorage } from '@/backend/services/skill';
+import { createAudioAttachmentTranscriber } from '@/backend/services/voice';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import type { DocumentParserMode } from '@/shared/contracts/fileAttachment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -44,7 +45,7 @@ import type { LanguageVarious } from '@/shared/data/preference';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 import { resolveAppLanguage } from '@/shared/utils/languages';
 
-import { managedFileResolver } from '../resources/managedFileResolver';
+import { type ManagedFileResolver, managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeTextGenerator, RuntimeWebTools } from '../runtime';
 import type { AgentSessionStore } from '../sessionStore/AgentSessionStore';
 import {
@@ -113,7 +114,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       kind: 'created',
     };
   };
-  readonly files = managedFileResolver;
+  readonly files: ManagedFileResolver;
   readonly inferenceModel = createAgentInferenceModelResolver(modelService);
   readonly runtimeTools;
   readonly skills;
@@ -164,6 +165,19 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
     private readonly keepAlive: KeepAliveSource = { acquire: () => ({ release() {} }) },
   ) {
     super();
+    const transcribeAudio = createAudioAttachmentTranscriber({
+      ai: aiService,
+      preference: preferenceService,
+    });
+    this.files = {
+      ...managedFileResolver,
+      transcribeAudio: (file, signal) =>
+        transcribeAudio(
+          file,
+          (readSignal) => managedFileResolver.readAsBytes(file, readSignal),
+          signal,
+        ),
+    };
     this.imageGeneration = createAgentImageGeneration({
       ai: aiService,
       models: modelService,
@@ -205,6 +219,7 @@ export class AgentHostDependencies extends BaseService implements MobileAgentHos
       preference: this.preferenceService,
       webSearch: this.webSearchService,
       trash: this.trash,
+      transcribeAudio: this.files.transcribeAudio,
     }));
   }
 

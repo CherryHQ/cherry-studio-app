@@ -6,13 +6,18 @@ import { AssistantMessageActionsProvider } from '../../context/AssistantMessageA
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
-jest.mock('../../../../voice/SpeechSheet', () => ({
-  SpeechSheet: (props: object) => jest.requireActual('react').createElement('SpeechSheet', props),
-}));
-
 jest.mock('../../translation/MessageTranslationProvider', () => ({
   useMessageTranslation: () => undefined,
   useMessageTranslationStore: () => null,
+}));
+
+const mockToggleSpeech = jest.fn();
+const mockSpeech = jest.fn((_messageId: string, _text: string | undefined) => ({
+  isSpeaking: false,
+  toggle: mockToggleSpeech,
+}));
+jest.mock('../../../../voice/useMessageSpeech', () => ({
+  useMessageSpeech: (messageId: string, text: string | undefined) => mockSpeech(messageId, text),
 }));
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
@@ -139,13 +144,6 @@ describe('AssistantMessageToolbar', () => {
     },
   );
 
-  test('opens speech only on explicit action with the settled message text', () => {
-    renderToolbar(createMessage('success', ' Read this '));
-    expect(renderer?.root.findAllByType('SpeechSheet' as never)).toHaveLength(0);
-    act(() => renderer!.root.findByProps({ testID: 'assistant-message-speech' }).props.onPress());
-    expect(renderer!.root.findByType('SpeechSheet' as never).props.text).toBe('Read this');
-  });
-
   test('copies projected text and exposes copied feedback for only this message', async () => {
     renderToolbar(createMessage('success', ' Answer '));
     const copyButton = renderer?.root.findByProps({ testID: 'assistant-message-copy' });
@@ -236,6 +234,15 @@ describe('AssistantMessageToolbar', () => {
     expect(menuItem('translate')).toBeUndefined();
     act(() => menuItem('share')?.onPress());
     expect(mockShare).toHaveBeenCalledWith('assistant-1', undefined);
+  });
+
+  test('reads the answer text aloud from the more menu', () => {
+    renderToolbar(createMessage('success', 'Answer'));
+
+    expect(mockSpeech).toHaveBeenLastCalledWith('assistant-1', 'Answer');
+    expect(menuItem('read-aloud')?.label).toBe('voice.speech.start');
+    act(() => menuItem('read-aloud')?.onPress());
+    expect(mockToggleSpeech).toHaveBeenCalledTimes(1);
   });
 
   test('adds an answer from the model chosen with @', async () => {

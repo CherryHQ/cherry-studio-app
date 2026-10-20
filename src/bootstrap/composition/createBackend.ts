@@ -1,3 +1,4 @@
+import { getLocales } from 'expo-localization';
 import { createMMKV } from 'react-native-mmkv';
 
 import { checkChatModel } from '@/backend/ai/agent/modelCheck';
@@ -75,7 +76,7 @@ import {
 import { createSystemEntryModule, createSystemShareImporter } from '@/backend/services/systemEntry';
 import { createTranslationModule } from '@/backend/services/translation';
 import type { TrashRuntime } from '@/backend/services/trash';
-import { createVoiceModule, createVoicePlatform } from '@/backend/services/voice';
+import { createVoice } from '@/backend/services/voice';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
@@ -83,6 +84,7 @@ import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { resolveAppLanguage } from '@/shared/utils/languages';
 
 export type BackendComposition = {
   backend: Backend;
@@ -318,10 +320,16 @@ export function createBackend(
   });
 
   services.agent.configureSkills(skills);
-  const voice = createVoiceModule({
+  const voice = createVoice({
     ai: services.ai,
+    preference: services.preference,
     providers: services.provider,
-    ...createVoicePlatform(services.devicePermissions),
+    permissions: services.devicePermissions,
+    language: () =>
+      resolveAppLanguage(
+        services.preference.readCached('app.language'),
+        getLocales().map((locale) => locale.languageTag),
+      ),
   });
 
   return {

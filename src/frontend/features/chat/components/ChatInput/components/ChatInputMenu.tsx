@@ -1,21 +1,14 @@
 import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
-import MicIcon from '@cherrystudio/app-icons/icons/mic';
 import ToolCaseIcon from '@cherrystudio/app-icons/icons/tool-case';
 import { Composer, Image, useToast } from '@cherrystudio/ui/components';
 import { type RefObject, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { View } from 'react-native';
 
-import {
-  ComposerMenu,
-  useComposerDocumentPicker,
-  useComposerMeta,
-  useComposerPresentationActions,
-} from '@/frontend/components/Composer';
+import { ComposerMenu, useComposerDocumentPicker } from '@/frontend/components/Composer';
 import { useMcpIcon } from '@/frontend/hooks/mcp/useMcpIcon';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { VoiceInputSheet } from '../../../voice/VoiceInputSheet';
 import { FilePickerBottomSheet } from './FilePickerBottomSheet';
 
 const logger = loggerService.withContext('ChatInputMenu');
@@ -38,9 +31,6 @@ export function ChatInputMenu({
   const { toast } = useToast();
   const mcpIcon = useMcpIcon();
   const [isFilePickerOpen, setIsFilePickerOpen] = useState(false);
-  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-  const { inputRef } = useComposerMeta();
-  const { runInputReplacement } = useComposerPresentationActions();
   const openDocumentPicker = useComposerDocumentPicker();
 
   function uploadFiles() {
@@ -60,12 +50,6 @@ export function ChatInputMenu({
         onPickFiles={() => setIsFilePickerOpen(true)}
         triggerRef={triggerRef}
       >
-        <Composer.Menu.Item
-          icon={<MicIcon className="size-5 text-foreground" />}
-          label={t('voice.input')}
-          onPress={() => void runInputReplacement(() => setIsVoiceOpen(true))}
-          testID="chat-composer-voice"
-        />
         {onPickPlugins && (
           <Composer.Menu.Item
             icon={<BoxesIcon className="size-5 text-foreground" />}
@@ -93,12 +77,6 @@ export function ChatInputMenu({
       </ComposerMenu>
       {media === 'all' && isFilePickerOpen ? (
         <FilePickerBottomSheet onClose={() => setIsFilePickerOpen(false)} onUpload={uploadFiles} />
-      ) : null}
-      {isVoiceOpen ? (
-        <VoiceInputSheet
-          onClose={() => setIsVoiceOpen(false)}
-          onTranscribed={(text) => inputRef.current?.insertText(text)}
-        />
       ) : null}
     </>
   );

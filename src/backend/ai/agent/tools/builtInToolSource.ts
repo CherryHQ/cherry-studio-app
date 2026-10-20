@@ -42,7 +42,7 @@ import { FileEntryIdSchema } from '@/shared/data/types/file';
 import { createUniqueModelId } from '@/shared/data/types/model';
 import type { WebSearchCapability } from '@/shared/data/types/webSearch';
 
-import type { TurnToolResources } from '../resources/managedFileResolver';
+import type { ManagedFileResolver, TurnToolResources } from '../resources/managedFileResolver';
 import { managedFileResolver } from '../resources/managedFileResolver';
 import type { RuntimeModel, RuntimeTool } from '../runtime';
 import { createAgentManagementTools, type AgentManagementData } from './agentManagementTools';
@@ -135,6 +135,8 @@ export type SystemCapabilityServices = {
   preference: PaintingToolDependencies['preference'];
   webSearch: WebSearchToolDependencies['webSearch'];
   trash: FileLibraryTrashAccess;
+  /** Lets file tools read audio as a transcript. */
+  transcribeAudio?: ManagedFileResolver['transcribeAudio'];
 };
 
 export function createSystemCapabilitySource(
@@ -163,8 +165,12 @@ export function createSystemCapabilitySource(
       const workspaceName = workspaceFolderId
         ? (await fileAccess.library.folder(workspaceFolderId))?.name
         : undefined;
+      const files: ManagedFileResolver = services.transcribeAudio
+        ? { ...managedFileResolver, transcribeAudio: services.transcribeAudio }
+        : managedFileResolver;
       const catalog = createCatalog(
         deps,
+        files,
         scope,
         resources,
         documentParserMode,
@@ -256,6 +262,7 @@ function isPlatformSupported(descriptor: BuiltInToolDescriptor, platform: string
  */
 function createCatalog(
   deps: SystemCapabilitySourceDependencies,
+  files: ManagedFileResolver,
   scope: BuiltInToolScope,
   resources: TurnToolResources,
   documentParserMode: DocumentParserMode,
@@ -279,9 +286,9 @@ function createCatalog(
       resources,
       fileAccess,
     ),
-    createReadFileTool(managedFileResolver, resources, documentParserMode, fileAccess),
+    createReadFileTool(files, resources, documentParserMode, fileAccess),
     createWriteFileTool(fileContent, fileAccess),
-    ...createFileLibraryTools(fileAccess, managedFileResolver, documentParserMode, workspaceName),
+    ...createFileLibraryTools(fileAccess, files, documentParserMode, workspaceName),
     ...createFileLibraryManagementTools(fileAccess.library, deps.trash),
     ...(deps.jsSandbox
       ? createOfficeTools(

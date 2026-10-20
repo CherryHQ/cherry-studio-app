@@ -76,19 +76,34 @@ jest.mock('expo-media-library', () => {
   };
 });
 
-// expo-audio patches native player prototypes at import time. Voice lifecycle suites
-// replace these ports with explicit recorder/player fakes; unrelated suites only import them.
+// Voice native libraries resolve their modules at import time. Voice engine suites replace them
+// with explicit fakes; unrelated suites only import them through backend composition.
 jest.mock('expo-audio', () => ({
-  AudioModule: {
-    getRecordingPermissionsAsync: jest.fn(),
-    requestRecordingPermissionsAsync: jest.fn(),
-  },
-  RecordingPresets: { HIGH_QUALITY: {} },
+  AudioModule: { AudioRecorder: jest.fn() },
+  AudioQuality: { MEDIUM: 64 },
+  IOSOutputFormat: { MPEG4AAC: 'aac ' },
+  createAudioPlayer: jest.fn(),
+  getRecordingPermissionsAsync: jest.fn(),
+  requestRecordingPermissionsAsync: jest.fn(),
   setAudioModeAsync: jest.fn(),
-  useAudioRecorder: jest.fn(),
-  useAudioRecorderState: jest.fn(),
-  useAudioPlayer: jest.fn(),
-  useAudioPlayerStatus: jest.fn(),
+}));
+jest.mock('expo-speech', () => ({
+  getAvailableVoicesAsync: jest.fn(async () => []),
+  maxSpeechInputLength: 4000,
+  speak: jest.fn(),
+  stop: jest.fn(async () => undefined),
+}));
+jest.mock('expo-speech-recognition', () => ({
+  ExpoSpeechRecognitionModule: {
+    abort: jest.fn(),
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    getPermissionsAsync: jest.fn(),
+    getSpeechRecognitionServices: jest.fn(() => []),
+    isRecognitionAvailable: jest.fn(() => false),
+    requestPermissionsAsync: jest.fn(),
+    start: jest.fn(),
+    stop: jest.fn(),
+  },
 }));
 
 // The library resolves its native module at import time. Its own jest entry is

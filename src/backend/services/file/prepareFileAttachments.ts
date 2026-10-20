@@ -194,8 +194,12 @@ export async function prepareFileAttachments(
         file,
         content: { kind: 'text', text: projected.value },
         report: {
-          mode: mode === 'document' ? 'document-text' : 'text',
-          ...(content.parser ? { parser: content.parser } : {}),
+          mode:
+            mode === 'document' ? 'document-text' : mode === 'audio' ? 'audio-transcript' : 'text',
+          // The audio-transcript mode already names how the text was produced.
+          ...(content.parser && content.parser !== 'transcription'
+            ? { parser: content.parser }
+            : {}),
           sourceTruncated: content.sourceTruncated,
           requestTruncated: projected.didTruncate,
           includedCharacters: projected.characters,

@@ -40,6 +40,9 @@ jest.mock('../hooks/useConversationFeedbackHint', () => ({
   useConversationFeedbackHint: jest.fn(),
 }));
 
+jest.mock('../../../voice/useMessageSpeech', () => ({
+  useMessageSpeech: () => ({ isSpeaking: false, toggle: jest.fn() }),
+}));
 jest.mock('../translation/MessageTranslationProvider', () => ({
   MessageTranslationProvider: ({ children }: { children: ReactNode }) => children,
   useMessageTranslation: () => undefined,

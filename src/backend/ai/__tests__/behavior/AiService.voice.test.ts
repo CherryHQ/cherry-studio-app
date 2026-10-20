@@ -139,7 +139,7 @@ test('rejects unsupported and disabled accounts before selecting a credential', 
         { providerId: f.provider.id, modelId: 'whisper-1', audio: new Uint8Array([1]) },
         new AbortController().signal,
       ),
-    ).rejects.toMatchObject({ code: 'provider-unavailable' });
+    ).rejects.toMatchObject({ code: 'not-configured' });
     expect(f.spies.resolveApiKey).not.toHaveBeenCalled();
   }
 });

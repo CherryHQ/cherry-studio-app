@@ -250,6 +250,7 @@ export async function resolveRuntimeContentAttachments(
       historicalFileEntryIds,
       readBytes: (file, readSignal) => files.readAsBytes(file, readSignal),
       readDocumentText: (file, readSignal) => files.readDocumentText(file, readSignal),
+      ...(files.transcribeAudio ? { transcribeAudio: files.transcribeAudio } : {}),
       signal,
       documentParserMode,
       target: {

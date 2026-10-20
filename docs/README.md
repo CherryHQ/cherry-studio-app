@@ -67,7 +67,7 @@ They are the source of truth for how the repository works today.
 | [Lifecycle](./references/lifecycle/README.md) | Service host, startup phases, teardown, and resource-scope coordination |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
 | [Remote Access](./references/remote-access/README.md) | Plan for pairing, configuration sync, and Agent access over the desktop's encrypted channel |
-| [Voice Input And Speech](./references/voice.md) | Explicit recording/file transcription, speech playback, account selection, and pending native acceptance |
+| [Voice Input And Speech](./references/voice.md) | Dictation and read-aloud engines, AI voice models, and audio attachment transcription |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
 
 ## Documentation Governance

@@ -1,5 +1,7 @@
 import { withPlugins, type ExportedConfig } from 'expo/config-plugins';
 
+import { GOOGLE_RECOGNITION_SERVICES } from '@/backend/services/voice/systemDictation';
+
 import appConfig from '../../../app.json';
 
 function voicePlugins(): ExportedConfig {
@@ -7,7 +9,9 @@ function voicePlugins(): ExportedConfig {
   const entries = expo.plugins.filter(
     (plugin) =>
       Array.isArray(plugin) &&
-      ['expo-camera', 'expo-image-picker', 'expo-audio'].includes(plugin[0] as string),
+      ['expo-camera', 'expo-image-picker', 'expo-audio', 'expo-speech-recognition'].includes(
+        plugin[0] as string,
+      ),
   ) as Parameters<typeof withPlugins>[1];
   return withPlugins(
     {
@@ -28,7 +32,7 @@ const request = {
 };
 
 // Apply the installed plugins' in-memory mods; no prebuild, generated files or native tools.
-test('the combined camera, picker and audio plugins retain Android microphone access without background services', async () => {
+test('the combined camera, picker, audio and recognition plugins retain Android microphone access without background services', async () => {
   expect(appConfig.expo.android.blockedPermissions).not.toContain(
     'android.permission.RECORD_AUDIO',
   );
@@ -51,18 +55,24 @@ test('the combined camera, picker and audio plugins retain Android microphone ac
     $: { 'android:name': 'android.permission.RECORD_AUDIO', 'tools:node': 'remove' },
   });
   expect(result.modResults.manifest.application?.[0].service ?? []).toEqual([]);
+  // Package visibility is what lets the system engine find Google's recognizers.
+  const visible = (result.modResults.manifest.queries ?? []).flatMap(
+    (query) => query.package?.map((item) => item.$['android:name']) ?? [],
+  );
+  expect(visible).toEqual(expect.arrayContaining([...GOOGLE_RECOGNITION_SERVICES]));
 });
 
 test('the combined plugins retain the voice microphone purpose on iOS without background audio', async () => {
   const config = voicePlugins();
+  // Prebuild merges this static Info.plist config; running the mods below replaces it in memory.
+  const staticInfoPlist = { ...config.ios?.infoPlist };
   const result = await config.mods!.ios!.infoPlist!({
     ...config,
     modRawConfig: config,
     modRequest: { ...request, platform: 'ios', modName: 'infoPlist' },
     modResults: {},
   });
-  expect(result.modResults.NSMicrophoneUsageDescription).toContain(
-    'selected AI provider for transcription',
-  );
+  expect(result.modResults.NSMicrophoneUsageDescription).toContain('voice input');
+  expect(staticInfoPlist.NSSpeechRecognitionUsageDescription).toContain('voice input');
   expect(result.modResults.UIBackgroundModes ?? []).not.toContain('audio');
 });

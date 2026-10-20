@@ -182,7 +182,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Cherry Studio to scan desktop pairing QR codes and take photos for chat messages and drawings.",
-          "microphonePermission": "Allow Cherry Studio to record your voice and send it to your selected AI provider for transcription.",
+          "microphonePermission": "Allow Cherry Studio to use the microphone for voice input.",
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": true
         }
@@ -220,16 +220,28 @@
         {
           "photosPermission": "Allow Cherry Studio to preview and select photos for drawings and chat messages.",
           "cameraPermission": "Allow Cherry Studio to scan desktop pairing QR codes and take photos for chat messages and drawings.",
-          "microphonePermission": "Allow Cherry Studio to record your voice and send it to your selected AI provider for transcription."
+          "microphonePermission": "Allow Cherry Studio to use the microphone for voice input."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Cherry Studio to record your voice and send it to your selected AI provider for transcription.",
+          "microphonePermission": "Allow Cherry Studio to use the microphone for voice input.",
           "recordAudioAndroid": true,
           "enableBackgroundRecording": false,
           "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow Cherry Studio to use the microphone for voice input.",
+          "speechRecognitionPermission": "Allow Cherry Studio to turn your speech into text for voice input.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox",
+            "com.google.android.as",
+            "com.google.android.tts"
+          ]
         }
       ],
       [

@@ -1,23 +1,57 @@
-export const MAX_VOICE_AUDIO_BYTES = 20 * 1024 * 1024;
-export const MAX_VOICE_TEXT_LENGTH = 4096;
-export const MAX_VOICE_RECORDING_SECONDS = 120;
+/** Engines a capability can run on. Each engine is one adapter under `backend/services/voice`. */
+export const VOICE_ENGINES = ['system', 'ai'] as const;
+export type VoiceEngineId = (typeof VOICE_ENGINES)[number];
 
-export type VoiceOperation = 'speech' | 'transcription';
+/** `dictation` turns speech into composer text; `speech` reads text aloud. */
+export type VoiceCapability = 'dictation' | 'speech';
+
+/** Each capability's engine choice; null uses the first engine the device supports. */
+export const VOICE_ENGINE_PREFERENCE = {
+  dictation: 'feature.voice.dictation_engine',
+  speech: 'feature.voice.speech_engine',
+} as const satisfies Record<VoiceCapability, string>;
+
+/** `unsupported` cannot run on this device; `needs-setup` lacks a configured model. */
+export type VoiceEngineStatus = 'ready' | 'needs-setup' | 'unsupported';
+
 export type VoiceModelSelection = { providerId: string; modelId: string };
-export type VoiceProviderOption = {
-  id: string;
-  name: string;
-};
-export type VoiceAudio = { id: string; uri: string };
+export type VoiceProviderOption = { id: string; name: string };
+export type SpeechVoice = { id: string; name: string; language?: string };
+
 export type VoiceRequestOptions = { signal?: AbortSignal };
-export type SpeechInput = VoiceModelSelection & { text: string; voice: string };
-export type TranscriptionInput = VoiceModelSelection & { uri: string };
+
+export type DictationOptions = VoiceRequestOptions & {
+  /** The whole transcript so far; engines without live results call it once with the final text. */
+  onText?: (text: string) => void;
+  /** Input level from 0 to 1 while capturing. */
+  onLevel?: (level: number) => void;
+};
+
+export interface DictationSession {
+  /** Settles after `stop()`, an engine-initiated end, abort or failure. */
+  readonly result: Promise<string>;
+  /** Ends capture and keeps what was said. Aborting the start signal discards it instead. */
+  stop(): void;
+}
+
+export type SpeakOptions = VoiceRequestOptions & {
+  /** Caller identity of the text being read, for example a message id. */
+  key?: string;
+};
+
+export type VoiceActivity =
+  | { kind: 'idle' }
+  | { kind: 'dictating' }
+  | { kind: 'speaking'; key: string | null };
+
 export type VoiceErrorCode =
-  | 'provider-unavailable'
-  | 'invalid-input'
+  | 'unsupported'
+  | 'not-configured'
+  | 'permission-denied'
+  | 'permission-blocked'
+  | 'busy'
+  | 'no-speech'
   | 'audio-too-large'
-  | 'text-too-long'
-  | 'empty-transcript'
   | 'failed';
 
 export class VoiceError extends Error {
@@ -31,16 +65,32 @@ export class VoiceError extends Error {
   }
 }
 
-/** Explicit, local-account voice operations. Callers own review, playback, and cancellation. */
+/**
+ * Device voice input and output. Callers never choose an engine: the user's voice settings do.
+ * At most one dictation or speech runs at a time, and backgrounding the app ends it.
+ */
 export interface VoiceModule {
+  getEngineStatus(
+    capability: VoiceCapability,
+    engine: VoiceEngineId,
+    options?: VoiceRequestOptions,
+  ): Promise<VoiceEngineStatus>;
+  /** The user's choice, or the first engine this device supports; null when none is. */
+  getEffectiveEngine(
+    capability: VoiceCapability,
+    options?: VoiceRequestOptions,
+  ): Promise<VoiceEngineId | null>;
+  /** Locally configured accounts that can serve the AI engine's audio requests. */
   listProviders(options?: VoiceRequestOptions): Promise<VoiceProviderOption[]>;
-  requestMicrophoneAccess(options?: VoiceRequestOptions): Promise<{
-    granted: boolean;
-    canAskAgain: boolean;
-  }>;
-  /** Reads caller-owned local bytes. The source file is never deleted by this operation. */
-  transcribe(input: TranscriptionInput, options?: VoiceRequestOptions): Promise<string>;
-  /** A temporary WAV lease; release it after detaching the player. */
-  generateSpeech(input: SpeechInput, options?: VoiceRequestOptions): Promise<VoiceAudio>;
-  releaseAudio(id: string): Promise<void>;
+  listVoices(engine: VoiceEngineId, options?: VoiceRequestOptions): Promise<SpeechVoice[]>;
+  /** Resolves once capture has started; a running speech stops first. Rejects `busy` when dictating. */
+  startDictation(options?: DictationOptions): Promise<DictationSession>;
+  /**
+   * Reads Markdown prose aloud, replacing a running speech; rejects `busy` during dictation.
+   * Resolves when reading finishes or is stopped.
+   */
+  speak(text: string, options?: SpeakOptions): Promise<void>;
+  stopSpeaking(): void;
+  getActivity(): VoiceActivity;
+  subscribeActivity(listener: () => void): () => void;
 }
