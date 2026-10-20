@@ -67,8 +67,10 @@ voice operations do not create jobs, attachments, or durable conversation/usage 
 
 The Expo config plugin enables foreground recording, adds the microphone purpose string, and
 explicitly disables background recording/playback support. Android's previous blocked
-`RECORD_AUDIO` permission is removed. These native changes require new iOS and Android development
-builds; JavaScript updates alone cannot install the audio module or microphone permissions. Follow
+`RECORD_AUDIO` permission is removed. Camera and image-picker plugins share the audio microphone
+purpose string: setting their microphone permission to `false` would remove the iOS purpose or
+block Android recording when Expo composes the native configuration. These native changes require
+new iOS and Android development builds; JavaScript updates alone cannot install the audio module or microphone permissions. Follow
 [Local EAS Builds](../guides/local-builds.md) when packaging is explicitly requested.
 
 Focused tests cover protocol request shapes, byte preservation, credential selection, failures,
