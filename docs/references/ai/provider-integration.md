@@ -61,6 +61,23 @@ sharing chat's OAuth and protocol adapters without creating conversation history
 `AiService` is not exposed through `Backend` or frontend context. Every request supplies an explicit
 `uniqueModelId`; `AiService` does not resolve an Assistant, Topic, or default-model fallback.
 
+### Invocation Usage And Context Occupancy
+
+Image generation captures an immutable usage context through ai-core's `onProviderCallStart` for
+each provider invocation, including each batch and retry. Its completion handler keeps that
+context paired with the upstream request ID, image count, usage, timing, and completion time.
+The credential receipt describes the key actually selected for the operation; observing a new
+invocation does not rotate credentials. Failed attempts have no successful usage event and do not
+produce invented billing records. `AiUsageRecordService` deduplicates successful records by request
+ID and contains persistence failures; ai-core isolates synchronous observer failures from results.
+
+Pi conversation occupancy and billed usage are separate. `projectPiTurn` keeps the latest measured
+input-token count as `contextTokens`, while summing each response's billed usage. An Anthropic
+`pause_turn` continuation therefore retains one context occupancy and both invocation receipts.
+The runtime continuation regression covers this distinction. ai-core's `getContextTokens` is not
+applied to Pi totals: Pi owns their semantics, and the current image path has no conversation
+context-occupancy display requiring that helper.
+
 ## Provider And Model Records
 
 `ProviderService` reads and writes `user_provider` rows. A Provider owns its display name, API keys,
