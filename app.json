@@ -19,7 +19,10 @@
     "ios": {
       "supportsTablet": true,
       "requireFullScreen": false,
-      "icon": "./assets/icon.png",
+      "icon": {
+        "light": "./assets/icon-light.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "bundleIdentifier": "com.cherryai.cherrystudio-app",
       "appleTeamId": "87242QY66T",
       "privacyManifests": {
@@ -104,6 +107,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
         "backgroundColor": "#F65D5D"
       },
       "package": "com.cherryai.cherrystudio_app",
