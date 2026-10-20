@@ -73,7 +73,83 @@ test('keeps SearXNG snippets and instance defaults without discovery or result-p
   ]);
 });
 
-function providerConfig(id: 'exa-mcp' | 'searxng'): WebSearchProvider {
+test('routes DeepSeek search and fetch through the registered protocol with independent hosts', async () => {
+  const configuration = providerConfig('deepseek');
+  configuration.apiKeys = ['test-key'];
+  configuration.capabilities[0].apiHost = 'https://search.example.com';
+  configuration.capabilities[1].apiHost = 'https://fetch.example.com';
+  const query = '猫😀'.repeat(70);
+  request
+    .mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({
+        results: [{ title: 'Result', url: 'https://example.com', snippet: 'Summary' }],
+      }),
+    })
+    .mockResolvedValueOnce({
+      status: 200,
+      headers: {},
+      bodyText: JSON.stringify({ title: 'Page', content: 'Full page' }),
+    });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.searchKeywords!(query, config)).resolves.toMatchObject({
+    providerId: 'deepseek',
+    capability: 'searchKeywords',
+    results: [{ title: 'Result', content: 'Summary', sourceInput: query }],
+  });
+  await expect(provider.fetchUrls!('https://example.com', config)).resolves.toMatchObject({
+    providerId: 'deepseek',
+    capability: 'fetchUrls',
+    results: [{ title: 'Page', content: 'Full page', url: 'https://example.com' }],
+  });
+  const [search, fetch] = request.mock.calls.map(([call]) => call);
+  expect(search).toMatchObject({
+    url: 'https://search.example.com/v1/tools/search',
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-key' },
+  });
+  expect(JSON.parse(search.body!)).toEqual({ query: '猫😀'.repeat(64), count: 5 });
+  expect(fetch).toMatchObject({
+    url: 'https://fetch.example.com/v1/tools/fetch',
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-key' },
+  });
+  expect(JSON.parse(fetch.body!)).toEqual({ url: 'https://example.com' });
+});
+
+test.each(['searchKeywords', 'fetchUrls'] as const)(
+  'does not dispatch DeepSeek %s without a key or after cancellation',
+  async (capability) => {
+    const configuration = providerConfig('deepseek');
+    const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+    const input = capability === 'searchKeywords' ? 'query' : 'https://example.com';
+    await expect(provider[capability]!(input, config)).rejects.toMatchObject({
+      code: 'api_key_missing',
+    });
+    expect(request).not.toHaveBeenCalled();
+
+    configuration.apiKeys = ['test-key'];
+    await expect(
+      provider[capability]!(input, config, { signal: AbortSignal.abort() }),
+    ).rejects.toMatchObject({ kind: 'cancelled' });
+    expect(request).not.toHaveBeenCalled();
+  },
+);
+
+test('preserves a DeepSeek authentication failure without retrying the request', async () => {
+  const configuration = providerConfig('deepseek');
+  configuration.apiKeys = ['rejected-key'];
+  request.mockResolvedValue({ status: 401, headers: {}, bodyText: 'Invalid key' });
+  const provider = createWebSearchProvider(configuration, new ApiKeyRotationState(), { request });
+  await expect(provider.searchKeywords!('query', config)).rejects.toMatchObject({
+    kind: 'http',
+    status: 401,
+  });
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
+function providerConfig(id: 'exa-mcp' | 'searxng' | 'deepseek'): WebSearchProvider {
   const preset = WEB_SEARCH_PROVIDER_PRESET_MAP[id];
   return {
     id,

@@ -20,6 +20,7 @@ export const WEB_SEARCH_PROVIDER_IDS = [
   'exa-mcp',
   'bocha',
   'querit',
+  'deepseek',
   'fetch',
   'jina',
   'firecrawl',

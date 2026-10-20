@@ -198,7 +198,7 @@ Cherry Studio desktop.
 | --- | --- | --- | --- |
 | `zhipu` | yes | | Zhipu model provider key |
 | `tavily`, `exa`, `bocha`, `parallel`, `serply` | yes | | API key required |
-| `querit` | yes | yes | API key required |
+| `querit`, `deepseek` | yes | yes | API key required |
 | `exa-mcp` | yes | yes | none; uses the `exa` key when one is set |
 | `jina` | yes | yes | API key required to search, optional to read pages |
 | `firecrawl` | yes | yes | API key optional |
