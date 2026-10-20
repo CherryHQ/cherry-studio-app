@@ -153,6 +153,10 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
     title: session.data?.name,
     navigation: target.kind === 'session' ? target : undefined,
   });
+  // With several answers to the last question, the next message continues the one shown.
+  const continuesShownAnswer =
+    !messageWindow.hasNewerMessages &&
+    Boolean(messages.findLast((message) => message.display.role === 'assistant')?.display.branch);
   const shareMessage = useCallback(
     (messageId: string, translations?: ChatShareTranslations) => {
       if (sessionId)
@@ -266,6 +270,9 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                       : latestConversationImageResult(
                           messageWindow.messages.map((message) => message.imageResult),
                         )
+                  }
+                  placeholder={
+                    continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                   }
                   sessionId={sessionId}
                 />

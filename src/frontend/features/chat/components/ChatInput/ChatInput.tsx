@@ -62,6 +62,8 @@ type ChatInputProps = {
   controls: ReturnType<typeof useAgentChatControls>;
   dismissKeyboardOnSend?: boolean;
   imageResult?: ConversationImageResult;
+  /** Replaces the default prompt, as when it names the answer the next message continues. */
+  placeholder?: string;
   sessionId?: string;
 };
 
@@ -73,6 +75,7 @@ export function ChatInput({
   controls,
   dismissKeyboardOnSend,
   imageResult,
+  placeholder,
   sessionId,
 }: ChatInputProps) {
   const { draft } = useComposerState();
@@ -174,6 +177,7 @@ export function ChatInput({
             skillAction={skillAction}
             controls={controls}
             dismissKeyboardOnSend={dismissKeyboardOnSend}
+            placeholder={placeholder}
             providerSetupReturnTo={providerSetupReturnTo}
             reasoningEfforts={reasoningEfforts}
             reasoningSelection={reasoningSelection}
@@ -197,6 +201,7 @@ function TextChatInput({
   skillAction,
   controls,
   dismissKeyboardOnSend,
+  placeholder,
   providerSetupReturnTo,
   reasoningEfforts,
   reasoningSelection,
@@ -413,7 +418,7 @@ function TextChatInput({
                       placeholder={
                         skillAction
                           ? t(skillAction === 'create' ? 'skills.create.hint' : 'skills.find.hint')
-                          : undefined
+                          : placeholder
                       }
                       onStop={() => void cancel()}
                       fieldStyle={isPickerVisible ? compactInputStyle : undefined}

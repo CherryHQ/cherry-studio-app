@@ -19,6 +19,7 @@ import { chatHref, chatRouteParams } from '@/frontend/appShell/navigation/chat';
 import { ToolInputPreviewProvider } from '@/frontend/components/Message';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import {
+  type AgentMessageView,
   AgentProtocolError,
   type AgentQueuedInput,
   type AgentSubmitMessageInput,
@@ -197,6 +198,27 @@ export function useAgentChatClient() {
 /** The complete observed state of one Session; selectors below narrow it for the composer. */
 export function useAgentSessionState(sessionId: string | undefined) {
   return useAgentSessionSelection(useAgentChatContext().client, sessionId, selectSessionState);
+}
+
+/** The named answers among the Session's live rows, in `ids` order; the same array while they read the same. */
+export function useAgentLiveAnswers(
+  sessionId: string | undefined,
+  ids: readonly string[],
+): readonly (AgentMessageView | undefined)[] {
+  const idsKey = ids.join('\n');
+  const select = useMemo(() => selectLiveAnswers(idsKey ? idsKey.split('\n') : []), [idsKey]);
+  return useAgentSessionSelection(useAgentChatContext().client, sessionId, select);
+}
+
+function selectLiveAnswers(ids: readonly string[]) {
+  let previous: readonly (AgentMessageView | undefined)[] = [];
+  return (state: AgentSessionChatState) => {
+    const next = ids.map((id) => state.liveMessages.find((message) => message.id === id));
+    if (next.length === previous.length && next.every((message, i) => message === previous[i]))
+      return previous;
+    previous = next;
+    return next;
+  };
 }
 
 /** Retain the result as live messages settle into (or leave) the visible history window. */

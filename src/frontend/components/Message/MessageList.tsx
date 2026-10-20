@@ -5,9 +5,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import {
+import Animated, {
   runOnJS,
   useAnimatedReaction,
+  useAnimatedRef,
   useDerivedValue,
   useSharedValue,
 } from 'react-native-reanimated';
@@ -23,6 +24,7 @@ import {
 } from './list/messageListLayout';
 import { MessageListLiveTailProvider } from './list/MessageListLiveTailContext';
 import { MessageListRow } from './list/MessageListRow';
+import { type MessageListScroll, MessageListScrollProvider } from './list/MessageListScrollContext';
 import { useMessageListScrollController } from './list/useMessageListScrollController';
 import type { MessageListItem, MessageListProps } from './types';
 
@@ -191,6 +193,16 @@ export function MessageList({
     void onLoadOlder();
   }, [onLoadOlder]);
   const sharedValues = useMemo(() => ({ scrollOffset }), [scrollOffset]);
+  const listViewRef = useAnimatedRef<View>();
+  const scroll = useMemo<MessageListScroll>(
+    () => ({
+      listRef: listViewRef,
+      scrollOffset,
+      scrollToOffset: (offset) => listRef.current?.scrollToOffset({ animated: false, offset }),
+      topInset: contentTopInset,
+    }),
+    [contentTopInset, listViewRef, scrollOffset],
+  );
   const handleEndReached = useCallback(() => {
     void onLoadNewer?.();
   }, [onLoadNewer]);
@@ -198,72 +210,74 @@ export function MessageList({
   return (
     <MessageListDisclosureProvider onDisclosureToggle={handleDisclosureToggle}>
       <MessageListLiveTailProvider isVisible={isLiveTailVisible}>
-        <View className="flex-1" testID="chat-message-list">
-          <ScrollInteractionBoundary
-            onMomentumScrollBegin={handleMomentumScrollBegin}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            onScrollBeginDrag={handleScrollBeginDrag}
-            onScrollEndDrag={handleScrollEndDrag}
-            onTouchStart={handleTouchStart}
-          >
-            {(scrollHandlers) => (
-              <KeyboardAwareLegendList
-                ref={listRef}
-                {...scrollHandlers}
-                applyWorkaroundForContentInsetHitTestBug
-                contentContainerStyle={contentContainerStyle}
-                contentInsetAdjustmentBehavior="never"
-                data={messages}
-                {...(dataKey ? { dataKey } : {})}
-                drawDistance={80}
-                estimatedItemSize={300}
-                estimatedHeaderSize={contentTopInset}
-                extraData={extraData}
-                getItemType={getMessageRowType}
-                keyExtractor={messageKeyExtractor}
-                keyboardDismissMode="none"
-                keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
-                keyboardOffset={keyboardOffset}
-                keyboardShouldPersistTaps={keyboardShouldPersistTaps}
-                ListHeaderComponent={listHeader}
-                {...(!dataKey ? { initialScrollAtEnd: true } : {})}
-                maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
-                onContentSizeChange={handleListContentSizeChange}
-                onLayout={handleListLayout}
-                onLoad={handleLoad}
-                onScroll={handleScroll}
-                onStartReached={onLoadOlder ? handleStartReached : undefined}
-                onStartReachedThreshold={0.05}
-                onEndReached={hasNewerMessages ? handleEndReached : undefined}
-                onEndReachedThreshold={0.3}
-                // Message parts own local disclosure state. Keep recycling disabled
-                // until that state is explicitly reset with LegendList recycling hooks.
-                recycleItems={false}
-                renderItem={renderMessageRow}
-                scrollEventThrottle={16}
-                scrollsToTop
-                sharedValues={sharedValues}
-                showsVerticalScrollIndicator={false}
-                className="flex-1"
+        <MessageListScrollProvider value={scroll}>
+          <Animated.View className="flex-1" ref={listViewRef} testID="chat-message-list">
+            <ScrollInteractionBoundary
+              onMomentumScrollBegin={handleMomentumScrollBegin}
+              onMomentumScrollEnd={handleMomentumScrollEnd}
+              onScrollBeginDrag={handleScrollBeginDrag}
+              onScrollEndDrag={handleScrollEndDrag}
+              onTouchStart={handleTouchStart}
+            >
+              {(scrollHandlers) => (
+                <KeyboardAwareLegendList
+                  ref={listRef}
+                  {...scrollHandlers}
+                  applyWorkaroundForContentInsetHitTestBug
+                  contentContainerStyle={contentContainerStyle}
+                  contentInsetAdjustmentBehavior="never"
+                  data={messages}
+                  {...(dataKey ? { dataKey } : {})}
+                  drawDistance={80}
+                  estimatedItemSize={300}
+                  estimatedHeaderSize={contentTopInset}
+                  extraData={extraData}
+                  getItemType={getMessageRowType}
+                  keyExtractor={messageKeyExtractor}
+                  keyboardDismissMode="none"
+                  keyboardLiftBehavior={isFollowing ? 'persistent' : 'never'}
+                  keyboardOffset={keyboardOffset}
+                  keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+                  ListHeaderComponent={listHeader}
+                  {...(!dataKey ? { initialScrollAtEnd: true } : {})}
+                  maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+                  onContentSizeChange={handleListContentSizeChange}
+                  onLayout={handleListLayout}
+                  onLoad={handleLoad}
+                  onScroll={handleScroll}
+                  onStartReached={onLoadOlder ? handleStartReached : undefined}
+                  onStartReachedThreshold={0.05}
+                  onEndReached={hasNewerMessages ? handleEndReached : undefined}
+                  onEndReachedThreshold={0.3}
+                  // Message parts own local disclosure state. Keep recycling disabled
+                  // until that state is explicitly reset with LegendList recycling hooks.
+                  recycleItems={false}
+                  renderItem={renderMessageRow}
+                  scrollEventThrottle={16}
+                  scrollsToTop
+                  sharedValues={sharedValues}
+                  showsVerticalScrollIndicator={false}
+                  className="flex-1"
+                />
+              )}
+            </ScrollInteractionBoundary>
+            {messages.length > 0 ? (
+              <ScrollToBottomButton
+                accessibilityLabel={t('chat.message.scrollToBottom')}
+                bottomAccessoryHeight={scrollButtonBottom}
+                gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
+                isAtBottom={
+                  !hasNewerMessages &&
+                  (isFollowing || bottomState.dataKey !== dataKey || bottomState.isAtBottom)
+                }
+                // The press only enters following mode, which already hides the
+                // button. Mirroring an optimistic at-end state here would stick at
+                // `true` whenever the scroll does not actually land at the end.
+                onPress={handleScrollToEnd}
               />
-            )}
-          </ScrollInteractionBoundary>
-          {messages.length > 0 ? (
-            <ScrollToBottomButton
-              accessibilityLabel={t('chat.message.scrollToBottom')}
-              bottomAccessoryHeight={scrollButtonBottom}
-              gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-              isAtBottom={
-                !hasNewerMessages &&
-                (isFollowing || bottomState.dataKey !== dataKey || bottomState.isAtBottom)
-              }
-              // The press only enters following mode, which already hides the
-              // button. Mirroring an optimistic at-end state here would stick at
-              // `true` whenever the scroll does not actually land at the end.
-              onPress={handleScrollToEnd}
-            />
-          ) : null}
-        </View>
+            ) : null}
+          </Animated.View>
+        </MessageListScrollProvider>
       </MessageListLiveTailProvider>
     </MessageListDisclosureProvider>
   );

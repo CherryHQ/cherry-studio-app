@@ -50,8 +50,13 @@ jest.mock('@/frontend/components/MarkdownText', () => ({ MarkdownText: () => nul
 
 jest.mock('@/frontend/components/ModelPicker', () => ({ ModelPickerDrawer: () => null }));
 
-jest.mock('../components/MessageAnswerTabs', () => ({
-  MessageAnswerTabs: () => null,
+jest.mock('../components/MessageAnswerCards', () => ({
+  AnswerReadingBar: () => null,
+  MessageAnswerCards: () => null,
+}));
+
+jest.mock('../components/AnswerReadingSection', () => ({
+  AnswerReadingSection: ({ children }: { children: unknown }) => children,
 }));
 
 jest.mock('../hooks/useIsScreenReaderEnabled', () => ({
@@ -127,6 +132,7 @@ jest.mock('@/frontend/components/Message', () => ({
     const { createElement } = jest.requireActual('react');
     return createElement('UserMessage', { message });
   },
+  useMessageListDisclosureToggle: () => () => undefined,
 }));
 
 jest.mock('@/frontend/components/Avatar', () => ({
