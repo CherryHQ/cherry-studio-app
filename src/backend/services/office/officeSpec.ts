@@ -3,11 +3,15 @@ import * as z from 'zod';
 import { FileEntryIdSchema, SafeNameSchema } from '@/shared/data/types/file';
 
 // XML 1.0 cannot represent these code points, including unpaired UTF-16 surrogates.
-export const officeText = (max: number) =>
+// `excluded` joins the same character class: a second regex exports allOf, which
+// provider tool schemas may reject.
+export const officeText = (max: number, excluded = '') =>
   z
     .string()
     .max(max)
-    .regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]*$/)
+    .regex(
+      new RegExp(String.raw`^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff${excluded}]*$`),
+    )
     // Keep this out of JSON Schema: regex flags are lost during conversion.
     .refine(
       (value) => !/[\ud800-\udfff]/u.test(value),
@@ -67,13 +71,15 @@ export const workbookSpecSchema = z.strictObject({
   sheets: z
     .array(
       z.strictObject({
-        name: officeText(31)
+        name: officeText(31, String.raw`\[\]:*?/\\`)
           .min(1)
-          .regex(/^[^[\]:*?/\\]+$/)
           .refine(
             (name) =>
               !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',
             'Use an Excel sheet name without edge apostrophes or the reserved name History.',
+          )
+          .describe(
+            'Excel sheet name: 1–31 characters; no [ ] : * ? / \\, no leading/trailing apostrophe, and not History (case-insensitive).',
           ),
         images: z
           .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))

@@ -95,13 +95,12 @@ const replacement = {
   expect_text: officeText(32_000).describe(
     'Exact complete paragraph text from read_office_content.',
   ),
-  find: officeText(16_000)
+  find: officeText(16_000, String.raw`\t\n\r`)
     .min(1)
-    .regex(/^[^\r\n\t]*$/)
     .describe(
       'Literal text occurring exactly once inside charRange, or in the complete paragraph when no range is supplied.',
     ),
-  replace: officeText(16_000).regex(/^[^\r\n\t]*$/),
+  replace: officeText(16_000, String.raw`\t\n\r`),
 };
 export const officeEditSchemas = {
   docx: z

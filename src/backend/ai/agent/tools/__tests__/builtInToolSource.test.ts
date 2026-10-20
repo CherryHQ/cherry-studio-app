@@ -431,6 +431,7 @@ describe('createSystemCapabilitySource', () => {
   test('describes every tool with a stable built-in ref and JSON Schema input', async () => {
     const tools = await resolve({
       deviceAccess: { 'location.read': 'granted' },
+      jsSandbox: { run: jest.fn(), startBridge: jest.fn() },
       paintingModel: paintingModel(),
       webSearchProviders: { fetchUrls: true, searchKeywords: true },
     });
@@ -443,6 +444,8 @@ describe('createSystemCapabilitySource', () => {
       expect(tool.description.length).toBeGreaterThan(0);
       expect(tool.inputSchema).toMatchObject({ type: 'object' });
       expect(tool.inputSchema).not.toHaveProperty('$schema');
+      // Strict provider converters reject allOf, such as two regexes on one string.
+      expect(JSON.stringify(tool.inputSchema)).not.toContain('"allOf"');
     }
   });
 

@@ -172,6 +172,38 @@ describe('Office generation contracts', () => {
     ).toBe(true);
   });
 
+  test.each([
+    '',
+    'x'.repeat(32),
+    ...['[', ']', ':', '*', '?', '/', '\\'].map((character) => `Data${character}1`),
+    "'Data",
+    "Data'",
+    'History',
+    'hIsToRy',
+    'Data\0',
+    'Data\ufffe',
+    'Data\ud800',
+  ])('rejects invalid workbook sheet name %j', (name) => {
+    expect(
+      officeInputSchemas.xlsx.safeParse({
+        filename: 'book.xlsx',
+        spec: { version: 1, sheets: [{ name, rows: [[1]] }] },
+      }).success,
+    ).toBe(false);
+  });
+
+  test.each(['Data', '销售 😀', "Team's data", 'x'.repeat(31)])(
+    'accepts valid workbook sheet name %j',
+    (name) => {
+      expect(
+        officeInputSchemas.xlsx.safeParse({
+          filename: 'book.xlsx',
+          spec: { version: 1, sheets: [{ name, rows: [[1]] }] },
+        }).success,
+      ).toBe(true);
+    },
+  );
+
   test('rejects unknown fields, invalid XML, duplicate sheets and ragged tables', () => {
     const document = {
       filename: 'doc.docx',
