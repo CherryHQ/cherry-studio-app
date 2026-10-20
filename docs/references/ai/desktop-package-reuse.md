@@ -1,9 +1,9 @@
 # Desktop AI Reuse
 
-Status: **Mobile now declares published `@cherrystudio/ai-core@2.1.0` and
-`@cherrystudio/ai-sdk-provider@0.1.7` in place of local source packages; Expo and device acceptance
+Status: **Mobile now declares published `@cherrystudio/ai-core@2.4.2` and
+`@cherrystudio/ai-sdk-provider@0.1.9` in place of local source packages; Expo and device acceptance
 of those artifacts is pending. Mobile does not mirror Desktop's conversation Runtime.
-Mobile consumes `@cherrystudio/provider-registry@0.1.0` for catalog schemas, queries, and trusted
+Mobile consumes `@cherrystudio/provider-registry@0.2.3` for catalog schemas, queries, and trusted
 provider data. Mobile retains its loader, product extensions, and persisted-data projection.
 The registry compatibility baseline remains `2.1.4`; device acceptance is separate from package
 and Metro checks.**
@@ -67,14 +67,17 @@ dependency review before the pinned version changes.
 
 ### Dependency resolution
 
-The published `ai-core@2.1.0` and `ai-sdk-provider@0.1.7` require OpenAI SDK `3.0.109`; `ai-core`
+The published `ai-core@2.4.2` and `ai-sdk-provider@0.1.9` require OpenAI SDK `3.0.109`; `ai-core`
 also requires Azure SDK `3.0.116`. Mobile pins those versions and carries the matching OpenAI patch.
+Both Cherry packages now require Google SDK `3.0.132`. Mobile pins it with its required
+`@ai-sdk/provider@3.0.18` and `@ai-sdk/provider-utils@4.0.58`, retaining the Google model-path and
+image-routing patch.
 Expo-specific dependency choices and Pi patches remain Mobile-owned. A later Desktop version bump
 by itself is not a reason to change the Mobile graph.
 
 ## Published Provider Registry
 
-`@cherrystudio/provider-registry@0.1.0` supplies pure schemas, reasoning rules, and `createRegistry`
+`@cherrystudio/provider-registry@0.2.3` supplies pure schemas, reasoning rules, and `createRegistry`
 through its root entry. Mobile bundles trusted providers through `./data/providers`; the `./node`
 filesystem loader and the complete model catalog stay outside the application bundle. Test-only
 fixtures use the package's JSON exports.

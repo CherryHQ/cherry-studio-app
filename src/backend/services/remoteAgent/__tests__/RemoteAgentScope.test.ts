@@ -1005,6 +1005,31 @@ it('removes a missing session preview instead of retaining it as normal offline 
   await test.source.drain();
 });
 
+it.each([
+  {
+    details: { kind: 'ITEM_TOO_LARGE', itemBytes: 70_000, budgetBytes: 62_279, retryable: false },
+    retryable: false,
+  },
+  { details: undefined, retryable: true },
+])('preserves resource-exhaustion retryability: %j', async ({ details, retryable }) => {
+  const test = fixture();
+  test.request.mockRejectedValue(
+    new RemoteFailureError({
+      reason: 'RESOURCE_EXHAUSTED',
+      message: 'Page item exceeds response byte budget',
+      details,
+    }),
+  );
+  await expect(
+    test.source.history('s', '1', undefined, new AbortController().signal),
+  ).rejects.toMatchObject({
+    code: 'RESOURCE_EXHAUSTED',
+    retryable,
+  });
+  test.source.dispose();
+  await test.source.drain();
+});
+
 it('keeps a command whose reply was lost in transit uncertain rather than failed', async () => {
   const test = fixture();
   let snapshot: RemoteSessionSnapshot | undefined;

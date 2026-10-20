@@ -1,4 +1,3 @@
-import { REMOTE_PROVIDER_IDS, type RemoteProviderId } from '@cherrystudio/web-search';
 import { WEB_SEARCH_PROVIDER_CATALOG } from '@cherrystudio/web-search/catalog';
 import * as z from 'zod';
 
@@ -44,7 +43,10 @@ export interface WebSearchProviderPreset extends WebSearchProviderPresetConfig {
   id: WebSearchProviderId;
 }
 
-const MOBILE_REMOTE_CAPABILITIES: Record<RemoteProviderId, readonly WebSearchCapability[]> = {
+const MOBILE_REMOTE_CAPABILITIES: Record<
+  Exclude<WebSearchProviderId, 'fetch'>,
+  readonly WebSearchCapability[]
+> = {
   zhipu: ['searchKeywords'],
   tavily: ['searchKeywords'],
   searxng: ['searchKeywords'],
@@ -60,25 +62,27 @@ const MOBILE_REMOTE_CAPABILITIES: Record<RemoteProviderId, readonly WebSearchCap
 };
 
 const remotePresets = Object.fromEntries(
-  REMOTE_PROVIDER_IDS.map((id): [RemoteProviderId, WebSearchProviderPresetConfig] => {
-    const metadata = WEB_SEARCH_PROVIDER_CATALOG[id];
-    return [
-      id,
-      {
-        name: metadata.name,
-        type: metadata.type,
-        capabilities: metadata.capabilities
-          .filter((item) => MOBILE_REMOTE_CAPABILITIES[id].includes(item.capability))
-          .map((item) => ({
-            feature: item.capability,
-            requiresApiHost: item.requiresApiHost,
-            requiresApiKey: item.apiKey === 'required',
-            apiHost: item.defaultApiHost ?? '',
-          })),
-      },
-    ];
-  }),
-) as Record<RemoteProviderId, WebSearchProviderPresetConfig>;
+  WEB_SEARCH_PROVIDER_IDS.filter((id) => id !== 'fetch').map(
+    (id): [Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderPresetConfig] => {
+      const metadata = WEB_SEARCH_PROVIDER_CATALOG[id];
+      return [
+        id,
+        {
+          name: metadata.name,
+          type: metadata.type,
+          capabilities: metadata.capabilities
+            .filter((item) => MOBILE_REMOTE_CAPABILITIES[id].includes(item.capability))
+            .map((item) => ({
+              feature: item.capability,
+              requiresApiHost: item.requiresApiHost,
+              requiresApiKey: item.apiKey === 'required',
+              apiHost: item.defaultApiHost ?? '',
+            })),
+        },
+      ];
+    },
+  ),
+) as Record<Exclude<WebSearchProviderId, 'fetch'>, WebSearchProviderPresetConfig>;
 
 export const WEB_SEARCH_PROVIDER_PRESET_MAP: Record<
   WebSearchProviderId,
