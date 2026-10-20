@@ -133,6 +133,16 @@ for the same window. Android terminal notices remain dismissable by persistent d
 across process restarts. Cold startup clears orphaned ongoing surfaces without replaying paid work.
 An ended Live Activity cannot be enumerated after restart; its dismissal date retires it.
 
+## Brand Artwork
+
+Brand artwork is limited to the existing `assets/icon-light.png` and `assets/icon-dark.png`.
+iOS stages exact copies of both: Lock Screen banners follow the system surface's appearance,
+while every Dynamic Island size uses the dark artwork on its black background. Images retain
+full-color rendering; action/status colors must not recolor the logo. Android supplies the
+launcher artwork as its large icon and uses Cherry `brand` red for the system small-icon badge.
+Standard Android status chips still render their small icon as a system-controlled monochrome mask;
+supplying a large icon does not provide Xiaomi's proprietary full-color island integration.
+
 ## Privacy And Payloads
 
 Reply previews, titles, assistant attribution, and painting prompts use SwiftUI `privacySensitive`.

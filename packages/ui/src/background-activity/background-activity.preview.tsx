@@ -17,9 +17,9 @@ import type {
   BackgroundActivityIcon,
   BackgroundActivityPresentation,
 } from './background-activity.types';
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from './logo';
+import { CHERRY_ACTIVITY_LOGO_DARK_BASE64, CHERRY_ACTIVITY_LOGO_LIGHT_BASE64 } from './logo';
 
-const BRAND_COLOR = '#F65D5D';
+const BRAND_COLOR = '#FF5757';
 
 export type BackgroundActivityPreviewProps = Omit<
   BackgroundActivityPresentation,
@@ -108,7 +108,7 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
             width: 44,
           }}
         >
-          <ActivityIcon icon={props.icon} size={17} />
+          {props.showLogo ? <CherryLogo size={17} /> : <ActivityIcon icon={props.icon} size={17} />}
         </View>
       </PreviewSurface>
     </ScrollView>
@@ -143,6 +143,7 @@ function BannerPreview({
   levelOfDetail,
   preview,
   showLogo,
+  theme,
   title,
 }: BackgroundActivityPreviewProps & { colors: PreviewColors; elapsed: string }) {
   const summary = preview && levelOfDetail !== 'simplified' ? preview : title;
@@ -161,7 +162,7 @@ function BannerPreview({
         padding: 12,
       }}
     >
-      {showLogo ? <CherryLogo size={32} /> : <ActivityIcon icon={icon} size={24} />}
+      {showLogo ? <CherryLogo size={32} theme={theme} /> : <ActivityIcon icon={icon} size={24} />}
       <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
         <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
           <Text
@@ -221,6 +222,7 @@ function CompactPreview({
   compactIcon,
   compactLabel,
   elapsed,
+  showLogo,
 }: BackgroundActivityPreviewProps & { elapsed: string }) {
   return (
     <View
@@ -235,7 +237,7 @@ function CompactPreview({
         width: 280,
       }}
     >
-      <ActivityIcon icon={compactIcon} size={16} />
+      {showLogo ? <CherryLogo size={16} /> : <ActivityIcon icon={compactIcon} size={16} />}
       {compactLabel !== undefined ? (
         <Text
           numberOfLines={1}
@@ -358,11 +360,13 @@ function ActivityIcon({ icon, size }: { icon: BackgroundActivityIcon; size: numb
   return <Icon color={BRAND_COLOR} size={size} />;
 }
 
-function CherryLogo({ size }: { size: number }) {
+function CherryLogo({ size, theme = 'dark' }: { size: number; theme?: 'dark' | 'light' }) {
+  const logo =
+    theme === 'dark' ? CHERRY_ACTIVITY_LOGO_DARK_BASE64 : CHERRY_ACTIVITY_LOGO_LIGHT_BASE64;
   return (
     <Image
       contentFit="contain"
-      source={{ uri: `data:image/png;base64,${CHERRY_ACTIVITY_LOGO_BASE64}` }}
+      source={{ uri: `data:image/png;base64,${logo}` }}
       style={{ height: size, width: size }}
     />
   );

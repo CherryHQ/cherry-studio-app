@@ -83,7 +83,7 @@ type BackgroundActivityEnvironmentPort = {
   getColorScheme(): 'dark' | 'light';
   isPresentationEnabled(): boolean;
   subscribePresentationEnabled(listener: () => void): () => void;
-  prepareLogo(): Promise<string | undefined>;
+  prepareLogos(): Promise<BackgroundActivityNativePresentation['logoUris']>;
   /** Emits the deep link of the task surface the user is currently looking at. */
   subscribeVisibleTask(listener: (deepLinkUrl: string | undefined) => void): () => void;
 };
@@ -112,7 +112,7 @@ type BackgroundActivityEnvironmentPort = {
 export class BackgroundActivityManager extends BaseService {
   private appState: AppStateStatus = AppState.currentState;
   private disposed = false;
-  private logoUri?: string;
+  private logoUris: BackgroundActivityNativePresentation['logoUris'];
   private operationTail: Promise<void> = Promise.resolve();
   private sessions = new Set<SessionRecord>();
   private settled = new Set<SettledSurface>();
@@ -140,7 +140,7 @@ export class BackgroundActivityManager extends BaseService {
     );
     await this.clearOrphanedSurfaces();
     // Environments without a logo surface resolve `undefined`; no platform check here.
-    this.logoUri = await this.environment.prepareLogo();
+    this.logoUris = await this.environment.prepareLogos();
   }
 
   startSession<Props extends BackgroundActivityBaseProps>(
@@ -478,7 +478,7 @@ export class BackgroundActivityManager extends BaseService {
     return {
       ...record.props,
       colorScheme: this.environment.getColorScheme(),
-      ...(this.logoUri ? { logoUri: this.logoUri } : {}),
+      ...(this.logoUris ? { logoUris: this.logoUris } : {}),
     };
   }
 

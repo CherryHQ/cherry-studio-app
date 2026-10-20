@@ -1,4 +1,7 @@
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
+import {
+  CHERRY_ACTIVITY_LOGO_DARK_BASE64,
+  CHERRY_ACTIVITY_LOGO_LIGHT_BASE64,
+} from '@cherrystudio/ui/background-activity';
 
 import type { BackgroundActivityActionResponse } from '@/shared/backgroundActivity/actions';
 
@@ -9,7 +12,10 @@ let mockWidgetsDirectory: string | null = 'file:///widgets';
 
 jest.mock('expo-file-system', () => ({
   File: class MockFile {
-    readonly uri = 'file:///widgets/cherry-studio-logo.png';
+    readonly uri: string;
+    constructor(directory: string, name: string) {
+      this.uri = `${directory}/${name}`;
+    }
     write = mockWrite;
   },
 }));
@@ -37,11 +43,17 @@ describe('BackgroundActivityEnvironment', () => {
     jest.restoreAllMocks();
   });
 
-  it('prepares the shared activity logo and returns its file URI', async () => {
+  it('stages both original logo variants at distinct widget file URIs', async () => {
     const environment = new BackgroundActivityEnvironment();
 
-    await expect(environment.prepareLogo()).resolves.toBe('file:///widgets/cherry-studio-logo.png');
-    expect(mockWrite).toHaveBeenCalledWith(CHERRY_ACTIVITY_LOGO_BASE64, {
+    await expect(environment.prepareLogos()).resolves.toEqual({
+      dark: 'file:///widgets/cherry-studio-logo-dark.png',
+      light: 'file:///widgets/cherry-studio-logo-light.png',
+    });
+    expect(mockWrite).toHaveBeenNthCalledWith(1, CHERRY_ACTIVITY_LOGO_DARK_BASE64, {
+      encoding: 'base64',
+    });
+    expect(mockWrite).toHaveBeenNthCalledWith(2, CHERRY_ACTIVITY_LOGO_LIGHT_BASE64, {
       encoding: 'base64',
     });
   });
@@ -86,14 +98,14 @@ describe('BackgroundActivityEnvironment', () => {
     });
     const environment = new BackgroundActivityEnvironment();
 
-    await expect(environment.prepareLogo()).resolves.toBeUndefined();
+    await expect(environment.prepareLogos()).resolves.toBeUndefined();
   });
 
   it('degrades to no logo when the native app-group directory is unavailable', async () => {
     mockWidgetsDirectory = null;
     const environment = new BackgroundActivityEnvironment();
 
-    await expect(environment.prepareLogo()).resolves.toBeUndefined();
+    await expect(environment.prepareLogos()).resolves.toBeUndefined();
     expect(mockWrite).not.toHaveBeenCalled();
   });
 });

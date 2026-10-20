@@ -29,7 +29,10 @@ export const renderBackgroundActivity: LiveActivityComponent<
 > = (props, environment) => {
   'widget';
   // Widget layouts execute as isolated function strings, so runtime values must be local.
-  const brandColor = '#F65D5D';
+  const brandColor = '#FF5757';
+  const bannerLogoUri = props.logoUris?.[environment.colorScheme === 'dark' ? 'dark' : 'light'];
+  // The island stays black even when the app or Lock Screen uses the light appearance.
+  const islandLogoUri = props.logoUris?.dark;
   const hasCompactLabel = props.compactLabel !== undefined;
   const isSimplified =
     environment.levelOfDetail === 'simplified' || environment.activityFamily === 'small';
@@ -86,9 +89,9 @@ export const renderBackgroundActivity: LiveActivityComponent<
             frame({ maxWidth: Infinity, alignment: 'leading' }),
           ]}
         >
-          {props.logoUri ? (
+          {bannerLogoUri ? (
             <Image
-              uiImage={props.logoUri}
+              uiImage={bannerLogoUri}
               modifiers={[
                 resizable(),
                 frame({ height: 32, width: 32 }),
@@ -185,9 +188,9 @@ export const renderBackgroundActivity: LiveActivityComponent<
           frame({ maxWidth: Infinity, alignment: 'leading' }),
         ]}
       >
-        {props.logoUri ? (
+        {bannerLogoUri ? (
           <Image
-            uiImage={props.logoUri}
+            uiImage={bannerLogoUri}
             modifiers={[
               resizable(),
               frame({ height: 24, width: 24 }),
@@ -241,9 +244,9 @@ export const renderBackgroundActivity: LiveActivityComponent<
         )}
       </HStack>
     ),
-    compactLeading: props.logoUri ? (
+    compactLeading: islandLogoUri ? (
       <Image
-        uiImage={props.logoUri}
+        uiImage={islandLogoUri}
         modifiers={[
           resizable(),
           frame({ height: 16, width: 16 }),
@@ -277,9 +280,9 @@ export const renderBackgroundActivity: LiveActivityComponent<
         ]}
       />
     ),
-    minimal: props.logoUri ? (
+    minimal: islandLogoUri ? (
       <Image
-        uiImage={props.logoUri}
+        uiImage={islandLogoUri}
         modifiers={[
           resizable(),
           frame({ height: 16, width: 16 }),
@@ -306,9 +309,9 @@ export const renderBackgroundActivity: LiveActivityComponent<
           spacing={8}
           modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
         >
-          {props.logoUri ? (
+          {islandLogoUri ? (
             <Image
-              uiImage={props.logoUri}
+              uiImage={islandLogoUri}
               modifiers={[
                 resizable(),
                 frame({ height: 24, width: 24 }),
