@@ -69,11 +69,15 @@ export const workbookSpecSchema = z.strictObject({
       z.strictObject({
         name: officeText(31)
           .min(1)
-          .regex(/^[^[\]:*?/\\]+$/)
+          // A second regex exports allOf, which provider tool schemas may reject.
+          .refine((name) => /^[^[\]:*?/\\]+$/.test(name))
           .refine(
             (name) =>
               !name.startsWith("'") && !name.endsWith("'") && name.toLowerCase() !== 'history',
             'Use an Excel sheet name without edge apostrophes or the reserved name History.',
+          )
+          .describe(
+            'Excel sheet name: 1–31 characters; no [ ] : * ? / \\, no leading/trailing apostrophe, and not History (case-insensitive).',
           ),
         images: z
           .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))
