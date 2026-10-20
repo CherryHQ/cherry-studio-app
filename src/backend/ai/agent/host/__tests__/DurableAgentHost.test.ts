@@ -1859,12 +1859,26 @@ describe('Cherry-owned transcript and disposable execution recovery', () => {
 
   test('an unadmitted reservation becomes interrupted and a missing Cherry owner never reappears', async () => {
     const state = fixture();
-    await state.reserve();
+    const { assistantMessageId } = await state.reserve();
+    const reservedAt = Date.parse(
+      (await state.store.getMessage(state.sessionId, assistantMessageId))!.createdAt,
+    );
+    const finalize = jest.spyOn(state.store, 'finalizeAssistantMessage');
     state.copies.clear();
     state.copies.set('deleted-owner', { revision: 0, turns: [] });
+    const now = jest.spyOn(Date, 'now').mockReturnValue(reservedAt + 60_000);
     await state.host.initialize();
+    now.mockRestore();
     try {
       expect((await state.store.listMessages(state.sessionId)).at(-1)?.status).toBe('interrupted');
+      // Administrative recovery keeps the reservation's activity time.
+      expect(finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runtimeStats: {
+            runtimeTiming: { startedAt: reservedAt, completedAt: reservedAt, spans: [] },
+          },
+        }),
+      );
       expect(await state.store.getSession('deleted-owner')).toBeNull();
       expect(state.conversations.discardConversation).toHaveBeenCalledWith(
         runtimeLane('deleted-owner'),
