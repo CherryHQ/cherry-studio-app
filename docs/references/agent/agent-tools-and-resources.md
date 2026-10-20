@@ -653,8 +653,14 @@ unchanged. Remote desktop conversations refuse selection chips instead of droppi
 reads the current referenced content and compares it with the excerpt before editing, following
 Desktop's workflow. Selection references do not widen file grants.
 
-Template filling, formula authoring/evaluation, arbitrary layouts, image insertion/deletion in existing files
-and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
+`run_office_script` runs model-written JavaScript with the pinned Office libraries in the same
+compute pool and publishes its returned DOCX/XLSX/PPTX as a new created artifact. It covers what the
+spec tools cannot express, including template filling, formulas, free layouts and package-level edits
+of existing files. Its inputs are authorized managed file ids exposed to the script as bytes; the
+job has no app, file or network port. A script that returns nothing reports `{ status: "read", logs }`
+and saves no file, so package inspection does not leave scratch files. Outputs whose XML parts do
+not parse are refused before publication. Script errors and console output return as
+`{ status: "error", message }`. Formula evaluation and external asset fetching remain out of scope. Native, desktop Office and device acceptance are
 pending. Executed tests cover package contents and supported patch preservation in a Node VM;
 they do not establish native QuickJS compatibility or Office visual fidelity.
 

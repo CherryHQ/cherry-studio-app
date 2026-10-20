@@ -279,6 +279,7 @@
   "chat.builtinTool.office.inspect": "Inspect Office file",
   "chat.builtinTool.office.presentation": "Create presentation",
   "chat.builtinTool.office.read": "Read Office content",
+  "chat.builtinTool.office.script": "Run Office script",
   "chat.builtinTool.office.workbook": "Create workbook",
   "chat.builtinTool.reminders.create": "Create reminder",
   "chat.builtinTool.reminders.delete": "Delete reminder",

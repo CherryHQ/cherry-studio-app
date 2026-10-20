@@ -1,10 +1,10 @@
 # Office Files
 
 This module generates, inspects, reads and patches Office files in the native QuickJS compute pool.
-The Agent adapters in `ai/agent/tools/officeTools.ts` and `officeEditTools.ts` own file authorization,
+The Agent adapters in `ai/agent/tools/officeTools.ts`, `officeEditTools.ts` and `officeScriptTool.ts` own file authorization,
 source hashes, image resolution and managed-file publication. Computations receive validated data
 and bytes; they have no file or network port. The existing preview WebView supplies selections.
-There is no new native module, remote service, job queue or model-written renderer.
+There is no new native module, remote service or job queue.
 
 ## Implemented Surface
 
@@ -18,6 +18,7 @@ There is no new native module, remote service, job queue or model-written render
 | `edit_document` | Version 1, source/hash, filename, exact paragraph replacements and/or existing picture replacements | New DOCX copy, retaining surrounding runs, hyperlinks and picture layout |
 | `edit_workbook` | Version 1, source/hash, filename, one sheet, up to 1000 scalar cell edits and/or existing picture replacements | New XLSX copy, retaining untouched package parts |
 | `edit_presentation` | Version 1, source/hash, filename, slide/shape/table-cell paragraph replacements and/or existing picture replacements | New PPTX copy, retaining surrounding runs, hyperlinks and picture layout |
+| `run_office_script` | Output filename, model-written JavaScript and up to 8 authorized managed file ids | New DOCX, XLSX or PPTX produced by the script |
 
 Creation inputs have `filename` and `spec`, and every creation spec requires `version: 1`.
 Edit inputs require top-level `version: 1`. Unknown properties and
@@ -50,7 +51,7 @@ compute and publication resources at once; cancellation does not release a runni
 before cleanup. Code Mode uses its existing separate bridge pool, so a script waiting for an Office
 child tool does not occupy the child's compute slot.
 
-All eight tools are absent without the native compute sandbox. They do not require its interactive
+All nine tools are absent without the native compute sandbox. They do not require its interactive
 bridge. Each tool declares `RuntimeTool.deferred`; Pi exposes its schema through `tool_search`,
 and its normal callable catalog also makes the tools available as Code Mode child tools.
 They retain the existing `replay: 'unsafe'` policy. A
@@ -65,6 +66,27 @@ Source and image reads use `WorkspaceFileAccess.resolveRead`: conversation grant
 in the selected workspace are required on every call. Outputs are separate logical files in the
 selected workspace, or at the library root when no workspace is selected. Storage receives the
 workspace placement for validation at commit; edits do not advance the source file's version.
+
+## Office Scripts
+
+`run_office_script` opens the pinned libraries to the model instead of wrapping more of them in
+specs. The output extension selects one generator library (`docx`, `PptxGenJS` or `XLSX`); `zip`
+(fflate), `xml` (xmldom), `atob`/`btoa` and `inputs[id]` (`name`, `mediaType`, `base64`, `bytes`)
+are always present. The script is the body of an async function and returns the file as base64,
+`Uint8Array` or `ArrayBuffer`. A script that returns nothing only inspects its inputs: it reports
+`status: "read"` with its console output (16 KiB) and saves no file.
+
+The job rejects a result that is not a ZIP package containing the format's main part, or whose XML
+parts (each up to 1 MiB) do not parse, so hand-edited package XML cannot publish a corrupt file.
+The adapter then publishes the result like generation. Inputs are any authorized managed files,
+6 MiB together; output, time and memory limits match generation. Script and console errors return
+as `status: "error"` so the model can correct and retry. Formula cells must carry their computed
+value because nothing in the app calculates them.
+
+The QuickJS job has no app, file or network port, so model code can only compute bytes. Changing an
+existing file without losing untouched parts goes through its package XML or `docx.patchDocument`;
+SheetJS read/write drops styles, images and charts, and PptxGenJS cannot open files. The fixed spec
+tools stay the cheaper path for work they cover.
 
 ## Desktop Reference And Patch Contract
 
@@ -186,8 +208,9 @@ Node VM; it is not evidence of QuickJS compatibility, native budgets, Office vis
 device behavior. Before release, complete both-platform native acceptance, open
 the files in Office without a repair prompt, and check preview, text wrapping and editability.
 
-Template filling, arbitrary layouts, formula authoring/evaluation, chart authoring, editing Word
-table text/headers, inserting/deleting images in existing files, and macros remain outside this slice. Untouched
+The fixed tools do not cover template filling, arbitrary layouts, formula authoring, chart
+authoring, editing Word table text/headers or inserting/deleting images in existing files; those go
+through `run_office_script`. Formula evaluation and macros remain outside this module. Untouched
 images, charts, themes and other parts are preserved rather than reconstructed. The preview HTML
 must be regenerated by an authorized package build before device acceptance of the selection UI. See
 [Office Tools Design](../../../../docs/references/agent/office-tools-design.md).

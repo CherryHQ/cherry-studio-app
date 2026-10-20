@@ -283,6 +283,7 @@
   "chat.builtinTool.office.inspect": "Проверить файл Office",
   "chat.builtinTool.office.presentation": "Создать презентацию",
   "chat.builtinTool.office.read": "Прочитать содержимое Office",
+  "chat.builtinTool.office.script": "Выполнить скрипт Office",
   "chat.builtinTool.office.workbook": "Создать книгу",
   "chat.builtinTool.reminders.create": "Создать напоминание",
   "chat.builtinTool.reminders.delete": "Удалить напоминание",

@@ -137,6 +137,7 @@ describe('createSystemCapabilitySource', () => {
       'edit_document',
       'edit_workbook',
       'edit_presentation',
+      'run_office_script',
     ];
     const absent = capabilityIds(await resolve({}));
     expect(absent.some((id) => office.includes(id))).toBe(false);

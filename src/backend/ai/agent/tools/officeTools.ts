@@ -15,6 +15,7 @@ import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
+import { createOfficeScriptTool } from './officeScriptTool';
 import { officeOperationSlots, readOfficeImages, type OfficeFiles } from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
@@ -143,7 +144,11 @@ export function createOfficeTools(
       },
     }),
   );
-  return [...generators, ...createOfficeEditTools(sandbox, files, access)];
+  return [
+    ...generators,
+    ...createOfficeEditTools(sandbox, files, access),
+    createOfficeScriptTool(sandbox, files, access),
+  ];
 }
 
 function invalid(message: string): RuntimeToolResult {

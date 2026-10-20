@@ -281,6 +281,7 @@
   "chat.builtinTool.office.inspect": "Inspeccionar archivo de Office",
   "chat.builtinTool.office.presentation": "Crear presentación",
   "chat.builtinTool.office.read": "Leer contenido de Office",
+  "chat.builtinTool.office.script": "Ejecutar script de Office",
   "chat.builtinTool.office.workbook": "Crear libro de cálculo",
   "chat.builtinTool.reminders.create": "Crear recordatorio",
   "chat.builtinTool.reminders.delete": "Eliminar recordatorio",

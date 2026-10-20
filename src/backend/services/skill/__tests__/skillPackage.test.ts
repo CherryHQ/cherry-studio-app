@@ -108,6 +108,17 @@ describe('validateSkillPackage', () => {
         { code: 'unsupported-semantics', subject: 'shell-interpolation' },
       ]),
     );
+    // Spreadsheet error values end inline code with `!`; that is text, not `!`command``.
+    expect(
+      validateSkillPackage(
+        files({
+          'SKILL.md': `${ENTRY}\nNever ship \`#REF!\` or \`#DIV/0!\`.\n\nKeep \`$#,##0\` formats.`,
+        }),
+      ).ok,
+    ).toBe(true);
+    expect(
+      validateSkillPackage(files({ 'SKILL.md': `${ENTRY}\nSee \`#N/A\`, then run !\`date\`` })).ok,
+    ).toBe(false);
     const mismatch = validateSkillPackage(files({ 'SKILL.md': ENTRY }), {
       expectedName: 'other',
     });
