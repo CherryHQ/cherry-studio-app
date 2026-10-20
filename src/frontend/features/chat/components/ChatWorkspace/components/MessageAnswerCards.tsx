@@ -186,9 +186,9 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
       >
         {isError ? (
           <ContentState.Error
-            action={{ label: t('common.retry'), onPress: () => void refetch() }}
             description={t('chat.history.loadFailed')}
             layout="leading"
+            primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
           />
         ) : null}
         {width > 0 ? (
