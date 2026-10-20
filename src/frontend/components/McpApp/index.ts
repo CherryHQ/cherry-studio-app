@@ -5,3 +5,4 @@ export {
   McpAppContextNotice,
   useMcpAppConversation,
 } from './McpAppConversationProvider';
+export { toMcpAppContextText } from './mcpAppContextText';

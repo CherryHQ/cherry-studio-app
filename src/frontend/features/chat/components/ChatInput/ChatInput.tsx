@@ -12,7 +12,11 @@ import {
   useComposerActions,
   useComposerState,
 } from '@/frontend/components/Composer';
-import { McpAppContextNotice, useMcpAppConversation } from '@/frontend/components/McpApp';
+import {
+  McpAppContextNotice,
+  toMcpAppContextText,
+  useMcpAppConversation,
+} from '@/frontend/components/McpApp';
 import {
   ModelPickerDrawer,
   type ModelPickerModelItem,
@@ -298,7 +302,7 @@ function TextChatInput({
       );
       const appContexts = mode === 'standard' ? (mcpApps?.snapshot() ?? []) : [];
       for (const context of appContexts)
-        parts.push({ type: 'text', text: `[MCP App context: ${context.title}]\n${context.text}` });
+        parts.push({ type: 'text', text: toMcpAppContextText(context) });
       const modelId = replyModels?.[0] ?? selectedModelId;
       const result = await sendMessage({
         parts,

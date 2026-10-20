@@ -455,7 +455,8 @@ The native WebView shell isolates server HTML in an opaque-origin sandbox and re
 and resource origins using declared CSP domains. It denies nested frames, custom origins, browser
 device permissions, forms, popups, and direct navigation. External HTTPS links and messages require
 native confirmation. Messages are staged in the composer; text/structured model-context updates
-remain visible and removable until the user's next submission. Theme, locale, dimensions, and
+remain visible and removable until the user's next submission, which carries each as a JSON
+envelope labeled untrusted third-party app data. Theme, locale, dimensions, and
 teardown use the Apps protocol. Closing, backgrounding, revocation, or route disposal ends the view.
 The inline native shell enforces CSP through meta directives; this is a mobile implementation
 constraint, not evidence of complete CSP-header or Apps conformance. iOS/Android WebView behavior,
