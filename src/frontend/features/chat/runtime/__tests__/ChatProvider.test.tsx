@@ -390,6 +390,35 @@ describe('ChatProvider Draft handoff', () => {
     },
   );
 
+  it('leaves a follow-up behind a running answer to the queue instead of the transcript', async () => {
+    const admission = deferred<void>();
+    mockSubmitMessage.mockImplementation(() => admission.promise);
+    mockChatState.activeTurn = {
+      id: 'active-turn',
+      sessionId: 'session-1',
+      assistantMessageId: 'active-answer',
+      status: 'running',
+      startedAt: '2026-08-25T00:00:00.000Z',
+      endedAt: null,
+      error: null,
+    };
+    act(() => {
+      renderer = create(<Harness sessionId="session-1" />);
+    });
+    let sending!: Promise<void>;
+    act(() => {
+      sending = currentControls().sendMessage({ parts: [{ type: 'text', text: 'Follow up' }] });
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+    expect(currentControls().isBusy).toBe(true);
+    expect(currentControls().canSend).toBe(false);
+    await act(async () => {
+      admission.resolve();
+      await sending;
+    });
+    expect(currentControls().pendingSend).toBeUndefined();
+  });
+
   it.each(['before', 'after'] as const)(
     'retires a queued placeholder when the queue arrives %s admission, including after withdrawal',
     async (arrival) => {

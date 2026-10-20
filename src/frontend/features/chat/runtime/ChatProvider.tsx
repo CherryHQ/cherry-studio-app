@@ -363,14 +363,14 @@ export function useAgentChatControls(input: {
         isNewSession: !sessionId,
         messages: createPendingChatMessages(request),
       };
+      const state = sessionId ? client.getState(sessionId) : undefined;
       setSubmission({
         composerKey,
         userMessageId: request.userMessageId,
         isSubmitting: true,
-        selectedMessageId: sessionId
-          ? client.getState(sessionId).snapshot?.session.activeNodeId
-          : undefined,
-        send: pending,
+        selectedMessageId: state?.snapshot?.session.activeNodeId,
+        // A follow-up behind a running answer waits in the queue, which displays it.
+        ...(state && selectRunningAnswerId(state) ? {} : { send: pending }),
       });
       try {
         await sendMessage({

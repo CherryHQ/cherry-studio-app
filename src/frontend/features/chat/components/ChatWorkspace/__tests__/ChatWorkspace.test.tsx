@@ -435,6 +435,34 @@ describe('ChatWorkspace message rendering integration', () => {
     },
   );
 
+  test('does not append a send to a page around an older message', () => {
+    const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const workspace = createWorkspaceElement(false, history);
+    renderer = renderWorkspace(false, history);
+    act(() =>
+      renderer?.update(
+        <ChatWorkspace
+          {...workspace.props}
+          enteringUserMessageId="user-2"
+          messageWindow={{ ...workspace.props.messageWindow, hasNewerMessages: true }}
+          pendingSend={{
+            sessionId: 'session-1',
+            isNewSession: false,
+            messages: createPendingChatMessages({
+              userMessageId: 'user-2',
+              assistantMessageId: 'assistant-2',
+              parts: [{ type: 'text', text: 'Follow up' }],
+            }),
+          }}
+        />,
+      ),
+    );
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+  });
+
   test('keeps the first exchange visible through a terminal snapshot and merges partial history by the same IDs', () => {
     const pendingSend: PendingChatSend = {
       sessionId: 'session-1',
