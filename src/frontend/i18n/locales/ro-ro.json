@@ -297,6 +297,7 @@
   "chat.compaction.compacting": "Se comprimă contextul…",
   "chat.compaction.failed": "Comprimarea contextului a eșuat.",
   "chat.draft.greeting": "Ce ar trebui să creăm împreună astăzi?",
+  "chat.errorPart.billing": "Gestionează facturarea {{provider}}",
   "chat.errorPart.detail.facts": "Diagnosticare",
   "chat.errorPart.detail.finishReason": "Terminați motivul",
   "chat.errorPart.detail.hint": "Deschide detaliile erorii.",

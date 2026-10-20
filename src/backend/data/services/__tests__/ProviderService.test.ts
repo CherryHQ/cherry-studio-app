@@ -18,6 +18,7 @@ jest.mock('../utils/orderKey', () => ({
 jest.mock('../ProviderRegistryService', () => ({
   providerRegistryService: {
     getProviderDisplayMetadata: jest.fn(() => ({})),
+    getProviderBillingUrl: jest.fn(() => undefined),
     getExcludedProviderIds: jest.fn(() => []),
     isProviderExcluded: jest.fn(() => false),
   },

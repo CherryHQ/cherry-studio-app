@@ -15,6 +15,7 @@ type ChatMessageRowProps = {
   isScreenReaderEnabled: boolean;
   message: MessageListItem;
   renderUsage?: (message: MessageListItem) => ReactNode;
+  renderRecovery?: (message: MessageListItem) => ReactNode;
 };
 
 /** One transcript row: its item from the list plus its own keyed conversation state. */
@@ -24,6 +25,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
   isScreenReaderEnabled,
   message,
   renderUsage,
+  renderRecovery,
 }: ChatMessageRowProps) {
   const row = useChatMessageRow(message.id);
   return (
@@ -39,6 +41,7 @@ export const ChatMessageRow = memo(function ChatMessageRow({
         isScreenReaderEnabled={isScreenReaderEnabled}
         message={message}
         renderUsage={renderUsage}
+        accessories={renderRecovery?.(message)}
         shouldShowTimestamp={row.showsTimestamp}
       />
     </ConversationMessageContent>

@@ -75,6 +75,19 @@ are rehydrated by `ProviderRegistryService` at request time.
 paintings, and settings. Provider and Model shapes follow Cherry Desktop unless mobile has a
 documented runtime compatibility reason to diverge.
 
+### Quota Recovery
+
+Provider website metadata includes an optional billing destination. The local Provider projection
+exposes it only for API-key accounts linked to a known preset whose configured endpoint origins
+match that preset's trusted catalog. Custom providers, changed gateway hosts, unknown connections,
+OAuth accounts, and presets without billing metadata retain the existing fallback.
+
+Local chat offers an explicit billing action after a structured quota failure names that configured
+Provider. It uses the configured account's display name and the existing external-link opener;
+model names and diagnostic text never select a destination. Recovery is composed only by the local
+chat screen. Remote transcripts do not resolve their opaque provider IDs against local accounts.
+Opening the page neither retries the request nor changes credentials.
+
 ## AI SDK Provider Resolution
 
 `resolveProviderConnection()` is the shared, credential-selection-free connection resolver used by

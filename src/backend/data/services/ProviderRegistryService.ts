@@ -464,6 +464,38 @@ export class ProviderRegistryService {
     };
   }
 
+  /** Billing belongs to the configured account, never a model vendor behind a gateway. */
+  getProviderBillingUrl(input: {
+    presetProviderId: string | null;
+    endpointConfigs: EndpointConfigs | null | undefined;
+  }): string | undefined {
+    if (!input.presetProviderId) return undefined;
+    const preset = this.loader.findProvider(input.presetProviderId);
+    const billing = preset?.metadata?.website?.billing;
+    const endpoints = Object.entries(input.endpointConfigs ?? {});
+    if (!billing || endpoints.length === 0) return undefined;
+    try {
+      const destination = new URL(billing);
+      if (destination.protocol !== 'https:' || destination.username || destination.password)
+        return undefined;
+      for (const [type, config] of endpoints) {
+        const catalogUrl = preset?.endpointConfigs?.[type as EndpointType]?.baseUrl;
+        if (!config?.baseUrl || !catalogUrl) return undefined;
+        const configured = new URL(config.baseUrl);
+        if (
+          configured.protocol !== 'https:' ||
+          configured.username ||
+          configured.password ||
+          configured.origin !== new URL(catalogUrl).origin
+        )
+          return undefined;
+      }
+      return billing;
+    } catch {
+      return undefined;
+    }
+  }
+
   private findProfileProvider(context: Pick<ReasoningProviderContext, 'id' | 'presetProviderId'>) {
     if (context.presetProviderId === null) {
       return undefined;

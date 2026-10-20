@@ -41,6 +41,7 @@ import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
+import { LocalQuotaRecovery } from './components/LocalQuotaRecovery';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
@@ -54,6 +55,7 @@ import { createChatShareHandoff, type ChatShareTranslations } from './share/chat
 
 const PREVIEW_CONTENT_BOTTOM_INSET = 12;
 const renderLocalUsage = (message: MessageListItem) => <AssistantMessageUsage message={message} />;
+const renderLocalRecovery = (message: MessageListItem) => <LocalQuotaRecovery message={message} />;
 
 export function ChatScreen() {
   return (
@@ -230,6 +232,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                 feedbackHintBottomOffset={composerHeight}
                 isTranslationEnabled
                 renderUsage={renderLocalUsage}
+                renderRecovery={renderLocalRecovery}
                 snapshot={snapshot}
                 messages={messages}
                 onShare={sessionId ? shareMessage : undefined}

@@ -291,6 +291,7 @@
   "chat.compaction.compacting": "正在壓縮上下文…",
   "chat.compaction.failed": "上下文壓縮失敗。",
   "chat.draft.greeting": "今天想一起做點什麼？",
+  "chat.errorPart.billing": "管理 {{provider}} 帳單",
   "chat.errorPart.detail.facts": "診斷信息",
   "chat.errorPart.detail.finishReason": "結束原因",
   "chat.errorPart.detail.hint": "打開錯誤詳情。",

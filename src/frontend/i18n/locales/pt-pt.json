@@ -297,6 +297,7 @@
   "chat.compaction.compacting": "A comprimir o contexto…",
   "chat.compaction.failed": "A compressão do contexto falhou.",
   "chat.draft.greeting": "O que devemos criar em conjunto hoje?",
+  "chat.errorPart.billing": "Gerir a faturação de {{provider}}",
   "chat.errorPart.detail.facts": "Diagnóstico",
   "chat.errorPart.detail.finishReason": "Finalizar motivo",
   "chat.errorPart.detail.hint": "Abre os detalhes do erro.",

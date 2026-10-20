@@ -294,6 +294,7 @@
   "chat.compaction.compacting": "Compacting context…",
   "chat.compaction.failed": "Context compaction failed.",
   "chat.draft.greeting": "What should we create together today?",
+  "chat.errorPart.billing": "Manage {{provider}} billing",
   "chat.errorPart.detail.facts": "Diagnostics",
   "chat.errorPart.detail.finishReason": "Finish reason",
   "chat.errorPart.detail.hint": "Opens the error details.",

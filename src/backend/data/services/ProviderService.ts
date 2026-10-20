@@ -269,7 +269,18 @@ function rowToProvider(row: UserProviderRow): Provider {
       ...DEFAULT_PROVIDER_SETTINGS,
       ...(row.providerSettings as Partial<ProviderSettings> | null),
     },
-    websites: metadata.websites,
+    websites: metadata.websites
+      ? {
+          ...metadata.websites,
+          billing:
+            authType === 'api-key'
+              ? providerRegistryService.getProviderBillingUrl({
+                  presetProviderId: row.presetProviderId,
+                  endpointConfigs: row.endpointConfigs as EndpointConfigs | null,
+                })
+              : undefined,
+        }
+      : undefined,
   };
 }
 

@@ -291,6 +291,7 @@
   "chat.compaction.compacting": "Đang nén ngữ cảnh…",
   "chat.compaction.failed": "Nén ngữ cảnh thất bại.",
   "chat.draft.greeting": "Hôm nay chúng ta nên cùng nhau tạo ra điều gì?",
+  "chat.errorPart.billing": "Quản lý thanh toán {{provider}}",
   "chat.errorPart.detail.facts": "Chẩn đoán",
   "chat.errorPart.detail.finishReason": "Lý do kết thúc",
   "chat.errorPart.detail.hint": "Mở chi tiết lỗi.",

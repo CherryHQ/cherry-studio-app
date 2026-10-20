@@ -294,6 +294,7 @@
   "chat.compaction.compacting": "Bağlam sıkıştırılıyor…",
   "chat.compaction.failed": "Bağlam sıkıştırılamadı.",
   "chat.draft.greeting": "Bugün birlikte ne yaratmalıyız?",
+  "chat.errorPart.billing": "{{provider}} faturalandırmasını yönet",
   "chat.errorPart.detail.facts": "Teşhis",
   "chat.errorPart.detail.finishReason": "Bitiş nedeni",
   "chat.errorPart.detail.hint": "Hata ayrıntılarını açar.",

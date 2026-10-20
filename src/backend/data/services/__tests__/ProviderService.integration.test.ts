@@ -1,6 +1,9 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
+import { installProviderRegistryTestSnapshot } from '../providerRegistryTestSnapshot';
 import { ProviderService } from '../ProviderService';
 
 describe('ProviderService integration', () => {
@@ -8,9 +11,30 @@ describe('ProviderService integration', () => {
   let service: ProviderService;
 
   beforeEach(async () => {
+    installProviderRegistryTestSnapshot();
     testDatabase = createServiceTestDatabase();
     await installTestHost({ DbService: testDatabase.dbService });
     service = new ProviderService();
+  });
+
+  it('projects billing for a copied preset and removes it when the account routes through a gateway', async () => {
+    const provider = await service.create({
+      providerId: 'my-deepseek',
+      presetProviderId: 'deepseek',
+      name: 'My DeepSeek',
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://api.deepseek.com/v1' },
+      },
+    });
+    expect(provider.websites?.billing).toBe('https://platform.deepseek.com/top_up');
+
+    const changed = await service.update('my-deepseek', {
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://gateway.example.com/v1' },
+      },
+    });
+    expect(changed.websites?.billing).toBeUndefined();
+    expect(changed.websites?.official).toBe(provider.websites?.official);
   });
 
   afterEach(async () => {

@@ -19,6 +19,64 @@ import {
 beforeEach(installProviderRegistryTestSnapshot);
 
 describe('provider-registry-service', () => {
+  test.each(['openai', 'anthropic', 'cherryin', 'deepseek'])(
+    'resolves %s billing only for its configured catalog endpoints',
+    (id) => {
+      const preset = providerRegistryService
+        .loadProviders()
+        .find((provider) => provider.id === id)!;
+      const billing = providerRegistryService.getProviderDisplayMetadata(id).websites?.billing;
+      expect(billing).toMatch(/^https:\/\//);
+      expect(
+        providerRegistryService.getProviderBillingUrl({
+          presetProviderId: id,
+          endpointConfigs: preset.endpointConfigs,
+        }),
+      ).toBe(billing);
+      const endpoint = Object.keys(preset.endpointConfigs!)[0];
+      expect(
+        providerRegistryService.getProviderBillingUrl({
+          presetProviderId: id,
+          endpointConfigs: {
+            ...preset.endpointConfigs,
+            [endpoint]: { baseUrl: 'https://gateway.example.com/v1' },
+          },
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  test('keeps custom, unknown, unconfigured, and metadata-free providers without billing', () => {
+    for (const presetProviderId of [null, 'custom', 'ollama']) {
+      expect(
+        providerRegistryService.getProviderBillingUrl({
+          presetProviderId,
+          endpointConfigs: {
+            [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl: 'https://api.openai.com' },
+          },
+        }),
+      ).toBeUndefined();
+    }
+    expect(
+      providerRegistryService.getProviderBillingUrl({
+        presetProviderId: 'openai',
+        endpointConfigs: null,
+      }),
+    ).toBeUndefined();
+  });
+
+  test.each(['http://api.openai.com', 'not a URL', 'https://user:secret@api.openai.com'])(
+    'rejects an ineligible billing connection %s',
+    (baseUrl) => {
+      expect(
+        providerRegistryService.getProviderBillingUrl({
+          presetProviderId: 'openai',
+          endpointConfigs: { [ENDPOINT_TYPE.OPENAI_RESPONSES]: { baseUrl } },
+        }),
+      ).toBeUndefined();
+    },
+  );
+
   test('projects downloaded GPT-6.1 Sol efforts for GGAPI without changing its API model id', () => {
     const loader = new MobileRegistryLoader();
     loader.installRemoteSnapshot(

@@ -152,6 +152,7 @@ export type EndpointConfigs = Partial<Record<EndpointType, EndpointConfig>>;
 
 export type ProviderWebsites = {
   apiKey?: string;
+  billing?: string;
   docs?: string;
   models?: string;
   official?: string;

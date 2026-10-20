@@ -52,6 +52,8 @@ type ChatWorkspaceProps = {
   /** Translation is available only for locally owned Agent messages. */
   isTranslationEnabled?: boolean;
   renderUsage?: (message: MessageListItem) => ReactNode;
+  /** Recovery actions supplied only by the owner of the failed request's account. */
+  renderRecovery?: (message: MessageListItem) => ReactNode;
 };
 
 export function ChatWorkspace({
@@ -75,6 +77,7 @@ export function ChatWorkspace({
   sessionId,
   isTranslationEnabled = false,
   renderUsage,
+  renderRecovery,
 }: ChatWorkspaceProps) {
   const {
     dataKey,
@@ -193,10 +196,17 @@ export function ChatWorkspace({
           isScreenReaderEnabled={isScreenReaderEnabled}
           message={message}
           renderUsage={renderUsage}
+          renderRecovery={renderRecovery}
         />
       );
     },
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [
+      assistantPresentation,
+      isAssistantToolbarEnabled,
+      isScreenReaderEnabled,
+      renderUsage,
+      renderRecovery,
+    ],
   );
   const messageListExtraData = useMemo(
     () => ({
@@ -204,8 +214,15 @@ export function ChatWorkspace({
       isAssistantToolbarEnabled,
       isScreenReaderEnabled,
       renderUsage,
+      renderRecovery,
     }),
-    [assistantPresentation, isAssistantToolbarEnabled, isScreenReaderEnabled, renderUsage],
+    [
+      assistantPresentation,
+      isAssistantToolbarEnabled,
+      isScreenReaderEnabled,
+      renderUsage,
+      renderRecovery,
+    ],
   );
   const requiresInitialHistoryLayout =
     typeof initialScrollTarget === 'object' ||

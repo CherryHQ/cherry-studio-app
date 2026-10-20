@@ -291,6 +291,7 @@
   "chat.compaction.compacting": "コンテキストを圧縮中…",
   "chat.compaction.failed": "コンテキストの圧縮に失敗しました。",
   "chat.draft.greeting": "今日は一緒に何を作りましょうか?",
+  "chat.errorPart.billing": "{{provider}} の請求を管理",
   "chat.errorPart.detail.facts": "診断",
   "chat.errorPart.detail.finishReason": "終了理由",
   "chat.errorPart.detail.hint": "エラーの詳細を開きます。",

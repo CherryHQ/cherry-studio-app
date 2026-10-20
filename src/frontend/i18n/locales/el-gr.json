@@ -294,6 +294,7 @@
   "chat.compaction.compacting": "Συμπίεση περιβάλλοντος…",
   "chat.compaction.failed": "Η συμπίεση του περιβάλλοντος απέτυχε.",
   "chat.draft.greeting": "Τι πρέπει να δημιουργήσουμε μαζί σήμερα;",
+  "chat.errorPart.billing": "Διαχείριση χρέωσης {{provider}}",
   "chat.errorPart.detail.facts": "Διαγνωστικά",
   "chat.errorPart.detail.finishReason": "Λόγος λήξης",
   "chat.errorPart.detail.hint": "Ανοίγει τις λεπτομέρειες του σφάλματος.",
