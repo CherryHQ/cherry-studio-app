@@ -1,6 +1,6 @@
 import { MAX_TEXT_ATTACHMENT_BYTES } from '@/shared/utils/fileAttachmentPolicy';
 
-import { fitPiCodemodeOutput } from '../piCodemodeOutput';
+import { fitPiCodemodeOutput, piCodemodeFailureCode } from '../piCodemodeOutput';
 
 const bytes = (text: string) => new TextEncoder().encode(text).byteLength;
 
@@ -24,4 +24,31 @@ test.each([
   // A split surrogate pair would encode as a replacement character.
   expect(saved).not.toContain('�');
   expect(/[\uD800-\uDBFF]$/.test(kept!)).toBe(false);
+});
+
+// The failure text pi-durable's Code Mode formats for the model: header, output, then the error.
+const failed = (error: string, statuses: string[] = []) => ({
+  isError: true,
+  output: [
+    { type: 'text' as const, text: 'Script failed\nWall time 0.1 seconds\nOutput:\n' },
+    { type: 'text' as const, text: `partial\nScript error:\n${error}\n\nNo tool calls were made.` },
+  ],
+  details: {
+    calls: statuses.map((status, id) => ({ id, name: 'read_file', args: '{}', status })),
+  },
+});
+
+test.each([
+  ['a timeout', failed('Script timed out: stopped: budget', ['error']), 'script_timeout'],
+  ['an abort', failed('Script aborted: cancelled'), 'script_aborted'],
+  ['a sandbox failure', failed('Script sandbox failed: bridge closed'), 'sandbox_failed'],
+  ['a failed nested call', failed('Error: not found', ['ok', 'error']), 'nested_tool_failed'],
+  ['a script exception', failed('SyntaxError: unexpected token', ['ok']), 'script_error'],
+  [
+    'output cut before its error',
+    { isError: true, output: [{ type: 'text' as const, text: 'Script failed' }] },
+    'script_failed',
+  ],
+])('records %s as its failure cause', (_case, result, code) => {
+  expect(piCodemodeFailureCode(result)).toBe(code);
 });

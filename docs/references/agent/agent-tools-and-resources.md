@@ -703,10 +703,16 @@ file however many edits it took, and across turns a file keeps its history as ve
   file instead. Without a workspace, edits to root files retain their lineage, and outside copies
   land at the root. A derived version becomes this turn's draft, so subsequent edits continue it.
 
-`edit_file` serializes calls naming the same source within a turn. The database transaction also
-compares the current entry id and content revision before committing; a competing Session cannot
-silently fork or overwrite a shared file. It rejects stale drafts and destinations moved outside
-the captured workspace. The Agent must re-read after a conflict.
+`edit_file` serializes calls naming the same source within a turn, in the order the model listed
+them. Batched path edits all carry the base of the same read: a base that this tool's own earlier
+edit in the turn replaced continues from that edit's version and revision, so the batch applies
+instead of conflicting on its second call. A change from anywhere else still leaves the base stale.
+The database transaction also compares the current entry id and content revision before committing;
+a competing Session cannot silently fork or overwrite a shared file. It rejects stale drafts and
+destinations moved outside the captured workspace. The Agent must re-read after a conflict. Error
+results carry a fixed `code` (`old_string_not_found`, `old_string_ambiguous`, `stale_revision`,
+`file_too_large`, `not_text`, `file_unavailable`, `file_unreadable`, `file_not_in_scope`,
+`invalid_tool_input`) beside the model-facing message.
 
 `read_file` accepts the conversation ledger and the selected workspace. Outside-library reads
 require the separately approved library tool. It shares `readAttachmentContent` with attachment preparation and captures the
@@ -767,7 +773,10 @@ sixty-four-call turn budget, including invalid child arguments. Admission happen
 creation and deduplicates resumed calls by their stable IDs; only model rounds count toward twenty
 steps. A child call past the budget fails without creating a task; the script receives the error,
 keeps running and returns what it gathered, and the next model request is the tool-free final
-response. The Code Mode prompt section states this limit. The live parent shows
+response. The Code Mode prompt section states this limit. It also tells the model to hand a file's
+content to another tool by reading it inside the script (`read_file` `offset`/`max_characters`,
+joined until `complete`) rather than retyping it into tool arguments; model output is the costly
+and lossy channel, while scripts pass strings at no model cost. The live parent shows
 bounded child-call summaries. The completed parent retains upstream summaries and managed artifacts;
 child outputs are not copied into separate model-history messages. Unsafe child execution is not
 promised exactly once after a crash.
