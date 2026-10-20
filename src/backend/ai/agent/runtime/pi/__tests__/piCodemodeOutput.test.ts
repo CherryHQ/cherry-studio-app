@@ -42,7 +42,16 @@ test.each([
   ['a timeout', failed('Script timed out: stopped: budget', ['error']), 'script_timeout'],
   ['an abort', failed('Script aborted: cancelled'), 'script_aborted'],
   ['a sandbox failure', failed('Script sandbox failed: bridge closed'), 'sandbox_failed'],
-  ['a failed nested call', failed('Error: not found', ['ok', 'error']), 'nested_tool_failed'],
+  [
+    'an exception after a nested call failed',
+    failed('Error: not found', ['ok', 'error']),
+    'script_error',
+  ],
+  [
+    'a script exception after a caught child failure',
+    failed('SyntaxError: unexpected token\n    at JSON.parse (<anonymous>)', ['error', 'ok']),
+    'script_error',
+  ],
   ['a script exception', failed('SyntaxError: unexpected token', ['ok']), 'script_error'],
   [
     'output cut before its error',

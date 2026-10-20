@@ -34,8 +34,9 @@ Current producers are:
   attempted application capability execution, including built-in tools and image generation,
   with tool call id, outcome and safe failure facts. A Code Mode script is one `run_js` record.
   A failed script records its cause: `script_timeout`, `script_aborted`, `sandbox_failed`,
-  `nested_tool_failed` when one of its tool calls failed, otherwise `script_error`, and
-  `script_failed` when the cause is not visible in its result. Each tool call it makes has its own
+  `script_error` for other terminating exceptions, and `script_failed` when the cause is not visible
+  in its result. A failed child call alone does not establish why the script terminated: the script
+  may have caught it and failed later for another reason. Each tool call it makes has its own
   record under a `<script call id>/<key>` id. OpenAI Responses call ids join call and item ids with
   `|`, which diagnostic identifiers keep. The model bridge records terminal stream
   events without copying provider payloads.

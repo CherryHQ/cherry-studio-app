@@ -704,7 +704,8 @@ file however many edits it took, and across turns a file keeps its history as ve
   land at the root. A derived version becomes this turn's draft, so subsequent edits continue it.
 
 `edit_file` serializes calls naming the same source within a turn, in the order the model listed
-them. Batched path edits all carry the base of the same read: a base that this tool's own earlier
+them. The source and its derived draft share one queue, entered before resolving paths or checking
+the base. Batched path edits all carry the base of the same read: a base that this tool's own earlier
 edit in the turn replaced continues from that edit's version and revision, so the batch applies
 instead of conflicting on its second call. A change from anywhere else still leaves the base stale.
 The database transaction also compares the current entry id and content revision before committing;

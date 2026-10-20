@@ -42,6 +42,7 @@ export function piCodemodeFailureCode(result: ToolExecutionResult): string {
   if (start === -1) return 'script_failed';
   const head = text.slice(start + SCRIPT_ERROR.length);
   for (const [prefix, code] of FAILURE_KINDS) if (head.startsWith(prefix)) return code;
-  const calls = (result.details as { calls?: { status?: unknown }[] } | undefined)?.calls ?? [];
-  return calls.some((call) => call.status === 'error') ? 'nested_tool_failed' : 'script_error';
+  // A failed child may have been caught before an unrelated script exception.
+  // Call statuses do not establish the cause of the terminating error.
+  return 'script_error';
 }

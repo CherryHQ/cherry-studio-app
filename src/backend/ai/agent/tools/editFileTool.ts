@@ -92,20 +92,18 @@ export type TurnEditScope = Pick<
   'availableFiles' | 'draftFileEntryIds' | 'fileEntryIds'
 >;
 
+type FileEditQueue = { tail: Promise<unknown>; draftId?: FileEntryId };
+
 export function createEditFileTool(
   files: EditFileFiles,
   scope: TurnEditScope,
   access?: WorkspaceFileAccess,
 ): RuntimeTool {
-  /** One edit at a time per source (see `runExclusively`). */
-  const queues = new Map<string, Promise<unknown>>();
   /**
-   * The version this turn already derived from a source. A second edit of the
-   * same source continues that version instead of forking a same-named twin,
-   * which is the "one artifact per turn" rule applied to history as well as
-   * drafts.
+   * A source and the draft derived from it share one queue. Register calls before
+   * resolving their paths, so asynchronous lookups cannot reorder a batch.
    */
-  const versions = new Map<string, FileEntryId>();
+  const queues = new Map<string, FileEditQueue>();
   /**
    * The version and revision each of this tool's writes replaced, mapped to what it
    * wrote. Edits batched in one message all carry the base of the same read; a base
@@ -131,6 +129,7 @@ export function createEditFileTool(
   };
 
   const edit = async (
+    queue: FileEditQueue,
     requestedId: FileEntryId,
     old_string: string,
     new_string: string,
@@ -141,7 +140,7 @@ export function createEditFileTool(
     // A version this turn already derived is one of its drafts, whether or not
     // the catalog wrapper has granted it yet: parallel calls can reach here
     // before that grant lands.
-    const derived = versions.get(requestedId);
+    const derived = queue.draftId;
     const sourceFileEntryId = derived ?? requestedId;
     const rewritable = derived !== undefined || scope.draftFileEntryIds.has(sourceFileEntryId);
 
@@ -269,7 +268,8 @@ export function createEditFileTool(
           },
           signal,
         );
-    versions.set(requestedId, entry.id);
+    queue.draftId = entry.id;
+    queues.set(entry.id, queue);
     recordWrite(source, entry);
 
     return {
@@ -320,24 +320,6 @@ export function createEditFileTool(
       } = parsed.data;
       if (!access && (!file_entry_id || parsed.data.path))
         return invalid('invalid_tool_input', 'Provide a managed file_entry_id.');
-      // A base an earlier edit of this batch already replaced may have landed by now.
-      const base =
-        base_file_entry_id !== undefined && base_revision !== undefined
-          ? latestBase({ fileEntryId: base_file_entry_id, revision: base_revision })
-          : undefined;
-      const requestedId = access
-        ? await access.resolveEdit(
-            base
-              ? {
-                  ...parsed.data,
-                  base_file_entry_id: base.fileEntryId,
-                  base_revision: base.revision,
-                }
-              : parsed.data,
-          )
-        : FileEntryIdSchema.parse(file_entry_id);
-      if (!access && !scope.fileEntryIds.has(requestedId))
-        return invalid('file_not_in_scope', 'The file is not part of this conversation.');
       if (old_string === new_string) {
         return Promise.resolve(
           invalid('invalid_tool_input', 'old_string and new_string must be different.'),
@@ -352,15 +334,36 @@ export function createEditFileTool(
           ),
         );
       }
-      const expected =
-        base_revision === undefined
-          ? undefined
-          : { fileEntryId: base_file_entry_id ?? requestedId, revision: base_revision };
-      // Queue on the entry the edit will actually touch, so naming a source and
-      // the version already derived from it does not open two writers on one file.
-      return runExclusively(queues, versions.get(requestedId) ?? requestedId, () =>
-        edit(requestedId, old_string, new_string, replace_all, signal, expected),
-      );
+      // Valid references carry an entry id, even in path mode. Missing ids fail
+      // reference validation inside the queue without touching a file.
+      const key = file_entry_id ?? base_file_entry_id ?? '';
+      const queue = queues.get(key) ?? { tail: Promise.resolve() };
+      queues.set(key, queue);
+      return runExclusively(queue, async () => {
+        signal.throwIfAborted();
+        const base =
+          base_file_entry_id !== undefined && base_revision !== undefined
+            ? latestBase({ fileEntryId: base_file_entry_id, revision: base_revision })
+            : undefined;
+        const requestedId = access
+          ? await access.resolveEdit(
+              base
+                ? {
+                    ...parsed.data,
+                    base_file_entry_id: base.fileEntryId,
+                    base_revision: base.revision,
+                  }
+                : parsed.data,
+            )
+          : FileEntryIdSchema.parse(file_entry_id);
+        if (!access && !scope.fileEntryIds.has(requestedId))
+          return invalid('file_not_in_scope', 'The file is not part of this conversation.');
+        const expected =
+          base_revision === undefined
+            ? undefined
+            : { fileEntryId: base_file_entry_id ?? requestedId, revision: base_revision };
+        return edit(queue, requestedId, old_string, new_string, replace_all, signal, expected);
+      });
     },
   };
 }
@@ -372,19 +375,12 @@ export function createEditFileTool(
  * in-place draft rewrite cannot. Queueing happens synchronously at call time,
  * so the edits also apply in the order the model listed them.
  */
-function runExclusively<T>(
-  queues: Map<string, Promise<unknown>>,
-  key: string,
-  work: () => Promise<T>,
-): Promise<T> {
-  const result = (queues.get(key) ?? Promise.resolve()).then(work);
+function runExclusively<T>(queue: FileEditQueue, work: () => Promise<T>): Promise<T> {
+  const result = queue.tail.then(work);
   // The queued tail never rejects: one failed edit must not fail the next.
-  queues.set(
-    key,
-    result.then(
-      () => undefined,
-      () => undefined,
-    ),
+  queue.tail = result.then(
+    () => undefined,
+    () => undefined,
   );
   return result;
 }

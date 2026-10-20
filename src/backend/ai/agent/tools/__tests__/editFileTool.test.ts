@@ -1,4 +1,5 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import { FileEntrySchema, type FileEntryId } from '@/shared/data/types/file';
 
 import type { ManagedFileFact } from '../../resources/managedFileResolver';
@@ -252,6 +253,84 @@ describe('editFileTool', () => {
       expect(second.value).toMatchObject({ status: 'edited' });
       expect(workspace.text()).toBe('ALPHA\nBETA\n');
     });
+
+    test('refreshes the base when an earlier edit lands before the path lookup finishes', async () => {
+      const workspace = createWorkspace('alpha\nbeta\n', false);
+      const writing = deferred();
+      const finishWrite = deferred();
+      const create = workspace.storage.createTextEntry.getMockImplementation()!;
+      workspace.storage.createTextEntry.mockImplementationOnce(async (input) => {
+        writing.resolve();
+        await finishWrite.promise;
+        return create(input);
+      });
+      const first = execute(workspace.tool, { ...base, old_string: 'alpha', new_string: 'ALPHA' });
+      await writing.promise;
+
+      const resolvePath = workspace.library.resolvePath.getMockImplementation()!;
+      workspace.library.resolvePath.mockImplementationOnce(async () => {
+        await first;
+        return resolvePath();
+      });
+      const second = execute(workspace.tool, { ...base, old_string: 'beta', new_string: 'BETA' });
+      const completed = Promise.all([first, second]);
+      finishWrite.resolve();
+
+      const outputs = await completed;
+      expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
+        'edited',
+        'edited',
+      ]);
+      expect(workspace.text()).toBe('ALPHA\nBETA\n');
+    });
+
+    test.each([
+      ['the original path base', base],
+      ['the derived draft id', { file_entry_id: EDITED_ID }],
+    ])(
+      'keeps a late edit using %s behind edits already queued on the source',
+      async (_case, ref) => {
+        const workspace = createWorkspace('alpha\nbeta\ngamma\n', false);
+        const reading = deferred();
+        const finishRead = deferred();
+        const read = workspace.files.readAsBytes;
+        let paused = false;
+        jest.spyOn(workspace.files, 'readAsBytes').mockImplementation(async (file, signal) => {
+          const bytes = await read(file, signal);
+          if (file.fileEntryId === EDITED_ID && !paused) {
+            paused = true;
+            reading.resolve();
+            await finishRead.promise;
+          }
+          return bytes;
+        });
+        const first = execute(workspace.tool, {
+          ...base,
+          old_string: 'alpha',
+          new_string: 'ALPHA',
+        });
+        const second = execute(workspace.tool, { ...base, old_string: 'beta', new_string: 'BETA' });
+        await first;
+        await reading.promise;
+
+        const third = execute(workspace.tool, { ...ref, old_string: 'gamma', new_string: 'GAMMA' });
+        const completed = Promise.all([first, second, third]);
+        // Let unblocked lookups and writes settle while the second edit still holds its bytes.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        const whileReading = workspace.text();
+        finishRead.resolve();
+
+        const outputs = await completed;
+        expect(whileReading).toBe('ALPHA\nbeta\ngamma\n');
+        expect(outputs.map((output) => (output.value as { status: string }).status)).toEqual([
+          'edited',
+          'edited',
+          'edited',
+        ]);
+        expect(workspace.text()).toBe('ALPHA\nBETA\nGAMMA\n');
+        expect(outputs.flatMap((output) => output.artifacts)).toHaveLength(1);
+      },
+    );
 
     test('still conflict when something else changed the file', async () => {
       const workspace = createWorkspace('alpha\nbeta\n', true);
@@ -692,38 +771,62 @@ function createWorkspace(initial: string, draft: boolean) {
   const library = {
     contains: async () => true,
     fileForEntry: async () => ({ id: 'file-1', name: 'notes.md', folderId: 'folder-1' }),
-    resolvePath: async () => ({ file: { currentEntryId: current, name: 'notes.md' } }),
+    resolvePath: jest.fn(async () => ({ file: { currentEntryId: current, name: 'notes.md' } })),
   };
   const storage = {
     createTextEntry: jest.fn(async (input: { data: string }) => {
       current = `00000000-0000-7000-8000-00000000000${nextId++}` as FileEntryId;
       return store(current, input.data);
     }),
-    rewriteTextEntry: jest.fn(async (input: { data: string; id: FileEntryId }) =>
-      store(input.id, input.data),
+    rewriteTextEntry: jest.fn(
+      async (input: { data: string; id: FileEntryId; baseUpdatedAt?: number }) => {
+        if (input.id !== current || input.baseUpdatedAt !== revisions.get(input.id))
+          throw DataApiErrorFactory.conflict('The draft changed after it was read.');
+        return store(input.id, input.data);
+      },
     ),
+  };
+  const fileEntryIds = new Set<string>();
+  const draftFileEntryIds = new Set<string>(draft ? [SOURCE_ID] : []);
+  const scope: TurnEditScope = {
+    availableFiles: new Map(),
+    fileEntryIds,
+    draftFileEntryIds,
+  };
+  const grantFile = (id: FileEntryId) => {
+    fileEntryIds.add(id);
+    draftFileEntryIds.add(id);
   };
   const access = new WorkspaceFileAccess(
     'folder-1',
-    {
-      availableFiles: new Map(),
-      fileEntryIds: new Set(),
-      draftFileEntryIds: new Set(draft ? [SOURCE_ID] : []),
-      grantFile: jest.fn(),
-    },
+    { ...scope, grantFile },
     library as unknown as FileLibraryService,
     storage as unknown as ConstructorParameters<typeof WorkspaceFileAccess>[3],
   );
-  const scope: TurnEditScope = {
-    availableFiles: new Map(),
-    fileEntryIds: new Set(),
-    draftFileEntryIds: new Set(draft ? [SOURCE_ID] : []),
-  };
+  const tool = createTool(files, scope, access);
   return {
-    tool: createTool(files, scope, access),
+    tool: {
+      ...tool,
+      async execute(call: Parameters<typeof tool.execute>[0]) {
+        const output = await tool.execute(call);
+        for (const artifact of output.artifacts) grantFile(artifact.ref.fileEntryId);
+        return output;
+      },
+    },
+    files,
+    library,
+    storage,
     text: () => blobs.get(current),
     changeElsewhere: (data: string) => store(current, data),
   };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 function execute(
