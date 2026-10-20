@@ -285,6 +285,27 @@ test.each([
   expect(JSON.stringify(exported)).not.toMatch(/private|arguments|stack/);
 });
 
+// OpenAI Responses ids join call and item ids; Code Mode appends its nested call number.
+test.each(['call_abc123|fc_def456', 'call_abc123|fc_def456/c3'])(
+  'keeps the %s tool call id',
+  (id) => {
+    const record = {
+      ...trace,
+      name: 'pi.execute_tool',
+      attributes: { 'tool.name': 'read_file', 'tool.call.id': id },
+    };
+    const projected = projectDiagnosticLine(
+      { tooLarge: false, data: new TextEncoder().encode(JSON.stringify(record)) },
+      'traces',
+      { fromMs: 0, toMs: 1000 },
+    );
+    if (!projected || projected === 'malformed') throw new Error('Expected an exported trace');
+    expect(JSON.parse(new TextDecoder().decode(projected.data)).attributes).toMatchObject({
+      'tool.call.id': id,
+    });
+  },
+);
+
 test('preserves durable failure correlation and retry facts through persistent log reprojection', () => {
   const first = projectDiagnosticLog(
     createLogRecord('warn', 'Pi durable generation retry scheduled', 'PiDurableObserver', {}, [

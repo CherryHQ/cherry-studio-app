@@ -12,7 +12,8 @@ export type BackgroundActivityIcon =
 export type BackgroundActivityActions = {
   token: string;
   prompt: string;
-  buttons: { id: string; label: string }[];
+  /** At most one `primary` button carries the decision's emphasis; others stay neutral. */
+  buttons: { id: string; label: string; role?: 'primary' }[];
   reply?: { label: string; placeholder: string; choices: string[] };
 };
 

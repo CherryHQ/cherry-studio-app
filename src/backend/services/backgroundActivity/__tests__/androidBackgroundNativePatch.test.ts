@@ -178,7 +178,7 @@ test('connection cards remain ordinary ongoing notifications with immutable back
   );
 });
 
-test('remote task and reply cards group by PC while only the connection card is a silent summary', () => {
+test('task and connection notices stay a flat list labelled in the header line', () => {
   const bridge = readFileSync(
     join(
       process.cwd(),
@@ -186,49 +186,8 @@ test('remote task and reply cards group by PC while only the connection card is 
     ),
     'utf8',
   );
-  expect(bridge).toContain('if (uri.host != "remote") return null');
-  expect(bridge).toContain('uri.getQueryParameter("connectionId")');
-  expect(bridge).toContain('return "${context.packageName}:remote:$connectionId"');
-  expect(bridge).toContain('builder.setGroup(group).setGroupSummary(isGroupSummary)');
-  expect(bridge).toContain('NotificationCompat.GROUP_ALERT_CHILDREN');
-  expect(bridge).toContain('actions?.get("promoted") != false && !isGroupSummary');
-  // The Android 16 ordinary text-input notice is cloned from this grouped builder.
-  expect(bridge).toContain('builder.clearActions()');
-});
-
-test('removing a PC summary retains results and reconnect silently regroups them', () => {
-  const bridge = readFileSync(
-    join(
-      process.cwd(),
-      'modules/system-integration/android/src/main/java/expo/modules/systemintegration/BackgroundExecution.kt',
-    ),
-    'utf8',
-  );
-  const cancellation = bridge.slice(
-    bridge.indexOf('private fun cancelNotification('),
-    bridge.indexOf('private fun actionIntent('),
-  );
-  expect(cancellation.indexOf('detachGroup(context, id)')).toBeLessThan(
-    cancellation.indexOf('manager.cancel(id)'),
-  );
-  expect(bridge).toContain(
-    'entry.id == id || entry.id == connectionId || entry.notification.group != group',
-  );
-  expect(bridge).toContain('.setGroup(null).setOnlyAlertOnce(true)');
-  expect(bridge).toContain('notification.extras.getString("deviceGroup") != group');
-  expect(bridge).toContain('if (isGroupSummary) regroupNotifications(context, group!!)');
-  expect(bridge).toContain(
-    '.setGroup(group).setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)',
-  );
-  // System group rendering may hide summary actions; connection control is the first child.
-  expect(bridge).toContain('notificationId(context, connectionKey(id))');
-  expect(bridge).toContain('.setGroupSummary(false).setSortKey("0_connection")');
-  expect(bridge).toContain('builder.setSortKey("1_task")');
-  expect(bridge).toContain('if (connectionId != -1) manager.cancel(connectionId)');
-  expect(bridge).toContain('if (isGroupSummary) this.actions = null');
-  expect(bridge).toContain(
-    'val actionNotificationId = if (isGroupSummary) notificationId(context, connectionKey(id)) else id',
-  );
-  expect(bridge).toContain('actionIntent(context, actionNotificationId, token, button["id"]');
-  expect(bridge).toContain('val group = summary?.group ?: control?.group ?: return');
+  expect(bridge).not.toContain('setGroup(');
+  expect(bridge).toContain('(options?.get("subText") as? String)?.let { builder.setSubText(it) }');
+  expect(bridge).toContain('if (options?.get("connection") == true) builder.setShowWhen(false)');
+  expect(bridge).toContain('actionIntent(context, id, token, button["id"]');
 });

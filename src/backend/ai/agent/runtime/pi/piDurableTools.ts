@@ -23,9 +23,9 @@ import { RuntimeJsonValueSchema } from '../runtimeSchemas';
 import { createErrorToolResult, toModelToolResult } from '../toolResults';
 import type { RuntimeJsonValue, RuntimeTool, RuntimeToolResult } from '../types';
 import { PiCodemodeFiles, retainPiCodemodeArtifacts } from './piCodemodeFiles';
+import { piCodemodeFailureCode } from './piCodemodeOutput';
 import { PiCodemodeMcpResultEntry } from './piCodemodeResults';
 import { PI_SCRIPT_CAPABILITY_NAME } from './piDurableProjection';
-import { PI_TOOL_BUDGET } from './piToolBudget';
 import {
   hasToolInstructions,
   retainToolInstructions,
@@ -39,7 +39,6 @@ type PiDurableToolOptions = {
   acceptsImages?: boolean;
   codemode?: Extension;
   previousFailures?(api: HookApi, context: Context): Promise<readonly string[]>;
-  admitCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<boolean>;
   beforeCall?(call: ToolHookCall, api: HookApi, context: Context): Promise<string | undefined>;
   /** Resolve the current Pi run, including queued input and a reconstructed process generation. */
   resolve(
@@ -64,12 +63,10 @@ type PiDurableToolOptions = {
   ): Promise<boolean>;
 };
 
-const BUDGET_REFUSAL = `The turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget is exhausted.`;
-
 const codemodeRulesSection = section(
   'cherry-codemode',
   () =>
-    `Every tools.* call a Code Mode script makes counts toward the turn's ${PI_TOOL_BUDGET.maxToolCalls} tool-call budget. A call beyond it fails without running; return what the script has gathered instead of retrying. Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>.`,
+    "Code Mode store/load is temporary working data; history rebuilds, forks and restores may clear it. Save lasting results with file tools. Output paths managed-file:<id> refer to read_file file_entry_id <id>. To give a tool a file's content, read it in the script with read_file offset and max_characters, join value.text until value.complete, and pass that string; never retype file content into tool arguments.",
   { tag: false },
 );
 
@@ -258,62 +255,18 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
         async execute(args: unknown, api: ToolExecutionApi, context: Context) {
           const { tool: current, turnId } = await resolve(scriptCapability!, api, context);
           if (current.approval === 'deny') throw new Error('JavaScript execution is disabled.');
-          // The ledger only grows within a turn, so one refusal settles every later call.
-          let exhausted = false;
-          const script = () =>
-            tool.execute(
-              args,
-              {
-                ...api,
-                // Admission precedes upstream argument validation and nested task creation, so a
-                // refused call costs no task. The script receives an error and keeps its output.
-                async executeTool(name, arguments_, callContext, nestedOptions) {
-                  const key = nestedOptions?.key;
-                  if (key === undefined)
-                    throw new Error('A nested tool call requires a stable key.');
-                  exhausted ||=
-                    options.admitCall !== undefined &&
-                    !(await options.admitCall(
-                      {
-                        type: 'toolCall',
-                        // Upstream derives the nested task's call ID the same way.
-                        id: `${api.callId}/${key}`,
-                        name,
-                        arguments: arguments_,
-                        parent: { taskId: api.taskId, callId: api.callId },
-                      },
-                      api,
-                      callContext,
-                    ));
-                  if (exhausted)
-                    return {
-                      taskId: api.taskId,
-                      isError: true,
-                      diagnostics: [
-                        {
-                          severity: 'error' as const,
-                          code: 'tool_call_limit_exceeded',
-                          message: BUDGET_REFUSAL,
-                        },
-                      ],
-                    };
-                  return api.executeTool(name, arguments_, callContext, nestedOptions);
-                },
-              },
-              context,
-            );
           // The capability's execute is the Host's boundary for tool diagnostics; it sees the
           // script's outcome while Pi keeps the upstream result.
-          let result: Awaited<ReturnType<typeof script>> | undefined;
+          let result: ToolExecutionResult | undefined;
           await current.execute({
             input: RuntimeJsonValueSchema.parse(args),
             signal: requireSignal(context),
             toolCallId: api.callId,
             turnId,
             run: async () => {
-              result = await script();
+              result = await tool.execute(args, api, context);
               const value: RuntimeJsonValue = result.isError
-                ? { status: 'error', code: 'script_failed' }
+                ? { status: 'error', code: piCodemodeFailureCode(result) }
                 : { status: 'ok' };
               return { value, artifacts: [] };
             },
@@ -333,9 +286,6 @@ export function createPiDurableToolExtension(options: PiDurableToolOptions): Ext
     hooks: [
       hook(ToolTask, {
         async beforeTool(call, api, context) {
-          // A nested call was admitted by the Code Mode wrapper before its task existed.
-          if (!call.parent && options.admitCall && !(await options.admitCall(call, api, context)))
-            return { block: BUDGET_REFUSAL };
           const blocked = await options.beforeCall?.(call, api, context);
           if (blocked) return { block: blocked };
           const template =

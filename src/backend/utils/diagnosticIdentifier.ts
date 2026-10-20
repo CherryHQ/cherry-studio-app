@@ -1,8 +1,11 @@
-/** Bounded identifiers, excluding free text, URLs, absolute paths and recognizable credentials. */
+/**
+ * Bounded identifiers, excluding free text, URLs, absolute paths and recognizable credentials.
+ * `|` joins the call and item ids of OpenAI Responses tool calls.
+ */
 export function diagnosticIdentifier(value: unknown): string | undefined {
   if (typeof value !== 'string' || value.length > 160) return undefined;
   if (
-    !/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$/.test(value) ||
+    !/^[a-zA-Z0-9][a-zA-Z0-9_.:/|-]*$/.test(value) ||
     value.includes('://') ||
     /^[a-z]:\//i.test(value)
   )
