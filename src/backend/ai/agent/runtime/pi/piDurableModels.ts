@@ -23,7 +23,6 @@ import {
 } from './piModelDiagnostics';
 import type { PiRuntimeDependencies } from './piModelTypes';
 import { providerErrorEvent } from './piStreamEvents';
-import { disablePiToolCalls } from './piToolChoice';
 import { applyPiWebReplay, PiWebResponse } from './PiWebResponse';
 import { applyPiWebTools, type PiWebToolRoutes } from './piWebTools';
 
@@ -45,7 +44,6 @@ export function createPiDurableModels(
     providerSessionId: string | undefined,
     signal: AbortSignal | undefined,
   ) => Promise<TraceSpan | undefined>,
-  toolFree?: (signal: AbortSignal | undefined) => boolean,
   /** Routes of a conversation request that may still use the web; absent for every other call. */
   webRoutes?: (signal: AbortSignal | undefined) => PiWebToolRoutes | undefined,
 ) {
@@ -133,9 +131,8 @@ export function createPiDurableModels(
                 ? resolved.defaultThinkingLevel
                 : effort;
           const onPayload = options?.onPayload;
-          const withoutTools = toolFree?.(options?.signal) ?? false;
           // The stored route is intersected with the credentials this request actually resolved.
-          const configured = withoutTools ? undefined : webRoutes?.(options?.signal);
+          const configured = webRoutes?.(options?.signal);
           const native = resolved.nativeWebTools;
           const routes: PiWebToolRoutes = {
             search: configured?.search === 'server' && native?.search ? 'server' : 'none',
@@ -156,12 +153,9 @@ export function createPiDurableModels(
                 // A credential retry sends the request again; its metadata starts over.
                 if (!continuedContent) web?.reset();
                 const sent = (await onPayload?.(payload, wire)) ?? payload;
-                // Pi's simple options omit tool choice on some APIs; the final payload enforces it.
-                // Replay follows: a deferred server tool returns only beside its definition.
+                // Replay follows routing: a deferred server tool returns only beside its definition.
                 const prepared = applyPiWebReplay(
-                  withoutTools
-                    ? disablePiToolCalls(sent, wire.api)
-                    : applyPiWebTools(sent, native?.dialect, routes),
+                  applyPiWebTools(sent, native?.dialect, routes),
                   wire,
                   context.messages,
                 );

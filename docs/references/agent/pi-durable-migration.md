@@ -60,7 +60,7 @@ Mobile compatibility changes and boundaries:
   host protocol and prelude without importing the WASM launcher.
 - Code Mode runs through that upstream extension and the existing native QuickJS engine. Native
   changes add bidirectional JSON delivery, virtual clocks, deterministic seeding and compute
-  budgets. Cherry retains tool approval, artifact admission, shared call budgets, failure-group
+  budgets. Cherry retains tool approval, artifact admission, failure-group
   policy and model-backed capability attribution. Completed parents preserve upstream child-call
   summaries; live child results no longer appear interrupted merely because they have no transcript
   entry. A client whose native module predates the bridge offers no JavaScript capability until
