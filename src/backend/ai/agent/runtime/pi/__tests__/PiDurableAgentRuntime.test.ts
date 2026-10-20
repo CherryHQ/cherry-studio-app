@@ -472,6 +472,37 @@ describe('Persistent Agent facade', () => {
     },
   );
 
+  test('keeps tool return contracts in the stored configuration across reopen', async () => {
+    const state = fixture();
+    const outputSchema = { type: 'object', required: ['fileEntryId'] };
+    const tool: RuntimeTool = {
+      ref: { source: 'builtin', capabilityId: 'create_document' },
+      providerName: 'create_document',
+      displayName: 'Create document',
+      description: '',
+      inputSchema: { type: 'object' },
+      outputSchema,
+      approval: 'auto',
+      execute: async () => ({ value: null, artifacts: [] }),
+    };
+    const first = state.create();
+    await first.initialize(state.database, state.ports);
+    await first.ensureConversation({
+      ...seed,
+      configuration: { ...seed.configuration, tools: [tool] },
+    });
+    // The Host compares this contract before queueing input behind a running turn.
+    expect((await first.configuration(lane)).tools[0]).toMatchObject({ outputSchema });
+    await first.close();
+    const reopened = state.create();
+    await reopened.initialize(state.database, state.ports);
+    try {
+      expect((await reopened.configuration(lane)).tools[0]).toMatchObject({ outputSchema });
+    } finally {
+      await reopened.close();
+    }
+  });
+
   test('starts the next queued input after a terminal provider failure without resubmission', async () => {
     const state = fixture();
     const resolveModel = state.dependencies.resolveModel;
