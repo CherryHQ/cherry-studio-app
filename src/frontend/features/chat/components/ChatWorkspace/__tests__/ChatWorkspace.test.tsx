@@ -6,6 +6,7 @@ import type { MessageListItem, MessageListProps } from '@/frontend/components/Me
 import type { AgentApprovalView, AgentMessageView } from '@/shared/contracts/agent';
 
 import {
+  createPendingChatMessages,
   mergeAgentMessageViews,
   toAgentMessageListItem,
 } from '../../../runtime/agentMessageProjection';
@@ -375,11 +376,97 @@ describe('ChatWorkspace message rendering integration', () => {
     requestAnimationFrameSpy.mockRestore();
   });
 
+  test.each(['user', 'assistant'] as const)(
+    'shows an existing-session send immediately and reconciles %s arriving first without duplicate rows',
+    (firstRole) => {
+      const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+      const pendingSend: PendingChatSend = {
+        sessionId: 'session-1',
+        isNewSession: false,
+        messages: createPendingChatMessages({
+          userMessageId: 'user-2',
+          assistantMessageId: 'assistant-2',
+          parts: [{ type: 'text', text: 'Follow up' }],
+        }),
+      };
+      const workspace = createWorkspaceElement(false, history);
+      renderer = renderWorkspace(false, history);
+      act(() => mockMessageListProps?.onReady?.());
+      act(() => readyFrame?.(0));
+      const send = () => (
+        <ChatWorkspace
+          {...workspace.props}
+          enteringUserMessageId="user-2"
+          pendingSend={pendingSend}
+        />
+      );
+
+      act(() => renderer?.update(send()));
+      const ids = ['user-1', 'assistant-1', 'user-2', 'assistant-2'];
+      expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
+      expect(mockMessageListProps?.messages.slice(-2)).toEqual(pendingSend.messages);
+      expect(mockMessageListProps?.enteringMessageId).toBe('user-2');
+      expect(mockCoverVisible).toBe(false);
+      expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
+
+      const user = {
+        ...createMessage('user-2', 'user'),
+        createdAt: '2026-08-09T00:00:01.000Z',
+      };
+      const assistant = {
+        ...createMessage('assistant-2', 'assistant', 'streaming'),
+        createdAt: '2026-08-09T00:00:02.000Z',
+      };
+      mockAgentChatSession.liveMessages = [firstRole === 'user' ? user : assistant];
+      act(() => renderer?.update(send()));
+      expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
+      expect(mockPendingSendDisplayed).not.toHaveBeenCalled();
+
+      mockAgentChatSession.liveMessages = [user, assistant];
+      act(() => renderer?.update(send()));
+      expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
+      expect(mockMessageListProps?.messages.at(-1)?.data.parts).toEqual([
+        { type: 'text', text: 'assistant-2', state: 'done' },
+      ]);
+      expect(mockPendingSendDisplayed).toHaveBeenCalledWith('user-2');
+
+      act(() => renderer?.update(workspace));
+      expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual(ids);
+    },
+  );
+
+  test('does not append a send to a page around an older message', () => {
+    const history = [createMessage('user-1', 'user'), createMessage('assistant-1', 'assistant')];
+    const workspace = createWorkspaceElement(false, history);
+    renderer = renderWorkspace(false, history);
+    act(() =>
+      renderer?.update(
+        <ChatWorkspace
+          {...workspace.props}
+          enteringUserMessageId="user-2"
+          messageWindow={{ ...workspace.props.messageWindow, hasNewerMessages: true }}
+          pendingSend={{
+            sessionId: 'session-1',
+            isNewSession: false,
+            messages: createPendingChatMessages({
+              userMessageId: 'user-2',
+              assistantMessageId: 'assistant-2',
+              parts: [{ type: 'text', text: 'Follow up' }],
+            }),
+          }}
+        />,
+      ),
+    );
+    expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'assistant-1',
+    ]);
+  });
+
   test('keeps the first exchange visible through a terminal snapshot and merges partial history by the same IDs', () => {
     const pendingSend: PendingChatSend = {
       sessionId: 'session-1',
       isNewSession: true,
-      isSubmitting: true,
       messages: [
         {
           id: 'user-1',
@@ -474,7 +561,6 @@ describe('ChatWorkspace message rendering integration', () => {
     const pendingSend: PendingChatSend = {
       sessionId: 'session-1',
       isNewSession: true,
-      isSubmitting: true,
       messages: [
         {
           id: 'user-1',
