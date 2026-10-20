@@ -12,11 +12,15 @@ const SELECTION_MENTION_PATTERN = /\[((?:\\.|[^\]\\\n])+)\]\(selection:\/\/([A-Z
 
 /** The editor shows the label as a chip; the link carries the selection as base64url JSON. */
 export function createSelectionMention(label: string, selection: OfficeSelection): string {
+  return `[${createMentionLabel(label).replace(/[\\[\]]/g, '\\$&')}](${createSelectionMentionUrl(selection)})`;
+}
+
+export function createSelectionMentionUrl(selection: OfficeSelection): string {
   const payload = fromByteArray(new TextEncoder().encode(JSON.stringify(selection)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
-  return `[${createMentionLabel(label).replace(/[\\[\]]/g, '\\$&')}](selection://${payload})`;
+  return `selection://${payload}`;
 }
 
 function readSelection(payload: string): OfficeSelection | undefined {

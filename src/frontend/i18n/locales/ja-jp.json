@@ -689,6 +689,7 @@
   "fileViewer.saveToPhotos": "写真に保存",
   "fileViewer.selection.hint": "文書の内容をタップして選択してください。",
   "fileViewer.selection.openChat": "新しいチャットで引用",
+  "fileViewer.selection.referenceInChat": "現在のチャットで引用",
   "fileViewer.selection.requiresAgent": "この選択範囲を扱うには、標準モードの Agent を作成してください。",
   "fileViewer.selection.select": "引用する内容を選択",
   "fileViewer.selection.slide": "スライド {{slide}}",

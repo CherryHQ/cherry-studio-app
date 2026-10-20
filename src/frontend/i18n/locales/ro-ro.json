@@ -709,6 +709,7 @@
   "fileViewer.saveToPhotos": "Salvați în Fotografii",
   "fileViewer.selection.hint": "Atinge conținutul documentului pentru a-l selecta.",
   "fileViewer.selection.openChat": "Citează într-o conversație nouă",
+  "fileViewer.selection.referenceInChat": "Citează în conversația curentă",
   "fileViewer.selection.requiresAgent": "Creează un Agent în modul standard pentru a lucra cu această selecție.",
   "fileViewer.selection.select": "Selectează conținutul de citat",
   "fileViewer.selection.slide": "Diapozitivul {{slide}}",

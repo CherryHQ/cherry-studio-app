@@ -709,6 +709,7 @@
   "fileViewer.saveToPhotos": "Enregistrer dans Photos",
   "fileViewer.selection.hint": "Touchez le contenu du document pour le sélectionner.",
   "fileViewer.selection.openChat": "Citer dans une nouvelle conversation",
+  "fileViewer.selection.referenceInChat": "Citer dans la conversation actuelle",
   "fileViewer.selection.requiresAgent": "Créez un Agent en mode standard pour travailler sur cette sélection.",
   "fileViewer.selection.select": "Sélectionner le contenu à citer",
   "fileViewer.selection.slide": "Diapositive {{slide}}",

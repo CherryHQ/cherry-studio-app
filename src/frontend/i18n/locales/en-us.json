@@ -699,6 +699,7 @@
   "fileViewer.saveToPhotos": "Save to Photos",
   "fileViewer.selection.hint": "Tap document content to select it.",
   "fileViewer.selection.openChat": "Reference in new chat",
+  "fileViewer.selection.referenceInChat": "Reference in current chat",
   "fileViewer.selection.requiresAgent": "Create a standard Agent to work with this selection.",
   "fileViewer.selection.select": "Select content to reference",
   "fileViewer.selection.slide": "Slide {{slide}}",

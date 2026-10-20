@@ -5,11 +5,14 @@ export {
   type ChatRouteParamsInput,
   type ChatTarget,
   parseChatRoute,
+  parseChatPreviewSource,
 } from './chatRoute';
 export { useStartNewChat } from './useStartNewChat';
 export {
   createChatComposerHandoff,
   getChatComposerHandoff,
+  createChatSelectionHandoff,
+  takeChatSelectionHandoff,
   type ChatComposerHandoff,
 } from './chatComposerHandoff';
 export { ChatSourceProvider, useChatSource } from './ChatSourceProvider';

@@ -275,6 +275,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                     continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                   }
                   sessionId={sessionId}
+                  selectionHandoff={target.selectionHandoff}
                 />
                 <ChatDockFooter>
                   <Text className="text-center text-xs text-muted-foreground">

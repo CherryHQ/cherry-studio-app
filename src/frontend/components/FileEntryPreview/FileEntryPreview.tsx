@@ -70,7 +70,9 @@ export function FileEntryAttachment({
     return <FileEntryAttachmentSkeleton aspectRatio={initialAspectRatio} />;
   }
 
-  if (data && fileEntryPreviewKind(data.entry) === 'image') {
+  if (!data) return null;
+
+  if (fileEntryPreviewKind(data.entry) === 'image') {
     return (
       <FileEntryImage
         entry={data.entry}
@@ -81,7 +83,7 @@ export function FileEntryAttachment({
     );
   }
 
-  return <EntryAttachment entry={data?.entry} entryId={entryId} uri={data?.uri} />;
+  return <EntryAttachment entry={data.entry} uri={data.uri} />;
 }
 
 /**
@@ -160,31 +162,20 @@ function EntryPreview({
   );
 }
 
-function EntryAttachment({
-  entry,
-  entryId,
-  uri,
-}: {
-  entry: FileEntry | undefined;
-  entryId: FileEntryId;
-  uri: string | undefined;
-}) {
-  const { handleError, t } = useFileEntryPreviewError(entryId);
+function EntryAttachment({ entry, uri }: ResolvedFile) {
+  const { handleError, t } = useFileEntryPreviewError(entry.id);
   const { openFileEntry } = useOpenFileEntry();
-  const file = entry && uri ? toFilePreviewFile(entry, uri) : null;
 
   return (
     <FileAttachmentPreview
       categoryLabel={t('filePreview.document')}
-      file={file}
+      file={toFilePreviewFile(entry, uri)}
       labels={{
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),
       }}
       onError={handleError}
-      onPress={() => {
-        if (entry && uri) openFileEntry({ entry, uri });
-      }}
+      onPress={() => openFileEntry({ entry, uri })}
     />
   );
 }

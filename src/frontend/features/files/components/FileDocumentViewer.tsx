@@ -6,7 +6,12 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { chatHref, createChatComposerHandoff } from '@/frontend/appShell/navigation/chat';
+import {
+  chatHref,
+  createChatComposerHandoff,
+  createChatSelectionHandoff,
+  type ChatTarget,
+} from '@/frontend/appShell/navigation/chat';
 import { createReadyAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
 import { canPreviewDocument, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
 import { useAgentsApi } from '@/frontend/hooks/agent';
@@ -22,7 +27,13 @@ import { FileDocumentPreview } from './FileDocumentPreview';
 import { FileMenuGuide } from './FileMenuGuide';
 import { FileViewerHeader } from './FileViewerHeader';
 
-export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
+export function FileDocumentViewer({
+  file,
+  sourceChat,
+}: {
+  file: ResolvedFile;
+  sourceChat?: ChatTarget;
+}) {
   const { t } = useTranslation();
   const { openFileEntryWithSystem } = useOpenFileEntry();
   const page = useDocumentPreviewPage();
@@ -54,13 +65,19 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
       t('fileViewer.selection.slide', { slide }),
     );
     if (!reference) return;
+    const attachment = createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`);
+    if (sourceChat) {
+      const selectionHandoff = createChatSelectionHandoff({ attachment, selection: reference });
+      router.dismissTo(chatHref({ ...sourceChat, selectionHandoff }));
+      return;
+    }
     const agent = agents.find((agent) => agent.mode === 'standard');
     if (!agent) {
       toast.show({ label: t('fileViewer.selection.requiresAgent'), variant: 'danger' });
       return;
     }
     const composerHandoff = createChatComposerHandoff({
-      attachments: [createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`)],
+      attachments: [attachment],
       draft: '',
       selection: reference,
     });
@@ -142,7 +159,9 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
             {selection?.excerpt ?? t('fileViewer.selection.hint')}
           </Text>
           <Button disabled={!selection} onPress={openSelection}>
-            {t('fileViewer.selection.openChat')}
+            {sourceChat
+              ? t('fileViewer.selection.referenceInChat')
+              : t('fileViewer.selection.openChat')}
           </Button>
         </View>
       ) : null}
