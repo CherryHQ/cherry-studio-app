@@ -392,6 +392,7 @@
   "chat.media.fileUnavailable": "{{name}} kullanılamıyor",
   "chat.media.photos": "Fotoğraflar",
   "chat.media.unavailable": "Kullanılamıyor",
+  "chat.message.answeredBy": "{{agent}}, {{model}} ile",
   "chat.message.renderFailed": "Bu mesaj görüntülenemiyor.",
   "chat.message.scrollToBottom": "Aşağıya doğru kaydır",
   "chat.message.stopped": "Durduruldu",

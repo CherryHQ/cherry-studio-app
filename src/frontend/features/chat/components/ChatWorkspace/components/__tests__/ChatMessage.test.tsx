@@ -17,6 +17,8 @@ jest.mock('@cherrystudio/ui/components', () => ({
   Button: (props: object) => jest.requireActual('react').createElement('Button', props),
   ContextMenu: (props: ContextMenuProps) => mockContextMenu(props),
   ContextMenuExclusion: ({ children }: { children: ReactNode }) => children,
+  InfoPopover: ({ children, ...props }: { children: ReactNode }) =>
+    jest.requireActual('react').createElement('InfoPopover', props, children),
 }));
 
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
@@ -251,6 +253,30 @@ describe('ChatMessage', () => {
       name: 'Qwen3.8 Max Preview',
       providerId: 'qwen',
     });
+  });
+
+  test('keeps the agent name whole and drops the model name once the name wraps', () => {
+    const model = {
+      id: 'qwen::qwen3-max' as const,
+      modelId: 'qwen3-max',
+      name: 'Qwen3 Max',
+      providerId: 'qwen',
+    };
+    act(() => {
+      renderer = create(renderMessage({ ...createMessage('success'), model }));
+    });
+    const texts = () => renderer!.root.findAllByType('Text' as never);
+    const name = texts().find((text) => text.props.onTextLayout)!;
+    expect(name.props.numberOfLines).toBeUndefined();
+    expect(texts().some((text) => text.props.children === 'Qwen3 Max')).toBe(true);
+    expect(renderer?.root.findByType('InfoPopover' as never).props.text).toBe('Qwen3 Max');
+
+    act(() => name.props.onTextLayout({ nativeEvent: { lines: [{}, {}] } }));
+
+    expect(texts().some((text) => text.props.children === 'Qwen3 Max')).toBe(false);
+    expect(
+      renderer?.root.findAllByProps({ testID: 'assistant-message-model-avatar' }),
+    ).toHaveLength(1);
   });
 
   test('names the models of several answers in the answer tabs instead of the header', () => {

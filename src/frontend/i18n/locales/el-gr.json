@@ -392,6 +392,7 @@
   "chat.media.fileUnavailable": "Το {{name}} δεν είναι διαθέσιμο",
   "chat.media.photos": "Φωτογραφίες",
   "chat.media.unavailable": "Μη διαθέσιμο",
+  "chat.message.answeredBy": "{{agent}}, με {{model}}",
   "chat.message.renderFailed": "Δεν είναι δυνατή η εμφάνιση αυτού του μηνύματος.",
   "chat.message.scrollToBottom": "Κάντε κύλιση προς τα κάτω",
   "chat.message.stopped": "Διακόπηκε",

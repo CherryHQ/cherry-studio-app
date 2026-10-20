@@ -400,6 +400,7 @@
   "chat.media.fileUnavailable": "{{name}} недоступен",
   "chat.media.photos": "Фотографии",
   "chat.media.unavailable": "Недоступно",
+  "chat.message.answeredBy": "{{agent}}, модель {{model}}",
   "chat.message.renderFailed": "Не удаётся показать это сообщение.",
   "chat.message.scrollToBottom": "Прокрутите вниз",
   "chat.message.stopped": "Остановлено",

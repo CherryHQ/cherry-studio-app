@@ -396,6 +396,7 @@
   "chat.media.fileUnavailable": "{{name}} este indisponibil",
   "chat.media.photos": "Fotografii",
   "chat.media.unavailable": "Indisponibil",
+  "chat.message.answeredBy": "{{agent}}, cu {{model}}",
   "chat.message.renderFailed": "Acest mesaj nu poate fi afișat.",
   "chat.message.scrollToBottom": "Derulați în jos",
   "chat.message.stopped": "Oprit",

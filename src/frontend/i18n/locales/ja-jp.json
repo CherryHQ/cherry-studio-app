@@ -388,6 +388,7 @@
   "chat.media.fileUnavailable": "{{name}} は利用できません",
   "chat.media.photos": "写真",
   "chat.media.unavailable": "利用不可",
+  "chat.message.answeredBy": "{{agent}}（{{model}} を使用）",
   "chat.message.renderFailed": "このメッセージを表示できません。",
   "chat.message.scrollToBottom": "一番下までスクロールします",
   "chat.message.stopped": "停止しました",

@@ -388,6 +388,7 @@
   "chat.media.fileUnavailable": "{{name}} không có sẵn",
   "chat.media.photos": "Ảnh",
   "chat.media.unavailable": "Không có sẵn",
+  "chat.message.answeredBy": "{{agent}}, dùng {{model}}",
   "chat.message.renderFailed": "Không thể hiển thị tin nhắn này.",
   "chat.message.scrollToBottom": "Cuộn xuống cuối",
   "chat.message.stopped": "Đã dừng",

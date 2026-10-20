@@ -396,6 +396,7 @@
   "chat.media.fileUnavailable": "{{name}} não está disponível",
   "chat.media.photos": "Fotos",
   "chat.media.unavailable": "Indisponível",
+  "chat.message.answeredBy": "{{agent}}, com {{model}}",
   "chat.message.renderFailed": "Não é possível apresentar esta mensagem.",
   "chat.message.scrollToBottom": "Desça",
   "chat.message.stopped": "Interrompido",

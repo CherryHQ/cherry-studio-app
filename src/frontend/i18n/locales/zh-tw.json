@@ -388,6 +388,7 @@
   "chat.media.fileUnavailable": "{{name}} 不可用",
   "chat.media.photos": "照片",
   "chat.media.unavailable": "無法使用",
+  "chat.message.answeredBy": "{{agent}}，使用 {{model}}",
   "chat.message.renderFailed": "無法顯示這則訊息。",
   "chat.message.scrollToBottom": "滾動到底部",
   "chat.message.stopped": "已停止",
