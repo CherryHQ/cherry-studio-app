@@ -476,7 +476,11 @@ export class RemoteAgentScope implements RemoteAgentSource {
         this.state = { ...this.state, attachments, preupload };
         for (const listener of this.stateListeners) listener();
       }
-      return await this.call(session, method, params, signal);
+      const negotiatedParams =
+        method === 'agent.messages.list' && session.agentMessageSummariesVersion === 1
+          ? { ...params, partsMode: 'paged' as const }
+          : params;
+      return await this.call(session, method, negotiatedParams, signal);
     } finally {
       linked?.dispose();
     }
