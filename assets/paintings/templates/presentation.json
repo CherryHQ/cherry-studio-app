@@ -1,0 +1,200 @@
+{
+  "human-fragments-motion": {
+    "category": "poster",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "A street figure striding through giant headline letters",
+      "zh-cn": "人物从超大标题字母间大步穿出的街头海报"
+    }
+  },
+  "human-fragments-sport": {
+    "category": "poster",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "An athlete bursting out of a bold sports headline",
+      "zh-cn": "运动员冲出大字标题的运动海报"
+    }
+  },
+  "laundromat-dance": {
+    "category": "portrait",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "A one-take K-pop dance moment in a bright laundromat",
+      "zh-cn": "明亮洗衣房里的一镜到底 K-pop 舞蹈瞬间"
+    }
+  },
+  "underwater-editorial": {
+    "category": "portrait",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "A red gown drifting in deep-sea light, made for a magazine cover",
+      "zh-cn": "深海光影里的红裙肖像，适合做杂志封面"
+    }
+  },
+  "wuxia-swordswoman": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A cinematic wuxia character look in a misty bamboo forest",
+      "zh-cn": "竹林雨雾中的东方武侠定妆照"
+    }
+  },
+  "literary-art-poster": {
+    "category": "poster",
+    "summary": {
+      "en-us": "A gallery-style poster built around a literary quote",
+      "zh-cn": "以一句文学引文为主角的艺术海报"
+    }
+  },
+  "tuscan-residence": {
+    "category": "space",
+    "summary": {
+      "en-us": "A four-page interior design proposal for a sunlit home",
+      "zh-cn": "阳光住宅的四页室内设计提案"
+    }
+  },
+  "summer-hillside": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A casual phone snapshot running across a summer hillside",
+      "zh-cn": "夏日草坡上奔跑的手机随手拍"
+    }
+  },
+  "slow-shutter-fashion": {
+    "category": "poster",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A still figure in a crowd blurred by a slow shutter",
+      "zh-cn": "慢门人潮里静止的主角，时尚大片质感"
+    }
+  },
+  "crocs-campaign": {
+    "category": "poster",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "A surreal product ad with a giant shoe and a model",
+      "zh-cn": "巨型鞋履与模特同框的超现实产品广告"
+    }
+  },
+  "tennis-collage": {
+    "category": "poster",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A three-panel cinematic tennis campaign collage",
+      "zh-cn": "三栏电影感网球广告拼贴"
+    }
+  },
+  "deadpan-cat": {
+    "category": "cute",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A deadpan cat in heart sunglasses, shot like a fashion portrait",
+      "zh-cn": "戴心形墨镜的冷脸猫咪，时尚大片拍法"
+    }
+  },
+  "monochrome-suit": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A calm black-and-white suit portrait with film light",
+      "zh-cn": "电影光感的黑白西装肖像"
+    }
+  },
+  "circular-cutout": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A studio portrait leaning out of a round wall opening",
+      "zh-cn": "从圆形墙洞探身而出的棚拍肖像"
+    }
+  },
+  "travel-journal": {
+    "category": "illustration",
+    "photoSlot": 2,
+    "summary": {
+      "en-us": "An ink and watercolor travel journal page",
+      "zh-cn": "墨线水彩风的旅行手账页"
+    }
+  },
+  "wedding-invitation": {
+    "category": "poster",
+    "photoSlot": 5,
+    "summary": {
+      "en-us": "An elegant wedding invitation with a soft bridal portrait",
+      "zh-cn": "带柔美新娘肖像的精致婚礼请柬"
+    }
+  },
+  "storyboard-sketch": {
+    "category": "illustration",
+    "photoSlot": 1,
+    "summary": {
+      "en-us": "A rough pencil storyboard told across eight panels",
+      "zh-cn": "八格铅笔草稿分镜"
+    }
+  },
+  "anime-companion": {
+    "category": "cute",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A warm anime-style moment with a person and a cat",
+      "zh-cn": "人和猫咪同框的温馨动漫风合影"
+    }
+  },
+  "doodle-shadow": {
+    "category": "cute",
+    "requiresPhoto": true,
+    "summary": {
+      "en-us": "Your photo dancing with its hand-drawn doodle shadow",
+      "zh-cn": "你的照片和手绘涂鸦影子一起跳舞"
+    }
+  },
+  "y2k-street": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A candid Y2K street snapshot on film",
+      "zh-cn": "胶片质感的 Y2K 街头抓拍"
+    }
+  },
+  "birthday-poster": {
+    "category": "poster",
+    "photoSlot": 2,
+    "summary": {
+      "en-us": "A luxurious birthday poster with a giant age number",
+      "zh-cn": "以巨大数字为主体的精致生日海报"
+    }
+  },
+  "light-trails": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A seated portrait wrapped in long-exposure light trails",
+      "zh-cn": "长曝光光轨环绕的坐姿肖像"
+    }
+  },
+  "anime-companion-variant": {
+    "category": "cute",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A sunny manga moment of a high five with a cat",
+      "zh-cn": "和猫咪击掌的暖阳漫画瞬间"
+    }
+  },
+  "train-window": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A golden-hour portrait by a train window",
+      "zh-cn": "黄金时刻的火车窗边肖像"
+    }
+  },
+  "low-angle-fashion": {
+    "category": "portrait",
+    "photoSlot": 0,
+    "summary": {
+      "en-us": "A worm's-eye fashion portrait reaching toward the lens",
+      "zh-cn": "贴地仰拍、伸手向镜头的时尚肖像"
+    }
+  }
+}

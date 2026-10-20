@@ -90,11 +90,12 @@ export type PaintingBoardLayoutMetrics = {
 };
 
 /**
- * Top-to-bottom layered layout. A node sits one row below its lowest parent,
- * and an imported image sits directly above the first generation that used
- * it. Within a row, nodes follow their parents' horizontal order and then
- * generation order, so branches stay under the image they came from. Rows are
- * centred on the widest row; positions are not stored.
+ * Left-to-right layered layout, reading like a timeline. A node sits one
+ * column after its rightmost parent, and an imported image sits directly
+ * before the first generation that used it. Within a column, nodes follow
+ * their parents' vertical order and then generation order, so branches stay
+ * beside the image they came from. Columns are centred on the tallest one;
+ * positions are not stored.
  */
 export function layoutPaintingBoard(
   graph: PaintingBoardGraph,
@@ -124,8 +125,8 @@ export function layoutPaintingBoard(
     );
     depth.set(node.id, Math.max(0, firstConsumerDepth - 1));
   }
-  // An import that could not move above a root pushes that root and its
-  // descendants down one row; nodes are already in dependency order.
+  // An import that could not move before a root pushes that root and its
+  // descendants one column later; nodes are already in dependency order.
   for (const node of graph.nodes) {
     if (node.kind !== 'painting') continue;
     const minimum = Math.max(
@@ -135,51 +136,48 @@ export function layoutPaintingBoard(
     if ((depth.get(node.id) ?? 0) < minimum) depth.set(node.id, minimum);
   }
 
-  const rows: string[][] = [];
+  const columns: string[][] = [];
   for (const node of graph.nodes) {
-    const row = depth.get(node.id) ?? 0;
-    (rows[row] ??= []).push(node.id);
+    (columns[depth.get(node.id) ?? 0] ??= []).push(node.id);
   }
 
-  const column = new Map<string, number>();
-  for (const row of rows) {
-    if (!row) continue;
+  const row = new Map<string, number>();
+  for (const column of columns) {
+    if (!column) continue;
     const anchor = (id: string) => {
-      const placed = (parents.get(id) ?? []).filter((parent) => column.has(parent));
-      if (placed.length === 0) {
-        // Imports have no parents; align them with the first consumer's other parents.
-        return Number.POSITIVE_INFINITY;
-      }
-      return placed.reduce((sum, parent) => sum + (column.get(parent) ?? 0), 0) / placed.length;
+      const placed = (parents.get(id) ?? []).filter((parent) => row.has(parent));
+      // Imports have no parents and sort after the nodes that follow a branch.
+      if (placed.length === 0) return Number.POSITIVE_INFINITY;
+      return placed.reduce((sum, parent) => sum + (row.get(parent) ?? 0), 0) / placed.length;
     };
-    row.sort(
+    column.sort(
       (left, right) =>
         anchor(left) - anchor(right) || (order.get(left) ?? 0) - (order.get(right) ?? 0),
     );
-    row.forEach((id, index) => column.set(id, index));
+    column.forEach((id, index) => row.set(id, index));
   }
 
-  const widest = Math.max(1, ...rows.map((row) => row?.length ?? 0));
-  const step = metrics.nodeWidth + metrics.columnGap;
-  const width = widest * metrics.nodeWidth + (widest - 1) * metrics.columnGap;
+  const tallest = Math.max(1, ...columns.map((column) => column?.length ?? 0));
+  const step = metrics.nodeHeight + metrics.rowGap;
+  const height = tallest * metrics.nodeHeight + (tallest - 1) * metrics.rowGap;
   const nodes = new Map<string, PaintingBoardLayoutNode>();
-  rows.forEach((row, rowIndex) => {
-    if (!row) return;
-    const rowWidth = row.length * metrics.nodeWidth + (row.length - 1) * metrics.columnGap;
-    const offset = (width - rowWidth) / 2;
-    row.forEach((id, index) => {
+  columns.forEach((column, columnIndex) => {
+    if (!column) return;
+    const columnHeight = column.length * metrics.nodeHeight + (column.length - 1) * metrics.rowGap;
+    const offset = (height - columnHeight) / 2;
+    column.forEach((id, index) => {
       nodes.set(id, {
         id,
-        x: offset + index * step,
-        y: rowIndex * (metrics.nodeHeight + metrics.rowGap),
+        x: columnIndex * (metrics.nodeWidth + metrics.columnGap),
+        y: offset + index * step,
       });
     });
   });
-  const rowCount = rows.length;
+  const columnCount = columns.length;
 
   return {
-    height: rowCount * metrics.nodeHeight + Math.max(0, rowCount - 1) * metrics.rowGap,
+    height,
     nodes,
-    width,
+    width: columnCount * metrics.nodeWidth + Math.max(0, columnCount - 1) * metrics.columnGap,
   };
 }

@@ -14,16 +14,15 @@ export function createPaintingHandlers(service: PaintingService): HandlersFor<Pa
           query.ids.map((id) => ({ id, kind: 'painting' })),
           () => service.deleteMany(query.ids),
         ),
-      GET: ({ query }) => service.listByCursor(query),
-    },
-    '/paintings/ids': {
-      GET: () => service.listAllIds(),
     },
     '/paintings/:id': {
       GET: ({ params }) => service.getById(params.id),
     },
     '/paintings/by-output/:fileEntryId': {
       GET: ({ params }) => service.findByOutputFile(params.fileEntryId),
+    },
+    '/painting-boards': {
+      GET: ({ query }) => service.listBoardsByCursor(query),
     },
     '/painting-boards/:id': {
       // Fence the parent before waiting; new children cannot escape a stale snapshot.

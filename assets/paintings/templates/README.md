@@ -9,8 +9,13 @@ Source catalog tree SHA-256: `ec3d0bc385d67515c8d35016401dbd47e7f9020cbea1a53a63
 The desktop names, prompts, and images remain unchanged. When syncing the catalog, update the
 static image imports in `paintingTemplates.ts`; its catalog tests protect their correspondence.
 
-Selecting a template previews its image and full default prompt. "Try it" opens the existing
-painting composer with that prompt prefilled. Each `${...}` value is materialized into the same
-text for the preview and draft. Users adjust the prompt, model, generation settings, and reference
-photos in the composer before sending. Edits do not change the bundled template, and preview
-images are never attached to the draft.
+`presentation.json` is mobile-owned and sits beside the desktop files. For each template it gives
+the stage category, a one-line summary in the two prompt languages, and how a photo joins the
+request: `photoSlot` is the position of the `${...}` value whose subject a photo can replace, and
+`requiresPhoto` marks a prompt that already asks for an uploaded photo. Slot positions are the same
+in both languages; the template tests protect that.
+
+Using a template shows each `${...}` value as an editable field. Blank fields keep the default, a
+photo-backed slot names the photo's subject instead, and the photo itself is attached as the
+reference image. Edits do not change the bundled template, and preview images are never attached
+to a request.

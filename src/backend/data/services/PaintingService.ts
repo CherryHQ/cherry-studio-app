@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, lt, lte, or, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
@@ -13,7 +13,13 @@ import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { FileEntryId } from '@/shared/data/types/file';
 import { createUniqueModelId, isUniqueModelId } from '@/shared/data/types/model';
-import type { Painting, PaintingBoard, UpdatePaintingBoardDto } from '@/shared/data/types/painting';
+import {
+  PAINTING_BOARD_RECENT_LIMIT,
+  type Painting,
+  type PaintingBoard,
+  type PaintingBoardSummary,
+  type UpdatePaintingBoardDto,
+} from '@/shared/data/types/painting';
 
 import { computeNewOrderKey, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -22,7 +28,7 @@ const defaultLimit = 20;
 const maxLimit = 100;
 const boardTitleLength = 40;
 
-type PaintingCursor = { id: string; orderKey: string };
+type BoardCursor = { id: string; updatedAt: number };
 
 export interface CreatePaintingInput {
   /** Grows this board; a new board titled after the request is created when omitted. */
@@ -49,46 +55,84 @@ export class PaintingService {
   }
 
   /**
-   * Output-less receipts are listed too: while `painting.generate` runs (or
-   * after it was interrupted) the row is all the gallery has to show, and
-   * hiding it would leave the user with no way back to a running generation
-   * and no way to delete an abandoned one.
+   * The gallery lists boards, most recently touched first. Each summary carries
+   * the board's newest receipts — output-less ones included, since a running
+   * generation is what the cover should show — so one request draws a page.
    */
-  async listByCursor(
+  async listBoardsByCursor(
     params: { cursor?: string; limit?: number } = {},
-  ): Promise<CursorPaginationResponse<Painting>> {
+  ): Promise<CursorPaginationResponse<PaintingBoardSummary>> {
     const limit = Math.min(Math.max(params.limit ?? defaultLimit, 1), maxLimit);
-    const cursor = params.cursor ? decodeCursor(params.cursor) : undefined;
+    const cursor = params.cursor ? decodeBoardCursor(params.cursor) : undefined;
     const afterCursor = cursor
       ? or(
-          gt(paintingTable.orderKey, cursor.orderKey),
-          and(eq(paintingTable.orderKey, cursor.orderKey), gt(paintingTable.id, cursor.id)),
+          lt(paintingBoardTable.updatedAt, cursor.updatedAt),
+          and(
+            eq(paintingBoardTable.updatedAt, cursor.updatedAt),
+            lt(paintingBoardTable.id, cursor.id),
+          ),
         )
       : undefined;
 
     const rows = await this.db
       .select()
-      .from(paintingTable)
+      .from(paintingBoardTable)
       .where(afterCursor)
-      .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id))
+      .orderBy(desc(paintingBoardTable.updatedAt), desc(paintingBoardTable.id))
       .limit(limit + 1);
     const pageRows = rows.slice(0, limit);
     const last = pageRows.at(-1);
+    const boardIds = pageRows.map((row) => row.id);
+    const counts = new Map<string, { images: number; paintings: number }>();
+    const recent = new Map<string, Painting[]>();
+
+    if (boardIds.length > 0) {
+      const countRows = await this.db
+        .select({
+          boardId: paintingTable.boardId,
+          images: sql<number>`coalesce(sum(json_array_length(${paintingTable.files}, '$.output')), 0)`,
+          paintings: sql<number>`count(*)`,
+        })
+        .from(paintingTable)
+        .where(inArray(paintingTable.boardId, boardIds))
+        .groupBy(paintingTable.boardId);
+      for (const row of countRows) {
+        counts.set(row.boardId, { images: Number(row.images), paintings: Number(row.paintings) });
+      }
+
+      const ranked = this.db
+        .select({
+          ...getTableColumns(paintingTable),
+          rank: sql<number>`row_number() over (partition by ${paintingTable.boardId} order by ${paintingTable.createdAt} desc, ${paintingTable.id} desc)`.as(
+            'rank',
+          ),
+        })
+        .from(paintingTable)
+        .where(inArray(paintingTable.boardId, boardIds))
+        .as('ranked');
+      const recentRows = await this.db
+        .select()
+        .from(ranked)
+        .where(lte(ranked.rank, PAINTING_BOARD_RECENT_LIMIT))
+        .orderBy(asc(ranked.boardId), asc(ranked.rank));
+      for (const { rank: _rank, ...row } of recentRows) {
+        const paintings = recent.get(row.boardId) ?? [];
+        paintings.push(rowToPainting(row));
+        recent.set(row.boardId, paintings);
+      }
+    }
 
     return {
-      items: pageRows.map(rowToPainting),
+      items: pageRows.map((row) => ({
+        board: rowToBoard(row),
+        imageCount: counts.get(row.id)?.images ?? 0,
+        paintingCount: counts.get(row.id)?.paintings ?? 0,
+        recentPaintings: recent.get(row.id) ?? [],
+      })),
       ...(rows.length > limit && last
-        ? { nextCursor: encodeCursor({ id: last.id, orderKey: last.orderKey }) }
+        ? { nextCursor: encodeBoardCursor({ id: last.id, updatedAt: last.updatedAt }) }
         : {}),
     };
-  }
-
-  async listAllIds(): Promise<string[]> {
-    const rows = await this.db
-      .select({ id: paintingTable.id })
-      .from(paintingTable)
-      .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id));
-    return rows.map((row) => row.id);
   }
 
   async getById(id: string): Promise<Painting> {
@@ -400,21 +444,21 @@ function rowToPainting(row: PaintingRow): Painting {
   };
 }
 
-function encodeCursor(cursor: PaintingCursor): string {
+function encodeBoardCursor(cursor: BoardCursor): string {
   return JSON.stringify(cursor);
 }
 
-function decodeCursor(value: string): PaintingCursor {
+function decodeBoardCursor(value: string): BoardCursor {
   try {
-    const parsed = JSON.parse(value) as Partial<PaintingCursor>;
-    if (typeof parsed.id !== 'string' || typeof parsed.orderKey !== 'string') {
-      throw new Error('Painting cursor fields are invalid');
+    const parsed = JSON.parse(value) as Partial<BoardCursor>;
+    if (typeof parsed.id !== 'string' || typeof parsed.updatedAt !== 'number') {
+      throw new Error('Painting board cursor fields are invalid');
     }
-    return { id: parsed.id, orderKey: parsed.orderKey };
+    return { id: parsed.id, updatedAt: parsed.updatedAt };
   } catch (error) {
     throw DataApiErrorFactory.validation(
-      { cursor: ['Invalid painting cursor'] },
-      error instanceof Error ? error.message : 'Invalid painting cursor',
+      { cursor: ['Invalid painting board cursor'] },
+      error instanceof Error ? error.message : 'Invalid painting board cursor',
     );
   }
 }

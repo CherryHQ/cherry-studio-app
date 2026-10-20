@@ -1,7 +1,12 @@
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { Painting, PaintingBoard, UpdatePaintingBoardDto } from '@/shared/data/types/painting';
+import type {
+  Painting,
+  PaintingBoard,
+  PaintingBoardSummary,
+  UpdatePaintingBoardDto,
+} from '@/shared/data/types/painting';
 
-export type PaintingListQuery = {
+export type PaintingBoardListQuery = {
   cursor?: string;
   limit?: number;
 };
@@ -11,15 +16,6 @@ export type PaintingSchemas = {
     DELETE: {
       query: { ids: readonly string[] };
       response: undefined;
-    };
-    GET: {
-      query?: PaintingListQuery;
-      response: CursorPaginationResponse<Painting>;
-    };
-  };
-  '/paintings/ids': {
-    GET: {
-      response: string[];
     };
   };
   '/paintings/:id': {
@@ -33,6 +29,13 @@ export type PaintingSchemas = {
     GET: {
       params: { fileEntryId: string };
       response: Painting | null;
+    };
+  };
+  /** Most recently touched first: a generation, a rename, or moving the focus all count. */
+  '/painting-boards': {
+    GET: {
+      query?: PaintingBoardListQuery;
+      response: CursorPaginationResponse<PaintingBoardSummary>;
     };
   };
   '/painting-boards/:id': {
