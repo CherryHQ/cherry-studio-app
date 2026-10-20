@@ -119,14 +119,6 @@ describe('menu overlay native boundary', () => {
     expect(closed).toHaveBeenCalledTimes(1);
   });
 
-  it('waits for the Android invisible commit because that platform has no onDismiss event', () => {
-    jest.replaceProperty(Platform, 'OS', 'android');
-    act(() => renderer.update(render(false, false)));
-    expect(closed).not.toHaveBeenCalled();
-    act(() => [...frames.values()].forEach((callback) => callback(0)));
-    expect(closed).toHaveBeenCalledTimes(1);
-  });
-
   it('focuses the first registered item after presentation and cancels a pending focus when closing', () => {
     act(() => renderer.root.findByType(Modal).props.onShow());
     expect(focusMenuTarget).not.toHaveBeenCalled();
@@ -143,7 +135,11 @@ describe('menu overlay native boundary', () => {
   });
 });
 
-describe.each(['ios', 'android'] as const)('keyboard-preserving menu overlay (%s)', (platform) => {
+describe.each([
+  { platform: 'ios', Overlay: KeyboardMenuOverlay, name: 'composer' },
+  { platform: 'android', Overlay: KeyboardMenuOverlay, name: 'composer' },
+  { platform: 'android', Overlay: MenuOverlay, name: 'action menu' },
+] as const)('keyboard-preserving $name overlay ($platform)', ({ platform, Overlay }) => {
   let renderer: ReactTestRenderer;
   let frames: Map<number, FrameRequestCallback>;
   let nextFrame: number;
@@ -152,15 +148,9 @@ describe.each(['ios', 'android'] as const)('keyboard-preserving menu overlay (%s
   const close = jest.fn();
   const closed = jest.fn();
   const render = (isOpen = true, isVisible = true) => (
-    <KeyboardMenuOverlay
-      isOpen={isOpen}
-      isVisible={isVisible}
-      onClose={close}
-      onClosed={closed}
-      testID="menu"
-    >
+    <Overlay isOpen={isOpen} isVisible={isVisible} onClose={close} onClosed={closed} testID="menu">
       <Item />
-    </KeyboardMenuOverlay>
+    </Overlay>
   );
 
   function flushFrame() {

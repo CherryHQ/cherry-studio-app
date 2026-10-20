@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+import { KeyboardController, KeyboardEvents } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MenuContent } from '../menu-content';
@@ -266,5 +268,63 @@ describe.each([false, true])('MenuContent (native presses: %s)', (shouldUseNativ
     act(() => renderer!.root.findByProps({ accessibilityLabel: 'Rename' }).props.onPress());
     expect(items[0].onPress).not.toHaveBeenCalled();
     expect(mockOpenChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('measured menu anchors during keyboard motion', () => {
+  let renderer: ReactTestRenderer | undefined;
+  const onClose = jest.fn();
+  const render = (isOpen = true) => (
+    <MenuContent
+      anchor={anchor}
+      isOpen={isOpen}
+      items={[{ id: 'copy', label: 'Copy', onPress: jest.fn() }]}
+      onClose={onClose}
+      onClosed={mockClosed}
+    />
+  );
+
+  beforeEach(() => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.clearAllMocks();
+    jest
+      .spyOn(KeyboardEvents, 'addListener')
+      .mockImplementation(
+        () => ({ remove: jest.fn() }) as unknown as ReturnType<typeof KeyboardEvents.addListener>,
+      );
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    jest.restoreAllMocks();
+  });
+
+  it.each(['keyboardWillShow', 'keyboardWillHide'] as const)(
+    'dismisses an Android menu when %s invalidates its measured anchor',
+    (event) => {
+      act(() => {
+        renderer = create(render());
+      });
+      expect(onClose).not.toHaveBeenCalled();
+      const subscribe = jest.mocked(KeyboardEvents.addListener);
+      const listener = subscribe.mock.calls.find(([name]) => name === event)?.[1];
+      act(() => listener?.(KeyboardController.state()));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledWith();
+
+      act(() => renderer!.update(render(false)));
+      for (const subscription of subscribe.mock.results) {
+        expect(subscription.value.remove).toHaveBeenCalledTimes(1);
+      }
+      expect(subscribe).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('leaves the iOS modal keyboard lifecycle unchanged', () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    act(() => {
+      renderer = create(render());
+    });
+    expect(KeyboardEvents.addListener).not.toHaveBeenCalled();
   });
 });
