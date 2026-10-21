@@ -7,7 +7,7 @@ import { AgentSkillUpdateSchema, SKILLS_MAX_LIMIT } from '@/shared/data/api/sche
 import { AgentIdSchema } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
 import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
-import { UniqueModelIdSchema } from '@/shared/data/types/model';
+import { UNIQUE_MODEL_ID_SEPARATOR, UniqueModelIdSchema } from '@/shared/data/types/model';
 
 import type { RuntimeTool, RuntimeToolResult } from '../runtime';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
@@ -16,6 +16,8 @@ export type AgentManagementData = Pick<
   AgentService,
   'create' | 'getById' | 'list' | 'listSkillBindings' | 'update'
 >;
+// Model-facing properties keep a concrete type: OpenAI-compatible gateways that
+// translate tools for Gemini reject a property whose type hides inside a union.
 const targetSchema = z
   .string()
   .refine(
@@ -25,46 +27,16 @@ const targetSchema = z
   .describe(
     'An exact id returned by agent_list/agent_get, or current for the Agent in this conversation.',
   );
-// Gemini gateways reject properties whose type is hidden in a union. Expose a
-// string sentinel, while accepting released null inputs when a saved call resumes.
-const modelInputSchema = z
-  .string()
-  .refine(
-    (value) => value === '' || UniqueModelIdSchema.safeParse(value).success,
-    'Invalid model id',
-  )
-  .describe(
-    'An exact registered provider::model id, or an empty string to clear the model. Omit to inherit the global default on creation or preserve the current model on update.',
-  );
-const modelSchema = z.preprocess(
-  (value) => (value === '' ? null : value),
-  UniqueModelIdSchema.nullable(),
-);
-const skillBindingSchema = z.strictObject({
-  skillId: AgentSkillUpdateSchema.shape.skillId,
-  state: z.enum(['enabled', 'disabled', 'removed']),
-});
-const skillUpdatesSchema = z
-  .array(
-    z.union([
-      skillBindingSchema.transform(({ skillId, state }) => ({
-        skillId,
-        isEnabled: state === 'removed' ? null : state === 'enabled',
-      })),
-      // Persisted tool calls used boolean/null isEnabled before the wire contract changed.
-      AgentSkillUpdateSchema,
-    ]),
-  )
-  .max(SKILLS_MAX_LIMIT);
-const skillChangesDescription =
-  'Only listed bindings change; all others are preserved. Use exact installed skillId values. state: enabled binds/enables, disabled binds/disables, removed removes the binding. This does not change library-wide enablement.';
+// `UniqueModelIdSchema` is a zod custom type, which JSON Schema cannot represent.
+const modelIdSchema = z
+  .templateLiteral([z.string().min(1), UNIQUE_MODEL_ID_SEPARATOR, z.string().min(1)])
+  .refine((value) => UniqueModelIdSchema.safeParse(value).success, 'Invalid model id');
 const fields = UpdateAgentSchema.extend({
   name: z.string().trim().min(1).max(255).optional(),
   instructions: z.string().max(64_000).optional(),
-  model: modelSchema.optional(),
+  model: modelIdSchema.optional(),
 });
 const createSchema = fields.required({ name: true, instructions: true });
-const createInputSchema = createSchema.extend({ model: modelInputSchema.optional() });
 const getSchema = z.strictObject({ agent_id: targetSchema });
 const listSchema = z.strictObject({
   search: z.string().trim().min(1).max(255).optional(),
@@ -78,22 +50,23 @@ const updateSchema = z.strictObject({
     .describe(
       'Copy updatedAt from a fresh agent_get. A stale version is rejected; read again and reconcile before retrying.',
     ),
-  changes: fields.extend({
-    skills: skillUpdatesSchema.optional().describe(skillChangesDescription),
-  }),
-});
-const updateInputSchema = updateSchema.extend({
-  changes: updateSchema.shape.changes
+  changes: fields
     .extend({
-      model: modelInputSchema.optional(),
       skills: z
-        .array(skillBindingSchema)
+        .array(
+          z.strictObject({
+            skillId: AgentSkillUpdateSchema.shape.skillId,
+            state: z.enum(['enabled', 'disabled', 'removed']),
+          }),
+        )
         .max(SKILLS_MAX_LIMIT)
         .optional()
-        .describe(skillChangesDescription),
+        .describe(
+          'Only listed bindings change; all others are preserved. Use exact installed skillId values. state: enabled binds/enables, disabled binds/disables, removed removes the binding. This does not change library-wide enablement.',
+        ),
     })
     .describe(
-      'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions. model: "" clears the model.',
+      'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions.',
     ),
 });
 
@@ -114,14 +87,13 @@ export function createAgentManagementTools(
     schema: z.ZodType<T>,
     approval: 'auto' | 'ask',
     execute: (input: T, signal: AbortSignal) => Promise<RuntimeToolResult>,
-    inputSchema: z.ZodType = schema,
   ): RuntimeTool {
     return {
       ref: { source: 'builtin', capabilityId: name },
       providerName: name,
       displayName: name,
       description,
-      inputSchema: toRuntimeInputSchema(inputSchema),
+      inputSchema: toRuntimeInputSchema(schema),
       approval,
       async execute({ input, signal }) {
         const parsed = schema.safeParse(input);
@@ -184,7 +156,10 @@ export function createAgentManagementTools(
         return {
           value: {
             agent: AgentToolRecordSchema.parse(agent),
-            skills: bindings.items.map(({ skillId, isEnabled }) => ({ skillId, isEnabled })),
+            skills: bindings.items.map(({ skillId, isEnabled }) => ({
+              skillId,
+              state: isEnabled ? 'enabled' : 'disabled',
+            })),
           },
           artifacts: [],
         };
@@ -208,7 +183,6 @@ export function createAgentManagementTools(
           artifacts: [],
         };
       },
-      createInputSchema,
     ),
     tool(
       'agent_update',
@@ -225,14 +199,20 @@ export function createAgentManagementTools(
         signal.throwIfAborted();
         const agent = await agents.update(target(agent_id), patch, {
           expectedUpdatedAt: expected_updated_at,
-          ...(skills?.length ? { skillUpdates: skills } : {}),
+          ...(skills?.length
+            ? {
+                skillUpdates: skills.map(({ skillId, state }) => ({
+                  skillId,
+                  isEnabled: state === 'removed' ? null : state === 'enabled',
+                })),
+              }
+            : {}),
         });
         return {
           value: { status: 'updated', agent: AgentToolRecordSchema.parse(agent) },
           artifacts: [],
         };
       },
-      updateInputSchema,
     ),
   ];
 }

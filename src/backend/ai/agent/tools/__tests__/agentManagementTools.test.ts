@@ -122,16 +122,13 @@ describe('Agent management tools', () => {
     expect(data.create).not.toHaveBeenCalled();
   });
 
-  test.each([
-    { model: 'provider::model', expected: 'provider::model' },
-    { model: '', expected: null },
-    { model: null, expected: null },
-  ])('preserves explicit model selection or clearing: $model', async ({ model, expected }) => {
+  test('passes an explicit model selection to creation and update', async () => {
     const { data, invoke } = setup();
+    const model = 'provider::model';
     expect(
       await invoke('agent_create', { name: 'Writer', instructions: 'Write clearly.', model }),
     ).not.toHaveProperty('failure');
-    expect(data.create).toHaveBeenCalledWith(expect.objectContaining({ model: expected }));
+    expect(data.create).toHaveBeenCalledWith(expect.objectContaining({ model }));
     expect(
       await invoke('agent_update', {
         agent_id: 'current',
@@ -141,12 +138,12 @@ describe('Agent management tools', () => {
     ).not.toHaveProperty('failure');
     expect(data.update).toHaveBeenCalledWith(
       agent.id,
-      { model: expected },
+      { model },
       { expectedUpdatedAt: agent.updatedAt },
     );
   });
 
-  test.each([' ', 'model', '::model', 'provider::', false, 0])(
+  test.each(['', ' ', 'model', '::model', 'provider::', null, false, 0])(
     'rejects invalid model values before writing: %j',
     async (model) => {
       const { data, invoke } = setup();
@@ -165,31 +162,7 @@ describe('Agent management tools', () => {
     },
   );
 
-  test.each([
-    { state: 'enabled', isEnabled: true },
-    { state: 'disabled', isEnabled: false },
-    { state: 'removed', isEnabled: null },
-  ])(
-    'maps the concrete Skill state to the existing atomic update: $state',
-    async ({ state, isEnabled }) => {
-      const { data, invoke } = setup();
-      const skillId = '00000000-0000-4000-8000-000000000002';
-      expect(
-        await invoke('agent_update', {
-          agent_id: 'current',
-          expected_updated_at: agent.updatedAt,
-          changes: { skills: [{ skillId, state }] },
-        }),
-      ).not.toHaveProperty('failure');
-      expect(data.update).toHaveBeenCalledWith(
-        agent.id,
-        {},
-        { expectedUpdatedAt: agent.updatedAt, skillUpdates: [{ skillId, isEnabled }] },
-      );
-    },
-  );
-
-  test('keeps Agent ID validation after exposing a plain string', async () => {
+  test('rejects an invented Agent id before reading', async () => {
     const { data, invoke } = setup();
     expect(await invoke('agent_get', { agent_id: 'invented' })).toHaveProperty('failure');
     expect(data.getById).not.toHaveBeenCalled();
@@ -198,7 +171,7 @@ describe('Agent management tools', () => {
   test.each<Record<string, RuntimeJsonValue>>([
     { state: 'unknown' },
     { state: 'removed', isEnabled: true },
-    { isEnabled: 'false' },
+    { isEnabled: false },
   ])('rejects invalid or ambiguous Skill changes: %j', async (binding) => {
     const { data, invoke } = setup();
     expect(
@@ -226,21 +199,24 @@ describe('Agent management tools', () => {
       ],
     });
     expect((await invoke('agent_get', { agent_id: 'current' })).value).toMatchObject({
-      skills: [{ skillId, isEnabled: false }],
+      skills: [{ skillId, state: 'disabled' }],
     });
-    for (const isEnabled of [true, false, null]) {
-      const skills = [{ skillId, isEnabled }];
+    for (const [state, isEnabled] of [
+      ['enabled', true],
+      ['disabled', false],
+      ['removed', null],
+    ] as const) {
       await invoke('agent_update', {
         agent_id: 'current',
         expected_updated_at: agent.updatedAt,
-        changes: { skills },
+        changes: { skills: [{ skillId, state }] },
       });
       expect(data.update).toHaveBeenLastCalledWith(
         agent.id,
         {},
         {
           expectedUpdatedAt: agent.updatedAt,
-          skillUpdates: skills,
+          skillUpdates: [{ skillId, isEnabled }],
         },
       );
     }
