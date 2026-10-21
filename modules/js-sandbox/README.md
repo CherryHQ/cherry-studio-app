@@ -9,15 +9,16 @@ limits are described in [Agent Tools And Controlled Resources](../../docs/refere
 
 Each `run(runId, code, limits)` creates a fresh [QuickJS-NG](https://github.com/quickjs-ng/quickjs)
 runtime on a dedicated native thread and destroys it afterwards; the script is an in-memory string
-and nothing touches the file system. Execution happens outside the app's Hermes runtime and JS
+and nothing touches the file system unless the caller uses `runFiles` below. Execution happens outside the app's Hermes runtime and JS
 thread, without access to app state. The caller limits concurrent native runs to bound aggregate
 resource use. QuickJS' `std` and `os` modules are not
 compiled in, so the sandbox's global object contains only ECMAScript built-ins, `atob`/`btoa`,
 `queueMicrotask`, `performance`, and a captured `console`. The C++ core in `cpp/` is
 shared by the iOS (Objective-C++ bridge) and Android (JNI) adapters.
 
-Every call starts fresh. The caller supplies all input values in the code and receives the returned
-value and console output; the sandbox keeps no state between calls.
+Every call starts fresh. The caller supplies all input values in the code (or, with `runFiles`, in
+files it chose) and receives the returned value and console output; the sandbox keeps no state
+between calls.
 
 QuickJS was chosen because it is built to embed untrusted code with budgets:
 
@@ -45,6 +46,17 @@ and its larger frames cut the recursion that fits in the stack to about 800 call
 settle, since there are no timers or I/O), `cancelled`, or `internal`. `cancel(runId)` interrupts a
 run, including one that has not started yet. The caller (`src/backend/services/jsSandbox`) owns the
 limits.
+
+## File Runs
+
+`runFiles(runId, code, limits, { inputs, output })` is `run` plus a deletable global `__files` for
+the caller's trusted code, which takes it before any model code runs. `inputs` and `output` are
+`file://` URIs the host chose; the script cannot name a path. `__files.read(index)` returns a whole
+input file as an ArrayBuffer allocated inside the runtime, so it counts against the memory limit,
+and `__files.write(uint8Array)` replaces the output file and returns its byte count. An empty
+`output` means the run writes nothing. Office jobs use this to process files of tens of megabytes
+without passing their bytes through Hermes, base64 or the source text. Clients built before it
+lack `runFiles`; the service reports that as `JsSandbox.files`.
 
 The sandbox service shares a two-run limit across turns, queues extra calls, and retains a cancelled
 run's slot until the native promise settles. Waiting in the queue does not consume the execution

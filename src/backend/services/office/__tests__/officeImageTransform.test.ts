@@ -1,22 +1,22 @@
 import { posix } from 'node:path';
-import { runInNewContext } from 'node:vm';
 
 import { DOMParser, XMLSerializer, type Element } from '@xmldom/xmldom';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
 import { createOfficeCode } from '../createOfficeCode';
 import { officeEditSchemas, type OfficeTransformRequest } from '../officeEditSpec';
-import type { OfficeFormat, OfficeImage, OfficeRequest } from '../officeSpec';
+import type { OfficeFormat, OfficeRequest } from '../officeSpec';
 import { createOfficeTransformCode } from '../transformOfficeFile';
+import { runOfficeJob, runOfficeJobSync } from './_officeJob';
 
 const IMAGE_ID = '00000000-0000-7000-8000-000000000001';
 const SOURCE_ID = '00000000-0000-7000-8000-000000000002';
-const PNG: OfficeImage = {
-  mediaType: 'image/png',
+const PNG = {
+  mediaType: 'image/png' as const,
   data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
 };
-const JPEG: OfficeImage = {
-  mediaType: 'image/jpeg',
+const JPEG = {
+  mediaType: 'image/jpeg' as const,
   data: '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDlaKKK+dP2Y//Z',
 };
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -126,11 +126,11 @@ async function fixture(format: OfficeFormat) {
       },
     },
   };
-  const data: string = await runInNewContext(
-    `(async () => { ${createOfficeCode(requests[format], { [IMAGE_ID]: PNG })} })()`,
-    { queueMicrotask, atob, btoa },
+  const { output } = await runOfficeJob(
+    createOfficeCode(requests[format], { [IMAGE_ID]: { index: 0, mediaType: PNG.mediaType } }),
+    [Buffer.from(PNG.data, 'base64')],
   );
-  const parts = unzipSync(new Uint8Array(Buffer.from(data, 'base64')));
+  const parts = unzipSync(output!);
   const doc = document(parts, owners[format]);
   let nodes = doc.getElementsByTagNameNS(pictureNamespaces[format], 'pic');
   if (format === 'pptx') {
@@ -155,13 +155,14 @@ async function fixture(format: OfficeFormat) {
 
 // Executes the shipped ZIP/XML code. Native budgets and visual fidelity need device/Office acceptance.
 function operate(parts: Parts, request: OfficeTransformRequest) {
-  return runInNewContext(
-    `(() => { ${createOfficeTransformCode(zipSync(parts), request, { [IMAGE_ID]: JPEG })} })()`,
-    { atob, btoa },
-    { timeout: 5000 },
-  ) as {
+  const { value, output } = runOfficeJobSync(
+    createOfficeTransformCode(request, { [IMAGE_ID]: { index: 1, mediaType: JPEG.mediaType } }),
+    [zipSync(parts), Buffer.from(JPEG.data, 'base64')],
+  );
+  return { ...(value as object), output } as {
+    output?: Uint8Array;
     error?: string;
-    data?: string;
+    size?: number;
     kind?: string;
     total?: number;
     offset?: number;
@@ -196,8 +197,8 @@ function editRequest(format: OfficeFormat, items: ImageItem[]): OfficeTransformR
 }
 function outputParts(result: ReturnType<typeof operate>) {
   expect(result.error).toBeUndefined();
-  expect(result.data).toBeDefined();
-  return unzipSync(new Uint8Array(Buffer.from(result.data!, 'base64')));
+  expect(result.size).toBe(result.output?.length);
+  return unzipSync(result.output!);
 }
 
 test.each<OfficeFormat>(['docx', 'xlsx', 'pptx'])(
@@ -372,10 +373,10 @@ test('rejects a mixed cell/image edit as a whole when image replacement fails', 
 test('refuses an output whose newly added image would exceed the readable ZIP entry limit', async () => {
   const source = await fixture('docx');
   const item = inspect(source, 'docx').items![0];
-  for (let index = Object.keys(source).length; index < 2048; index++)
+  for (let index = Object.keys(source).length; index < 4096; index++)
     source[`padding/part${index}.txt`] = strToU8('keep');
   expect(operate(source, editRequest('docx', [item]))).toEqual({
-    error: 'Edited Office package exceeds the package limits.',
+    error: 'Edited Office package has too many parts.',
   });
 });
 
@@ -497,7 +498,7 @@ test('validates image-only, mixed, empty and cross-format serialized requests', 
   expect(officeEditSchemas.docx.safeParse(base).success).toBe(false);
   expect(officeEditSchemas.docx.safeParse({ ...base, images: [] }).success).toBe(false);
   expect(
-    officeEditSchemas.docx.safeParse({ ...base, images: Array(9).fill(images[0]) }).success,
+    officeEditSchemas.docx.safeParse({ ...base, images: Array(51).fill(images[0]) }).success,
   ).toBe(false);
   expect(officeEditSchemas.pptx.safeParse({ ...base, images }).success).toBe(false);
   expect(

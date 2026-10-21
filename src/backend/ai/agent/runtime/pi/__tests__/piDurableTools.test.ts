@@ -330,6 +330,55 @@ describe('durable capability boundary', () => {
     }
   });
 
+  test('a failed nested call reports its reason to the script', async () => {
+    const message = 'The source file is 70.0 MiB, over the 64.0 MiB limit.';
+    const execute: RuntimeTool['execute'] = async () => ({
+      value: { status: 'error', message },
+      artifacts: [],
+      failure: {
+        scope: 'call',
+        error: { code: 'office_failed', message, retryable: false, origin: 'tool' },
+      },
+    });
+    let diagnostics: unknown;
+    const extension = capabilityExtension({
+      name: 'cherry',
+      tools: [capability({ approval: 'auto', execute }), scriptCapability()],
+      approve: async () => true,
+      codemode: defineExtension({
+        name: 'test-codemode',
+        tools: [
+          defineTool({
+            name: 'codemode',
+            parameters: { type: 'object' } as TSchema,
+            description: 'Save one file.',
+            replay: 'safe',
+            async execute(_args, api, context) {
+              const result = await api.executeTool('create_file', { name: 'a.txt' }, context, {
+                key: 'c1',
+              });
+              diagnostics = result.isError && result.diagnostics;
+              return { output: [{ type: 'text', text: 'done' }] };
+            },
+          }),
+        ],
+      }),
+    });
+    const harness = await open(new MemoryStorage(), extension);
+    try {
+      const conversation = await harness.createConversation(
+        { ownership: { kind: 'ownerless' }, agent: { extensions: [extension] } },
+        BACKGROUND_CONTEXT,
+      );
+      await harness.waitForTask(await toolTask(conversation, 'codemode', {}), BACKGROUND_CONTEXT);
+      expect(diagnostics).toEqual([
+        expect.objectContaining({ severity: 'error', code: 'office_failed', message }),
+      ]);
+    } finally {
+      await harness.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   test.each([
     ['enabled', 'auto' as const, ['create_file', 'codemode'], true],
     ['denied', 'deny' as const, ['create_file'], false],

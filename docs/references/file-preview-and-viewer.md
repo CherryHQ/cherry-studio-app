@@ -111,7 +111,7 @@ browser decoding limits still apply. The export page reuses this reader.
 
 ### Document
 
-Office previews up to 4 MiB also offer **Select content to reference** in the header menu.
+Office previews also offer **Select content to reference** in the header menu.
 Selection mode is explicit; browsing does not capture references. The package owns document taps,
 scrolling, zoom and cancelled gestures. The app holds the selected anchor/excerpt and supplies a
 footer action to reference the selection with the original attachment. A preview opened from a chat

@@ -1,17 +1,16 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
-import type { JsSandbox } from '@/backend/services/jsSandbox';
 import { OFFICE_MEDIA_TYPES } from '@/backend/services/office';
 import { FileEntrySchema } from '@/shared/data/types/file';
-import { sha256Hex } from '@/shared/utils/sha256';
 
 import { createOfficeEditTools } from '../officeEditTools';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
+import { fakeOfficeFiles, fakeOfficeSandbox } from './_officeFiles';
 
 const SOURCE = '00000000-0000-7000-8000-000000000001';
 const OUTPUT = '00000000-0000-7000-8000-000000000002';
 const WORKSPACE_ID = '00000000-0000-7000-8000-000000000003';
 const IMAGE = '00000000-0000-7000-8000-000000000004';
-const bytes = new Uint8Array([80, 75, 3, 4]);
+const DIGEST = 'a'.repeat(64);
 const entry = FileEntrySchema.parse({
   id: OUTPUT,
   filename: 'copy.docx',
@@ -23,40 +22,14 @@ const entry = FileEntrySchema.parse({
 });
 
 function setup(allowed = true, folderId: string | null = null) {
-  const files = {
-    readImage: jest.fn(),
-    resolveAvailable: jest.fn(
-      async () =>
-        new Map([
-          [
-            SOURCE,
-            {
-              fileEntryId: SOURCE,
-              name: 'source.docx',
-              size: bytes.length,
-              mediaType: OFFICE_MEDIA_TYPES.docx,
-            },
-          ],
-          [IMAGE, { fileEntryId: IMAGE, name: 'photo.png', size: 10, mediaType: 'image/png' }],
-        ]),
-    ),
-    readAsBytes: jest.fn(async () => bytes),
-    createBytesEntry: jest.fn(async () => entry),
-  };
-  const sandbox: JsSandbox = {
-    run: jest.fn(
-      async ({ onSettled }: Parameters<JsSandbox['run']>[0]): ReturnType<JsSandbox['run']> => {
-        onSettled?.();
-        return {
-          status: 'ok',
-          result: JSON.stringify({ data: 'UEsDBA==' }),
-          logs: '',
-          logsTruncated: false,
-          durationMs: 1,
-        };
-      },
-    ),
-  };
+  const files = fakeOfficeFiles(
+    [
+      { fileEntryId: SOURCE, name: 'source.docx', size: 4, mediaType: OFFICE_MEDIA_TYPES.docx },
+      { fileEntryId: IMAGE, name: 'photo.png', size: 10, mediaType: 'image/png' },
+    ],
+    entry,
+  );
+  const sandbox = fakeOfficeSandbox(JSON.stringify({ size: 4 }));
   const allowedIds = new Set(allowed ? [SOURCE] : []);
   const library = { contains: jest.fn(async () => false) };
   const access = new WorkspaceFileAccess(
@@ -75,7 +48,7 @@ function setup(allowed = true, folderId: string | null = null) {
     version: 1,
     file_entry_id: SOURCE,
     filename: 'copy.docx',
-    source_sha256: sha256Hex(bytes),
+    source_sha256: DIGEST,
     edits: [
       {
         anchor: { format: 'docx', paragraph: 0 },
@@ -99,22 +72,27 @@ test('authorizes every replacement before reading the source or image bytes', as
   const { execute, files, sandbox } = setup();
   await expect(execute(imageEdit)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
   expect(files.resolveAvailable).not.toHaveBeenCalled();
-  expect(files.readAsBytes).not.toHaveBeenCalled();
-  expect(files.readImage).not.toHaveBeenCalled();
+  expect(files.hash).not.toHaveBeenCalled();
+  expect(files.prepareImage).not.toHaveBeenCalled();
   expect(sandbox.run).not.toHaveBeenCalled();
 });
 
 test('publishes an image-only derivative and keeps the resolved media inside the compute job', async () => {
   const { execute, files, sandbox, allowedIds } = setup();
   allowedIds.add(IMAGE);
-  files.readImage.mockResolvedValue({ mediaType: 'image/png', data: 'aW1hZ2U=' });
   expect((await execute(imageEdit)).value).toMatchObject({
     status: 'created',
     fileEntryId: OUTPUT,
+    sha256: 'b'.repeat(64),
   });
-  expect(files.readImage).toHaveBeenCalledTimes(1);
-  expect(jest.mocked(sandbox.run).mock.calls[0][0].code).toContain('"data":"aW1hZ2U="');
-  expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+  expect(files.prepareImage).toHaveBeenCalledTimes(1);
+  const run = sandbox.run.mock.calls[0][0];
+  expect(run.files).toEqual({
+    inputs: [`file:///managed/${SOURCE}`, `file:///managed/${IMAGE}`],
+    output: 'file:///cache/1.docx',
+  });
+  expect(run.code).toContain(`"${IMAGE}":{"index":1,"mediaType":"image/png"}`);
+  expect(files.createFileEntry).toHaveBeenCalledTimes(1);
 });
 
 test('stale sources and unavailable replacement images never publish a derivative', async () => {
@@ -123,54 +101,55 @@ test('stale sources and unavailable replacement images never publish a derivativ
   expect((await execute({ ...imageEdit, source_sha256: '0'.repeat(64) })).value).toMatchObject({
     status: 'error',
   });
-  expect(files.readImage).not.toHaveBeenCalled();
-  files.readImage.mockResolvedValue(undefined);
-  expect((await execute(imageEdit)).value).toMatchObject({ status: 'error' });
+  expect(files.prepareImage).not.toHaveBeenCalled();
+  // An undecodable image that is neither PNG nor JPEG cannot be embedded.
+  const facts = await files.resolveAvailable();
+  facts.get(IMAGE)!.mediaType = 'image/heic';
+  files.resolveAvailable.mockResolvedValue(facts);
+  expect((await execute(imageEdit)).value).toMatchObject({
+    status: 'error',
+    message: expect.stringContaining('could not be converted'),
+  });
   expect(sandbox.run).not.toHaveBeenCalled();
-  expect(files.createBytesEntry).not.toHaveBeenCalled();
+  expect(files.createFileEntry).not.toHaveBeenCalled();
 });
 
 test('rechecks workspace replacement access on each edit', async () => {
   const { execute, files, library } = setup(false, WORKSPACE_ID);
   library.contains.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
-  files.readImage.mockResolvedValue({ mediaType: 'image/png', data: 'aW1hZ2U=' });
   expect((await execute(imageEdit)).value).toMatchObject({ status: 'created' });
   library.contains.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
   await expect(execute(imageEdit)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-  expect(files.readImage).toHaveBeenCalledTimes(1);
-  expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+  expect(files.prepareImage).toHaveBeenCalledTimes(1);
+  expect(files.createFileEntry).toHaveBeenCalledTimes(1);
 });
 
-test('rejects oversized replacement images before native work or publication', async () => {
-  const { execute, files, sandbox, allowedIds } = setup();
-  allowedIds.add(IMAGE);
-  const facts = await files.resolveAvailable();
-  facts.get(IMAGE)!.size = 2 * 1024 * 1024 + 1;
-  files.resolveAvailable.mockResolvedValue(facts);
-  expect((await execute(imageEdit)).value).toMatchObject({
+test('reports the size of an oversized source before native work or publication', async () => {
+  const { execute, files, sandbox } = setup();
+  files.sizes.set(`file:///managed/${SOURCE}`, 65 * 1024 * 1024);
+  expect((await execute()).value).toMatchObject({
     status: 'error',
-    message: expect.stringContaining('2 MiB'),
+    message: expect.stringContaining('65.0 MiB, over the 64.0 MiB limit'),
   });
-  expect(files.readImage).not.toHaveBeenCalled();
   expect(sandbox.run).not.toHaveBeenCalled();
-  expect(files.createBytesEntry).not.toHaveBeenCalled();
+  expect(files.createFileEntry).not.toHaveBeenCalled();
 });
 
 test('unauthorized source references cannot read storage', async () => {
   const { execute, files } = setup(false);
   await expect(execute()).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
   expect(files.resolveAvailable).not.toHaveBeenCalled();
-  expect(files.readAsBytes).not.toHaveBeenCalled();
+  expect(files.hash).not.toHaveBeenCalled();
 });
 
 test('stale inspection digests refuse computation and publication', async () => {
   const { execute, files, sandbox } = setup();
-  expect((await execute({ source_sha256: 'a'.repeat(64) })).value).toMatchObject({
+  expect((await execute({ source_sha256: '0'.repeat(64) })).value).toMatchObject({
     status: 'error',
     message: expect.stringContaining('changed'),
   });
   expect(sandbox.run).not.toHaveBeenCalled();
-  expect(files.createBytesEntry).not.toHaveBeenCalled();
+  expect(files.createFileEntry).not.toHaveBeenCalled();
 });
 
 test.each([null, WORKSPACE_ID])(
@@ -178,9 +157,9 @@ test.each([null, WORKSPACE_ID])(
   async (folderId) => {
     const { execute, files } = setup(true, folderId);
     const result = await execute();
-    expect(files.createBytesEntry).toHaveBeenCalledWith(
+    expect(files.createFileEntry).toHaveBeenCalledWith(
       {
-        data: bytes,
+        uri: 'file:///cache/1.docx',
         name: 'copy.docx',
         mediaType: OFFICE_MEDIA_TYPES.docx,
         provenance: 'generated',
@@ -193,7 +172,7 @@ test.each([null, WORKSPACE_ID])(
       status: 'created',
       fileEntryId: OUTPUT,
       source_file_entry_id: SOURCE,
-      source_sha256: sha256Hex(bytes),
+      source_sha256: DIGEST,
     });
     expect(result.artifacts).toEqual([
       expect.objectContaining({
@@ -209,9 +188,9 @@ test('edits workspace files without an attachment grant and refuses files moved 
   library.contains.mockResolvedValueOnce(true);
   expect((await execute()).value).toMatchObject({ status: 'created' });
   await expect(execute()).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-  expect(files.readAsBytes).toHaveBeenCalledTimes(1);
+  expect(files.hash).toHaveBeenCalledTimes(2);
   expect(sandbox.run).toHaveBeenCalledTimes(1);
-  expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+  expect(files.createFileEntry).toHaveBeenCalledTimes(1);
 });
 
 test.each([
@@ -239,8 +218,11 @@ test.each([
   const tool = tools.find((tool) => tool.providerName === name)!;
   expect((await tool.execute(call)).value).toMatchObject({ status: 'read' });
   await expect(tool.execute(call)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-  expect(files.readAsBytes).toHaveBeenCalledTimes(1);
-  expect(files.createBytesEntry).not.toHaveBeenCalled();
+  expect(sandbox.run.mock.calls[0][0].files).toEqual({
+    inputs: [`file:///managed/${SOURCE}`],
+    output: undefined,
+  });
+  expect(files.createFileEntry).not.toHaveBeenCalled();
 });
 
 test('cancellation after native completion prevents publication', async () => {
@@ -251,12 +233,13 @@ test('cancellation after native completion prevents publication', async () => {
     abort.abort(new Error('cancelled'));
     return {
       status: 'ok',
-      result: JSON.stringify({ data: 'UEsDBA==' }),
+      result: JSON.stringify({ size: 4 }),
       logs: '',
       logsTruncated: false,
       durationMs: 1,
     };
   });
   await expect(execute({}, abort.signal)).rejects.toThrow('cancelled');
-  expect(files.createBytesEntry).not.toHaveBeenCalled();
+  expect(files.createFileEntry).not.toHaveBeenCalled();
+  expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
 });

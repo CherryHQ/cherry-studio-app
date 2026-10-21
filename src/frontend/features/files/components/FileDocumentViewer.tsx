@@ -54,7 +54,6 @@ export function FileDocumentViewer({
     status === 'preview' &&
     !page.isError &&
     Boolean(page.data) &&
-    file.entry.size <= 4 * 1024 * 1024 &&
     documentType !== undefined &&
     isBuiltinOfficeFileType(documentType);
   const toggleSelection = () => {

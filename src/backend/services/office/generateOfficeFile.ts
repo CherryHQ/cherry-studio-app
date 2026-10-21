@@ -1,79 +1,73 @@
-import { toByteArray } from 'base64-js';
-
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 
-import { createOfficeCode } from './createOfficeCode';
+import { createOfficeCode, type OfficeImageInput } from './createOfficeCode';
+import { OFFICE_MAX_FILE_BYTES } from './officePackageCode';
 import type { OfficeImage, OfficeRequest } from './officeSpec';
 
 export const OFFICE_MAX_INPUT_BYTES = 128 * 1024;
-export const OFFICE_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
-export const OFFICE_MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+/** Distinct images one call may embed or replace. */
+export const OFFICE_MAX_IMAGES = 50;
 
 export class OfficeGenerationError extends Error {}
 
+/** The largest heap an Office job may use. */
+export const OFFICE_MAX_MEMORY_BYTES = 512 * 1024 * 1024;
+
+/**
+ * A job's heap grows with the bytes it reads. Measured with the native engine, unzipping, editing
+ * and repacking peak near 2.7x the input (30 MiB deck plus 30 MiB of images: 160 MiB).
+ */
+export function officeLimits(inputBytes: number, maxResultBytes = 1024) {
+  return {
+    timeoutMs: 120_000,
+    memoryBytes: Math.min(OFFICE_MAX_MEMORY_BYTES, 128 * 1024 * 1024 + 4 * inputBytes),
+    maxResultBytes,
+    maxLogBytes: 1024,
+  };
+}
+
+/** Writes the generated file to `output` and returns its size. */
 export async function generateOfficeFile(input: {
   request: OfficeRequest;
   images: Readonly<Record<string, OfficeImage>>;
+  output: string;
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
-}): Promise<Uint8Array> {
+}): Promise<number> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
-    const code = createOfficeCode(input.request, input.images);
+    const entries = Object.entries(input.images);
+    const images: Record<string, OfficeImageInput> = Object.fromEntries(
+      entries.map(([id, image], index) => [id, { index, mediaType: image.mediaType }]),
+    );
+    const code = createOfficeCode(input.request, images);
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
+      files: { inputs: entries.map(([, image]) => image.uri), output: input.output },
       signal: input.signal,
       onSettled: input.onSettled,
-      limits: {
-        timeoutMs: 30_000,
-        memoryBytes: 64 * 1024 * 1024,
-        maxResultBytes: Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 + 2,
-        maxLogBytes: 1024,
-      },
+      limits: officeLimits(entries.reduce((total, [, image]) => total + image.size, 0)),
     });
     input.signal.throwIfAborted();
     if (outcome.status === 'error') {
       throw new OfficeGenerationError(
-        `Office generation failed (${outcome.kind}). Reduce the document size or complexity and try again.`,
+        `Office generation failed (${outcome.kind}): ${outcome.message.slice(0, 500)}`,
       );
     }
-    return decodeOfficeResult(outcome);
+    return writtenSize(outcome.result && JSON.parse(outcome.result));
   } finally {
     if (!submitted) input.onSettled();
   }
 }
 
-/** Validates a sandbox result holding one base64 ZIP package within the output limit. */
-export function decodeOfficeResult(outcome: {
-  result?: string;
-  resultTruncated?: boolean;
-}): Uint8Array {
-  if (!outcome.result || outcome.resultTruncated) {
-    throw new OfficeGenerationError(
-      'Office generation returned an incomplete file. Reduce its size and try again.',
-    );
-  }
-  const result: unknown = JSON.parse(outcome.result);
-  if (
-    typeof result !== 'string' ||
-    result.length > Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 ||
-    result.length % 4 !== 0 ||
-    !/^[A-Za-z0-9+/]+={0,2}$/.test(result)
-  ) {
-    throw new OfficeGenerationError('Office generation returned an invalid file.');
-  }
-  const bytes = toByteArray(result);
-  if (
-    bytes.length > OFFICE_MAX_OUTPUT_BYTES ||
-    bytes[0] !== 0x50 ||
-    bytes[1] !== 0x4b ||
-    bytes[2] !== 3 ||
-    bytes[3] !== 4
-  ) {
-    throw new OfficeGenerationError('Office generation returned an invalid or oversized file.');
-  }
-  return bytes;
+/** The size a job reported after writing its output file. */
+export function writtenSize(size: unknown): number {
+  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0)
+    throw new OfficeGenerationError('Office generation returned no file.');
+  if (size > OFFICE_MAX_FILE_BYTES)
+    throw new OfficeGenerationError('Office generation returned an oversized file.');
+  return size;
 }

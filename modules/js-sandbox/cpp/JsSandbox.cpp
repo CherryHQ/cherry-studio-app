@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -163,6 +164,7 @@ struct Session {
   /// Why the interrupt handler stopped the script; it keeps stopping it after.
   const char *interrupt = nullptr;
   Heap heap{limits.memoryBytes};
+  const Files *files = nullptr;
   Output output{};
   std::optional<size_t> interruptBudget;
   const std::function<void(const std::string &)> *post = nullptr;
@@ -459,6 +461,69 @@ JSValue hostSettle(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
   return JS_UNDEFINED;
 }
 
+/// `__files.read(index)`: the whole input file as a new ArrayBuffer. The buffer
+/// comes from the captured ArrayBuffer constructor, so it counts against the heap.
+JSValue hostReadFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv, int,
+                     JSValueConst *data) {
+  const auto &inputs = sessionOf(ctx).files->inputs;
+  int32_t index = -1;
+  if (argc < 1 || JS_ToInt32(ctx, &index, argv[0]) < 0) return JS_EXCEPTION;
+  if (index < 0 || static_cast<size_t>(index) >= inputs.size()) {
+    return JS_ThrowRangeError(ctx, "No input file has this index.");
+  }
+  std::unique_ptr<FILE, int (*)(FILE *)> file(std::fopen(inputs[index].c_str(), "rb"), std::fclose);
+  if (!file || std::fseek(file.get(), 0, SEEK_END) != 0) {
+    return JS_ThrowInternalError(ctx, "An input file could not be opened.");
+  }
+  const long size = std::ftell(file.get());
+  if (size < 0 || std::fseek(file.get(), 0, SEEK_SET) != 0) {
+    return JS_ThrowInternalError(ctx, "An input file could not be read.");
+  }
+  JSValue length = JS_NewInt64(ctx, size);
+  Value buffer(ctx, JS_CallConstructor(ctx, data[0], 1, &length));
+  if (buffer.isException()) return JS_EXCEPTION;
+  size_t capacity = 0;
+  uint8_t *bytes = JS_GetArrayBuffer(ctx, &capacity, buffer.get());
+  if (!bytes && size > 0) return JS_EXCEPTION;
+  if (capacity != static_cast<size_t>(size) ||
+      std::fread(bytes, 1, capacity, file.get()) != capacity) {
+    return JS_ThrowInternalError(ctx, "An input file changed while it was read.");
+  }
+  return buffer.release();
+}
+
+/// `__files.write(bytes)`: replaces the output file with a Uint8Array's bytes.
+JSValue hostWriteFile(JSContext *ctx, JSValueConst, int argc, JSValueConst *argv) {
+  const auto &path = sessionOf(ctx).files->output;
+  if (path.empty()) return JS_ThrowTypeError(ctx, "This run has no output file.");
+  size_t size = 0;
+  const uint8_t *bytes = argc > 0 ? JS_GetUint8Array(ctx, &size, argv[0]) : nullptr;
+  if (!bytes) return argc > 0 ? JS_EXCEPTION : JS_ThrowTypeError(ctx, "Pass a Uint8Array.");
+  std::unique_ptr<FILE, int (*)(FILE *)> file(std::fopen(path.c_str(), "wb"), std::fclose);
+  const bool written = file && std::fwrite(bytes, 1, size, file.get()) == size &&
+                       std::fflush(file.get()) == 0;
+  if (!written) return JS_ThrowInternalError(ctx, "The output file could not be written.");
+  return JS_NewInt64(ctx, static_cast<int64_t>(size));
+}
+
+/// Installs `__files` as a deletable global, so host code can take it before
+/// any model code runs.
+bool installFiles(JSContext *ctx) {
+  Value global(ctx, JS_GetGlobalObject(ctx));
+  Value arrayBuffer(ctx, JS_GetPropertyStr(ctx, global.get(), "ArrayBuffer"));
+  JSValue captured[] = {arrayBuffer.get()};
+  Value files(ctx, JS_NewObject(ctx));
+  if (files.isException() ||
+      JS_SetPropertyStr(ctx, files.get(), "read",
+                        JS_NewCFunctionData(ctx, hostReadFile, 1, 0, 1, captured)) < 0 ||
+      JS_SetPropertyStr(ctx, files.get(), "write",
+                        JS_NewCFunction(ctx, hostWriteFile, "write", 1)) < 0) {
+    return false;
+  }
+  return JS_DefinePropertyValueStr(ctx, global.get(), "__files", files.release(),
+                                   JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE) >= 0;
+}
+
 /// Reports the pending exception: the interrupt reason first, then the memory
 /// limit, then the prelude's description of the error.
 std::string failure(JSContext *ctx, const Session &session, const char *kind,
@@ -561,6 +626,9 @@ std::string execute(const std::string &code, Session &session) {
   }
   Value observe(ctx, JS_GetPropertyStr(ctx, hooks.get(), "observe"));
   Value describe(ctx, JS_GetPropertyStr(ctx, hooks.get(), "describe"));
+  if (session.files && !installFiles(ctx)) {
+    return failure(ctx, session, "internal", JS_UNDEFINED);
+  }
 
   // Opening on the first line keeps reported line numbers equal to the
   // model's own; the newline before the close survives a trailing comment.
@@ -696,7 +764,8 @@ std::string executeBridge(const std::string &setup, const std::string &data,
 
 std::string run(const std::string &runId,
                 const std::string &code,
-                const Limits &limits) {
+                const Limits &limits,
+                const Files *files) {
   auto state = std::make_shared<RunState>();
   {
     std::lock_guard<std::mutex> lock(gRunsMutex);
@@ -708,6 +777,7 @@ std::string run(const std::string &runId,
 
   const auto start = Clock::now();
   Session session{limits, *state, start};
+  session.files = files;
   if (limits.timeoutMs > 0) {
     session.deadline = start + std::chrono::milliseconds(limits.timeoutMs);
   }

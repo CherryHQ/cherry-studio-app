@@ -55,12 +55,12 @@ function imageReplacements<T extends z.ZodType>(anchor: T) {
       z.strictObject({
         anchor,
         file_entry_id: FileEntryIdSchema.describe(
-          'Replacement PNG/JPEG from the conversation or selected workspace. Keeps the existing image frame, crop and transforms; prepare a matching aspect ratio to avoid stretching.',
+          'Existing replacement image from the conversation, a generated image or the selected workspace. Keeps the existing image frame, crop and transforms; pick an image with a matching aspect ratio to avoid stretching.',
         ),
       }),
     )
     .min(1)
-    .max(8)
+    .max(50)
     .optional();
 }
 
