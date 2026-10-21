@@ -57,7 +57,9 @@ tool does not occupy the child's compute slot.
 Source documents and images stay on disk until the job reads them: `__files.read(index)` returns
 an input as an ArrayBuffer inside the job's heap, and `saveOffice` writes the finished package with
 `__files.write`, returning only its size. No document or image bytes pass through Hermes, base64 or
-the job's source text, and every input is read at most once per job. Clients whose sandbox predates
+the job's source text, and every input is read at most once per job. The prelude keeps `__files` in
+a closure, so a model script reaches files only through `readInput` and the validating `saveOffice`.
+Clients whose sandbox predates
 `runFiles` omit the Office tools.
 
 A call may use 50 distinct images (create, replace or script inputs), from attachments, generated

@@ -154,6 +154,15 @@ describe('Office scripts', () => {
     expect(value).toBeNull();
   });
 
+  test('hides the host file port from the script', async () => {
+    const { value, output } = await job(
+      'docx',
+      `if (typeof files !== 'undefined' || '__files' in globalThis) throw new Error('port');`,
+    );
+    expect(value).toBeNull();
+    expect(output).toBeUndefined();
+  });
+
   test.each([
     ['return 42;', 'Return the DOCX file as a Uint8Array, ArrayBuffer or base64 string'],
     ['return "ok";', 'Return nothing to only inspect inputs'],
