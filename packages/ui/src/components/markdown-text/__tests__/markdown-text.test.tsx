@@ -132,6 +132,22 @@ describe('MarkdownText', () => {
     );
   });
 
+  test('renders citation links in a low-emphasis neutral, apart from other links', () => {
+    const renderer = render(
+      <MarkdownText
+        citationLinkPrefix="cite:"
+        fontSizeStep={0}
+        markdown="Claim [1](cite:https%3A%2F%2Fexample.com)"
+        onLinkPress={jest.fn()}
+      />,
+    );
+    const { link, linkVariants } =
+      renderer.root.findByType('EnrichedMarkdownText').props.markdownStyle;
+
+    expect(link).toEqual({ color: 'link', underline: false });
+    expect(linkVariants).toEqual({ '^cite:': { color: 'foreground-tertiary' } });
+  });
+
   test.each([
     [true, 'StreamdownText'],
     [false, 'EnrichedMarkdownText'],
