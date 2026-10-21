@@ -613,8 +613,9 @@ they do not calculate formulas themselves.
 `inspect_office_file` with `kind: "images"` returns paged picture anchors, names/alt text, optional
 frame dimensions and cell positions, and `replaceable`/`reason`. These anchors feed the edit tools'
 optional `images` array, not `read_office_content`. Each replacement contains `anchor` and a managed
-PNG/JPEG `file_entry_id`. Image-only and mixed edits are supported, with at most 8 replacements and
-2 MiB of replacement images. Every image is authorized before any file bytes are read. Replacement
+image `file_entry_id`. Image-only and mixed edits are supported, with at most 50 replacements;
+large or non-PNG/JPEG images are embedded as a compressed JPEG copy, never regenerated. Every image
+is authorized before any file bytes are read. Replacement
 keeps the selected occurrence's frame, crop, transforms and alt text; matching the new aspect ratio
 is the caller's responsibility. Shared original media stays unchanged for other occurrences.
 Unsupported linked/alternate/extended images fail explicitly. Image-only workbook edits do not
@@ -626,7 +627,8 @@ each result as `{ value, artifacts }`. Creation and editing return `value.status
 `source_sha256`. Inspection exposes `items` (paragraph `anchor`/`excerpt`, sheets, or slide shapes);
 exact reads expose `text` or cell `rows`. Excel `rows` is a two-dimensional array of cell objects;
 use `value.rows.flat().find(cell => cell.address === "B2")?.value` to read B2.
-A business error returns `{ status: "error", message }`.
+A business error returns `{ status: "error", message }` and marks the call failed, so the
+conversation shows it as failed; in Code Mode the nested call rejects with that message.
 `library_search_files` instead returns `{ files, nextCursor }`, without a status; each file includes
 `fileEntryId`. Code Mode commits `store()` changes only when a script succeeds. Finish a short
 creation script after storing file ids, then run dependent work in a separate script:

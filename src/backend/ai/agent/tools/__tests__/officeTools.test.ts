@@ -1,11 +1,11 @@
 import type { FileLibraryService } from '@/backend/data/services/FileLibraryService';
-import type { JsSandbox } from '@/backend/services/jsSandbox';
 import { OFFICE_MEDIA_TYPES } from '@/backend/services/office';
 import { FileEntrySchema } from '@/shared/data/types/file';
 
 import type { RuntimeTool } from '../../runtime';
 import { createOfficeTools } from '../officeTools';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
+import { fakeOfficeFiles, fakeOfficeSandbox } from './_officeFiles';
 
 const IMAGE_ID = '00000000-0000-7000-8000-000000000001';
 const ENTRY_ID = '00000000-0000-7000-8000-000000000002';
@@ -32,34 +32,11 @@ const entry = FileEntrySchema.parse({
 });
 
 function setup(folderId: string | null = null) {
-  const files = {
-    readAsBytes: jest.fn(),
-    createBytesEntry: jest.fn(async () => entry),
-    resolveAvailable: jest.fn(
-      async () =>
-        new Map([
-          [
-            IMAGE_ID,
-            { fileEntryId: IMAGE_ID, name: 'image.png', mediaType: 'image/png', size: 10 },
-          ],
-        ]),
-    ),
-    readImage: jest.fn(async () => ({ data: 'aW1hZ2U=', mediaType: 'image/png' })),
-  };
-  const sandbox: JsSandbox = {
-    run: jest.fn(
-      async ({ onSettled }: Parameters<JsSandbox['run']>[0]): ReturnType<JsSandbox['run']> => {
-        onSettled?.();
-        return {
-          status: 'ok',
-          result: '"UEsDBA=="',
-          logs: '',
-          logsTruncated: false,
-          durationMs: 1,
-        };
-      },
-    ),
-  };
+  const files = fakeOfficeFiles(
+    [{ fileEntryId: IMAGE_ID, name: 'image.png', mediaType: 'image/png', size: 10 }],
+    entry,
+  );
+  const sandbox = fakeOfficeSandbox();
   const allowed = new Set<string>();
   const library = { contains: jest.fn(async () => false) };
   const access = new WorkspaceFileAccess(
@@ -88,11 +65,15 @@ describe('Office tools', () => {
   test.each([null, WORKSPACE_ID])(
     'publishes a generated artifact in destination %s',
     async (folderId) => {
-      const { files, tool } = setup(folderId);
+      const { files, sandbox, tool } = setup(folderId);
       const output = await execute(tool);
-      expect(files.createBytesEntry).toHaveBeenCalledWith(
+      expect(sandbox.run.mock.calls[0][0].files).toEqual({
+        inputs: [],
+        output: 'file:///cache/1.docx',
+      });
+      expect(files.createFileEntry).toHaveBeenCalledWith(
         {
-          data: new Uint8Array([80, 75, 3, 4]),
+          uri: 'file:///cache/1.docx',
           name: 'Report.docx',
           mediaType: OFFICE_MEDIA_TYPES.docx,
           provenance: 'generated',
@@ -118,6 +99,7 @@ describe('Office tools', () => {
           },
         ],
       });
+      expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
     },
   );
 
@@ -132,51 +114,74 @@ describe('Office tools', () => {
     const { files, sandbox, library, tool } = setup(WORKSPACE_ID);
     library.contains.mockResolvedValueOnce(true);
     expect((await execute(tool, IMAGE_INPUT)).value).toMatchObject({ status: 'created' });
-    expect(files.readImage).toHaveBeenCalledTimes(1);
+    expect(files.prepareImage).toHaveBeenCalledTimes(1);
+    expect(sandbox.run.mock.calls[0][0].files.inputs).toEqual([`file:///managed/${IMAGE_ID}`]);
     await expect(execute(tool, IMAGE_INPUT)).rejects.toMatchObject({ code: 'INVALID_OPERATION' });
-    expect(files.readImage).toHaveBeenCalledTimes(1);
+    expect(files.prepareImage).toHaveBeenCalledTimes(1);
     expect(sandbox.run).toHaveBeenCalledTimes(1);
-    expect(files.createBytesEntry).toHaveBeenCalledTimes(1);
+    expect(files.createFileEntry).toHaveBeenCalledTimes(1);
   });
 
-  test('does not save a truncated sandbox result', async () => {
+  test('embeds a compressed copy of a large or non-PNG image and discards it', async () => {
+    const { files, sandbox, allowed, tool } = setup();
+    allowed.add(IMAGE_ID);
+    files.prepareImage.mockResolvedValueOnce({
+      uri: 'file:///cache/photo.jpg',
+      mediaType: 'image/jpeg',
+    });
+    files.sizes.set('file:///cache/photo.jpg', 700_000);
+    expect((await execute(tool, IMAGE_INPUT)).value).toMatchObject({ status: 'created' });
+    const run = sandbox.run.mock.calls[0][0];
+    expect(run.files.inputs).toEqual(['file:///cache/photo.jpg']);
+    expect(run.code).toContain(`"${IMAGE_ID}":{"index":0,"mediaType":"image/jpeg"}`);
+    expect(files.discard).toHaveBeenCalledWith('file:///cache/photo.jpg');
+  });
+
+  test('marks a failed generation as a failed call with its reason', async () => {
     const { files, sandbox, tool } = setup();
-    sandbox.run = jest.fn(
-      async ({ onSettled }: Parameters<JsSandbox['run']>[0]): ReturnType<JsSandbox['run']> => {
-        onSettled?.();
-        return {
-          status: 'ok',
-          result: '"UEsDBA=="',
-          resultTruncated: true,
-          logs: '',
-          logsTruncated: false,
-          durationMs: 1,
-        };
-      },
-    );
+    sandbox.run.mockImplementationOnce(async ({ onSettled }) => {
+      onSettled?.();
+      return {
+        status: 'error',
+        kind: 'memory',
+        message: 'The script exceeded the 128 MiB memory limit.',
+        logs: '',
+        logsTruncated: false,
+        durationMs: 1,
+      };
+    });
+    const output = await execute(tool);
+    expect(output.failure).toMatchObject({
+      scope: 'call',
+      error: { message: expect.stringContaining('128 MiB memory limit') },
+    });
+    expect(output.value).toMatchObject({ status: 'error' });
+    expect(files.createFileEntry).not.toHaveBeenCalled();
+    expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
+  });
+
+  test('does not save when the job reports no written file', async () => {
+    const { files, sandbox, tool } = setup();
+    sandbox.run.mockImplementationOnce(async ({ onSettled }) => {
+      onSettled?.();
+      return { status: 'ok', result: 'null', logs: '', logsTruncated: false, durationMs: 1 };
+    });
     expect((await execute(tool)).value).toMatchObject({ status: 'error' });
-    expect(files.createBytesEntry).not.toHaveBeenCalled();
+    expect(files.createFileEntry).not.toHaveBeenCalled();
   });
 
   test('cancellation after rendering prevents publication', async () => {
     const { files, sandbox, tool } = setup();
     const controller = new AbortController();
     const reason = new Error('cancelled');
-    sandbox.run = jest.fn(
-      async ({ onSettled }: Parameters<JsSandbox['run']>[0]): ReturnType<JsSandbox['run']> => {
-        controller.abort(reason);
-        onSettled?.();
-        return {
-          status: 'ok',
-          result: '"UEsDBA=="',
-          logs: '',
-          logsTruncated: false,
-          durationMs: 1,
-        };
-      },
-    );
+    sandbox.run.mockImplementationOnce(async ({ onSettled }) => {
+      controller.abort(reason);
+      onSettled?.();
+      return { status: 'ok', result: '4', logs: '', logsTruncated: false, durationMs: 1 };
+    });
     await expect(execute(tool, INPUT, controller.signal)).rejects.toBe(reason);
-    expect(files.createBytesEntry).not.toHaveBeenCalled();
+    expect(files.createFileEntry).not.toHaveBeenCalled();
+    expect(files.discard).toHaveBeenCalledWith('file:///cache/1.docx');
   });
 
   test('rejects oversized JSON before entering the sandbox', async () => {
@@ -190,6 +195,6 @@ describe('Office tools', () => {
     });
     expect(output.value).toMatchObject({ status: 'error' });
     expect(sandbox.run).not.toHaveBeenCalled();
-    expect(files.createBytesEntry).not.toHaveBeenCalled();
+    expect(files.createFileEntry).not.toHaveBeenCalled();
   });
 });

@@ -52,6 +52,11 @@ export type JsSandboxOutcome = z.infer<typeof outcomeSchema>;
 export type JsSandboxRun = {
   code: string;
   limits: JsSandboxLimits;
+  /**
+   * Host-chosen local file URIs for trusted host code, read and written through the global
+   * `__files` without passing bytes through this runtime. Requires `JsSandbox.files`.
+   */
+  files?: { inputs: readonly string[]; output?: string };
   signal: AbortSignal;
   /** Fires after native cleanup, including when the caller already received cancellation. */
   onSettled?: () => void;
@@ -60,6 +65,8 @@ export type JsSandboxRun = {
 export type JsSandbox = {
   /** Script failures resolve as outcomes; only cancellation rejects. */
   run(input: JsSandboxRun): Promise<JsSandboxOutcome>;
+  /** Absent or false when the installed native module predates file access. */
+  files?: boolean;
   /** Absent when the installed native module predates the interactive bridge. */
   startBridge?(input: JsSandboxBridgeInput): Promise<JsSandboxBridge>;
 };
@@ -97,7 +104,9 @@ export function createJsSandbox(
   if (!native) {
     return null;
   }
+  const runFiles = native.runFiles?.bind(native);
   return {
+    files: Boolean(runFiles),
     ...(native.runBridge && native.deliver && native.addListener
       ? {
           async startBridge(input: JsSandboxBridgeInput): Promise<JsSandboxBridge> {
@@ -141,7 +150,8 @@ export function createJsSandbox(
           },
         }
       : {}),
-    async run({ code, limits, signal, onSettled }) {
+    async run({ code, limits, files, signal, onSettled }) {
+      if (files && !runFiles) throw new Error('This client cannot give the sandbox file access.');
       let onAbort: (() => void) | undefined;
       let hasStarted = false;
       let releaseSlot: (() => void) | undefined;
@@ -160,7 +170,13 @@ export function createJsSandbox(
         });
         // Cancellation releases the caller immediately, but the slot remains
         // occupied until native cleanup finishes, so cancelled threads count too.
-        const running = native.run(runId, code, limits).finally(() => {
+        const started = files
+          ? runFiles!(runId, code, limits, {
+              inputs: [...files.inputs],
+              output: files.output ?? '',
+            })
+          : native.run(runId, code, limits);
+        const running = started.finally(() => {
           releaseSlot?.();
           onSettled?.();
         });

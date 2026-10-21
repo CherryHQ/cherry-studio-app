@@ -11,6 +11,13 @@ std::string toUtf8(NSString *value) {
   return bytes ? std::string(bytes, [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding]) : std::string();
 }
 
+NSString *outcomeText(const std::string &result) {
+  return [[NSString alloc] initWithBytes:result.data()
+                                  length:result.size()
+                                encoding:NSUTF8StringEncoding]
+      ?: @"{\"status\":\"error\",\"kind\":\"internal\",\"message\":\"The sandbox returned invalid text.\"}";
+}
+
 } // namespace
 
 @implementation JsSandboxRunner
@@ -24,12 +31,24 @@ std::string toUtf8(NSString *value) {
 {
   const cherry::jssandbox::Limits limits{
       timeoutMs, memoryBytes, maxResultBytes, maxLogBytes};
-  const std::string result =
-      cherry::jssandbox::run(toUtf8(runId), toUtf8(code), limits);
-  return [[NSString alloc] initWithBytes:result.data()
-                                  length:result.size()
-                                encoding:NSUTF8StringEncoding]
-      ?: @"{\"status\":\"error\",\"kind\":\"internal\",\"message\":\"The sandbox returned invalid text.\"}";
+  return outcomeText(cherry::jssandbox::run(toUtf8(runId), toUtf8(code), limits));
+}
+
++ (NSString *)runWithId:(NSString *)runId
+                   code:(NSString *)code
+             inputPaths:(NSArray<NSString *> *)inputPaths
+             outputPath:(NSString *)outputPath
+              timeoutMs:(uint32_t)timeoutMs
+            memoryBytes:(uint32_t)memoryBytes
+         maxResultBytes:(uint32_t)maxResultBytes
+            maxLogBytes:(uint32_t)maxLogBytes
+{
+  const cherry::jssandbox::Limits limits{
+      timeoutMs, memoryBytes, maxResultBytes, maxLogBytes};
+  cherry::jssandbox::Files files;
+  for (NSString *path in inputPaths) files.inputs.push_back(toUtf8(path));
+  files.output = toUtf8(outputPath);
+  return outcomeText(cherry::jssandbox::run(toUtf8(runId), toUtf8(code), limits, &files));
 }
 
 + (void)cancelWithId:(NSString *)runId

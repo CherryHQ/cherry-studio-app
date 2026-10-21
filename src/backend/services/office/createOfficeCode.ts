@@ -1,9 +1,5 @@
-import {
-  officeTextEncoderCode,
-  officeZipLibraryCode,
-  officeXmlLibraryCode,
-} from './officePackageCode';
-import type { OfficeFormat, OfficeImage, OfficeRequest } from './officeSpec';
+import { officeRuntimeCode } from './officePackageCode';
+import type { OfficeFormat, OfficeRequest } from './officeSpec';
 import docx from './vendor/docx.json';
 import pptxgenjs from './vendor/pptxgenjs.json';
 import xlsx from './vendor/xlsx.json';
@@ -51,14 +47,14 @@ for (const [index, block] of spec.blocks.entries()) {
     const image = images[block.file_entry_id];
     const scale = Math.min(1, 600 / block.width_px, 800 / block.height_px);
     children.push(new Paragraph({ children: [new ImageRun({
-      type: image.mediaType === 'image/png' ? 'png' : 'jpg', data: image.data,
+      type: image.mediaType === 'image/png' ? 'png' : 'jpg', data: readInput(image.index),
       transformation: { width: Math.max(1, Math.round(block.width_px * scale)), height: Math.max(1, Math.round(block.height_px * scale)) },
       altText: { title: block.alt || '', description: block.alt || '', name: 'Image' },
     })] }));
   }
 }
 const file = new Document({ creator: 'Cherry Studio', title: spec.title || '', numbering: { config: numbering }, sections: [{ children }] });
-return Packer.toBase64String(file);
+return saveOffice(await Packer.toArrayBuffer(file), 'docx');
 `;
 
 const workbookRenderer = `
@@ -78,8 +74,8 @@ for (const input of spec.sheets) {
   }
   library.utils.book_append_sheet(book, sheet, input.name);
 }
-const result = library.write(book, { bookType: 'xlsx', type: 'base64', compression: true });
-if (!spec.sheets.some(sheet => sheet.images?.length)) return result;
+const result = library.write(book, { bookType: 'xlsx', type: 'array', compression: true });
+if (!spec.sheets.some(sheet => sheet.images?.length)) return saveOffice(result, 'xlsx');
 ${workbookImagesCode}
 `;
 
@@ -92,7 +88,11 @@ deck.title = spec.title || '';
 deck.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'en-US' };
 const dark = spec.theme === 'dark';
 const foreground = dark ? 'F5F5F5' : '202124';
-for (const input of spec.slides) {
+// PptxGenJS decodes base64 images in plain JavaScript (about 6 s per 30 MiB); it gets a 1-pixel
+// stand-in, and the real bytes replace it in the package below.
+const standIn = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=';
+const media = [];
+for (const [slideIndex, input] of spec.slides.entries()) {
   const slide = deck.addSlide();
   slide.background = { color: dark ? '18202B' : 'FFFFFF' };
   const titleOnly = input.type === 'title';
@@ -108,30 +108,63 @@ for (const input of spec.slides) {
     const scale = Math.min(12 / input.width_px, 5.2 / input.height_px);
     const w = input.width_px * scale;
     const h = input.height_px * scale;
-    slide.addImage({ data: 'data:' + image.mediaType + ';base64,' + image.data, x: 0.65 + (12 - w) / 2, y: 1.6 + (5.2 - h) / 2, w, h, altText: input.alt || '' });
+    slide.addImage({ data: 'data:' + image.mediaType + ';base64,' + standIn, x: 0.65 + (12 - w) / 2, y: 1.6 + (5.2 - h) / 2, w, h, altText: input.alt || '' });
+    // PptxGenJS names a slide's first image image-<slide>-1.<subtype>.
+    media.push(['ppt/media/image-' + (slideIndex + 1) + '-1.' + image.mediaType.slice(6), image.index]);
   }
 }
-return deck.write({ outputType: 'base64', compression: true });
+// Uncompressed output: PptxGenJS would deflate media too. The repack below compresses only XML.
+const parts = zip.unzipSync(await deck.write({ outputType: 'uint8array' }));
+for (const [path, index] of media) {
+  if (!parts[path]) throw new Error('The generated presentation is missing ' + path + '.');
+  parts[path] = readInput(index);
+}
+return saveOffice(zip.zipSync(parts, { level: 6 }), 'pptx');
 `;
+
+// Packer deflates every part; for photos that only costs time (25 s for 30 MiB in QuickJS).
+const storeDocumentMedia = String.raw`
+const compiler = module.exports.Packer.compiler;
+const compile = compiler.compile.bind(compiler);
+compiler.compile = (...args) => {
+  const archive = compile(...args);
+  for (const [name, file] of Object.entries(archive.files))
+    if (/[.](?:jpe?g|png|gif|webp|tiff?)$/i.test(name)) file.options.compression = 'STORE';
+  return archive;
+};`;
+
+// docx names each image by a pure-JavaScript SHA-1 of its bytes, about 10 s per 30 MiB in QuickJS.
+// The name only deduplicates media, so the same data object (inputs[id].bytes is cached) keeps one id.
+const DOCX_IMAGE_HASH =
+  'var hashedId = (data) => import_hash.default.sha1().update(data instanceof ArrayBuffer ? new Uint8Array(data) : data).digest("hex");';
+if (!docx.code.includes(DOCX_IMAGE_HASH)) throw new Error('The pinned docx image naming changed.');
+const docxCode = docx.code.replace(
+  DOCX_IMAGE_HASH,
+  `var hashedId = (() => { const objects = new WeakMap(), texts = new Map(); let next = 0;
+  return data => { const ids = typeof data === 'string' ? texts : objects; if (!ids.has(data)) ids.set(data, (++next).toString(16).padStart(40, '0')); return ids.get(data); }; })();`,
+);
 
 /** An expression evaluating to the pinned generator library for one format. */
 export function officeLibraryCode(format: OfficeFormat): string {
   if (format === 'docx')
-    return `(() => { const module = { exports: {} }; const exports = module.exports;\n${docx.code}\nreturn module.exports; })()`;
+    return `(() => { const module = { exports: {} }; const exports = module.exports;\n${docxCode}\n${storeDocumentMedia}\nreturn module.exports; })()`;
   if (format === 'xlsx') return `(() => {\n${xlsx.code}\nreturn XLSX; })()`;
   return `(() => { const window = globalThis;\n${pptxgenjs.code}\nreturn PptxGenJS; })()`;
 }
 
 const renderers: Record<OfficeFormat, string> = {
   docx: documentRenderer,
-  xlsx: `${officeZipLibraryCode}\n${officeXmlLibraryCode}\n${workbookRenderer}`,
+  xlsx: workbookRenderer,
   pptx: presentationRenderer,
 };
 
-/** Only app-owned code is executable; model text and managed images are JSON data. */
+/** An image the job reads from its input file at `index`. */
+export type OfficeImageInput = { index: number; mediaType: 'image/png' | 'image/jpeg' };
+
+/** Only app-owned code is executable; model text and image references are JSON data. */
 export function createOfficeCode(
   request: OfficeRequest,
-  images: Readonly<Record<string, OfficeImage>>,
+  images: Readonly<Record<string, OfficeImageInput>>,
 ): string {
-  return `${officeTextEncoderCode}\n${officeSchedulerCode}\nconst library = ${officeLibraryCode(request.format)};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderers[request.format]}`;
+  return `${officeRuntimeCode}\n${officeSchedulerCode}\nconst library = ${officeLibraryCode(request.format)};\nconst { spec, images } = ${JSON.stringify({ spec: request.spec, images })};\n${renderers[request.format]}`;
 }

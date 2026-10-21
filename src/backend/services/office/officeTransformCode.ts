@@ -1,6 +1,15 @@
 // Trusted code for a fresh QuickJS compute job. No model-written code, paths, network or DOM UI.
 // The algorithms follow Desktop's office-transform patch-copy and run-edit recipes.
 import { officeImageTransformCode } from './officeImageTransformCode';
+import { OFFICE_MAX_FILE_BYTES } from './officePackageCode';
+
+/** Decompressed package bytes one job may hold. */
+const OFFICE_MAX_EXPANDED_BYTES = 2 * OFFICE_MAX_FILE_BYTES;
+/**
+ * Largest XML part parsed into a tree. xmldom takes about 180 bytes of heap and 3.5 s per MiB on a
+ * Mac; 2 MiB of sheet XML is roughly 10,000 rows of four cells.
+ */
+const OFFICE_MAX_XML_PART_BYTES = 2 * 1024 * 1024;
 
 export const officeTransformCode = String.raw`
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -11,13 +20,13 @@ const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const fail = message => { throw new Error(message); };
-const bytes = Uint8Array.from(atob(sourceBase64), c => c.charCodeAt(0));
+const bytes = readInput(0);
 const seen = new Set();
 let inflated = 0;
 const parts = zip.unzipSync(bytes, { filter: entry => {
   inflated += entry.originalSize;
-  if (seen.has(entry.name) || seen.size >= 2048 || !Number.isSafeInteger(entry.originalSize) ||
-      entry.originalSize > 4 * 1024 * 1024 || inflated > 16 * 1024 * 1024 ||
+  if (seen.has(entry.name) || seen.size >= 4096 || !Number.isSafeInteger(entry.originalSize) ||
+      entry.originalSize > ${OFFICE_MAX_FILE_BYTES} || inflated > ${OFFICE_MAX_EXPANDED_BYTES} ||
       entry.name.includes('\\') || entry.name.startsWith('/') || ['__proto__', 'constructor', 'prototype'].includes(entry.name) || entry.name.split('/').includes('..'))
     fail('The Office package has duplicate, unsafe or oversized parts.');
   seen.add(entry.name);
@@ -46,6 +55,8 @@ function parse(text) {
 function document(path) {
   if (!docs.has(path)) {
     if (!Object.prototype.hasOwnProperty.call(parts, path)) fail('Missing Office part: ' + path);
+    // An XML tree takes many times its text in memory; media and other parts are only copied.
+    if (parts[path].length > ${OFFICE_MAX_XML_PART_BYTES}) fail('The Office part ' + path + ' has ' + (parts[path].length / 1048576).toFixed(1) + ' MiB of XML; this device can parse at most ${OFFICE_MAX_XML_PART_BYTES / 1048576} MiB per part. Use run_office_script to read large sheets.');
     docs.set(path, parse(decode(parts[path])));
   }
   return docs.get(path);
@@ -368,12 +379,6 @@ for (const path of dirty) {
   parse(text);
   parts[path] = zip.strToU8('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + text);
 }
-const outputParts = Object.values(parts);
-if (outputParts.length > 2048 || outputParts.some(part => part.length > 4 * 1024 * 1024) || outputParts.reduce((total, part) => total + part.length, 0) > 16 * 1024 * 1024)
-  fail('Edited Office package exceeds the package limits.');
-const output = zip.zipSync(parts, { level: 6 });
-if (output.length > 4 * 1024 * 1024) fail('Edited Office file exceeds 4 MiB.');
-let binary = '';
-for (let offset = 0; offset < output.length; offset += 8192) binary += String.fromCharCode(...output.subarray(offset, offset + 8192));
-return { data: btoa(binary) };
+if (Object.keys(parts).length > 4096) fail('Edited Office package has too many parts.');
+return { size: saveOffice(zip.zipSync(parts, { level: 6 }), request.format) };
 `;

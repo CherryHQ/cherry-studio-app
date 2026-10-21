@@ -214,7 +214,7 @@ describe('fileStorage', () => {
     ).toBe(true);
   });
 
-  test.each(['text', 'bytes'] as const)(
+  test.each(['text'] as const)(
     'discards unregistered %s when cancelled after writing a new file',
     async (source) => {
       const entries = createEntryStore();
@@ -223,9 +223,8 @@ describe('fileStorage', () => {
       const creating = createInternalEntry(
         entries,
         {
-          ...(source === 'text'
-            ? { source, data: 'draft' }
-            : { source, data: new Uint8Array([80, 75, 3, 4]) }),
+          source,
+          data: 'draft',
           mediaType: 'text/plain',
           name: 'draft.txt',
           provenance: 'generated',
@@ -243,7 +242,7 @@ describe('fileStorage', () => {
     },
   );
 
-  test.each(['text', 'bytes'] as const)(
+  test.each(['text'] as const)(
     'cleans up %s when entry creation rejects cancellation from its transaction',
     async (source) => {
       const controller = new AbortController();
@@ -260,9 +259,8 @@ describe('fileStorage', () => {
         createInternalEntry(
           entries,
           {
-            ...(source === 'text'
-              ? { source, data: 'draft' }
-              : { source, data: new Uint8Array([80, 75, 3, 4]) }),
+            source,
+            data: 'draft',
             mediaType: 'text/plain',
             name: 'draft.txt',
             provenance: 'generated',
@@ -418,13 +416,13 @@ describe('fileStorage', () => {
     expect(onFileChange).toHaveBeenCalledTimes(1);
   });
 
-  test('stores binary output verbatim with the declared Office type and generated provenance', async () => {
-    const data = new Uint8Array([80, 75, 3, 4, 0, 255]);
+  test('copies a generated local file with the declared Office type and generated provenance', async () => {
+    testState.files.set('file:///cache/OfficeJobs/output.docx', 6);
     const entries = createEntryStore();
     const folderId = '00000000-0000-7000-8000-000000000009';
     const entry = await createInternalEntry(entries, {
-      source: 'bytes',
-      data,
+      source: 'uri',
+      uri: 'file:///cache/OfficeJobs/output.docx',
       name: 'report.docx',
       provenance: 'generated',
       mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -437,12 +435,11 @@ describe('fileStorage', () => {
     );
     expect(entry).toMatchObject({
       filename: 'report.docx',
-      size: data.length,
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      size: 6,
       provenance: 'generated',
     });
-    expect(testState.writes).toEqual([
-      expect.objectContaining({ content: data, options: undefined }),
-    ]);
+    expect(testState.files.has('file:///cache/OfficeJobs/output.docx')).toBe(true);
     expect(onFileChange).toHaveBeenCalledWith(
       expect.arrayContaining(['/files/library', '/files/entries', `/files/entries/${entry.id}`]),
     );

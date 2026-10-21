@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 namespace cherry::jssandbox {
 
@@ -19,12 +20,22 @@ struct Limits {
   size_t maxLogBytes;
 };
 
+/// Host-chosen local files a trusted caller's code reads and writes through the
+/// global `__files` ({ read(index): ArrayBuffer, write(Uint8Array): number }).
+/// Paths never come from the script; bytes stay inside the runtime's heap budget.
+struct Files {
+  std::vector<std::string> inputs;
+  /// Empty when the run produces no file.
+  std::string output;
+};
+
 /// Runs `code` as the body of an async function in a fresh, isolated QuickJS
 /// runtime on the calling thread, which must have a large enough native stack.
 /// Returns a JSON object describing the outcome; never throws.
 std::string run(const std::string &runId,
                 const std::string &code,
-                const Limits &limits);
+                const Limits &limits,
+                const Files *files = nullptr);
 
 /// Interrupts the run with this id, including one that has not started yet.
 void cancel(const std::string &runId);

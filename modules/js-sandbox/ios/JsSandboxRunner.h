@@ -14,6 +14,18 @@ NS_ASSUME_NONNULL_BEGIN
             maxLogBytes:(uint32_t)maxLogBytes
     NS_SWIFT_NAME(run(id:code:timeoutMs:memoryBytes:maxResultBytes:maxLogBytes:));
 
+/// `run` with host-chosen local files exposed as the script's `__files`; an
+/// empty `outputPath` means the run produces no file.
++ (NSString *)runWithId:(NSString *)runId
+                   code:(NSString *)code
+             inputPaths:(NSArray<NSString *> *)inputPaths
+             outputPath:(NSString *)outputPath
+              timeoutMs:(uint32_t)timeoutMs
+            memoryBytes:(uint32_t)memoryBytes
+         maxResultBytes:(uint32_t)maxResultBytes
+            maxLogBytes:(uint32_t)maxLogBytes
+    NS_SWIFT_NAME(run(id:code:inputPaths:outputPath:timeoutMs:memoryBytes:maxResultBytes:maxLogBytes:));
+
 + (void)cancelWithId:(NSString *)runId NS_SWIFT_NAME(cancel(id:));
 
 + (NSString *)runBridgeWithId:(NSString *)runId

@@ -139,7 +139,7 @@ function replacePictures() {
       let index = 1;
       do { imagePath = prefix + '/media/cherry-replacement-' + index++ + '.' + extension; }
       while (parts[imagePath] || reserved.has('/' + imagePath));
-      parts[imagePath] = Uint8Array.from(atob(image.data), character => character.charCodeAt(0));
+      parts[imagePath] = readInput(image.index);
       const type = freshElement(types, CT, 'Override');
       type.setAttribute('PartName', '/' + imagePath); type.setAttribute('ContentType', image.mediaType);
       types.appendChild(type); dirty.add('[Content_Types].xml'); newParts.set(change.file_entry_id, imagePath);

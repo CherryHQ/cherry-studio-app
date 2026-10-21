@@ -6,6 +6,8 @@ import {
   OfficeGenerationError,
   officeImageIds,
   officeInputSchemas,
+  OFFICE_MAX_FILE_BYTES,
+  OFFICE_MAX_IMAGES,
   OFFICE_MAX_INPUT_BYTES,
   OFFICE_MEDIA_TYPES,
   type OfficeFormat,
@@ -13,10 +15,16 @@ import {
 } from '@/backend/services/office';
 import { filenameExtension, SafeNameSchema } from '@/shared/data/types/file';
 
-import type { RuntimeTool, RuntimeToolResult } from '../runtime';
+import type { RuntimeTool } from '../runtime';
 import { createOfficeEditTools } from './officeEditTools';
 import { createOfficeScriptTool } from './officeScriptTool';
-import { officeOperationSlots, readOfficeImages, type OfficeFiles } from './officeToolResources';
+import {
+  mebibytes,
+  officeFailure as invalid,
+  prepareOfficeImages,
+  startOfficeOperation,
+  type OfficeFiles,
+} from './officeToolResources';
 import { officeToolOutputSchemas } from './officeToolResults';
 import { toRuntimeInputSchema } from './runtimeToolSchema';
 import type { WorkspaceFileAccess } from './workspaceFileAccess';
@@ -60,7 +68,7 @@ export function createOfficeTools(
       ref: { source: 'builtin', capabilityId: name },
       providerName: name,
       displayName,
-      description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments or the selected workspace. Input JSON must fit 128 KiB; images together must fit 2 MiB; output is limited to 4 MiB. Use a plain filename with the matching extension. In Code Mode, check result.value.status === "created" and use result.value.fileEntryId; status "error" includes a message. store() changes survive only a successful script. Finish a short creation script after storing ids, then perform dependent reads and edits in another script.`,
+      description: `${description} Saves a new managed file in the selected workspace, or at the library root without a workspace, and returns its attachment; never overwrites or edits a source. Images may come from conversation attachments, generated images or the selected workspace: pass their existing file ids, never regenerate an image to place it. Up to ${OFFICE_MAX_IMAGES} distinct images per file in any image format; large ones are compressed for embedding automatically. Input JSON must fit 128 KiB; the output is limited to ${mebibytes(OFFICE_MAX_FILE_BYTES)}. Use a plain filename with the matching extension. In Code Mode, use result.value.fileEntryId; a failed call throws its message. store() changes survive only a successful script. Finish a short creation script after storing ids, then perform dependent reads and edits in another script.`,
       inputSchema: toRuntimeInputSchema(officeInputSchemas[format]),
       outputSchema: officeToolOutputSchemas[name],
       approval: 'auto',
@@ -82,32 +90,31 @@ export function createOfficeTools(
         // The schema and format are selected together from officeInputSchemas above.
         const request = { ...parsed.data, filename, format } as OfficeRequest;
         const ids = officeImageIds(request);
-        if (ids.length > 8) return invalid('Use at most 8 distinct images per file.');
+        if (ids.length > OFFICE_MAX_IMAGES)
+          return invalid(
+            `This file uses ${ids.length} distinct images; one file accepts at most ${OFFICE_MAX_IMAGES}.`,
+          );
         for (const id of ids) {
           signal.throwIfAborted();
           await access.resolveRead({ file_entry_id: id });
         }
 
-        const release = await officeOperationSlots.acquire(signal);
-        let nativeSettled = true;
-        let finished = false;
+        const operation = await startOfficeOperation(files, signal);
         try {
-          const images = await readOfficeImages(ids, files, signal);
-          nativeSettled = false;
-          const data = await generateOfficeFile({
+          const images = await prepareOfficeImages(ids, files, operation, signal);
+          const output = operation.output(format);
+          await generateOfficeFile({
             request,
             images,
+            output,
             sandbox,
             signal,
-            onSettled: () => {
-              nativeSettled = true;
-              if (finished) release();
-            },
+            onSettled: operation.job(),
           });
           signal.throwIfAborted();
-          const entry = await files.createBytesEntry(
+          const entry = await files.createFileEntry(
             {
-              data,
+              uri: output,
               name: filename,
               mediaType: OFFICE_MEDIA_TYPES[format],
               provenance: 'generated',
@@ -138,8 +145,7 @@ export function createOfficeTools(
           if (error instanceof OfficeGenerationError) return invalid(error.message);
           throw error;
         } finally {
-          finished = true;
-          if (nativeSettled) release();
+          operation.finish();
         }
       },
     }),
@@ -149,8 +155,4 @@ export function createOfficeTools(
     ...createOfficeEditTools(sandbox, files, access),
     createOfficeScriptTool(sandbox, files, access),
   ];
-}
-
-function invalid(message: string): RuntimeToolResult {
-  return { value: { status: 'error', message }, artifacts: [] };
 }

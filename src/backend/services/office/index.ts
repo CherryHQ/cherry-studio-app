@@ -1,9 +1,10 @@
 export {
   generateOfficeFile,
   OfficeGenerationError,
-  OFFICE_MAX_IMAGE_BYTES,
+  OFFICE_MAX_IMAGES,
   OFFICE_MAX_INPUT_BYTES,
 } from './generateOfficeFile';
+export { OFFICE_MAX_FILE_BYTES } from './officePackageCode';
 export {
   officeImageIds,
   officeInputSchemas,

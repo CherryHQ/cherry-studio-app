@@ -1,4 +1,4 @@
-import { runInNewContext } from 'node:vm';
+import { createHash } from 'node:crypto';
 
 import type { TSchema } from '@earendil-works/pi-ai';
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation';
@@ -9,6 +9,7 @@ import { fileLibraryService } from '@/backend/data/services/FileLibraryService';
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 import { FileEntryIdSchema, FileEntrySchema, type FileEntry } from '@/shared/data/types/file';
 
+import { runOfficeJob } from '../../../../../services/office/__tests__/_officeJob';
 import { managedFileResolver } from '../../../resources/managedFileResolver';
 import { createFileLibraryTools } from '../../../tools/fileLibraryTools';
 import type { OfficeFiles } from '../../../tools/officeToolResources';
@@ -17,52 +18,57 @@ import { WorkspaceFileAccess } from '../../../tools/workspaceFileAccess';
 import type { RuntimeJsonValue } from '../../types';
 
 function setup() {
-  const entries = new Map<string, { entry: FileEntry; data: Uint8Array }>();
+  // Managed files and temporary outputs live in one in-memory store keyed by URI.
+  const store = new Map<string, Uint8Array>();
+  const entries = new Map<string, FileEntry>();
+  let temporary = 0;
+  const managed = (id: string) => `file:///managed/${id}`;
+  function addFile(name: string, mediaType: string, data: Uint8Array): FileEntry {
+    const entry = FileEntrySchema.parse({
+      id: `00000000-0000-7000-8000-${String(entries.size + 1).padStart(12, '0')}`,
+      filename: name,
+      mediaType,
+      size: data.length,
+      provenance: 'generated',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    entries.set(entry.id, entry);
+    store.set(managed(entry.id), data);
+    return entry;
+  }
   const files: OfficeFiles = {
-    async createBytesEntry(input) {
-      const entry = FileEntrySchema.parse({
-        id: `00000000-0000-7000-8000-${String(entries.size + 1).padStart(12, '0')}`,
-        filename: input.name,
-        mediaType: input.mediaType,
-        size: input.data.length,
-        provenance: 'generated',
-        createdAt: 1,
-        updatedAt: 1,
-      });
-      entries.set(entry.id, { entry, data: input.data });
-      return entry;
-    },
-    async readAsBytes(file) {
-      return entries.get(file.fileEntryId)!.data;
-    },
-    async readImage(file) {
-      const stored = entries.get(file.fileEntryId)!;
-      return {
-        data: Buffer.from(stored.data).toString('base64'),
-        mediaType: stored.entry.mediaType,
-      };
-    },
     async resolveAvailable(ids) {
       return new Map(
         ids.map((id) => {
-          const { entry } = entries.get(id)!;
+          const entry = entries.get(id)!;
           return [id, { fileEntryId: id, name: entry.filename, ...entry }];
         }),
       );
     },
+    localUri: (file) => managed(file.fileEntryId),
+    prepareImage: async () => undefined,
+    size: (uri) => store.get(uri)?.length,
+    hash: async (uri) => createHash('sha256').update(store.get(uri)!).digest('hex'),
+    temporaryUri: (extension) => `file:///cache/${++temporary}.${extension}`,
+    discard: (uri) => void store.delete(uri),
+    async createFileEntry(input) {
+      return addFile(input.name, input.mediaType, store.get(input.uri)!);
+    },
   };
   // Execute the production job text; native QuickJS limits remain device acceptance concerns.
   const sandbox: JsSandbox = {
-    async run({ code, onSettled }) {
+    files: true,
+    async run({ code, files: io, onSettled }) {
       try {
-        const result: unknown = await runInNewContext(`(async () => { ${code} })()`, {
-          queueMicrotask,
-          atob,
-          btoa,
-        });
+        const { value, output } = await runOfficeJob(
+          code,
+          (io?.inputs ?? []).map((uri) => store.get(uri)!),
+        );
+        if (output && io?.output) store.set(io.output, output);
         return {
           status: 'ok',
-          result: JSON.stringify(result),
+          result: JSON.stringify(value),
           logs: '',
           logsTruncated: false,
           durationMs: 1,
@@ -93,26 +99,22 @@ function setup() {
     );
     return value;
   }
-  return { tools, execute, files };
+  return { tools, execute, addFile };
 }
 
 test.each(['docx', 'xlsx', 'pptx'] as const)(
   '%s image inspection and image-only editing match the Code Mode contracts',
   async (format) => {
-    const { execute, files } = setup();
-    const image = await files.createBytesEntry(
-      {
-        name: 'photo.png',
-        mediaType: 'image/png',
-        provenance: 'generated',
-        data: new Uint8Array(
-          Buffer.from(
-            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
-            'base64',
-          ),
+    const { execute, addFile } = setup();
+    const image = addFile(
+      'photo.png',
+      'image/png',
+      new Uint8Array(
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+          'base64',
         ),
-      },
-      new AbortController().signal,
+      ),
     );
     const picture = { file_entry_id: image.id, width_px: 100, height_px: 60, alt: 'Photo' };
     const formats = {

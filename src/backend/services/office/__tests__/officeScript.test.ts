@@ -1,13 +1,14 @@
-import { runInNewContext } from 'node:vm';
-
 import { strFromU8, unzipSync } from 'fflate';
 
 import type { OfficeFormat } from '../officeSpec';
-import { createOfficeScriptCode, type OfficeScriptInput } from '../runOfficeScript';
+import { createOfficeScriptCode } from '../runOfficeScript';
+import { runOfficeJob } from './_officeJob';
+
+type TestInput = { name: string; mediaType: string; data: Uint8Array };
 
 const IMAGE_ID = '00000000-0000-7000-8000-000000000001';
 const SOURCE_ID = '00000000-0000-7000-8000-000000000002';
-const IMAGE: OfficeScriptInput = {
+const IMAGE: TestInput = {
   name: 'dot.png',
   mediaType: 'image/png',
   data: Buffer.from(
@@ -16,20 +17,31 @@ const IMAGE: OfficeScriptInput = {
   ),
 };
 
-// node:vm checks the script contract without DOM, Node modules, Buffer or timers in its context;
-// QuickJS limits and native I/O remain device acceptance.
+async function job(format: OfficeFormat, script: string, inputs: Record<string, TestInput> = {}) {
+  const code = createOfficeScriptCode(
+    format,
+    script,
+    Object.fromEntries(
+      Object.entries(inputs).map(([id, { name, mediaType, data }]) => [
+        id,
+        { name, mediaType, size: data.length },
+      ]),
+    ),
+  );
+  return runOfficeJob(
+    code,
+    Object.values(inputs).map((input) => input.data),
+  );
+}
+
 async function run(
   format: OfficeFormat,
   script: string,
-  inputs: Record<string, OfficeScriptInput> = {},
+  inputs: Record<string, TestInput> = {},
 ): Promise<Uint8Array> {
-  const result: unknown = await runInNewContext(
-    `(async () => { ${createOfficeScriptCode(format, script, inputs)} })()`,
-    { queueMicrotask, atob, btoa },
-    { timeout: 10_000 },
-  );
-  expect(typeof result).toBe('string');
-  return new Uint8Array(Buffer.from(result as string, 'base64'));
+  const { value, output } = await job(format, script, inputs);
+  expect(value).toBe(output?.length);
+  return output!;
 }
 
 describe('Office scripts', () => {
@@ -121,15 +133,38 @@ describe('Office scripts', () => {
   });
 
   test('returns null without packaging when the script only inspects inputs', async () => {
-    const result: unknown = await runInNewContext(
-      `(async () => { ${createOfficeScriptCode('docx', `console.log(inputs['${IMAGE_ID}'].bytes.length);`, { [IMAGE_ID]: IMAGE })} })()`,
-      { queueMicrotask, atob, btoa, console: { log: () => {} } },
+    const { value, output } = await job(
+      'docx',
+      `if (inputs['${IMAGE_ID}'].bytes.length !== ${IMAGE.data.length}) throw new Error('size');`,
+      { [IMAGE_ID]: IMAGE },
     );
-    expect(result).toBeNull();
+    expect(value).toBeNull();
+    expect(output).toBeUndefined();
+  });
+
+  test('reads each input once and only when the script uses it', async () => {
+    const unread = { ...IMAGE, data: new Uint8Array() };
+    const { value } = await job(
+      'docx',
+      `const first = inputs['${IMAGE_ID}'];
+      if (first.bytes !== first.bytes || first.size !== ${IMAGE.data.length}) throw new Error('copy');
+      if (first.base64 !== '${Buffer.from(IMAGE.data).toString('base64')}') throw new Error('base64');`,
+      { [IMAGE_ID]: IMAGE, [SOURCE_ID]: unread },
+    );
+    expect(value).toBeNull();
+  });
+
+  test('hides the host file port from the script', async () => {
+    const { value, output } = await job(
+      'docx',
+      `if (typeof files !== 'undefined' || '__files' in globalThis) throw new Error('port');`,
+    );
+    expect(value).toBeNull();
+    expect(output).toBeUndefined();
   });
 
   test.each([
-    ['return 42;', 'Return the DOCX file as a base64 string'],
+    ['return 42;', 'Return the DOCX file as a Uint8Array, ArrayBuffer or base64 string'],
     ['return "ok";', 'Return nothing to only inspect inputs'],
     ['return zip.zipSync({ a: zip.strToU8("x") });', 'word/document.xml is missing'],
     ['return new Uint8Array([1, 2, 3]);', 'not a ZIP package'],

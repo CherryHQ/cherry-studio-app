@@ -13,6 +13,16 @@ export type JsSandboxLimits = {
 export type JsSandboxNativeModule = {
   /** Resolves with the outcome JSON; script failures never reject. */
   run(runId: string, code: string, limits: JsSandboxLimits): Promise<string>;
+  /**
+   * `run` with host-chosen local file URIs exposed to trusted host code as the global `__files`.
+   * Optional on older development clients. An empty `output` means the run writes no file.
+   */
+  runFiles?(
+    runId: string,
+    code: string,
+    limits: JsSandboxLimits,
+    files: { inputs: string[]; output: string },
+  ): Promise<string>;
   /** Interrupts a run, including one that has not started yet. */
   cancel(runId: string): void;
   /** Optional on older development clients. The setup is trusted host code, never model code. */

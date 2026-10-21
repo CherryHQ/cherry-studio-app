@@ -1,30 +1,33 @@
 import { createHash } from 'node:crypto';
-import { runInNewContext } from 'node:vm';
 
 import { strFromU8, unzipSync } from 'fflate';
 
 import { createOfficeCode } from '../createOfficeCode';
-import { officeInputSchemas, type OfficeImage, type OfficeRequest } from '../officeSpec';
+import { officeInputSchemas, type OfficeRequest } from '../officeSpec';
 import docx from '../vendor/docx.json';
 import pptxgenjs from '../vendor/pptxgenjs.json';
 import xlsx from '../vendor/xlsx.json';
+import { runOfficeJob } from './_officeJob';
 
 const IMAGE_ID = '00000000-0000-7000-8000-000000000001';
-const IMAGE: OfficeImage = {
-  mediaType: 'image/png',
-  data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
-};
+const IMAGE = new Uint8Array(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aBE8AAAAASUVORK5CYII=',
+    'base64',
+  ),
+);
 
-// This checks the adapter without DOM, Node modules, Buffer, or timers in its context. Device
-// acceptance remains separate: node:vm does not prove QuickJS memory/time limits or native I/O.
-async function render(request: OfficeRequest, images: Record<string, OfficeImage> = {}) {
-  const result: unknown = await runInNewContext(
-    `(async () => { ${createOfficeCode(request, images)} })()`,
-    { queueMicrotask, atob, btoa },
-    { timeout: 5000 },
+async function render(request: OfficeRequest, images: readonly string[] = []) {
+  const code = createOfficeCode(
+    request,
+    Object.fromEntries(images.map((id, index) => [id, { index, mediaType: 'image/png' as const }])),
   );
-  expect(typeof result).toBe('string');
-  return unzipSync(new Uint8Array(Buffer.from(result as string, 'base64')));
+  const { value, output } = await runOfficeJob(
+    code,
+    images.map(() => IMAGE),
+  );
+  expect(value).toBe(output?.length);
+  return unzipSync(output!);
 }
 
 describe('Office generation contracts', () => {
@@ -56,7 +59,7 @@ describe('Office generation contracts', () => {
           ],
         },
       },
-      { [IMAGE_ID]: IMAGE },
+      [IMAGE_ID],
     );
     const xml = strFromU8(files['word/document.xml']);
     expect(xml).toContain('中文 😀 &amp; &lt;tag&gt;');
@@ -120,7 +123,7 @@ describe('Office generation contracts', () => {
         ],
       },
     };
-    const files = await render(request, { [IMAGE_ID]: IMAGE });
+    const files = await render(request, [IMAGE_ID]);
     expect(strFromU8(files['xl/worksheets/sheet1.xml'])).toContain('rIdCherryDrawing');
     expect(strFromU8(files['xl/worksheets/_rels/sheet1.xml.rels'])).toContain(
       '../drawings/drawing1.xml',
@@ -129,7 +132,7 @@ describe('Office generation contracts', () => {
     expect(drawing).toContain('<xdr:col>2</xdr:col>');
     expect(drawing).toContain('<xdr:row>3</xdr:row>');
     expect(drawing).toContain('中文 😀 &amp; photo');
-    expect(files['xl/media/image1.png']).toEqual(new Uint8Array(Buffer.from(IMAGE.data, 'base64')));
+    expect(files['xl/media/image1.png']).toEqual(IMAGE);
     expect(strFromU8(files['[Content_Types].xml'])).toContain('image/png');
   });
 
@@ -161,15 +164,25 @@ describe('Office generation contracts', () => {
           ],
         },
       },
-      { [IMAGE_ID]: IMAGE },
+      [IMAGE_ID],
     );
     expect(strFromU8(files['ppt/slides/slide1.xml'])).toContain('中文 😀 &lt;title&gt;');
     expect(strFromU8(files['ppt/slides/slide2.xml'])).toContain('<a:t>One</a:t>');
     expect(strFromU8(files['ppt/slides/slide3.xml'])).toContain('<a:tbl>');
     expect(strFromU8(files['ppt/slides/slide4.xml'])).toContain('<p:pic>');
-    expect(
-      Object.keys(files).some((path) => path.startsWith('ppt/media/') && files[path].length > 0),
-    ).toBe(true);
+    expect(files['ppt/media/image-4-1.png']).toEqual(IMAGE);
+  });
+
+  test('embeds a repeated document image once without hashing its bytes', async () => {
+    const image = { type: 'image' as const, file_entry_id: IMAGE_ID, width_px: 10, height_px: 10 };
+    const files = await render(
+      { format: 'docx', filename: 'twice.docx', spec: { version: 1, blocks: [image, image] } },
+      [IMAGE_ID],
+    );
+    const media = Object.keys(files).filter((path) => /^word\/media\/.+\.png$/.test(path));
+    expect(media).toHaveLength(1);
+    expect(files[media[0]]).toEqual(IMAGE);
+    expect(strFromU8(files['word/document.xml']).match(/<pic:pic /g)).toHaveLength(2);
   });
 
   test.each([
