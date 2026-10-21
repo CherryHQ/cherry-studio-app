@@ -397,6 +397,18 @@ function resultWithDetails(tool: RuntimeTool, output: RuntimeToolResult): ToolEx
         }
       : {}),
     isError: output.failure !== undefined,
+    // A failed nested call omits its value, so Code Mode reports its error diagnostics instead.
+    ...(output.failure
+      ? {
+          diagnostics: [
+            {
+              severity: 'error' as const,
+              code: output.failure.error.code,
+              message: output.failure.error.message,
+            },
+          ],
+        }
+      : {}),
     details: JSON.parse(JSON.stringify(details)) as JsonValue,
   };
 }

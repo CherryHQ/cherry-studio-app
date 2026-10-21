@@ -39,7 +39,7 @@ for format behavior, limits, selection evidence and pending acceptance.
   bundled PDF resources over the page's message bridge. Other document types keep the system-open
   state; a document too large to preview shows `FileMenuGuide`, which points to system opening in
   the header's overflow menu. The package owns everything inside the document; this page owns file access, the container,
-  theme, locale, logging and the system-open fallback. For Office files up to 4 MiB, the header menu
+  theme, locale, logging and the system-open fallback. For previewed Office files, the header menu
   enables structural selection. A footer shows the selected excerpt and opens a new chat draft
   containing the original attachment and a selection chip (`file · ¶4`, `file · Sheet!B2`,
   `file · Slide 2`), passed through the composer handoff rather than as draft text.

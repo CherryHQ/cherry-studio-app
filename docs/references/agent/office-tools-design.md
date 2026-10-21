@@ -316,8 +316,10 @@ keep the failing tools or operations unavailable rather than lowering the contra
 ## Selection Questions And Acceptance Plan
 
 Generation uses pinned browser assets for docx 9.11.0, PptxGenJS 4.0.1 and SheetJS 0.20.3 in the
-QuickJS compute pool. Inputs are bounded to 128 KiB JSON and 2 MiB of managed PNG/JPEG images;
-outputs to 4 MiB, with 30-second/64-MiB native limits. See the service contract for exact shapes.
+QuickJS compute pool. Inputs are bounded to 128 KiB JSON and 50 managed images, which are prepared
+for embedding; sources and outputs to 64 MiB. Jobs read and write files natively, with a 120-second
+deadline and a heap that grows with the bytes they read. See the service contract for exact shapes
+and the measured memory behind these limits.
 The patch engine ports Cherry Desktop's `office-transform` package-copy and run-edit rules using
 pinned `fflate` and `@xmldom/xmldom` assets. Excel image generation adds DrawingML parts to newly
 created workbooks. Existing packages never round-trip through the generation libraries. The shared

@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { runInNewContext } from 'node:vm';
 
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
@@ -13,6 +12,7 @@ import {
 import { createOfficeTransformCode } from '../transformOfficeFile';
 import fflate from '../vendor/fflate.json';
 import xmldom from '../vendor/xmldom.json';
+import { runOfficeJob, runOfficeJobSync } from './_officeJob';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -43,17 +43,17 @@ function archive(parts: Record<string, string | Uint8Array>) {
 // The same trusted job text, without DOM, filesystem or Node globals in its context.
 // This fixture cannot establish native QuickJS compatibility or Office visual fidelity.
 function operate(parts: Record<string, string | Uint8Array>, request: OfficeTransformRequest) {
-  return runInNewContext(
-    `(() => { ${createOfficeTransformCode(archive(parts), request)} })()`,
-    { atob, btoa },
-    { timeout: 5000 },
-  ) as { error?: string; data?: string; text?: string; items?: unknown[] };
+  const { value, output } = runOfficeJobSync(createOfficeTransformCode(request), [archive(parts)]);
+  return {
+    ...(value as { error?: string; size?: number; text?: string; items?: unknown[] }),
+    output,
+  };
 }
 
 function editedParts(result: ReturnType<typeof operate>) {
   expect(result.error).toBeUndefined();
-  expect(result.data).toBeDefined();
-  return unzipSync(new Uint8Array(Buffer.from(result.data!, 'base64')));
+  expect(result.size).toBe(result.output?.length);
+  return unzipSync(result.output!);
 }
 
 const word = (paragraph: string) =>
@@ -145,19 +145,17 @@ const workbookEdit = (address = 'A1'): OfficeTransformRequest => ({
 });
 
 test('edits generated XLSX files with an unused macro content-type default', async () => {
-  const generated: string = await runInNewContext(
-    `(async () => { ${createOfficeCode(
+  const { output: generated } = await runOfficeJob(
+    createOfficeCode(
       {
         format: 'xlsx',
         filename: 'generated.xlsx',
         spec: { version: 1, sheets: [{ name: 'Data', rows: [['Keep 🍒', 3, true]] }] },
       },
       {},
-    )} })()`,
-    { queueMicrotask, atob, btoa },
-    { timeout: 5000 },
+    ),
   );
-  const source = unzipSync(new Uint8Array(Buffer.from(generated, 'base64')));
+  const source = unzipSync(generated!);
   expect(strFromU8(source['[Content_Types].xml'])).toContain('macroEnabled');
   expect(Object.keys(source).some((path) => path.endsWith('.bin'))).toBe(false);
   const output = editedParts(operate(source, workbookEdit('B1')));

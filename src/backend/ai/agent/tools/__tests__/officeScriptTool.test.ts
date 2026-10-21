@@ -6,6 +6,7 @@ import { FileEntrySchema } from '@/shared/data/types/file';
 import type { RuntimeTool } from '../../runtime';
 import { createOfficeScriptTool } from '../officeScriptTool';
 import { WorkspaceFileAccess } from '../workspaceFileAccess';
+import { fakeOfficeFiles, fakeOfficeSandbox } from './_officeFiles';
 
 const INPUT_ID = '00000000-0000-7000-8000-000000000001';
 const ENTRY_ID = '00000000-0000-7000-8000-000000000002';
@@ -22,32 +23,29 @@ type Input = Parameters<RuntimeTool['execute']>[0]['input'];
 
 const INPUT: Input = { filename: 'Deck.pptx', code: 'return "";', inputs: [INPUT_ID] };
 
+const DOC_ID = '00000000-0000-7000-8000-000000000003';
+
 function setup(
   outcome: Awaited<ReturnType<JsSandbox['run']>> = {
     status: 'ok',
-    result: '"UEsDBA=="',
+    result: '4',
     logs: 'slides: 3',
     logsTruncated: false,
     durationMs: 1,
   },
 ) {
-  const files = {
-    readAsBytes: jest.fn(async () => new Uint8Array([1, 2, 3])),
-    createBytesEntry: jest.fn(async () => entry),
-    resolveAvailable: jest.fn(
-      async () =>
-        new Map([
-          [INPUT_ID, { fileEntryId: INPUT_ID, name: 'photo.png', mediaType: 'image/png', size: 3 }],
-        ]),
-    ),
-    readImage: jest.fn(),
-  };
-  const sandbox: JsSandbox = {
-    run: jest.fn(async ({ onSettled }: Parameters<JsSandbox['run']>[0]) => {
-      onSettled?.();
-      return outcome;
-    }),
-  };
+  const files = fakeOfficeFiles(
+    [
+      { fileEntryId: INPUT_ID, name: 'photo.png', mediaType: 'image/png', size: 3 },
+      { fileEntryId: DOC_ID, name: 'deck.pptx', mediaType: OFFICE_MEDIA_TYPES.pptx, size: 5 },
+    ],
+    entry,
+  );
+  const sandbox = fakeOfficeSandbox();
+  sandbox.run.mockImplementation(async ({ onSettled }: Parameters<JsSandbox['run']>[0]) => {
+    onSettled?.();
+    return outcome;
+  });
   const allowed = new Set<string>();
   const access = new WorkspaceFileAccess(
     null,
@@ -66,16 +64,24 @@ function setup(
 }
 
 describe('run_office_script', () => {
-  test('gives the script authorized input bytes and publishes its result with logs', async () => {
+  test('gives the script authorized input files and publishes its result with logs', async () => {
     const { files, sandbox, allowed, execute } = setup();
     allowed.add(INPUT_ID);
-    const output = await execute();
-    expect(jest.mocked(sandbox.run).mock.calls[0][0].code).toContain(
-      `{"${INPUT_ID}":{"name":"photo.png","mediaType":"image/png","base64":"AQID"}}`,
+    allowed.add(DOC_ID);
+    const output = await execute({ ...INPUT, inputs: [DOC_ID, INPUT_ID] });
+    const run = sandbox.run.mock.calls[0][0];
+    expect(run.code).toContain(
+      `{"${DOC_ID}":{"name":"deck.pptx","mediaType":"${OFFICE_MEDIA_TYPES.pptx}","size":5,"index":0},"${INPUT_ID}":{"name":"photo.png","mediaType":"image/png","size":3,"index":1}}`,
     );
-    expect(files.createBytesEntry).toHaveBeenCalledWith(
+    expect(run.files).toEqual({
+      inputs: [`file:///managed/${DOC_ID}`, `file:///managed/${INPUT_ID}`],
+      output: 'file:///cache/1.pptx',
+    });
+    // Only images get an embedding copy.
+    expect(files.prepareImage).toHaveBeenCalledTimes(1);
+    expect(files.createFileEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: new Uint8Array([80, 75, 3, 4]),
+        uri: 'file:///cache/1.pptx',
         name: 'Deck.pptx',
         mediaType: OFFICE_MEDIA_TYPES.pptx,
         folderId: null,
@@ -121,7 +127,7 @@ describe('run_office_script', () => {
       status: 'read',
       logs: 'sheets: 明细',
     });
-    expect(files.createBytesEntry).not.toHaveBeenCalled();
+    expect(files.createFileEntry).not.toHaveBeenCalled();
   });
 
   test('returns the script error and console output for the model to fix', async () => {
@@ -138,6 +144,31 @@ describe('run_office_script', () => {
       message:
         'Script failed (exception): TypeError: pres.addSlid is not a function\nConsole:\nbefore',
     });
-    expect(files.createBytesEntry).not.toHaveBeenCalled();
+    expect(files.createFileEntry).not.toHaveBeenCalled();
+  });
+
+  test('explains that a memory failure needs smaller work, not a rewrite', async () => {
+    const { execute } = setup({
+      status: 'error',
+      kind: 'memory',
+      message: 'The script exceeded the 128 MiB memory limit.',
+      logs: '',
+      logsTruncated: false,
+      durationMs: 1,
+    });
+    const output = await execute({ filename: 'Deck.pptx', code: 'return 1;' });
+    expect(output.failure?.error.message).toContain('Rewriting the script cannot raise this limit');
+  });
+
+  test('reports the total size when the inputs exceed one run', async () => {
+    const { files, sandbox, allowed, execute } = setup();
+    allowed.add(DOC_ID);
+    files.sizes.set(`file:///managed/${DOC_ID}`, 97 * 1024 * 1024);
+    expect((await execute({ ...INPUT, inputs: [DOC_ID] })).value).toEqual({
+      status: 'error',
+      message:
+        'The inputs total 97.0 MiB, over the 96.0 MiB one run can read. Use fewer files per run.',
+    });
+    expect(sandbox.run).not.toHaveBeenCalled();
   });
 });

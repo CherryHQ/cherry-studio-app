@@ -20,7 +20,7 @@ export const officeText = (max: number, excluded = '') =>
 
 const imageSchema = z.strictObject({
   file_entry_id: FileEntryIdSchema.describe(
-    'A managed image from the conversation or selected workspace. PNG or JPEG only.',
+    'An existing managed image from the conversation, a generated image or the selected workspace.',
   ),
   width_px: z.number().int().min(1).max(1600),
   height_px: z.number().int().min(1).max(1600),
@@ -83,7 +83,7 @@ export const workbookSpecSchema = z.strictObject({
           ),
         images: z
           .array(imageSchema.extend({ cell: z.string().regex(/^[A-Z]{1,3}[1-9][0-9]{0,6}$/) }))
-          .max(8)
+          .max(50)
           .optional(),
         rows: rectangularRows(
           z.union([officeText(16_000), z.number().finite(), z.boolean(), z.null()]),
@@ -137,7 +137,7 @@ export const presentationSpecSchema = z.strictObject({
       ]),
     )
     .min(1)
-    .max(32),
+    .max(100),
 });
 
 export const officeInputSchemas = {
@@ -151,7 +151,8 @@ export type OfficeRequest = {
   [Format in OfficeFormat]: { format: Format } & z.infer<(typeof officeInputSchemas)[Format]>;
 }[OfficeFormat];
 
-export type OfficeImage = { data: string; mediaType: 'image/png' | 'image/jpeg' };
+/** A prepared image file the job reads; `uri` is host-only and never reaches the model. */
+export type OfficeImage = { uri: string; size: number; mediaType: 'image/png' | 'image/jpeg' };
 
 export const OFFICE_MEDIA_TYPES = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

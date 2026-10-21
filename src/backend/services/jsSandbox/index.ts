@@ -1,1 +1,1 @@
-export { createJsSandbox, type JsSandbox } from './jsSandbox';
+export { createJsSandbox, type JsSandbox, type JsSandboxOutcome } from './jsSandbox';

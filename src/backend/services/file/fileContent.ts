@@ -63,8 +63,8 @@ const createTextEntryInputSchema = z.strictObject({
   provenance: FileEntryProvenanceSchema,
 });
 
-const createBytesEntryInputSchema = createTextEntryInputSchema.extend({
-  data: z.instanceof(Uint8Array),
+const createFileEntryInputSchema = createTextEntryInputSchema.omit({ data: true }).extend({
+  uri: z.string().min(1),
 });
 
 /**
@@ -166,18 +166,21 @@ export const fileContent = {
     const validated = createTextEntryInputSchema.parse(input);
     return createInternalEntry(fileEntryService, { ...validated, source: 'text' }, signal);
   },
-  /** Generated binary artifacts use the same write/commit/rollback boundary as text files. */
-  createBytesEntry: async (
+  /**
+   * Copies a finished local file, such as a generated document, into a new managed entry through
+   * the same write/commit/rollback boundary as text files. The caller owns the source file.
+   */
+  createFileEntry: async (
     input: FilePlacement & {
-      data: Uint8Array;
+      uri: string;
       mediaType: string;
       name: string;
       provenance: FileEntryProvenance;
     },
     signal?: AbortSignal,
   ) => {
-    const validated = createBytesEntryInputSchema.parse(input);
-    return createInternalEntry(fileEntryService, { ...validated, source: 'bytes' }, signal);
+    const validated = createFileEntryInputSchema.parse(input);
+    return createInternalEntry(fileEntryService, { ...validated, source: 'uri' }, signal);
   },
   prepareAttachments: async (input: PrepareFileAttachmentsInput): Promise<PreparedFile[]> => {
     const signal = input.signal ?? new AbortController().signal;

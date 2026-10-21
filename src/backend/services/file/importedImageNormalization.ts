@@ -50,6 +50,47 @@ export function normalizeImportedImage(input: {
   return run;
 }
 
+/** Above this size, an image embedded in a document is re-encoded; most photos land well below it. */
+export const EMBEDDED_IMAGE_MAX_BYTES = 1024 * 1024;
+
+/**
+ * A PNG/JPEG copy of a managed image for embedding into a document: small PNG/JPEG files are used
+ * as they are (undefined); larger ones, and other still formats, become a JPEG of at most 2048 px
+ * and about 1 MiB. Undefined also when the image cannot be decoded.
+ */
+export function prepareEmbeddedImage(input: {
+  mediaType: string;
+  name: string;
+  uri: string;
+}): Promise<NormalizedImportedImage | undefined> {
+  const run = queue.then(() => prepareEmbedded(input));
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+async function prepareEmbedded(input: {
+  mediaType: string;
+  name: string;
+  uri: string;
+}): Promise<NormalizedImportedImage | undefined> {
+  try {
+    const size = new File(input.uri).size;
+    if (
+      ['image/png', 'image/jpeg'].includes(input.mediaType) &&
+      Number.isSafeInteger(size) &&
+      size <= EMBEDDED_IMAGE_MAX_BYTES
+    )
+      return undefined;
+    const uri = await encodeWithinLimit(input.uri, SaveFormat.JPEG, EMBEDDED_IMAGE_MAX_BYTES);
+    return uri
+      ? { mediaType: 'image/jpeg', name: withExtension(input.name, 'jpg'), uri }
+      : undefined;
+  } catch (error) {
+    logger.warn('Failed to prepare an image for embedding', error as Error);
+    return undefined;
+  }
+}
+
 export function discardNormalizedImage(image: NormalizedImportedImage): void {
   try {
     const file = new File(image.uri);
@@ -77,7 +118,7 @@ async function normalize(input: {
       return undefined;
     }
 
-    const uri = await encodeWithinLimit(input.uri, output.format);
+    const uri = await encodeWithinLimit(input.uri, output.format, IMPORTED_IMAGE_MAX_BYTES);
     if (!uri) return undefined;
     return {
       mediaType: output.mediaType,
@@ -93,7 +134,11 @@ async function normalize(input: {
   }
 }
 
-async function encodeWithinLimit(uri: string, format: SaveFormat): Promise<string | undefined> {
+async function encodeWithinLimit(
+  uri: string,
+  format: SaveFormat,
+  maxBytes: number,
+): Promise<string | undefined> {
   const sourceContext = ImageManipulator.manipulate(uri);
   let sourceImage: Awaited<ReturnType<typeof sourceContext.renderAsync>> | undefined;
   try {
@@ -122,11 +167,11 @@ async function encodeWithinLimit(uri: string, format: SaveFormat): Promise<strin
         encoded = new File(saved.uri);
         const size = encoded.size;
         if (!Number.isSafeInteger(size) || size <= 0) return undefined;
-        if (size <= IMPORTED_IMAGE_MAX_BYTES) {
+        if (size <= maxBytes) {
           isAccepted = true;
           return encoded.uri;
         }
-        scale *= Math.min(0.8, Math.sqrt(IMPORTED_IMAGE_MAX_BYTES / size) * 0.9);
+        scale *= Math.min(0.8, Math.sqrt(maxBytes / size) * 0.9);
       } finally {
         rendered?.release();
         context.release();

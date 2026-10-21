@@ -1,67 +1,76 @@
-import { fromByteArray, toByteArray } from 'base64-js';
 import type * as z from 'zod';
 
 import type { JsSandbox } from '@/backend/services/jsSandbox';
 
-import { OfficeGenerationError, OFFICE_MAX_OUTPUT_BYTES } from './generateOfficeFile';
-import type { OfficeTransformRequest } from './officeEditSpec';
+import type { OfficeImageInput } from './createOfficeCode';
 import {
-  officeTextEncoderCode,
-  officeZipLibraryCode,
-  officeXmlLibraryCode,
-} from './officePackageCode';
+  OfficeGenerationError,
+  officeLimits,
+  OFFICE_MAX_MEMORY_BYTES,
+  writtenSize,
+} from './generateOfficeFile';
+import type { OfficeTransformRequest } from './officeEditSpec';
+import { officeRuntimeCode } from './officePackageCode';
 import type { OfficeImage } from './officeSpec';
 import { officeTransformCode } from './officeTransformCode';
 
+/** Input file 0 is the source package; replacement images follow in `images` order. */
 export function createOfficeTransformCode(
-  bytes: Uint8Array,
   request: OfficeTransformRequest,
-  images: Readonly<Record<string, OfficeImage>> = {},
+  images: Readonly<Record<string, OfficeImageInput>> = {},
 ): string {
   return `
-${officeTextEncoderCode}
-${officeZipLibraryCode}
-${officeXmlLibraryCode}
+${officeRuntimeCode}
 const request = ${JSON.stringify(request)};
-const sourceBase64 = ${JSON.stringify(fromByteArray(bytes))};
 const images = ${JSON.stringify(images)};
 try { return (() => { ${officeTransformCode} })(); }
 catch (error) { return { error: String(error.message || error).slice(0, 500) }; }
 `;
 }
 
+/** Reads `source`; an edit writes the new package to `output` and returns its size. */
 export async function transformOfficeFile(input: {
-  bytes: Uint8Array;
+  source: { uri: string; size: number };
   request: OfficeTransformRequest;
   images?: Readonly<Record<string, OfficeImage>>;
+  output?: string;
   sandbox: JsSandbox;
   signal: AbortSignal;
   onSettled: () => void;
-}): Promise<{ data: Uint8Array } | { content: Record<string, z.core.util.JSONType> }> {
+}): Promise<{ size: number } | { content: Record<string, z.core.util.JSONType> }> {
   let submitted = false;
   try {
     input.signal.throwIfAborted();
-    if (input.bytes.length > OFFICE_MAX_OUTPUT_BYTES)
-      throw new OfficeGenerationError('Source Office file exceeds 4 MiB.');
-    const code = createOfficeTransformCode(input.bytes, input.request, input.images);
+    const entries = Object.entries(input.images ?? {});
+    const code = createOfficeTransformCode(
+      input.request,
+      Object.fromEntries(
+        entries.map(([id, image], index) => [id, { index: index + 1, mediaType: image.mediaType }]),
+      ),
+    );
     submitted = true;
     const outcome = await input.sandbox.run({
       code,
+      files: {
+        inputs: [input.source.uri, ...entries.map(([, image]) => image.uri)],
+        output: input.output,
+      },
       signal: input.signal,
       onSettled: input.onSettled,
       limits: {
-        timeoutMs: 30_000,
-        memoryBytes: 64 * 1024 * 1024,
-        maxResultBytes:
-          input.request.operation === 'edit'
-            ? Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 + 100
-            : 128 * 1024,
-        maxLogBytes: 1024,
+        ...officeLimits(0, 128 * 1024),
+        // Only app code runs here, and a parsed XML part takes about 180 times its text (a 2 MiB
+        // sheet: 352 MiB), which the compressed input size does not predict.
+        memoryBytes: OFFICE_MAX_MEMORY_BYTES,
       },
     });
     input.signal.throwIfAborted();
     if (outcome.status === 'error')
-      throw new OfficeGenerationError(`Office operation failed (${outcome.kind}).`);
+      throw new OfficeGenerationError(
+        outcome.kind === 'memory'
+          ? 'The file is too large or complex to process on this device.'
+          : `Office operation failed (${outcome.kind}).`,
+      );
     if (!outcome.result || outcome.resultTruncated)
       throw new OfficeGenerationError(
         'Office result exceeds its limit. Read a smaller range or inspect fewer items.',
@@ -72,24 +81,8 @@ export async function transformOfficeFile(input: {
     if ('error' in value) throw new OfficeGenerationError(String(value.error));
     if (input.request.operation !== 'edit')
       return { content: value as Record<string, z.core.util.JSONType> };
-    if (
-      !('data' in value) ||
-      typeof value.data !== 'string' ||
-      value.data.length > Math.ceil(OFFICE_MAX_OUTPUT_BYTES / 3) * 4 ||
-      value.data.length % 4 ||
-      !/^[A-Za-z0-9+/]+={0,2}$/.test(value.data)
-    )
-      throw new OfficeGenerationError('Invalid edited Office file.');
-    const data = toByteArray(value.data);
-    if (
-      data.length > OFFICE_MAX_OUTPUT_BYTES ||
-      data[0] !== 0x50 ||
-      data[1] !== 0x4b ||
-      data[2] !== 3 ||
-      data[3] !== 4
-    )
-      throw new OfficeGenerationError('Invalid edited Office package.');
-    return { data };
+    if (!('size' in value)) throw new OfficeGenerationError('Invalid edited Office file.');
+    return { size: writtenSize(value.size) };
   } finally {
     if (!submitted) input.onSettled();
   }

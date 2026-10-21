@@ -48,6 +48,36 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNat
           fromBytes(env, runId), fromBytes(env, code), limits));
 }
 
+extern "C" JNIEXPORT jbyteArray JNICALL Java_expo_modules_jssandbox_JsSandboxNative_runFiles(
+    JNIEnv *env,
+    jclass,
+    jbyteArray runId,
+    jbyteArray code,
+    jobjectArray inputPaths,
+    jbyteArray outputPath,
+    jint timeoutMs,
+    jint memoryBytes,
+    jint maxResultBytes,
+    jint maxLogBytes) {
+  const cherry::jssandbox::Limits limits{
+      static_cast<uint32_t>(timeoutMs),
+      static_cast<size_t>(memoryBytes),
+      static_cast<size_t>(maxResultBytes),
+      static_cast<size_t>(maxLogBytes),
+  };
+  cherry::jssandbox::Files files;
+  const jsize count = env->GetArrayLength(inputPaths);
+  for (jsize i = 0; i < count; i++) {
+    auto path = static_cast<jbyteArray>(env->GetObjectArrayElement(inputPaths, i));
+    files.inputs.push_back(fromBytes(env, path));
+    env->DeleteLocalRef(path);
+  }
+  files.output = fromBytes(env, outputPath);
+  return toBytes(
+      env,
+      cherry::jssandbox::run(fromBytes(env, runId), fromBytes(env, code), limits, &files));
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_expo_modules_jssandbox_JsSandboxNative_cancel(JNIEnv *env, jclass, jbyteArray runId) {
   cherry::jssandbox::cancel(fromBytes(env, runId));

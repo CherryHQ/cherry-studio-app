@@ -141,7 +141,10 @@ describe('createSystemCapabilitySource', () => {
     ];
     const absent = capabilityIds(await resolve({}));
     expect(absent.some((id) => office.includes(id))).toBe(false);
-    const tools = await resolve({ jsSandbox: { run: jest.fn() } });
+    // Clients whose sandbox predates native file access cannot run Office jobs.
+    const older = capabilityIds(await resolve({ jsSandbox: { run: jest.fn() } }));
+    expect(older.some((id) => office.includes(id))).toBe(false);
+    const tools = await resolve({ jsSandbox: { run: jest.fn(), files: true } });
     for (const name of office) {
       expect(tools.find((tool) => tool.providerName === name)).toMatchObject({
         approval: 'auto',
@@ -573,17 +576,18 @@ describe('createSystemCapabilitySource', () => {
       provenance: 'generated',
       size: 4,
     });
-    const save = jest.spyOn(fileContent, 'createBytesEntry').mockResolvedValueOnce(entry);
+    const save = jest.spyOn(fileContent, 'createFileEntry').mockResolvedValueOnce(entry);
     const grantFile = jest.fn();
     const source = createSystemCapabilitySource(
       SERVICES,
       dependencies({
         jsSandbox: {
+          files: true,
           run: async ({ onSettled }) => {
             onSettled?.();
             return {
               status: 'ok',
-              result: '"UEsDBA=="',
+              result: '4',
               logs: '',
               logsTruncated: false,
               durationMs: 1,
