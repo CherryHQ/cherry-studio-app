@@ -1,3 +1,5 @@
+import { partitionMessageParts } from '@/frontend/components/Message/parts/partitionMessageParts';
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
 /** Enough text to fill a folded card on any screen; the rest is never laid out there. */
@@ -11,15 +13,25 @@ export type AnswerPreview = Readonly<{
   isTruncated: boolean;
 }>;
 
-/** An answer's text for a folded card: its text parts in order, cut to the preview length. */
+/**
+ * An answer's text for a folded card: the result text the full answer shows outside its process,
+ * with citation markers resolved the same way, cut to the preview length.
+ */
 export function answerPreview(parts: readonly CherryMessagePart[] | undefined): AnswerPreview {
-  const text = (parts ?? [])
-    .flatMap((part) => (part.type === 'text' && part.text.trim() ? [part.text] : []))
-    .join('\n\n');
+  const all = parts ?? [];
+  const { textByPartIndex } = resolveMessageCitations(all);
+  const texts = partitionMessageParts(all).body.flatMap(({ index, part }) =>
+    part.type === 'text'
+      ? [textByPartIndex.get(index) ?? { markdown: part.text, plainText: part.text }]
+      : [],
+  );
+  const text = texts.map((resolved) => resolved.markdown).join('\n\n');
   const characters = Array.from(text);
   return {
     isTruncated: characters.length > ANSWER_PREVIEW_LENGTH,
-    length: characters.filter((character) => !/\s/.test(character)).length,
+    length: Array.from(texts.map((resolved) => resolved.plainText).join('')).filter(
+      (character) => !/\s/.test(character),
+    ).length,
     text:
       characters.length > ANSWER_PREVIEW_LENGTH
         ? characters.slice(0, ANSWER_PREVIEW_LENGTH).join('')

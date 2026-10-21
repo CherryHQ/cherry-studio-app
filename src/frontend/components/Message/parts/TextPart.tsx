@@ -5,12 +5,12 @@ import { useResolveClassNames, useUniwind } from 'uniwind';
 import pluginInlineIcons from '@/assets/plugins/inline-icons.json';
 import skillInlineIcon from '@/assets/skills/inline-icon.json';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import { getPluginInlineIcon } from '@/frontend/utils/pluginIcons';
 import { type MentionSegment, splitToolMentions } from '@/frontend/utils/toolMentions';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
-import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
 import { splitTextReferences } from './textReferences';

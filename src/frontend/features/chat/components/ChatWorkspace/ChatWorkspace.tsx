@@ -19,6 +19,7 @@ import { ChatTranscript } from './ChatTranscript';
 import { ChatDraftState } from './components/ChatDraftState';
 import { ChatForkOriginDivider } from './components/ChatForkOriginDivider';
 import { ChatMessageRow } from './components/ChatMessageRow';
+import { ExpandedAnswerProvider } from './components/ExpandedAnswer';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import { ChatMessageRowProvider } from './context/ChatMessageRowContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
@@ -275,28 +276,30 @@ export function ChatWorkspace({
             timestampMessageIds={timestampMessageIds}
           >
             <ChatSessionProvider value={sessionId}>
-              <ChatTranscript
-                requiresInitialLayout={requiresInitialHistoryLayout}
-                isLoadingMore={isLoadingOlder || isLoadingNewer}
-                contentBottomInset={contentBottomInset}
-                // A draft window has no Session yet and reports an empty key. Keying the
-                // first send by its pending Session keeps the list on one dataset across
-                // the draft-to-Session handoff instead of starting as a keyless list.
-                dataKey={dataKey || listKey}
-                enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
-                extraData={messageListExtraData}
-                initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
-                initialScrollTarget={initialScrollTarget}
-                hasNewerMessages={hasNewerMessages}
-                keyboardOffset={keyboardOffset}
-                // ChatScreen owns background presses so blur also ends composer editing.
-                keyboardShouldPersistTaps="always"
-                messages={listMessages}
-                onLoadOlder={loadOlder}
-                onLoadNewer={loadNewer}
-                onReturnToLatest={returnToLatest}
-                renderMessage={renderChatMessage}
-              />
+              <ExpandedAnswerProvider messages={listMessages} renderUsage={renderUsage}>
+                <ChatTranscript
+                  requiresInitialLayout={requiresInitialHistoryLayout}
+                  isLoadingMore={isLoadingOlder || isLoadingNewer}
+                  contentBottomInset={contentBottomInset}
+                  // A draft window has no Session yet and reports an empty key. Keying the
+                  // first send by its pending Session keeps the list on one dataset across
+                  // the draft-to-Session handoff instead of starting as a keyless list.
+                  dataKey={dataKey || listKey}
+                  enteringMessageId={enteringUserMessageId ?? live.enteringMessageKey}
+                  extraData={messageListExtraData}
+                  initialLayoutReady={!requiresInitialHistoryLayout || !isLoadingInitial}
+                  initialScrollTarget={initialScrollTarget}
+                  hasNewerMessages={hasNewerMessages}
+                  keyboardOffset={keyboardOffset}
+                  // ChatScreen owns background presses so blur also ends composer editing.
+                  keyboardShouldPersistTaps="always"
+                  messages={listMessages}
+                  onLoadOlder={loadOlder}
+                  onLoadNewer={loadNewer}
+                  onReturnToLatest={returnToLatest}
+                  renderMessage={renderChatMessage}
+                />
+              </ExpandedAnswerProvider>
             </ChatSessionProvider>
           </ChatMessageRowProvider>
         </AssistantMessageActionsProvider>

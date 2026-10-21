@@ -38,9 +38,26 @@ Fork provenance stays on the Session, not in persisted Messages. When the copied
 is present in the paginated window, `ChatWorkspace` inserts a presentation-only system row after it;
 until that boundary loads, the divider remains absent rather than attaching to a page edge.
 
-Answer tabs switch the displayed branch. The selected answer uses the composer for its running
-state and stop action; the transcript has no separate stop button or selected-tab spinner.
-Other running answers retain their tab indicators so background work remains discoverable.
+Several answers to one question are equal-height cards. Swiping settles on an answer and shows it,
+so the next message continues it; only the reader's own swipe chooses, never a scroll that ends
+after layout. A card previews the result text the full answer shows outside its process, with
+citations resolved as in the answer, and names its length when it folds. The shown answer uses the
+composer for its running state and stop action; other cards show their own running or failed state.
+
+Tapping any card opens that answer in full over the whole screen: the model and the answers' dots
+stay at the top, the answer's toolbar at the bottom, and there is no composer. Swiping across moves
+to another answer, which becomes the shown one; closing (the close button, pulling down past the top
+on iOS, or Android back) returns to the transcript with that answer's card shown. The layer is a
+component inside the workspace's providers rather than a route, so menus, sheets and toasts portal
+above it as they do over the transcript.
+
+The layer grows from the card's frame and shrinks back onto the shown card. Its content lays out
+once at the final size and is clipped by the growing frame, which fades out near the card so the
+card's own text shows through. Past half of the motion the screen hides its header and the
+workspace region reaches over the composer (`FullScreenLayerHost`); shrinking below half returns
+both, so they appear within the motion. A new action takes over from the current progress. With
+reduced motion the layer fades in and out in place. The transcript keeps its size and header inset
+throughout, so nothing under the layer moves.
 
 With message actions enabled, long-pressing a settled user or assistant message opens copy and
 share using the platform's default timing. iOS presents its native context menu; Android positions

@@ -3,9 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
-import { AnswerReadingBar, MessageAnswerCards } from '../MessageAnswerCards';
+import { ExpandAnswerContextProvider } from '../../context/ExpandAnswerContext';
+import { MessageAnswerCards } from '../MessageAnswerCards';
 
 const mockSelectBranch = jest.fn();
+const mockExpand = jest.fn();
 let mockActions: Record<string, jest.Mock | undefined> = {};
 let mockAnswers = new Map<string, MessageListItem>();
 
@@ -13,7 +15,6 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
-    Button: (props: object) => createElement('Button', props),
     ShimmerText: (props: object) => createElement('ShimmerText', props),
     Skeleton: () => createElement('Skeleton'),
     Spinner: () => createElement('Spinner'),
@@ -115,13 +116,32 @@ describe('MessageAnswerCards', () => {
     let settle: (applied: boolean) => void = () => {};
     mockSelectBranch.mockReturnValue(new Promise<boolean>((resolve) => (settle = resolve)));
     renderCards();
-    const [scroll] = host((node) => node.props.testID === 'message-answers-a1');
-
-    act(() => scroll!.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 300 } } }));
+    swipeTo(300);
     expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'a1', targetId: 'a2' });
     expect(selectedDot()).toBe(1);
 
     await act(async () => settle(false));
+    expect(selectedDot()).toBe(0);
+  });
+
+  test('a scroll that ends without a swipe, as after layout, chooses nothing', () => {
+    renderCards();
+    const [scroll] = host((node) => node.props.testID === 'message-answers-a1');
+
+    act(() => scroll!.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x: 300 } } }));
+    expect(mockSelectBranch).not.toHaveBeenCalled();
+    expect(selectedDot()).toBe(0);
+  });
+
+  test('a choice that took effect does not return when the row later shows the earlier answer', () => {
+    renderCards();
+    swipeTo(300);
+    expect(selectedDot()).toBe(1);
+
+    // The selection lands, then the answer is switched back from elsewhere.
+    act(() => renderer!.update(cards({ ...shown(), ...answerItem('a2', 'Second answer') })));
+    expect(selectedDot()).toBe(1);
+    act(() => renderer!.update(cards(shown())));
     expect(selectedDot()).toBe(0);
   });
 
@@ -131,22 +151,16 @@ describe('MessageAnswerCards', () => {
     expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'a1', targetId: 'a3' });
   });
 
-  test('folds a long answer to its opening and reads it in full after selection succeeds', async () => {
-    const onExpand = jest.fn();
+  test('folds a long answer to its opening and names its length instead of a button', () => {
     mockAnswers.set('a2', answerItem('a2', '字'.repeat(2_000)));
-    renderCards(onExpand);
-    const expand = readButton('a2');
+    renderCards();
 
-    expect(expand.props.testID).toBe('message-answer-a2-expand');
-    expect(expand.props.children).toBe('chat.branch.expand:{"length":"2,000"}');
     expect(markdown()[1]).toHaveLength(1_200);
-
-    await act(async () => expand.props.onPress());
-    expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'a1', targetId: 'a2' });
-    expect(onExpand).toHaveBeenCalled();
+    expect(texts()).toContain('chat.branch.length:{"length":"2,000"}');
+    expect(texts().filter((text) => text.startsWith('chat.branch.length'))).toHaveLength(1);
   });
 
-  test('keeps a full-view entry for short text, tool-only answers and errors', () => {
+  test('every card opens its answer, including short text, tool-only answers and errors', () => {
     mockAnswers.set(
       'a2',
       answerItem('a2', '', 'success', {
@@ -155,53 +169,55 @@ describe('MessageAnswerCards', () => {
     );
     renderCards();
 
-    expect(readButton('a1').props.children).toBe('chat.branch.read');
-    expect(readButton('a2').props.children).toBe('chat.branch.read');
-    expect(readButton('a3').props.children).toBe('chat.branch.read');
+    for (const id of ['a1', 'a2', 'a3']) act(() => card(id).props.onPress());
+    expect(mockExpand.mock.calls.map(([request]) => request.id)).toEqual(['a1', 'a2', 'a3']);
     expect(texts()).toContain('chat.branch.noTextPreview');
     expect(texts()).not.toContain('chat.message.stopped');
   });
 
-  test('waits for an in-flight choice before opening and stays folded if it fails', async () => {
+  test('opening another answer shows it, and reports when it could not be shown', async () => {
     let settle: (applied: boolean) => void = () => {};
     mockSelectBranch.mockReturnValue(new Promise<boolean>((resolve) => (settle = resolve)));
-    const onExpand = jest.fn();
-    renderCards(onExpand);
+    renderCards();
 
-    act(() => dots()[1]!.props.onPress());
-    act(() => readButton('a2').props.onPress());
-    expect(mockSelectBranch).toHaveBeenCalledTimes(1);
-    expect(onExpand).not.toHaveBeenCalled();
+    act(() => card('a2').props.onPress());
+    expect(mockSelectBranch).toHaveBeenCalledWith({ messageId: 'a1', targetId: 'a2' });
+    const [{ selection }] = mockExpand.mock.calls[0]!;
+    expect(selectedDot()).toBe(1);
 
     await act(async () => settle(false));
-    expect(onExpand).not.toHaveBeenCalled();
+    await expect(selection).resolves.toBe(false);
     expect(selectedDot()).toBe(0);
   });
 
-  test('the reading bar names the answer read in full, switches it and folds back', () => {
-    const onCollapse = jest.fn();
-    const onSelect = jest.fn();
-    act(() => {
-      renderer = create(
-        <AnswerReadingBar message={shown()} onCollapse={onCollapse} onSelect={onSelect} />,
-      );
-    });
+  test('opening the shown answer selects nothing', async () => {
+    renderCards();
 
-    expect(texts()).toContain('chat.branch.repeatedModel:{"index":1,"model":"Claude"}');
-    act(() => dots()[0]!.props.onPress());
-    expect(onSelect).not.toHaveBeenCalled();
-    act(() => dots()[1]!.props.onPress());
-    expect(onSelect).toHaveBeenCalledWith('a2');
-    act(() => renderer!.root.findByType('Button' as never).props.onPress());
-    expect(onCollapse).toHaveBeenCalled();
+    act(() => card('a1').props.onPress());
+    expect(mockSelectBranch).not.toHaveBeenCalled();
+    await expect(mockExpand.mock.calls[0]![0].selection).resolves.toBe(true);
   });
 
-  function renderCards(onExpand = jest.fn()) {
+  function renderCards() {
     act(() => {
-      renderer = create(<MessageAnswerCards message={shown()} onExpand={onExpand} />);
+      renderer = create(cards(shown()));
     });
     const [container] = host((node) => typeof node.props.onLayout === 'function');
     act(() => container!.props.onLayout({ nativeEvent: { layout: { width: 370 } } }));
+  }
+
+  function cards(message: MessageListItem) {
+    return (
+      <ExpandAnswerContextProvider value={mockExpand}>
+        <MessageAnswerCards message={message} />
+      </ExpandAnswerContextProvider>
+    );
+  }
+
+  function swipeTo(x: number) {
+    const [scroll] = host((node) => typeof node.props.onScrollBeginDrag === 'function');
+    act(() => scroll!.props.onScrollBeginDrag());
+    act(() => scroll!.props.onMomentumScrollEnd({ nativeEvent: { contentOffset: { x } } }));
   }
 
   function host(predicate: (node: ReturnType<ReactTestRenderer['root']['find']>) => boolean) {
@@ -211,7 +227,16 @@ describe('MessageAnswerCards', () => {
   function dots() {
     return renderer!.root.findAll(
       (node) =>
-        node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function',
+        typeof node.type !== 'string' &&
+        String(node.props.accessibilityLabel).startsWith('chat.branch.page') &&
+        typeof node.props.onPress === 'function',
+    );
+  }
+
+  function card(id: string) {
+    return renderer!.root.find(
+      (node) =>
+        node.props.testID === `message-answer-${id}` && typeof node.props.onPress === 'function',
     );
   }
 
@@ -224,12 +249,6 @@ describe('MessageAnswerCards', () => {
 
   function markdown(): string[] {
     return renderer!.root.findAllByType('MarkdownText' as never).map((node) => node.props.markdown);
-  }
-
-  function readButton(id: string) {
-    return renderer!.root
-      .findAllByType('Button' as never)
-      .find((button) => button.props.testID === `message-answer-${id}-expand`)!;
   }
 
   function selectedDot() {

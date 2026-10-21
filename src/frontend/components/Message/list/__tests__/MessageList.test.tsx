@@ -181,12 +181,8 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual<typeof import('react')>('react');
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    __esModule: true,
-    default: { View },
     runOnJS: (fn: unknown) => fn,
-    useAnimatedRef: () => React.useRef(null),
     useAnimatedReaction: (
       prepare: MockAnimatedReaction['prepare'],
       react: MockAnimatedReaction['react'],

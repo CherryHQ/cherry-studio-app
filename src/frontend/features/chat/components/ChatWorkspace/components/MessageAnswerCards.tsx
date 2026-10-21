@@ -1,9 +1,7 @@
-import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import {
   BackgroundPressExclusion,
-  Button,
   ContentState,
   ShimmerText,
   Skeleton,
@@ -12,7 +10,7 @@ import {
 import { cn } from '@cherrystudio/ui/utils';
 import MaskedView from '@react-native-masked-view/masked-view';
 import { LinearGradient } from 'expo-linear-gradient';
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, type Ref, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   type LayoutChangeEvent,
@@ -37,6 +35,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { useAgentAnswers } from '../../../runtime';
 import { useAssistantMessageActions } from '../context/AssistantMessageActionsProvider';
 import { useChatSessionId } from '../context/ChatSessionContext';
+import { measureFrame, useExpandAnswer } from '../context/ExpandAnswerContext';
 import { answerPreview } from '../utils/answerPreview';
 
 const CARD_GAP = 8;
@@ -92,17 +91,18 @@ export function useAnswerGroup(
 /**
  * One question's answers as a row of equal cards: the shown one in full width and the next
  * peeking beside it. Swiping settles on an answer and shows it; the next question follows the
- * answer shown. A long answer folds to its opening, and reading it in full is `onExpand`.
+ * answer shown. A long answer folds to its opening; tapping any card opens that answer in full.
  */
 export const MessageAnswerCards = memo(function MessageAnswerCards({
   message,
-  onExpand,
 }: {
   message: MessageListItem;
-  onExpand: () => void;
 }) {
   const { t } = useTranslation();
   const { selectBranch } = useAssistantMessageActions();
+  const expand = useExpandAnswer();
+  const cardRefs = useRef(new Map<string, View>());
+  const measure = useCallback((id: string) => measureFrame(cardRefs.current.get(id)), []);
   const sessionId = useChatSessionId();
   const branchSiblings = message.branch?.siblings;
   const ids = useMemo(() => (branchSiblings ?? []).map((sibling) => sibling.id), [branchSiblings]);
@@ -119,6 +119,8 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
   const selection = useRef<{ id: string; result: Promise<boolean> }>(undefined);
   // The card moves on release; the answer itself follows once the transcript is read again.
   const [choice, setChoice] = useState<{ from: string; to: string }>();
+  // Spent once the row shows it; kept, it would redirect the row's next return to `from`.
+  if (choice && choice.to === message.id) setChoice(undefined);
   const shownId = choice?.from === message.id ? choice.to : message.id;
   const shownIndex = Math.max(
     0,
@@ -169,7 +171,11 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
     scrollRef.current?.scrollTo({ animated: false, x: shownOffset });
   }, [shownId, shownOffset, width]);
 
+  // Layout and programmatic scrolls also end; only the reader's own swipe chooses an answer.
+  const isSwiping = useRef(false);
   const handleScrollEnd = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!isSwiping.current) return;
+    isSwiping.current = false;
     const x = nativeEvent.contentOffset.x;
     let nearest = 0;
     offsets.forEach((offset, index) => {
@@ -200,6 +206,9 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
               horizontal
               keyboardShouldPersistTaps="handled"
               onMomentumScrollEnd={handleScrollEnd}
+              onScrollBeginDrag={() => {
+                isSwiping.current = true;
+              }}
               ref={scrollRef}
               showsHorizontalScrollIndicator={false}
               snapToOffsets={offsets}
@@ -213,14 +222,14 @@ export const MessageAnswerCards = memo(function MessageAnswerCards({
                   key={sibling.id}
                   model={group.models[index]}
                   name={group.names[index]!}
-                  onExpand={() => {
-                    void show(index).then((applied) => {
-                      if (applied) onExpand();
-                    });
-                  }}
                   onPress={() => {
                     place(index, true);
-                    void show(index);
+                    const selection = show(index);
+                    expand?.({ id: sibling.id, measure, selection });
+                  }}
+                  ref={(card) => {
+                    if (card) cardRefs.current.set(sibling.id, card);
+                    else cardRefs.current.delete(sibling.id);
                   }}
                   status={sibling.status}
                   testID={`message-answer-${sibling.id}`}
@@ -250,8 +259,8 @@ const AnswerCard = memo(function AnswerCard({
   isShown,
   model,
   name,
-  onExpand,
   onPress,
+  ref,
   status,
   testID,
   width,
@@ -261,8 +270,8 @@ const AnswerCard = memo(function AnswerCard({
   isShown: boolean;
   model: Answers['models'][number];
   name: string;
-  onExpand: () => void;
   onPress: () => void;
+  ref: Ref<View>;
   status: MessageListItem['status'];
   testID: string;
   width: number;
@@ -276,18 +285,33 @@ const AnswerCard = memo(function AnswerCard({
 
   return (
     <Pressable
-      accessible={false}
+      accessibilityHint={t('chat.branch.read')}
+      accessibilityLabel={name}
+      accessibilityRole="button"
       accessibilityState={{ selected: isShown }}
-      className="gap-2 rounded-2xl border border-border-subtle bg-card px-3.5 pt-3 pb-3.5"
-      disabled={isShown}
+      className="gap-2 rounded-2xl border border-border-subtle bg-card px-3.5 pt-3 pb-3.5 active:opacity-80"
       onPress={onPress}
+      ref={ref}
       style={{ width }}
       testID={testID}
     >
       <View className="flex-row items-center gap-1.5">
         {model ? <ModelAvatar model={model.model} provider={model.provider} size={16} /> : null}
-        <Text className="min-w-0 flex-1 font-semibold text-foreground text-sm">{name}</Text>
-        <AnswerStatus status={status} />
+        <Text className="min-w-0 flex-1 font-semibold text-foreground text-sm" numberOfLines={1}>
+          {name}
+        </Text>
+        {isRunning || status === 'error' ? (
+          <AnswerStatus status={status} />
+        ) : isFolded ? (
+          <View className="flex-row items-center">
+            <Text className="text-foreground-tertiary text-xs">
+              {t('chat.branch.length', {
+                length: preview.length.toLocaleString(i18n.resolvedLanguage ?? i18n.language),
+              })}
+            </Text>
+            <ChevronRightIcon className="size-3.5 text-foreground-tertiary" />
+          </View>
+        ) : null}
       </View>
       {/* Fades the text itself, so the card's surface never picks up a band. */}
       <MaskedView
@@ -333,28 +357,11 @@ const AnswerCard = memo(function AnswerCard({
           </View>
         </View>
       </MaskedView>
-      {answer ? (
-        <View className="self-start">
-          <Button
-            icon={<ChevronDownIcon />}
-            onPress={onExpand}
-            size="xs"
-            testID={`${testID}-expand`}
-            variant="secondary"
-          >
-            {isFolded
-              ? t('chat.branch.expand', {
-                  length: preview.length.toLocaleString(i18n.resolvedLanguage ?? i18n.language),
-                })
-              : t('chat.branch.read')}
-          </Button>
-        </View>
-      ) : null}
     </Pressable>
   );
 });
 
-function AnswerStatus({ status }: { status: MessageListItem['status'] }) {
+export function AnswerStatus({ status }: { status: MessageListItem['status'] | undefined }) {
   const { t } = useTranslation();
   if (status === 'pending')
     return (
@@ -414,52 +421,5 @@ export function AnswerDots({
         </Pressable>
       ))}
     </View>
-  );
-}
-
-/** Names the answer being read in full, switches to another, and folds back to the cards. */
-export function AnswerReadingBar({
-  message,
-  onCollapse,
-  onSelect,
-}: {
-  message: MessageListItem;
-  onCollapse: () => void;
-  onSelect: (targetId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const group = useAnswerGroup(message);
-  const index = Math.max(
-    0,
-    group.siblings.findIndex((sibling) => sibling.id === message.id),
-  );
-  const model = group.models[index];
-  return (
-    <BackgroundPressExclusion>
-      <View className="min-h-11 flex-row items-center gap-2 border-border-subtle border-b bg-chat-background py-1.5">
-        {model ? <ModelAvatar model={model.model} provider={model.provider} size={16} /> : null}
-        <Text className="min-w-0 flex-1 font-semibold text-foreground text-sm">
-          {group.names[index]}
-        </Text>
-        <AnswerDots
-          count={group.siblings.length}
-          index={index}
-          names={group.names}
-          onSelect={(dot) => {
-            const target = group.siblings[dot];
-            if (target && target.id !== message.id) onSelect(target.id);
-          }}
-        />
-        <Button
-          icon={<ChevronUpIcon />}
-          onPress={onCollapse}
-          size="xs"
-          testID={`message-answers-collapse-${message.id}`}
-          variant="secondary"
-        >
-          {t('chat.branch.collapse')}
-        </Button>
-      </View>
-    </BackgroundPressExclusion>
   );
 }
