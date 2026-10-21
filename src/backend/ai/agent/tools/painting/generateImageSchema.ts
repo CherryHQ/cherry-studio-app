@@ -143,7 +143,10 @@ export function buildGenerateImageToolSchema(
   const inputShape: Record<string, z.ZodType> = { prompt: GENERATE_IMAGE_PROMPT_FIELD };
 
   for (const [key, entries] of params) {
-    const variants = entries.map(({ spec }) => constrainedParamSchema(key, spec));
+    // Modes usually share a spec. Identical branches would still emit an anyOf without a
+    // top-level type, which Gemini-translating gateways reject.
+    const specs = new Map(entries.map(({ spec }) => [JSON.stringify(spec), spec]));
+    const variants = [...specs.values()].map((spec) => constrainedParamSchema(key, spec));
     const schema = (
       variants.length === 1
         ? variants[0]

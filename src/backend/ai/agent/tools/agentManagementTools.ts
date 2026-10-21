@@ -3,7 +3,7 @@ import * as z from 'zod';
 import type { AgentService } from '@/backend/data/services/AgentService';
 import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 import { UpdateAgentSchema } from '@/shared/data/api/schemas/agents';
-import { ReplaceAgentSkillsSchema } from '@/shared/data/api/schemas/skills';
+import { AgentSkillUpdateSchema, SKILLS_MAX_LIMIT } from '@/shared/data/api/schemas/skills';
 import { AgentIdSchema } from '@/shared/data/types/agent';
 import { DEFAULT_DISABLED_AGENT_CAPABILITIES } from '@/shared/data/types/agentCapability';
 import { AgentToolRecordSchema } from '@/shared/data/types/agentManagementTool';
@@ -16,8 +16,14 @@ export type AgentManagementData = Pick<
   AgentService,
   'create' | 'getById' | 'list' | 'listSkillBindings' | 'update'
 >;
+// Model-facing properties keep a concrete type: OpenAI-compatible gateways that
+// translate tools for Gemini reject a property whose type hides inside a union.
 const targetSchema = z
-  .union([AgentIdSchema, z.literal('current')])
+  .string()
+  .refine(
+    (value) => value === 'current' || AgentIdSchema.safeParse(value).success,
+    'Invalid Agent id',
+  )
   .describe(
     'An exact id returned by agent_list/agent_get, or current for the Agent in this conversation.',
   );
@@ -28,7 +34,7 @@ const modelIdSchema = z
 const fields = UpdateAgentSchema.extend({
   name: z.string().trim().min(1).max(255).optional(),
   instructions: z.string().max(64_000).optional(),
-  model: modelIdSchema.nullable().optional(),
+  model: modelIdSchema.optional(),
 });
 const createSchema = fields.required({ name: true, instructions: true });
 const getSchema = z.strictObject({ agent_id: targetSchema });
@@ -46,14 +52,21 @@ const updateSchema = z.strictObject({
     ),
   changes: fields
     .extend({
-      skills: ReplaceAgentSkillsSchema.shape.updates
+      skills: z
+        .array(
+          z.strictObject({
+            skillId: AgentSkillUpdateSchema.shape.skillId,
+            state: z.enum(['enabled', 'disabled', 'removed']),
+          }),
+        )
+        .max(SKILLS_MAX_LIMIT)
         .optional()
         .describe(
-          'Only listed bindings change; all others are preserved. Use exact installed skillId values. isEnabled: true binds/enables, false binds/disables, null removes the binding. This does not change library-wide enablement.',
+          'Only listed bindings change; all others are preserved. Use exact installed skillId values. state: enabled binds/enables, disabled binds/disables, removed removes the binding. This does not change library-wide enablement.',
         ),
     })
     .describe(
-      'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions. model: null clears the model.',
+      'Only fields explicitly being changed. Omitted fields are preserved; instructions replace the full prompt, so preserve unrelated instructions.',
     ),
 });
 
@@ -143,7 +156,10 @@ export function createAgentManagementTools(
         return {
           value: {
             agent: AgentToolRecordSchema.parse(agent),
-            skills: bindings.items.map(({ skillId, isEnabled }) => ({ skillId, isEnabled })),
+            skills: bindings.items.map(({ skillId, isEnabled }) => ({
+              skillId,
+              state: isEnabled ? 'enabled' : 'disabled',
+            })),
           },
           artifacts: [],
         };
@@ -183,7 +199,14 @@ export function createAgentManagementTools(
         signal.throwIfAborted();
         const agent = await agents.update(target(agent_id), patch, {
           expectedUpdatedAt: expected_updated_at,
-          ...(skills?.length ? { skillUpdates: skills } : {}),
+          ...(skills?.length
+            ? {
+                skillUpdates: skills.map(({ skillId, state }) => ({
+                  skillId,
+                  isEnabled: state === 'removed' ? null : state === 'enabled',
+                })),
+              }
+            : {}),
         });
         return {
           value: { status: 'updated', agent: AgentToolRecordSchema.parse(agent) },
