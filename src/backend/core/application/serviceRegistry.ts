@@ -21,6 +21,7 @@ import {
 } from '@/backend/services/desktopConnections';
 import { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import { DocumentExportRuntime } from '@/backend/services/documentExport';
+import { EnterpriseSyncService } from '@/backend/services/enterprise';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { IosBackgroundExecutionSource } from '@/backend/services/keepAlive/IosBackgroundExecutionSource';
@@ -74,6 +75,7 @@ export const services = {
   TraceStorageService,
   DiagnosticBundleService,
   McpRuntimeService,
+  EnterpriseSyncService,
   AiService,
   AgentSessionStore: SqliteAgentSessionStore,
   AgentRuntime: PiRuntimeService,

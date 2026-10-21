@@ -36,6 +36,8 @@ export const AgentSchema = z.strictObject({
   id: AgentIdSchema,
   /** System instructions supplied to every turn */
   instructions: z.string(),
+  /** Owned by the enterprise server: read-only except for the managed-Agent field allowlist. */
+  isManaged: z.boolean().optional(),
   mode: AgentModeSchema,
   model: UniqueModelIdSchema.nullable(),
   /** Read-time projection of the model's display name; edits go through `model` */
@@ -46,3 +48,11 @@ export const AgentSchema = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
+
+/** Fields a user may still change on an Agent the enterprise server manages. */
+export const MANAGED_AGENT_EDITABLE_FIELDS = [
+  'model',
+  'mode',
+  'toolApprovalMode',
+  'disabledCapabilities',
+] as const satisfies readonly (keyof Agent)[];

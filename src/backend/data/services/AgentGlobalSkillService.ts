@@ -33,6 +33,7 @@ import {
   type SkillSourceKind,
 } from '@/shared/data/types/skill';
 
+import { assertUserOwned } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 /** Persisted facts the installer commits; timestamps and ids are allocated here. */
@@ -84,6 +85,7 @@ export function rowToSkill(row: AgentGlobalSkillRow): Skill {
     profile: SkillProfileSchema.safeParse(row.profile).data ?? EMPTY_SKILL_PROFILE,
     invocation: row.invocation,
     isEnabled: row.isEnabled,
+    isManaged: row.managedRemoteId !== null,
     createdAt: timestampToISO(row.createdAt),
     updatedAt: timestampToISO(row.updatedAt),
   });
@@ -296,6 +298,7 @@ export class AgentGlobalSkillService {
     }
     const skillIds = [...byId.keys()];
     if (skillIds.length === 0) return;
+    await this.assertAgentWritable(tx, agentId);
     const liveRows = await tx
       .select({ id: agentGlobalSkillTable.id })
       .from(agentGlobalSkillTable)
@@ -392,6 +395,7 @@ export class AgentGlobalSkillService {
     record: SkillInstallRecord,
     expectedContentHash?: string,
   ): Promise<Skill> {
+    await this.assertSkillWritable(tx, skillId, 'skill.update');
     const [row] = await tx
       .update(agentGlobalSkillTable)
       .set({
@@ -421,6 +425,7 @@ export class AgentGlobalSkillService {
 
   /** Deletes the installation and its bindings; startup reconciliation removes the bytes. */
   async deleteTx(tx: Database, skillId: string): Promise<void> {
+    await this.assertSkillWritable(tx, skillId, 'skill.delete');
     await tx.delete(agentSkillTable).where(eq(agentSkillTable.skillId, skillId));
     const [row] = await tx
       .delete(agentGlobalSkillTable)
@@ -457,13 +462,22 @@ export class AgentGlobalSkillService {
 
   private async assertAgentWritable(tx: Database, agentId: string): Promise<void> {
     const [agent] = await tx
-      .select({ id: agentTable.id })
+      .select({ id: agentTable.id, managedRemoteId: agentTable.managedRemoteId })
       .from(agentTable)
       .where(and(eq(agentTable.id, agentId), isNull(agentTable.deletedAt)))
       .limit(1);
     if (!agent) {
       throw DataApiErrorFactory.notFound('Agent', agentId);
     }
+    assertUserOwned(agent.managedRemoteId !== null, 'agent.skills');
+  }
+
+  private async assertSkillWritable(tx: Database, skillId: string, operation: string) {
+    const [skill] = await tx
+      .select({ managedRemoteId: agentGlobalSkillTable.managedRemoteId })
+      .from(agentGlobalSkillTable)
+      .where(eq(agentGlobalSkillTable.id, skillId));
+    assertUserOwned(Boolean(skill?.managedRemoteId), operation);
   }
 }
 

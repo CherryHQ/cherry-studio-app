@@ -21,6 +21,7 @@ import {
 } from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
+import { assertProvidersEditable } from './managedResources';
 import { assertCustomProviderModelEndpointTypes } from './providerModelEndpointIntegrity';
 import {
   createCustomModel,
@@ -465,6 +466,7 @@ export class ModelService {
   }
 
   async create(input: CreateModelInput): Promise<Model> {
+    assertProvidersEditable('model.create');
     providerRegistryService.assertReady();
     const row = (await this.dbService.withWriteTx(async (tx) => {
       await assertModelEndpointWrites(tx, [toCreateModelEndpointWrite(input)]);
@@ -477,6 +479,7 @@ export class ModelService {
   }
 
   async batchCreate(inputs: CreateModelInput[]): Promise<Model[]> {
+    assertProvidersEditable('model.batchCreate');
     if (inputs.length === 0) {
       return [];
     }
@@ -500,6 +503,7 @@ export class ModelService {
   }
 
   async createDtos(dtos: CreateModelDto[]): Promise<Model[]> {
+    assertProvidersEditable('model.createDtos');
     const configs = await this.getProviderConfigs(dtos.map((dto) => dto.providerId));
     const inputs = dtos.map((dto) =>
       dtoToCreateInput(
@@ -515,6 +519,7 @@ export class ModelService {
   }
 
   async update(providerId: string, modelId: string, dto: UpdateModelDto): Promise<Model> {
+    assertProvidersEditable('model.update');
     providerRegistryService.assertReady();
     return this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
@@ -545,6 +550,7 @@ export class ModelService {
   async bulkUpdate(
     items: Array<{ modelId: string; patch: UpdateModelDto; providerId: string }>,
   ): Promise<Model[]> {
+    assertProvidersEditable('model.bulkUpdate');
     if (items.length === 0) {
       return [];
     }
@@ -596,6 +602,7 @@ export class ModelService {
 
   /** Compatibility method used by the mobile workflow backend. */
   async delete(id: UniqueModelId): Promise<boolean> {
+    assertProvidersEditable('model.delete');
     const { modelId, providerId } = parseUniqueModelId(id);
     try {
       await this.deleteByKey(providerId, modelId);
@@ -609,6 +616,7 @@ export class ModelService {
   }
 
   async deleteByKey(providerId: string, modelId: string): Promise<void> {
+    assertProvidersEditable('model.deleteByKey');
     const id = createUniqueModelId(providerId, modelId);
     await this.assertNotUsedAsDefault(id, `delete model ${id}`);
 
@@ -628,6 +636,7 @@ export class ModelService {
   }
 
   async bulkDelete(items: Array<{ modelId: string; providerId: string }>): Promise<void> {
+    assertProvidersEditable('model.bulkDelete');
     const uniqueItems = new Map<string, { modelId: string; providerId: string }>();
     for (const item of items) {
       uniqueItems.set(createUniqueModelId(item.providerId, item.modelId), item);
@@ -678,6 +687,7 @@ export class ModelService {
       presetProviderId?: string | null;
     },
   ): Promise<ReconcileProviderModelsResult> {
+    assertProvidersEditable('model.reconcileProviderModels');
     const result = await this.applyReconcile(providerId, input, providerConfig);
     return {
       added: await this.enrichModels(result.inserted),
@@ -692,6 +702,7 @@ export class ModelService {
       presetProviderId?: string | null;
     },
   ): Promise<Model> {
+    assertProvidersEditable('model.createFromRegistry');
     const registryData = providerRegistryService.lookupModel(
       input.providerId,
       input.modelId,

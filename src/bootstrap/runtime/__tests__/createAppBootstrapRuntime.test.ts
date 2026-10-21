@@ -16,6 +16,8 @@ const mockCache = { kind: 'cache', resetForRestore: jest.fn() };
 const mockDb = { kind: 'db' };
 const mockTrash = { entries: {}, hasPendingStorageWork: () => false };
 const mockBackup = { configure: jest.fn() };
+const mockEnterpriseSync = { configure: jest.fn() };
+const mockEnterpriseAccount = { kind: 'enterprise-account', verify: jest.fn(async () => {}) };
 const mockStorageBoot = jest.fn(() => ({ restoring: false, resetCaches: false }));
 const mockCommitStorageBoot = jest.fn();
 const mockFailStorageBoot = jest.fn();
@@ -80,6 +82,9 @@ jest.mock('@/backend/services/file/filePreviewStorage', () => ({
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
 }));
+jest.mock('@/bootstrap/profile/enterpriseAccount', () => ({
+  enterpriseAccount: () => mockEnterpriseAccount,
+}));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
 }));
@@ -142,6 +147,7 @@ const createRuntime = () =>
     RemoteAgentRuntime: mockRemoteAgent,
     DiagnosticBundleService: mockDiagnostics,
     DocumentExportRuntime: mockDocumentExport,
+    EnterpriseSyncService: mockEnterpriseSync,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     MobileAgentHost: mockAgent,
@@ -295,6 +301,7 @@ describe('createAppBootstrapRuntime', () => {
       desktopConnectionManager: mockDesktopConnectionManager,
       diagnostics: mockDiagnostics,
       documentExport: mockDocumentExport,
+      enterprise: mockEnterpriseAccount,
       languageServing: mockAgentRuntime,
       providerAccounts: mockProviderAccounts,
       providerRegistryUpdater: mockProviderRegistryUpdater,

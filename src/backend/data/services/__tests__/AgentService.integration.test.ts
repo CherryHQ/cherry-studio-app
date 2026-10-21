@@ -223,6 +223,30 @@ describe('AgentService persistence', () => {
     }
   });
 
+  it('lets the user adjust only the allowed fields of an enterprise-managed Agent', async () => {
+    insertUserModel(sqlite, 'openai', 'gpt-4');
+    const agent = await agentService.create({ name: 'Managed', instructions: 'Hidden' });
+    sqlite.prepare("UPDATE agent SET managed_remote_id = '7' WHERE id = ?").run(agent.id);
+
+    // The editor resubmits unchanged locked fields alongside the allowed change.
+    await expect(
+      agentService.update(agent.id, {
+        name: 'Managed',
+        instructions: 'Hidden',
+        toolApprovalMode: 'default',
+      }),
+    ).resolves.toMatchObject({
+      isManaged: true,
+      toolApprovalMode: 'default',
+    });
+    await expect(agentService.update(agent.id, { instructions: 'Leaked' })).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+    await expect(agentService.delete(agent.id)).rejects.toMatchObject({
+      code: 'INVALID_OPERATION',
+    });
+  });
+
   it('persists mode switches without resetting capability or approval preferences', async () => {
     const agent = await agentService.create({
       name: 'Chat',

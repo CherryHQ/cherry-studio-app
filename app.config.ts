@@ -103,6 +103,28 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       }),
     extra: {
       ...config.extra,
+      // Public Accounts Portal inputs. Non-production builds default to the cn-dev staging
+      // deployment; production must supply every value explicitly.
+      accountsPortal: {
+        origin:
+          process.env.ACCOUNTS_PORTAL_ORIGIN ??
+          (profile === 'production' ? '' : 'https://accounts-portal-staging.cherry-ai.com'),
+        issuer:
+          process.env.ACCOUNTS_PORTAL_ISSUER ??
+          (profile === 'production' ? '' : 'https://auth-cn-dev.cherry-ai.com'),
+        clientId:
+          process.env.ACCOUNTS_PORTAL_CLIENT_ID ??
+          (profile === 'production' ? '' : '395913266875862394'),
+        scopes: (
+          process.env.ACCOUNTS_PORTAL_SCOPES ??
+          (profile === 'production' ? '' : 'urn:zitadel:iam:org:project:id:382618228913868810:aud')
+        )
+          .split(/\s+/)
+          .filter(Boolean),
+        enterpriseAddress:
+          process.env.ACCOUNTS_PORTAL_ENTERPRISE_API ??
+          (profile === 'production' ? '' : 'https://cse-api-staging.cherry-ai.com'),
+      },
       // Packaged builds gate on the native `production-apk` channel; only development reads the flag.
       // Keeping it out of packaged configs keeps it out of their runtime fingerprints.
       isApkUpdatesEnabled: profile === 'development' && apkUpdatesSetting === 'true',

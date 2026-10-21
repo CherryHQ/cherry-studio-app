@@ -35,6 +35,7 @@ import type {
 } from '@/backend/services/desktopConnections';
 import type { DiagnosticBundleService } from '@/backend/services/diagnostics';
 import type { DocumentExportRuntime } from '@/backend/services/documentExport';
+import type { EnterpriseSyncService } from '@/backend/services/enterprise';
 import { resetFilePreviewsForRestore } from '@/backend/services/file/filePreviewStorage';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
@@ -45,6 +46,7 @@ import type { TrashRuntime } from '@/backend/services/trash';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
+import { enterpriseAccount } from '@/bootstrap/profile/enterpriseAccount';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import {
   publishForegroundActivityAttention,
@@ -56,7 +58,9 @@ import { cacheService as frontendCache } from '@/frontend/data/CacheService';
 import i18n, { initI18n } from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 import { BackupError } from '@/shared/contracts/backup';
+import { normalizeEnterpriseAddress } from '@/shared/contracts/enterprise';
 import { measureStartupStage } from '@/shared/core/logger/startupDiagnostics';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { ApiClient } from '@/shared/data/api/types';
 import type { PreferenceClient } from '@/shared/data/preference';
 
@@ -153,6 +157,13 @@ export function createAppBootstrapRuntime(
   );
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const trash = host.container.get<TrashRuntime>('TrashRuntime');
+  const account = enterpriseAccount();
+  const enterpriseSync = host.container.get<EnterpriseSyncService>('EnterpriseSyncService');
+  enterpriseSync.configure({
+    address: () => normalizeEnterpriseAddress(account.getState().address),
+    getProductToken: account.getProductToken,
+    reportRejected: account.reportRejected,
+  });
   const services = createBackendServices({
     agent,
     ai,
@@ -188,6 +199,7 @@ export function createAppBootstrapRuntime(
     languageServing,
     providerRegistryUpdater,
     trash,
+    enterprise: account,
   });
   backup.configure(
     () =>
@@ -278,6 +290,9 @@ export function createAppBootstrapRuntime(
           resetFilePreviewsForRestore();
         }
         await measureStartupStage('startup.host', () => application.install(host));
+        // An enterprise profile opens offline from its last sync; only the very first sync blocks.
+        if (isEnterpriseProfile() && !(await enterpriseSync.hasSynced()))
+          await measureStartupStage('startup.enterprise', () => enterpriseSync.sync());
         await initializeAppRuntime(services);
         await measureStartupStage('startup.skills', initializeSkills);
         commitStorageBoot();
@@ -305,6 +320,7 @@ export function createAppBootstrapRuntime(
     runPostReadyTasks: async () => {
       // Starts the best-effort PostReady phase off the first-paint path.
       host.runPostReady();
+      void account.verify();
     },
   };
 }

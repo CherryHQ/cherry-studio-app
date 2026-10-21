@@ -3,11 +3,13 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { backupDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { BackupError } from '@/shared/contracts/backup';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import { DEVICE_LOCAL_PREFERENCE_KEYS } from '@/shared/data/preference/preferenceSchema';
 
 import { customSqlStatements } from './customSql';
 import { validateFileLibraryDatabase } from './fileLibraryValidation';
 import { migrations } from './migrations';
+import { ENTERPRISE_SYNC_STATE_KEY } from './schemas/appState';
 
 export type BackupMigration = { when: number; sha256: string };
 export type BackupDatabaseVersion = { migrations: BackupMigration[] };
@@ -60,9 +62,30 @@ export async function withBackupDatabase<T>(
 export async function captureDatabase(source: SQLiteDatabase, target: File): Promise<void> {
   await withBackupDatabase(target, async (destination) => {
     await backupDatabaseAsync({ sourceDatabase: source, destDatabase: destination });
+    await removeEnterpriseData(destination);
     await sealDatabase(destination);
   });
   assertNoSidecars(target);
+}
+
+/**
+ * A backup holds only the user's own data, so it restores into any profile. Enterprise
+ * definitions come back from the next sync; a managed Agent stays as the user's own Agent so
+ * its conversations survive.
+ */
+async function removeEnterpriseData(db: SQLiteDatabase): Promise<void> {
+  await db.execAsync(`
+    PRAGMA foreign_keys = ON;
+    BEGIN IMMEDIATE;
+    DELETE FROM agent_tool_binding WHERE mcp_server_id IN (SELECT id FROM mcp_server WHERE managed_remote_id IS NOT NULL);
+    DELETE FROM mcp_server WHERE managed_remote_id IS NOT NULL;
+    DELETE FROM agent_global_skill WHERE managed_remote_id IS NOT NULL;
+    DELETE FROM agent_tool_binding WHERE agent_id IN (SELECT id FROM agent WHERE managed_remote_id IS NOT NULL);
+    UPDATE agent SET managed_remote_id = NULL, instructions = '' WHERE managed_remote_id IS NOT NULL;
+    DELETE FROM app_state WHERE key = '${ENTERPRISE_SYNC_STATE_KEY}';
+    ${isEnterpriseProfile() ? 'DELETE FROM user_provider;' : ''}
+    COMMIT;
+  `);
 }
 
 async function sealDatabase(db: SQLiteDatabase): Promise<void> {
@@ -217,6 +240,9 @@ export async function restoreDeviceState(
       'UPDATE agent_session SET workspace_folder_id = NULL WHERE workspace_folder_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM file_folder WHERE id = agent_session.workspace_folder_id)',
     );
     await db.runAsync('DELETE FROM desktop_connection');
+    // An enterprise profile's providers come only from its server; the next sync restores them.
+    if (isEnterpriseProfile()) await db.runAsync('DELETE FROM user_provider');
+    await db.runAsync('DELETE FROM app_state WHERE key = ?', ENTERPRISE_SYNC_STATE_KEY);
     await db.runAsync(
       "UPDATE agent_session_message SET status = 'interrupted', updated_at = ? WHERE status IN ('pending','streaming')",
       now,

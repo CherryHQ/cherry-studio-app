@@ -137,3 +137,4 @@ minimumReleaseAgeExclude:
   - expo-camera@57.0.3
   - '@legendapp/list@3.3.3'
   - '@cherrystudio/analytics-client@1.4.0'
+  - '@cherryinternal/accounts-portal@0.1.0'

@@ -26,8 +26,10 @@ import {
 } from '@/shared/data/types/agent';
 import { sanitizeDisabledAgentCapabilities } from '@/shared/data/types/agentCapability';
 import type { UniqueModelId } from '@/shared/data/types/model';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import { agentGlobalSkillService } from './AgentGlobalSkillService';
+import { assertManagedAgentUpdate, assertUserOwned } from './managedResources';
 import { modelService } from './ModelService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -47,6 +49,7 @@ function rowToAgent(row: AgentRow, modelName: null | string = null): Agent {
     disabledCapabilities: sanitizeDisabledAgentCapabilities(row.disabledCapabilities),
     id: row.id,
     instructions: row.instructions,
+    isManaged: row.managedRemoteId !== null,
     mode: row.mode,
     model: row.model as UniqueModelId | null,
     modelName,
@@ -210,6 +213,13 @@ export class AgentService {
     const updates = Object.fromEntries(
       Object.entries(dto).filter(([, value]) => value !== undefined),
     ) as Partial<typeof agentTable.$inferInsert>;
+    // Editors resubmit the whole form, so only fields whose value changes count as edits.
+    assertManagedAgentUpdate(current.isManaged, [
+      ...Object.entries(updates)
+        .filter(([field, value]) => !deepEqual(value, current[field as keyof Agent]))
+        .map(([field]) => field),
+      ...(skillUpdates?.length ? ['skills'] : []),
+    ]);
 
     if (Object.keys(updates).length === 0 && !skillUpdates?.length) {
       return current;
@@ -274,6 +284,7 @@ export class AgentService {
    * point the column at an arbitrary string.
    */
   async setAvatar(id: string, avatar: string): Promise<Agent> {
+    assertUserOwned((await this.getById(id)).isManaged, 'agent.setAvatar');
     const row = await this.dbService.withWriteTx(async (tx) => {
       const [updated] = await tx
         .update(agentTable)
@@ -299,6 +310,7 @@ export class AgentService {
    * (docs/references/agent/agent-persistence.md).
    */
   async delete(id: string): Promise<DeleteAgentResult> {
+    assertUserOwned((await this.getById(id, { includeDeleted: true })).isManaged, 'agent.delete');
     const deleted = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(agentTable)

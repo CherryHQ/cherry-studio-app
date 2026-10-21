@@ -215,6 +215,11 @@ const backendLayer = layerPattern(
   'Backend may depend only on backend and shared modules. Bootstrap owns cross-layer assembly.',
 );
 
+const enterpriseIsolation = layerPattern(
+  ['backend/services/enterprise'],
+  'Enterprise implementations stay behind shared contracts. Only bootstrap and service registration assemble them.',
+);
+
 const backendServicesLayer = {
   group: aliasRoots(['backend/ai']),
   message:
@@ -410,11 +415,16 @@ module.exports = defineConfig([
   {
     files: ['src/backend/**/*.{ts,tsx}'],
     ignores: [...piZoneFiles, ...aiSdkGenerationZoneFiles],
-    rules: restrictedImportRules([backendLayer, ...piIsolation, aiSdkGenerationPrivacy]),
+    rules: restrictedImportRules([
+      backendLayer,
+      enterpriseIsolation,
+      ...piIsolation,
+      aiSdkGenerationPrivacy,
+    ]),
   },
   // The facade and its own implementation are the inside of the generation
   // boundary; the Pi ban still applies to them.
-  restrictedImports(aiSdkGenerationZoneFiles, [backendLayer, ...piIsolation]),
+  restrictedImports(aiSdkGenerationZoneFiles, [backendLayer, enterpriseIsolation, ...piIsolation]),
   // The Agent Runtime contract and its FakeRuntime are process-local but must
   // stay independent of the application protocol, persistence, React, and Expo
   // (Runtime dependency rule and conformance item 11 in
@@ -428,6 +438,7 @@ module.exports = defineConfig([
     ],
     rules: restrictedImportRules([
       backendLayer,
+      enterpriseIsolation,
       runtimeContractLayer,
       sharedPlatformIndependence,
       ...piIsolation,
@@ -445,7 +456,12 @@ module.exports = defineConfig([
       'src/backend/ai/agent/runtime/pi/piModelResolver.ts',
       'src/backend/ai/agent/runtime/pi/PiProviderAccountAdapter.ts',
     ],
-    rules: restrictedImportRules([backendLayer, runtimeContractLayer, sharedPlatformIndependence]),
+    rules: restrictedImportRules([
+      backendLayer,
+      enterpriseIsolation,
+      runtimeContractLayer,
+      sharedPlatformIndependence,
+    ]),
   },
   // `piModelResolver.ts` bridges app model records to Pi; `PiProviderAccountAdapter`
   // bridges native account storage, fetch, and crypto. The model resolver
@@ -458,19 +474,23 @@ module.exports = defineConfig([
       'src/backend/ai/agent/runtime/pi/PiProviderAccountAdapter.ts',
       'src/backend/ai/agent/runtime/pi/__tests__/**/*.{ts,tsx}',
     ],
-    [backendLayer],
+    [backendLayer, enterpriseIsolation],
   ),
   restrictedImports(
     ['src/backend/services/**/*.{ts,tsx}'],
+    [backendLayer, enterpriseIsolation, backendServicesLayer, ...piIsolation],
+  ),
+  restrictedImports(
+    ['src/backend/services/enterprise/**/*.{ts,tsx}'],
     [backendLayer, backendServicesLayer, ...piIsolation],
   ),
   restrictedImports(
     ['src/backend/data/**/*.{ts,tsx}'],
-    [backendLayer, backendDataLayer, ...piIsolation],
+    [backendLayer, enterpriseIsolation, backendDataLayer, ...piIsolation],
   ),
   restrictedImports(
     ['src/backend/core/**/*.{ts,tsx}'],
-    [backendLayer, backendCoreLayer, ...piIsolation],
+    [backendLayer, enterpriseIsolation, backendCoreLayer, ...piIsolation],
   ),
   // Registration is assembly: this file names every concrete service class —
   // including the Pi Runtime binding — so it keeps only the backend layer rule.

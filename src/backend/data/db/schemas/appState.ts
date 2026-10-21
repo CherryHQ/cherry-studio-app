@@ -8,3 +8,6 @@ export const appStateTable = sqliteTable('app_state', {
   description: text(), // Optional description field
   ...createUpdateTimestamps,
 });
+
+/** Enterprise sync bookkeeping; cleared so a restored database is projected again. */
+export const ENTERPRISE_SYNC_STATE_KEY = 'enterprise.sync';

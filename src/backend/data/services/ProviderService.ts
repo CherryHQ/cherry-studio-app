@@ -30,6 +30,7 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
 } from '@/shared/data/types/provider';
 
+import { assertProvidersEditable } from './managedResources';
 import {
   assertCustomProviderEndpointConfiguration,
   getRemovedConfiguredChatEndpoints,
@@ -588,6 +589,7 @@ export class ProviderService {
   }
 
   async create(input: CreateProviderInput): Promise<Provider> {
+    assertProvidersEditable('provider.create');
     const values = toInsert(input);
     const row = (await this.dbService.withWriteTx((tx) => {
       if (values.presetProviderId === null) {
@@ -606,6 +608,7 @@ export class ProviderService {
   }
 
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
+    assertProvidersEditable('provider.update');
     const updates: Partial<InsertUserProviderRow> = {};
 
     if (input.apiKeys !== undefined) {
@@ -716,6 +719,7 @@ export class ProviderService {
   }
 
   async replaceApiKeys(providerId: string, apiKeys: ApiKeyEntry[]): Promise<Provider> {
+    assertProvidersEditable('provider.replaceApiKeys');
     const normalizedApiKeys = normalizeApiKeys(apiKeys);
     const [row] = await this.dbService.withWriteTx((tx) =>
       tx
@@ -737,6 +741,7 @@ export class ProviderService {
     keyId: string,
     updates: UpdateApiKeyInput,
   ): Promise<Provider> {
+    assertProvidersEditable('provider.updateApiKey');
     const row = await this.getRowByProviderId(providerId);
 
     if (!row) {
@@ -765,6 +770,7 @@ export class ProviderService {
   }
 
   async delete(providerId: string): Promise<void> {
+    assertProvidersEditable('provider.delete');
     await this.dbService.withWriteTx(async (tx) => {
       const providerModelIds = tx
         .select({ id: userModelTable.id })
@@ -789,6 +795,7 @@ export class ProviderService {
   }
 
   async batchUpsert(inputs: CreateProviderInput[]): Promise<void> {
+    assertProvidersEditable('provider.batchUpsert');
     if (inputs.length === 0) {
       return;
     }

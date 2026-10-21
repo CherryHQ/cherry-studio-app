@@ -26,6 +26,7 @@ import {
   type RemoteMcpServer,
 } from '@/shared/data/types/mcpServer';
 
+import { assertUserOwned } from './managedResources';
 import { timestampToISO } from './utils/rowMappers';
 
 export type ListMcpServersQuery = {
@@ -45,6 +46,7 @@ function rowToMcpServer(row: McpServerRow): McpServer {
     endpointUrl: row.endpointUrl,
     headers: row.headers ?? undefined,
     ...(row.origin === 'remote' && row.oauth && { oauth: row.oauth }),
+    ...(row.managedRemoteId !== null && { isManaged: true }),
     id: row.id,
     isEnabled: row.isEnabled,
     name: row.name,
@@ -133,6 +135,7 @@ export class McpServerService {
 
   async update(id: string, dto: UpdateMcpServerDto): Promise<McpServer> {
     const existing = await this.getById(id);
+    assertUserOwned(existing.origin !== 'builtin' && existing.isManaged, 'mcp.update');
     const parsed = UpdateMcpServerSchema.parse(dto);
     if (
       existing.origin === 'builtin' &&
@@ -249,9 +252,11 @@ export class McpServerService {
   }
 
   async delete(id: string): Promise<void> {
-    if ((await this.getById(id)).origin === 'builtin') {
+    const existing = await this.getById(id);
+    if (existing.origin === 'builtin') {
       throw DataApiErrorFactory.validation({ origin: ['Disconnect this connection from Plugins'] });
     }
+    assertUserOwned(existing.isManaged, 'mcp.delete');
     await this.dbService.withWriteTx(async (tx) => {
       await tx
         .update(agentToolBindingTable)
