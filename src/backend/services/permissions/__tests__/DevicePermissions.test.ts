@@ -296,6 +296,33 @@ describe('DevicePermissions', () => {
     });
   });
 
+  test('does not query or request Android library access for system photo selection', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: 34 });
+    const unsupported = { state: 'unavailable', canAskAgain: false, reason: 'unsupported' };
+    await expect(service.getStatuses(['photos.read'])).resolves.toEqual({
+      'photos.read': unsupported,
+    });
+    await expect(service.request(['photos.read'])).resolves.toEqual({ 'photos.read': unsupported });
+    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalled();
+    expect(MediaLibrary.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  test('requests only write access to save photos on Android 10 and earlier', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+    Object.defineProperty(Platform, 'Version', { configurable: true, value: 29 });
+    jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(unrequested as never);
+    jest.mocked(MediaLibrary.requestPermissionsAsync).mockImplementation(async () => {
+      jest.mocked(MediaLibrary.getPermissionsAsync).mockResolvedValue(allowed as never);
+      return allowed as never;
+    });
+    await expect(service.request(['photos.write'])).resolves.toEqual({
+      'photos.write': { state: 'granted', canAskAgain: false },
+    });
+    expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(true, ['photo']);
+    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalledWith(false, expect.anything());
+  });
+
   test('does not request photo reading or storage permissions for the modern Android writer', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     Object.defineProperty(Platform, 'Version', { configurable: true, value: 30 });
