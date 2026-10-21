@@ -32,6 +32,7 @@ describe('MarkdownText adapter', () => {
 
     expect(mockCherryMarkdownText).toHaveBeenCalledWith(
       expect.objectContaining({
+        citationLinkPrefix: 'cite:',
         fontSizeStep: 1,
         isStreaming: false,
         markdown: '[Cherry](https://cherry-ai.com)',

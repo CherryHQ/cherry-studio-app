@@ -17,6 +17,7 @@ const markdownThemeVariables = [
   '--color-background',
   '--color-primary',
   '--color-muted-foreground',
+  '--color-foreground-tertiary',
   '--color-link',
   '--color-border',
   '--color-secondary',
@@ -38,6 +39,12 @@ export type MarkdownSelectionMenuLabels = {
 };
 
 export type MarkdownTextProps = {
+  /**
+   * URL prefix of inline citation markers. Citations annotate the answer rather
+   * than navigate away from it, so they render in a low-emphasis neutral instead
+   * of the link color.
+   */
+  citationLinkPrefix?: string;
   fontSizeStep: TypographySizeStep;
   isStreaming?: boolean;
   markdown: string;
@@ -120,6 +127,7 @@ function createMarkdownTypographyStyle(
 }
 
 export function MarkdownText({
+  citationLinkPrefix,
   fontSizeStep,
   isStreaming = false,
   markdown,
@@ -133,6 +141,7 @@ export function MarkdownText({
     backgroundValue,
     primaryValue,
     mutedForegroundValue,
+    foregroundTertiaryValue,
     linkValue,
     borderValue,
     secondaryValue,
@@ -145,6 +154,7 @@ export function MarkdownText({
   const background = resolveCSSString(backgroundValue);
   const primary = resolveCSSString(primaryValue);
   const mutedForeground = resolveCSSString(mutedForegroundValue);
+  const foregroundTertiary = resolveCSSString(foregroundTertiaryValue);
   const link = resolveCSSString(linkValue);
   const border = resolveCSSString(borderValue);
   const secondary = resolveCSSString(secondaryValue);
@@ -209,6 +219,9 @@ export function MarkdownText({
         syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
       link: { color: link, underline: false },
+      linkVariants: citationLinkPrefix
+        ? { [`^${escapeRegExp(citationLinkPrefix)}`]: { color: foregroundTertiary } }
+        : undefined,
       strong: { color: foreground },
       em: { color: foreground },
       strikethrough: { color: mutedForeground },
@@ -247,9 +260,11 @@ export function MarkdownText({
   }, [
     background,
     border,
+    citationLinkPrefix,
     codeBlock,
     fontSizeStep,
     foreground,
+    foregroundTertiary,
     inlineCode,
     inlineCodeForeground,
     link,
@@ -281,6 +296,10 @@ export function MarkdownText({
       streamingAnimation={isStreaming}
     />
   );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function resolveCSSString(value: number | string | undefined, fallback = 'invalid'): string {
