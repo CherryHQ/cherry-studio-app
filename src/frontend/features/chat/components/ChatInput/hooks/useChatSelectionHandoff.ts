@@ -5,21 +5,15 @@ import {
   takeChatSelectionHandoff,
   type ChatComposerHandoff,
 } from '@/frontend/appShell/navigation/chat';
-import {
-  useComposerActions,
-  useComposerMeta,
-  useComposerState,
-} from '@/frontend/components/Composer';
+import { useComposerActions, useComposerState } from '@/frontend/components/Composer';
 import { isComposerAttachmentReady } from '@/frontend/components/Composer/utils/composerAttachments';
 
-import { createMentionLabel } from '../utils/mentionLabels';
-import { createSelectionMentionUrl } from '../utils/selectionMentions';
+import { createSelectionMention } from '../utils/selectionMentions';
 
-/** Insert at the retained caret when the preview returns; the existing draft stays mounted. */
+/** Append the reference when the preview returns; the existing draft stays mounted. */
 export function useChatSelectionHandoff(token: string | undefined) {
   const { attachments } = useComposerState();
-  const { inputRef } = useComposerMeta();
-  const { addAttachments } = useComposerActions();
+  const { addAttachments, setDraft } = useComposerActions();
   const pending = useRef<
     | {
         token: string | undefined;
@@ -32,8 +26,6 @@ export function useChatSelectionHandoff(token: string | undefined) {
 
   useFocusEffect(
     useCallback(() => {
-      const input = inputRef.current;
-      if (!input) return;
       const handoff = takeChatSelectionHandoff(token);
       if (handoff) {
         const existing = attachments.find(
@@ -67,14 +59,13 @@ export function useChatSelectionHandoff(token: string | undefined) {
       if (!isComposerAttachmentReady(attachment)) return;
       // Workspace preparation can copy the source to a new managed entry.
       pending.current = undefined;
-      input.insertLink(
-        createMentionLabel(reference.selection.label),
-        createSelectionMentionUrl({
-          ...reference.selection.selection,
-          file_entry_id: attachment.fileEntryId,
-        }),
-      );
-      input.insertText(' ');
-    }, [addAttachments, attachments, inputRef, token]),
+      const mention = createSelectionMention(reference.selection.label, {
+        ...reference.selection.selection,
+        file_entry_id: attachment.fileEntryId,
+      });
+      // The caret of a field never focused sits at its start on Android, so append through the
+      // draft: the order matches iOS and every chip is rebuilt from Markdown.
+      setDraft((draft) => `${draft}${draft && !/\s$/.test(draft) ? ' ' : ''}${mention} `);
+    }, [addAttachments, attachments, setDraft, token]),
   );
 }

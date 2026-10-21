@@ -1,5 +1,4 @@
-import type { ComposerInputHandle } from '@cherrystudio/ui/components';
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -9,7 +8,7 @@ import {
 } from '@/frontend/appShell/navigation/chat';
 import {
   ComposerProvider,
-  useComposerMeta,
+  useComposerState,
 } from '@/frontend/components/Composer/context/ComposerProvider';
 import { useManagedComposerAttachments } from '@/frontend/components/Composer/hooks/useManagedComposerAttachments';
 import {
@@ -24,22 +23,12 @@ import { useChatSelectionHandoff } from '../useChatSelectionHandoff';
 
 let mockFocused = false;
 let mockReplayFocus = false;
+let mockInitialDraft = '';
 let mockDraft = '';
-let mockCaret = 0;
 let mockAttachmentStore: ReturnType<typeof useManagedComposerAttachments>;
 const mockPrepareWorkspaceAttachment = jest.fn();
 const mockToastShow = jest.fn();
 const mockFileModule = { prepareWorkspaceAttachment: mockPrepareWorkspaceAttachment };
-const mockInput = {
-  insertText(text: string) {
-    mockDraft = mockDraft.slice(0, mockCaret) + text + mockDraft.slice(mockCaret);
-    mockCaret += text.length;
-  },
-  insertLink(label: string, url: string) {
-    this.insertText(`[${label}](${url})`);
-  },
-};
-const mockInputRef: { current: typeof mockInput | null } = { current: mockInput };
 
 jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => {
@@ -111,20 +100,17 @@ function Probe({ token, initialAttachments, workspaceSessionId, workspaceFolderI
     mockAttachmentStore = store;
   }, [store]);
   return (
-    <ComposerProvider attachmentStore={store}>
+    <ComposerProvider attachmentStore={store} initialDraft={mockInitialDraft}>
       <SelectionProbe token={token} />
     </ComposerProvider>
   );
 }
 
 function SelectionProbe({ token }: Pick<ProbeProps, 'token'>) {
-  const { inputRef } = useComposerMeta();
-  useLayoutEffect(() => {
-    inputRef.current = mockInputRef.current as unknown as ComposerInputHandle | null;
-    return () => {
-      inputRef.current = null;
-    };
-  });
+  const { draft } = useComposerState();
+  useEffect(() => {
+    mockDraft = draft;
+  }, [draft]);
   useChatSelectionHandoff(token);
   return null;
 }
@@ -146,9 +132,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFocused = false;
   mockReplayFocus = false;
-  mockDraft = 'Keep before and after';
-  mockCaret = 'Keep before '.length;
-  mockInputRef.current = mockInput;
+  mockInitialDraft = 'Keep before and after';
   mockPrepareWorkspaceAttachment.mockResolvedValue(file);
 });
 afterEach(() => {
@@ -156,7 +140,7 @@ afterEach(() => {
   renderer = undefined;
 });
 
-it('inserts once at the retained caret without replacing draft text, attachments or its seed', () => {
+it('appends once after the draft without replacing its text, attachments or seed', () => {
   const seed = createChatComposerHandoff({ attachments: [], draft: 'Original seed' });
   const existing = createReadyAttachmentDraft(
     { ...file, entry: { ...file.entry, id: '00000000-0000-7000-8000-000000000002' } },
@@ -168,8 +152,10 @@ it('inserts once at the retained caret without replacing draft text, attachments
 
   focus();
   expect(readSelectionMentions(mockDraft)).toMatchObject({
-    text: 'Keep before report.docx · ¶1 and after',
-    selectionReferences: [{ ...selection, type: 'selection', offset: 'Keep before '.length }],
+    text: 'Keep before and after report.docx · ¶1 ',
+    selectionReferences: [
+      { ...selection, type: 'selection', offset: 'Keep before and after '.length },
+    ],
   });
   expect(mockAttachmentStore.attachments).toEqual([existing, attachment]);
   expect(getChatComposerHandoff(seed)?.draft).toBe('Original seed');
@@ -177,22 +163,43 @@ it('inserts once at the retained caret without replacing draft text, attachments
   const inserted = mockDraft;
   focus(false);
   focus();
+  expect(mockDraft).toBe(inserted);
   act(() => renderer?.unmount());
   renderer = undefined;
+  mockInitialDraft = inserted;
   render({ token, initialAttachments: [existing, attachment] });
+  focus();
   expect(mockDraft).toBe(inserted);
   expect(mockAttachmentStore.attachments).toEqual([existing, attachment]);
 });
 
-it('keeps the pending reference until the input is available and deduplicates its attachment', () => {
+it('places the first reference of an empty draft without a leading space', () => {
+  mockInitialDraft = '';
+  render({ token: createChatSelectionHandoff({ attachment, selection }) });
+  focus();
+  expect(mockDraft.startsWith('[')).toBe(true);
+  expect(readSelectionMentions(mockDraft).text).toBe('report.docx · ¶1 ');
+});
+
+it('keeps an earlier reference intact when appending after it', () => {
+  const earlier = createChatSelectionHandoff({ attachment, selection });
+  mockInitialDraft = '';
+  render({ token: earlier });
+  focus();
+  focus(false);
+  const second = { ...selection, label: 'report.docx · ¶2' };
+  render({ token: createChatSelectionHandoff({ attachment, selection: second }) });
+  focus();
+  expect(readSelectionMentions(mockDraft).selectionReferences.map((ref) => ref.label)).toEqual([
+    selection.label,
+    second.label,
+  ]);
+});
+
+it('deduplicates its attachment', () => {
   const token = createChatSelectionHandoff({ attachment, selection });
   const existing = { ...attachment, id: 'from-picker' };
-  mockInputRef.current = null;
   render({ token, initialAttachments: [existing] });
-  focus();
-  expect(mockDraft).toBe('Keep before and after');
-  mockInputRef.current = mockInput;
-  focus(false);
   focus();
   expect(readSelectionMentions(mockDraft).selectionReferences).toHaveLength(1);
   expect(mockAttachmentStore.attachments).toEqual([existing]);
@@ -236,7 +243,7 @@ it.each([
   };
   await act(async () => prepared.resolve(copy));
   expect(readSelectionMentions(mockDraft)).toMatchObject({
-    text: 'Keep before report.docx · ¶1 and after',
+    text: 'Keep before and after report.docx · ¶1 ',
     selectionReferences: [
       { ...selection, selection: { ...selection.selection, file_entry_id: copy.entry.id } },
     ],
