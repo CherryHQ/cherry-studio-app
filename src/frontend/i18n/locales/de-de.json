@@ -699,7 +699,7 @@
   "fileViewer.saveToPhotos": "Unter Fotos speichern",
   "fileViewer.selection.hint": "Tippen Sie auf Dokumentinhalt, um ihn auszuwählen.",
   "fileViewer.selection.openChat": "In neuem Chat referenzieren",
-  "fileViewer.selection.requiresAgent": "Erstellen Sie einen Agent im Standardmodus, um diese Auswahl zu bearbeiten.",
+  "fileViewer.selection.referenceInChat": "Im aktuellen Chat referenzieren",
   "fileViewer.selection.select": "Inhalt zum Referenzieren auswählen",
   "fileViewer.selection.slide": "Folie {{slide}}",
   "fileViewer.share": "Teilen",

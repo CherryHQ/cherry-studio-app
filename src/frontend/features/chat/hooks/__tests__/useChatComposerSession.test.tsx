@@ -135,6 +135,25 @@ describe('useChatComposerSession', () => {
 
     expect(current()).toEqual({ key: draftKey + 3, target: draftTarget });
   });
+
+  it.each([
+    { kind: 'session' as const, sessionId: 'session-1' },
+    { kind: 'draft' as const, agentId: 'agent-1', composerHandoff: 'seed-1' },
+  ])('keeps the mounted $kind composer when a preview selection arrives', (target) => {
+    act(() => {
+      renderer = create(<Probe onChange={captureComposerSession} target={target} />);
+    });
+    const original = current();
+    act(() => {
+      renderer?.update(
+        <Probe
+          onChange={captureComposerSession}
+          target={{ ...target, selectionHandoff: 'selection-1' }}
+        />,
+      );
+    });
+    expect(current()).toBe(original);
+  });
 });
 
 function captureComposerSession(value: ChatComposerSessionState) {

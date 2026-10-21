@@ -689,7 +689,7 @@
   "fileViewer.saveToPhotos": "Lưu vào Ảnh",
   "fileViewer.selection.hint": "Nhấn vào nội dung tài liệu để chọn.",
   "fileViewer.selection.openChat": "Trích dẫn trong cuộc trò chuyện mới",
-  "fileViewer.selection.requiresAgent": "Tạo Agent ở chế độ tiêu chuẩn để làm việc với phần đã chọn này.",
+  "fileViewer.selection.referenceInChat": "Trích dẫn trong cuộc trò chuyện hiện tại",
   "fileViewer.selection.select": "Chọn nội dung để trích dẫn",
   "fileViewer.selection.slide": "Trang chiếu {{slide}}",
   "fileViewer.share": "Chia sẻ",

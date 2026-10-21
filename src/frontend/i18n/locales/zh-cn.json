@@ -689,7 +689,7 @@
   "fileViewer.saveToPhotos": "保存到相册",
   "fileViewer.selection.hint": "点按文档内容以选择。",
   "fileViewer.selection.openChat": "在新对话中引用",
-  "fileViewer.selection.requiresAgent": "请先创建标准模式 Agent，再处理此选区。",
+  "fileViewer.selection.referenceInChat": "引用到当前对话",
   "fileViewer.selection.select": "选择引用内容",
   "fileViewer.selection.slide": "第 {{slide}} 页",
   "fileViewer.share": "分享",

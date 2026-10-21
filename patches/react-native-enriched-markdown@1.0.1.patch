@@ -1244,3 +1244,48 @@ index c67dd9ddbfbc364ff9d54125b07722ea21375e6c..19202f05d4e7005ea99f0826c9703a0a
 +      private const val MAX_ANIMATED_CONTENT_LENGTH = 64 * 1024
      }
    }
+diff --git a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt
+index 6f6a2eac2dfe211074eff7984775a4fb89e38fde..37fb0297f066d6a9fa741f68bc63f349dd9e37f7 100644
+--- a/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt
++++ b/android/src/main/java/com/swmansion/enriched/markdown/input/formatting/FormattingStore.kt
+@@ -107,9 +107,14 @@ class FormattingStore {
+     var mergedEnd = newRange.end
+     val mergeIndexes = mutableListOf<Int>()
+ 
++    // Links are atomic: a new link replaces the links it overlaps and never absorbs a touching
++    // neighbour, which would drop that neighbour's URL.
++    val isLink = newRange.type == StyleType.LINK
+     for ((idx, existing) in ranges.withIndex()) {
+       if (existing.type != newRange.type) continue
+-      if (existing.start <= mergedEnd && existing.end >= mergedStart) {
++      if (isLink) {
++        if (existing.start < newRange.end && existing.end > newRange.start) mergeIndexes.add(idx)
++      } else if (existing.start <= mergedEnd && existing.end >= mergedStart) {
+         mergedStart = minOf(mergedStart, existing.start)
+         mergedEnd = maxOf(mergedEnd, existing.end)
+         mergeIndexes.add(idx)
+diff --git a/ios/input/ENRMFormattingStore.mm b/ios/input/ENRMFormattingStore.mm
+index 92a4fbe06893243c3768d88b65ee9f65ec108dbb..51c80a4a7879e3d27f6657257d4d2bcc4ebe6179 100644
+--- a/ios/input/ENRMFormattingStore.mm
++++ b/ios/input/ENRMFormattingStore.mm
+@@ -167,13 +167,19 @@ - (void)addRange:(ENRMFormattingRange *)newRange
+   NSUInteger mergedStart = newRange.range.location;
+   NSUInteger mergedEnd = NSMaxRange(newRange.range);
+ 
++  // Links are atomic: a new link replaces the links it overlaps and never absorbs a touching
++  // neighbour, which would drop that neighbour's URL.
++  BOOL isLink = newRange.type == ENRMInputStyleTypeLink;
+   for (NSUInteger idx = 0; idx < _ranges.count; idx++) {
+     ENRMFormattingRange *existing = _ranges[idx];
+     if (existing.type != newRange.type)
+       continue;
+ 
+     NSUInteger existingEnd = NSMaxRange(existing.range);
+-    if (existing.range.location <= mergedEnd && existingEnd >= mergedStart) {
++    if (isLink) {
++      if (existing.range.location < NSMaxRange(newRange.range) && existingEnd > newRange.range.location)
++        [mergeIndexes addIndex:idx];
++    } else if (existing.range.location <= mergedEnd && existingEnd >= mergedStart) {
+       mergedStart = MIN(mergedStart, existing.range.location);
+       mergedEnd = MAX(mergedEnd, existingEnd);
+       [mergeIndexes addIndex:idx];

@@ -1,28 +1,41 @@
 import type { FilePreviewSelection } from '@cherrystudio/file-preview-webview/protocol';
-import { Button, ContentState, useToast } from '@cherrystudio/ui/components';
+import { Button, ContentState } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { chatHref, createChatComposerHandoff } from '@/frontend/appShell/navigation/chat';
+import {
+  chatHref,
+  createChatComposerHandoff,
+  createChatSelectionHandoff,
+  type ChatTarget,
+} from '@/frontend/appShell/navigation/chat';
+import { AgentMenu } from '@/frontend/components/AgentMenu';
 import { createReadyAttachmentDraft } from '@/frontend/components/Composer/utils/composerAttachments';
 import { canPreviewDocument, useOpenFileEntry } from '@/frontend/components/FileEntryPreview';
-import { useAgentsApi } from '@/frontend/hooks/agent';
 import type { ResolvedFile } from '@/shared/contracts/file';
+import type { Agent } from '@/shared/data/types/agent';
 import {
   documentFileTypeFromMediaType,
   isBuiltinOfficeFileType,
 } from '@/shared/utils/documentFileTypes';
 
 import { useDocumentPreviewPage } from '../hooks/useDocumentPreviewPage';
+import { acceptsSelection, useSelectionSourceChat } from '../hooks/useSelectionSourceChat';
 import { officeSelectionReference } from '../utils/officeSelection';
 import { FileDocumentPreview } from './FileDocumentPreview';
 import { FileMenuGuide } from './FileMenuGuide';
 import { FileViewerHeader } from './FileViewerHeader';
 
-export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
+export function FileDocumentViewer({
+  file,
+  sourceChat,
+}: {
+  file: ResolvedFile;
+  sourceChat?: ChatTarget;
+}) {
   const { t } = useTranslation();
   const { openFileEntryWithSystem } = useOpenFileEntry();
   const page = useDocumentPreviewPage();
@@ -33,8 +46,8 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState<FilePreviewSelection | null>(null);
   const router = useRouter();
-  const { agents } = useAgentsApi();
-  const { toast } = useToast();
+  const { isResolving: isResolvingSourceChat, returnsToSourceChat } =
+    useSelectionSourceChat(sourceChat);
   const { bottom } = useSafeAreaInsets();
   const documentType = documentFileTypeFromMediaType(file.entry.mediaType);
   const canSelect =
@@ -48,21 +61,30 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
     setSelection(null);
     setIsSelecting((value) => !value);
   };
-  const openSelection = () => {
+  const createSelectionHandoff = () => {
     if (!selection) return;
     const reference = officeSelectionReference(file, selection, (slide) =>
       t('fileViewer.selection.slide', { slide }),
     );
     if (!reference) return;
-    const agent = agents.find((agent) => agent.mode === 'standard');
-    if (!agent) {
-      toast.show({ label: t('fileViewer.selection.requiresAgent'), variant: 'danger' });
-      return;
-    }
-    const composerHandoff = createChatComposerHandoff({
-      attachments: [createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`)],
-      draft: '',
+    return {
+      attachment: createReadyAttachmentDraft(file, `file-entry:${file.entry.id}`),
       selection: reference,
+    };
+  };
+  const referenceInSourceChat = () => {
+    const handoff = createSelectionHandoff();
+    if (!handoff || !sourceChat) return;
+    const selectionHandoff = createChatSelectionHandoff(handoff);
+    router.dismissTo(chatHref({ ...sourceChat, selectionHandoff }));
+  };
+  const referenceInNewChat = (agent: Agent) => {
+    const handoff = createSelectionHandoff();
+    if (!handoff) return;
+    const composerHandoff = createChatComposerHandoff({
+      attachments: [handoff.attachment],
+      draft: '',
+      selection: handoff.selection,
     });
     router.dismissTo(chatHref({ kind: 'draft', agentId: agent.id, composerHandoff }));
   };
@@ -141,9 +163,15 @@ export function FileDocumentViewer({ file }: { file: ResolvedFile }) {
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
             {selection?.excerpt ?? t('fileViewer.selection.hint')}
           </Text>
-          <Button disabled={!selection} onPress={openSelection}>
-            {t('fileViewer.selection.openChat')}
-          </Button>
+          {returnsToSourceChat ? (
+            <Button disabled={!selection || isResolvingSourceChat} onPress={referenceInSourceChat}>
+              {t('fileViewer.selection.referenceInChat')}
+            </Button>
+          ) : (
+            <AgentMenu accepts={acceptsSelection} onSelect={referenceInNewChat}>
+              <Button disabled={!selection}>{t('fileViewer.selection.openChat')}</Button>
+            </AgentMenu>
+          )}
         </View>
       ) : null}
     </>

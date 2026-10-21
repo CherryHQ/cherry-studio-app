@@ -7,6 +7,7 @@ import { View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/appShell/header';
+import { parseChatPreviewSource, type ChatTarget } from '@/frontend/appShell/navigation/chat';
 import { fileEntryPreviewKind, useResolvedFile } from '@/frontend/components/FileEntryPreview';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
@@ -21,7 +22,9 @@ export function FileViewerScreen() {
   const params = useLocalSearchParams<{
     fileEntryId?: string | string[];
     imageEditRequestId?: string | string[];
+    sourceChat?: string | string[];
   }>();
+  const sourceChat = parseChatPreviewSource(getSingleRouteParam(params.sourceChat));
   const imageEditRequestId = getSingleRouteParam(params.imageEditRequestId);
   const entryId = FileEntryIdSchema.safeParse(getSingleRouteParam(params.fileEntryId));
 
@@ -39,6 +42,7 @@ export function FileViewerScreen() {
     <FileViewerRoute
       entryId={entryId.data}
       imageEditRequestId={imageEditRequestId}
+      sourceChat={sourceChat}
       key={`${entryId.data}:${imageEditRequestId ?? ''}`}
     />
   );
@@ -47,9 +51,11 @@ export function FileViewerScreen() {
 function FileViewerRoute({
   entryId,
   imageEditRequestId,
+  sourceChat,
 }: {
   entryId: FileEntryId;
   imageEditRequestId?: string;
+  sourceChat?: ChatTarget;
 }) {
   const { t } = useTranslation();
   const query = useResolvedFile(entryId);
@@ -92,7 +98,11 @@ function FileViewerRoute({
           key={`${file.entry.updatedAt}:${file.uri}`}
         />
       ) : kind === 'document' ? (
-        <FileDocumentViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} />
+        <FileDocumentViewer
+          file={file}
+          sourceChat={sourceChat}
+          key={`${file.entry.updatedAt}:${file.uri}`}
+        />
       ) : (
         <FileTextViewer file={file} key={`${file.entry.updatedAt}:${file.uri}`} kind={kind} />
       )}

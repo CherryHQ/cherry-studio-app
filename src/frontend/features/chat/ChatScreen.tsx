@@ -76,6 +76,13 @@ function LocalChatHeader(props: ComponentProps<typeof MainHeader>) {
   const workspaceName = workspace.workspace?.name;
   const [workspaceAddress, setWorkspaceAddress] = useState<FileWorkspaceAddress | null>(null);
   const closeWorkspace = useCallback(() => setWorkspaceAddress(null), []);
+  // The sheet reopens on focus; a reference returning from its preview belongs to the composer.
+  const selectionHandoff = target?.selectionHandoff;
+  const [shownSelectionHandoff, setShownSelectionHandoff] = useState(selectionHandoff);
+  if (selectionHandoff !== shownSelectionHandoff) {
+    setShownSelectionHandoff(selectionHandoff);
+    if (selectionHandoff) setWorkspaceAddress(null);
+  }
   function openWorkspace() {
     if (!target) return;
     Keyboard.dismiss();
@@ -275,6 +282,7 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
                     continuesShownAnswer ? t('chat.inputPlaceholderContinue') : undefined
                   }
                   sessionId={sessionId}
+                  selectionHandoff={target.selectionHandoff}
                 />
                 <ChatDockFooter>
                   <Text className="text-center text-xs text-muted-foreground">
