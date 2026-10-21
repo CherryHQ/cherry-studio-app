@@ -248,8 +248,8 @@ importers:
         specifier: 0.6.0
         version: 0.6.0(zod@4.4.3)
       '@cherrystudio/remote-transport':
-        specifier: 0.2.3
-        version: 0.2.3(zod@4.4.3)
+        specifier: 0.2.4
+        version: 0.2.4(zod@4.4.3)
       '@cherrystudio/ui':
         specifier: workspace:*
         version: link:packages/ui
@@ -832,8 +832,8 @@ importers:
         version: 4.4.3
     devDependencies:
       '@cherrystudio/file-preview':
-        specifier: 0.1.2
-        version: 0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: 0.1.3
+        version: 0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/node':
         specifier: ^25.7.0
         version: 25.9.5
@@ -1754,8 +1754,8 @@ packages:
       typescript:
         optional: true
 
-  '@cherrystudio/file-preview@0.1.2':
-    resolution: {integrity: sha512-6Ou/e9iOxhXcfJNpPRzLsmIiLrh5KTto1XWgtI9qwG1H+CyoMmGx2tV5rK2Xb4Ytjs3b5mgZaa8NOefRwSIFPw==}
+  '@cherrystudio/file-preview@0.1.3':
+    resolution: {integrity: sha512-x4TZOWvsrpisZ2WLoQ6MOUZ8zM6At+ZcpfpFJrRGtf5dzvn6Mw4/fbDetRi1FSgTZbdLpZxhUGc0AfzmZs0MBA==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -1770,8 +1770,8 @@ packages:
     peerDependencies:
       zod: ^4.3.4
 
-  '@cherrystudio/remote-transport@0.2.3':
-    resolution: {integrity: sha512-tA3sCv10x+OHMgwX4kJle+SaDYqLfZKY1yJ5yZuaTfwzLwzZj4slhvKQo2pPOKvCu+sVBX80lFyyCWVXZg7PNQ==}
+  '@cherrystudio/remote-transport@0.2.4':
+    resolution: {integrity: sha512-76eytxIsRAFHbvMnyBuRX4qu0XpDZ6AQdZcSi5VhwFxf57dAfNWlIDqbRxbw5VT6Ts8oJT2O+pa9jH3Vl6hlgg==}
 
   '@cherrystudio/web-search@0.2.0':
     resolution: {integrity: sha512-31bLFiAFsXgcEDiT8Du/GLR3cPBLFG7QtcZRj2WVPKFAL3moKYB55h8ciHMdMpowEBp81nQWyb1eKFerC8ycrQ==}
@@ -11087,7 +11087,7 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  '@cherrystudio/file-preview@0.1.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+  '@cherrystudio/file-preview@0.1.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
     dependencies:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
@@ -11103,7 +11103,7 @@ snapshots:
       json-canonicalize: 3.0.1
       zod: 4.4.3
 
-  '@cherrystudio/remote-transport@0.2.3(zod@4.4.3)':
+  '@cherrystudio/remote-transport@0.2.4(zod@4.4.3)':
     dependencies:
       '@cherrystudio/remote-protocol': 0.6.0(zod@4.4.3)
       '@libp2p/crypto': 5.1.23
