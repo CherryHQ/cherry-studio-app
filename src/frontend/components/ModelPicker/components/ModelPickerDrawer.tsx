@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import {
@@ -196,7 +197,8 @@ function ModelPickerDrawerContent({
   const hasSearch = deferredSearchText.trim().length > 0;
   const hasActiveFilters = selectedBadge !== null;
   const emptyAction =
-    !hasSearch && !hasActiveFilters && onAddProvider
+    // Enterprise providers come from the organization and cannot be added here.
+    !hasSearch && !hasActiveFilters && onAddProvider && !isEnterpriseProfile()
       ? { label: t('modelPicker.addProvider'), onPress: onAddProvider }
       : undefined;
 

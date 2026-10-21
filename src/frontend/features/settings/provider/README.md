@@ -28,6 +28,10 @@ This page branch owns the `/settings/provider` list and its child pages.
 - `components/ProviderConfiguration/` owns the configuration body shared by provider details,
   setup, creation and onboarding.
 
+In an enterprise profile the organization configures every provider and model. The list hides
+creation, import, and enable switches, and `detail/` renders `ManagedProviderDetail` instead: the
+provider name and its usable models only, without credentials, account, or edit actions.
+
 ## Provider List Motion
 
 The list keeps provider IDs independent of the enabled/disabled group. Headers and provider rows

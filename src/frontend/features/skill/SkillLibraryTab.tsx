@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useAppSearch } from '@/frontend/appShell/search';
+import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import { useApiClient } from '@/frontend/data/DataApiProvider';
 import { useSkillsApi } from '@/frontend/hooks/skill';
 import type { SkillListItem } from '@/shared/data/types/skill';
@@ -101,7 +102,9 @@ function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: Ski
   const { t } = useTranslation();
   return (
     <Section.Item
-      accessibilityLabel={skill.name}
+      accessibilityLabel={
+        skill.isManaged ? `${skill.name}, ${t('enterprise.managed.badge')}` : skill.name
+      }
       description={
         <View className="gap-0.5">
           <Text className="text-sm text-muted-foreground" numberOfLines={2}>
@@ -112,7 +115,16 @@ function InstalledSkillRow({ onPress, skill }: { onPress: () => void; skill: Ski
           ) : null}
         </View>
       }
-      label={skill.name}
+      label={
+        skill.isManaged ? (
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text className="shrink text-base text-foreground">{skill.name}</Text>
+            <ManagedBadge />
+          </View>
+        ) : (
+          skill.name
+        )
+      }
       onPress={onPress}
       testID={`skill-${skill.id}`}
       trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}

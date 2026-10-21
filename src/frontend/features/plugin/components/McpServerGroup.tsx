@@ -41,6 +41,7 @@ export function McpServerGroup() {
                 : t('settings.mcp.list.toolCount', { count: summary.toolCount })
             }
             icon={<PluginIcon source={mcpIcon} />}
+            isManaged={server.isManaged}
             key={server.id}
             onPress={() => openServer(server.id)}
             status={{

@@ -1,4 +1,5 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader } from '@/frontend/appShell/header';
 import { usePreference } from '@/frontend/data/hooks';
 
+import { useEnterpriseAccount } from './account';
 import { ProfileHero } from './components/ProfileHero';
 import { useProviderListNavigation } from './provider';
 
@@ -26,6 +28,7 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [userName] = usePreference('app.user.name');
   const { openProviderList, prepareProviderList } = useProviderListNavigation();
+  const { state: account } = useEnterpriseAccount();
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -43,6 +46,16 @@ export default function SettingsScreen() {
       >
         <ProfileHero onPress={openProfileSettings} userName={userName} />
         <View className="gap-6 px-4 pt-2">
+          {account.isAvailable ? (
+            <Section>
+              <Section.Item
+                label={t('enterprise.account.title')}
+                leading={<CircleUserRoundIcon className="size-4 text-foreground" />}
+                description={account.needsSignIn ? t('enterprise.account.needsSignIn') : undefined}
+                onPress={() => router.push('/settings/account')}
+              />
+            </Section>
+          ) : null}
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}

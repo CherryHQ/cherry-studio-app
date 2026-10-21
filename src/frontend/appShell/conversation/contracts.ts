@@ -216,6 +216,8 @@ export type AgentSummary = {
   emoji?: string;
   avatar?: string | null;
   avatarUri?: string | null;
+  /** Delivered by the enterprise server; only local Agents can be managed. */
+  isManaged?: boolean;
 };
 export type WorkspaceSummary =
   | { ref: WorkspaceRef; id: string; name: string; kind?: 'registered' }

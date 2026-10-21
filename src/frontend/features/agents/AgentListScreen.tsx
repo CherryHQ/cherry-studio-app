@@ -11,6 +11,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { AgentAvatar } from '@/frontend/components/Avatar';
 import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearch';
+import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import {
   SelectionControls,
   SelectionProvider,
@@ -73,7 +74,8 @@ function AgentListScreenBody() {
       deleteSelected: async (ids) => {
         await deleteAgents(ids);
       },
-      getAllIds: () => listedAgents.map((agent) => agent.id),
+      // Agents the enterprise server manages cannot be deleted, so selection skips them.
+      getAllIds: () => listedAgents.flatMap((agent) => (agent.isManaged ? [] : [agent.id])),
     }),
     [deleteAgents, listedAgents],
   );
@@ -268,24 +270,31 @@ const AgentListRow = memo(function AgentListRow({
   onToggle,
 }: AgentListRowProps) {
   const { t } = useTranslation();
+  // A managed Agent cannot be deleted, so it never joins a selection.
+  const isSelectable = !agent.isManaged;
 
   // Keep the press target and long-press handler mounted when selection starts,
   // so releasing that same touch cannot also toggle the row or open the editor.
   return (
     <Pressable
       accessibilityActions={
-        isEditing ? undefined : [{ name: 'longpress', label: t('agent.selection.start') }]
+        isEditing || !isSelectable
+          ? undefined
+          : [{ name: 'longpress', label: t('agent.selection.start') }]
       }
-      accessibilityLabel={agent.name}
+      accessibilityLabel={
+        agent.isManaged ? `${agent.name}, ${t('enterprise.managed.badge')}` : agent.name
+      }
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
-      accessibilityState={isEditing ? { checked: isSelected } : undefined}
+      accessibilityState={isEditing ? { checked: isSelected, disabled: !isSelectable } : undefined}
       className="w-full active:bg-foreground/5"
+      disabled={isEditing && !isSelectable}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === 'longpress') {
           onStartSelection(agent.id);
         }
       }}
-      onLongPress={() => onStartSelection(agent.id)}
+      onLongPress={isSelectable ? () => onStartSelection(agent.id) : undefined}
       onPress={() => {
         if (isEditing) {
           onToggle(agent.id);
@@ -298,15 +307,18 @@ const AgentListRow = memo(function AgentListRow({
       <View className="min-w-0 flex-row items-center gap-3 px-4 py-3">
         <AgentAvatar avatar={agent.avatar} name={agent.name} uri={agent.avatarUri} />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="text-base text-foreground" numberOfLines={1}>
-            {agent.name}
-          </Text>
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text className="shrink text-base text-foreground" numberOfLines={1}>
+              {agent.name}
+            </Text>
+            {agent.isManaged ? <ManagedBadge /> : null}
+          </View>
           <Text className="text-muted-foreground text-sm" numberOfLines={1}>
             {agent.modelName ?? t('agent.model.none')}
           </Text>
         </View>
         {isEditing ? (
-          <SelectionIndicator selected={isSelected} />
+          <SelectionIndicator disabled={!isSelectable} selected={isSelected} />
         ) : (
           <ChevronRightIcon className="size-5 text-muted-foreground" />
         )}

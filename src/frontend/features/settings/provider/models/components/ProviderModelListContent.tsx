@@ -33,7 +33,7 @@ export type ProviderModelListContentProps = {
   management?: ReturnType<typeof useProviderModelManagement>;
   ListEmptyComponent?: ReactElement;
   isEndpointSelectionDisabled?: boolean;
-  models: Model[];
+  models: readonly Model[];
   onEndpointPress?: (model: Model) => void;
   provider: Provider | undefined;
   updatingModelId?: string;

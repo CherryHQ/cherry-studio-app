@@ -1,6 +1,7 @@
 import { Section, useToast } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { ModelAvatar } from '@/frontend/components/Avatar';
@@ -14,6 +15,7 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/ModelPicker';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 import { SettingsScrollPage } from '../components/SettingsScrollPage';
 
@@ -77,14 +79,34 @@ export default function ModelSettingsScreen() {
     [imageModelPickerData, isSaving, selections, t, textModelPickerData],
   );
   const selectedModelId = activeKind ? selections[activeKind] : null;
+  // Enterprise sync writes these preferences; the organization owns the choice.
+  const isManaged = isEnterpriseProfile();
 
   return (
     <>
       <SettingsScrollPage headerProps={{ title: t('settings.pages.model.title') }}>
-        <Section>
-          {items.map(({ key, ...item }) => (
-            <Section.SelectItem key={key} {...item} />
-          ))}
+        <Section footer={isManaged ? t('enterprise.providers.notice') : undefined}>
+          {items.map(({ key, ...item }) =>
+            isManaged ? (
+              <Section.Item
+                key={key}
+                label={item.label}
+                trailing={
+                  <View className="min-w-0 flex-row items-center justify-end gap-1">
+                    {item.valueLeading}
+                    <Text
+                      className="min-w-0 shrink text-right text-base text-foreground"
+                      numberOfLines={1}
+                    >
+                      {item.value}
+                    </Text>
+                  </View>
+                }
+              />
+            ) : (
+              <Section.SelectItem key={key} {...item} />
+            ),
+          )}
         </Section>
       </SettingsScrollPage>
       {activeKind ? (

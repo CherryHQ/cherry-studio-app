@@ -11,6 +11,7 @@ import { InlineSearch, useInlineSearch } from '@/frontend/components/InlineSearc
 import { ModelRegistryGate } from '@/frontend/components/ModelRegistry';
 import { SelectionToolbar } from '@/frontend/components/Selection';
 import { useBackendModule, useQuery } from '@/frontend/data';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { Model } from '@/shared/data/types/model';
 
 import { useProviderApiServiceSheetClose } from '../apiService';
@@ -29,6 +30,7 @@ import {
   hasMultipleProviderModelPurposes,
   type ProviderModelPurpose,
 } from '../models/utils/providerModelPurpose';
+import { ManagedProviderDetail } from './components/ManagedProviderDetail';
 import { ProviderDetailTabs } from './components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './components/ProviderDetailTabs/types';
 import { ProviderModelList } from './components/ProviderModelList';
@@ -42,6 +44,12 @@ export default function ProviderDetailSettingsScreen() {
 
   if (!providerId) {
     return <Redirect href="/settings/provider" />;
+  }
+
+  if (isEnterpriseProfile()) {
+    return (
+      <ManagedProviderDetail key={providerId} providerId={providerId} providerName={providerName} />
+    );
   }
 
   return (

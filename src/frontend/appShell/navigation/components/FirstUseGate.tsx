@@ -6,21 +6,25 @@ import { View } from 'react-native';
 
 import { usePreference, useQuery } from '@/frontend/data';
 import { useLatestAgentSession } from '@/frontend/hooks/agent';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 
 /** Seeded Agents have no model, so first use is determined before restoring the chat route. */
 export function FirstUseGate({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const [status] = usePreference('app.onboarding.status');
+  // Onboarding sets up providers and default models, which the organization owns in enterprise.
+  const isManaged = isEnterpriseProfile();
   const models = useQuery('/models', {
-    enabled: status === 'unseen',
+    enabled: status === 'unseen' && !isManaged,
     query: { enabled: true, isSystemSupported: true },
     retry: false,
   });
   // Existing conversations also identify an installation that should skip onboarding.
   const latestSession = useLatestAgentSession({
-    enabled: status === 'unseen',
+    enabled: status === 'unseen' && !isManaged,
   });
 
+  if (isManaged) return children;
   if (status === 'pending') return <Redirect href="/onboarding" />;
   if (status !== 'unseen') return children;
   // A background refresh must not unmount an already admitted chat.

@@ -6,13 +6,14 @@ import { AnimatedLegendList } from '@legendapp/list/reanimated';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { LinearTransition, ReduceMotion, useReducedMotion } from 'react-native-reanimated';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/header';
 import { InlineSearch } from '@/frontend/components/InlineSearch';
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
 import { matchesSearchKeywords, toSearchKeywords } from '@/frontend/utils/search';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSeparator } from '../components/SettingsServiceRow';
@@ -44,6 +45,8 @@ export default function ProviderListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
+  // The organization configures every provider of an enterprise profile; rows only open details.
+  const isManaged = isEnterpriseProfile();
   const { isPreparing, openSetup } = useProviderSetup();
   const reducedMotion = useReducedMotion();
   const isNavigatingRef = useRef(false);
@@ -198,12 +201,12 @@ export default function ProviderListScreen() {
             isEnabled={item.isEnabled}
             isPending={item.isPending}
             onOpen={openProvider}
-            onToggle={toggleProviderEnabled}
+            onToggle={isManaged ? undefined : toggleProviderEnabled}
             provider={item.provider}
           />
         </View>
       ),
-    [openProvider, toggleProviderEnabled],
+    [isManaged, openProvider, toggleProviderEnabled],
   );
   const loadMoreProviders = useCallback(() => {
     if (!isFiltering && !hasPendingProviderUpdate) {
@@ -256,8 +259,16 @@ export default function ProviderListScreen() {
 
   return (
     <>
-      <RouteHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
+      <RouteHeader
+        rightActions={isManaged ? undefined : rightActions}
+        title={t('settings.pages.provider.title')}
+      />
       <InlineSearch onChangeText={setQuery} value={query} />
+      {isManaged ? (
+        <Text className="px-7 pt-2 pb-1 text-muted-foreground text-sm">
+          {t('enterprise.providers.notice')}
+        </Text>
+      ) : null}
       <View className="flex-1 px-4 pb-5">
         {providerItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">

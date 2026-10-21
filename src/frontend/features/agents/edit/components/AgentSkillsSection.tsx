@@ -14,17 +14,21 @@ type AgentSkillsSectionProps = {
   /** Draft binding state keyed by Skill id; absent means unbound. */
   bindings: ReadonlyMap<string, boolean>;
   onChange: (updates: AgentSkillUpdate[]) => void;
+  /** Lists only the bound Skills, without switches or the library link. */
+  readOnly?: boolean;
 };
 
 /**
  * Per-Agent Skill bindings. The switch expresses the user's intent; the caption
  * reports a missing package. Installation and updates live in the Skill library,
- * linked from the footer.
+ * linked from the footer. A managed Agent's bindings belong to the enterprise server, so it shows
+ * them read-only.
  */
 export function AgentSkillsSection({
   agentId,
   bindings,
   onChange,
+  readOnly = false,
   skills,
 }: AgentSkillsSectionProps) {
   const { t } = useTranslation();
@@ -34,19 +38,30 @@ export function AgentSkillsSection({
     <Section footer={t('agent.skills.usageHint')} title={t('agent.skills.section')}>
       {skills.map((skill) => {
         const isEnabled = bindings.get(skill.id) === true;
+        const description = (
+          <View className="gap-0.5">
+            <Text className="text-sm text-muted-foreground" numberOfLines={2}>
+              {skill.description}
+            </Text>
+            {skill.isPackageMissing ? (
+              <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
+            ) : null}
+          </View>
+        );
+        if (readOnly) {
+          return isEnabled ? (
+            <Section.Item
+              accessibilityLabel={skill.name}
+              description={description}
+              key={skill.id}
+              label={skill.name}
+            />
+          ) : null;
+        }
         return (
           <Section.SwitchItem
             accessibilityLabel={skill.name}
-            description={
-              <View className="gap-0.5">
-                <Text className="text-sm text-muted-foreground" numberOfLines={2}>
-                  {skill.description}
-                </Text>
-                {skill.isPackageMissing ? (
-                  <Text className="text-warning text-xs">{t('skills.packageMissing')}</Text>
-                ) : null}
-              </View>
-            }
+            description={description}
             key={skill.id}
             label={skill.name}
             onValueChange={(value) => onChange([{ isEnabled: value, skillId: skill.id }])}
@@ -54,11 +69,13 @@ export function AgentSkillsSection({
           />
         );
       })}
-      <Section.Item
-        label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
-        onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
-        trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
-      />
+      {readOnly ? null : (
+        <Section.Item
+          label={skills.length === 0 ? t('agent.skills.manageEmpty') : t('agent.skills.manage')}
+          onPress={() => router.push({ pathname: '/skills', params: { agentId } })}
+          trailing={<ChevronRightIcon className="size-5 text-muted-foreground" />}
+        />
+      )}
     </Section>
   );
 }

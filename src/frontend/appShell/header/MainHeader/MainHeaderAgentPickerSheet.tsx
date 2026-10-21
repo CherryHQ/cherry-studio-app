@@ -7,6 +7,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import type { AgentSummary, useConversationAgents } from '@/frontend/appShell/conversation';
 import { AgentAvatar } from '@/frontend/components/Avatar';
+import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 
 type MainHeaderAgentPickerSheetProps = {
   currentAgentId?: string;
@@ -125,7 +126,9 @@ function AgentPickerRow({
   return (
     <View className="min-w-0 flex-row items-center gap-2">
       <Pressable
-        accessibilityLabel={agent.name}
+        accessibilityLabel={
+          agent.isManaged ? `${agent.name}, ${t('enterprise.managed.badge')}` : agent.name
+        }
         accessibilityRole="radio"
         accessibilityState={{ checked: selected }}
         className="min-w-0 flex-1 flex-row items-center gap-3 rounded-xl py-1 active:opacity-60"
@@ -139,7 +142,10 @@ function AgentPickerRow({
           uri={agent.avatarUri}
         />
         <View className="min-w-0 flex-1 gap-0.5">
-          <Text className="font-semibold text-base text-foreground">{agent.name}</Text>
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text className="shrink font-semibold text-base text-foreground">{agent.name}</Text>
+            {agent.isManaged ? <ManagedBadge /> : null}
+          </View>
           {agent.modelName || agent.configuration !== 'unknown' ? (
             <Text className="text-muted-foreground text-xs" numberOfLines={1}>
               {agent.modelName ?? t('agent.model.none')}

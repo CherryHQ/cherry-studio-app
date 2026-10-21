@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 
 import { ProviderAvatar } from '@/frontend/components/Avatar';
 import { useBackendModule } from '@/frontend/data';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAccountBadge } from './ProviderAccountBadge';
@@ -20,12 +21,14 @@ export const ProviderListRow = memo(function ProviderListRow({
   isEnabled: boolean;
   isPending: boolean;
   onOpen: (provider: Provider) => void;
-  onToggle: (provider: Provider, isEnabled: boolean) => void;
+  /** Omitted when the provider is managed elsewhere and cannot be switched here. */
+  onToggle?: (provider: Provider, isEnabled: boolean) => void;
   provider: Provider;
 }) {
   const { t } = useTranslation();
   const accounts = useBackendModule('providers').accounts;
-  const supportsSignIn = accounts.getCapabilities(provider).signIn;
+  // Enterprise credentials come from the organization; there is no account to sign in to.
+  const supportsSignIn = !isEnterpriseProfile() && accounts.getCapabilities(provider).signIn;
   const statusLabel = t(
     isEnabled ? 'settings.provider.status.enabled' : 'settings.provider.status.disabled',
   );
@@ -62,18 +65,20 @@ export const ProviderListRow = memo(function ProviderListRow({
       testID={`provider-row-${provider.id}`}
       trailing={
         <View className="flex-row items-center gap-2">
-          <Switch
-            accessibilityLabel={t(
-              isEnabled
-                ? 'settings.provider.disableProviderNamed'
-                : 'settings.provider.enableProviderNamed',
-              { name: provider.name },
-            )}
-            disabled={isPending}
-            onValueChange={(value) => onToggle(provider, value)}
-            testID={`provider-enabled-switch-${provider.id}`}
-            value={isEnabled}
-          />
+          {onToggle ? (
+            <Switch
+              accessibilityLabel={t(
+                isEnabled
+                  ? 'settings.provider.disableProviderNamed'
+                  : 'settings.provider.enableProviderNamed',
+                { name: provider.name },
+              )}
+              disabled={isPending}
+              onValueChange={(value) => onToggle(provider, value)}
+              testID={`provider-enabled-switch-${provider.id}`}
+              value={isEnabled}
+            />
+          ) : null}
           <View className="size-5 items-center justify-center">
             {isPending ? (
               <Spinner accessibilityLabel={t('settings.provider.status.updating')} size="sm" />

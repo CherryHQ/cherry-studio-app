@@ -4,9 +4,10 @@ import { loggerService } from '@logger';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { RouteHeaderProps } from '@/frontend/appShell/header';
+import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import { useBackendModule } from '@/frontend/data';
 import { useSkillApiById, useSkillInstructionsApi } from '@/frontend/hooks/skill';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
@@ -96,27 +97,23 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
     }
   }
 
-  const headerProps: RouteHeaderProps = {
-    rightActions: [
-      {
-        accessibilityLabel: t('common.more'),
-        disabled: isBusy,
-        icon: EllipsisIcon,
-        items: [
-          ...(skill.sourceUrl
-            ? [
-                {
-                  id: 'skill-update',
-                  label: t('skills.detail.update'),
-                  onPress: () => void update(),
-                },
-                {
-                  id: 'skill-source',
-                  label: t('skills.detail.openSource'),
-                  onPress: () => void openExternalUrl(skill.sourceUrl!),
-                },
-              ]
-            : []),
+  // The enterprise server owns a managed Skill's installation, so only its source stays reachable.
+  const menuItems = [
+    ...(skill.sourceUrl && !skill.isManaged
+      ? [{ id: 'skill-update', label: t('skills.detail.update'), onPress: () => void update() }]
+      : []),
+    ...(skill.sourceUrl
+      ? [
+          {
+            id: 'skill-source',
+            label: t('skills.detail.openSource'),
+            onPress: () => void openExternalUrl(skill.sourceUrl!),
+          },
+        ]
+      : []),
+    ...(skill.isManaged
+      ? []
+      : [
           {
             destructive: true,
             id: 'skill-uninstall',
@@ -130,16 +127,32 @@ function SkillDetail({ skill }: { skill: SkillListItem }) {
                 title: t('skills.detail.uninstallTitle', { name: skill.name }),
               }),
           },
-        ],
-        key: 'skill-actions',
-        type: 'menu',
-      },
-    ],
+        ]),
+  ];
+  const headerProps: RouteHeaderProps = {
+    rightActions:
+      menuItems.length > 0
+        ? [
+            {
+              accessibilityLabel: t('common.more'),
+              disabled: isBusy,
+              icon: EllipsisIcon,
+              items: menuItems,
+              key: 'skill-actions',
+              type: 'menu',
+            },
+          ]
+        : [],
     title: skill.name,
   };
 
   const feedback = (
     <>
+      {skill.isManaged ? (
+        <View className="flex-row">
+          <ManagedBadge />
+        </View>
+      ) : null}
       {skill.isPackageMissing ? (
         <Text className="text-sm text-warning">{t('skills.packageMissing')}</Text>
       ) : null}

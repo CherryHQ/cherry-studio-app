@@ -20,6 +20,7 @@ import { RouteHeader, type HeaderToolbarAction } from '@/frontend/appShell/heade
 import { useOpenProviderSetup } from '@/frontend/appShell/navigation';
 import { chatHref } from '@/frontend/appShell/navigation/chat';
 import { AgentAvatar, AvatarImagePicker } from '@/frontend/components/Avatar';
+import { ManagedBadge } from '@/frontend/components/ManagedBadge';
 import {
   ModelPickerDrawer,
   ModelPickerIcon,
@@ -38,6 +39,7 @@ import { useAgentSkillsApi } from '@/frontend/hooks/skill';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { getSingleRouteParam } from '@/frontend/utils/routeParams';
+import { isEnterpriseProfile } from '@/shared/data/activeProfile';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { Agent, AgentMode } from '@/shared/data/types/agent';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
@@ -45,7 +47,12 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 import type { UniqueModelId } from '@/shared/data/types/model';
 import type { SkillListItem } from '@/shared/data/types/skill';
 
-import { type AgentFormState, buildAgentDto, createAgentFormState } from './agentForm';
+import {
+  type AgentFormState,
+  buildAgentDto,
+  canEditAgentField,
+  createAgentFormState,
+} from './agentForm';
 import { createAgentSkillBindingDraft } from './agentSkillSettings';
 import { createAgentToolBindingDraft } from './agentToolSettings';
 import { AgentCapabilitiesSection } from './components/AgentCapabilitiesSection';
@@ -193,6 +200,11 @@ function AgentEditForm({
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isSettingAvatar;
   const isNameInvalid = isEditing && !form.name.trim();
+  // The enterprise server owns a managed Agent's identity, instructions and bindings; the user
+  // keeps the allowlisted run settings. Its instructions are confidential, so they never render.
+  const isManaged = agent?.isManaged === true;
+  const canEditAvatar = canEditAgentField(agent, 'avatar');
+  const canEditName = canEditAgentField(agent, 'name');
 
   // New agents start on the global default model. Both the preference and the
   // model catalog load asynchronously, so keep following them until the user
@@ -414,68 +426,98 @@ function AgentEditForm({
         {/* The hero is the one primary object: who this Agent is. Create and edit
             share it, so a new Agent is filled in exactly where it will later be read. */}
         <View className="items-center gap-4 pb-2">
-          <AvatarImagePicker
-            accessibilityLabel={t('agent.form.setAvatar')}
-            onBeforeOpen={Keyboard.dismiss}
-            onError={reportAvatarPickError}
-            onSelect={handleAvatarSelect}
-            size={agentFormAvatarSize}
-          >
-            <View>
-              <AgentAvatar
-                accessibilityLabel={t('agent.form.setAvatar')}
-                avatar={agent?.avatar}
-                name={form.name}
-                size={agentFormAvatarSize}
-                uri={form.avatarUri}
-              />
-              <View className="absolute right-0 bottom-0 size-7 items-center justify-center rounded-full border border-border bg-card">
-                <CameraIcon className="size-4 text-muted-foreground" />
+          {canEditAvatar ? (
+            <AvatarImagePicker
+              accessibilityLabel={t('agent.form.setAvatar')}
+              onBeforeOpen={Keyboard.dismiss}
+              onError={reportAvatarPickError}
+              onSelect={handleAvatarSelect}
+              size={agentFormAvatarSize}
+            >
+              <View>
+                <AgentAvatar
+                  accessibilityLabel={t('agent.form.setAvatar')}
+                  avatar={agent?.avatar}
+                  name={form.name}
+                  size={agentFormAvatarSize}
+                  uri={form.avatarUri}
+                />
+                <View className="absolute right-0 bottom-0 size-7 items-center justify-center rounded-full border border-border bg-card">
+                  <CameraIcon className="size-4 text-muted-foreground" />
+                </View>
               </View>
-            </View>
-          </AvatarImagePicker>
-          <View className="items-center gap-1 self-stretch">
-            {/* The underline marks the name as a field, as on a provider. */}
-            <TextInput
-              accessibilityLabel={t('agent.form.name')}
-              autoCorrect={false}
-              className={cn(
-                'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
-                isNameInvalid ? 'border-error' : 'border-border-strong',
-              )}
-              cursorColor={mutedForegroundColor}
-              onBlur={flush}
-              onChangeText={(value) => updateForm('name', value)}
-              placeholder={t('agent.form.namePlaceholder')}
-              placeholderTextColor={mutedForegroundColor}
-              returnKeyType="done"
-              selectionColor={mutedForegroundColor}
-              value={form.name}
+            </AvatarImagePicker>
+          ) : (
+            <AgentAvatar
+              avatar={agent?.avatar}
+              name={form.name}
+              size={agentFormAvatarSize}
+              uri={form.avatarUri}
             />
-            {isNameInvalid ? (
-              <Text accessibilityLiveRegion="polite" className="text-error text-sm">
-                {t('agent.form.nameRequired')}
+          )}
+          <View className="items-center gap-1 self-stretch">
+            {canEditName ? (
+              <>
+                {/* The underline marks the name as a field, as on a provider. */}
+                <TextInput
+                  accessibilityLabel={t('agent.form.name')}
+                  autoCorrect={false}
+                  className={cn(
+                    'min-w-40 max-w-full border-b px-2 pb-1.5 text-center font-semibold text-2xl text-foreground',
+                    isNameInvalid ? 'border-error' : 'border-border-strong',
+                  )}
+                  cursorColor={mutedForegroundColor}
+                  onBlur={flush}
+                  onChangeText={(value) => updateForm('name', value)}
+                  placeholder={t('agent.form.namePlaceholder')}
+                  placeholderTextColor={mutedForegroundColor}
+                  returnKeyType="done"
+                  selectionColor={mutedForegroundColor}
+                  value={form.name}
+                />
+                {isNameInvalid ? (
+                  <Text accessibilityLiveRegion="polite" className="text-error text-sm">
+                    {t('agent.form.nameRequired')}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <Text
+                accessibilityRole="header"
+                className="max-w-full px-2 text-center font-semibold text-2xl text-foreground"
+              >
+                {form.name}
               </Text>
+            )}
+            {isManaged ? (
+              <>
+                <ManagedBadge />
+                <Text className="text-center text-sm text-muted-foreground">
+                  {t('enterprise.managed.agentNotice')}
+                </Text>
+              </>
             ) : null}
           </View>
         </View>
-        <Section title={t('agent.form.instructions')}>
-          <TextInput
-            accessibilityLabel={t('agent.form.instructions')}
-            autoCorrect
-            className="min-h-28 px-4 py-3 text-base text-foreground"
-            cursorColor={mutedForegroundColor}
-            multiline
-            onBlur={flush}
-            onChangeText={(value) => updateForm('instructions', value)}
-            placeholder={t('agent.form.instructionsPlaceholder')}
-            placeholderTextColor={mutedForegroundColor}
-            scrollEnabled={false}
-            selectionColor={mutedForegroundColor}
-            textAlignVertical="top"
-            value={form.instructions}
-          />
-        </Section>
+        {isManaged ? null : (
+          <Section title={t('agent.form.instructions')}>
+            <TextInput
+              accessibilityLabel={t('agent.form.instructions')}
+              autoCorrect
+              className="min-h-28 px-4 py-3 text-base text-foreground"
+              cursorColor={mutedForegroundColor}
+              multiline
+              onBlur={flush}
+              onChangeText={(value) => updateForm('instructions', value)}
+              placeholder={t('agent.form.instructionsPlaceholder')}
+              placeholderTextColor={mutedForegroundColor}
+              scrollEnabled={false}
+              selectionColor={mutedForegroundColor}
+              textAlignVertical="top"
+              value={form.instructions}
+            />
+          </Section>
+        )}
         <View className="gap-3">
           <Section
             footer={
@@ -514,7 +556,10 @@ function AgentEditForm({
               />
             ) : null}
           </Section>
-          {!modelPickerData.isLoading && modelPickerData.modelItems.length === 0 ? (
+          {/* Enterprise providers come from the organization and cannot be added here. */}
+          {!modelPickerData.isLoading &&
+          modelPickerData.modelItems.length === 0 &&
+          !isEnterpriseProfile() ? (
             <Button onPress={handleAddProvider} size="sm" variant="secondary">
               {t('modelPicker.addProvider')}
             </Button>
@@ -528,19 +573,24 @@ function AgentEditForm({
             onChange={(next) => updateForm('disabledCapabilities', next)}
           />
         ) : null}
-        {form.mode === 'standard' && (servers.length > 0 || toolBindings.length > 0) ? (
+        {form.mode === 'standard' &&
+        (toolBindings.length > 0 || (!isManaged && servers.length > 0)) ? (
           <AgentToolsSection
             bindings={toolBindings}
             onChange={handleToolBindingsChange}
             originalBindings={originalToolBindings}
+            readOnly={isManaged}
             servers={servers}
           />
         ) : null}
-        {isEditing && form.mode === 'standard' ? (
+        {isEditing &&
+        form.mode === 'standard' &&
+        (!isManaged || skills.some((skill) => skillBindings.get(skill.id) === true)) ? (
           <AgentSkillsSection
             agentId={agentId}
             bindings={skillBindings}
             onChange={saveSkillBindings}
+            readOnly={isManaged}
             skills={skills}
           />
         ) : null}
@@ -549,7 +599,7 @@ function AgentEditForm({
             {t('agent.actions.retry')}
           </Button>
         ) : null}
-        {agentId ? (
+        {agentId && !isManaged ? (
           <Section>
             <Section.Item
               destructive
