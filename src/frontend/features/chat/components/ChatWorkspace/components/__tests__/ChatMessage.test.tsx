@@ -1,10 +1,9 @@
 import type { ContextMenuProps } from '@cherrystudio/ui/components';
-import type { ReactElement, ReactNode, Ref } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListItem } from '@/frontend/components/Message';
 
-import type { AnswerReadingSectionHandle } from '../AnswerReadingSection';
 import { ChatMessage } from '../ChatMessage';
 
 const mockContextMenu = jest.fn(({ children }: ContextMenuProps) => children);
@@ -12,7 +11,6 @@ const mockCopyMessage = jest.fn();
 const mockDeleteMessageTurn = jest.fn();
 const mockShareMessage = jest.fn();
 const mockLocalUsage = jest.fn(() => null);
-const mockRevealTop = jest.fn((onRevealed?: () => void) => onRevealed?.());
 
 jest.mock('@cherrystudio/ui/components', () => ({
   BackgroundPressExclusion: ({ children }: { children: ReactNode }) => children,
@@ -23,7 +21,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
     jest.requireActual('react').createElement('InfoPopover', props, children),
 }));
 
-const mockSelectBranch = jest.fn();
 let mockCanSelectBranch = false;
 
 jest.mock('../../context/AssistantMessageActionsProvider', () => ({
@@ -31,7 +28,7 @@ jest.mock('../../context/AssistantMessageActionsProvider', () => ({
     copyAssistantMessage: mockCopyMessage,
     deleteMessageTurn: mockDeleteMessageTurn,
     shareAssistantMessage: mockShareMessage,
-    ...(mockCanSelectBranch ? { selectBranch: mockSelectBranch } : {}),
+    ...(mockCanSelectBranch ? { selectBranch: jest.fn() } : {}),
   }),
 }));
 
@@ -54,11 +51,8 @@ jest.mock('@/frontend/components/Message', () => {
     AssistantMessage: ({ children, ...props }: { children: ReactNode }) =>
       createElement('AssistantMessage', props, children),
     UserMessage: () => createElement('UserMessage', null),
-    useMessageListDisclosureToggle: () => mockStopFollowing,
   };
 });
-
-const mockStopFollowing = jest.fn();
 
 jest.mock('../../translation/MessageTranslation', () => ({
   MessageTranslationContent: () => null,
@@ -71,26 +65,7 @@ jest.mock('../AssistantMessageToolbar', () => ({
 jest.mock('../MessageAnswerCards', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    AnswerReadingBar: (props: object) => createElement('AnswerReadingBar', props),
     MessageAnswerCards: (props: object) => createElement('MessageAnswerCards', props),
-  };
-});
-
-jest.mock('../AnswerReadingSection', () => {
-  const { createElement, useImperativeHandle } = jest.requireActual('react');
-  return {
-    AnswerReadingSection: ({
-      bar,
-      children,
-      ref,
-    }: {
-      bar: ReactNode;
-      children: ReactNode;
-      ref?: Ref<AnswerReadingSectionHandle>;
-    }) => {
-      useImperativeHandle(ref, () => ({ revealTop: mockRevealTop }));
-      return createElement('AnswerReadingSection', null, bar, children);
-    },
   };
 });
 
@@ -308,7 +283,7 @@ describe('ChatMessage', () => {
     ).toHaveLength(1);
   });
 
-  test('shows several answers as cards, one read in full on request, and folds back', () => {
+  test('shows several answers as cards in place of a single answer', () => {
     mockCanSelectBranch = true;
     const branched = branchedMessage();
     act(() => {
@@ -318,31 +293,8 @@ describe('ChatMessage', () => {
     expect(
       renderer?.root.findAllByProps({ testID: 'assistant-message-model-avatar' }),
     ).toHaveLength(0);
-    const cards = renderer!.root.findByType('MessageAnswerCards' as never);
-    expect(cards.props.message).toBe(branched);
+    expect(renderer!.root.findByType('MessageAnswerCards' as never).props.message).toBe(branched);
     expect(renderer!.root.findAllByType('AssistantMessage' as never)).toHaveLength(0);
-
-    act(() => cards.props.onExpand());
-    expect(mockStopFollowing).toHaveBeenCalledTimes(1);
-    expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(0);
-    expect(renderer!.root.findByType('AssistantMessage' as never).props.message).toBe(branched);
-
-    const bar = renderer!.root.findByType('AnswerReadingBar' as never);
-    act(() => bar.props.onSelect('assistant-2'));
-    expect(mockSelectBranch).toHaveBeenCalledWith({
-      messageId: 'assistant-1',
-      targetId: 'assistant-2',
-    });
-    let finishPositioning: (() => void) | undefined;
-    mockRevealTop.mockImplementationOnce((onRevealed) => {
-      finishPositioning = onRevealed;
-    });
-    act(() => bar.props.onCollapse());
-    expect(mockStopFollowing).toHaveBeenCalledTimes(3);
-    expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(0);
-
-    act(() => finishPositioning?.());
-    expect(renderer!.root.findAllByType('MessageAnswerCards' as never)).toHaveLength(1);
   });
 
   test('shows only the selected answer where answers cannot be switched', () => {

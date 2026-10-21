@@ -41,6 +41,7 @@ import { ChatRouteResolver } from './components/ChatRouteResolver';
 import { ChatScreenFrame } from './components/ChatScreenFrame';
 import { AssistantMessageUsage, ChatEmptyState, ChatWorkspace } from './components/ChatWorkspace';
 import { FileWorkspaceSheet } from './components/FileWorkspaceSheet';
+import { FullScreenLayerHost } from './components/FullScreenLayer';
 import { LocalRuntimeStatus } from './components/LocalRuntimeStatus';
 import { useChatComposerSession } from './hooks/useChatComposerSession';
 import { useSessionReadReceipt } from './hooks/useSessionReadReceipt';
@@ -223,45 +224,47 @@ function ResolvedChatContent({ target }: { target: ChatTarget }) {
           !messageWindow.error ? (
             <SessionReadReceipt sessionId={sessionId} />
           ) : null}
-          {/* Native background taps yield to scrolling and excluded message content. */}
-          <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
-            {sessionId && session.error ? (
-              <View className="flex-1 justify-center px-8 py-16">
-                <ContentState.Error
-                  primaryAction={{
-                    children: t('agent.actions.retry'),
-                    onPress: () => void session.refetch(),
-                  }}
-                  prominence="prominent"
-                  title={t('navigation.chatsLoadFailed')}
+          <FullScreenLayerHost>
+            {/* Native background taps yield to scrolling and excluded message content. */}
+            <ComposerDismissArea disabled={!hasComposer} testID="chat-background">
+              {sessionId && session.error ? (
+                <View className="flex-1 justify-center px-8 py-16">
+                  <ContentState.Error
+                    primaryAction={{
+                      children: t('agent.actions.retry'),
+                      onPress: () => void session.refetch(),
+                    }}
+                    prominence="prominent"
+                    title={t('navigation.chatsLoadFailed')}
+                  />
+                </View>
+              ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
+                <ChatWorkspace
+                  feedbackHintBottomOffset={composerHeight}
+                  isTranslationEnabled
+                  renderUsage={renderLocalUsage}
+                  snapshot={snapshot}
+                  messages={messages}
+                  onShare={sessionId ? shareMessage : undefined}
+                  pendingSend={controls.pendingSend}
+                  enteringUserMessageId={controls.enteringUserMessageId}
+                  onPendingSendDisplayed={controls.completePendingSend}
+                  assistantAvatar={agent.agent?.avatar}
+                  assistantAvatarUri={agent.agent?.avatarUri}
+                  assistantName={agent.agent?.name}
+                  isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
+                  contentBottomInset={contentBottomInset}
+                  forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
+                  forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
+                  keyboardOffset={keyboardOffset}
+                  messageWindow={messageWindow}
+                  sessionId={sessionId}
                 />
-              </View>
-            ) : (isSessionAvailable && sessionId) || target.kind === 'draft' ? (
-              <ChatWorkspace
-                feedbackHintBottomOffset={composerHeight}
-                isTranslationEnabled
-                renderUsage={renderLocalUsage}
-                snapshot={snapshot}
-                messages={messages}
-                onShare={sessionId ? shareMessage : undefined}
-                pendingSend={controls.pendingSend}
-                enteringUserMessageId={controls.enteringUserMessageId}
-                onPendingSendDisplayed={controls.completePendingSend}
-                assistantAvatar={agent.agent?.avatar}
-                assistantAvatarUri={agent.agent?.avatarUri}
-                assistantName={agent.agent?.name}
-                isAssistantToolbarEnabled={!isPreview && Boolean(sessionId)}
-                contentBottomInset={contentBottomInset}
-                forkBoundaryMessageId={session.data?.forkBoundaryMessageId ?? undefined}
-                forkedFromSessionId={session.data?.forkedFromSessionId ?? undefined}
-                keyboardOffset={keyboardOffset}
-                messageWindow={messageWindow}
-                sessionId={sessionId}
-              />
-            ) : (
-              <ChatEmptyState contentBottomInset={contentBottomInset} />
-            )}
-          </ComposerDismissArea>
+              ) : (
+                <ChatEmptyState contentBottomInset={contentBottomInset} />
+              )}
+            </ComposerDismissArea>
+          </FullScreenLayerHost>
           {/* Below the transcript: the column's top edge sits under the header overlay. */}
           {sessionId ? <LocalRuntimeStatus sessionId={sessionId} /> : null}
           {hasComposer ? (

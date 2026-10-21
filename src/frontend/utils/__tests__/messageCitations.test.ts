@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import { resolveMessageCitations } from '../citations';
+import { resolveMessageCitations } from '../messageCitations';
 
 describe('resolveMessageCitations', () => {
   test('makes native provider citations clickable while retaining plain-text numbering', () => {

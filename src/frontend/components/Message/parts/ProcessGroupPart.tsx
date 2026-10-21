@@ -3,13 +3,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import type { ResolvedCitationText } from '@/frontend/utils/messageCitations';
 import { getMessageProcessDurationMs } from '@/frontend/utils/messageProcessDuration';
 import type { CherryMessagePart } from '@/shared/data/types/message';
 import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { useMessageListDisclosureToggle } from '../list/MessageListDisclosureContext';
 import type { MessageListItem } from '../types';
-import type { ResolvedCitationText } from './citations';
 import { MessagePartRenderer } from './MessagePartRenderer';
 import type { MessagePartRenderMode } from './MessageParts';
 import {

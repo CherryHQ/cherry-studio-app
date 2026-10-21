@@ -3,10 +3,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { resolveMessageCitations } from '@/frontend/utils/messageCitations';
 import { imageParamsAspectRatio } from '@/shared/utils/imageGenerationParams';
 
 import type { MessageListItem } from '../types';
-import { resolveMessageCitations } from './citations';
 import { GeneratedFileStrip } from './GeneratedFileStrip';
 import { GoogleSearchSuggestions } from './GoogleSearchSuggestions';
 import { MessagePartRenderer } from './MessagePartRenderer';
