@@ -939,17 +939,26 @@ disabled groups as the manual create form. A saved Agent without a model remains
 but cannot start chatting. The model derives instructions from the conversation and may use
 `ask_user_question` for material missing requirements.
 
+The model-facing definition uses concrete property types for Gemini-compatible gateways. `model`
+is a registered `provider::model` string; an empty string explicitly clears it. Omitting it preserves
+the model on update. Agent targets use a string validated locally as an exact Agent ID or `current`.
+
 `agent_list` supports name search and pagination, returns at most 50 compact records per call,
 and omits instructions. `agent_get` returns the editable definition, `updatedAt`, and current Skill
 bindings (`skillId` and `isEnabled`); both get and
 update accept `current` to refer to the originating conversation's Agent. Update requires that
 version and an explicit field patch. The persistence transaction compares the row timestamp before
 writing, rejecting a concurrent edit or deletion. A conflict requires reading and reconciling the
-latest definition. `changes.skills` applies only the listed bindings: `isEnabled: true` binds and
-enables, `false` binds and disables, and `null` removes a binding. Unlisted bindings are preserved;
+latest definition. `changes.skills` applies only the listed bindings: `state: enabled` binds and
+enables, `disabled` binds and disables, and `removed` removes a binding. Unlisted bindings are preserved;
 this does not change the Skill library's global enablement. Definition edits and requested binding
 changes commit together, so a missing Skill rolls back the whole edit. Changes to the active Agent
 apply to future turns only.
+
+Execution still accepts released calls with `model: null` and Skill `isEnabled: true | false | null`,
+so persisted calls retain their meaning when resumed. Those legacy forms are not advertised in new
+tool definitions. Storage and `agent_get` continue to use the existing nullable model and boolean/null
+Skill binding contracts.
 
 Create/update publish committed Data API cache invalidations, including when a turn has no visible
 chat subscriber. Successful writes render a compact saved-Agent card with a Start chat action when a model is

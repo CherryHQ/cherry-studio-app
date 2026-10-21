@@ -49,10 +49,46 @@ function setup() {
     const tool = tools.find((entry) => entry.providerName === name)!;
     return tool.execute({ input, signal, toolCallId: 'call-1', turnId: 'turn-1' });
   };
-  return { data, invoke };
+  return { data, invoke, tools };
 }
 
 describe('Agent management tools', () => {
+  test('publishes concrete property types instead of the unions rejected by Gemini gateways', () => {
+    const { tools } = setup();
+    const schemas = Object.fromEntries(tools.map((tool) => [tool.providerName, tool.inputSchema]));
+    expect(schemas.agent_create).toMatchObject({
+      type: 'object',
+      properties: { model: { type: 'string' } },
+    });
+    expect(schemas.agent_get).toMatchObject({
+      properties: { agent_id: { type: 'string' } },
+    });
+    expect(schemas.agent_update).toMatchObject({
+      properties: {
+        agent_id: { type: 'string' },
+        changes: {
+          type: 'object',
+          properties: {
+            model: { type: 'string' },
+            skills: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  skillId: { type: 'string' },
+                  state: { type: 'string', enum: ['enabled', 'disabled', 'removed'] },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    for (const schema of Object.values(schemas)) {
+      expect(JSON.stringify(schema)).not.toMatch(/"(?:anyOf|oneOf)"/);
+    }
+  });
+
   test('creation leaves default-model resolution to storage and uses the manual form capability defaults', async () => {
     const { data, invoke } = setup();
     const result = await invoke('agent_create', {
@@ -84,6 +120,95 @@ describe('Agent management tools', () => {
       { expectedUpdatedAt: agent.updatedAt },
     );
     expect(data.create).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { model: 'provider::model', expected: 'provider::model' },
+    { model: '', expected: null },
+    { model: null, expected: null },
+  ])('preserves explicit model selection or clearing: $model', async ({ model, expected }) => {
+    const { data, invoke } = setup();
+    expect(
+      await invoke('agent_create', { name: 'Writer', instructions: 'Write clearly.', model }),
+    ).not.toHaveProperty('failure');
+    expect(data.create).toHaveBeenCalledWith(expect.objectContaining({ model: expected }));
+    expect(
+      await invoke('agent_update', {
+        agent_id: 'current',
+        expected_updated_at: agent.updatedAt,
+        changes: { model },
+      }),
+    ).not.toHaveProperty('failure');
+    expect(data.update).toHaveBeenCalledWith(
+      agent.id,
+      { model: expected },
+      { expectedUpdatedAt: agent.updatedAt },
+    );
+  });
+
+  test.each([' ', 'model', '::model', 'provider::', false, 0])(
+    'rejects invalid model values before writing: %j',
+    async (model) => {
+      const { data, invoke } = setup();
+      expect(
+        await invoke('agent_create', { name: 'Writer', instructions: 'Write clearly.', model }),
+      ).toHaveProperty('failure');
+      expect(
+        await invoke('agent_update', {
+          agent_id: 'current',
+          expected_updated_at: agent.updatedAt,
+          changes: { model },
+        }),
+      ).toHaveProperty('failure');
+      expect(data.create).not.toHaveBeenCalled();
+      expect(data.update).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each([
+    { state: 'enabled', isEnabled: true },
+    { state: 'disabled', isEnabled: false },
+    { state: 'removed', isEnabled: null },
+  ])(
+    'maps the concrete Skill state to the existing atomic update: $state',
+    async ({ state, isEnabled }) => {
+      const { data, invoke } = setup();
+      const skillId = '00000000-0000-4000-8000-000000000002';
+      expect(
+        await invoke('agent_update', {
+          agent_id: 'current',
+          expected_updated_at: agent.updatedAt,
+          changes: { skills: [{ skillId, state }] },
+        }),
+      ).not.toHaveProperty('failure');
+      expect(data.update).toHaveBeenCalledWith(
+        agent.id,
+        {},
+        { expectedUpdatedAt: agent.updatedAt, skillUpdates: [{ skillId, isEnabled }] },
+      );
+    },
+  );
+
+  test('keeps Agent ID validation after exposing a plain string', async () => {
+    const { data, invoke } = setup();
+    expect(await invoke('agent_get', { agent_id: 'invented' })).toHaveProperty('failure');
+    expect(data.getById).not.toHaveBeenCalled();
+  });
+
+  test.each<Record<string, RuntimeJsonValue>>([
+    { state: 'unknown' },
+    { state: 'removed', isEnabled: true },
+    { isEnabled: 'false' },
+  ])('rejects invalid or ambiguous Skill changes: %j', async (binding) => {
+    const { data, invoke } = setup();
+    expect(
+      await invoke('agent_update', {
+        agent_id: 'current',
+        expected_updated_at: agent.updatedAt,
+        changes: { skills: [{ skillId: '00000000-0000-4000-8000-000000000002', ...binding }] },
+      }),
+    ).toHaveProperty('failure');
+    expect(data.update).not.toHaveBeenCalled();
   });
 
   test('reads bindings and passes only requested Skill changes to the guarded update', async () => {
