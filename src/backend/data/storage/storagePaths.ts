@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { defaultDatabaseDirectory } from 'expo-sqlite';
 
 import { BackupError, type RestoreOutcome } from '@/shared/contracts/backup';
+import { getActiveProfile } from '@/shared/data/activeProfile';
 
 import { getBackupStorage } from '../../../../modules/backup-storage';
 import {
@@ -13,6 +14,18 @@ import {
 
 let boot: ReturnType<typeof selectBootStorage> | undefined;
 
+/** The active profile's root. The local profile keeps the original Documents layout. */
+export function profileRoot(): Directory {
+  const { id } = getActiveProfile();
+  return id === 'local' ? Paths.document : new Directory(Paths.document, 'profiles', id);
+}
+
+function legacyDatabaseDirectory(): string {
+  return getActiveProfile().id === 'local'
+    ? defaultDatabaseDirectory
+    : new Directory(profileRoot(), 'database').uri;
+}
+
 export function backupStorageNative() {
   const native = getBackupStorage();
   if (!native) throw new BackupError('unavailable');
@@ -21,7 +34,7 @@ export function backupStorageNative() {
 
 function writeControl(control: StorageControl): void {
   backupStorageNative().writeControl(
-    Paths.document.uri,
+    profileRoot().uri,
     JSON.stringify(StorageControlSchema.parse(control)),
   );
 }
@@ -31,8 +44,8 @@ export function getStorageBoot() {
   const native = getBackupStorage();
   if (!native) {
     if (
-      new Directory(Paths.document, 'storage-control').exists ||
-      new Directory(Paths.document, 'stores').exists
+      new Directory(profileRoot(), 'storage-control').exists ||
+      new Directory(profileRoot(), 'stores').exists
     ) {
       throw new BackupError('unavailable');
     }
@@ -45,8 +58,8 @@ export function getStorageBoot() {
     };
     return boot;
   }
-  const raw = native.readControl(Paths.document.uri);
-  if (raw === null && new Directory(Paths.document, 'stores').exists) {
+  const raw = native.readControl(profileRoot().uri);
+  if (raw === null && new Directory(profileRoot(), 'stores').exists) {
     throw new BackupError(
       'storage',
       'Storage control is missing; refusing to open an empty database.',
@@ -63,12 +76,12 @@ export function getStorageBoot() {
 
 export function storageDirectory(id = getStorageBoot().storageId): Directory {
   StorageIdSchema.parse(id);
-  return id === 'legacy' ? Paths.document : new Directory(Paths.document, 'stores', id);
+  return id === 'legacy' ? profileRoot() : new Directory(profileRoot(), 'stores', id);
 }
 
 export function databaseDirectory(id = getStorageBoot().storageId): string {
   return id === 'legacy'
-    ? defaultDatabaseDirectory
+    ? legacyDatabaseDirectory()
     : new Directory(storageDirectory(id), 'database').uri;
 }
 
@@ -153,7 +166,7 @@ export function cleanupStorageAfterBoot(): void {
   const control = { ...state.control, cleanupProcessId: processId };
   writeControl(control);
   boot = { ...state, control };
-  const stores = new Directory(Paths.document, 'stores');
+  const stores = new Directory(profileRoot(), 'stores');
   if (stores.exists) {
     for (const entry of stores.list()) {
       if (
@@ -165,7 +178,7 @@ export function cleanupStorageAfterBoot(): void {
     }
   }
   if (control.current !== 'legacy') {
-    // Never delete Documents or the shared SQLite directory themselves.
+    // Never delete Documents, a profile root or the shared SQLite directory themselves.
     for (const name of [
       'cherry.db',
       'cherry.db-wal',
@@ -174,7 +187,11 @@ export function cleanupStorageAfterBoot(): void {
       'pi-agent.db-wal',
       'pi-agent.db-shm',
     ]) {
-      const file = new File(Paths.document, 'SQLite', name);
+      // Directory objects keep file URIs; Android rejects the plain SQLite directory path.
+      const file =
+        getActiveProfile().id === 'local'
+          ? new File(Paths.document, 'SQLite', name)
+          : new File(profileRoot(), 'database', name);
       if (file.exists) file.delete();
     }
     for (const parts of [
@@ -184,7 +201,7 @@ export function cleanupStorageAfterBoot(): void {
       ['agent-avatars'],
       ['provider-avatars'],
     ]) {
-      const directory = new Directory(Paths.document, ...parts);
+      const directory = new Directory(profileRoot(), ...parts);
       if (directory.exists) directory.delete();
     }
   }

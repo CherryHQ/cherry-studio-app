@@ -79,7 +79,9 @@ import type { BackendServices } from '@/bootstrap/composition/createBackendServi
 import type { Backend } from '@/shared/contracts';
 import type { BackgroundExecutionModule } from '@/shared/contracts/backgroundExecution';
 import type { DiagnosticsModule } from '@/shared/contracts/diagnostics';
+import type { EnterpriseModule } from '@/shared/contracts/enterprise';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { profileScopedName } from '@/shared/data/activeProfile';
 import { FileEntryIdSchema } from '@/shared/data/types/file';
 import type { UniqueModelId } from '@/shared/data/types/model';
 
@@ -116,6 +118,7 @@ export function createBackend(
     languageServing: LanguageServingSupport & AgentRuntime & RuntimeTextGenerator;
     providerRegistryUpdater: Pick<ProviderRegistryUpdaterService, 'applyUpdate' | 'ensureReady'>;
     trash: Pick<TrashRuntime, 'trashFile'>;
+    enterprise: EnterpriseModule;
   },
 ): BackendComposition {
   const { dbService } = infrastructure;
@@ -130,13 +133,17 @@ export function createBackend(
     connections: infrastructure.desktopConnectionManager,
     files: services.fileContent,
     background: infrastructure.remoteBackground,
-    journal: new RemoteAgentCommandJournal(createMMKV({ id: 'cherry-remote-agent-commands' })),
+    journal: new RemoteAgentCommandJournal(
+      createMMKV({ id: profileScopedName('cherry-remote-agent-commands') }),
+    ),
   });
   infrastructure.documentExport.configure(createDocumentExportDependencies(exportFiles));
   const desktopStore = new DesktopConnectionService(dbService, (provider) =>
     infrastructure.providerAccounts.getCapabilities(provider),
   );
-  const connectionIntents = createMMKV({ id: 'cherry-desktop-connection-intents' });
+  const connectionIntents = createMMKV({
+    id: profileScopedName('cherry-desktop-connection-intents'),
+  });
   infrastructure.desktopConnectionManager.configure(desktopStore, {
     isDisconnected: (id) => connectionIntents.getBoolean(id) ?? false,
     setDisconnected: (id, disconnected) => {
@@ -350,6 +357,7 @@ export function createBackend(
       desktopConnections: infrastructure.desktopConnections,
       diagnostics: infrastructure.diagnostics,
       documentExport: infrastructure.documentExport,
+      enterprise: infrastructure.enterprise,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         prepareWorkspaceAttachment: services.fileContent.prepareWorkspaceAttachment,

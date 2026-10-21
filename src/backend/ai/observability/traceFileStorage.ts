@@ -2,6 +2,8 @@ import { randomUUID } from 'expo-crypto';
 import { Directory, File, FileMode, Paths } from 'expo-file-system';
 import { deleteAsync, getInfoAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
+import { profileRoot } from '@/backend/data/storage/storagePaths';
+
 import type { TraceFileStorage } from './types';
 
 export const TRACE_RETENTION = Object.freeze({
@@ -17,7 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const encoder = new TextEncoder();
 
 function traceDirectory(): Directory {
-  return new Directory(Paths.document, 'Runtime', 'trace', 'v1');
+  return new Directory(profileRoot(), 'Runtime', 'trace', 'v1');
 }
 
 // Directory.list() and File.size synchronously inspect native files. Use the

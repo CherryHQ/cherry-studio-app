@@ -7,6 +7,7 @@ import {
   type PluginAuthorizationService,
 } from '@/backend/data/services/PluginAuthorizationService';
 import { PluginError } from '@/shared/contracts/plugins';
+import { profileScopedName } from '@/shared/data/activeProfile';
 
 import type { PluginAuthorizationStore } from './pluginAuthorization';
 import {
@@ -114,7 +115,7 @@ export class PluginCredentialStore {
     method: string,
     serverName: string,
   ): PluginAuthorizationStore {
-    const applicationKey = `plugin-application.${pluginId}.${method}`;
+    const applicationKey = profileScopedName(`plugin-application.${pluginId}.${method}`);
     return {
       notifyChanged: () => this.notifyChanged(),
       getCurrentAuthorizationId: () =>
