@@ -99,7 +99,8 @@ identical file bytes or launcher-size bitmaps. Never substitute the legacy cherr
 tint the app mark with action or status colors. The black Dynamic Island uses the dark variant;
 other full-color surfaces choose the variant for their own background. Android's mandatory
 monochrome notification mask remains
-system-rendered, with `brand` red as the notification accent. Do not repeat the app logo in the
+system-rendered. Its accent is `#C74444`, `brand` red darkened below Android's 0.179 luminance
+threshold: on a lighter accent the system draws the mask black instead of the app icon's white. Do not repeat the app logo in the
 notification's large-icon content slot.
 
 Use `control-active` for switch fills, `primary` for emphasized actions and adjustable progress,

@@ -146,7 +146,9 @@ The 32px asset covers the largest logo slot and fits within the smallest Live Ac
 Do not embed the 1024px launcher originals: oversized images can prevent a Live Activity from
 starting. See [Apple's image constraints](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities).
 
-Android uses Cherry `brand` red for the system small-icon badge. The large-icon content slot is not
+Android uses the darkened notification brand red (`#C74444`) for the system small-icon badge:
+Android tints the mask black on accents above 0.179 relative luminance, which includes `brand`
+`#FF5757`. The large-icon content slot is not
 used to repeat the app logo, following [Android's notification anatomy guidance](https://developer.android.com/develop/ui/compose/notifications#notification-anatomy).
 Standard Android status chips render their small icon as a system-controlled monochrome mask;
 Xiaomi's proprietary full-color island integration is not implemented.

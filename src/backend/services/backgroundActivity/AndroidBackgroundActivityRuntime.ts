@@ -376,8 +376,8 @@ export class AndroidBackgroundActivityRuntime extends BaseService implements Kee
             // Native execution stays foreground until the last task releases it.
             taskName: 'CherryBackgroundGeneration',
             taskIcon: { name: 'notification_icon', type: 'drawable' },
-            // Same brand identity as the native notification bridge (DESIGN.md `brand`).
-            color: '#FF5757',
+            // Same notification brand red as the native notification bridge (DESIGN.md).
+            color: '#C74444',
             // The notification bridge names the same channel; task content never does.
             channelName: this.environment.translate('notifications.android.runningTitle'),
             foregroundServiceType: ['dataSync'],

@@ -39,8 +39,9 @@ Platform service expiry also disconnects remote transports. The connection notic
 the documented `dataSync` time limit and does not enable indefinite background execution on iOS.
 
 The PC name is the connection notice's only identity anchor: it is the title, and the connection
-status sits in the header line with no timestamp. Cherry notifications use `brand` red for the
-system small-icon badge. The large-icon content slot is not used to repeat the app logo.
+status sits in the header line with no timestamp. Cherry notifications use the darkened
+notification brand red (`#C74444`, see DESIGN.md) for the system small-icon badge, which keeps the
+mark white. The large-icon content slot is not used to repeat the app logo.
 Android still renders the status-bar and Live Update chip's small icon as a monochrome mask;
 OEM island presentation remains system-owned.
 The card shows **Running** while that PC has an observed unfinished session, including

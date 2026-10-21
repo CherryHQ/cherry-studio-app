@@ -19,8 +19,11 @@ internal object BackgroundExecution {
   private const val OWNER = "cherry-background-activity"
   private const val RUNNING_CHANNEL = "RN_BACKGROUND_ACTIONS_CHANNEL"
   private const val ATTENTION_CHANNEL = "generation-updates"
-  /** DESIGN.md `brand`; notification identity uses Cherry red, never action green. */
-  private const val BRAND_COLOR = 0xFFFF5757.toInt()
+  /**
+   * DESIGN.md notification brand red. Android draws the small-icon mask black on light
+   * accents (luminance > 0.179), so `brand` #FF5757 is darkened to keep the mark white.
+   */
+  private const val BRAND_COLOR = 0xFFC74444.toInt()
 
   @Synchronized
   fun notificationId(context: Context, key: String): Int {
