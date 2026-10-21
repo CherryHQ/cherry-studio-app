@@ -5,6 +5,10 @@ packages:
 # contaminate others. See docs/guides/development.md#dependencies.
 sideEffectsCacheReadonly: true
 
+# Implicit pre-run installs can reapply patches during EAS prebuild and change the native
+# fingerprint. See docs/guides/development.md#dependencies.
+verifyDepsBeforeRun: warn
+
 minimumReleaseAge: 1440
 trustPolicy: no-downgrade
 

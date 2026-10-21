@@ -154,7 +154,11 @@ export class DevicePermissions implements PermissionsModule {
       case 'camera.read':
         return toPermissionStatus(await ImagePicker.getCameraPermissionsAsync());
       case 'photos.read':
-        return toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
+        // Android selection uses the system picker, which grants access to selected URIs.
+        // The app does not browse the library or declare its read permissions.
+        return Platform.OS === 'android'
+          ? unsupported
+          : toPermissionStatus(await MediaLibrary.getPermissionsAsync(false, ['photo']));
       case 'photos.write':
         // Expo's modern MediaStore writer starts at Android 11; its older writer
         // still requires WRITE_EXTERNAL_STORAGE, including on Android 10.
