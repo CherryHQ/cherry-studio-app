@@ -110,6 +110,7 @@ export function createSystemDictationEngine({
         ),
         ExpoSpeechRecognitionModule.addListener('error', (event) => {
           if (event.error === 'aborted') return;
+          logger.warn('Speech recognition failed', { error: event.error, message: event.message });
           const code = ERRORS[event.error] ?? 'failed';
           // A silence timeout after speech still ends with what was said.
           if (code === 'no-speech' && text()) return;
